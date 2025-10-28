@@ -1,0 +1,138 @@
+edition = "2023";
+
+package thru.core.v1;
+
+option features.field_presence = EXPLICIT;
+
+import "buf/validate/validate.proto";
+import "google/api/field_behavior.proto";
+import "google/protobuf/timestamp.proto";
+import "thru/common/v1/consensus.proto";
+import "thru/core/v1/types.proto";
+
+option go_package = "github.com/Unto-Labs/thru-net/grpc/pkg/proto/thru/core/v1;corev1";
+option java_multiple_files = true;
+option java_package = "network.thru.core.v1";
+option csharp_namespace = "Thru.Core.V1";
+option ruby_package = "Thru::Core::V1";
+option objc_class_prefix = "THUC";
+option swift_prefix = "THUC";
+
+// AccountView controls which sections of account resources are returned.
+enum AccountView {
+  // ACCOUNT_VIEW_UNSPECIFIED uses service defaults.
+  ACCOUNT_VIEW_UNSPECIFIED = 0;
+
+  // ACCOUNT_VIEW_PUBKEY_ONLY returns only the account address.
+  ACCOUNT_VIEW_PUBKEY_ONLY = 1;
+
+  // ACCOUNT_VIEW_META_ONLY returns only account metadata.
+  ACCOUNT_VIEW_META_ONLY = 2;
+
+  // ACCOUNT_VIEW_DATA_ONLY returns only account data.
+  ACCOUNT_VIEW_DATA_ONLY = 3;
+
+  // ACCOUNT_VIEW_FULL returns address, metadata, and data.
+  ACCOUNT_VIEW_FULL = 4;
+}
+
+// AccountFlags enumerates boolean account capability flags.
+message AccountFlags {
+  bool is_program = 1 [(google.api.field_behavior) = OPTIONAL];
+  bool is_privileged = 2 [(google.api.field_behavior) = OPTIONAL];
+  bool is_uncompressable = 3 [(google.api.field_behavior) = OPTIONAL];
+  bool is_ephemeral = 4 [(google.api.field_behavior) = OPTIONAL];
+  bool is_deleted = 5 [(google.api.field_behavior) = OPTIONAL];
+  bool is_new = 6 [(google.api.field_behavior) = OPTIONAL];
+  bool is_compressed = 7 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// AccountMeta captures metadata associated with an account.
+message AccountMeta {
+  uint32 version = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (buf.validate.field).uint32.gte = 1
+  ];
+  AccountFlags flags = 2 [(google.api.field_behavior) = OPTIONAL];
+  uint32 data_size = 3 [(google.api.field_behavior) = REQUIRED];
+  uint64 state_counter = 4 [(google.api.field_behavior) = OPTIONAL];
+  Pubkey owner = 5 [(google.api.field_behavior) = REQUIRED];
+  uint64 balance = 6 [(google.api.field_behavior) = OPTIONAL];
+  uint64 nonce = 7 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// AccountData contains account data payloads.
+message AccountData {
+  bytes data = 1 [
+    (google.api.field_behavior) = OPTIONAL,
+    (buf.validate.field).bytes.max_len = 16777216
+  ];
+  bool compressed = 2 [(google.api.field_behavior) = OPTIONAL];
+  string compression_algorithm = 3 [
+    (google.api.field_behavior) = OPTIONAL,
+    (buf.validate.field).string.max_len = 64
+  ];
+}
+
+// DataSlice describes a contiguous range of account data to return.
+message DataSlice {
+  uint32 offset = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (buf.validate.field).uint64.lte = 16777216
+  ];
+  uint32 length = 2 [
+    (google.api.field_behavior) = REQUIRED,
+    (buf.validate.field).uint64.lte = 16777216
+  ];
+}
+
+// AccountPage represents a 4KB chunk for streaming account data.
+message AccountPage {
+  uint32 page_idx = 1 [(google.api.field_behavior) = REQUIRED];
+  uint32 page_size = 2 [
+    (google.api.field_behavior) = REQUIRED,
+    (buf.validate.field).uint32.lte = 4096
+  ];
+  bytes page_data = 3 [
+    (google.api.field_behavior) = REQUIRED,
+    (buf.validate.field).bytes.max_len = 4096
+  ];
+  bool compressed = 4 [(google.api.field_behavior) = OPTIONAL];
+  string compression_algorithm = 5 [
+    (google.api.field_behavior) = OPTIONAL,
+    (buf.validate.field).string.max_len = 64
+  ];
+}
+
+// VersionContextMetadata captures context for a returned account state.
+message VersionContextMetadata {
+  uint64 slot = 1 [(google.api.field_behavior) = OPTIONAL];
+  google.protobuf.Timestamp block_timestamp = 2
+      [(google.api.field_behavior) = OPTIONAL];
+}
+
+// Account models a fully decoded account resource.
+message Account {
+  Pubkey address = 1 [(google.api.field_behavior) = REQUIRED];
+  AccountMeta meta = 2 [(google.api.field_behavior) = OPTIONAL];
+  AccountData data = 3 [(google.api.field_behavior) = OPTIONAL];
+  VersionContextMetadata version_context = 4
+      [(google.api.field_behavior) = OPTIONAL];
+  thru.common.v1.ConsensusStatus consensus_status = 5
+      [(google.api.field_behavior) = OPTIONAL];
+}
+
+// RawAccount captures raw serialized account bytes.
+message RawAccount {
+  Pubkey address = 1 [(google.api.field_behavior) = REQUIRED];
+  bytes raw_meta = 2 [
+    (google.api.field_behavior) = REQUIRED,
+    (buf.validate.field).bytes.max_len = 4096
+  ];
+  bytes raw_data = 3 [
+    (google.api.field_behavior) = OPTIONAL,
+    (buf.validate.field).bytes.max_len = 16777216
+  ];
+  VersionContextMetadata version_context = 4
+      [(google.api.field_behavior) = OPTIONAL];
+}

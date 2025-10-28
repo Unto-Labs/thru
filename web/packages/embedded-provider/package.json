@@ -1,0 +1,26 @@
+{
+  "name": "@thru/embedded-provider",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "eslint src/",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@thru/chain-interfaces": "workspace:*",
+    "@thru/protocol": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^24.7.0"
+  }
+}

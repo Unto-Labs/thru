@@ -1,0 +1,1 @@
+export { ThruAccountSwitcher } from './ThruAccountSwitcher';

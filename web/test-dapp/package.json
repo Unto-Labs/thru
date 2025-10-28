@@ -1,0 +1,33 @@
+{
+  "name": "test-dapp",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev --turbopack -p 3001",
+    "build": "next build --turbopack",
+    "start": "next start",
+    "lint": "eslint"
+  },
+  "dependencies": {
+    "@thru/browser-sdk": "^0.0.5",
+    "@thru/chain-interfaces": "^0.0.5",
+    "@thru/embedded-provider": "^0.0.5",
+    "@thru/react-sdk": "^0.0.5",
+    "@thru/react-ui": "^0.0.5",
+    "@thru/thru-sdk": "^0.0.5",
+    "next": "15.5.4",
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  },
+  "devDependencies": {
+    "@eslint/eslintrc": "^3",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "eslint": "^9",
+    "eslint-config-next": "15.5.4",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

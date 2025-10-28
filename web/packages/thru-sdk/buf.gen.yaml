@@ -1,0 +1,12 @@
+version: v2
+
+managed:
+  enabled: true
+
+plugins:
+  - local: protoc-gen-es
+    out: thru-ts-client-sdk/proto
+    opt: target=ts
+  # - remote: buf.build/grpc/web
+    # out: thru-ts-client-sdk/proto
+    # opt: import_style=typescript,mode=grpcwebtext

@@ -1,0 +1,25 @@
+{
+  "name": "@thru/browser-sdk",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "eslint src/",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@thru/embedded-provider": "workspace:*",
+    "@thru/chain-interfaces": "workspace:*",
+    "@thru/protocol": "workspace:*",
+    "@thru/thru-sdk": "workspace:*"
+  }
+}

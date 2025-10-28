@@ -1,0 +1,128 @@
+edition = "2023";
+
+package thru.services.v1;
+
+option features.field_presence = EXPLICIT;
+
+import "buf/validate/validate.proto";
+import "google/api/field_behavior.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+import "thru/common/v1/consensus.proto";
+import "thru/common/v1/filters.proto";
+import "thru/core/v1/account.proto";
+import "thru/core/v1/block.proto";
+import "thru/core/v1/transaction.proto";
+import "thru/core/v1/types.proto";
+
+option go_package = "github.com/Unto-Labs/thru-net/grpc/pkg/proto/thru/services/v1;servicesv1";
+option java_multiple_files = true;
+option java_package = "network.thru.services.v1";
+option csharp_namespace = "Thru.Services.V1";
+option ruby_package = "Thru::Services::V1";
+option objc_class_prefix = "THUS";
+option swift_prefix = "THUS";
+
+// StreamBlocksRequest subscribes to real-time block updates.
+message StreamBlocksRequest {
+  uint64 start_slot = 1 [(google.api.field_behavior) = OPTIONAL];
+  thru.common.v1.Filter filter = 2 [(google.api.field_behavior) = OPTIONAL];
+  thru.core.v1.BlockView view = 3 [(google.api.field_behavior) = OPTIONAL];
+  thru.common.v1.ConsensusStatus min_consensus = 4
+      [(google.api.field_behavior) = OPTIONAL];
+}
+
+// StreamBlocksResponse delivers block updates.
+message StreamBlocksResponse {
+  thru.core.v1.Block block = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+// StreamAccountUpdatesRequest subscribes to account delta events.
+message StreamAccountUpdatesRequest {
+  thru.core.v1.Pubkey address = 1 [(google.api.field_behavior) = REQUIRED];
+  thru.core.v1.AccountView view = 2 [(google.api.field_behavior) = OPTIONAL];
+  thru.common.v1.Filter filter = 4 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// AccountUpdate describes a delta for an account.
+message AccountUpdate {
+  uint64 slot = 1 [(google.api.field_behavior) = REQUIRED];
+  thru.core.v1.AccountPage page = 2
+      [(google.api.field_behavior) = OPTIONAL];
+  thru.core.v1.AccountMeta meta = 3
+      [(google.api.field_behavior) = OPTIONAL];
+  bool delete = 4 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// StreamAccountUpdatesResponse contains either an initial snapshot or a delta.
+message StreamAccountUpdatesResponse {
+  oneof message {
+    thru.core.v1.Account snapshot = 1;
+    AccountUpdate update = 2;
+  }
+}
+
+// StreamTransactionsRequest subscribes to transaction confirmations.
+message StreamTransactionsRequest {
+  thru.common.v1.Filter filter = 1 [(google.api.field_behavior) = OPTIONAL];
+  thru.common.v1.ConsensusStatus min_consensus = 2
+      [(google.api.field_behavior) = OPTIONAL];
+}
+
+// StreamTransactionsResponse delivers transaction events.
+message StreamTransactionsResponse {
+  thru.core.v1.Transaction transaction = 1
+      [(google.api.field_behavior) = REQUIRED];
+}
+
+// StreamEventsRequest subscribes to chain events.
+message StreamEventsRequest {
+  thru.common.v1.Filter filter = 1 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// StreamEventsResponse delivers event payloads.
+message StreamEventsResponse {
+  string event_id = 1 [(google.api.field_behavior) = REQUIRED];
+  bytes payload = 2 [(google.api.field_behavior) = OPTIONAL];
+  google.protobuf.Timestamp timestamp = 3
+      [(google.api.field_behavior) = OPTIONAL];
+  thru.core.v1.Pubkey program = 4 [(google.api.field_behavior) = REQUIRED];
+  uint32 call_idx = 5 [(google.api.field_behavior) = REQUIRED];
+  thru.core.v1.Signature signature = 6
+      [(google.api.field_behavior) = REQUIRED];
+  uint64 slot = 7 [(google.api.field_behavior) = REQUIRED];
+}
+
+// TrackTransactionRequest subscribes to status updates for a transaction.
+message TrackTransactionRequest {
+  thru.core.v1.Signature signature = 1 [(google.api.field_behavior) = REQUIRED];
+  google.protobuf.Duration timeout = 2
+      [(google.api.field_behavior) = OPTIONAL];
+}
+
+// TrackTransactionResponse reports status transitions for a transaction.
+message TrackTransactionResponse {
+  thru.core.v1.Signature signature = 1 [(google.api.field_behavior) = REQUIRED];
+  thru.common.v1.ConsensusStatus consensus_status = 2
+      [(google.api.field_behavior) = OPTIONAL];
+  thru.core.v1.TransactionExecutionResult execution_result = 3
+      [(google.api.field_behavior) = OPTIONAL];
+}
+
+// StreamingService serves server-streaming gRPC APIs for real-time data.
+service StreamingService {
+  rpc StreamBlocks(StreamBlocksRequest)
+      returns (stream StreamBlocksResponse);
+
+  rpc StreamAccountUpdates(StreamAccountUpdatesRequest)
+      returns (stream StreamAccountUpdatesResponse);
+
+  rpc StreamTransactions(StreamTransactionsRequest)
+      returns (stream StreamTransactionsResponse);
+
+  rpc StreamEvents(StreamEventsRequest)
+      returns (stream StreamEventsResponse);
+
+  rpc TrackTransaction(TrackTransactionRequest)
+      returns (stream TrackTransactionResponse);
+}

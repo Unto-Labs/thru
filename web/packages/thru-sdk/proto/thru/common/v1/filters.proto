@@ -1,0 +1,50 @@
+edition = "2023";
+
+package thru.common.v1;
+
+option features.field_presence = EXPLICIT;
+
+import "buf/validate/validate.proto";
+import "google/api/field_behavior.proto";
+
+option go_package = "github.com/Unto-Labs/thru-net/grpc/pkg/proto/thru/common/v1;commonv1";
+option java_multiple_files = true;
+option java_package = "network.thru.common.v1";
+option csharp_namespace = "Thru.Common.V1";
+option ruby_package = "Thru::Common::V1";
+option objc_class_prefix = "THU";
+option swift_prefix = "THU";
+
+// Filter represents a CEL-based expression applied to query or stream results.
+message Filter {
+  // CEL expression applied server-side. Empty expressions are treated as no-op.
+  string expression = 1 [
+    (google.api.field_behavior) = OPTIONAL,
+    (buf.validate.field).string.max_len = 4096
+  ];
+
+  // Named parameter bindings for expression parameterization.
+  map<string, string> params = 2 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// CelFilterValidation describes the validation configuration returned to
+// clients to help them build safe filter expressions.
+message CelFilterValidation {
+  // List of allowed CEL function names for a specific request type.
+  repeated string allowed_functions = 1 [
+    (google.api.field_behavior) = OPTIONAL,
+    (buf.validate.field).repeated.max_items = 128
+  ];
+
+  // List of allowed field names accessible to the CEL expression.
+  repeated string allowed_fields = 2 [
+    (google.api.field_behavior) = OPTIONAL,
+    (buf.validate.field).repeated.max_items = 256
+  ];
+
+  // Maximum AST node count permitted for a CEL expression.
+  uint32 max_complexity = 3 [
+    (google.api.field_behavior) = OPTIONAL,
+    (buf.validate.field).uint32.lte = 1000
+  ];
+}

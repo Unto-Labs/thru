@@ -1,0 +1,197 @@
+//! Runtime error utilities for converting error codes to human-readable strings
+
+/// Transaction Runtime Error Codes - ported from src/thru/runtime/tn_runtime_errors.h
+
+// Error class definitions
+const TN_RUNTIME_ERR_CLASS__TXN_IN_VALIDATE: i32 = 0xFFFFFF00_u32 as i32;
+const TN_RUNTIME_ERR_CLASS__TXN_IN_PRE_EXECUTE: i32 = 0xFFFFFE00_u32 as i32;
+const TN_RUNTIME_ERR_CLASS__TXN_IN_EXECUTE: i32 = 0xFFFFFD00_u32 as i32;
+
+// Success code
+const TN_RUNTIME_TXN_EXECUTE_SUCCESS: i32 = 0;
+
+// Transaction Validation Errors
+const TN_RUNTIME_TXN_ERR_INVALID_FORMAT: i32 = 0x01 | TN_RUNTIME_ERR_CLASS__TXN_IN_VALIDATE;
+const TN_RUNTIME_TXN_ERR_INVALID_VERSION: i32 = 0x02 | TN_RUNTIME_ERR_CLASS__TXN_IN_VALIDATE;
+const TN_RUNTIME_TXN_ERR_INVALID_FLAGS: i32 = 0x03 | TN_RUNTIME_ERR_CLASS__TXN_IN_VALIDATE;
+const TN_RUNTIME_TXN_ERR_INVALID_SIGNATURE: i32 = 0x04 | TN_RUNTIME_ERR_CLASS__TXN_IN_VALIDATE;
+const TN_RUNTIME_TXN_ERR_DUPLICATE_ACCOUNT: i32 = 0x05 | TN_RUNTIME_ERR_CLASS__TXN_IN_VALIDATE;
+const TN_RUNTIME_TXN_ERR_UNSORTED_ACCOUNTS: i32 = 0x06 | TN_RUNTIME_ERR_CLASS__TXN_IN_VALIDATE;
+const TN_RUNTIME_TXN_ERR_UNSORTED_READWRITE_ACCOUNTS: i32 =
+    0x07 | TN_RUNTIME_ERR_CLASS__TXN_IN_VALIDATE;
+const TN_RUNTIME_TXN_ERR_UNSORTED_READONLY_ACCOUNTS: i32 =
+    0x08 | TN_RUNTIME_ERR_CLASS__TXN_IN_VALIDATE;
+const TN_RUNTIME_TXN_ERR_ACCOUNT_COUNT_LIMIT_EXCEEDED: i32 =
+    0x09 | TN_RUNTIME_ERR_CLASS__TXN_IN_VALIDATE;
+
+// Transaction Pre-Execute Errors
+const TN_RUNTIME_TXN_ERR_NONCE_TOO_LOW: i32 = 0x01 | TN_RUNTIME_ERR_CLASS__TXN_IN_PRE_EXECUTE;
+const TN_RUNTIME_TXN_ERR_NONCE_TOO_HIGH: i32 = 0x02 | TN_RUNTIME_ERR_CLASS__TXN_IN_PRE_EXECUTE;
+const TN_RUNTIME_TXN_ERR_INSUFFICIENT_FEE_PAYER_BALANCE: i32 =
+    0x03 | TN_RUNTIME_ERR_CLASS__TXN_IN_PRE_EXECUTE;
+const TN_RUNTIME_TXN_ERR_FEE_PAYER_ACCOUNT_DOES_NOT_EXIST: i32 =
+    0x04 | TN_RUNTIME_ERR_CLASS__TXN_IN_PRE_EXECUTE;
+const TN_RUNTIME_TXN_ERR_NOT_LIVE_YET: i32 = 0x05 | TN_RUNTIME_ERR_CLASS__TXN_IN_PRE_EXECUTE;
+const TN_RUNTIME_TXN_ERR_EXPIRED: i32 = 0x06 | TN_RUNTIME_ERR_CLASS__TXN_IN_PRE_EXECUTE;
+const TN_RUNTIME_TXN_ERR_INVALID_FEE_PAYER_STATE_PROOF: i32 =
+    0x07 | TN_RUNTIME_ERR_CLASS__TXN_IN_PRE_EXECUTE;
+const TN_RUNTIME_TXN_ERR_INVALID_FEE_PAYER_STATE_PROOF_TYPE: i32 =
+    0x08 | TN_RUNTIME_ERR_CLASS__TXN_IN_PRE_EXECUTE;
+const TN_RUNTIME_TXN_ERR_INVALID_FEE_PAYER_STATE_PROOF_SLOT: i32 =
+    0x09 | TN_RUNTIME_ERR_CLASS__TXN_IN_PRE_EXECUTE;
+const TN_RUNTIME_TXN_ERR_INVALID_FEE_PAYER_ACCOUNT_OWNER: i32 =
+    0x0A | TN_RUNTIME_ERR_CLASS__TXN_IN_PRE_EXECUTE;
+const TN_RUNTIME_TXN_ERR_INVALID_FEE_PAYER_STATE_PROOF_ACCOUNT_OWNER: i32 =
+    0x0B | TN_RUNTIME_ERR_CLASS__TXN_IN_PRE_EXECUTE;
+const TN_RUNTIME_TXN_ERR_INVALID_FEE_PAYER_STATE_PROOF_ACCOUNT_META_DATA_SZ: i32 =
+    0x0C | TN_RUNTIME_ERR_CLASS__TXN_IN_PRE_EXECUTE;
+
+// Transaction Execute Errors
+const TN_RUNTIME_TXN_ERR_VM_FAILED: i32 = 0x01 | TN_RUNTIME_ERR_CLASS__TXN_IN_EXECUTE;
+const TN_RUNTIME_TXN_ERR_INVALID_PROGRAM_ACCOUNT: i32 = 0x02 | TN_RUNTIME_ERR_CLASS__TXN_IN_EXECUTE;
+const TN_RUNTIME_TXN_ERR_VM_REVERT: i32 = 0x03 | TN_RUNTIME_ERR_CLASS__TXN_IN_EXECUTE;
+const TN_RUNTIME_TXN_ERR_CU_EXHAUSTED: i32 = 0x04 | TN_RUNTIME_ERR_CLASS__TXN_IN_EXECUTE;
+const TN_RUNTIME_TXN_ERR_SU_EXHAUSTED: i32 = 0x05 | TN_RUNTIME_ERR_CLASS__TXN_IN_EXECUTE;
+
+/// Convert VM error code to human-readable string
+///
+/// This is a Rust port of the `tn_runtime_error_to_str` function from
+/// `src/thru/runtime/tn_runtime_errors.c`
+///
+/// # Arguments
+/// * `err` - The error code to convert
+///
+/// # Returns
+/// * `Some(&str)` - Human-readable error string if error code is recognized
+/// * `None` - If error code is not recognized
+pub fn tn_vm_error_str(err: i32) -> Option<&'static str> {
+    match err {
+        TN_RUNTIME_TXN_EXECUTE_SUCCESS => Some("TN_RUNTIME_TXN_EXECUTE_SUCCESS"),
+        TN_RUNTIME_TXN_ERR_INVALID_FORMAT => Some("TN_RUNTIME_TXN_ERR_INVALID_FORMAT"),
+        TN_RUNTIME_TXN_ERR_INVALID_VERSION => Some("TN_RUNTIME_TXN_ERR_INVALID_VERSION"),
+        TN_RUNTIME_TXN_ERR_INVALID_FLAGS => Some("TN_RUNTIME_TXN_ERR_INVALID_FLAGS"),
+        TN_RUNTIME_TXN_ERR_INVALID_SIGNATURE => Some("TN_RUNTIME_TXN_ERR_INVALID_SIGNATURE"),
+        TN_RUNTIME_TXN_ERR_DUPLICATE_ACCOUNT => Some("TN_RUNTIME_TXN_ERR_DUPLICATE_ACCOUNT"),
+        TN_RUNTIME_TXN_ERR_UNSORTED_ACCOUNTS => Some("TN_RUNTIME_TXN_ERR_UNSORTED_ACCOUNTS"),
+        TN_RUNTIME_TXN_ERR_UNSORTED_READWRITE_ACCOUNTS => {
+            Some("TN_RUNTIME_TXN_ERR_UNSORTED_READWRITE_ACCOUNTS")
+        }
+        TN_RUNTIME_TXN_ERR_UNSORTED_READONLY_ACCOUNTS => {
+            Some("TN_RUNTIME_TXN_ERR_UNSORTED_READONLY_ACCOUNTS")
+        }
+        TN_RUNTIME_TXN_ERR_ACCOUNT_COUNT_LIMIT_EXCEEDED => {
+            Some("TN_RUNTIME_TXN_ERR_ACCOUNT_COUNT_LIMIT_EXCEEDED")
+        }
+        TN_RUNTIME_TXN_ERR_NONCE_TOO_LOW => Some("TN_RUNTIME_TXN_ERR_NONCE_TOO_LOW"),
+        TN_RUNTIME_TXN_ERR_NONCE_TOO_HIGH => Some("TN_RUNTIME_TXN_ERR_NONCE_TOO_HIGH"),
+        TN_RUNTIME_TXN_ERR_INSUFFICIENT_FEE_PAYER_BALANCE => {
+            Some("TN_RUNTIME_TXN_ERR_INSUFFICIENT_FEE_PAYER_BALANCE")
+        }
+        TN_RUNTIME_TXN_ERR_FEE_PAYER_ACCOUNT_DOES_NOT_EXIST => {
+            Some("TN_RUNTIME_TXN_ERR_FEE_PAYER_ACCOUNT_DOES_NOT_EXIST")
+        }
+        TN_RUNTIME_TXN_ERR_NOT_LIVE_YET => Some("TN_RUNTIME_TXN_ERR_NOT_LIVE_YET"),
+        TN_RUNTIME_TXN_ERR_EXPIRED => Some("TN_RUNTIME_TXN_ERR_EXPIRED"),
+        TN_RUNTIME_TXN_ERR_INVALID_FEE_PAYER_STATE_PROOF => {
+            Some("TN_RUNTIME_TXN_ERR_INVALID_FEE_PAYER_STATE_PROOF")
+        }
+        TN_RUNTIME_TXN_ERR_INVALID_FEE_PAYER_STATE_PROOF_TYPE => {
+            Some("TN_RUNTIME_TXN_ERR_INVALID_FEE_PAYER_STATE_PROOF_TYPE")
+        }
+        TN_RUNTIME_TXN_ERR_INVALID_FEE_PAYER_STATE_PROOF_SLOT => {
+            Some("TN_RUNTIME_TXN_ERR_INVALID_FEE_PAYER_STATE_PROOF_SLOT")
+        }
+        TN_RUNTIME_TXN_ERR_INVALID_FEE_PAYER_ACCOUNT_OWNER => {
+            Some("TN_RUNTIME_TXN_ERR_INVALID_FEE_PAYER_ACCOUNT_OWNER")
+        }
+        TN_RUNTIME_TXN_ERR_INVALID_FEE_PAYER_STATE_PROOF_ACCOUNT_OWNER => {
+            Some("TN_RUNTIME_TXN_ERR_INVALID_FEE_PAYER_STATE_PROOF_ACCOUNT_OWNER")
+        }
+        TN_RUNTIME_TXN_ERR_INVALID_FEE_PAYER_STATE_PROOF_ACCOUNT_META_DATA_SZ => {
+            Some("TN_RUNTIME_TXN_ERR_INVALID_FEE_PAYER_STATE_PROOF_ACCOUNT_META_DATA_SZ")
+        }
+        TN_RUNTIME_TXN_ERR_VM_FAILED => Some("TN_RUNTIME_TXN_ERR_VM_FAILED"),
+        TN_RUNTIME_TXN_ERR_INVALID_PROGRAM_ACCOUNT => {
+            Some("TN_RUNTIME_TXN_ERR_INVALID_PROGRAM_ACCOUNT")
+        }
+        TN_RUNTIME_TXN_ERR_VM_REVERT => Some("TN_RUNTIME_TXN_ERR_VM_REVERT"),
+        TN_RUNTIME_TXN_ERR_CU_EXHAUSTED => Some("TN_RUNTIME_TXN_ERR_CU_EXHAUSTED"),
+        TN_RUNTIME_TXN_ERR_SU_EXHAUSTED => Some("TN_RUNTIME_TXN_ERR_SU_EXHAUSTED"),
+        _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_tn_vm_error_str_success() {
+        assert_eq!(
+            tn_vm_error_str(TN_RUNTIME_TXN_EXECUTE_SUCCESS),
+            Some("TN_RUNTIME_TXN_EXECUTE_SUCCESS")
+        );
+    }
+
+    #[test]
+    fn test_tn_vm_error_str_validation_errors() {
+        assert_eq!(
+            tn_vm_error_str(TN_RUNTIME_TXN_ERR_INVALID_FORMAT),
+            Some("TN_RUNTIME_TXN_ERR_INVALID_FORMAT")
+        );
+        assert_eq!(
+            tn_vm_error_str(TN_RUNTIME_TXN_ERR_INVALID_VERSION),
+            Some("TN_RUNTIME_TXN_ERR_INVALID_VERSION")
+        );
+        assert_eq!(
+            tn_vm_error_str(TN_RUNTIME_TXN_ERR_INVALID_FLAGS),
+            Some("TN_RUNTIME_TXN_ERR_INVALID_FLAGS")
+        );
+        assert_eq!(
+            tn_vm_error_str(TN_RUNTIME_TXN_ERR_INVALID_SIGNATURE),
+            Some("TN_RUNTIME_TXN_ERR_INVALID_SIGNATURE")
+        );
+        assert_eq!(
+            tn_vm_error_str(TN_RUNTIME_TXN_ERR_DUPLICATE_ACCOUNT),
+            Some("TN_RUNTIME_TXN_ERR_DUPLICATE_ACCOUNT")
+        );
+    }
+
+    #[test]
+    fn test_tn_vm_error_str_pre_execute_errors() {
+        assert_eq!(
+            tn_vm_error_str(TN_RUNTIME_TXN_ERR_NONCE_TOO_LOW),
+            Some("TN_RUNTIME_TXN_ERR_NONCE_TOO_LOW")
+        );
+        assert_eq!(
+            tn_vm_error_str(TN_RUNTIME_TXN_ERR_NONCE_TOO_HIGH),
+            Some("TN_RUNTIME_TXN_ERR_NONCE_TOO_HIGH")
+        );
+        assert_eq!(
+            tn_vm_error_str(TN_RUNTIME_TXN_ERR_INSUFFICIENT_FEE_PAYER_BALANCE),
+            Some("TN_RUNTIME_TXN_ERR_INSUFFICIENT_FEE_PAYER_BALANCE")
+        );
+    }
+
+    #[test]
+    fn test_tn_vm_error_str_execute_errors() {
+        assert_eq!(
+            tn_vm_error_str(TN_RUNTIME_TXN_ERR_VM_FAILED),
+            Some("TN_RUNTIME_TXN_ERR_VM_FAILED")
+        );
+        assert_eq!(
+            tn_vm_error_str(TN_RUNTIME_TXN_ERR_VM_REVERT),
+            Some("TN_RUNTIME_TXN_ERR_VM_REVERT")
+        );
+        assert_eq!(
+            tn_vm_error_str(TN_RUNTIME_TXN_ERR_CU_EXHAUSTED),
+            Some("TN_RUNTIME_TXN_ERR_CU_EXHAUSTED")
+        );
+    }
+
+    #[test]
+    fn test_tn_vm_error_str_unknown() {
+        assert_eq!(tn_vm_error_str(999999), None);
+        assert_eq!(tn_vm_error_str(-1), None);
+    }
+}

@@ -1,0 +1,95 @@
+edition = "2023";
+
+package thru.core.v1;
+
+option features.field_presence = EXPLICIT;
+
+import "buf/validate/validate.proto";
+import "google/api/field_behavior.proto";
+import "thru/core/v1/types.proto";
+
+option go_package = "github.com/Unto-Labs/thru-net/grpc/pkg/proto/thru/core/v1;corev1";
+option java_multiple_files = true;
+option java_package = "network.thru.core.v1";
+option csharp_namespace = "Thru.Core.V1";
+option ruby_package = "Thru::Core::V1";
+option objc_class_prefix = "THUC";
+option swift_prefix = "THUC";
+
+// TransactionView controls how transactions are materialized in responses.
+enum TransactionView {
+  TRANSACTION_VIEW_UNSPECIFIED = 0;
+  TRANSACTION_VIEW_SIGNATURE_ONLY = 1;
+  TRANSACTION_VIEW_HEADER_ONLY = 2;
+  TRANSACTION_VIEW_HEADER_AND_BODY = 3;
+  TRANSACTION_VIEW_FULL = 4;
+}
+
+// TransactionHeader carries structured metadata for a transaction.
+message TransactionHeader {
+  Signature fee_payer_signature = 1 [(google.api.field_behavior) = REQUIRED];
+  uint32 version = 2 [(google.api.field_behavior) = REQUIRED];
+  uint32 flags = 3 [(google.api.field_behavior) = OPTIONAL];
+  uint32 readwrite_accounts_count = 4 [(google.api.field_behavior) = OPTIONAL];
+  uint32 readonly_accounts_count = 5 [(google.api.field_behavior) = OPTIONAL];
+  uint32 instruction_data_size = 6 [(google.api.field_behavior) = OPTIONAL];
+  uint32 requested_compute_units = 7 [(google.api.field_behavior) = OPTIONAL];
+  uint32 requested_state_units = 8 [(google.api.field_behavior) = OPTIONAL];
+  uint32 requested_memory_units = 9 [(google.api.field_behavior) = OPTIONAL];
+  uint32 expiry_after = 10 [(google.api.field_behavior) = OPTIONAL];
+  uint64 fee = 11 [(google.api.field_behavior) = OPTIONAL];
+  uint64 nonce = 12 [(google.api.field_behavior) = OPTIONAL];
+  uint64 start_slot = 13 [(google.api.field_behavior) = OPTIONAL];
+  Pubkey fee_payer_pubkey = 14 [(google.api.field_behavior) = OPTIONAL];
+  Pubkey program_pubkey = 15 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// TransactionExecutionResult captures execution outcomes.
+message TransactionExecutionResult {
+  uint32 consumed_compute_units = 1 [(google.api.field_behavior) = OPTIONAL];
+  uint32 consumed_memory_units = 2 [(google.api.field_behavior) = OPTIONAL];
+  uint32 consumed_state_units = 3 [(google.api.field_behavior) = OPTIONAL];
+  uint64 user_error_code = 4 [(google.api.field_behavior) = OPTIONAL];
+  uint32 vm_error = 5 [(google.api.field_behavior) = OPTIONAL];
+  uint64 execution_result = 6 [(google.api.field_behavior) = OPTIONAL];
+  uint32 pages_used = 7 [(google.api.field_behavior) = OPTIONAL];
+  uint32 events_count = 8 [(google.api.field_behavior) = OPTIONAL];
+  uint32 events_size = 9 [(google.api.field_behavior) = OPTIONAL];
+  repeated Pubkey readwrite_accounts = 10
+      [(google.api.field_behavior) = OPTIONAL];
+  repeated Pubkey readonly_accounts = 11
+      [(google.api.field_behavior) = OPTIONAL];
+  repeated TransactionEvent events = 12
+      [(google.api.field_behavior) = OPTIONAL];
+}
+// TransactionEvent describes an event emitted during transaction execution.
+message TransactionEvent {
+  string event_id = 1 [(google.api.field_behavior) = OPTIONAL];
+  uint32 call_idx = 2 [(google.api.field_behavior) = OPTIONAL];
+  uint32 program_idx = 3 [(google.api.field_behavior) = OPTIONAL];
+  Pubkey program = 4 [(google.api.field_behavior) = OPTIONAL];
+  bytes payload = 5 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// Transaction describes a fully decoded transaction resource.
+message Transaction {
+  Signature signature = 1 [(google.api.field_behavior) = REQUIRED];
+  TransactionHeader header = 2 [(google.api.field_behavior) = OPTIONAL];
+  bytes body = 3 [
+    (google.api.field_behavior) = OPTIONAL,
+    (buf.validate.field).bytes.max_len = 16777216
+  ];
+  TransactionExecutionResult execution_result = 4
+      [(google.api.field_behavior) = OPTIONAL];
+  uint64 slot = 5 [(google.api.field_behavior) = OPTIONAL];
+  uint32 block_offset = 6 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// RawTransaction provides direct access to serialized transaction bytes.
+message RawTransaction {
+  Signature signature = 1 [(google.api.field_behavior) = REQUIRED];
+  bytes raw_transaction = 2 [
+    (google.api.field_behavior) = REQUIRED,
+    (buf.validate.field).bytes.max_len = 16777216
+  ];
+}
