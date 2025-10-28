@@ -1,0 +1,44 @@
+{
+  "name": "@thru/thru-sdk",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./dist/sdk.js",
+  "types": "./dist/sdk.d.ts",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "import": "./dist/sdk.js",
+      "types": "./dist/sdk.d.ts"
+    },
+    "./client": {
+      "import": "./dist/client.js",
+      "types":"./dist/client.d.ts"
+    }
+  },
+  "scripts": {
+    "get-height": "ts-node thru-ts-client-sdk/get-height.ts",
+    "counter": "tsx --tsconfig tsconfig.json thru-ts-client-sdk/counter.ts",
+    "create-account": "tsx --tsconfig tsconfig.json thru-ts-client-sdk/create-account.ts",
+    "protobufs:pull": "rm -rf proto && cp -a ../../../proto ./proto",
+    "protobufs:generate": "buf generate --include-imports",
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "eslint src/",
+    "test:transactions": "node --loader ts-node/esm --test \"thru-ts-client-sdk/transactions/__tests__/*.test.ts\"",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "^2.9.0",
+    "@connectrpc/connect": "^2.1.0",
+    "@connectrpc/connect-web": "^2.1.0",
+    "@noble/ed25519": "^2.3.0",
+    "@noble/hashes": "^1.4.0"
+  },
+  "devDependencies": {
+    "@bufbuild/buf": "^1.58.0",
+    "@bufbuild/protoc-gen-es": "^2.9.0",
+    "ts-node": "^10.9.1",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}

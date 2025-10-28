@@ -1,0 +1,24 @@
+{
+  "name": "@thru/indexed-db-stamper",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "eslint src/",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@thru/chain-interfaces": "workspace:*",
+    "@thru/crypto": "workspace:*",
+    "idb": "^8.0.3"
+  }
+}

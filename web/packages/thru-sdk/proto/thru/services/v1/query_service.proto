@@ -1,0 +1,344 @@
+edition = "2023";
+
+package thru.services.v1;
+
+option features.field_presence = EXPLICIT;
+
+import "buf/validate/validate.proto";
+import "google/api/annotations.proto";
+import "google/api/client.proto";
+import "google/api/field_behavior.proto";
+import "thru/common/v1/consensus.proto";
+import "thru/common/v1/filters.proto";
+import "thru/common/v1/pagination.proto";
+import "thru/core/v1/account.proto";
+import "thru/core/v1/block.proto";
+import "thru/core/v1/state.proto";
+import "thru/core/v1/transaction.proto";
+import "thru/core/v1/types.proto";
+
+option go_package = "github.com/Unto-Labs/thru-net/grpc/pkg/proto/thru/services/v1;servicesv1";
+option java_multiple_files = true;
+option java_package = "network.thru.services.v1";
+option csharp_namespace = "Thru.Services.V1";
+option ruby_package = "Thru::Services::V1";
+option objc_class_prefix = "THUS";
+option swift_prefix = "THUS";
+
+// GetAccountRequest retrieves a decoded account by public key.
+message GetAccountRequest {
+  thru.core.v1.Pubkey address = 1 [(google.api.field_behavior) = REQUIRED];
+  thru.core.v1.AccountView view = 2 [(google.api.field_behavior) = OPTIONAL];
+  thru.common.v1.VersionContext version_context = 3
+      [(google.api.field_behavior) = REQUIRED];
+  thru.common.v1.ConsensusStatus min_consensus = 4
+      [(google.api.field_behavior) = OPTIONAL];
+  thru.core.v1.DataSlice data_slice = 6
+      [(google.api.field_behavior) = OPTIONAL];
+
+  reserved 5;
+  reserved skip_data;
+}
+
+// GetRawAccountRequest retrieves raw account bytes by public key.
+message GetRawAccountRequest {
+  thru.core.v1.Pubkey address = 1 [(google.api.field_behavior) = REQUIRED];
+  thru.core.v1.AccountView view = 2 [(google.api.field_behavior) = OPTIONAL];
+  thru.common.v1.VersionContext version_context = 3
+      [(google.api.field_behavior) = REQUIRED];
+  thru.common.v1.ConsensusStatus min_consensus = 4
+      [(google.api.field_behavior) = OPTIONAL];
+}
+
+// GetTransactionRequest retrieves a decoded transaction by signature.
+message GetTransactionRequest {
+  thru.core.v1.Signature signature = 1 [(google.api.field_behavior) = REQUIRED];
+  thru.core.v1.TransactionView view = 2 [(google.api.field_behavior) = OPTIONAL];
+  thru.common.v1.VersionContext version_context = 3
+      [(google.api.field_behavior) = REQUIRED];
+  thru.common.v1.ConsensusStatus min_consensus = 4
+      [(google.api.field_behavior) = OPTIONAL];
+}
+
+// GetRawTransactionRequest retrieves raw transaction bytes by signature.
+message GetRawTransactionRequest {
+  thru.core.v1.Signature signature = 1 [(google.api.field_behavior) = REQUIRED];
+  thru.common.v1.VersionContext version_context = 2
+      [(google.api.field_behavior) = REQUIRED];
+  thru.common.v1.ConsensusStatus min_consensus = 3
+      [(google.api.field_behavior) = OPTIONAL];
+}
+
+// GenerateStateProofRequest requests an account state proof.
+message GenerateStateProofRequest {
+  thru.core.v1.StateProofRequest request = 1
+      [(google.api.field_behavior) = REQUIRED];
+}
+
+// GenerateStateProofResponse contains the generated proof.
+message GenerateStateProofResponse {
+  thru.core.v1.StateProof proof = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+// GetBlockRequest retrieves decoded block information by slot or hash.
+message GetBlockRequest {
+  option (buf.validate.message).cel = {
+    id: "block_selector_set"
+    message: "either slot or block_hash must be set"
+    expression: "has(this.slot) || has(this.block_hash)"
+  };
+
+  oneof selector {
+    uint64 slot = 1 [(google.api.field_behavior) = OPTIONAL];
+    thru.core.v1.BlockHash block_hash = 2 [(google.api.field_behavior) = OPTIONAL];
+  }
+  thru.core.v1.BlockView view = 3 [(google.api.field_behavior) = OPTIONAL];
+  thru.common.v1.ConsensusStatus min_consensus = 4
+      [(google.api.field_behavior) = OPTIONAL];
+}
+
+// GetRawBlockRequest retrieves raw block bytes by slot or hash.
+message GetRawBlockRequest {
+  option (buf.validate.message).cel = {
+    id: "raw_block_selector_set"
+    message: "either slot or block_hash must be set"
+    expression: "has(this.slot) || has(this.block_hash)"
+  };
+
+  oneof selector {
+    uint64 slot = 1 [(google.api.field_behavior) = OPTIONAL];
+    thru.core.v1.BlockHash block_hash = 2 [(google.api.field_behavior) = OPTIONAL];
+  }
+  thru.common.v1.ConsensusStatus min_consensus = 3
+      [(google.api.field_behavior) = OPTIONAL];
+}
+
+// ListOwnedAccountsRequest lists accounts for a given owner public key.
+message ListOwnedAccountsRequest {
+  thru.core.v1.Pubkey owner = 1 [(google.api.field_behavior) = REQUIRED];
+  thru.core.v1.AccountView view = 2 [(google.api.field_behavior) = OPTIONAL];
+  thru.common.v1.VersionContext version_context = 3
+      [(google.api.field_behavior) = OPTIONAL];
+  thru.common.v1.Filter filter = 4 [(google.api.field_behavior) = OPTIONAL];
+  thru.common.v1.PageRequest page = 5 [(google.api.field_behavior) = OPTIONAL];
+  thru.common.v1.ConsensusStatus min_consensus = 6
+      [(google.api.field_behavior) = OPTIONAL];
+}
+
+// ListOwnedAccountsResponse contains paginated accounts.
+message ListOwnedAccountsResponse {
+  repeated thru.core.v1.Account accounts = 1
+      [(google.api.field_behavior) = OPTIONAL];
+  thru.common.v1.PageResponse page = 2
+      [(google.api.field_behavior) = OPTIONAL];
+}
+
+// ListBlocksRequest lists blocks with pagination and filtering.
+message ListBlocksRequest {
+  thru.common.v1.Filter filter = 1 [(google.api.field_behavior) = OPTIONAL];
+  thru.common.v1.PageRequest page = 2 [(google.api.field_behavior) = OPTIONAL];
+  thru.core.v1.BlockView view = 3 [(google.api.field_behavior) = OPTIONAL];
+  thru.common.v1.ConsensusStatus min_consensus = 4
+      [(google.api.field_behavior) = OPTIONAL];
+}
+
+// ListBlocksResponse returns a page of blocks.
+message ListBlocksResponse {
+  repeated thru.core.v1.Block blocks = 1
+      [(google.api.field_behavior) = OPTIONAL];
+  thru.common.v1.PageResponse page = 2
+      [(google.api.field_behavior) = OPTIONAL];
+}
+
+// ListTransactionsForAccountRequest lists transaction signatures involving an account.
+message ListTransactionsForAccountRequest {
+  thru.core.v1.Pubkey account = 1 [(google.api.field_behavior) = REQUIRED];
+  thru.common.v1.PageRequest page = 2 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// ListTransactionsForAccountResponse contains transaction signatures.
+message ListTransactionsForAccountResponse {
+  repeated thru.core.v1.Signature signatures = 1
+      [(google.api.field_behavior) = OPTIONAL];
+  thru.common.v1.PageResponse page = 2
+      [(google.api.field_behavior) = OPTIONAL];
+}
+
+// GetVersionRequest fetches component version strings.
+message GetVersionRequest {}
+
+// GetVersionResponse returns version information per component.
+message GetVersionResponse {
+  map<string, string> versions = 1
+      [(google.api.field_behavior) = REQUIRED];
+}
+
+// GetEventRequest fetches an event by identifier.
+message GetEventRequest {
+  string event_id = 1 [
+    (google.api.field_behavior) = REQUIRED,
+    (buf.validate.field).string.max_len = 128
+  ];
+  thru.common.v1.VersionContext version_context = 2
+      [(google.api.field_behavior) = OPTIONAL];
+}
+
+// Event represents a transaction event emitted by the chain.
+message Event {
+  string event_id = 1 [(google.api.field_behavior) = REQUIRED];
+  thru.core.v1.Signature transaction_signature = 2
+      [(google.api.field_behavior) = REQUIRED];
+  thru.core.v1.Pubkey program = 3 [(google.api.field_behavior) = OPTIONAL];
+  bytes payload = 4 [(google.api.field_behavior) = OPTIONAL];
+  uint64 slot = 5 [(google.api.field_behavior) = OPTIONAL];
+  uint32 call_idx = 6 [(google.api.field_behavior) = OPTIONAL];
+  uint32 program_idx = 7 [(google.api.field_behavior) = OPTIONAL];
+  uint32 payload_size = 8 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// GetTransactionStatusRequest fetches execution status for a transaction.
+message GetTransactionStatusRequest {
+  thru.core.v1.Signature signature = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+// TransactionStatus captures status metadata for a transaction.
+message TransactionStatus {
+  thru.core.v1.Signature signature = 1 [(google.api.field_behavior) = REQUIRED];
+  thru.common.v1.ConsensusStatus consensus_status = 2
+      [(google.api.field_behavior) = OPTIONAL];
+  thru.core.v1.TransactionExecutionResult execution_result = 3
+      [(google.api.field_behavior) = OPTIONAL];
+}
+
+// 
+message GetHeightRequest {}
+
+// GetHeightResponse
+message GetHeightResponse {
+  uint64 finalized = 1 [(google.api.field_behavior) = REQUIRED];
+  uint64 locally_executed = 2 [(google.api.field_behavior) = REQUIRED];
+  uint64 cluster_executed = 3 [(google.api.field_behavior) = REQUIRED];
+}
+
+
+// QueryService defines unary RPCs for accessing blockchain data.
+service QueryService {
+  option (google.api.default_host) = "api.thru.network";
+
+  // Get block heights
+  rpc GetHeight(GetHeightRequest) returns (GetHeightResponse) {
+    option (google.api.http) = {
+      get: "/v1/height"
+    };
+  }
+
+  // Get account information.
+  rpc GetAccount(GetAccountRequest) returns (thru.core.v1.Account) {
+    option (google.api.http) = {
+      get: "/v1/accounts/{address.value}"
+    };
+    option (google.api.method_signature) = "address";
+  }
+
+  // Get account raw bytes.
+  rpc GetRawAccount(GetRawAccountRequest) returns (thru.core.v1.RawAccount) {
+    option (google.api.http) = {
+      get: "/v1/accounts/{address.value}:raw"
+    };
+    option (google.api.method_signature) = "address";
+  }
+
+  // Get transaction by signature.
+  rpc GetTransaction(GetTransactionRequest) returns (thru.core.v1.Transaction) {
+    option (google.api.http) = {
+      get: "/v1/transactions/{signature.value}"
+    };
+    option (google.api.method_signature) = "signature";
+  }
+
+  // Get raw transaction by signature.
+  rpc GetRawTransaction(GetRawTransactionRequest)
+      returns (thru.core.v1.RawTransaction) {
+    option (google.api.http) = {
+      get: "/v1/transactions/{signature.value}:raw"
+    };
+    option (google.api.method_signature) = "signature";
+  }
+
+  // Get block by slot or hash.
+  rpc GetBlock(GetBlockRequest) returns (thru.core.v1.Block) {
+    option (google.api.http) = {
+      get: "/v1/blocks/{slot}"
+      additional_bindings {
+        get: "/v1/blocks/by-hash/{block_hash.value}"
+      }
+    };
+  }
+
+  // Get raw block bytes.
+  rpc GetRawBlock(GetRawBlockRequest) returns (thru.core.v1.RawBlock) {
+    option (google.api.http) = {
+      get: "/v1/blocks/{slot}:raw"
+      additional_bindings {
+        get: "/v1/blocks/by-hash/{block_hash.value}:raw"
+      }
+    };
+  }
+
+  // List accounts owned by a public key.
+  rpc ListOwnedAccounts(ListOwnedAccountsRequest)
+      returns (ListOwnedAccountsResponse) {
+    option (google.api.http) = {
+      get: "/v1/accounts"
+    };
+  }
+
+  // List blocks using pagination and filtering. By default returns blocks ordered from latest slot to the first one.
+  rpc ListBlocks(ListBlocksRequest) returns (ListBlocksResponse) {
+    option (google.api.http) = {
+      get: "/v1/blocks"
+    };
+  }
+
+  // List executed transaction signatures involving an account.
+  rpc ListTransactionsForAccount(ListTransactionsForAccountRequest)
+      returns (ListTransactionsForAccountResponse) {
+    option (google.api.http) = {
+      get: "/v1/accounts/{account.value}/transactions"
+    };
+    option (google.api.method_signature) = "account";
+  }
+
+  // Get a specific event by ID.
+  rpc GetEvent(GetEventRequest) returns (Event) {
+    option (google.api.http) = {
+      get: "/v1/events/{event_id}"
+    };
+    option (google.api.method_signature) = "event_id";
+  }
+
+  // Get derived transaction status metadata.
+  rpc GetTransactionStatus(GetTransactionStatusRequest)
+      returns (TransactionStatus) {
+    option (google.api.http) = {
+      get: "/v1/transactions/{signature.value}:status"
+    };
+    option (google.api.method_signature) = "signature";
+  }
+
+  // Generate an account state proof snapshot.
+  rpc GenerateStateProof(GenerateStateProofRequest)
+      returns (GenerateStateProofResponse) {
+    option (google.api.http) = {
+      post: "/v1/stateproofs:generate"
+      body: "*"
+    };
+  }
+
+  // Get component version strings.
+  rpc GetVersion(GetVersionRequest) returns (GetVersionResponse) {
+    option (google.api.http) = {
+      get: "/v1/version"
+    };
+  }
+}
