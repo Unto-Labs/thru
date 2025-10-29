@@ -119,7 +119,7 @@ jobs:
 
       - name: Build packages
         working-directory: web
-        run: pnpm --filter "${{ matrix.package }}" run build
+        run: pnpm --filter "./packages/*" -r build
 
       - name: Run package tests
         working-directory: web
