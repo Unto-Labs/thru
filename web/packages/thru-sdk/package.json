@@ -16,7 +16,7 @@
     }
   },
   "scripts": {
-    "get-height": "ts-node thru-ts-client-sdk/get-height.ts",
+    "get-height": "tsx --tsconfig tsconfig.json thru-ts-client-sdk/test-scripts/get-height.ts",
     "counter": "tsx --tsconfig tsconfig.json thru-ts-client-sdk/counter.ts",
     "create-account": "tsx --tsconfig tsconfig.json thru-ts-client-sdk/create-account.ts",
     "protobufs:pull": "rm -rf proto && cp -a ../../../proto ./proto",

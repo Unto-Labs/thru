@@ -3,7 +3,7 @@ import { AccountView } from "./proto/thru/core/v1/account_pb";
 import { BlockView } from "./proto/thru/core/v1/block_pb";
 import { TransactionView } from "./proto/thru/core/v1/transaction_pb";
 
-export const DEFAULT_HOST = "http://74.118.142.189:8080";
+export const DEFAULT_HOST = "https://grpc-web.alphanet.thruput.org";
 
 export const DEFAULT_ACCOUNT_VIEW = AccountView.FULL;
 export const DEFAULT_BLOCK_VIEW = BlockView.FULL;

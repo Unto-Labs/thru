@@ -2,6 +2,7 @@
 name = "thru-cli"
 version = "0.1.0"
 description = "Command-line interface for the Thru blockchain"
+license = "Apache-2.0"
 edition = "2024"
 keywords = ["thru", "cli", "blockchain", "rpc"]
 categories = ["command-line-utilities", "cryptography::cryptocurrencies"]
@@ -12,8 +13,8 @@ path = "src/main.rs"
 
 [dependencies]
 # Thru dependencies
-thru-grpc-client = { path = "../thru-grpc-client" }
-thru-base = { path = "../thru-base" }
+thru-grpc-client = { version = "0.1.0", path = "../thru-grpc-client" }
+thru-base = { version = "0.1.0", path = "../thru-base" }
 
 # CLI framework
 clap = { version = "4.4", features = ["derive", "env"] }

@@ -39,7 +39,7 @@ async function getBlockHeight(hostUrl: string): Promise<void> {
 }
 
 /* Main execution */
-const DEFAULT_HOST = 'http://74.118.142.189:8080';
+const DEFAULT_HOST = "https://grpc-web.alphanet.thruput.org";
 
 console.log(`Connecting to Thru node at ${DEFAULT_HOST}...`);
 

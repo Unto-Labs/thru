@@ -1,7 +1,6 @@
 // Main exports
 export { EmbeddedThruChain } from './chains/ThruChain';
 export { EmbeddedProvider, type ConnectOptions, type EmbeddedProviderConfig } from './EmbeddedProvider';
-export { IframeManager } from './IframeManager';
 
 // Type exports
 export type {

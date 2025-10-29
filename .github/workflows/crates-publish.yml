@@ -1,4 +1,7 @@
-name: NPM Packages Publish
+name: Crates Publish
+
+env:
+  CRATES_TO_PUBLISH: "thru-base thru-grpc-client thru-cli"
 
 on:
   release:
@@ -56,18 +59,11 @@ jobs:
         run: |
           echo "Skipping publish for tag $TAG (prerelease=$IS_PRERELEASE)"
 
-  publish-npm-packages:
+  publish-crates:
     needs: guard
     if: ${{ needs.guard.outputs.should_publish == 'true' && github.repository == 'Unto-Labs/thru' }}
     runs-on: ubuntu-latest
     timeout-minutes: 60
-    strategy:
-      matrix:
-        package:
-          - '@thru/browser-sdk'
-          - '@thru/react-sdk'
-          - '@thru/react-ui'
-          - '@thru/thru-sdk'
     env:
       RELEASE_VERSION: ${{ needs.guard.outputs.version }}
 
@@ -78,60 +74,60 @@ jobs:
           ref: ${{ needs.guard.outputs.tag }}
           fetch-depth: 0
 
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-          run_install: false
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: pnpm
-          cache-dependency-path: web/pnpm-lock.yaml
-          registry-url: https://registry.npmjs.org/
-
-      - name: Install workspace dependencies
-        working-directory: web
-        run: pnpm install --frozen-lockfile
-
-      - name: Sync package versions with release
-        working-directory: web
+      - name: Ensure crates.io token
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
+          if [ -z "$CARGO_REGISTRY_TOKEN" ]; then
+            echo "CARGO_REGISTRY_TOKEN secret is not configured." >&2
+            exit 1
+          fi
+
+      - name: Set up Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install buf
+        run: |
+          if ! command -v buf >/dev/null 2>&1; then
+            BUF_VERSION=1.44.0
+            curl -sSL "https://github.com/bufbuild/buf/releases/download/v${BUF_VERSION}/buf-Linux-x86_64.tar.gz" -o /tmp/buf.tar.gz
+            sudo tar -xzf /tmp/buf.tar.gz -C /usr/local --strip-components=1
+          fi
+
+      - name: Install cargo-edit
+        run: |
+          if ! command -v cargo-set-version >/dev/null 2>&1; then
+            cargo install cargo-edit --locked
+          fi
+
+      - name: Sync crate versions with release
+        working-directory: rpc
+        env:
+          RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
+        run: |
+          set -euo pipefail
           if [ -z "$RELEASE_VERSION" ]; then
             echo "Release version is not set." >&2
             exit 1
           fi
-          for pkg_json in packages/*/package.json; do
-            [ -f "$pkg_json" ] || continue
-            PKG_NAME=$(jq -r '.name' "$pkg_json")
-            PRIVATE=$(jq -r '.private // false' "$pkg_json")
-            if [ "$PRIVATE" = "true" ]; then
-              echo "Skipping private package $PKG_NAME"
-              continue
-            fi
-            tmp=$(mktemp)
-            jq --arg v "$RELEASE_VERSION" '.version = $v' "$pkg_json" > "$tmp"
-            mv "$tmp" "$pkg_json"
-            echo "Set $PKG_NAME version to $RELEASE_VERSION"
+          for crate in $CRATES_TO_PUBLISH; do
+            echo "Updating $crate to version $RELEASE_VERSION"
+            cargo set-version --package "$crate" "$RELEASE_VERSION"
           done
 
-      - name: Build packages
-        working-directory: web
-        run: pnpm --filter "${{ matrix.package }}" run build
+      - name: Cache cargo build artifacts
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: |
+            rpc
 
-      - name: Run package tests
-        working-directory: web
-        run: pnpm --filter "${{ matrix.package }}" run test
-
-      - name: Publish ${{ matrix.package }} to npm
-        working-directory: web
+      - name: Run crate publishes
+        working-directory: rpc
         env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
         run: |
-          if [ -z "$NODE_AUTH_TOKEN" ]; then
-            echo "NPM_TOKEN secret is not configured." >&2
-            exit 1
-          fi
-          pnpm publish --filter "${{ matrix.package }}" --no-git-checks
+          set -euo pipefail
+          for crate in $CRATES_TO_PUBLISH; do
+            echo "Running cargo publish for $crate"
+            cargo publish -p "$crate"
+          done

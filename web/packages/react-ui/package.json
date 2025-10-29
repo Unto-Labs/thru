@@ -17,7 +17,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@thru/react-sdk": "workspace:*"
+    "@thru/react-sdk": "workspace:*",
+    "@thru/chain-interfaces": "workspace:*"
   },
   "peerDependencies": {
     "react": "^18.0.0 || ^19.0.0",
