@@ -28,7 +28,7 @@ export const POST_MESSAGE_EVENT_TYPE = 'event' as const;
 
 export const IFRAME_READY_EVENT = 'iframe:ready' as const;
 
-export const DEFAULT_IFRAME_URL = 'https://wallet.thru.io/embedded';
+export const DEFAULT_IFRAME_URL = 'https://thru-wallet.up.railway.app/embedded';
 
 const REQUEST_ID_PREFIX = 'req';
 

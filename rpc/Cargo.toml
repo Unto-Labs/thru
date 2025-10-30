@@ -1,3 +1,0 @@
-[workspace]
-resolver = "3"
-members = [ "thru-base", "thru-rpc","thru-rpc-service", "thru-uds", "thru-uds-logs", "thru-uds-tui", "thru-e2e-tests", "thru-stress-test", "thru-rpc-client", "thru-cli", "block-builder", "thru-grpc-client"]
