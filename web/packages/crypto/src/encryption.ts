@@ -1,4 +1,5 @@
 import scrypt from 'scrypt-js';
+import { getWebCrypto } from '@thru/helpers';
 
 export interface EncryptedData {
   ciphertext: Uint8Array;
@@ -31,6 +32,7 @@ export class EncryptionService {
    */
   static async encrypt(data: Uint8Array, password: string): Promise<EncryptedData> {
     // Generate random salt and IV
+    const crypto = getWebCrypto();
     const salt = crypto.getRandomValues(new Uint8Array(this.SALT_LENGTH));
     const iv = crypto.getRandomValues(new Uint8Array(this.IV_LENGTH));
 
@@ -96,6 +98,7 @@ export class EncryptionService {
     );
 
     // Import key for WebCrypto API
+    const crypto = getWebCrypto();
     const cryptoKey = await crypto.subtle.importKey(
       'raw',
       new Uint8Array(derivedKey),

@@ -17,8 +17,8 @@
   },
   "scripts": {
     "get-height": "tsx --tsconfig tsconfig.json thru-ts-client-sdk/test-scripts/get-height.ts",
-    "counter": "tsx --tsconfig tsconfig.json thru-ts-client-sdk/counter.ts",
-    "create-account": "tsx --tsconfig tsconfig.json thru-ts-client-sdk/create-account.ts",
+    "counter": "tsx --tsconfig tsconfig.json thru-ts-client-sdk/test-scripts/counter.ts",
+    "create-account": "tsx --tsconfig tsconfig.json thru-ts-client-sdk/test-scripts/create-account.ts",
     "protobufs:pull": "rm -rf proto && cp -a ../../../proto ./proto",
     "protobufs:generate": "buf generate --include-imports",
     "build": "tsup",
@@ -32,7 +32,9 @@
     "@connectrpc/connect": "^2.1.0",
     "@connectrpc/connect-web": "^2.1.0",
     "@noble/ed25519": "^2.3.0",
-    "@noble/hashes": "^1.4.0"
+    "@noble/hashes": "^1.4.0",
+    "@thru/crypto": "workspace:*",
+    "@thru/helpers": "workspace:*"
   },
   "devDependencies": {
     "@bufbuild/buf": "^1.58.0",

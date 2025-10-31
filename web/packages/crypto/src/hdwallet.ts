@@ -1,6 +1,6 @@
 import { getPublicKeyAsync } from '@noble/ed25519';
-import { encodeAddress } from '@thru/thru-sdk';
 import { derivePath } from 'ed25519-hd-key';
+import { encodeAddress } from '@thru/helpers';
 
 /**
  * HD Wallet helpers for Thru (BIP44 coin type 9999).

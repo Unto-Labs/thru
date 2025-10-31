@@ -1,4 +1,4 @@
-import type { BytesLike } from "../modules/helpers";
+import { BytesLike } from "@thru/helpers";
 
 export type Bytes32 = Uint8Array;
 export type Bytes64 = Uint8Array;

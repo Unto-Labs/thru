@@ -1,0 +1,19 @@
+[package]
+name = "thru-grpc-client"
+version = "0.1.0"
+edition = "2024"
+description = "Thru GRPC Client"
+license = "Apache-2.0"
+
+[dependencies]
+bytes = "1"
+prost = "0.14.1"
+prost-types = "0.14.1"
+tonic = { version = "0.14.2", features = ["transport"] }
+tonic-prost = "0.14.2"
+
+[build-dependencies]
+prost = "0.14.1"
+prost-types = "0.14.1"
+tonic-prost-build = "0.14.2"
+walkdir = "2"

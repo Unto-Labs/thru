@@ -5,6 +5,7 @@ export * as accounts from "./modules/accounts";
 export * as blocks from "./modules/blocks";
 export * as events from "./modules/events";
 export * as height from "./modules/height";
+export * as keys from "./modules/keys";
 export * as proofs from "./modules/proofs";
 export * as streaming from "./modules/streaming";
 export * as transactions from "./modules/transactions";
@@ -18,19 +19,15 @@ export type {
 export type { BlockQueryOptions, ListBlocksOptions, RawBlockQueryOptions } from "./modules/blocks";
 export type { GetEventOptions } from "./modules/events";
 export {
-    decodeAddress,
-    decodeSignature,
     deriveProgramAddress,
-    encodeAddress,
-    encodeSignature,
     toPubkey
 } from "./modules/helpers";
 export type {
     BlockSelector,
-    BytesLike,
     DeriveProgramAddressOptions,
     DeriveProgramAddressResult
 } from "./modules/helpers";
+export type { GeneratedKeyPair } from "./modules/keys";
 export type { TrackTransactionOptions } from "./modules/streaming";
 export type {
     BuildAndSignTransactionOptions, BuildTransactionOptions, RawTransactionQueryOptions, TransactionAccountsConfig,

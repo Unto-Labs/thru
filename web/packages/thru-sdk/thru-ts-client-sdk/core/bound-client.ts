@@ -1,21 +1,19 @@
 import type { ThruClientContext } from "./client";
 
+import { decodeAddress, decodeSignature, encodeAddress, encodeSignature } from "@thru/helpers";
 import * as accountsModule from "../modules/accounts";
 import * as blocksModule from "../modules/blocks";
 import * as eventsModule from "../modules/events";
 import * as heightModule from "../modules/height";
 import {
-    decodeAddress,
-    decodeSignature,
     deriveProgramAddress,
-    encodeAddress,
-    encodeSignature,
     toBlockHash,
     toPubkey,
     toSignature,
     type DeriveProgramAddressOptions,
     type DeriveProgramAddressResult,
 } from "../modules/helpers";
+import * as keysModule from "../modules/keys";
 import * as proofsModule from "../modules/proofs";
 import * as streamingModule from "../modules/streaming";
 import * as transactionsModule from "../modules/transactions";
@@ -64,6 +62,10 @@ interface BoundProofs {
     generate: BoundFunction<typeof proofsModule.generateStateProof>;
 }
 
+interface BoundKeys {
+    generateKeyPair: typeof keysModule.generateKeyPair;
+}
+
 interface Helpers {
     toSignature(value: Uint8Array | string): Signature;
     toPubkey(value: Uint8Array | string, field: string): Pubkey;
@@ -82,6 +84,7 @@ export interface Thru {
     transactions: BoundTransactions;
     events: BoundEvents;
     proofs: BoundProofs;
+    keys: BoundKeys;
     helpers: Helpers;
 }
 
@@ -118,6 +121,9 @@ export function createBoundThruClient(ctx: ThruClientContext): Thru {
             encodeAddress,
             decodeAddress,
             deriveProgramAddress,
+        },
+        keys: {
+            generateKeyPair: keysModule.generateKeyPair,
         },
         events: {
             get: bind(ctx, eventsModule.getEvent),

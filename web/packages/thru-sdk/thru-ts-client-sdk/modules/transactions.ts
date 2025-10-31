@@ -32,9 +32,9 @@ import {
     type TransactionHeaderInput,
 } from "../transactions";
 import { parseAccountIdentifier, parseInstructionData } from "../transactions/utils";
-import type { BytesLike } from "./helpers";
-import { encodeSignature, toSignature as toSignatureMessage } from "./helpers";
+import { toSignature } from "./helpers";
 
+import { BytesLike, encodeSignature } from "@thru/helpers";
 import { getAccount } from "./accounts";
 import { getBlockHeight } from "./height";
 
@@ -94,7 +94,7 @@ export async function getTransaction(
     options: TransactionQueryOptions = {},
 ): Promise<CoreTransaction> {
     const request = create(GetTransactionRequestSchema, {
-        signature: toSignatureMessage(signature),
+        signature: toSignature(signature),
         view: options.view ?? DEFAULT_TRANSACTION_VIEW,
         versionContext: options.versionContext,
         minConsensus: options.minConsensus ?? DEFAULT_MIN_CONSENSUS,
@@ -108,7 +108,7 @@ export async function getRawTransaction(
     options: RawTransactionQueryOptions = {},
 ): Promise<RawTransaction> {
     const request = create(GetRawTransactionRequestSchema, {
-        signature: toSignatureMessage(signature),
+        signature: toSignature(signature),
         versionContext: options.versionContext,
         minConsensus: options.minConsensus ?? DEFAULT_MIN_CONSENSUS,
     });
@@ -117,7 +117,7 @@ export async function getRawTransaction(
 
 export async function getTransactionStatus(ctx: ThruClientContext, signature: BytesLike): Promise<TransactionStatus> {
     const request = create(GetTransactionStatusRequestSchema, {
-        signature: toSignatureMessage(signature),
+        signature: toSignature(signature),
     });
     return ctx.query.getTransactionStatus(request);
 }

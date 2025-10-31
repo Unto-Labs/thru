@@ -1,6 +1,4 @@
-import type { BytesLike } from "../modules/helpers";
-import { decodeAddress } from "../modules/helpers";
-import { hexToBytes, isHexString } from "../utils/utils";
+import { BytesLike, decodeAddress, hexToBytes, isHexString } from "@thru/helpers";
 import type { AccountAddress, ProgramIdentifier } from "./types";
 
 const ACCOUNT_LIMIT = 1024;

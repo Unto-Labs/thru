@@ -1,4 +1,3 @@
-import { getPublicKeyAsync } from "@noble/ed25519";
 import { createThruClient } from "../client";
 import { ConsensusStatus } from "../proto/thru/common/v1/consensus_pb";
 
@@ -8,20 +7,10 @@ const sdk = createThruClient({
 });
 
 // Replace with the account you want to create and its 32-byte private key.
-const targetAccountPrivateKeyHex = "da0abd760d32d319ad11069d2d56f8c61b03f28d4096947c5117a54f427e4d60";
-const targetAccountAddress = sdk.helpers.encodeAddress(await getPublicKeyAsync(targetAccountPrivateKeyHex))
 
-function hexToBytes(hex: string): Uint8Array {
-    const normalized = hex.startsWith("0x") ? hex.slice(2) : hex;
-    if (normalized.length % 2 !== 0) {
-        throw new Error("Private key hex must contain an even number of characters");
-    }
-    const bytes = new Uint8Array(normalized.length / 2);
-    for (let i = 0; i < normalized.length; i += 2) {
-        bytes[i / 2] = parseInt(normalized.substring(i, i + 2), 16);
-    }
-    return bytes;
-}
+const keypair = await sdk.keys.generateKeyPair()
+const targetAccountAddress = keypair.address
+const targetAccountPrivateKey = keypair.privateKey
 
 async function fetchAccountSnapshot(label: string, address: string): Promise<void> {
     try {
@@ -48,10 +37,10 @@ async function run(): Promise<void> {
     await fetchAccountSnapshot("Pre-create", targetAccountAddress);
 
     const feePayerPublicKey = sdk.helpers.decodeAddress(targetAccountAddress);
-    const feePayerPrivateKey = hexToBytes(targetAccountPrivateKeyHex);
+    const feePayerPrivateKey = targetAccountPrivateKey
 
     const transaction = await sdk.accounts.create({
-        publicKey: feePayerPublicKey
+        publicKey: feePayerPublicKey,
     })
 
     await transaction.sign(feePayerPrivateKey);

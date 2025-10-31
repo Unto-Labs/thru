@@ -1,4 +1,4 @@
-import { BytesLike } from "../modules/helpers";
+import { BytesLike } from "@thru/helpers";
 import { StateProofType } from "../proto/thru/core/v1/state_pb";
 
 export type GenerateStateProofOptions = {

@@ -1,5 +1,6 @@
 import { create } from "@bufbuild/protobuf";
 
+import { BytesLike } from "@thru/helpers";
 import type { ThruClientContext } from "../core/client";
 import { DEFAULT_ACCOUNT_VIEW, DEFAULT_MIN_CONSENSUS } from "../defaults";
 import { ConsensusStatus, VersionContext } from "../proto/thru/common/v1/consensus_pb";
@@ -15,14 +16,17 @@ import {
 } from "../proto/thru/services/v1/query_service_pb";
 import type { Transaction } from "../transactions/Transaction";
 import { TransactionBuilder } from "../transactions/TransactionBuilder";
+import type { TransactionHeaderInput } from "../transactions/types";
+import { mergeTransactionHeader } from "../utils/utils";
 import { getBlockHeight } from "./height";
-import type { BytesLike } from "./helpers";
 import { toPubkey } from "./helpers";
 import { generateStateProof } from "./proofs";
 
 export interface CreateAccountOptions {
     /** The new account's public key (fee payer). */
     publicKey: BytesLike;
+    /** Optional overrides for the transaction header. */
+    header?: Partial<TransactionHeaderInput>;
 }
 
 
@@ -116,18 +120,22 @@ export async function createAccount(
     program[31] = 0x02;
 
     const builder = new TransactionBuilder();
+    const headerDefaults: TransactionHeaderInput = {
+        fee: 0n,
+        nonce: 0n,
+        startSlot,
+        expiryAfter: 100,
+        computeUnits: 10_000,
+        memoryUnits: 10_000,
+        stateUnits: 10_000,
+    };
+
+    const header = mergeTransactionHeader(headerDefaults, options.header);
+
     const transaction = builder.build({
         feePayer: { publicKey: feePayer },
         program,
-        header: {
-            fee: 0n,
-            nonce: 0n,
-            startSlot,
-            expiryAfter: 100,
-            computeUnits: 10_000,
-            memoryUnits: 10_000,
-            stateUnits: 10_000,
-        },
+        header,
         content: {
             proofs: { feePayerStateProof: proofBytes }
         }
