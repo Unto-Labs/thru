@@ -28,9 +28,9 @@ serde_yaml = "0.9"
 serde_json = "1.0"
 
 # gRPC client
-tonic = { version = "0.14", features = ["transport"] }
-prost-types = "0.14"
-tonic-health = "0.14"
+tonic = { version = "0.14.2", features = ["transport", "tls-aws-lc", "tls-webpki-roots"] }
+prost-types = "0.14.1"
+tonic-health = "0.14.2"
 
 # Error handling
 anyhow = "1.0"

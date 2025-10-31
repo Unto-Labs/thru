@@ -152,7 +152,7 @@ impl KeyManager {
 /// Configuration structure for the Thru CLI
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
-    /// Endpoint for gRPC requests (e.g. http://127.0.0.1:8472)
+    /// Endpoint for gRPC requests (e.g. http://127.0.0.1:8472 or https://grpc.alphanet.thruput.org:443)
     pub rpc_base_url: String,
 
     /// Key management
@@ -297,7 +297,7 @@ impl Config {
         let mut url =
             Url::parse(&self.rpc_base_url).map_err(|e| ConfigError::InvalidUrl(e.to_string()))?;
 
-        let scheme = url.scheme();
+        let scheme = url.scheme().to_string();
         if scheme != "http" && scheme != "https" {
             return Err(ConfigError::InvalidUrl(format!(
                 "unsupported scheme '{}'; expected http or https",
@@ -323,15 +323,17 @@ impl Config {
         // Ensure path is exactly "/"
         url.set_path("/");
 
-        // Historically the CLI talked to JSON-RPC on 8080/3000. Remap to gRPC default 8472.
-        match url.port() {
-            Some(port) if port == 8080 || port == 3000 || port == 8081 => {
-                let _ = url.set_port(Some(8472));
+        // Set default ports only if not explicitly specified
+        if url.port().is_none() {
+            match scheme.as_str() {
+                "http" => {
+                    let _ = url.set_port(Some(80));
+                }
+                "https" => {
+                    let _ = url.set_port(Some(443));
+                }
+                _ => {}
             }
-            None => {
-                let _ = url.set_port(Some(8472));
-            }
-            _ => {}
         }
 
         Ok(url)
@@ -398,5 +400,61 @@ mod tests {
         let mut config = Config::default();
         config.rpc_base_url = "not-a-url".to_string();
         assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_grpc_url_http_default_port() {
+        let mut config = Config::default();
+        config.rpc_base_url = "http://localhost".to_string();
+        let grpc_url = config.get_grpc_url().unwrap();
+        assert_eq!(grpc_url.port_or_known_default(), Some(80));
+    }
+
+    #[test]
+    fn test_grpc_url_https_default_port() {
+        let mut config = Config::default();
+        config.rpc_base_url = "https://grpc.alphanet.thruput.org".to_string();
+        let grpc_url = config.get_grpc_url().unwrap();
+        assert_eq!(grpc_url.port_or_known_default(), Some(443));
+    }
+
+    #[test]
+    fn test_grpc_url_explicit_port_443() {
+        let mut config = Config::default();
+        config.rpc_base_url = "https://grpc.alphanet.thruput.org:443".to_string();
+        let grpc_url = config.get_grpc_url().unwrap();
+        assert_eq!(grpc_url.port_or_known_default(), Some(443));
+    }
+
+    #[test]
+    fn test_grpc_url_explicit_port_8443() {
+        let mut config = Config::default();
+        config.rpc_base_url = "https://grpc.alphanet.thruput.org:8443".to_string();
+        let grpc_url = config.get_grpc_url().unwrap();
+        assert_eq!(grpc_url.port(), Some(8443));
+    }
+
+    #[test]
+    fn test_grpc_url_explicit_port_8472() {
+        let mut config = Config::default();
+        config.rpc_base_url = "http://localhost:8472".to_string();
+        let grpc_url = config.get_grpc_url().unwrap();
+        assert_eq!(grpc_url.port(), Some(8472));
+    }
+
+    #[test]
+    fn test_grpc_url_explicit_port_8080() {
+        let mut config = Config::default();
+        config.rpc_base_url = "http://localhost:8080".to_string();
+        let grpc_url = config.get_grpc_url().unwrap();
+        assert_eq!(grpc_url.port(), Some(8080));
+    }
+
+    #[test]
+    fn test_grpc_url_explicit_port_9000() {
+        let mut config = Config::default();
+        config.rpc_base_url = "http://localhost:9000".to_string();
+        let grpc_url = config.get_grpc_url().unwrap();
+        assert_eq!(grpc_url.port(), Some(9000));
     }
 }

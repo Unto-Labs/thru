@@ -1,8 +1,6 @@
-edition = "2023";
+syntax = "proto3";
 
 package thru.services.v1;
-
-option features.field_presence = EXPLICIT;
 
 import "google/api/annotations.proto";
 import "google/api/client.proto";

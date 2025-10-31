@@ -1,8 +1,6 @@
-edition = "2023";
+syntax = "proto3";
 
 package thru.services.v1;
-
-option features.field_presence = EXPLICIT;
 
 import "buf/validate/validate.proto";
 import "google/api/field_behavior.proto";

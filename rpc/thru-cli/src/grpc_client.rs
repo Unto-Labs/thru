@@ -9,7 +9,7 @@ use tokio::time;
 use tonic::{
     Request, Status,
     metadata::MetadataValue,
-    transport::{Channel, Endpoint},
+    transport::{Channel, ClientTlsConfig, Endpoint},
 };
 use tonic_health::pb::{HealthCheckRequest, HealthCheckResponse, health_client::HealthClient};
 
@@ -56,6 +56,15 @@ impl ClientBuilder {
         let mut endpoint = Endpoint::from_shared(url.to_string())
             .expect("invalid gRPC endpoint URL provided to ClientBuilder");
         endpoint = endpoint.timeout(self.timeout);
+        
+        // Enable TLS for HTTPS URLs
+        if url.scheme() == "https" {
+            let tls_config = ClientTlsConfig::new()
+                .with_enabled_roots();
+            endpoint = endpoint.tls_config(tls_config)
+                .expect("failed to configure TLS for HTTPS endpoint");
+        }
+        
         self.endpoint = endpoint;
         self
     }

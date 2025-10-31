@@ -1,8 +1,6 @@
-edition = "2023";
+syntax = "proto3";
 
 package thru.core.v1;
-
-option features.field_presence = EXPLICIT;
 
 import "google/api/field_behavior.proto";
 import "thru/core/v1/types.proto";

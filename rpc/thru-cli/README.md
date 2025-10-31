@@ -99,6 +99,32 @@ max_retries: 3
 | `max_retries` | Max retry attempts | 3 | No |
 | `auth_token` | Authorization token for HTTP requests | None | No |
 
+### RPC URL and Port Handling
+
+The CLI uses standard port handling:
+
+- **HTTP URLs without explicit port**: Default to port `80` (e.g., `http://localhost` → `http://localhost:80`)
+- **HTTPS URLs without explicit port**: Default to port `443` (e.g., `https://grpc.alphanet.thruput.org` → `https://grpc.alphanet.thruput.org:443`)
+- **Explicit ports**: Used exactly as specified (e.g., `http://localhost:8472` uses port `8472`)
+
+**Examples:**
+
+```yaml
+# HTTPS with standard port (recommended for production)
+rpc_base_url: "https://grpc.alphanet.thruput.org:443"
+
+# HTTPS without explicit port (defaults to 443)
+rpc_base_url: "https://grpc.alphanet.thruput.org"
+
+# HTTP with custom port (common for local development)
+rpc_base_url: "http://localhost:8472"
+
+# HTTP without explicit port (defaults to 80)
+rpc_base_url: "http://localhost"
+```
+
+**Important**: Do not use angle brackets `<>` around URLs in the config file.
+
 ### Authentication
 
 If your Thru node requires authentication, you can configure an authorization token in your `config.yaml`:

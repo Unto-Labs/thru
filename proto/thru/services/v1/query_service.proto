@@ -1,8 +1,6 @@
-edition = "2023";
+syntax = "proto3";
 
 package thru.services.v1;
-
-option features.field_presence = EXPLICIT;
 
 import "buf/validate/validate.proto";
 import "google/api/annotations.proto";
@@ -37,7 +35,7 @@ message GetAccountRequest {
       [(google.api.field_behavior) = OPTIONAL];
 
   reserved 5;
-  reserved skip_data;
+  reserved "skip_data";
 }
 
 // GetRawAccountRequest retrieves raw account bytes by public key.

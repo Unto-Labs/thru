@@ -11,8 +11,8 @@ permissions:
 jobs:
   # Build SDK artifacts
   build-sdk-artifacts:
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
+    runs-on: ubuntu-large
+    timeout-minutes: 120
     strategy:
       matrix:
         sdk: [c]
