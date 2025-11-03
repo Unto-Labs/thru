@@ -1,7 +1,7 @@
 //! Shared utility functions
 
 use crate::error::CliError;
-use thru_base::tn_tools::Pubkey;
+use thru_base::{tn_runtime_utils::tn_vm_error_str, tn_tools::Pubkey};
 
 /// Validate and parse an address that can be either a ta... address or 64-char hex string
 /// returns 32-byte representation
@@ -60,4 +60,12 @@ pub fn parse_seed_bytes(hex_string: &str) -> Result<[u8; 32], CliError> {
     let mut result = [0u8; 32];
     result.copy_from_slice(&bytes);
     Ok(result)
+}
+
+/// Format a VM error code as "<numeric> (<name>)" when the name is known.
+pub fn format_vm_error(code: i32) -> String {
+    match tn_vm_error_str(code) {
+        Some(name) => format!("{} ({})", code, name),
+        None => code.to_string(),
+    }
 }

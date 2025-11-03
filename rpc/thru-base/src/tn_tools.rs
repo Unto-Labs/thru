@@ -155,6 +155,43 @@ impl Pubkey {
         // This should never fail since we're encoding from valid bytes
         Self(address)
     }
+
+    /// Create a Pubkey from a hex string
+    ///
+    /// The hex string can be 64 characters (32 bytes) with optional "0x" prefix
+    pub fn from_hex(hex_str: &str) -> Result<Self> {
+        // Remove "0x" prefix if present
+        let hex_str = hex_str.strip_prefix("0x").unwrap_or(hex_str);
+
+        // Validate hex string length (should be 64 characters for 32 bytes)
+        if hex_str.len() != 64 {
+            return Err(ValidationError::InvalidPubkey(format!(
+                "invalid hex pubkey length: expected 64 characters, got {}",
+                hex_str.len()
+            ))
+            .into());
+        }
+
+        // Decode hex to bytes
+        let bytes = hex::decode(hex_str).map_err(|e| {
+            ValidationError::InvalidPubkey(format!("invalid hex pubkey format: {}", e))
+        })?;
+
+        // Ensure we have exactly 32 bytes
+        if bytes.len() != 32 {
+            return Err(ValidationError::InvalidPubkey(format!(
+                "invalid hex pubkey: expected 32 bytes, got {}",
+                bytes.len()
+            ))
+            .into());
+        }
+
+        let mut bytes_array = [0u8; 32];
+        bytes_array.copy_from_slice(&bytes);
+
+        // Convert to Thru address format
+        Ok(Self::from_bytes(&bytes_array))
+    }
 }
 
 impl fmt::Display for Pubkey {

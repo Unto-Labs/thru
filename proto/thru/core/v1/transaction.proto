@@ -23,36 +23,79 @@ enum TransactionView {
   TRANSACTION_VIEW_FULL = 4;
 }
 
+// TransactionVmError enumerates runtime error codes returned by the executor.
+enum TransactionVmError {
+  TRANSACTION_VM_EXECUTE_SUCCESS = 0; // TN_RUNTIME_TXN_EXECUTE_SUCCESS
+  TRANSACTION_VM_ERROR_INVALID_FORMAT = -255;  // TN_RUNTIME_TXN_ERR_INVALID_FORMAT
+  TRANSACTION_VM_ERROR_INVALID_VERSION = -254;  // TN_RUNTIME_TXN_ERR_INVALID_VERSION
+  TRANSACTION_VM_ERROR_INVALID_FLAGS = -253;  // TN_RUNTIME_TXN_ERR_INVALID_FLAGS
+  TRANSACTION_VM_ERROR_INVALID_SIGNATURE = -252;  // TN_RUNTIME_TXN_ERR_INVALID_SIGNATURE
+  TRANSACTION_VM_ERROR_DUPLICATE_ACCOUNT = -251;  // TN_RUNTIME_TXN_ERR_DUPLICATE_ACCOUNT
+  TRANSACTION_VM_ERROR_UNSORTED_ACCOUNTS = -250;  // TN_RUNTIME_TXN_ERR_UNSORTED_ACCOUNTS
+  TRANSACTION_VM_ERROR_UNSORTED_READWRITE_ACCOUNTS =
+      -249;  // TN_RUNTIME_TXN_ERR_UNSORTED_READWRITE_ACCOUNTS
+  TRANSACTION_VM_ERROR_UNSORTED_READONLY_ACCOUNTS =
+      -248;  // TN_RUNTIME_TXN_ERR_UNSORTED_READONLY_ACCOUNTS
+  TRANSACTION_VM_ERROR_ACCOUNT_COUNT_LIMIT_EXCEEDED =
+      -247;  // TN_RUNTIME_TXN_ERR_ACCOUNT_COUNT_LIMIT_EXCEEDED
+  TRANSACTION_VM_ERROR_NONCE_TOO_LOW = -511;  // TN_RUNTIME_TXN_ERR_NONCE_TOO_LOW
+  TRANSACTION_VM_ERROR_NONCE_TOO_HIGH = -510;  // TN_RUNTIME_TXN_ERR_NONCE_TOO_HIGH
+  TRANSACTION_VM_ERROR_INSUFFICIENT_FEE_PAYER_BALANCE =
+      -509;  // TN_RUNTIME_TXN_ERR_INSUFFICIENT_FEE_PAYER_BALANCE
+  TRANSACTION_VM_ERROR_FEE_PAYER_ACCOUNT_DOES_NOT_EXIST =
+    -508;  // TN_RUNTIME_TXN_ERR_FEE_PAYER_ACCOUNT_DOES_NOT_EXIST
+  TRANSACTION_VM_ERROR_NOT_LIVE_YET = -507;  // TN_RUNTIME_TXN_ERR_NOT_LIVE_YET
+  TRANSACTION_VM_ERROR_EXPIRED = -506;       // TN_RUNTIME_TXN_ERR_EXPIRED
+  TRANSACTION_VM_ERROR_INVALID_FEE_PAYER_STATE_PROOF =
+      -505;  // TN_RUNTIME_TXN_ERR_INVALID_FEE_PAYER_STATE_PROOF
+  TRANSACTION_VM_ERROR_INVALID_FEE_PAYER_STATE_PROOF_TYPE =
+      -504;  // TN_RUNTIME_TXN_ERR_INVALID_FEE_PAYER_STATE_PROOF_TYPE
+  TRANSACTION_VM_ERROR_INVALID_FEE_PAYER_STATE_PROOF_SLOT =
+      -503;  // TN_RUNTIME_TXN_ERR_INVALID_FEE_PAYER_STATE_PROOF_SLOT
+  TRANSACTION_VM_ERROR_INVALID_FEE_PAYER_ACCOUNT_OWNER =
+      -502;  // TN_RUNTIME_TXN_ERR_INVALID_FEE_PAYER_ACCOUNT_OWNER
+  TRANSACTION_VM_ERROR_INVALID_FEE_PAYER_STATE_PROOF_ACCOUNT_OWNER =
+      -501;  // TN_RUNTIME_TXN_ERR_INVALID_FEE_PAYER_STATE_PROOF_ACCOUNT_OWNER
+  TRANSACTION_VM_ERROR_INVALID_FEE_PAYER_STATE_PROOF_ACCOUNT_META_DATA_SZ =
+      -500;  // TN_RUNTIME_TXN_ERR_INVALID_FEE_PAYER_STATE_PROOF_ACCOUNT_META_DATA_SZ
+  TRANSACTION_VM_ERROR_VM_FAILED = -767;  // TN_RUNTIME_TXN_ERR_VM_FAILED
+  TRANSACTION_VM_ERROR_INVALID_PROGRAM_ACCOUNT =
+      -766;                                     // TN_RUNTIME_TXN_ERR_INVALID_PROGRAM_ACCOUNT
+  TRANSACTION_VM_ERROR_VM_REVERT = -765;        // TN_RUNTIME_TXN_ERR_VM_REVERT
+  TRANSACTION_VM_ERROR_CU_EXHAUSTED = -764;     // TN_RUNTIME_TXN_ERR_CU_EXHAUSTED
+  TRANSACTION_VM_ERROR_SU_EXHAUSTED = -763;     // TN_RUNTIME_TXN_ERR_SU_EXHAUSTED
+}
+
 // TransactionHeader carries structured metadata for a transaction.
 message TransactionHeader {
   Signature fee_payer_signature = 1 [(google.api.field_behavior) = REQUIRED];
   uint32 version = 2 [(google.api.field_behavior) = REQUIRED];
-  uint32 flags = 3 [(google.api.field_behavior) = OPTIONAL];
-  uint32 readwrite_accounts_count = 4 [(google.api.field_behavior) = OPTIONAL];
-  uint32 readonly_accounts_count = 5 [(google.api.field_behavior) = OPTIONAL];
-  uint32 instruction_data_size = 6 [(google.api.field_behavior) = OPTIONAL];
-  uint32 requested_compute_units = 7 [(google.api.field_behavior) = OPTIONAL];
-  uint32 requested_state_units = 8 [(google.api.field_behavior) = OPTIONAL];
-  uint32 requested_memory_units = 9 [(google.api.field_behavior) = OPTIONAL];
-  uint32 expiry_after = 10 [(google.api.field_behavior) = OPTIONAL];
-  uint64 fee = 11 [(google.api.field_behavior) = OPTIONAL];
-  uint64 nonce = 12 [(google.api.field_behavior) = OPTIONAL];
-  uint64 start_slot = 13 [(google.api.field_behavior) = OPTIONAL];
-  Pubkey fee_payer_pubkey = 14 [(google.api.field_behavior) = OPTIONAL];
-  Pubkey program_pubkey = 15 [(google.api.field_behavior) = OPTIONAL];
+  uint32 flags = 3 [(google.api.field_behavior) = REQUIRED];
+  uint32 readwrite_accounts_count = 4 [(google.api.field_behavior) = REQUIRED];
+  uint32 readonly_accounts_count = 5 [(google.api.field_behavior) = REQUIRED];
+  uint32 instruction_data_size = 6 [(google.api.field_behavior) = REQUIRED];
+  uint32 requested_compute_units = 7 [(google.api.field_behavior) = REQUIRED];
+  uint32 requested_state_units = 8 [(google.api.field_behavior) = REQUIRED];
+  uint32 requested_memory_units = 9 [(google.api.field_behavior) = REQUIRED];
+  uint32 expiry_after = 10 [(google.api.field_behavior) = REQUIRED];
+  uint64 fee = 11 [(google.api.field_behavior) = REQUIRED];
+  uint64 nonce = 12 [(google.api.field_behavior) = REQUIRED];
+  uint64 start_slot = 13 [(google.api.field_behavior) = REQUIRED];
+  Pubkey fee_payer_pubkey = 14 [(google.api.field_behavior) = REQUIRED];
+  Pubkey program_pubkey = 15 [(google.api.field_behavior) = REQUIRED];
 }
 
 // TransactionExecutionResult captures execution outcomes.
 message TransactionExecutionResult {
-  uint32 consumed_compute_units = 1 [(google.api.field_behavior) = OPTIONAL];
-  uint32 consumed_memory_units = 2 [(google.api.field_behavior) = OPTIONAL];
-  uint32 consumed_state_units = 3 [(google.api.field_behavior) = OPTIONAL];
-  uint64 user_error_code = 4 [(google.api.field_behavior) = OPTIONAL];
-  uint32 vm_error = 5 [(google.api.field_behavior) = OPTIONAL];
-  uint64 execution_result = 6 [(google.api.field_behavior) = OPTIONAL];
-  uint32 pages_used = 7 [(google.api.field_behavior) = OPTIONAL];
-  uint32 events_count = 8 [(google.api.field_behavior) = OPTIONAL];
-  uint32 events_size = 9 [(google.api.field_behavior) = OPTIONAL];
+  uint32 consumed_compute_units = 1 [(google.api.field_behavior) = REQUIRED];
+  uint32 consumed_memory_units = 2 [(google.api.field_behavior) = REQUIRED];
+  uint32 consumed_state_units = 3 [(google.api.field_behavior) = REQUIRED];
+  uint64 user_error_code = 4 [(google.api.field_behavior) = REQUIRED];
+  TransactionVmError vm_error = 5 [(google.api.field_behavior) = REQUIRED];
+  uint64 execution_result = 6 [(google.api.field_behavior) = REQUIRED];
+  uint32 pages_used = 7 [(google.api.field_behavior) = REQUIRED];
+  uint32 events_count = 8 [(google.api.field_behavior) = REQUIRED];
+  uint32 events_size = 9 [(google.api.field_behavior) = REQUIRED];
   repeated Pubkey readwrite_accounts = 10
       [(google.api.field_behavior) = OPTIONAL];
   repeated Pubkey readonly_accounts = 11
@@ -62,25 +105,25 @@ message TransactionExecutionResult {
 }
 // TransactionEvent describes an event emitted during transaction execution.
 message TransactionEvent {
-  string event_id = 1 [(google.api.field_behavior) = OPTIONAL];
-  uint32 call_idx = 2 [(google.api.field_behavior) = OPTIONAL];
-  uint32 program_idx = 3 [(google.api.field_behavior) = OPTIONAL];
-  Pubkey program = 4 [(google.api.field_behavior) = OPTIONAL];
-  bytes payload = 5 [(google.api.field_behavior) = OPTIONAL];
+  string event_id = 1 [(google.api.field_behavior) = REQUIRED];
+  uint32 call_idx = 2 [(google.api.field_behavior) = REQUIRED];
+  uint32 program_idx = 3 [(google.api.field_behavior) = REQUIRED];
+  Pubkey program = 4 [(google.api.field_behavior) = REQUIRED];
+  bytes payload = 5 [(google.api.field_behavior) = REQUIRED];
 }
 
 // Transaction describes a fully decoded transaction resource.
 message Transaction {
   Signature signature = 1 [(google.api.field_behavior) = REQUIRED];
-  TransactionHeader header = 2 [(google.api.field_behavior) = OPTIONAL];
-  bytes body = 3 [
+  TransactionHeader header = 2 [(google.api.field_behavior) = REQUIRED];
+  optional bytes body = 3 [
     (google.api.field_behavior) = OPTIONAL,
     (buf.validate.field).bytes.max_len = 16777216
   ];
-  TransactionExecutionResult execution_result = 4
+  optional TransactionExecutionResult execution_result = 4
       [(google.api.field_behavior) = OPTIONAL];
-  uint64 slot = 5 [(google.api.field_behavior) = OPTIONAL];
-  uint32 block_offset = 6 [(google.api.field_behavior) = OPTIONAL];
+  optional uint64 slot = 5 [(google.api.field_behavior) = OPTIONAL];
+  optional uint32 block_offset = 6 [(google.api.field_behavior) = OPTIONAL];
 }
 
 // RawTransaction provides direct access to serialized transaction bytes.

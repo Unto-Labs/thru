@@ -1,8 +1,6 @@
-edition = "2023";
+syntax = "proto3";
 
 package thru.common.v1;
-
-option features.field_presence = EXPLICIT;
 
 import "buf/validate/validate.proto";
 import "google/api/field_behavior.proto";
@@ -18,20 +16,20 @@ option swift_prefix = "THU";
 // PageRequest contains pagination parameters for listing RPCs.
 message PageRequest {
   // Maximum number of items to return in a single response.
-  uint32 page_size = 1 [
+  optional uint32 page_size = 1 [
     (google.api.field_behavior) = OPTIONAL,
     (buf.validate.field).uint32.gte = 1,
     (buf.validate.field).uint32.lte = 1000
   ];
 
   // Token identifying the position to resume from.
-  string page_token = 2 [
+  optional string page_token = 2 [
     (google.api.field_behavior) = OPTIONAL,
     (buf.validate.field).string.max_len = 512
   ];
 
   // Optional ordering specification in "field [asc|desc]" form.
-  string order_by = 3 [
+  optional string order_by = 3 [
     (google.api.field_behavior) = OPTIONAL,
     (buf.validate.field).string.max_len = 256
   ];
@@ -40,8 +38,8 @@ message PageRequest {
 // PageResponse captures pagination metadata returned with list results.
 message PageResponse {
   // Token to retrieve the next page of results, if any.
-  string next_page_token = 1 [(google.api.field_behavior) = OPTIONAL];
+  optional string next_page_token = 1 [(google.api.field_behavior) = OPTIONAL];
 
   // Total number of items available when known.
-  uint64 total_size = 2 [(google.api.field_behavior) = OPTIONAL];
+  optional uint64 total_size = 2 [(google.api.field_behavior) = OPTIONAL];
 }

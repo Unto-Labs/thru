@@ -1,8 +1,6 @@
-edition = "2023";
+syntax = "proto3";
 
 package thru.services.v1;
-
-option features.field_presence = EXPLICIT;
 
 import "google/api/annotations.proto";
 import "google/api/client.proto";
@@ -29,6 +27,24 @@ message SendTransactionResponse {
   thru.core.v1.Signature signature = 1 [(google.api.field_behavior) = REQUIRED];
 }
 
+// BatchSendTransactionsRequest submits multiple transactions to the cluster.
+message BatchSendTransactionsRequest {
+  // List of raw transaction bytes encoded according to chain specification.
+  repeated bytes raw_transactions = 1 [(google.api.field_behavior) = REQUIRED];
+
+  // Number of retries for each transaction if not accepted by UDS (defaults to 0).
+  int32 num_retries = 2;
+}
+
+// BatchSendTransactionsResponse returns submission results for each transaction.
+message BatchSendTransactionsResponse {
+  // Signatures for each transaction (in same order as request).
+  repeated thru.core.v1.Signature signatures = 1 [(google.api.field_behavior) = REQUIRED];
+
+  // Acceptance status for each transaction (true if accepted, false if not).
+  repeated bool accepted = 2 [(google.api.field_behavior) = REQUIRED];
+}
+
 // CommandService defines transactional RPCs that mutate state or perform
 // expensive computations.
 service CommandService {
@@ -39,6 +55,15 @@ service CommandService {
       returns (SendTransactionResponse) {
     option (google.api.http) = {
       post: "/v1/transactions"
+      body: "*"
+    };
+  }
+
+  // Submit multiple transactions to the cluster in batch.
+  rpc BatchSendTransactions(BatchSendTransactionsRequest)
+      returns (BatchSendTransactionsResponse) {
+    option (google.api.http) = {
+      post: "/v1/transactions/batch"
       body: "*"
     };
   }

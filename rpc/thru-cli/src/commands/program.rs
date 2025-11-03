@@ -5,7 +5,6 @@ use std::path::Path;
 use std::time::Duration;
 use thru_base::rpc_types::{MakeStateProofConfig, ProofType};
 use thru_base::tn_tools::{KeyPair, Pubkey};
-use thru_base::tn_vm_error_str;
 use thru_base::txn_lib::Transaction;
 use thru_base::txn_tools::TransactionBuilder;
 
@@ -14,8 +13,22 @@ use crate::commands::uploader::UploaderManager;
 use crate::config::Config;
 use crate::crypto;
 use crate::error::CliError;
-use crate::grpc_client::Client as RpcClient;
 use crate::output;
+use crate::utils::format_vm_error;
+use thru_client::Client as RpcClient;
+
+const PROGRAM_SEED_MAX_LEN: usize = 32;
+
+fn seed_with_suffix(base_seed: &str, suffix: &str) -> (String, bool) {
+    let combined = format!("{}_{}", base_seed, suffix);
+    if combined.len() <= PROGRAM_SEED_MAX_LEN {
+        (combined, false)
+    } else {
+        let digest = crypto::calculate_sha256(combined.as_bytes());
+        let hashed = hex::encode(&digest[..PROGRAM_SEED_MAX_LEN / 2]);
+        (hashed, true)
+    }
+}
 
 /// Handle program subcommands
 pub async fn handle_program_command(
@@ -99,12 +112,34 @@ pub async fn handle_program_command(
             manager,
             ephemeral,
             seed,
-        } => destroy_program(config, manager.as_deref(), &seed, ephemeral, json_format).await,
+            fee_payer,
+        } => {
+            destroy_program(
+                config,
+                manager.as_deref(),
+                &seed,
+                ephemeral,
+                fee_payer.as_deref(),
+                json_format,
+            )
+            .await
+        }
         ProgramCommands::Finalize {
             manager,
             ephemeral,
             seed,
-        } => finalize_program(config, manager.as_deref(), &seed, ephemeral, json_format).await,
+            fee_payer,
+        } => {
+            finalize_program(
+                config,
+                manager.as_deref(),
+                &seed,
+                ephemeral,
+                fee_payer.as_deref(),
+                json_format,
+            )
+            .await
+        }
         ProgramCommands::SetAuthority {
             manager,
             ephemeral,
@@ -125,8 +160,17 @@ pub async fn handle_program_command(
             manager,
             seed,
             ephemeral,
+            fee_payer,
         } => {
-            claim_authority_program(config, manager.as_deref(), &seed, ephemeral, json_format).await
+            claim_authority_program(
+                config,
+                manager.as_deref(),
+                &seed,
+                ephemeral,
+                fee_payer.as_deref(),
+                json_format,
+            )
+            .await
         }
         ProgramCommands::DeriveAddress {
             program_id,
@@ -145,6 +189,14 @@ pub struct ProgramManager {
 impl ProgramManager {
     /// Create new program manager
     pub async fn new(config: &Config) -> Result<Self, CliError> {
+        Self::new_with_fee_payer(config, None).await
+    }
+
+    /// Create new program manager with optional fee payer override
+    pub async fn new_with_fee_payer(
+        config: &Config,
+        fee_payer_name: Option<&str>,
+    ) -> Result<Self, CliError> {
         // Create RPC client
         let rpc_url = config.get_grpc_url()?;
         let rpc_client = RpcClient::builder()
@@ -157,8 +209,12 @@ impl ProgramManager {
         let _manager_program_pubkey = config.get_manager_pubkey()?;
 
         // Create fee payer keypair from config
-        let private_key_bytes = config.get_private_key_bytes()?;
-        let fee_payer_keypair = crypto::keypair_from_hex(&hex::encode(private_key_bytes))?;
+        let fee_payer_key_hex = if let Some(name) = fee_payer_name {
+            config.keys.get_key(name)?
+        } else {
+            config.keys.get_default_key()?
+        };
+        let fee_payer_keypair = crypto::keypair_from_hex(fee_payer_key_hex)?;
 
         Ok(Self {
             rpc_client,
@@ -329,66 +385,66 @@ impl ProgramManager {
             .await
             .map_err(|e| CliError::TransactionSubmission(e.to_string()))?;
 
+        let has_failure =
+            transaction_details.execution_result != 0 || transaction_details.vm_error != 0;
+        let vm_error_label = format_vm_error(transaction_details.vm_error);
+        let vm_error_suffix = if transaction_details.vm_error != 0 {
+            format!(" ({})", vm_error_label)
+        } else {
+            String::new()
+        };
+        let user_error_label = if transaction_details.user_error_code != 0 {
+            Self::decode_manager_error(transaction_details.user_error_code)
+        } else {
+            "None".to_string()
+        };
+        let user_error_suffix = if transaction_details.user_error_code != 0 {
+            format!(" - Manager program error: {}", user_error_label)
+        } else {
+            String::new()
+        };
+
         if !json_format {
             output::print_success(&format!(
                 "Transaction completed: {}",
                 transaction_details.signature.as_str()
             ));
 
-            // Check execution result
-            if transaction_details.execution_result != 0 || transaction_details.vm_error != 0 {
-                let vm_error_msg = if transaction_details.vm_error != 0 {
-                    match tn_vm_error_str(transaction_details.vm_error) {
-                        Some(error_str) => format!(" ({})", error_str),
-                        None => String::new(),
-                    }
-                } else {
-                    String::new()
-                };
-
-                let user_error_msg = if transaction_details.user_error_code != 0 {
-                    format!(
-                        " - Manager program error: {}",
-                        Self::decode_manager_error(transaction_details.user_error_code)
-                    )
-                } else {
-                    String::new()
-                };
-
+            if has_failure {
                 output::print_warning(&format!(
-                    "Transaction completed with execution result: {} vm_error: {}{}{}",
+                    "Transaction completed with execution result: {} (hex 0x{:X}) vm_error: {}{}{}",
                     transaction_details.execution_result,
-                    transaction_details.vm_error,
-                    vm_error_msg,
-                    user_error_msg
+                    transaction_details.execution_result,
+                    vm_error_label,
+                    vm_error_suffix,
+                    user_error_suffix
                 ));
             }
         }
 
-        // Check for execution errors
-        if transaction_details.execution_result != 0 || transaction_details.vm_error != 0 {
-            let vm_error_msg = if transaction_details.vm_error != 0 {
-                match tn_vm_error_str(transaction_details.vm_error) {
-                    Some(error_str) => format!(" ({})", error_str),
-                    None => String::new(),
-                }
+        if has_failure {
+            let vm_error_display = if transaction_details.vm_error != 0 {
+                format!("{}{}", transaction_details.vm_error, vm_error_suffix)
             } else {
-                String::new()
+                "0".to_string()
             };
-
-            let user_error_msg = if transaction_details.user_error_code != 0 {
-                Self::decode_manager_error(transaction_details.user_error_code)
-            } else {
-                "None".to_string()
-            };
-
-            return Err(CliError::TransactionSubmission(format!(
-                "Transaction failed with execution result: {} (VM error: {}{}, Manager program error: {})",
+            let message = format!(
+                "Transaction failed (execution_result={} (hex 0x{:X}), vm_error={}, manager_error={})",
                 transaction_details.execution_result,
-                transaction_details.vm_error,
-                vm_error_msg,
-                user_error_msg
-            )));
+                transaction_details.execution_result,
+                vm_error_display,
+                user_error_label
+            );
+
+            return Err(CliError::TransactionFailed {
+                message,
+                execution_result: transaction_details.execution_result,
+                vm_error: transaction_details.vm_error,
+                vm_error_label,
+                user_error_code: transaction_details.user_error_code,
+                user_error_label,
+                signature: transaction_details.signature.as_str().to_string(),
+            });
         }
 
         Ok(())
@@ -453,13 +509,16 @@ async fn create_program(
     };
 
     // Step 1: Upload program to temporary buffer account
-    let temp_seed = format!("{}_temporary", seed);
+    let (temp_seed, temp_seed_hashed) = seed_with_suffix(seed, "temporary");
 
     if !json_format {
         output::print_info(&format!(
             "Step 1: Uploading program to temporary buffer (seed: {})",
             temp_seed
         ));
+        if temp_seed_hashed {
+            output::print_info("Seed + suffix exceeded 32 bytes; using hashed temporary seed");
+        }
     }
 
     // Create uploader manager and upload the program
@@ -683,13 +742,16 @@ async fn upgrade_program(
     };
 
     // Step 1: Upload program to temporary buffer account
-    let temp_seed = format!("{}_upgrade_temporary", seed);
+    let (temp_seed, temp_seed_hashed) = seed_with_suffix(seed, "upgrade_temporary");
 
     if !json_format {
         output::print_info(&format!(
             "Step 1: Uploading program to temporary buffer (seed: {})",
             temp_seed
         ));
+        if temp_seed_hashed {
+            output::print_info("Seed + suffix exceeded 32 bytes; using hashed temporary seed");
+        }
     }
 
     // Create uploader manager and upload the program
@@ -917,6 +979,7 @@ async fn destroy_program(
     manager_pubkey: Option<&str>,
     seed: &str,
     ephemeral: bool,
+    fee_payer: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
     use thru_base::txn_tools::MANAGER_INSTRUCTION_DESTROY;
@@ -937,11 +1000,15 @@ async fn destroy_program(
         output::print_info(&format!("Seed: {}", seed));
         output::print_info(&format!("Meta account: {}", meta_account_pubkey));
         output::print_info(&format!("Program account: {}", program_account_pubkey));
+        if let Some(name) = fee_payer {
+            output::print_info(&format!("Fee payer override: {}", name));
+        }
     }
 
     let mut config_with_manager = config.clone();
     config_with_manager.manager_program_public_key = manager_program_pubkey.to_string();
-    let program_manager = ProgramManager::new(&config_with_manager).await?;
+    let program_manager =
+        ProgramManager::new_with_fee_payer(&config_with_manager, fee_payer).await?;
 
     let nonce = program_manager.get_current_nonce().await?;
     let start_slot = program_manager.get_current_slot().await?;
@@ -968,19 +1035,146 @@ async fn destroy_program(
         .sign(&program_manager.fee_payer_keypair.private_key)
         .map_err(|e| CliError::Crypto(e.to_string()))?;
 
-    program_manager
+    if let Err(err) = program_manager
         .submit_and_verify_transaction(&transaction, json_format)
-        .await?;
+        .await
+    {
+        if json_format {
+            let mut failure_response = serde_json::json!({
+                "program_destroy": {
+                    "status": "failed",
+                    "seed": seed,
+                    "meta_account": meta_account_pubkey.to_string(),
+                    "program_account": program_account_pubkey.to_string(),
+                    "error": {
+                        "message": err.to_string()
+                    }
+                }
+            });
+
+            if let Some(obj) = failure_response
+                .as_object_mut()
+                .and_then(|map| map.get_mut("program_destroy"))
+                .and_then(|v| v.as_object_mut())
+            {
+                if let Some(name) = fee_payer {
+                    obj.insert(
+                        "fee_payer".to_string(),
+                        serde_json::Value::String(name.to_string()),
+                    );
+                }
+
+                if let Some(err_obj) = obj.get_mut("error").and_then(|v| v.as_object_mut()) {
+                    match &err {
+                        CliError::TransactionFailed {
+                            message,
+                            execution_result,
+                            vm_error,
+                            vm_error_label,
+                            user_error_code,
+                            user_error_label,
+                            signature,
+                        } => {
+                            err_obj.insert(
+                                "message".to_string(),
+                                serde_json::Value::String(message.clone()),
+                            );
+                            err_obj.insert(
+                                "execution_result".to_string(),
+                                serde_json::Value::Number(serde_json::Number::from(
+                                    *execution_result,
+                                )),
+                            );
+                            err_obj.insert(
+                                "execution_result_hex".to_string(),
+                                serde_json::Value::String(format!("0x{:X}", execution_result)),
+                            );
+                            err_obj.insert(
+                                "vm_error".to_string(),
+                                serde_json::Value::Number(serde_json::Number::from(i64::from(
+                                    *vm_error,
+                                ))),
+                            );
+                            err_obj.insert(
+                                "vm_error_label".to_string(),
+                                serde_json::Value::String(vm_error_label.clone()),
+                            );
+                            err_obj.insert(
+                                "user_error_code".to_string(),
+                                serde_json::Value::Number(serde_json::Number::from(
+                                    *user_error_code,
+                                )),
+                            );
+                            err_obj.insert(
+                                "user_error_code_hex".to_string(),
+                                serde_json::Value::String(format!("0x{:X}", user_error_code)),
+                            );
+                            err_obj.insert(
+                                "user_error_label".to_string(),
+                                serde_json::Value::String(user_error_label.clone()),
+                            );
+                            if !signature.is_empty() {
+                                err_obj.insert(
+                                    "signature".to_string(),
+                                    serde_json::Value::String(signature.clone()),
+                                );
+                            }
+                        }
+                        CliError::TransactionSubmission(msg) => {
+                            err_obj.insert(
+                                "message".to_string(),
+                                serde_json::Value::String(msg.clone()),
+                            );
+                        }
+                        CliError::Generic { message } => {
+                            err_obj.insert(
+                                "message".to_string(),
+                                serde_json::Value::String(message.clone()),
+                            );
+                        }
+                        _ => {
+                            err_obj.insert(
+                                "message".to_string(),
+                                serde_json::Value::String(err.to_string()),
+                            );
+                        }
+                    }
+                }
+            }
+
+            output::print_output(failure_response, true);
+        }
+
+        if json_format {
+            return Err(CliError::Reported);
+        }
+
+        output::print_error(&err.to_string());
+        return Err(CliError::Reported);
+    }
 
     let response = if json_format {
-        serde_json::json!({
+        let mut resp = serde_json::json!({
             "program_destroy": {
                 "status": "success",
                 "seed": seed,
                 "meta_account": meta_account_pubkey.to_string(),
                 "program_account": program_account_pubkey.to_string()
             }
-        })
+        });
+        if let Some(name) = fee_payer {
+            if let Some(obj) = resp
+                .as_object_mut()
+                .and_then(|map| map.get_mut("program_destroy"))
+                .and_then(|v| v.as_object_mut())
+            {
+                obj.insert(
+                    "fee_payer".to_string(),
+                    serde_json::Value::String(name.to_string()),
+                );
+            }
+        }
+        resp
     } else {
         output::print_success("Program destroyed successfully");
         return Ok(());
@@ -999,6 +1193,7 @@ async fn finalize_program(
     manager_pubkey: Option<&str>,
     seed: &str,
     ephemeral: bool,
+    fee_payer: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
     use thru_base::txn_tools::MANAGER_INSTRUCTION_FINALIZE;
@@ -1019,11 +1214,15 @@ async fn finalize_program(
         output::print_info(&format!("Seed: {}", seed));
         output::print_info(&format!("Meta account: {}", meta_account_pubkey));
         output::print_info(&format!("Program account: {}", program_account_pubkey));
+        if let Some(name) = fee_payer {
+            output::print_info(&format!("Fee payer override: {}", name));
+        }
     }
 
     let mut config_with_manager = config.clone();
     config_with_manager.manager_program_public_key = manager_program_pubkey.to_string();
-    let program_manager = ProgramManager::new(&config_with_manager).await?;
+    let program_manager =
+        ProgramManager::new_with_fee_payer(&config_with_manager, fee_payer).await?;
 
     let nonce = program_manager.get_current_nonce().await?;
     let start_slot = program_manager.get_current_slot().await?;
@@ -1055,14 +1254,27 @@ async fn finalize_program(
         .await?;
 
     let response = if json_format {
-        serde_json::json!({
+        let mut resp = serde_json::json!({
             "program_finalize": {
                 "status": "success",
                 "seed": seed,
                 "meta_account": meta_account_pubkey.to_string(),
                 "program_account": program_account_pubkey.to_string()
             }
-        })
+        });
+        if let Some(name) = fee_payer {
+            if let Some(obj) = resp
+                .as_object_mut()
+                .and_then(|map| map.get_mut("program_finalize"))
+                .and_then(|v| v.as_object_mut())
+            {
+                obj.insert(
+                    "fee_payer".to_string(),
+                    serde_json::Value::String(name.to_string()),
+                );
+            }
+        }
+        resp
     } else {
         output::print_success("Program finalized successfully");
         return Ok(());
@@ -1169,6 +1381,7 @@ async fn claim_authority_program(
     manager_pubkey: Option<&str>,
     seed: &str,
     ephemeral: bool,
+    fee_payer: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
     use thru_base::txn_tools::MANAGER_INSTRUCTION_CLAIM_AUTHORITY;
@@ -1189,11 +1402,15 @@ async fn claim_authority_program(
         output::print_info(&format!("Seed: {}", seed));
         output::print_info(&format!("Meta account: {}", meta_account_pubkey));
         output::print_info(&format!("Program account: {}", program_account_pubkey));
+        if let Some(name) = fee_payer {
+            output::print_info(&format!("Fee payer override: {}", name));
+        }
     }
 
     let mut config_with_manager = config.clone();
     config_with_manager.manager_program_public_key = manager_program_pubkey.to_string();
-    let program_manager = ProgramManager::new(&config_with_manager).await?;
+    let program_manager =
+        ProgramManager::new_with_fee_payer(&config_with_manager, fee_payer).await?;
 
     let nonce = program_manager.get_current_nonce().await?;
     let start_slot = program_manager.get_current_slot().await?;
@@ -1225,14 +1442,27 @@ async fn claim_authority_program(
         .await?;
 
     let response = if json_format {
-        serde_json::json!({
+        let mut resp = serde_json::json!({
             "program_claim_authority": {
                 "status": "success",
                 "seed": seed,
                 "meta_account": meta_account_pubkey.to_string(),
                 "program_account": program_account_pubkey.to_string()
             }
-        })
+        });
+        if let Some(name) = fee_payer {
+            if let Some(obj) = resp
+                .as_object_mut()
+                .and_then(|map| map.get_mut("program_claim_authority"))
+                .and_then(|v| v.as_object_mut())
+            {
+                obj.insert(
+                    "fee_payer".to_string(),
+                    serde_json::Value::String(name.to_string()),
+                );
+            }
+        }
+        resp
     } else {
         output::print_success("Authority claimed successfully");
         return Ok(());

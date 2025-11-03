@@ -1,8 +1,6 @@
-edition = "2023";
+syntax = "proto3";
 
 package thru.common.v1;
-
-option features.field_presence = EXPLICIT;
 
 import "buf/validate/validate.proto";
 import "google/api/field_behavior.proto";
@@ -52,15 +50,15 @@ message ErrorDetail {
   ];
 
   // Optional retention window expressed in slots when applicable.
-  uint64 retention_window_slots = 3
+  optional uint64 retention_window_slots = 3
       [(google.api.field_behavior) = OPTIONAL];
 
   // Optional retention cutoff timestamp when applicable.
-  google.protobuf.Timestamp retention_cutoff = 4
+  optional google.protobuf.Timestamp retention_cutoff = 4
       [(google.api.field_behavior) = OPTIONAL];
 
   // Optional name of the field associated with the error.
-  string field_name = 5 [
+  optional string field_name = 5 [
     (google.api.field_behavior) = OPTIONAL,
     (buf.validate.field).string.max_len = 128
   ];

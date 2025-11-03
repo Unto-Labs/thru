@@ -9,8 +9,8 @@ use tonic_health::pb::health_check_response::ServingStatus;
 use crate::config::Config;
 use crate::crypto::keypair_from_hex;
 use crate::error::CliError;
-use crate::grpc_client::{Client, ClientBuilder};
 use crate::output;
+use thru_client::{Client, ClientBuilder};
 
 /// Resolve account input to a public key
 ///
@@ -28,21 +28,27 @@ pub fn resolve_account_input(input: Option<&str>, config: &Config) -> Result<Pub
             Ok(keypair.address_string)
         }
         Some(value) => {
-            // Try as public key first
+            // Try as Thru format public key first (ta...)
             match Pubkey::new(value.to_string()) {
                 Ok(pubkey) => Ok(pubkey),
                 Err(_) => {
-                    // Try as key name
-                    match config.keys.get_key(value) {
-                        Ok(private_key) => {
-                            let keypair = keypair_from_hex(private_key)?;
-                            Ok(keypair.address_string)
+                    // Try as hex format public key (0x... or 64 hex chars)
+                    match Pubkey::from_hex(value) {
+                        Ok(pubkey) => Ok(pubkey),
+                        Err(_) => {
+                            // Try as key name
+                            match config.keys.get_key(value) {
+                                Ok(private_key) => {
+                                    let keypair = keypair_from_hex(private_key)?;
+                                    Ok(keypair.address_string)
+                                }
+                                Err(_) => Err(CliError::Validation(format!(
+                                    "Invalid input '{}': not a valid public key (ta... or hex), or key name. Available keys: {}",
+                                    value,
+                                    config.keys.list_keys().join(", ")
+                                ))),
+                            }
                         }
-                        Err(_) => Err(CliError::Validation(format!(
-                            "Invalid input '{}': not a valid public key or key name. Available keys: {}",
-                            value,
-                            config.keys.list_keys().join(", ")
-                        ))),
                     }
                 }
             }
@@ -132,6 +138,8 @@ pub async fn get_height(config: &Config, json_format: bool) -> Result<(), CliErr
 pub async fn get_account_info(
     config: &Config,
     account_input: Option<&str>,
+    data_start: Option<usize>,
+    data_len: Option<usize>,
     json_format: bool,
 ) -> Result<(), CliError> {
     let client = create_rpc_client(config)?;
@@ -163,18 +171,84 @@ pub async fn get_account_info(
                 serde_json::Value::Number(account.nonce.into()),
             );
             account_data.insert(
-                "stateCounter".to_string(),
-                serde_json::Value::Number(account.state_counter.into()),
+                "seq".to_string(),
+                serde_json::Value::Number(account.seq.into()),
             );
             account_data.insert(
                 "program".to_string(),
                 serde_json::Value::Bool(account.program),
             );
             account_data.insert("isNew".to_string(), serde_json::Value::Bool(account.is_new));
-            account_data.insert(
-                "data".to_string(),
-                serde_json::Value::String(account.data.unwrap_or_default()),
-            );
+
+            // Handle data display based on data_start/data_len parameters
+            if data_start.is_some() || data_len.is_some() {
+                // User wants to see hex data
+                if let Some(data_b64) = account.data {
+                    // Decode base64 data
+                    match base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &data_b64) {
+                        Ok(data_bytes) => {
+                            let start = data_start.unwrap_or(0);
+                            let len = data_len.unwrap_or(data_bytes.len().saturating_sub(start));
+                            let end = std::cmp::min(start + len, data_bytes.len());
+
+                            if start < data_bytes.len() {
+                                let slice = &data_bytes[start..end];
+                                let hex_data = hex::encode(slice);
+                                account_data.insert(
+                                    "dataHex".to_string(),
+                                    serde_json::Value::String(hex_data),
+                                );
+                                account_data.insert(
+                                    "dataHexStart".to_string(),
+                                    serde_json::Value::Number(start.into()),
+                                );
+                                account_data.insert(
+                                    "dataHexLen".to_string(),
+                                    serde_json::Value::Number((end - start).into()),
+                                );
+                            } else {
+                                account_data.insert(
+                                    "dataHex".to_string(),
+                                    serde_json::Value::String("".to_string()),
+                                );
+                                account_data.insert(
+                                    "error".to_string(),
+                                    serde_json::Value::String(format!("data_start {} exceeds data size {}", start, data_bytes.len())),
+                                );
+                            }
+                        }
+                        Err(e) => {
+                            return Err(CliError::Validation(format!("Failed to decode account data: {}", e)));
+                        }
+                    }
+                } else {
+                    account_data.insert(
+                        "dataHex".to_string(),
+                        serde_json::Value::String("".to_string()),
+                    );
+                }
+            } else {
+                // Default behavior - include base64 data
+                account_data.insert(
+                    "data".to_string(),
+                    serde_json::Value::String(account.data.unwrap_or_default()),
+                );
+            }
+
+            // Add version_context fields
+            if let Some(slot) = account.slot {
+                account_data.insert("slot".to_string(), serde_json::Value::Number(slot.into()));
+            }
+            if let Some(timestamp) = account.block_timestamp {
+                if let Ok(duration) = timestamp.duration_since(std::time::UNIX_EPOCH) {
+                    let timestamp_str =
+                        format!("{}.{:09}", duration.as_secs(), duration.subsec_nanos());
+                    account_data.insert(
+                        "blockTimestamp".to_string(),
+                        serde_json::Value::String(timestamp_str),
+                    );
+                }
+            }
 
             let response = output::create_account_info_response(account_data);
             output::print_output(response, json_format);
@@ -209,7 +283,7 @@ pub async fn get_account_info(
             } else {
                 output::print_error(&error_msg);
             }
-            Err(e)
+            Err(e.into())
         }
     }
 }
@@ -241,7 +315,7 @@ pub async fn get_balance(
             } else {
                 output::print_error(&error_msg);
             }
-            Err(e)
+            Err(e.into())
         }
     }
 }
@@ -256,6 +330,7 @@ fn create_rpc_client(config: &Config) -> Result<Client, CliError> {
         .timeout(timeout)
         .auth_token(config.auth_token.clone())
         .build()
+        .map_err(|e| e.into())
 }
 
 fn health_status_to_str(status: ServingStatus) -> &'static str {
@@ -331,5 +406,28 @@ mod tests {
         let error_msg = result.unwrap_err().to_string();
         assert!(error_msg.contains("Invalid input 'invalid_pubkey'"));
         assert!(error_msg.contains("Available keys: default"));
+    }
+
+    #[test]
+    fn test_resolve_account_input_with_hex_pubkey() {
+        let config = Config::default();
+        // Test with zero address (all zeros)
+        let hex_zero = "0000000000000000000000000000000000000000000000000000000000000000";
+        let result = resolve_account_input(Some(hex_zero), &config);
+        assert!(result.is_ok(), "Should resolve hex public key successfully");
+
+        // Test with 0x prefix
+        let hex_with_prefix = "0x0000000000000000000000000000000000000000000000000000000000000001";
+        let result_with_prefix = resolve_account_input(Some(hex_with_prefix), &config);
+        assert!(result_with_prefix.is_ok(), "Should resolve hex public key with 0x prefix");
+    }
+
+    #[test]
+    fn test_resolve_account_input_with_invalid_hex_length() {
+        let config = Config::default();
+        // Test with invalid hex length
+        let short_hex = "0x123456";
+        let result = resolve_account_input(Some(short_hex), &config);
+        assert!(result.is_err(), "Should fail for invalid hex length");
     }
 }

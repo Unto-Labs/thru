@@ -164,11 +164,11 @@ fn print_account_info(data: &Value) {
             println!("  {}: {}", "Nonce".cyan(), format_value(nonce));
         }
 
-        if let Some(state_counter) = account_data.get("stateCounter") {
+        if let Some(seq) = account_data.get("seq") {
             println!(
                 "  {}: {}",
-                "State Counter".cyan(),
-                format_value(state_counter)
+                "Seq".cyan(),
+                format_value(seq)
             );
         }
 
@@ -191,6 +191,48 @@ fn print_account_info(data: &Value) {
                 "Is New".cyan(),
                 if is_new { "Yes".green() } else { "No".red() }
             );
+        }
+
+        if let Some(slot) = account_data.get("slot") {
+            println!("  {}: {}", "Slot".cyan(), format_value(slot));
+        }
+
+        if let Some(timestamp) = account_data.get("blockTimestamp") {
+            let formatted_timestamp = if let Some(ts_str) = timestamp.as_str() {
+                // Parse the timestamp string (format: "seconds.nanoseconds")
+                if let Some((secs_str, _nanos_str)) = ts_str.split_once('.') {
+                    if let Ok(secs) = secs_str.parse::<i64>() {
+                        if let Some(dt) = chrono::DateTime::from_timestamp(secs, 0) {
+                            dt.format("%Y-%m-%d %H:%M:%S UTC").to_string()
+                        } else {
+                            format_value(timestamp)
+                        }
+                    } else {
+                        format_value(timestamp)
+                    }
+                } else {
+                    format_value(timestamp)
+                }
+            } else {
+                format_value(timestamp)
+            };
+            println!("  {}: {}", "Block Timestamp".cyan(), formatted_timestamp);
+        }
+
+        // Display hex data if present
+        if let Some(data_hex) = account_data.get("dataHex") {
+            let hex_str = format_value(data_hex);
+            if !hex_str.is_empty() {
+                println!("  {}: {}", "Data (Hex)".cyan(), hex_str.bright_yellow());
+
+                if let Some(start) = account_data.get("dataHexStart") {
+                    println!("  {}: {}", "  Data Start".cyan(), format_value(start));
+                }
+
+                if let Some(len) = account_data.get("dataHexLen") {
+                    println!("  {}: {} bytes", "  Data Length".cyan(), format_value(len));
+                }
+            }
         }
     }
 }

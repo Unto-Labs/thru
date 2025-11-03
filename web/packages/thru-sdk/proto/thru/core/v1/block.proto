@@ -1,8 +1,6 @@
-edition = "2023";
+syntax = "proto3";
 
 package thru.core.v1;
-
-option features.field_presence = EXPLICIT;
 
 import "buf/validate/validate.proto";
 import "google/api/field_behavior.proto";
@@ -35,13 +33,13 @@ message BlockHeader {
   uint32 version = 4 [(google.api.field_behavior) = REQUIRED];
   Pubkey producer = 5 [(google.api.field_behavior) = REQUIRED];
   google.protobuf.Timestamp expiry_timestamp = 6
-      [(google.api.field_behavior) = OPTIONAL];
-  uint64 start_slot = 7 [(google.api.field_behavior) = OPTIONAL];
-  uint32 expiry_after = 8 [(google.api.field_behavior) = OPTIONAL];
-  uint32 max_block_size = 9 [(google.api.field_behavior) = OPTIONAL];
-  uint64 max_compute_units = 10 [(google.api.field_behavior) = OPTIONAL];
-  uint32 max_state_units = 11 [(google.api.field_behavior) = OPTIONAL];
-  uint64 price = 12 [(google.api.field_behavior) = OPTIONAL];
+      [(google.api.field_behavior) = REQUIRED];
+  uint64 start_slot = 7 [(google.api.field_behavior) = REQUIRED];
+  uint32 expiry_after = 8 [(google.api.field_behavior) = REQUIRED];
+  uint32 max_block_size = 9 [(google.api.field_behavior) = REQUIRED];
+  uint64 max_compute_units = 10 [(google.api.field_behavior) = REQUIRED];
+  uint32 max_state_units = 11 [(google.api.field_behavior) = REQUIRED];
+  uint64 price = 12 [(google.api.field_behavior) = REQUIRED];
 }
 
 // ExecutionStatus enumerates block execution results.
@@ -56,19 +54,19 @@ enum ExecutionStatus {
 message BlockFooter {
   Signature signature = 1 [(google.api.field_behavior) = REQUIRED];
   ExecutionStatus status = 2 [(google.api.field_behavior) = REQUIRED];
-  uint64 consumed_compute_units = 3 [(google.api.field_behavior) = OPTIONAL];
-  uint32 consumed_state_units = 4 [(google.api.field_behavior) = OPTIONAL];
+  uint64 consumed_compute_units = 3 [(google.api.field_behavior) = REQUIRED];
+  uint32 consumed_state_units = 4 [(google.api.field_behavior) = REQUIRED];
 }
 
 // Block represents a fully decoded block resource.
 message Block {
   BlockHeader header = 1 [(google.api.field_behavior) = REQUIRED];
-  BlockFooter footer = 2 [(google.api.field_behavior) = OPTIONAL];
-  bytes body = 3 [
+  optional BlockFooter footer = 2 [(google.api.field_behavior) = OPTIONAL];
+  optional bytes body = 3 [
     (google.api.field_behavior) = OPTIONAL,
     (buf.validate.field).bytes.max_len = 33554432
   ];
-  thru.common.v1.ConsensusStatus consensus_status = 4
+  optional thru.common.v1.ConsensusStatus consensus_status = 4
       [(google.api.field_behavior) = OPTIONAL];
 }
 

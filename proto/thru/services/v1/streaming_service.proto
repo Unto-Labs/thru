@@ -23,10 +23,10 @@ option swift_prefix = "THUS";
 
 // StreamBlocksRequest subscribes to real-time block updates.
 message StreamBlocksRequest {
-  uint64 start_slot = 1 [(google.api.field_behavior) = OPTIONAL];
-  thru.common.v1.Filter filter = 2 [(google.api.field_behavior) = OPTIONAL];
-  thru.core.v1.BlockView view = 3 [(google.api.field_behavior) = OPTIONAL];
-  thru.common.v1.ConsensusStatus min_consensus = 4
+  optional uint64 start_slot = 1 [(google.api.field_behavior) = OPTIONAL];
+  optional thru.common.v1.Filter filter = 2 [(google.api.field_behavior) = OPTIONAL];
+  optional thru.core.v1.BlockView view = 3 [(google.api.field_behavior) = OPTIONAL];
+  optional thru.common.v1.ConsensusStatus min_consensus = 4
       [(google.api.field_behavior) = OPTIONAL];
 }
 
@@ -38,18 +38,18 @@ message StreamBlocksResponse {
 // StreamAccountUpdatesRequest subscribes to account delta events.
 message StreamAccountUpdatesRequest {
   thru.core.v1.Pubkey address = 1 [(google.api.field_behavior) = REQUIRED];
-  thru.core.v1.AccountView view = 2 [(google.api.field_behavior) = OPTIONAL];
-  thru.common.v1.Filter filter = 4 [(google.api.field_behavior) = OPTIONAL];
+  optional thru.core.v1.AccountView view = 2 [(google.api.field_behavior) = OPTIONAL];
+  optional thru.common.v1.Filter filter = 4 [(google.api.field_behavior) = OPTIONAL];
 }
 
 // AccountUpdate describes a delta for an account.
 message AccountUpdate {
   uint64 slot = 1 [(google.api.field_behavior) = REQUIRED];
-  thru.core.v1.AccountPage page = 2
+  optional thru.core.v1.AccountPage page = 2
       [(google.api.field_behavior) = OPTIONAL];
-  thru.core.v1.AccountMeta meta = 3
+  optional thru.core.v1.AccountMeta meta = 3
       [(google.api.field_behavior) = OPTIONAL];
-  bool delete = 4 [(google.api.field_behavior) = OPTIONAL];
+  optional bool delete = 4 [(google.api.field_behavior) = OPTIONAL];
 }
 
 // StreamAccountUpdatesResponse contains either an initial snapshot or a delta.
@@ -62,8 +62,8 @@ message StreamAccountUpdatesResponse {
 
 // StreamTransactionsRequest subscribes to transaction confirmations.
 message StreamTransactionsRequest {
-  thru.common.v1.Filter filter = 1 [(google.api.field_behavior) = OPTIONAL];
-  thru.common.v1.ConsensusStatus min_consensus = 2
+  optional thru.common.v1.Filter filter = 1 [(google.api.field_behavior) = OPTIONAL];
+  optional thru.common.v1.ConsensusStatus min_consensus = 2
       [(google.api.field_behavior) = OPTIONAL];
 }
 
@@ -75,14 +75,14 @@ message StreamTransactionsResponse {
 
 // StreamEventsRequest subscribes to chain events.
 message StreamEventsRequest {
-  thru.common.v1.Filter filter = 1 [(google.api.field_behavior) = OPTIONAL];
+  optional thru.common.v1.Filter filter = 1 [(google.api.field_behavior) = OPTIONAL];
 }
 
 // StreamEventsResponse delivers event payloads.
 message StreamEventsResponse {
   string event_id = 1 [(google.api.field_behavior) = REQUIRED];
-  bytes payload = 2 [(google.api.field_behavior) = OPTIONAL];
-  google.protobuf.Timestamp timestamp = 3
+  optional bytes payload = 2 [(google.api.field_behavior) = OPTIONAL];
+  optional google.protobuf.Timestamp timestamp = 3
       [(google.api.field_behavior) = OPTIONAL];
   thru.core.v1.Pubkey program = 4 [(google.api.field_behavior) = REQUIRED];
   uint32 call_idx = 5 [(google.api.field_behavior) = REQUIRED];
@@ -94,7 +94,7 @@ message StreamEventsResponse {
 // TrackTransactionRequest subscribes to status updates for a transaction.
 message TrackTransactionRequest {
   thru.core.v1.Signature signature = 1 [(google.api.field_behavior) = REQUIRED];
-  google.protobuf.Duration timeout = 2
+  optional google.protobuf.Duration timeout = 2
       [(google.api.field_behavior) = OPTIONAL];
 }
 

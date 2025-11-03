@@ -1,8 +1,6 @@
-edition = "2023";
+syntax = "proto3";
 
 package thru.core.v1;
-
-option features.field_presence = EXPLICIT;
 
 import "google/api/field_behavior.proto";
 import "thru/core/v1/types.proto";
@@ -27,7 +25,7 @@ enum StateProofType {
 message StateProofRequest {
   Pubkey address = 1 [(google.api.field_behavior) = REQUIRED];
   StateProofType proof_type = 2 [(google.api.field_behavior) = REQUIRED];
-  uint64 target_slot = 3 [(google.api.field_behavior) = OPTIONAL];
+  optional uint64 target_slot = 3 [(google.api.field_behavior) = OPTIONAL];
 }
 
 // StateProof returns binary proof data along with context.

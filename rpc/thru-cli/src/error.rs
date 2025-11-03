@@ -41,6 +41,22 @@ pub enum CliError {
     #[error("Transaction submission error: {0}")]
     TransactionSubmission(String),
 
+    /// Transaction failed with execution issues but was submitted
+    #[error("{message}")]
+    TransactionFailed {
+        message: String,
+        execution_result: u64,
+        vm_error: i32,
+        vm_error_label: String,
+        user_error_code: u64,
+        user_error_label: String,
+        signature: String,
+    },
+
+    /// Error already reported to user (used to avoid duplicate output)
+    #[error("Error already reported to user")]
+    Reported,
+
     /// Nonce management errors
     #[error("Nonce management error: {0}")]
     NonceManagement(String),
@@ -116,5 +132,23 @@ impl From<tonic::Status> for CliError {
 impl From<tonic::transport::Error> for CliError {
     fn from(err: tonic::transport::Error) -> Self {
         CliError::Transport(err.to_string())
+    }
+}
+
+impl From<thru_client::ClientError> for CliError {
+    fn from(err: thru_client::ClientError) -> Self {
+        match err {
+            thru_client::ClientError::Rpc(msg) => CliError::Rpc(msg),
+            thru_client::ClientError::Transport(msg) => CliError::Transport(msg),
+            thru_client::ClientError::Validation(msg) => CliError::Validation(msg),
+            thru_client::ClientError::TransactionSubmission(msg) => {
+                CliError::TransactionSubmission(msg)
+            }
+            thru_client::ClientError::TransactionVerification(msg) => {
+                CliError::TransactionVerification(msg)
+            }
+            thru_client::ClientError::AccountNotFound(msg) => CliError::AccountNotFound(msg),
+            thru_client::ClientError::Generic { message } => CliError::Generic { message },
+        }
     }
 }

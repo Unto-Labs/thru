@@ -1,8 +1,6 @@
-edition = "2023";
+syntax = "proto3";
 
 package thru.core.v1;
-
-option features.field_presence = EXPLICIT;
 
 import "buf/validate/validate.proto";
 import "google/api/field_behavior.proto";
@@ -38,13 +36,13 @@ enum AccountView {
 
 // AccountFlags enumerates boolean account capability flags.
 message AccountFlags {
-  bool is_program = 1 [(google.api.field_behavior) = OPTIONAL];
-  bool is_privileged = 2 [(google.api.field_behavior) = OPTIONAL];
-  bool is_uncompressable = 3 [(google.api.field_behavior) = OPTIONAL];
-  bool is_ephemeral = 4 [(google.api.field_behavior) = OPTIONAL];
-  bool is_deleted = 5 [(google.api.field_behavior) = OPTIONAL];
-  bool is_new = 6 [(google.api.field_behavior) = OPTIONAL];
-  bool is_compressed = 7 [(google.api.field_behavior) = OPTIONAL];
+  bool is_program = 1 [(google.api.field_behavior) = REQUIRED];
+  bool is_privileged = 2 [(google.api.field_behavior) = REQUIRED];
+  bool is_uncompressable = 3 [(google.api.field_behavior) = REQUIRED];
+  bool is_ephemeral = 4 [(google.api.field_behavior) = REQUIRED];
+  bool is_deleted = 5 [(google.api.field_behavior) = REQUIRED];
+  bool is_new = 6 [(google.api.field_behavior) = REQUIRED];
+  bool is_compressed = 7 [(google.api.field_behavior) = REQUIRED];
 }
 
 // AccountMeta captures metadata associated with an account.
@@ -53,22 +51,23 @@ message AccountMeta {
     (google.api.field_behavior) = REQUIRED,
     (buf.validate.field).uint32.gte = 1
   ];
-  AccountFlags flags = 2 [(google.api.field_behavior) = OPTIONAL];
+  AccountFlags flags = 2 [(google.api.field_behavior) = REQUIRED];
   uint32 data_size = 3 [(google.api.field_behavior) = REQUIRED];
-  uint64 state_counter = 4 [(google.api.field_behavior) = OPTIONAL];
+  // Account sequence number
+  uint64 seq = 4 [(google.api.field_behavior) = REQUIRED];
   Pubkey owner = 5 [(google.api.field_behavior) = REQUIRED];
-  uint64 balance = 6 [(google.api.field_behavior) = OPTIONAL];
-  uint64 nonce = 7 [(google.api.field_behavior) = OPTIONAL];
+  uint64 balance = 6 [(google.api.field_behavior) = REQUIRED];
+  uint64 nonce = 7 [(google.api.field_behavior) = REQUIRED];
 }
 
 // AccountData contains account data payloads.
 message AccountData {
-  bytes data = 1 [
+  optional bytes data = 1 [
     (google.api.field_behavior) = OPTIONAL,
     (buf.validate.field).bytes.max_len = 16777216
   ];
-  bool compressed = 2 [(google.api.field_behavior) = OPTIONAL];
-  string compression_algorithm = 3 [
+  optional bool compressed = 2 [(google.api.field_behavior) = OPTIONAL];
+  optional string compression_algorithm = 3 [
     (google.api.field_behavior) = OPTIONAL,
     (buf.validate.field).string.max_len = 64
   ];
@@ -97,8 +96,8 @@ message AccountPage {
     (google.api.field_behavior) = REQUIRED,
     (buf.validate.field).bytes.max_len = 4096
   ];
-  bool compressed = 4 [(google.api.field_behavior) = OPTIONAL];
-  string compression_algorithm = 5 [
+  optional bool compressed = 4 [(google.api.field_behavior) = OPTIONAL];
+  optional string compression_algorithm = 5 [
     (google.api.field_behavior) = OPTIONAL,
     (buf.validate.field).string.max_len = 64
   ];
@@ -106,19 +105,19 @@ message AccountPage {
 
 // VersionContextMetadata captures context for a returned account state.
 message VersionContextMetadata {
-  uint64 slot = 1 [(google.api.field_behavior) = OPTIONAL];
-  google.protobuf.Timestamp block_timestamp = 2
+  optional uint64 slot = 1 [(google.api.field_behavior) = OPTIONAL];
+  optional google.protobuf.Timestamp block_timestamp = 2
       [(google.api.field_behavior) = OPTIONAL];
 }
 
 // Account models a fully decoded account resource.
 message Account {
   Pubkey address = 1 [(google.api.field_behavior) = REQUIRED];
-  AccountMeta meta = 2 [(google.api.field_behavior) = OPTIONAL];
-  AccountData data = 3 [(google.api.field_behavior) = OPTIONAL];
-  VersionContextMetadata version_context = 4
+  optional AccountMeta meta = 2 [(google.api.field_behavior) = OPTIONAL];
+  optional AccountData data = 3 [(google.api.field_behavior) = OPTIONAL];
+  optional VersionContextMetadata version_context = 4
       [(google.api.field_behavior) = OPTIONAL];
-  thru.common.v1.ConsensusStatus consensus_status = 5
+  optional thru.common.v1.ConsensusStatus consensus_status = 5
       [(google.api.field_behavior) = OPTIONAL];
 }
 
@@ -129,10 +128,10 @@ message RawAccount {
     (google.api.field_behavior) = REQUIRED,
     (buf.validate.field).bytes.max_len = 4096
   ];
-  bytes raw_data = 3 [
+  optional bytes raw_data = 3 [
     (google.api.field_behavior) = OPTIONAL,
     (buf.validate.field).bytes.max_len = 16777216
   ];
-  VersionContextMetadata version_context = 4
+  optional VersionContextMetadata version_context = 4
       [(google.api.field_behavior) = OPTIONAL];
 }

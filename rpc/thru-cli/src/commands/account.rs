@@ -1,6 +1,7 @@
 //! Account management command implementations
 
 use base64::Engine;
+use thru_base::txn_tools::SYSTEM_PROGRAM;
 use std::time::Duration;
 use thru_base::rpc_types::{MakeStateProofConfig, ProofType};
 use thru_base::tn_account::{TN_ACCOUNT_META_FOOTPRINT, TnAccountMeta};
@@ -10,8 +11,9 @@ use crate::cli::AccountCommands;
 use crate::config::Config;
 use crate::crypto::keypair_from_hex;
 use crate::error::CliError;
-use crate::grpc_client::{Client, ClientBuilder};
 use crate::output;
+use crate::utils::format_vm_error;
+use thru_client::{Client, ClientBuilder};
 
 /// Helper function to resolve fee payer and target account
 fn resolve_fee_payer_and_target(
@@ -205,11 +207,7 @@ async fn create_account(
 
     // Check if transaction was successful
     if transaction_details.execution_result != 0 || transaction_details.vm_error != 0 {
-        let vm_error_msg = if transaction_details.vm_error != 0 {
-            format!(" (VM error: {})", transaction_details.vm_error)
-        } else {
-            String::new()
-        };
+        let (vm_error_msg, _) = vm_error_strings(transaction_details.vm_error);
 
         let error_msg = format!(
             "Transaction failed with execution result: {}{}",
@@ -253,8 +251,8 @@ async fn get_account_info(
     json_format: bool,
 ) -> Result<(), CliError> {
     // This is an alias to the existing getaccountinfo functionality
-    // We can reuse the existing implementation
-    crate::commands::rpc::get_account_info(config, key_name, json_format).await
+    // We can reuse the existing implementation (no data_start/data_len for account info subcommand)
+    crate::commands::rpc::get_account_info(config, key_name, None, None, json_format).await
 }
 
 /// Compress an account
@@ -372,10 +370,9 @@ async fn compress_account(
     }
 
     // Build compression transaction using system program (all zeros)
-    let system_program = [0u8; 32];
     let mut transaction = TransactionBuilder::build_compress_account(
         fee_payer_keypair.public_key, // Fee payer
-        system_program,               // System program
+        SYSTEM_PROGRAM,               // System program
         target_pubkey.to_bytes()?,    // Target account to compress
         &state_proof_bytes,           // State proof
         1,                            // Fee
@@ -427,35 +424,21 @@ async fn compress_account(
 
         // Check execution result
         if transaction_details.execution_result != 0 || transaction_details.vm_error != 0 {
-            let vm_error_msg = if transaction_details.vm_error != 0 {
-                match thru_base::tn_vm_error_str(transaction_details.vm_error) {
-                    Some(error_str) => format!(" ({})", error_str),
-                    None => String::new(),
-                }
-            } else {
-                String::new()
-            };
+            let (vm_error_msg, vm_error_label) = vm_error_strings(transaction_details.vm_error);
             output::print_warning(&format!(
                 "Transaction completed with execution result: {} vm_error: {}{}",
-                transaction_details.execution_result, transaction_details.vm_error, vm_error_msg
+                transaction_details.execution_result, vm_error_label, vm_error_msg
             ));
         }
     }
 
     // Check for execution errors
     if transaction_details.execution_result != 0 || transaction_details.vm_error != 0 {
-        let vm_error_msg = if transaction_details.vm_error != 0 {
-            match thru_base::tn_vm_error_str(transaction_details.vm_error) {
-                Some(error_str) => format!(" ({})", error_str),
-                None => String::new(),
-            }
-        } else {
-            String::new()
-        };
+        let (vm_error_msg, vm_error_label) = vm_error_strings(transaction_details.vm_error);
         return Err(CliError::TransactionSubmission(format!(
             "Transaction failed with execution result: {} (VM error: {}{}, User error: {})",
             transaction_details.execution_result,
-            transaction_details.vm_error,
+            vm_error_label,
             vm_error_msg,
             transaction_details.user_error_code
         )));
@@ -471,6 +454,7 @@ async fn compress_account(
                 "status": "success",
                 "execution_result": transaction_details.execution_result,
                 "vm_error": transaction_details.vm_error,
+                "vm_error_name": vm_error_strings(transaction_details.vm_error).1,
                 "user_error_code": transaction_details.user_error_code,
                 "compute_units_consumed": transaction_details.compute_units_consumed,
                 "slot": transaction_details.slot
@@ -654,10 +638,9 @@ async fn decompress_direct(
         output::print_info("Using direct decompression (data fits in single transaction)");
     }
 
-    let system_program = [0u8; 32];
     let mut transaction = TransactionBuilder::build_decompress_account(
         fee_payer_keypair.public_key, // Fee payer
-        system_program,               // System program
+        SYSTEM_PROGRAM,               // System program
         target_pubkey.to_bytes()?,    // Target account to decompress
         decomp_data,                  // Account data
         state_proof_bytes,            // State proof
@@ -699,18 +682,11 @@ async fn decompress_direct(
 
     // Check for execution errors
     if transaction_details.execution_result != 0 || transaction_details.vm_error != 0 {
-        let vm_error_msg = if transaction_details.vm_error != 0 {
-            match thru_base::tn_vm_error_str(transaction_details.vm_error) {
-                Some(error_str) => format!(" ({})", error_str),
-                None => String::new(),
-            }
-        } else {
-            String::new()
-        };
+        let (vm_error_msg, vm_error_label) = vm_error_strings(transaction_details.vm_error);
         return Err(CliError::TransactionSubmission(format!(
             "Transaction failed with execution result: {} (VM error: {}{}, User error: {})",
             transaction_details.execution_result,
-            transaction_details.vm_error,
+            vm_error_label,
             vm_error_msg,
             transaction_details.user_error_code
         )));
@@ -727,6 +703,7 @@ async fn decompress_direct(
                 "method": "direct",
                 "execution_result": transaction_details.execution_result,
                 "vm_error": transaction_details.vm_error,
+                "vm_error_name": vm_error_strings(transaction_details.vm_error).1,
                 "user_error_code": transaction_details.user_error_code,
                 "compute_units_consumed": transaction_details.compute_units_consumed,
                 "slot": transaction_details.slot
@@ -847,7 +824,7 @@ async fn decompress_with_uploader(
 
     let mut transaction = TransactionBuilder::build_decompress2(
         fee_payer_keypair.public_key,
-        [0u8; 32], // System program
+        SYSTEM_PROGRAM, // System program
         target_pubkey.to_bytes()?,
         buffer_account.to_bytes()?, // meta_account (same as data_account)
         buffer_account.to_bytes()?, // data_account (same as meta_account)
@@ -880,18 +857,11 @@ async fn decompress_with_uploader(
 
     // Check for execution errors
     if transaction_details.execution_result != 0 || transaction_details.vm_error != 0 {
-        let vm_error_msg = if transaction_details.vm_error != 0 {
-            match thru_base::tn_vm_error_str(transaction_details.vm_error) {
-                Some(error_str) => format!(" ({})", error_str),
-                None => String::new(),
-            }
-        } else {
-            String::new()
-        };
+        let (vm_error_msg, vm_error_label) = vm_error_strings(transaction_details.vm_error);
         return Err(CliError::TransactionSubmission(format!(
             "Transaction failed with execution result: {} (VM error: {}{}, User error: {})",
             transaction_details.execution_result,
-            transaction_details.vm_error,
+            vm_error_label,
             vm_error_msg,
             transaction_details.user_error_code
         )));
@@ -913,6 +883,7 @@ async fn decompress_with_uploader(
                 "method": method,
                 "execution_result": transaction_details.execution_result,
                 "vm_error": transaction_details.vm_error,
+                "vm_error_name": vm_error_strings(transaction_details.vm_error).1,
                 "user_error_code": transaction_details.user_error_code,
                 "compute_units_consumed": transaction_details.compute_units_consumed,
                 "slot": transaction_details.slot
@@ -1109,7 +1080,7 @@ async fn decompress_with_uploader_huge(
     // Create DECOMPRESS2 transaction using separate meta and data accounts
     let mut transaction = TransactionBuilder::build_decompress2(
         fee_payer_keypair.public_key,
-        [0u8; 32], // System program
+        SYSTEM_PROGRAM, // System program
         target_pubkey.to_bytes()?,
         meta_account.to_bytes()?,   // meta_account
         buffer_account.to_bytes()?, // data_account (buffer_account)
@@ -1149,18 +1120,11 @@ async fn decompress_with_uploader_huge(
 
     // Check for execution errors
     if transaction_details.execution_result != 0 || transaction_details.vm_error != 0 {
-        let vm_error_msg = if transaction_details.vm_error != 0 {
-            match thru_base::tn_vm_error_str(transaction_details.vm_error) {
-                Some(error_str) => format!(" ({})", error_str),
-                None => String::new(),
-            }
-        } else {
-            String::new()
-        };
+        let (vm_error_msg, vm_error_label) = vm_error_strings(transaction_details.vm_error);
         return Err(CliError::TransactionSubmission(format!(
             "Transaction failed with execution result: {} (VM error: {}{}, User error: {})",
             transaction_details.execution_result,
-            transaction_details.vm_error,
+            vm_error_label,
             vm_error_msg,
             transaction_details.user_error_code
         )));
@@ -1177,6 +1141,7 @@ async fn decompress_with_uploader_huge(
                 "method": "uploader_huge_separate_accounts",
                 "execution_result": transaction_details.execution_result,
                 "vm_error": transaction_details.vm_error,
+                "vm_error_name": vm_error_strings(transaction_details.vm_error).1,
                 "user_error_code": transaction_details.user_error_code,
                 "compute_units_consumed": transaction_details.compute_units_consumed,
                 "slot": transaction_details.slot,
@@ -1326,6 +1291,17 @@ fn create_rpc_client(config: &Config) -> Result<Client, CliError> {
         .timeout(timeout)
         .auth_token(config.auth_token.clone())
         .build()
+        .map_err(|e| e.into())
+}
+
+fn vm_error_strings(code: i32) -> (String, String) {
+    let label = format_vm_error(code);
+    let message = if code != 0 {
+        format!(" (VM error: {})", label)
+    } else {
+        String::new()
+    };
+    (message, label)
 }
 
 #[cfg(test)]

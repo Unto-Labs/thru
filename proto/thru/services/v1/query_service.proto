@@ -26,35 +26,32 @@ option swift_prefix = "THUS";
 // GetAccountRequest retrieves a decoded account by public key.
 message GetAccountRequest {
   thru.core.v1.Pubkey address = 1 [(google.api.field_behavior) = REQUIRED];
-  thru.core.v1.AccountView view = 2 [(google.api.field_behavior) = OPTIONAL];
+  optional thru.core.v1.AccountView view = 2 [(google.api.field_behavior) = OPTIONAL];
   thru.common.v1.VersionContext version_context = 3
       [(google.api.field_behavior) = REQUIRED];
-  thru.common.v1.ConsensusStatus min_consensus = 4
+  optional thru.common.v1.ConsensusStatus min_consensus = 4
       [(google.api.field_behavior) = OPTIONAL];
-  thru.core.v1.DataSlice data_slice = 6
+  optional thru.core.v1.DataSlice data_slice = 5
       [(google.api.field_behavior) = OPTIONAL];
-
-  reserved 5;
-  reserved "skip_data";
 }
 
 // GetRawAccountRequest retrieves raw account bytes by public key.
 message GetRawAccountRequest {
   thru.core.v1.Pubkey address = 1 [(google.api.field_behavior) = REQUIRED];
-  thru.core.v1.AccountView view = 2 [(google.api.field_behavior) = OPTIONAL];
+  optional thru.core.v1.AccountView view = 2 [(google.api.field_behavior) = OPTIONAL];
   thru.common.v1.VersionContext version_context = 3
       [(google.api.field_behavior) = REQUIRED];
-  thru.common.v1.ConsensusStatus min_consensus = 4
+  optional thru.common.v1.ConsensusStatus min_consensus = 4
       [(google.api.field_behavior) = OPTIONAL];
 }
 
 // GetTransactionRequest retrieves a decoded transaction by signature.
 message GetTransactionRequest {
   thru.core.v1.Signature signature = 1 [(google.api.field_behavior) = REQUIRED];
-  thru.core.v1.TransactionView view = 2 [(google.api.field_behavior) = OPTIONAL];
+  optional thru.core.v1.TransactionView view = 2 [(google.api.field_behavior) = OPTIONAL];
   thru.common.v1.VersionContext version_context = 3
       [(google.api.field_behavior) = REQUIRED];
-  thru.common.v1.ConsensusStatus min_consensus = 4
+  optional thru.common.v1.ConsensusStatus min_consensus = 4
       [(google.api.field_behavior) = OPTIONAL];
 }
 
@@ -63,7 +60,7 @@ message GetRawTransactionRequest {
   thru.core.v1.Signature signature = 1 [(google.api.field_behavior) = REQUIRED];
   thru.common.v1.VersionContext version_context = 2
       [(google.api.field_behavior) = REQUIRED];
-  thru.common.v1.ConsensusStatus min_consensus = 3
+  optional thru.common.v1.ConsensusStatus min_consensus = 3
       [(google.api.field_behavior) = OPTIONAL];
 }
 
@@ -90,8 +87,8 @@ message GetBlockRequest {
     uint64 slot = 1 [(google.api.field_behavior) = OPTIONAL];
     thru.core.v1.BlockHash block_hash = 2 [(google.api.field_behavior) = OPTIONAL];
   }
-  thru.core.v1.BlockView view = 3 [(google.api.field_behavior) = OPTIONAL];
-  thru.common.v1.ConsensusStatus min_consensus = 4
+  optional thru.core.v1.BlockView view = 3 [(google.api.field_behavior) = OPTIONAL];
+  optional thru.common.v1.ConsensusStatus min_consensus = 4
       [(google.api.field_behavior) = OPTIONAL];
 }
 
@@ -107,36 +104,40 @@ message GetRawBlockRequest {
     uint64 slot = 1 [(google.api.field_behavior) = OPTIONAL];
     thru.core.v1.BlockHash block_hash = 2 [(google.api.field_behavior) = OPTIONAL];
   }
-  thru.common.v1.ConsensusStatus min_consensus = 3
+  optional thru.common.v1.ConsensusStatus min_consensus = 3
       [(google.api.field_behavior) = OPTIONAL];
 }
 
-// ListOwnedAccountsRequest lists accounts for a given owner public key.
-message ListOwnedAccountsRequest {
-  thru.core.v1.Pubkey owner = 1 [(google.api.field_behavior) = REQUIRED];
-  thru.core.v1.AccountView view = 2 [(google.api.field_behavior) = OPTIONAL];
-  thru.common.v1.VersionContext version_context = 3
+// ListAccountsRequest lists accounts using CEL filters.
+message ListAccountsRequest {
+  optional thru.core.v1.AccountView view = 1 [(google.api.field_behavior) = OPTIONAL];
+  optional thru.common.v1.VersionContext version_context = 2
       [(google.api.field_behavior) = OPTIONAL];
-  thru.common.v1.Filter filter = 4 [(google.api.field_behavior) = OPTIONAL];
-  thru.common.v1.PageRequest page = 5 [(google.api.field_behavior) = OPTIONAL];
-  thru.common.v1.ConsensusStatus min_consensus = 6
+
+  // Optional CEL filter applied server-side. To emulate the legacy
+  // ListOwnedAccounts RPC, set:
+  //   filter.expression = "meta.owner.value == params.owner_bytes"
+  //   filter.params["owner_bytes"].bytes_value = <32-byte owner pubkey>
+  optional thru.common.v1.Filter filter = 3 [(google.api.field_behavior) = OPTIONAL];
+  optional thru.common.v1.PageRequest page = 4 [(google.api.field_behavior) = OPTIONAL];
+  optional thru.common.v1.ConsensusStatus min_consensus = 5
       [(google.api.field_behavior) = OPTIONAL];
 }
 
-// ListOwnedAccountsResponse contains paginated accounts.
-message ListOwnedAccountsResponse {
+// ListAccountsResponse contains paginated accounts.
+message ListAccountsResponse {
   repeated thru.core.v1.Account accounts = 1
       [(google.api.field_behavior) = OPTIONAL];
-  thru.common.v1.PageResponse page = 2
+  optional thru.common.v1.PageResponse page = 2
       [(google.api.field_behavior) = OPTIONAL];
 }
 
 // ListBlocksRequest lists blocks with pagination and filtering.
 message ListBlocksRequest {
-  thru.common.v1.Filter filter = 1 [(google.api.field_behavior) = OPTIONAL];
-  thru.common.v1.PageRequest page = 2 [(google.api.field_behavior) = OPTIONAL];
-  thru.core.v1.BlockView view = 3 [(google.api.field_behavior) = OPTIONAL];
-  thru.common.v1.ConsensusStatus min_consensus = 4
+  optional thru.common.v1.Filter filter = 1 [(google.api.field_behavior) = OPTIONAL];
+  optional thru.common.v1.PageRequest page = 2 [(google.api.field_behavior) = OPTIONAL];
+  optional thru.core.v1.BlockView view = 3 [(google.api.field_behavior) = OPTIONAL];
+  optional thru.common.v1.ConsensusStatus min_consensus = 4
       [(google.api.field_behavior) = OPTIONAL];
 }
 
@@ -144,21 +145,23 @@ message ListBlocksRequest {
 message ListBlocksResponse {
   repeated thru.core.v1.Block blocks = 1
       [(google.api.field_behavior) = OPTIONAL];
-  thru.common.v1.PageResponse page = 2
+  optional thru.common.v1.PageResponse page = 2
       [(google.api.field_behavior) = OPTIONAL];
 }
 
 // ListTransactionsForAccountRequest lists transaction signatures involving an account.
 message ListTransactionsForAccountRequest {
   thru.core.v1.Pubkey account = 1 [(google.api.field_behavior) = REQUIRED];
-  thru.common.v1.PageRequest page = 2 [(google.api.field_behavior) = OPTIONAL];
+  optional thru.common.v1.PageRequest page = 2 [(google.api.field_behavior) = OPTIONAL];
+  // Optional CEL filter applied after the account constraint.
+  optional thru.common.v1.Filter filter = 3 [(google.api.field_behavior) = OPTIONAL];
 }
 
 // ListTransactionsForAccountResponse contains transaction signatures.
 message ListTransactionsForAccountResponse {
   repeated thru.core.v1.Signature signatures = 1
       [(google.api.field_behavior) = OPTIONAL];
-  thru.common.v1.PageResponse page = 2
+  optional thru.common.v1.PageResponse page = 2
       [(google.api.field_behavior) = OPTIONAL];
 }
 
@@ -177,7 +180,7 @@ message GetEventRequest {
     (google.api.field_behavior) = REQUIRED,
     (buf.validate.field).string.max_len = 128
   ];
-  thru.common.v1.VersionContext version_context = 2
+  optional thru.common.v1.VersionContext version_context = 2
       [(google.api.field_behavior) = OPTIONAL];
 }
 
@@ -186,12 +189,12 @@ message Event {
   string event_id = 1 [(google.api.field_behavior) = REQUIRED];
   thru.core.v1.Signature transaction_signature = 2
       [(google.api.field_behavior) = REQUIRED];
-  thru.core.v1.Pubkey program = 3 [(google.api.field_behavior) = OPTIONAL];
-  bytes payload = 4 [(google.api.field_behavior) = OPTIONAL];
-  uint64 slot = 5 [(google.api.field_behavior) = OPTIONAL];
-  uint32 call_idx = 6 [(google.api.field_behavior) = OPTIONAL];
-  uint32 program_idx = 7 [(google.api.field_behavior) = OPTIONAL];
-  uint32 payload_size = 8 [(google.api.field_behavior) = OPTIONAL];
+  optional thru.core.v1.Pubkey program = 3 [(google.api.field_behavior) = OPTIONAL];
+  optional bytes payload = 4 [(google.api.field_behavior) = OPTIONAL];
+  optional uint64 slot = 5 [(google.api.field_behavior) = OPTIONAL];
+  optional uint32 call_idx = 6 [(google.api.field_behavior) = OPTIONAL];
+  optional uint32 program_idx = 7 [(google.api.field_behavior) = OPTIONAL];
+  optional uint32 payload_size = 8 [(google.api.field_behavior) = OPTIONAL];
 }
 
 // GetTransactionStatusRequest fetches execution status for a transaction.
@@ -202,9 +205,9 @@ message GetTransactionStatusRequest {
 // TransactionStatus captures status metadata for a transaction.
 message TransactionStatus {
   thru.core.v1.Signature signature = 1 [(google.api.field_behavior) = REQUIRED];
-  thru.common.v1.ConsensusStatus consensus_status = 2
+  optional thru.common.v1.ConsensusStatus consensus_status = 2
       [(google.api.field_behavior) = OPTIONAL];
-  thru.core.v1.TransactionExecutionResult execution_result = 3
+  optional thru.core.v1.TransactionExecutionResult execution_result = 3
       [(google.api.field_behavior) = OPTIONAL];
 }
 
@@ -283,9 +286,8 @@ service QueryService {
     };
   }
 
-  // List accounts owned by a public key.
-  rpc ListOwnedAccounts(ListOwnedAccountsRequest)
-      returns (ListOwnedAccountsResponse) {
+  // List accounts using CEL-based filtering.
+  rpc ListAccounts(ListAccountsRequest) returns (ListAccountsResponse) {
     option (google.api.http) = {
       get: "/v1/accounts"
     };

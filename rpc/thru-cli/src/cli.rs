@@ -37,6 +37,14 @@ pub enum Commands {
         /// Account identifier (key name from config or public key)
         /// If omitted, uses the 'default' key from config
         account: Option<String>,
+
+        /// Starting offset in account data to display (in bytes)
+        #[arg(long)]
+        data_start: Option<usize>,
+
+        /// Length of account data to display (in bytes)
+        #[arg(long)]
+        data_len: Option<usize>,
     },
 
     /// Get balance for a specific account
@@ -180,6 +188,10 @@ pub enum ProgramCommands {
 
         /// Seed for meta and program account derivation
         seed: String,
+
+        /// Fee payer account name from config (optional, defaults to 'default')
+        #[arg(long)]
+        fee_payer: Option<String>,
     },
 
     /// Finalize a managed program (make it immutable)
@@ -194,6 +206,10 @@ pub enum ProgramCommands {
 
         /// Seed for meta and program account derivation
         seed: String,
+
+        /// Fee payer account name from config (optional, defaults to 'default')
+        #[arg(long)]
+        fee_payer: Option<String>,
     },
 
     /// Set authority candidate for a managed program
@@ -225,6 +241,10 @@ pub enum ProgramCommands {
 
         /// Seed for meta and program account derivation
         seed: String,
+
+        /// Fee payer account (optional, defaults to 'default')
+        #[arg(long)]
+        fee_payer: Option<String>,
     },
 
     /// Get the program derived address
@@ -557,6 +577,10 @@ pub enum TokenCommands {
         /// Fee payer account (optional, defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
+
+        /// Override token program address (ta... or hex)
+        #[arg(long = "token-program")]
+        token_program: Option<String>,
     },
 
     /// Initialize a new token account
@@ -576,6 +600,10 @@ pub enum TokenCommands {
         /// Fee payer account (optional, defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
+
+        /// Override token program address (ta... or hex)
+        #[arg(long = "token-program")]
+        token_program: Option<String>,
     },
 
     /// Transfer tokens between accounts
@@ -592,6 +620,10 @@ pub enum TokenCommands {
         /// Fee payer account (optional, defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
+
+        /// Override token program address (ta... or hex)
+        #[arg(long = "token-program")]
+        token_program: Option<String>,
     },
 
     /// Mint new tokens to an account
@@ -611,6 +643,10 @@ pub enum TokenCommands {
         /// Fee payer account (optional, defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
+
+        /// Override token program address (ta... or hex)
+        #[arg(long = "token-program")]
+        token_program: Option<String>,
     },
 
     /// Burn tokens from an account
@@ -630,6 +666,10 @@ pub enum TokenCommands {
         /// Fee payer account (optional, defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
+
+        /// Override token program address (ta... or hex)
+        #[arg(long = "token-program")]
+        token_program: Option<String>,
     },
 
     /// Close a token account
@@ -646,6 +686,10 @@ pub enum TokenCommands {
         /// Fee payer account (optional, defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
+
+        /// Override token program address (ta... or hex)
+        #[arg(long = "token-program")]
+        token_program: Option<String>,
     },
 
     /// Freeze a token account
@@ -662,6 +706,10 @@ pub enum TokenCommands {
         /// Fee payer account (optional, defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
+
+        /// Override token program address (ta... or hex)
+        #[arg(long = "token-program")]
+        token_program: Option<String>,
     },
 
     /// Unfreeze a token account
@@ -678,6 +726,10 @@ pub enum TokenCommands {
         /// Fee payer account (optional, defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
+
+        /// Override token program address (ta... or hex)
+        #[arg(long = "token-program")]
+        token_program: Option<String>,
     },
 
     /// Derive token account address from mint, owner, and seed
@@ -691,6 +743,10 @@ pub enum TokenCommands {
         /// Seed for derivation (32 bytes hex, optional - defaults to all zeros)
         #[arg(long)]
         seed: Option<String>,
+
+        /// Override token program address (ta... or hex)
+        #[arg(long = "token-program")]
+        token_program: Option<String>,
     },
 
     /// Derive mint account address from mint authority and seed
@@ -700,5 +756,9 @@ pub enum TokenCommands {
 
         /// Seed for derivation (32 bytes hex)
         seed: String,
+
+        /// Override token program address (ta... or hex)
+        #[arg(long = "token-program")]
+        token_program: Option<String>,
     },
 }

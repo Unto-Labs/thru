@@ -4,7 +4,6 @@ use std::fs;
 use std::path::Path;
 use std::time::Duration;
 use thru_base::tn_tools::{KeyPair, Pubkey};
-use thru_base::tn_vm_error_str;
 use thru_base::txn_lib::Transaction;
 use thru_base::txn_tools::TransactionBuilder;
 
@@ -12,8 +11,9 @@ use crate::cli::UploaderCommands;
 use crate::config::Config;
 use crate::crypto;
 use crate::error::CliError;
-use crate::grpc_client::Client as RpcClient;
 use crate::output;
+use crate::utils::format_vm_error;
+use thru_client::Client as RpcClient;
 
 // Transaction verification constants
 const TRANSACTION_VERIFICATION_TIMEOUT: Duration = Duration::from_secs(30);
@@ -455,37 +455,31 @@ impl UploaderManager {
 
             // Check execution result
             if transaction_details.execution_result != 0 || transaction_details.vm_error != 0 {
+                let vm_error_label = format_vm_error(transaction_details.vm_error);
                 let vm_error_msg = if transaction_details.vm_error != 0 {
-                    match tn_vm_error_str(transaction_details.vm_error) {
-                        Some(error_str) => format!(" ({})", error_str),
-                        None => String::new(),
-                    }
+                    format!(" (VM error: {})", vm_error_label)
                 } else {
                     String::new()
                 };
                 output::print_warning(&format!(
                     "Transaction completed with execution result: {} vm_error: {}{}",
-                    transaction_details.execution_result,
-                    transaction_details.vm_error,
-                    vm_error_msg
+                    transaction_details.execution_result, vm_error_label, vm_error_msg
                 ));
             }
         }
 
         // Check for execution errors
         if transaction_details.execution_result != 0 || transaction_details.vm_error != 0 {
+            let vm_error_label = format_vm_error(transaction_details.vm_error);
             let vm_error_msg = if transaction_details.vm_error != 0 {
-                match tn_vm_error_str(transaction_details.vm_error) {
-                    Some(error_str) => format!(" ({})", error_str),
-                    None => String::new(),
-                }
+                format!(" (VM error: {})", vm_error_label)
             } else {
                 String::new()
             };
             return Err(CliError::TransactionVerification(format!(
                 "Transaction failed with execution result: {} (VM error: {}{}, User error: {})",
                 transaction_details.execution_result,
-                transaction_details.vm_error,
+                vm_error_label,
                 vm_error_msg,
                 transaction_details.user_error_code
             )));

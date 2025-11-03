@@ -25,28 +25,28 @@ jobs:
 
     - name: Create SDK artifact directory
       run: |
-        mkdir -p sdk-artifact/thru-${{ matrix.sdk }}-sdk
+        mkdir -p sdk-artifact/thru-program-sdk-${{ matrix.sdk }}-${{ github.event.release.tag_name }}
 
     - name: Copy SDK-specific files
       run: |
         # Copy the entire SDK directory
-        cp -rL sdks/${{ matrix.sdk }}/. sdk-artifact/thru-${{ matrix.sdk }}-sdk/
+        cp -rL sdks/${{ matrix.sdk }}/. sdk-artifact/thru-program-sdk-${{ matrix.sdk }}-${{ github.event.release.tag_name }}/
 
         # Ensure deps.sh and setup.sh are executable
-        chmod +x sdk-artifact/thru-${{ matrix.sdk }}-sdk/deps.sh
-        chmod +x sdk-artifact/thru-${{ matrix.sdk }}-sdk/setup.sh
+        chmod +x sdk-artifact/thru-program-sdk-${{ matrix.sdk }}-${{ github.event.release.tag_name }}/deps.sh
+        chmod +x sdk-artifact/thru-program-sdk-${{ matrix.sdk }}-${{ github.event.release.tag_name }}/setup.sh
 
     - name: Create tarball
       run: |
         cd sdk-artifact
-        tar -czf thru-program-sdk-${{ matrix.sdk }}-${{ github.event.release.tag_name }}.tar.gz thru-${{ matrix.sdk }}-sdk/
+        tar -czf thru-program-sdk-${{ matrix.sdk }}-${{ github.event.release.tag_name }}.tar.gz thru-program-sdk-${{ matrix.sdk }}-${{ github.event.release.tag_name }}/
         cd ..
         mv sdk-artifact/thru-program-sdk-${{ matrix.sdk }}-${{ github.event.release.tag_name }}.tar.gz .
 
     - name: Create zip archive
       run: |
         cd sdk-artifact
-        zip -r thru-program-sdk-${{ matrix.sdk }}-${{ github.event.release.tag_name }}.zip thru-${{ matrix.sdk }}-sdk/
+        zip -r thru-program-sdk-${{ matrix.sdk }}-${{ github.event.release.tag_name }}.zip thru-program-sdk-${{ matrix.sdk }}-${{ github.event.release.tag_name }}/
         cd ..
         mv sdk-artifact/thru-program-sdk-${{ matrix.sdk }}-${{ github.event.release.tag_name }}.zip .
 
@@ -57,128 +57,6 @@ jobs:
         path: |
           thru-program-sdk-${{ matrix.sdk }}-${{ github.event.release.tag_name }}.tar.gz
           thru-program-sdk-${{ matrix.sdk }}-${{ github.event.release.tag_name }}.zip
-        retention-days: 90
-
-  # Build RPC developer kit
-  build-rpc-artifacts:
-    runs-on: ubuntu-latest
-    timeout-minutes: 60
-
-    steps:
-    - name: Checkout code
-      uses: actions/checkout@v5
-      with:
-        submodules: true
-
-    - name: Create RPC artifact directory
-      run: |
-        mkdir -p rpc-artifact/thru-rpc-developer-kit
-
-    - name: Copy RPC components to artifact
-      run: |
-        # Copy source code for the three main components
-        cp -rL rpc/thru-base/. rpc-artifact/thru-rpc-developer-kit/thru-base/
-        cp -rL rpc/thru-rpc-client/. rpc-artifact/thru-rpc-developer-kit/thru-rpc-client/
-        cp -rL rpc/thru-cli/. rpc-artifact/thru-rpc-developer-kit/thru-cli/
-
-    - name: Create setup script
-      run: |
-        cat > rpc-artifact/thru-rpc-developer-kit/setup.sh << 'EOF'
-        #!/bin/bash
-        set -e
-
-        echo "Setting up Thru RPC Developer Kit..."
-
-        # Check if Rust is installed
-        if ! command -v cargo &> /dev/null; then
-            echo "Rust/Cargo not found. Please install Rust from https://rustup.rs/"
-            exit 1
-        fi
-
-        echo "Building RPC components..."
-        cd thru-base && cargo build --release && cd ..
-        cd thru-rpc-client && cargo build --release && cd ..
-        cd thru-cli && cargo build --release && cd ..
-
-        echo "Setup complete!"
-        echo "Built binaries are available in each component's target/release/ directory"
-        echo "Navigate to thru-cli and run 'cargo run -- --help' to get started with the CLI"
-        EOF
-
-        chmod +x rpc-artifact/thru-rpc-developer-kit/setup.sh
-
-    - name: Create README for developer kit
-      run: |
-        cat > rpc-artifact/thru-rpc-developer-kit/README.md << 'EOF'
-        # Thru RPC Developer Kit
-
-        This package contains the core RPC components for Thru network development:
-
-        ## Components
-
-        - **thru-base**: Core foundation library with common types and utilities
-        - **thru-rpc-client**: RPC client library for interacting with Thru network
-        - **thru-cli**: Command-line interface for Thru network operations
-
-        ## Quick Start
-
-        1. Ensure you have Rust installed: https://rustup.rs/
-        2. Run the setup script: `./setup.sh`
-        3. Start using the CLI: `cd thru-cli && cargo run -- --help`
-
-        ## Building
-
-        Build individual components:
-        ```bash
-        cd thru-base && cargo build --release
-        cd thru-rpc-client && cargo build --release
-        cd thru-cli && cargo build --release
-        ```
-
-        ## Using the Components
-
-        ### CLI Usage
-        ```bash
-        # Navigate to CLI directory and run
-        cd thru-cli
-        cargo run -- --help
-        ```
-
-        ### RPC Client Library
-        Add to your `Cargo.toml`:
-        ```toml
-        [dependencies]
-        thru-rpc-client = { path = "./path/to/thru-rpc-client" }
-        thru-base = { path = "./path/to/thru-base" }
-        ```
-
-        ## Documentation
-
-        - See individual component README files for detailed documentation
-        - Generate docs: `cargo doc --open`
-        EOF
-
-    - name: Create tarball
-      run: |
-        cd rpc-artifact
-        tar -czf thru-rpc-developer-kit-${{ github.event.release.tag_name }}.tar.gz thru-rpc-developer-kit/
-        cd ..
-        mv rpc-artifact/thru-rpc-developer-kit-${{ github.event.release.tag_name }}.tar.gz .
-
-    - name: Create zip archive
-      run: |
-        cd rpc-artifact
-        zip -r thru-rpc-developer-kit-${{ github.event.release.tag_name }}.zip thru-rpc-developer-kit/
-        cd ..
-        mv rpc-artifact/thru-rpc-developer-kit-${{ github.event.release.tag_name }}.zip .
-
-    - name: Upload RPC artifacts
-      uses: actions/upload-artifact@v5
-      with:
-        name: rpc-developer-kit
-        path: |
-          thru-rpc-developer-kit-${{ github.event.release.tag_name }}.tar.gz
-          thru-rpc-developer-kit-${{ github.event.release.tag_name }}.zip
         retention-days: 90
 
   # Build toolchain for Linux and macOS
@@ -232,49 +110,65 @@ jobs:
       run: |
         cd ${GITHUB_WORKSPACE}/.thru/sdk/
 
-        # Create a minimal toolchain directory with only essential folders
-        mkdir -p toolchain-minimal
+        # Detect OS and architecture
+        OS_NAME=$(uname -s)
+        ARCH_NAME=$(uname -m)
+
+        # Create a minimal toolchain directory with the final archive name
+        mkdir -p thru-toolchain-${OS_NAME}-${ARCH_NAME}-${{ github.event.release.tag_name }}
 
         # Copy only the essential directories
         for dir in bin include lib libexec picolibc riscv64-unknown-elf share; do
           if [ -d "toolchain/$dir" ]; then
             echo "Copying toolchain/$dir..."
-            cp -r "toolchain/$dir" toolchain-minimal/
+            cp -r "toolchain/$dir" thru-toolchain-${OS_NAME}-${ARCH_NAME}-${{ github.event.release.tag_name }}/
           else
             echo "Warning: toolchain/$dir not found, skipping"
           fi
         done
 
         # Display what we're packaging
-        echo "Minimal toolchain contents:"
-        ls -la toolchain-minimal/
+        echo "Toolchain package contents:"
+        ls -la thru-toolchain-${OS_NAME}-${ARCH_NAME}-${{ github.event.release.tag_name }}/
         echo "Total size:"
-        du -sh toolchain-minimal/
+        du -sh thru-toolchain-${OS_NAME}-${ARCH_NAME}-${{ github.event.release.tag_name }}/
 
     - name: Package toolchain as tar.gz
       run: |
         cd ${GITHUB_WORKSPACE}/.thru/sdk/
-        tar -czf thru-toolchain-${{ runner.os }}-${{ matrix.arch }}-${{ github.event.release.tag_name }}.tar.gz toolchain-minimal/
-        ls -la thru-toolchain-${{ runner.os }}-${{ matrix.arch }}-${{ github.event.release.tag_name }}.tar.gz
+        OS_NAME=$(uname -s)
+        ARCH_NAME=$(uname -m)
+        tar -czf thru-toolchain-${OS_NAME}-${ARCH_NAME}-${{ github.event.release.tag_name }}.tar.gz thru-toolchain-${OS_NAME}-${ARCH_NAME}-${{ github.event.release.tag_name }}/
+        ls -la thru-toolchain-${OS_NAME}-${ARCH_NAME}-${{ github.event.release.tag_name }}.tar.gz
 
     - name: Package toolchain as zip
       run: |
         cd ${GITHUB_WORKSPACE}/.thru/sdk/
-        zip -r thru-toolchain-${{ runner.os }}-${{ matrix.arch }}-${{ github.event.release.tag_name }}.zip toolchain-minimal/
-        ls -la thru-toolchain-${{ runner.os }}-${{ matrix.arch }}-${{ github.event.release.tag_name }}.zip
+        OS_NAME=$(uname -s)
+        ARCH_NAME=$(uname -m)
+        zip -r thru-toolchain-${OS_NAME}-${ARCH_NAME}-${{ github.event.release.tag_name }}.zip thru-toolchain-${OS_NAME}-${ARCH_NAME}-${{ github.event.release.tag_name }}/
+        ls -la thru-toolchain-${OS_NAME}-${ARCH_NAME}-${{ github.event.release.tag_name }}.zip
 
     - name: Upload toolchain artifacts
+      run: |
+        OS_NAME=$(uname -s)
+        ARCH_NAME=$(uname -m)
+        echo "os_name=${OS_NAME}" >> $GITHUB_OUTPUT
+        echo "arch_name=${ARCH_NAME}" >> $GITHUB_OUTPUT
+      id: detect-platform
+
+    - name: Upload toolchain artifacts to workflow
       uses: actions/upload-artifact@v5
       with:
-        name: toolchain-${{ runner.os }}-${{ matrix.arch }}
+        name: toolchain-${{ steps.detect-platform.outputs.os_name }}-${{ steps.detect-platform.outputs.arch_name }}
         path: |
-          .thru/sdk/thru-toolchain-${{ runner.os }}-${{ matrix.arch }}-${{ github.event.release.tag_name }}.tar.gz
-          .thru/sdk/thru-toolchain-${{ runner.os }}-${{ matrix.arch }}-${{ github.event.release.tag_name }}.zip
+          .thru/sdk/thru-toolchain-${{ steps.detect-platform.outputs.os_name }}-${{ steps.detect-platform.outputs.arch_name }}-${{ github.event.release.tag_name }}.tar.gz
+          .thru/sdk/thru-toolchain-${{ steps.detect-platform.outputs.os_name }}-${{ steps.detect-platform.outputs.arch_name }}-${{ github.event.release.tag_name }}.zip
         retention-days: 90
 
   # Upload all artifacts to existing release
   upload-release-artifacts:
-    needs: [build-sdk-artifacts, build-rpc-artifacts, build-toolchain]
+    needs: [build-sdk-artifacts, build-toolchain]
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -309,65 +203,34 @@ jobs:
         asset_name: thru-program-sdk-c-${{ github.event.release.tag_name }}.zip
         asset_content_type: application/zip
 
-    - name: Upload RPC Developer Kit tar.gz
-      uses: actions/upload-release-asset@v1
+    - name: Upload Toolchain artifacts
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ./release-artifacts/rpc-developer-kit/thru-rpc-developer-kit-${{ github.event.release.tag_name }}.tar.gz
-        asset_name: thru-rpc-developer-kit-${{ github.event.release.tag_name }}.tar.gz
-        asset_content_type: application/gzip
+      run: |
+        # Find all toolchain artifacts and upload them
+        for artifact_dir in release-artifacts/toolchain-*; do
+          if [ -d "$artifact_dir" ]; then
+            echo "Processing $artifact_dir"
+            for file in "$artifact_dir"/*; do
+              if [ -f "$file" ]; then
+                filename=$(basename "$file")
+                echo "Uploading $filename"
 
-    - name: Upload RPC Developer Kit zip
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ./release-artifacts/rpc-developer-kit/thru-rpc-developer-kit-${{ github.event.release.tag_name }}.zip
-        asset_name: thru-rpc-developer-kit-${{ github.event.release.tag_name }}.zip
-        asset_content_type: application/zip
+                # Determine content type
+                if [[ "$filename" == *.tar.gz ]]; then
+                  content_type="application/gzip"
+                elif [[ "$filename" == *.zip ]]; then
+                  content_type="application/zip"
+                else
+                  content_type="application/octet-stream"
+                fi
 
-    - name: Upload Linux x86_64 Toolchain tar.gz
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ./release-artifacts/toolchain-Linux-x86_64/thru-toolchain-Linux-x86_64-${{ github.event.release.tag_name }}.tar.gz
-        asset_name: thru-toolchain-Linux-x86_64-${{ github.event.release.tag_name }}.tar.gz
-        asset_content_type: application/gzip
-
-    - name: Upload Linux x86_64 Toolchain zip
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ./release-artifacts/toolchain-Linux-x86_64/thru-toolchain-Linux-x86_64-${{ github.event.release.tag_name }}.zip
-        asset_name: thru-toolchain-Linux-x86_64-${{ github.event.release.tag_name }}.zip
-        asset_content_type: application/zip
-
-    - name: Upload macOS arm64 Toolchain tar.gz
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ./release-artifacts/toolchain-macOS-arm64/thru-toolchain-macOS-arm64-${{ github.event.release.tag_name }}.tar.gz
-        asset_name: thru-toolchain-macOS-arm64-${{ github.event.release.tag_name }}.tar.gz
-        asset_content_type: application/gzip
-
-    - name: Upload macOS arm64 Toolchain zip
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ./release-artifacts/toolchain-macOS-arm64/thru-toolchain-macOS-arm64-${{ github.event.release.tag_name }}.zip
-        asset_name: thru-toolchain-macOS-arm64-${{ github.event.release.tag_name }}.zip
-        asset_content_type: application/zip
+                # Upload using GitHub CLI
+                gh release upload "${{ github.event.release.tag_name }}" "$file" --clobber
+              fi
+            done
+          fi
+        done
 
     - name: Release Summary
       run: |
@@ -375,6 +238,7 @@ jobs:
         echo ""
         echo "Uploaded artifacts:"
         echo "- C SDK (tar.gz, zip)"
-        echo "- RPC Developer Kit (tar.gz, zip)"
-        echo "- Linux x86_64 Toolchain (tar.gz, zip)"
-        echo "- macOS arm64 Toolchain (tar.gz, zip)"
+        echo "- Toolchains for detected platforms (tar.gz, zip)"
+        echo ""
+        echo "Toolchain artifacts:"
+        find release-artifacts/toolchain-* -type f -exec basename {} \; 2>/dev/null | sort || echo "  No toolchain artifacts found"

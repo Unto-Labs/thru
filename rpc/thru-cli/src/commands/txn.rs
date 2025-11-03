@@ -5,14 +5,14 @@ use crate::config::Config;
 use crate::crypto;
 use crate::error::CliError;
 use crate::output;
+use crate::utils::format_vm_error;
 use base64::Engine;
 use base64::engine::general_purpose;
 use std::time::Duration;
 use thru_base::rpc_types::{MakeStateProofConfig, ProofType};
 use thru_base::tn_tools::{KeyPair, Pubkey};
 use thru_base::txn_lib::{TnPubkey, Transaction};
-
-use crate::grpc_client::{Client, ClientBuilder};
+use thru_client::{Client, ClientBuilder};
 
 /// Handle transaction-related commands
 pub async fn handle_txn_command(
@@ -192,6 +192,43 @@ async fn execute_transaction(
             CliError::TransactionSubmission(format!("Failed to execute transaction: {:?}", e))
         })?;
 
+    let has_failure =
+        transaction_details.execution_result != 0 || transaction_details.vm_error != 0;
+    if has_failure {
+        let vm_error_label = format_vm_error(transaction_details.vm_error);
+        let vm_error_display = if transaction_details.vm_error != 0 {
+            format!("{} ({})", transaction_details.vm_error, vm_error_label)
+        } else {
+            "0".to_string()
+        };
+        let user_error_label = if transaction_details.user_error_code != 0 {
+            format!("0x{:X}", transaction_details.user_error_code)
+        } else {
+            "0x0".to_string()
+        };
+        let message = format!(
+            "Transaction failed (execution_result={} (hex 0x{:X}), vm_error={}, user_error={})",
+            transaction_details.execution_result,
+            transaction_details.execution_result,
+            vm_error_display,
+            user_error_label
+        );
+
+        if !json_format {
+            output::print_error(&message);
+        }
+
+        return Err(CliError::TransactionFailed {
+            message,
+            execution_result: transaction_details.execution_result,
+            vm_error: transaction_details.vm_error,
+            vm_error_label,
+            user_error_code: transaction_details.user_error_code,
+            user_error_label,
+            signature: transaction_details.signature.as_str().to_string(),
+        });
+    }
+
     // Format and display the result
     if json_format {
         let mut events_json = Vec::new();
@@ -258,20 +295,21 @@ async fn execute_transaction(
 
         let response = serde_json::json!({
             "transaction_execute": {
-                "status": "success",
-                "signature": transaction_details.signature.as_str(),
-                "slot": transaction_details.slot,
-                "compute_units_consumed": transaction_details.compute_units_consumed,
-                "state_units_consumed": transaction_details.state_units_consumed,
-                "execution_result": transaction_details.execution_result,
-                "vm_error": transaction_details.vm_error,
-                "user_error_code": transaction_details.user_error_code,
-                "events_count": transaction_details.events_cnt,
-                "events_size": transaction_details.events_sz,
-                "pages_used": transaction_details.pages_used,
-                "readwrite_accounts": transaction_details.rw_accounts.iter().map(|pk| pk.as_str().to_string()).collect::<Vec<_>>(),
-                "readonly_accounts": transaction_details.ro_accounts.iter().map(|pk| pk.as_str().to_string()).collect::<Vec<_>>(),
-                "events": events_json
+            "status": "success",
+            "signature": transaction_details.signature.as_str(),
+            "slot": transaction_details.slot,
+            "compute_units_consumed": transaction_details.compute_units_consumed,
+            "state_units_consumed": transaction_details.state_units_consumed,
+            "execution_result": transaction_details.execution_result,
+            "vm_error": transaction_details.vm_error,
+            "vm_error_name": format_vm_error(transaction_details.vm_error),
+            "user_error_code": transaction_details.user_error_code,
+            "events_count": transaction_details.events_cnt,
+            "events_size": transaction_details.events_sz,
+            "pages_used": transaction_details.pages_used,
+            "readwrite_accounts": transaction_details.rw_accounts.iter().map(|pk| pk.as_str().to_string()).collect::<Vec<_>>(),
+            "readonly_accounts": transaction_details.ro_accounts.iter().map(|pk| pk.as_str().to_string()).collect::<Vec<_>>(),
+            "events": events_json
             }
         });
         output::print_output(response, true);
@@ -288,7 +326,10 @@ async fn execute_transaction(
             transaction_details.state_units_consumed
         );
         println!("Execution Result: {}", transaction_details.execution_result);
-        println!("VM Error: {}", transaction_details.vm_error);
+        println!(
+            "VM Error: {}",
+            format_vm_error(transaction_details.vm_error)
+        );
         println!("User Error Code: {}", transaction_details.user_error_code);
         println!("Events Count: {}", transaction_details.events_cnt);
         println!("Events Size: {}", transaction_details.events_sz);
@@ -351,19 +392,6 @@ async fn execute_transaction(
                     println!("    Data (hex): {}", hex::encode(&event.data));
                 }
             }
-        }
-
-        if transaction_details.execution_result != 0 {
-            output::print_warning(&format!(
-                "Transaction completed with execution result: {}",
-                transaction_details.execution_result
-            ));
-        }
-        if transaction_details.vm_error != 0 {
-            output::print_warning(&format!(
-                "Transaction completed with VM error: {}",
-                transaction_details.vm_error
-            ));
         }
     }
 
@@ -673,6 +701,7 @@ fn create_rpc_client(config: &Config) -> Result<Client, CliError> {
         .timeout(Duration::from_secs(config.timeout_seconds))
         .auth_token(config.auth_token.clone())
         .build()
+        .map_err(|e| e.into())
 }
 
 /// Check account list size, deduplicate, and return sorted

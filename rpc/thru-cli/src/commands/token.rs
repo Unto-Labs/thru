@@ -8,13 +8,13 @@ const TOKEN_PROGRAM_FEE: u64 = 0;
 use crate::cli::TokenCommands;
 use crate::config::Config;
 use crate::error::CliError;
-use crate::grpc_client::{Client, ClientBuilder, TransactionDetails};
-use crate::utils::{parse_seed_bytes, validate_address_or_hex};
+use crate::utils::{format_vm_error, parse_seed_bytes, validate_address_or_hex};
 use std::time::Duration;
 use thru_base::crypto_utils::derive_program_address;
 use thru_base::tn_public_address::tn_pubkey_to_address_string;
-use thru_base::tn_tools::KeyPair;
+use thru_base::tn_tools::{KeyPair, Pubkey};
 use thru_base::txn_tools::TransactionBuilder;
+use thru_client::{Client, ClientBuilder, TransactionDetails};
 
 /// Helper function to resolve fee payer keypair from configuration
 fn resolve_fee_payer_keypair(
@@ -36,14 +36,52 @@ fn resolve_fee_payer_keypair(
         .map_err(|e| CliError::Crypto(format!("Failed to create fee payer keypair: {}", e)))
 }
 
+/// Resolve the token program pubkey, optionally overriding with command-line input.
+fn resolve_token_program(
+    config: &Config,
+    token_program: Option<&str>,
+) -> Result<(Pubkey, [u8; 32]), CliError> {
+    if let Some(program_str) = token_program {
+        let bytes = validate_address_or_hex(program_str)?;
+        let pubkey = Pubkey::from_bytes(&bytes);
+        Ok((pubkey, bytes))
+    } else {
+        let pubkey = config.get_token_program_pubkey()?;
+        let bytes = pubkey.to_bytes().map_err(|e| {
+            CliError::Crypto(format!("Failed to convert token program pubkey: {}", e))
+        })?;
+        Ok((pubkey, bytes))
+    }
+}
+
+fn derive_mint_account_pubkey(
+    token_program_pubkey: &Pubkey,
+    mint_authority_pubkey: &[u8; 32],
+    seed_bytes: &[u8; 32],
+) -> Result<Pubkey, CliError> {
+    use sha2::{Digest, Sha256};
+
+    let mut hasher = Sha256::new();
+    hasher.update(mint_authority_pubkey);
+    hasher.update(seed_bytes);
+
+    let hash = hasher.finalize();
+    let mut derived_seed = [0u8; 32];
+    derived_seed.copy_from_slice(&hash[..32]);
+
+    thru_base::crypto_utils::derive_program_address(&derived_seed, token_program_pubkey, false)
+        .map_err(|e| CliError::Crypto(format!("Failed to derive mint address: {}", e)))
+}
+
 /// Helper function to check transaction execution results and return appropriate errors
 fn check_transaction_result(
     transaction_details: &TransactionDetails,
     json_format: bool,
 ) -> Result<(), CliError> {
     if transaction_details.execution_result != 0 || transaction_details.vm_error != 0 {
+        let vm_error_label = format_vm_error(transaction_details.vm_error);
         let vm_error_msg = if transaction_details.vm_error != 0 {
-            format!(" (VM error: {})", transaction_details.vm_error)
+            format!(" (VM error: {})", vm_error_label)
         } else {
             String::new()
         };
@@ -65,6 +103,7 @@ fn check_transaction_result(
                     "message": error_msg,
                     "execution_result": transaction_details.execution_result,
                     "vm_error": transaction_details.vm_error,
+                    "vm_error_name": vm_error_label,
                     "user_error_code": transaction_details.user_error_code,
                     "signature": transaction_details.signature.as_str()
                 }
@@ -120,8 +159,10 @@ struct TransactionContext {
 async fn setup_transaction_context(
     config: &Config,
     fee_payer: Option<&str>,
+    token_program: Option<&str>,
 ) -> Result<TransactionContext, CliError> {
-    let token_program_pubkey = config.get_token_program_pubkey()?;
+    let (_token_program_pubkey, token_program_bytes) =
+        resolve_token_program(config, token_program)?;
     let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
     let client = create_rpc_client(config)?;
 
@@ -145,10 +186,6 @@ async fn setup_transaction_context(
     let block_height = client.get_block_height().await.map_err(|e| {
         CliError::TransactionSubmission(format!("Failed to get block height: {}", e))
     })?;
-
-    let token_program_bytes = token_program_pubkey
-        .to_bytes()
-        .map_err(|e| CliError::Crypto(format!("Failed to convert token program pubkey: {}", e)))?;
 
     Ok(TransactionContext {
         fee_payer_keypair,
@@ -203,6 +240,7 @@ pub async fn handle_token_command(
             seed,
             state_proof,
             fee_payer,
+            token_program,
         } => {
             initialize_mint(
                 config,
@@ -213,6 +251,7 @@ pub async fn handle_token_command(
                 &seed,
                 &state_proof,
                 fee_payer.as_deref(),
+                token_program.as_deref(),
                 json_format,
             )
             .await
@@ -223,6 +262,7 @@ pub async fn handle_token_command(
             seed,
             state_proof,
             fee_payer,
+            token_program,
         } => {
             initialize_account(
                 config,
@@ -231,6 +271,7 @@ pub async fn handle_token_command(
                 &seed,
                 &state_proof,
                 fee_payer.as_deref(),
+                token_program.as_deref(),
                 json_format,
             )
             .await
@@ -240,6 +281,7 @@ pub async fn handle_token_command(
             to,
             amount,
             fee_payer,
+            token_program,
         } => {
             transfer(
                 config,
@@ -247,6 +289,7 @@ pub async fn handle_token_command(
                 &to,
                 amount,
                 fee_payer.as_deref(),
+                token_program.as_deref(),
                 json_format,
             )
             .await
@@ -257,6 +300,7 @@ pub async fn handle_token_command(
             authority,
             amount,
             fee_payer,
+            token_program,
         } => {
             mint_to(
                 config,
@@ -265,6 +309,7 @@ pub async fn handle_token_command(
                 &authority,
                 amount,
                 fee_payer.as_deref(),
+                token_program.as_deref(),
                 json_format,
             )
             .await
@@ -275,6 +320,7 @@ pub async fn handle_token_command(
             authority,
             amount,
             fee_payer,
+            token_program,
         } => {
             burn(
                 config,
@@ -283,6 +329,7 @@ pub async fn handle_token_command(
                 &authority,
                 amount,
                 fee_payer.as_deref(),
+                token_program.as_deref(),
                 json_format,
             )
             .await
@@ -292,6 +339,7 @@ pub async fn handle_token_command(
             destination,
             authority,
             fee_payer,
+            token_program,
         } => {
             close_account(
                 config,
@@ -299,6 +347,7 @@ pub async fn handle_token_command(
                 &destination,
                 &authority,
                 fee_payer.as_deref(),
+                token_program.as_deref(),
                 json_format,
             )
             .await
@@ -308,6 +357,7 @@ pub async fn handle_token_command(
             mint,
             authority,
             fee_payer,
+            token_program,
         } => {
             freeze_account(
                 config,
@@ -315,6 +365,7 @@ pub async fn handle_token_command(
                 &mint,
                 &authority,
                 fee_payer.as_deref(),
+                token_program.as_deref(),
                 json_format,
             )
             .await
@@ -324,6 +375,7 @@ pub async fn handle_token_command(
             mint,
             authority,
             fee_payer,
+            token_program,
         } => {
             thaw_account(
                 config,
@@ -331,17 +383,41 @@ pub async fn handle_token_command(
                 &mint,
                 &authority,
                 fee_payer.as_deref(),
+                token_program.as_deref(),
                 json_format,
             )
             .await
         }
-        TokenCommands::DeriveTokenAccount { mint, owner, seed } => {
-            derive_token_account(config, &mint, &owner, seed.as_deref(), json_format).await
+        TokenCommands::DeriveTokenAccount {
+            mint,
+            owner,
+            seed,
+            token_program,
+        } => {
+            derive_token_account(
+                config,
+                &mint,
+                &owner,
+                seed.as_deref(),
+                token_program.as_deref(),
+                json_format,
+            )
+            .await
         }
         TokenCommands::DeriveMintAccount {
             mint_authority,
             seed,
-        } => derive_mint_account(config, &mint_authority, &seed, json_format).await,
+            token_program,
+        } => {
+            derive_mint_account(
+                config,
+                &mint_authority,
+                &seed,
+                token_program.as_deref(),
+                json_format,
+            )
+            .await
+        }
     }
 }
 
@@ -355,6 +431,7 @@ async fn initialize_mint(
     seed: &str,
     state_proof: &str,
     fee_payer: Option<&str>,
+    token_program: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
     // Validate inputs
@@ -411,8 +488,8 @@ async fn initialize_mint(
         None => None,
     };
 
-    // Get configuration
-    let token_program_pubkey = config.get_token_program_pubkey()?;
+    // Resolve token program and fee payer
+    let (token_program_pubkey, token_program_bytes) = resolve_token_program(config, token_program)?;
     let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
 
     // Create RPC client
@@ -439,21 +516,9 @@ async fn initialize_mint(
         CliError::TransactionSubmission(format!("Failed to get block height: {}", e))
     })?;
 
-    // Get token program as bytes for address derivation
-    let token_program_bytes = token_program_pubkey
-        .to_bytes()
-        .map_err(|e| CliError::Crypto(format!("Failed to convert token program pubkey: {}", e)))?;
-
-    // Convert token program Pubkey to thru_base Pubkey for address derivation
-    let token_program_base_pubkey = thru_base::tn_tools::Pubkey::from_bytes(&token_program_bytes);
-
     // Derive mint account address using the provided seed and token program as owner
-    let mint_account_base_pubkey = derive_program_address(
-        &seed_bytes,
-        &token_program_base_pubkey,
-        false, // mint accounts are not ephemeral
-    )
-    .map_err(|e| CliError::Crypto(format!("Failed to derive mint address: {}", e)))?;
+    let mint_account_base_pubkey =
+        derive_mint_account_pubkey(&token_program_pubkey, &mint_authority_pubkey, &seed_bytes)?;
 
     let mint_account_pubkey = mint_account_base_pubkey
         .to_bytes()
@@ -533,6 +598,7 @@ async fn initialize_account(
     seed: &str,
     state_proof: &str,
     fee_payer: Option<&str>,
+    token_program: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
     // Validate inputs
@@ -568,8 +634,8 @@ async fn initialize_account(
     let mint_pubkey = validate_address_or_hex(mint)?;
     let owner_pubkey = validate_address_or_hex(owner)?;
 
-    // Get configuration
-    let token_program_pubkey = config.get_token_program_pubkey()?;
+    // Resolve token program and fee payer
+    let (token_program_pubkey, token_program_bytes) = resolve_token_program(config, token_program)?;
     let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
 
     // Create RPC client
@@ -608,16 +674,9 @@ async fn initialize_account(
     let mut token_seed = [0u8; 32];
     token_seed.copy_from_slice(&token_seed_hash);
 
-    let token_program_bytes = token_program_pubkey
-        .to_bytes()
-        .map_err(|e| CliError::Crypto(format!("Failed to convert token program pubkey: {}", e)))?;
-
-    // Convert token program Pubkey to thru_base Pubkey for address derivation
-    let token_program_base_pubkey = thru_base::tn_tools::Pubkey::from_bytes(&token_program_bytes);
-
     let token_account_base_pubkey = derive_program_address(
         &token_seed,
-        &token_program_base_pubkey,
+        &token_program_pubkey,
         false, // token accounts are not ephemeral
     )
     .map_err(|e| CliError::Crypto(format!("Failed to derive token account address: {}", e)))?;
@@ -695,6 +754,7 @@ async fn transfer(
     to: &str,
     amount: u64,
     fee_payer: Option<&str>,
+    token_program: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
     // Validate inputs
@@ -724,7 +784,7 @@ async fn transfer(
     let to_pubkey = validate_address_or_hex(to)?;
 
     // Setup transaction context
-    let context = setup_transaction_context(config, fee_payer)
+    let context = setup_transaction_context(config, fee_payer, token_program)
         .await
         .map_err(|e| handle_account_not_found_error(e, "token_transfer", json_format))?;
 
@@ -776,6 +836,7 @@ async fn mint_to(
     authority: &str,
     amount: u64,
     fee_payer: Option<&str>,
+    token_program: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
     // Validate inputs
@@ -807,7 +868,7 @@ async fn mint_to(
     let authority_pubkey = validate_address_or_hex(authority)?;
 
     // Setup transaction context
-    let context = setup_transaction_context(config, fee_payer)
+    let context = setup_transaction_context(config, fee_payer, token_program)
         .await
         .map_err(|e| handle_account_not_found_error(e, "token_mint_to", json_format))?;
 
@@ -859,6 +920,7 @@ async fn burn(
     authority: &str,
     amount: u64,
     fee_payer: Option<&str>,
+    token_program: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
     // Validate inputs
@@ -889,8 +951,9 @@ async fn burn(
     let mint_pubkey = validate_address_or_hex(mint)?;
     let authority_pubkey = validate_address_or_hex(authority)?;
 
-    // Get configuration
-    let token_program_pubkey = config.get_token_program_pubkey()?;
+    // Resolve configuration
+    let (_token_program_pubkey, token_program_bytes) =
+        resolve_token_program(config, token_program)?;
     let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
 
     // Create RPC client
@@ -916,10 +979,6 @@ async fn burn(
     let block_height = client.get_block_height().await.map_err(|e| {
         CliError::TransactionSubmission(format!("Failed to get block height: {}", e))
     })?;
-
-    let token_program_bytes = token_program_pubkey
-        .to_bytes()
-        .map_err(|e| CliError::Crypto(format!("Failed to convert token program pubkey: {}", e)))?;
 
     // Build transaction using TransactionBuilder
     let mut transaction = TransactionBuilder::build_token_burn(
@@ -984,6 +1043,7 @@ async fn close_account(
     destination: &str,
     authority: &str,
     fee_payer: Option<&str>,
+    token_program: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
     if !json_format {
@@ -998,8 +1058,9 @@ async fn close_account(
     let destination_pubkey = validate_address_or_hex(destination)?;
     let authority_pubkey = validate_address_or_hex(authority)?;
 
-    // Get configuration
-    let token_program_pubkey = config.get_token_program_pubkey()?;
+    // Resolve configuration
+    let (_token_program_pubkey, token_program_bytes) =
+        resolve_token_program(config, token_program)?;
     let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
 
     // Create RPC client
@@ -1025,10 +1086,6 @@ async fn close_account(
     let block_height = client.get_block_height().await.map_err(|e| {
         CliError::TransactionSubmission(format!("Failed to get block height: {}", e))
     })?;
-
-    let token_program_bytes = token_program_pubkey
-        .to_bytes()
-        .map_err(|e| CliError::Crypto(format!("Failed to convert token program pubkey: {}", e)))?;
 
     // Build transaction using TransactionBuilder
     let mut transaction = TransactionBuilder::build_token_close_account(
@@ -1090,6 +1147,7 @@ async fn freeze_account(
     mint: &str,
     authority: &str,
     fee_payer: Option<&str>,
+    token_program: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
     if !json_format {
@@ -1104,8 +1162,9 @@ async fn freeze_account(
     let mint_pubkey = validate_address_or_hex(mint)?;
     let authority_pubkey = validate_address_or_hex(authority)?;
 
-    // Get configuration
-    let token_program_pubkey = config.get_token_program_pubkey()?;
+    // Resolve configuration
+    let (_token_program_pubkey, token_program_bytes) =
+        resolve_token_program(config, token_program)?;
     let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
 
     // Create RPC client
@@ -1131,10 +1190,6 @@ async fn freeze_account(
     let block_height = client.get_block_height().await.map_err(|e| {
         CliError::TransactionSubmission(format!("Failed to get block height: {}", e))
     })?;
-
-    let token_program_bytes = token_program_pubkey
-        .to_bytes()
-        .map_err(|e| CliError::Crypto(format!("Failed to convert token program pubkey: {}", e)))?;
 
     // Build transaction using TransactionBuilder
     let mut transaction = TransactionBuilder::build_token_freeze_account(
@@ -1196,6 +1251,7 @@ async fn thaw_account(
     mint: &str,
     authority: &str,
     fee_payer: Option<&str>,
+    token_program: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
     if !json_format {
@@ -1210,8 +1266,9 @@ async fn thaw_account(
     let mint_pubkey = validate_address_or_hex(mint)?;
     let authority_pubkey = validate_address_or_hex(authority)?;
 
-    // Get configuration
-    let token_program_pubkey = config.get_token_program_pubkey()?;
+    // Resolve configuration
+    let (_token_program_pubkey, token_program_bytes) =
+        resolve_token_program(config, token_program)?;
     let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
 
     // Create RPC client
@@ -1237,10 +1294,6 @@ async fn thaw_account(
     let block_height = client.get_block_height().await.map_err(|e| {
         CliError::TransactionSubmission(format!("Failed to get block height: {}", e))
     })?;
-
-    let token_program_bytes = token_program_pubkey
-        .to_bytes()
-        .map_err(|e| CliError::Crypto(format!("Failed to convert token program pubkey: {}", e)))?;
 
     // Build transaction using TransactionBuilder
     let mut transaction = TransactionBuilder::build_token_thaw_account(
@@ -1301,6 +1354,7 @@ async fn derive_token_account(
     mint: &str,
     owner: &str,
     seed: Option<&str>,
+    token_program: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
     // Parse mint and owner addresses
@@ -1338,18 +1392,12 @@ async fn derive_token_account(
 
     // Use the token_seed for PDA derivation with token program as owner
     // This matches account_create() call in process.rs line 87-92
-    let token_program_pubkey = config.get_token_program_pubkey()?;
-    let token_program_bytes = token_program_pubkey
-        .to_bytes()
-        .map_err(|e| CliError::Crypto(format!("Failed to convert token program pubkey: {}", e)))?;
-
-    // Convert token program Pubkey to thru_base Pubkey for address derivation
-    let token_program_base_pubkey = thru_base::tn_tools::Pubkey::from_bytes(&token_program_bytes);
+    let (token_program_pubkey, _) = resolve_token_program(config, token_program)?;
 
     // Derive the final token account address using the token_seed
     let token_account_base_pubkey = thru_base::crypto_utils::derive_program_address(
         &token_seed,
-        &token_program_base_pubkey,
+        &token_program_pubkey,
         false, // token accounts are not ephemeral
     )
     .map_err(|e| CliError::Crypto(format!("Failed to derive token account address: {}", e)))?;
@@ -1387,6 +1435,7 @@ async fn derive_mint_account(
     config: &Config,
     mint_authority: &str,
     seed: &str,
+    token_program: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
     if seed.len() != 64 {
@@ -1413,31 +1462,10 @@ async fn derive_mint_account(
         println!("  Seed: {}", seed);
     }
 
-    // sha256[mint authority + seed]
-    // then put through PDA fcn
-    use sha2::{Digest, Sha256};
+    let (token_program_pubkey, _) = resolve_token_program(config, token_program)?;
 
-    let mut hasher = Sha256::new();
-    hasher.update(&mint_authority_pubkey); // mint_authority.0
-    hasher.update(&seed_bytes); // seed
-
-    let mint_seed_hash = hasher.finalize();
-    let mut derived_seed = [0u8; 32];
-    derived_seed.copy_from_slice(&mint_seed_hash);
-
-    let token_program_pubkey = config.get_token_program_pubkey()?;
-    let token_program_bytes = token_program_pubkey
-        .to_bytes()
-        .map_err(|e| CliError::Crypto(format!("Failed to convert token program pubkey: {}", e)))?;
-
-    let token_program_base_pubkey = thru_base::tn_tools::Pubkey::from_bytes(&token_program_bytes);
-
-    let mint_account_base_pubkey = thru_base::crypto_utils::derive_program_address(
-        &derived_seed,
-        &token_program_base_pubkey,
-        false,
-    )
-    .map_err(|e| CliError::Crypto(format!("Failed to derive mint account address: {}", e)))?;
+    let mint_account_base_pubkey =
+        derive_mint_account_pubkey(&token_program_pubkey, &mint_authority_pubkey, &seed_bytes)?;
 
     let mint_account_pubkey = mint_account_base_pubkey.to_bytes().map_err(|e| {
         CliError::Crypto(format!(

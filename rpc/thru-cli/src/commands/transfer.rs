@@ -1,15 +1,16 @@
 //! Transfer command implementation
 
 use std::time::Duration;
-use thru_base::tn_tools::Pubkey;
+use thru_base::{tn_tools::Pubkey, txn_tools::EOA_PROGRAM};
 use thru_base::txn_lib::TnPubkey;
 use thru_base::txn_tools::TransactionBuilder;
 
 use crate::config::Config;
 use crate::crypto::keypair_from_hex;
 use crate::error::CliError;
-use crate::grpc_client::{Client, ClientBuilder};
 use crate::output;
+use crate::utils::format_vm_error;
+use thru_client::{Client, ClientBuilder};
 
 /// Handle the transfer command
 pub async fn handle_transfer_command(
@@ -72,13 +73,11 @@ pub async fn handle_transfer_command(
         CliError::TransactionSubmission(format!("Failed to get current slot: {}", e))
     })?;
 
-    // Get system program public key (all zeros for transfers)
-    let system_program: TnPubkey = [0u8; 32];
 
     // Build transfer transaction
     let mut transaction = TransactionBuilder::build_transfer(
         src_keypair.public_key,        // fee_payer
-        system_program,                // program (system program for transfers)
+        EOA_PROGRAM,                
         dst_pubkey,                    // to_account
         value,                         // amount
         transfer_fee,                  // fee (fixed for now)
@@ -107,7 +106,10 @@ pub async fn handle_transfer_command(
     // Check if transaction was successful
     if transaction_details.execution_result != 0 || transaction_details.vm_error != 0 {
         let vm_error_msg = if transaction_details.vm_error != 0 {
-            format!(" (VM error: {})", transaction_details.vm_error)
+            format!(
+                " (VM error: {})",
+                format_vm_error(transaction_details.vm_error)
+            )
         } else {
             String::new()
         };
@@ -186,6 +188,7 @@ fn create_rpc_client(config: &Config) -> Result<Client, CliError> {
         .timeout(timeout)
         .auth_token(config.auth_token.clone())
         .build()
+        .map_err(|e| e.into())
 }
 
 #[cfg(test)]

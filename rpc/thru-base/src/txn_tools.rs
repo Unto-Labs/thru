@@ -6,6 +6,28 @@ use crate::{
 use anyhow::Result;
 use hex;
 
+/// No-op program identifier (32-byte array with 0x03 in the last byte)
+pub const NOOP_PROGRAM: [u8; 32] = {
+    let mut arr = [0u8; 32];
+    arr[31] = 0x03;
+    arr
+};
+pub const SYSTEM_PROGRAM: [u8; 32] = {
+    let mut arr = [0u8; 32];
+    arr[31] = 0x01;
+    arr
+};
+pub const EOA_PROGRAM: [u8; 32] = {
+    let arr = [0u8; 32];
+    arr
+};
+
+pub const UPLOADER_PROGRAM: [u8; 32] = {
+    let mut arr = [0u8; 32];
+    arr[31] = 0x02;
+    arr
+};
+
 #[derive(Debug, Clone)]
 pub struct TransactionBuilder {
     // fee_payer: FdPubkey,
@@ -21,9 +43,7 @@ impl TransactionBuilder {
         start_slot: u64,
         fee_payer_state_proof: &StateProof,
     ) -> Result<Transaction> {
-        let mut noop_program = [0u8; 32];
-        noop_program[31] = 0x02;
-        let tx = Transaction::new(fee_payer, noop_program, 0, 0)
+        let tx = Transaction::new(fee_payer, NOOP_PROGRAM, 0, 0)
             .with_fee_payer_state_proof(fee_payer_state_proof)
             .with_start_slot(start_slot)
             .with_expiry_after(100)
@@ -33,7 +53,19 @@ impl TransactionBuilder {
         Ok(tx)
     }
 
-    /// Build balance transfer transaction
+    /// Build balance transfer transaction for EOA program (tn_eoa_program.c)
+    ///
+    /// This creates a transaction that calls the TRANSFER instruction of the EOA program,
+    /// which transfers balance from one account to another.
+    ///
+    /// # Arguments
+    /// * `fee_payer` - The account paying the transaction fee (also the from_account for the transfer)
+    /// * `program` - The EOA program pubkey (typically EOA_PROGRAM constant = all zeros)
+    /// * `to_account` - The destination account receiving the transfer
+    /// * `amount` - The amount to transfer
+    /// * `fee` - Transaction fee
+    /// * `nonce` - Account nonce
+    /// * `start_slot` - Starting slot for transaction validity
     pub fn build_transfer(
         fee_payer: TnPubkey,
         program: TnPubkey,
@@ -43,7 +75,7 @@ impl TransactionBuilder {
         nonce: u64,
         start_slot: u64,
     ) -> Result<Transaction> {
-        // Create transfer instruction data
+        // Create transfer instruction data for EOA program
         // Account layout: [0: fee_payer/from_account, 1: program, 2: to_account]
         let from_account_idx = 0u16; // fee_payer is also the from_account
         let to_account_idx = 2u16; // to_account added via add_rw_account
@@ -52,7 +84,7 @@ impl TransactionBuilder {
 
         let tx = Transaction::new(fee_payer, program, fee, nonce)
             .with_start_slot(start_slot)
-            .add_rw_account(to_account) // Alice account (receives transfer)
+            .add_rw_account(to_account) // Destination account (receives transfer)
             .with_instructions(instruction_data)
             .with_expiry_after(100)
             .with_compute_units(10000)
@@ -228,7 +260,14 @@ impl TransactionBuilder {
     }
 }
 
-/// Build transfer instruction matching shell script format
+/// Build transfer instruction for EOA program (tn_eoa_program.c)
+///
+/// Instruction format (matching tn_eoa_instruction_t and tn_eoa_transfer_args_t):
+/// - Discriminant: u32 (4 bytes) = TN_EOA_INSTRUCTION_TRANSFER (1)
+/// - Amount: u64 (8 bytes)
+/// - From account index: u16 (2 bytes)
+/// - To account index: u16 (2 bytes)
+/// Total: 16 bytes
 fn build_transfer_instruction(
     from_account_idx: u16,
     to_account_idx: u16,
@@ -236,17 +275,18 @@ fn build_transfer_instruction(
 ) -> Result<Vec<u8>> {
     let mut instruction = Vec::new();
 
-    // TI_DISCRIMINANT = 03
-    instruction.push(0x03);
+    // TN_EOA_INSTRUCTION_TRANSFER = 1 (u32, 4 bytes little-endian)
+    instruction.extend_from_slice(&1u32.to_le_bytes());
 
-    // TI_FROM_PUBKEY_IDX (little-endian u16)
+    // tn_eoa_transfer_args_t structure:
+    // - amount (u64, 8 bytes little-endian)
+    instruction.extend_from_slice(&amount.to_le_bytes());
+
+    // - from_account_idx (u16, 2 bytes little-endian)
     instruction.extend_from_slice(&from_account_idx.to_le_bytes());
 
-    // TI_TO_PUBKEY_IDX (little-endian u16)
+    // - to_account_idx (u16, 2 bytes little-endian)
     instruction.extend_from_slice(&to_account_idx.to_le_bytes());
-
-    // Amount in little-endian u64
-    instruction.extend_from_slice(&amount.to_le_bytes());
 
     Ok(instruction)
 }
@@ -477,6 +517,55 @@ mod tests {
         assert_eq!(addr1.len(), 46);
         assert_eq!(addr2.len(), 46);
         assert_eq!(addr3.len(), 46);
+    }
+
+    #[test]
+    fn test_eoa_transfer_instruction_format() {
+        // Test that the transfer instruction matches the EOA program's expected format
+        let from_idx = 0u16;
+        let to_idx = 2u16;
+        let amount = 1000u64;
+
+        let instruction = build_transfer_instruction(from_idx, to_idx, amount).unwrap();
+
+        // Expected format (matching tn_eoa_program.c):
+        // - Discriminant: u32 (4 bytes) = 1
+        // - Amount: u64 (8 bytes)
+        // - From account index: u16 (2 bytes)
+        // - To account index: u16 (2 bytes)
+        // Total: 16 bytes
+
+        assert_eq!(instruction.len(), 16, "Instruction should be 16 bytes");
+
+        // Check discriminant (TN_EOA_INSTRUCTION_TRANSFER = 1)
+        let discriminant = u32::from_le_bytes([
+            instruction[0],
+            instruction[1],
+            instruction[2],
+            instruction[3],
+        ]);
+        assert_eq!(discriminant, 1, "Discriminant should be 1 for TRANSFER");
+
+        // Check amount
+        let parsed_amount = u64::from_le_bytes([
+            instruction[4],
+            instruction[5],
+            instruction[6],
+            instruction[7],
+            instruction[8],
+            instruction[9],
+            instruction[10],
+            instruction[11],
+        ]);
+        assert_eq!(parsed_amount, amount, "Amount should match input");
+
+        // Check from_account_idx
+        let parsed_from = u16::from_le_bytes([instruction[12], instruction[13]]);
+        assert_eq!(parsed_from, from_idx, "From index should match input");
+
+        // Check to_account_idx
+        let parsed_to = u16::from_le_bytes([instruction[14], instruction[15]]);
+        assert_eq!(parsed_to, to_idx, "To index should match input");
     }
 }
 
@@ -1698,18 +1787,44 @@ fn add_sorted_accounts(tx: Transaction, accounts: &[(TnPubkey, bool)]) -> (Trans
 }
 
 /// Helper function to get authority index (0 if fee_payer, else add as readonly)
-fn add_authority_account(
-    mut tx: Transaction,
-    authority: TnPubkey,
-    fee_payer: TnPubkey,
-    next_idx: u16,
-) -> (Transaction, u16) {
-    if authority == fee_payer {
-        (tx, 0u16)
-    } else {
-        tx = tx.add_r_account(authority);
-        (tx, next_idx)
+fn add_sorted_rw_accounts(mut tx: Transaction, accounts: &[TnPubkey]) -> (Transaction, Vec<u16>) {
+    if accounts.is_empty() {
+        return (tx, Vec::new());
     }
+
+    let mut sorted: Vec<(usize, TnPubkey)> = accounts.iter().cloned().enumerate().collect();
+    sorted.sort_by(|a, b| a.1.cmp(&b.1));
+
+    let mut indices = vec![0u16; accounts.len()];
+    for (pos, (orig_idx, account)) in sorted.into_iter().enumerate() {
+        let idx = (2 + pos) as u16;
+        indices[orig_idx] = idx;
+        tx = tx.add_rw_account(account);
+    }
+
+    (tx, indices)
+}
+
+fn add_sorted_ro_accounts(
+    mut tx: Transaction,
+    base_idx: u16,
+    accounts: &[TnPubkey],
+) -> (Transaction, Vec<u16>) {
+    if accounts.is_empty() {
+        return (tx, Vec::new());
+    }
+
+    let mut sorted: Vec<(usize, TnPubkey)> = accounts.iter().cloned().enumerate().collect();
+    sorted.sort_by(|a, b| a.1.cmp(&b.1));
+
+    let mut indices = vec![0u16; accounts.len()];
+    for (pos, (orig_idx, account)) in sorted.into_iter().enumerate() {
+        let idx = base_idx + pos as u16;
+        indices[orig_idx] = idx;
+        tx = tx.add_r_account(account);
+    }
+
+    (tx, indices)
 }
 
 impl TransactionBuilder {
@@ -1728,8 +1843,10 @@ impl TransactionBuilder {
         nonce: u64,
         start_slot: u64,
     ) -> Result<Transaction> {
-        // Account layout: [0: fee_payer, 1: token_program, 2: mint_account]
-        let mint_account_idx = 2u16;
+        let base_tx =
+            Transaction::new(fee_payer, token_program, fee, nonce).with_start_slot(start_slot);
+        let (tx, indices) = add_sorted_rw_accounts(base_tx, &[mint_account]);
+        let mint_account_idx = indices[0];
 
         let instruction_data = build_token_initialize_mint_instruction(
             mint_account_idx,
@@ -1741,9 +1858,7 @@ impl TransactionBuilder {
             state_proof,
         )?;
 
-        let tx = Transaction::new(fee_payer, token_program, fee, nonce)
-            .with_start_slot(start_slot)
-            .add_rw_account(mint_account)
+        let tx = tx
             .with_instructions(instruction_data)
             .with_expiry_after(100)
             .with_compute_units(300_000)
@@ -1766,17 +1881,41 @@ impl TransactionBuilder {
         nonce: u64,
         start_slot: u64,
     ) -> Result<Transaction> {
-        // Account layout: [0: fee_payer, 1: token_program, 2: token_account, 3: mint_account, 4?: owner]
-        let token_account_idx = 2u16;
-        let mint_account_idx = 3u16;
-
-        // Handle case where owner is the same as fee_payer
         let owner_is_fee_payer = owner == fee_payer;
-        let owner_account_idx = if owner_is_fee_payer {
-            0u16 // Use fee_payer index
-        } else {
-            4u16 // Add as separate account
-        };
+
+        let mut rw_accounts = vec![token_account];
+        rw_accounts.sort();
+
+        let mut ro_accounts = vec![mint_account];
+        if !owner_is_fee_payer {
+            ro_accounts.push(owner);
+            ro_accounts.sort();
+        }
+
+        let mut tx =
+            Transaction::new(fee_payer, token_program, fee, nonce).with_start_slot(start_slot);
+
+        let mut token_account_idx = 0u16;
+        for (i, account) in rw_accounts.iter().enumerate() {
+            let idx = (2 + i) as u16;
+            if *account == token_account {
+                token_account_idx = idx;
+            }
+            tx = tx.add_rw_account(*account);
+        }
+
+        let base_ro_idx = 2 + rw_accounts.len() as u16;
+        let mut mint_account_idx = 0u16;
+        let mut owner_account_idx = if owner_is_fee_payer { 0u16 } else { 0u16 };
+        for (i, account) in ro_accounts.iter().enumerate() {
+            let idx = base_ro_idx + i as u16;
+            if *account == mint_account {
+                mint_account_idx = idx;
+            } else if !owner_is_fee_payer && *account == owner {
+                owner_account_idx = idx;
+            }
+            tx = tx.add_r_account(*account);
+        }
 
         let instruction_data = build_token_initialize_account_instruction(
             token_account_idx,
@@ -1786,17 +1925,7 @@ impl TransactionBuilder {
             state_proof,
         )?;
 
-        let mut tx = Transaction::new(fee_payer, token_program, fee, nonce)
-            .with_start_slot(start_slot)
-            .add_rw_account(token_account)
-            .add_r_account(mint_account);
-
-        // Only add owner account if it's different from fee_payer
-        if !owner_is_fee_payer {
-            tx = tx.add_r_account(owner);
-        }
-
-        tx = tx
+        let tx = tx
             .with_instructions(instruction_data)
             .with_expiry_after(100)
             .with_compute_units(300_000)
@@ -1812,7 +1941,7 @@ impl TransactionBuilder {
         token_program: TnPubkey,
         source_account: TnPubkey,
         dest_account: TnPubkey,
-        authority: TnPubkey,
+        _authority: TnPubkey,
         amount: u64,
         fee: u64,
         nonce: u64,
@@ -1859,19 +1988,27 @@ impl TransactionBuilder {
         nonce: u64,
         start_slot: u64,
     ) -> Result<Transaction> {
-        let tx = Transaction::new(fee_payer, token_program, fee, nonce)
+        let base_tx = Transaction::new(fee_payer, token_program, fee, nonce)
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(300_000)
             .with_state_units(10_000)
             .with_memory_units(10_000);
 
-        // Both mint and destination accounts need to be writable for mint operations
-        let accounts = &[(mint_account, true), (dest_account, true)];
-        let (tx, indices) = add_sorted_accounts(tx, accounts);
-        let (mint_account_idx, dest_account_idx) = (indices[0], indices[1]);
+        let (tx_after_rw, rw_indices) =
+            add_sorted_rw_accounts(base_tx, &[mint_account, dest_account]);
+        let mint_account_idx = rw_indices[0];
+        let dest_account_idx = rw_indices[1];
 
-        let (tx, authority_account_idx) = add_authority_account(tx, authority, fee_payer, 4);
+        let mut tx = tx_after_rw;
+        let authority_account_idx = if authority == fee_payer {
+            0u16
+        } else {
+            let base_ro_idx = 2 + rw_indices.len() as u16;
+            let (tx_after_ro, ro_indices) = add_sorted_ro_accounts(tx, base_ro_idx, &[authority]);
+            tx = tx_after_ro;
+            ro_indices[0]
+        };
 
         let instruction_data = build_token_mint_to_instruction(
             mint_account_idx,
@@ -1895,19 +2032,27 @@ impl TransactionBuilder {
         nonce: u64,
         start_slot: u64,
     ) -> Result<Transaction> {
-        let tx = Transaction::new(fee_payer, token_program, fee, nonce)
+        let base_tx = Transaction::new(fee_payer, token_program, fee, nonce)
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(300_000)
             .with_state_units(10_000)
             .with_memory_units(10_000);
 
-        // Both token and mint accounts need to be writable for burn operations
-        let accounts = &[(token_account, true), (mint_account, true)];
-        let (tx, indices) = add_sorted_accounts(tx, accounts);
-        let (token_account_idx, mint_account_idx) = (indices[0], indices[1]);
+        let (tx_after_rw, rw_indices) =
+            add_sorted_rw_accounts(base_tx, &[token_account, mint_account]);
+        let token_account_idx = rw_indices[0];
+        let mint_account_idx = rw_indices[1];
 
-        let (tx, authority_account_idx) = add_authority_account(tx, authority, fee_payer, 4);
+        let mut tx = tx_after_rw;
+        let authority_account_idx = if authority == fee_payer {
+            0u16
+        } else {
+            let base_ro_idx = 2 + rw_indices.len() as u16;
+            let (tx_after_ro, ro_indices) = add_sorted_ro_accounts(tx, base_ro_idx, &[authority]);
+            tx = tx_after_ro;
+            ro_indices[0]
+        };
 
         let instruction_data = build_token_burn_instruction(
             token_account_idx,
@@ -1930,19 +2075,27 @@ impl TransactionBuilder {
         nonce: u64,
         start_slot: u64,
     ) -> Result<Transaction> {
-        let tx = Transaction::new(fee_payer, token_program, fee, nonce)
+        let base_tx = Transaction::new(fee_payer, token_program, fee, nonce)
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(300_000)
             .with_state_units(10_000)
             .with_memory_units(10_000);
 
-        // Both token and mint accounts need to be writable for freeze operations
-        let accounts = &[(token_account, true), (mint_account, true)];
-        let (tx, indices) = add_sorted_accounts(tx, accounts);
-        let (token_account_idx, mint_account_idx) = (indices[0], indices[1]);
+        let (tx_after_rw, rw_indices) =
+            add_sorted_rw_accounts(base_tx, &[token_account, mint_account]);
+        let token_account_idx = rw_indices[0];
+        let mint_account_idx = rw_indices[1];
 
-        let (tx, authority_account_idx) = add_authority_account(tx, authority, fee_payer, 4);
+        let mut tx = tx_after_rw;
+        let authority_account_idx = if authority == fee_payer {
+            0u16
+        } else {
+            let base_ro_idx = 2 + rw_indices.len() as u16;
+            let (tx_after_ro, ro_indices) = add_sorted_ro_accounts(tx, base_ro_idx, &[authority]);
+            tx = tx_after_ro;
+            ro_indices[0]
+        };
 
         let instruction_data = build_token_freeze_account_instruction(
             token_account_idx,
@@ -1964,19 +2117,27 @@ impl TransactionBuilder {
         nonce: u64,
         start_slot: u64,
     ) -> Result<Transaction> {
-        let tx = Transaction::new(fee_payer, token_program, fee, nonce)
+        let base_tx = Transaction::new(fee_payer, token_program, fee, nonce)
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(300_000)
             .with_state_units(10_000)
             .with_memory_units(10_000);
 
-        // Both token and mint accounts need to be writable for thaw operations
-        let accounts = &[(token_account, true), (mint_account, true)];
-        let (tx, indices) = add_sorted_accounts(tx, accounts);
-        let (token_account_idx, mint_account_idx) = (indices[0], indices[1]);
+        let (tx_after_rw, rw_indices) =
+            add_sorted_rw_accounts(base_tx, &[token_account, mint_account]);
+        let token_account_idx = rw_indices[0];
+        let mint_account_idx = rw_indices[1];
 
-        let (tx, authority_account_idx) = add_authority_account(tx, authority, fee_payer, 4);
+        let mut tx = tx_after_rw;
+        let authority_account_idx = if authority == fee_payer {
+            0u16
+        } else {
+            let base_ro_idx = 2 + rw_indices.len() as u16;
+            let (tx_after_ro, ro_indices) = add_sorted_ro_accounts(tx, base_ro_idx, &[authority]);
+            tx = tx_after_ro;
+            ro_indices[0]
+        };
 
         let instruction_data = build_token_thaw_account_instruction(
             token_account_idx,
@@ -1998,19 +2159,36 @@ impl TransactionBuilder {
         nonce: u64,
         start_slot: u64,
     ) -> Result<Transaction> {
-        let tx = Transaction::new(fee_payer, token_program, fee, nonce)
+        let base_tx = Transaction::new(fee_payer, token_program, fee, nonce)
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(300_000)
             .with_state_units(10_000)
             .with_memory_units(10_000);
 
-        // Both token and destination accounts need to be writable
-        let accounts = &[(token_account, true), (destination, true)];
-        let (tx, indices) = add_sorted_accounts(tx, accounts);
-        let (token_account_idx, destination_idx) = (indices[0], indices[1]);
+        let mut rw_accounts = vec![token_account];
+        let destination_in_accounts = destination != fee_payer;
+        if destination_in_accounts {
+            rw_accounts.push(destination);
+        }
 
-        let (tx, authority_account_idx) = add_authority_account(tx, authority, fee_payer, 4);
+        let (tx_after_rw, rw_indices) = add_sorted_rw_accounts(base_tx, &rw_accounts);
+        let token_account_idx = rw_indices[0];
+        let destination_idx = if destination_in_accounts {
+            rw_indices[1]
+        } else {
+            0u16
+        };
+
+        let mut tx = tx_after_rw;
+        let authority_account_idx = if authority == fee_payer {
+            0u16
+        } else {
+            let base_ro_idx = 2 + rw_indices.len() as u16;
+            let (tx_after_ro, ro_indices) = add_sorted_ro_accounts(tx, base_ro_idx, &[authority]);
+            tx = tx_after_ro;
+            ro_indices[0]
+        };
 
         let instruction_data = build_token_close_account_instruction(
             token_account_idx,

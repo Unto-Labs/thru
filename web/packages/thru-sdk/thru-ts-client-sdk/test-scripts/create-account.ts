@@ -1,3 +1,4 @@
+import { bytesToHex } from "@noble/hashes/utils";
 import { createThruClient } from "../client";
 import { ConsensusStatus } from "../proto/thru/common/v1/consensus_pb";
 
@@ -11,6 +12,11 @@ const sdk = createThruClient({
 const keypair = await sdk.keys.generateKeyPair()
 const targetAccountAddress = keypair.address
 const targetAccountPrivateKey = keypair.privateKey
+
+console.log("Target account address:", targetAccountAddress);
+console.log("Target account private key:", targetAccountPrivateKey);
+const targetAccountPrivateKeyHex = bytesToHex(targetAccountPrivateKey);
+console.log("Target account private key hex:", targetAccountPrivateKeyHex);
 
 async function fetchAccountSnapshot(label: string, address: string): Promise<void> {
     try {

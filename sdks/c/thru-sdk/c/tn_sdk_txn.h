@@ -63,7 +63,7 @@ struct __attribute__((packed)) tsdk_account_meta {
   uchar version;       /* bytes: [0,1) - Account metadata version */
   uchar flags;         /* bytes: [1,2) - Account flags */
   uint data_sz;        /* bytes: [2,6) - Size of account data */
-  ulong state_counter; /* bytes: [6,14) - Account state counter */
+  ulong seq;           /* bytes: [6,14) - Account sequence number */
   tn_pubkey_t owner;   /* bytes: [14,46) - Account owner public key */
   ulong balance;       /* bytes: [46,54) - Account balance in native tokens */
   ulong nonce;         /* bytes: [54,62) - Account nonce */

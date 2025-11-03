@@ -13,7 +13,8 @@ path = "src/main.rs"
 
 [dependencies]
 # Thru dependencies
-thru-grpc-client = { version = "0.1.0", path = "../thru-grpc-client" }
+#thru-grpc-client = { version = "0.1.0", path = "../thru-grpc-client" }
+thru-client = { path = "../thru-client" }
 thru-base = { version = "0.1.0", path = "../thru-base" }
 
 # CLI framework
@@ -27,9 +28,8 @@ serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9"
 serde_json = "1.0"
 
-# gRPC client
+# gRPC types (needed for health checks and error handling)
 tonic = { version = "0.14.2", features = ["transport", "tls-aws-lc", "tls-webpki-roots"] }
-prost-types = "0.14.1"
 tonic-health = "0.14.2"
 
 # Error handling
@@ -47,6 +47,7 @@ dirs = "5.0"
 
 # Output formatting
 colored = "2.1"
+chrono = "0.4"
 
 # URL handling
 url = "2.5"
