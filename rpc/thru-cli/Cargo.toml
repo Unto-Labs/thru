@@ -13,8 +13,7 @@ path = "src/main.rs"
 
 [dependencies]
 # Thru dependencies
-#thru-grpc-client = { version = "0.1.0", path = "../thru-grpc-client" }
-thru-client = { path = "../thru-client" }
+thru-client = { version = "0.1.0", path = "../thru-client" }
 thru-base = { version = "0.1.0", path = "../thru-base" }
 
 # CLI framework

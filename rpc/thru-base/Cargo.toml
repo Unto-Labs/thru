@@ -17,4 +17,3 @@ serde = { version = "1.0.219", features = ["derive"] }
 log = "0.4.27"
 blake3 = "1.5"
 tracing = "0.1"
-# thru-rpc-service = { path = "../thru-rpc-service" }
