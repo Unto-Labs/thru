@@ -173,6 +173,9 @@ jobs:
     timeout-minutes: 60
 
     steps:
+    - name: Checkout code
+      uses: actions/checkout@v5
+
     - name: Download all artifacts
       uses: actions/download-artifact@v6
       with:
@@ -226,7 +229,7 @@ jobs:
                 fi
 
                 # Upload using GitHub CLI
-                gh release upload "${{ github.event.release.tag_name }}" "$file" --clobber
+                gh release upload "${{ github.event.release.tag_name }}" "$file" --repo "${{ github.repository }}" --clobber
               fi
             done
           fi
