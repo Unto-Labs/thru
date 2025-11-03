@@ -9,7 +9,7 @@ license = "Apache-2.0"
 bytes = "1"
 prost = "0.14.1"
 prost-types = "0.14.1"
-tonic = { version = "0.14.2", features = ["transport"] }
+tonic = { version = "0.14.2", features = ["transport", "tls-aws-lc", "tls-webpki-roots"] }
 tonic-prost = "0.14.2"
 
 [build-dependencies]
