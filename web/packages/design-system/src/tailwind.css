@@ -1,0 +1,483 @@
+@theme {
+  /* ========================================
+     BREAKPOINTS
+     ======================================== */
+  --breakpoint-sm: 600px;
+  --breakpoint-md: 840px;
+  --breakpoint-lg: 1200px;
+  --breakpoint-xl: 1600px;
+
+  /* ========================================
+     COLOR SCALES
+     ======================================== */
+
+  /* Steel (Neutral - Cool Gray) */
+  --color-steel-0: #f7f8f8;
+  --color-steel-100: #eaeef0;
+  --color-steel-200: #cdd5db;
+  --color-steel-300: #a4b3bc;
+  --color-steel-400: #7e93a0;
+  --color-steel-500: #5b6f7b;
+  --color-steel-600: #43515b;
+  --color-steel-700: #2b353b;
+  --color-steel-800: #151b1e;
+
+  /* Teal (Neutral - Warm Teal) */
+  --color-teal-0: #f9fbfb;
+  --color-teal-100: #eaf2f2;
+  --color-teal-200: #d1e1e1;
+  --color-teal-300: #a9c3c5;
+  --color-teal-400: #81a7a7;
+  --color-teal-500: #5e8787;
+  --color-teal-600: #456063;
+  --color-teal-700: #2d3e3e;
+  --color-teal-800: #151e1e;
+
+  /* Stone (Neutral - Alias to Teal for compatibility) */
+  --color-stone-0: var(--color-teal-0);
+  --color-stone-100: var(--color-teal-100);
+  --color-stone-200: var(--color-teal-200);
+  --color-stone-300: var(--color-teal-300);
+  --color-stone-400: var(--color-teal-400);
+  --color-stone-600: var(--color-teal-600);
+  --color-stone-700: var(--color-teal-700);
+  --color-stone-800: var(--color-teal-800);
+
+  /* Brick (Primary Brand Color) */
+  --color-brick-100: #fbdadc;
+  --color-brick-200: #f6acb0;
+  --color-brick-300: #ed787e;
+  --color-brick-400: #d33c43;
+
+  /* Thru Brick (Legacy naming) */
+  --color-thru-brick: var(--color-brick-200);
+  --color-thru-brick-alt: var(--color-brick-100);
+  --color-brick: var(--color-brick-200);
+
+  /* Sky (Blue) */
+  --color-sky-100: #cfeffc;
+  --color-sky-200: #8cd4f2;
+  --color-sky-300: #28a3d7;
+  --color-sky-400: #0279b1;
+
+  /* Grass (Green) */
+  --color-grass-100: #c2ebe8;
+  --color-grass-200: #75d1cc;
+  --color-grass-300: #239f97;
+  --color-grass-400: #0a766f;
+
+  /* Yellow (Saffron) */
+  --color-yellow-100: #fdefdd;
+  --color-yellow-200: #fde0ba;
+  --color-yellow-300: #fbc784;
+  --color-yellow-400: #ffad42;
+
+  /* Tan */
+  --color-tan-100: #f6ebe5;
+  --color-tan-200: #ebd5c7;
+  --color-tan-300: #ddb8a0;
+  --color-tan-400: #c98f69;
+
+  /* Sand */
+  --color-sand-100: #f6ebe5;
+  --color-sand-200: #ebd5c7;
+  --color-sand-300: #ddb8a0;
+  --color-sand-400: #c98f69;
+
+  /* Golden */
+  --color-golden: #ffffbd;
+
+  /* ========================================
+     SEMANTIC COLOR TOKENS
+     ======================================== */
+
+  /* Text Colors */
+  --color-text-primary: var(--color-steel-800);
+  --color-text-secondary: var(--color-teal-600);
+  --color-text-tertiary: var(--color-steel-400);
+  --color-text-brand: var(--color-brick-400);
+  --color-text-disabled: var(--color-steel-300);
+  --color-text-primary-inverse: var(--color-teal-0);
+  --color-text-secondary-inverse: var(--color-teal-200);
+  --color-text-tertiary-inverse: var(--color-teal-400);
+  --color-text-disabled-inverse: var(--color-steel-600);
+
+  /* Border Colors */
+  --color-border-primary: var(--color-teal-800);
+  --color-border-secondary: var(--color-teal-400);
+  --color-border-tertiary: var(--color-teal-200);
+  --color-border-brand: var(--color-brick-400);
+  --color-border-disabled: var(--color-steel-300);
+
+  /* Surface Colors */
+  --color-surface-higher: var(--color-teal-0);
+  --color-surface-primary: var(--color-teal-100);
+  --color-surface-lower: var(--color-teal-200);
+  --color-surface-disabled: var(--color-steel-100);
+  --color-surface-higher-inverse: var(--color-teal-600);
+  --color-surface-primary-inverse: var(--color-teal-700);
+  --color-surface-lower-inverse: var(--color-steel-800);
+
+  /* Surface Brand Colors */
+  --color-surface-brick: var(--color-brick-400);
+  --color-surface-sky: var(--color-sky-400);
+  --color-surface-grass: var(--color-grass-400);
+  --color-surface-yellow: var(--color-yellow-400);
+  --color-surface-tan: var(--color-tan-400);
+  --color-surface-sand: var(--color-sand-400);
+
+  /* ========================================
+     FONT FAMILIES
+     ======================================== */
+  --font-sans: var(--font-inter-tight);
+  --font-mono: var(--font-jetbrains-mono);
+
+  /* ========================================
+     FONT SIZES (for text-* utilities)
+     ======================================== */
+  --text-headline-2xl: 5rem;
+  --text-headline-xl: 4rem;
+  --text-headline-l: 3rem;
+  --text-headline-m: 2.5rem;
+  --text-headline-s: 2rem;
+  --text-headline-xs: 1.5rem;
+  --text-body-xl: 1.25rem;
+  --text-body-l: 1.125rem;
+  --text-body-m: 1rem;
+  --text-body-s: 0.875rem;
+  --text-body-xs: 0.75rem;
+
+  /* ========================================
+     BORDER WIDTH
+     ======================================== */
+  --border-width: 1px;
+  --border-width-2: 2px;
+  --border-width-4: 4px;
+}
+
+/* ========================================
+   TYPOGRAPHY CSS CLASSES
+   ======================================== */
+
+.type-heading-1 {
+  font-family: var(--font-sans);
+  font-size: 2.5rem;
+  line-height: 2.5rem;
+  letter-spacing: -0.03125rem;
+  font-weight: 400;
+}
+
+@media (min-width: 600px) {
+  .type-heading-1 {
+    font-size: 3rem;
+    line-height: 3rem;
+  }
+}
+
+@media (min-width: 840px) {
+  .type-heading-1 {
+    font-size: 4rem;
+    line-height: 4rem;
+  }
+}
+
+.type-heading-1-bold {
+  font-weight: 600;
+}
+
+.type-heading-2 {
+  font-family: var(--font-sans);
+  font-size: 2.5rem;
+  line-height: 2.5rem;
+  font-weight: 400;
+}
+
+@media (min-width: 600px) {
+  .type-heading-2 {
+    font-size: 2.75rem;
+    line-height: 2.75rem;
+  }
+}
+
+@media (min-width: 840px) {
+  .type-heading-2 {
+    font-size: 3rem;
+    line-height: 3rem;
+  }
+}
+
+.type-heading-2-bold {
+  font-weight: 600;
+}
+
+.type-heading-3 {
+  font-family: var(--font-sans);
+  font-size: 2rem;
+  line-height: 2rem;
+  font-weight: 400;
+}
+
+@media (min-width: 600px) {
+  .type-heading-3 {
+    font-size: 2.25rem;
+    line-height: 2.25rem;
+  }
+}
+
+@media (min-width: 840px) {
+  .type-heading-3 {
+    font-size: 2.5rem;
+    line-height: 2.5rem;
+  }
+}
+
+.type-heading-3-bold {
+  font-weight: 600;
+}
+
+.type-heading-4 {
+  font-family: var(--font-sans);
+  font-size: 1.75rem;
+  line-height: 2rem;
+  font-weight: 400;
+}
+
+@media (min-width: 840px) {
+  .type-heading-4 {
+    font-size: 2rem;
+    line-height: 2.25rem;
+  }
+}
+
+.type-heading-4-bold {
+  font-weight: 600;
+}
+
+.type-heading-5 {
+  font-family: var(--font-sans);
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 400;
+}
+
+.type-heading-5-bold {
+  font-weight: 600;
+}
+
+.type-body-1 {
+  font-family: var(--font-sans);
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+  font-weight: 400;
+}
+
+.type-body-1-bold {
+  font-weight: 600;
+}
+
+.type-body-3 {
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 400;
+}
+
+@media (min-width: 1600px) {
+  .type-body-3 {
+    font-size: 1.125rem;
+    line-height: 1.75rem;
+  }
+}
+
+.type-body-3-bold {
+  font-weight: 600;
+}
+
+.type-body-4 {
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 400;
+}
+
+@media (min-width: 1600px) {
+  .type-body-4 {
+    font-size: 1rem;
+    line-height: 1.5rem;
+  }
+}
+
+.type-body-4-bold {
+  font-weight: 600;
+}
+
+.type-body-5 {
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 400;
+}
+
+@media (min-width: 1600px) {
+  .type-body-5 {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+}
+
+.type-body-5-bold {
+  font-weight: 600;
+}
+
+.type-ui-1 {
+  font-family: var(--font-mono);
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+  font-weight: 400;
+  letter-spacing: -0.03125rem;
+}
+
+.type-ui-1-bold {
+  font-weight: 700;
+}
+
+.type-ui-2 {
+  font-family: var(--font-mono);
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+  font-weight: 400;
+  letter-spacing: -0.015625rem;
+}
+
+.type-ui-2-bold {
+  font-weight: 700;
+}
+
+.type-ui-3 {
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 400;
+}
+
+.type-ui-3-bold {
+  font-weight: 700;
+}
+
+.type-ui-4 {
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 400;
+}
+
+.type-ui-4-bold {
+  font-weight: 700;
+}
+
+.type-ui-5 {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 400;
+}
+
+@media (min-width: 1600px) {
+  .type-ui-5 {
+    font-size: 0.875rem;
+    line-height: 1.25rem;
+  }
+}
+
+.type-ui-5-bold {
+  font-weight: 700;
+}
+
+.type-button-1 {
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 400;
+}
+
+.type-button-1-bold {
+  font-weight: 600;
+}
+
+/* ========================================
+   UTILITY CLASSES
+   ======================================== */
+
+.scrollbar-hide {
+  -ms-overflow-style: none; /* Internet Explorer 10+ */
+  scrollbar-width: none; /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Safari and Chrome */
+}
+
+/* ========================================
+   ANIMATIONS
+   ======================================== */
+
+.pressure-gauge {
+  animation: pressure-rise 2s ease-in-out 0.25s forwards;
+  transform-origin: 12.5px 43px;
+  transform: rotate(44deg);
+}
+
+@keyframes pressure-rise {
+  0% {
+    transform: rotate(44deg); /* 0 PSI */
+  }
+
+  /* Overshoot to near max */
+  40% {
+    transform: rotate(315deg); /* ~100 PSI */
+  }
+
+  /* First slight drop back */
+  60% {
+    transform: rotate(308deg); /* ~88 PSI */
+  }
+
+  /* Final settle at 80 PSI */
+  100% {
+    transform: rotate(312deg); /* ~90 PSI */
+  }
+}
+
+@keyframes slide-left-right {
+  0% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(4px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@keyframes bounce-slow {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-4px);
+  }
+}
+
+.animate-slide {
+  animation: slide-left-right 1.5s ease-in-out infinite;
+}
+
+.group:hover .group-hover\:animate-slide {
+  animation: slide-left-right 1.5s ease-in-out infinite;
+}
+
+.animate-bounce-slow {
+  animation: bounce-slow 3s ease-in-out infinite;
+}

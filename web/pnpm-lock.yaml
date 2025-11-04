@@ -47,6 +47,28 @@ importers:
         specifier: ^3.0.1
         version: 3.0.1
 
+  packages/design-system:
+    dependencies:
+      react:
+        specifier: ^18.0.0 || ^19.0.0
+        version: 19.2.0
+      react-dom:
+        specifier: ^18.0.0 || ^19.0.0
+        version: 19.2.0(react@19.2.0)
+    devDependencies:
+      '@types/react':
+        specifier: ^19.0.0
+        version: 19.2.2
+      '@types/react-dom':
+        specifier: ^19.0.0
+        version: 19.2.2(@types/react@19.2.2)
+      tailwindcss:
+        specifier: ^4.1.14
+        version: 4.1.16
+      typescript:
+        specifier: ^5.0.0
+        version: 5.9.3
+
   packages/embedded-provider:
     dependencies:
       '@thru/chain-interfaces':
@@ -240,6 +262,9 @@ importers:
       '@thru/crypto':
         specifier: workspace:*
         version: link:../packages/crypto
+      '@thru/design-system':
+        specifier: workspace:*
+        version: link:../packages/design-system
       '@thru/indexed-db-stamper':
         specifier: workspace:*
         version: link:../packages/indexed-db-stamper

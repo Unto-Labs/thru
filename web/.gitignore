@@ -94,3 +94,7 @@ exported/
 .env.production.local
 
 test-app2/
+
+resources/
+
+thru-web/

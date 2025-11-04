@@ -184,7 +184,7 @@ export class EmbeddedProvider {
   }
 
   /**
-   * Get Solana chain API
+   * Get Thru chain API
    */
   get thru(): IThruChain {
     if (!this._thruChain) {
