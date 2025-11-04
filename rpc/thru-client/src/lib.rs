@@ -300,6 +300,96 @@ impl Client {
         })
     }
 
+    /// Get transaction details by signature.
+    pub async fn get_transaction(&self, signature: &Signature) -> Result<Option<TransactionDetails>> {
+        let signature_bytes = signature.to_bytes()
+            .map_err(|e| ClientError::Validation(format!("Invalid signature: {}", e)))?;
+
+        let transaction_proto = self
+            .fetch_transaction_details(&signature_bytes, self.timeout)
+            .await?;
+
+        if transaction_proto.is_none() {
+            return Ok(None);
+        }
+
+        let transaction_proto = transaction_proto.unwrap();
+        let transaction_slot = transaction_proto.slot.unwrap_or(0);
+        let execution_proto = transaction_proto.execution_result.clone();
+        let execution = execution_proto.unwrap_or_default();
+
+        let execution_result = execution.execution_result;
+        let vm_error = execution.vm_error as i32;
+        let user_error_code = execution.user_error_code;
+
+        let rw_accounts = execution
+            .readwrite_accounts
+            .iter()
+            .map(|pk| {
+                let bytes =
+                    array_from_vec::<32>(pk.value.clone(), "readwrite account").map_err(|e| {
+                        ClientError::Validation(format!("invalid readwrite account pubkey: {}", e))
+                    })?;
+                Ok(Pubkey::from_bytes(&bytes))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let ro_accounts = execution
+            .readonly_accounts
+            .iter()
+            .map(|pk| {
+                let bytes =
+                    array_from_vec::<32>(pk.value.clone(), "readonly account").map_err(|e| {
+                        ClientError::Validation(format!("invalid readonly account pubkey: {}", e))
+                    })?;
+                Ok(Pubkey::from_bytes(&bytes))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let events = execution
+            .events
+            .into_iter()
+            .map(|event| {
+                let program = event
+                    .program
+                    .and_then(|pk| array_from_vec::<32>(pk.value, "event program").ok())
+                    .map(|bytes| Pubkey::from_bytes(&bytes));
+                Event {
+                    call_idx: event.call_idx,
+                    program_idx: event.program_idx,
+                    data: event.payload,
+                    event_id: if event.event_id.is_empty() {
+                        None
+                    } else {
+                        Some(event.event_id)
+                    },
+                    program,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        Ok(Some(TransactionDetails {
+            compute_units_consumed: execution.consumed_compute_units as u64,
+            events_cnt: if execution.events_count != 0 {
+                execution.events_count
+            } else {
+                events.len() as u32
+            },
+            events_sz: execution.events_size,
+            execution_result,
+            pages_used: execution.pages_used,
+            state_units_consumed: execution.consumed_state_units as u64,
+            user_error_code,
+            vm_error,
+            signature: signature.clone(),
+            rw_accounts,
+            ro_accounts,
+            slot: transaction_slot,
+            proof_slot: transaction_slot,
+            events,
+        }))
+    }
+
     /// Submit a transaction and wait for execution or timeout.
     pub async fn execute_transaction(
         &self,

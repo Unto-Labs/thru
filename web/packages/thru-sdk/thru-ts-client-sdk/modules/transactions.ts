@@ -9,34 +9,44 @@ import {
     DEFAULT_MIN_CONSENSUS,
     DEFAULT_STATE_UNITS,
     DEFAULT_TRANSACTION_VIEW,
+    DEFAULT_VERSION_CONTEXT,
 } from "../defaults";
 import type { ConsensusStatus, VersionContext } from "../proto/thru/common/v1/consensus_pb";
+import type { Filter } from "../proto/thru/common/v1/filters_pb";
+import type { PageRequest } from "../proto/thru/common/v1/pagination_pb";
 import { AccountView } from "../proto/thru/core/v1/account_pb";
 import { Transaction as CoreTransaction, RawTransaction, TransactionView } from "../proto/thru/core/v1/transaction_pb";
-import { SendTransactionRequestSchema } from "../proto/thru/services/v1/command_service_pb";
+import {
+    BatchSendTransactionsRequestSchema,
+    type BatchSendTransactionsResponse,
+    SendTransactionRequestSchema,
+} from "../proto/thru/services/v1/command_service_pb";
 import {
     GetRawTransactionRequestSchema,
     GetTransactionRequestSchema,
     GetTransactionStatusRequestSchema,
+    ListTransactionsForAccountRequestSchema,
+    type ListTransactionsForAccountResponse,
     TransactionStatus,
 } from "../proto/thru/services/v1/query_service_pb";
 import {
-    Transaction as LocalTransaction,
-    TransactionBuilder,
     type BuildTransactionParams,
+    Transaction as LocalTransaction,
     type OptionalProofs,
     type ProgramIdentifier,
     type SignedTransactionResult,
     type TransactionAccountsInput,
-    type TransactionContentInput,
+    TransactionBuilder,
+    type TransactionBuilderContext,
     type TransactionHeaderInput,
 } from "../transactions";
-import { parseAccountIdentifier, parseInstructionData } from "../transactions/utils";
+import { parseAccountIdentifier, parseInstructionData, resolveProgramIdentifier } from "../transactions/utils";
 import { toSignature } from "./helpers";
 
 import { BytesLike, encodeSignature } from "@thru/helpers";
 import { getAccount } from "./accounts";
 import { getBlockHeight } from "./height";
+import { toPubkey } from "./helpers";
 
 export interface TransactionFeePayerConfig {
     publicKey: BytesLike;
@@ -46,12 +56,6 @@ export interface TransactionFeePayerConfig {
 export interface TransactionAccountsConfig {
     readWrite?: BytesLike[];
     readOnly?: BytesLike[];
-}
-
-export interface TransactionContentConfig {
-    instructions?: BytesLike;
-    feePayerStateProof?: Uint8Array;
-    feePayerAccountMetaRaw?: Uint8Array;
 }
 
 export interface TransactionHeaderConfig {
@@ -64,13 +68,21 @@ export interface TransactionHeaderConfig {
     memoryUnits?: number;
     flags?: number;
 }
+/**
+ * Instruction data can be either:
+ * - A Uint8Array directly
+ * - A function that takes a TransactionBuilderContext and returns a Uint8Array
+ */
+export type InstructionData = Uint8Array | ((context: TransactionBuilderContext) => Uint8Array);
 
 export interface BuildTransactionOptions {
     feePayer: TransactionFeePayerConfig;
     program: ProgramIdentifier;
     header?: TransactionHeaderConfig;
     accounts?: TransactionAccountsConfig;
-    content?: TransactionContentConfig;
+    instructionData?: InstructionData | BytesLike;
+    feePayerStateProof?: Uint8Array;
+    feePayerAccountMetaRaw?: Uint8Array;
 }
 
 export interface BuildAndSignTransactionOptions extends BuildTransactionOptions {
@@ -88,6 +100,11 @@ export interface RawTransactionQueryOptions {
     minConsensus?: ConsensusStatus;
 }
 
+export interface ListTransactionsForAccountOptions {
+    filter?: Filter;
+    page?: PageRequest;
+}
+
 export async function getTransaction(
     ctx: ThruClientContext,
     signature: BytesLike,
@@ -96,7 +113,7 @@ export async function getTransaction(
     const request = create(GetTransactionRequestSchema, {
         signature: toSignature(signature),
         view: options.view ?? DEFAULT_TRANSACTION_VIEW,
-        versionContext: options.versionContext,
+        versionContext: options.versionContext ?? DEFAULT_VERSION_CONTEXT,
         minConsensus: options.minConsensus ?? DEFAULT_MIN_CONSENSUS,
     });
     return ctx.query.getTransaction(request);
@@ -109,7 +126,7 @@ export async function getRawTransaction(
 ): Promise<RawTransaction> {
     const request = create(GetRawTransactionRequestSchema, {
         signature: toSignature(signature),
-        versionContext: options.versionContext,
+        versionContext: options.versionContext ?? DEFAULT_VERSION_CONTEXT,
         minConsensus: options.minConsensus ?? DEFAULT_MIN_CONSENSUS,
     });
     return ctx.query.getRawTransaction(request);
@@ -120,6 +137,19 @@ export async function getTransactionStatus(ctx: ThruClientContext, signature: By
         signature: toSignature(signature),
     });
     return ctx.query.getTransactionStatus(request);
+}
+
+export async function listTransactionsForAccount(
+    ctx: ThruClientContext,
+    account: BytesLike,
+    options: ListTransactionsForAccountOptions = {},
+): Promise<ListTransactionsForAccountResponse> {
+    const request = create(ListTransactionsForAccountRequestSchema, {
+        account: toPubkey(account, "account"),
+        filter: options.filter,
+        page: options.page,
+    });
+    return ctx.query.listTransactionsForAccount(request);
 }
 
 export async function buildTransaction(
@@ -151,6 +181,25 @@ export async function sendTransaction(
     return sendRawTransaction(ctx, raw);
 }
 
+export interface BatchSendTransactionsOptions {
+    numRetries?: number;
+}
+
+export async function batchSendTransactions(
+    ctx: ThruClientContext,
+    transactions: (LocalTransaction | Uint8Array)[],
+    options: BatchSendTransactionsOptions = {},
+): Promise<BatchSendTransactionsResponse> {
+    const rawTransactions = transactions.map((tx) =>
+        tx instanceof Uint8Array ? tx : tx.toWire(),
+    );
+    const request = create(BatchSendTransactionsRequestSchema, {
+        rawTransactions,
+        numRetries: options.numRetries ?? 0,
+    });
+    return ctx.command.batchSendTransactions(request);
+}
+
 async function sendRawTransaction(ctx: ThruClientContext, rawTransaction: Uint8Array): Promise<string> {
     const request = create(SendTransactionRequestSchema, { rawTransaction });
     const response = await ctx.command.sendTransaction(request);
@@ -169,9 +218,16 @@ async function createBuildParams(
     options: BuildTransactionOptions,
 ): Promise<BuildTransactionParams> {
     const feePayerPublicKey = parseAccountIdentifier(options.feePayer.publicKey, "feePayer.publicKey");
+    const program = resolveProgramIdentifier(options.program);
     const header = await createTransactionHeader(ctx, options.header ?? {}, feePayerPublicKey);
     const accounts = parseAccounts(options.accounts);
-    const content = createContent(options.content);
+    
+    // Create context for function resolution
+    const context = createBuilderContext(feePayerPublicKey, program, accounts);
+    
+    // Resolve instruction data (functions get resolved here)
+    const instructionData = resolveInstructionData(options.instructionData, context);
+    const proofs = createProofs(options);
 
     return {
         feePayer: {
@@ -181,7 +237,8 @@ async function createBuildParams(
         program: options.program,
         header,
         accounts,
-        content,
+        instructionData,
+        proofs,
     };
 }
 
@@ -230,33 +287,76 @@ function parseAccounts(accounts?: TransactionAccountsConfig): TransactionAccount
     return result;
 }
 
-function createContent(content?: TransactionContentConfig): TransactionContentInput | undefined {
-    if (!content) {
+function createBuilderContext(
+    feePayer: Uint8Array,
+    program: Uint8Array,
+    accounts?: TransactionAccountsInput,
+): TransactionBuilderContext {
+    // Build accounts array in transaction order: [feePayer, program, ...readWrite, ...readOnly]
+    const allAccounts: Uint8Array[] = [
+        feePayer,
+        program,
+        ...(accounts?.readWriteAccounts ?? []),
+        ...(accounts?.readOnlyAccounts ?? []),
+    ];
+
+    // Helper to compare two account addresses
+    const accountsEqual = (a: Uint8Array, b: Uint8Array): boolean => {
+        if (a.length !== 32 || b.length !== 32) {
+            return false;
+        }
+        for (let i = 0; i < 32; i++) {
+            if (a[i] !== b[i]) {
+                return false;
+            }
+        }
+        return true;
+    };
+
+    const getAccountIndex = (pubkey: Uint8Array): number => {
+        for (let i = 0; i < allAccounts.length; i++) {
+            if (accountsEqual(allAccounts[i], pubkey)) {
+                return i;
+            }
+        }
+        throw new Error("Account not found in transaction accounts");
+    };
+
+    return { accounts: allAccounts, getAccountIndex };
+}
+
+function resolveInstructionData(
+    value: InstructionData | BytesLike | undefined,
+    context: TransactionBuilderContext,
+): BytesLike | undefined {
+    if (value === undefined) {
         return undefined;
     }
-
-    const instructions = parseInstructionData(content.instructions);
-    const proofs: OptionalProofs = {};
-    if (content.feePayerStateProof) {
-        proofs.feePayerStateProof = new Uint8Array(content.feePayerStateProof);
+    
+    // If it's a function, resolve it with the context
+    if (typeof value === "function") {
+        return value(context);
     }
-    if (content.feePayerAccountMetaRaw) {
-        proofs.feePayerAccountMetaRaw = new Uint8Array(content.feePayerAccountMetaRaw);
+    
+    // If it's already a Uint8Array, pass it through
+    if (value instanceof Uint8Array) {
+        return value;
+    }
+    
+    // Otherwise, parse BytesLike (string) to Uint8Array
+    return parseInstructionData(value);
+}
+
+function createProofs(options: BuildTransactionOptions): OptionalProofs | undefined {
+    const proofs: OptionalProofs = {};
+    if (options.feePayerStateProof) {
+        proofs.feePayerStateProof = options.feePayerStateProof;
+    }
+    if (options.feePayerAccountMetaRaw) {
+        proofs.feePayerAccountMetaRaw = options.feePayerAccountMetaRaw;
     }
     const hasProofs = Boolean(proofs.feePayerStateProof || proofs.feePayerAccountMetaRaw);
-
-    if (!instructions && !hasProofs) {
-        return undefined;
-    }
-
-    const result: TransactionContentInput = {};
-    if (instructions) {
-        result.instructions = instructions;
-    }
-    if (hasProofs) {
-        result.proofs = proofs;
-    }
-    return result;
+    return hasProofs ? proofs : undefined;
 }
 
 async function fetchFeePayerNonce(ctx: ThruClientContext, feePayer: Uint8Array): Promise<bigint> {

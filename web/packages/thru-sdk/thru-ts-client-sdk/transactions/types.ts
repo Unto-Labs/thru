@@ -31,10 +31,19 @@ export interface TransactionAccountsInput {
     readOnlyAccounts?: AccountAddress[];
 }
 
-export interface TransactionContentInput {
-    instructions?: Uint8Array;
-    proofs?: OptionalProofs;
+/**
+ * Builder context provided to instruction data functions.
+ * Contains all transaction accounts in their final sorted order and helper functions
+ * for looking up account indexes.
+ */
+export interface TransactionBuilderContext {
+    /** All accounts in final transaction order: [feePayer, program, ...readWrite, ...readOnly] */
+    accounts: AccountAddress[];
+    /** Get the index of an account by its public key. Throws if account is not found in transaction. */
+    getAccountIndex: (pubkey: AccountAddress) => number;
 }
+
+
 
 export interface FeePayerInput {
     publicKey: AccountAddress;
@@ -46,7 +55,8 @@ export interface BuildTransactionParams {
     program: ProgramIdentifier;
     header: TransactionHeaderInput;
     accounts?: TransactionAccountsInput;
-    content?: TransactionContentInput;
+    instructionData?: BytesLike;
+    proofs?: OptionalProofs;
 }
 
 export interface BuiltTransactionResult {

@@ -1,6 +1,10 @@
 import { Transaction } from "./Transaction";
-import type { BuildTransactionParams, SignedTransactionResult, TransactionAccountsInput } from "./types";
-import { normalizeAccountList, resolveProgramIdentifier } from "./utils";
+import type {
+    BuildTransactionParams,
+    SignedTransactionResult,
+    TransactionAccountsInput
+} from "./types";
+import { normalizeAccountList, parseInstructionData, resolveProgramIdentifier } from "./utils";
 
 const FLAG_HAS_FEE_PAYER_PROOF = 1 << 0;
 
@@ -8,10 +12,11 @@ export class TransactionBuilder {
     build(params: BuildTransactionParams): Transaction {
         const program = resolveProgramIdentifier(params.program);
         const accounts = this.normalizeAccounts(params.accounts);
-        const instructions = params.content?.instructions;
-        const proofs = params.content?.proofs;
         const baseFlags = params.header.flags ?? 0;
-        const flags = proofs?.feePayerStateProof ? baseFlags | FLAG_HAS_FEE_PAYER_PROOF : baseFlags;
+        const flags = params.proofs?.feePayerStateProof ? baseFlags | FLAG_HAS_FEE_PAYER_PROOF : baseFlags;
+
+        /* Parse instruction data from BytesLike */
+        const instructionData = parseInstructionData(params.instructionData);
 
         return new Transaction({
             feePayer: params.feePayer.publicKey,
@@ -21,8 +26,8 @@ export class TransactionBuilder {
                 flags,
             },
             accounts,
-            instructions,
-            proofs,
+            instructionData,
+            proofs: params.proofs,
         });
     }
 

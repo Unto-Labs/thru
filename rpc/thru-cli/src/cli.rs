@@ -429,6 +429,12 @@ pub enum TxnCommands {
         #[arg(long)]
         slot: Option<u64>,
     },
+
+    /// Get transaction details by signature
+    Get {
+        /// Transaction signature (ts... format or 128 hex characters)
+        signature: String,
+    },
 }
 
 /// Account management subcommands

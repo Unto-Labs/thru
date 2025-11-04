@@ -25,7 +25,7 @@ export class Transaction {
     readonly readWriteAccounts: AccountAddress[];
     readonly readOnlyAccounts: AccountAddress[];
 
-    readonly instructions?: Uint8Array;
+    readonly instructionData?: Uint8Array;
     readonly feePayerStateProof?: Uint8Array;
     readonly feePayerAccountMetaRaw?: Uint8Array;
 
@@ -36,7 +36,7 @@ export class Transaction {
         program: AccountAddress;
         header: TransactionHeaderInput;
         accounts?: TransactionAccountsInput;
-        instructions?: Uint8Array;
+        instructionData?: Uint8Array;
         proofs?: OptionalProofs;
     }) {
         this.feePayer = copyKey(params.feePayer);
@@ -59,7 +59,7 @@ export class Transaction {
             ? params.accounts.readOnlyAccounts.map(copyKey)
             : [];
 
-        this.instructions = params.instructions ? new Uint8Array(params.instructions) : undefined;
+        this.instructionData = params.instructionData ? new Uint8Array(params.instructionData) : undefined;
         this.feePayerStateProof = params.proofs?.feePayerStateProof
             ? new Uint8Array(params.proofs.feePayerStateProof)
             : undefined;
@@ -132,11 +132,11 @@ export class Transaction {
         view.setUint16(offset, this.readOnlyAccounts.length, true);
         offset += 2;
 
-        const instructionLength = this.instructions?.length ?? 0;
-        if (instructionLength > 0xffff) {
+        const instructionDataLength = this.instructionData?.length ?? 0;
+        if (instructionDataLength > 0xffff) {
             throw new Error("Instruction data exceeds maximum length (65535 bytes)");
         }
-        view.setUint16(offset, instructionLength, true);
+        view.setUint16(offset, instructionDataLength, true);
         offset += 2;
 
         view.setUint32(offset, ensureUint32(this.requestedComputeUnits), true);
@@ -175,7 +175,7 @@ export class Transaction {
         const dynamicLength =
             this.readWriteAccounts.length * PUBKEY_LENGTH +
             this.readOnlyAccounts.length * PUBKEY_LENGTH +
-            (this.instructions?.length ?? 0) +
+            (this.instructionData?.length ?? 0) +
             (this.feePayerStateProof?.length ?? 0) +
             (this.feePayerAccountMetaRaw?.length ?? 0);
 
@@ -185,9 +185,9 @@ export class Transaction {
         let offset = headerWithoutSignature.length;
         offset = appendAccountList(result, offset, this.readWriteAccounts);
         offset = appendAccountList(result, offset, this.readOnlyAccounts);
-        if (this.instructions) {
-            result.set(this.instructions, offset);
-            offset += this.instructions.length;
+        if (this.instructionData) {
+            result.set(this.instructionData, offset);
+            offset += this.instructionData.length;
         }
         if (this.feePayerStateProof) {
             result.set(this.feePayerStateProof, offset);

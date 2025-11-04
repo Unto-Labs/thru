@@ -84,6 +84,9 @@ pub async fn handle_txn_command(
             account,
             slot,
         } => make_state_proof(config, &proof_type, &account, slot, json_format).await,
+        TxnCommands::Get { signature } => {
+            get_transaction(config, &signature, json_format).await
+        }
     }
 }
 
@@ -718,6 +721,232 @@ fn validate_and_process_accounts(mut accounts: Vec<TnPubkey>) -> Result<Vec<TnPu
     accounts.dedup();
 
     Ok(accounts)
+}
+
+/// Get transaction details by signature
+async fn get_transaction(
+    config: &Config,
+    signature_str: &str,
+    json_format: bool,
+) -> Result<(), CliError> {
+    // Parse signature - try ts... format first, then hex
+    let signature = if signature_str.starts_with("ts") && signature_str.len() == 90 {
+        thru_base::tn_tools::Signature::new(signature_str.to_string())
+            .map_err(|e| CliError::Validation(format!("Invalid signature: {}", e)))?
+    } else if signature_str.len() == 128 {
+        // Try as hex signature (64 bytes = 128 hex characters)
+        let sig_bytes = hex::decode(signature_str).map_err(|e| {
+            CliError::Validation(format!("Invalid hex signature: {}", e))
+        })?;
+        if sig_bytes.len() != 64 {
+            return Err(CliError::Validation(format!(
+                "Hex signature must be exactly 64 bytes (128 hex characters), got {} bytes",
+                sig_bytes.len()
+            )));
+        }
+        let mut sig_array = [0u8; 64];
+        sig_array.copy_from_slice(&sig_bytes);
+        thru_base::tn_tools::Signature::from_bytes(&sig_array)
+    } else {
+        return Err(CliError::Validation(format!(
+            "Invalid signature: {}. Must be a ts... signature (90 characters) or 128-character hex string",
+            signature_str
+        )));
+    };
+
+    // Create RPC client
+    let client = create_rpc_client(config)?;
+
+    // Get transaction
+    let transaction_details = client
+        .get_transaction(&signature)
+        .await
+        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get transaction: {:?}", e)))?;
+
+    match transaction_details {
+        None => {
+            if json_format {
+                let response = serde_json::json!({
+                    "transaction_get": {
+                        "status": "not_found",
+                        "signature": signature.as_str()
+                    }
+                });
+                output::print_output(response, true);
+            } else {
+                output::print_error(&format!("Transaction not found: {}", signature.as_str()));
+            }
+            Err(CliError::TransactionSubmission(format!(
+                "Transaction not found: {}",
+                signature.as_str()
+            )))
+        }
+        Some(details) => {
+            let has_failure = details.execution_result != 0 || details.vm_error != 0;
+
+            if json_format {
+                let mut events_json = Vec::new();
+
+                // Parse events for JSON output
+                for event in &details.events {
+                    let mut event_json = serde_json::Map::new();
+                    event_json.insert(
+                        "call_idx".to_string(),
+                        serde_json::Value::Number(serde_json::Number::from(event.call_idx as u64)),
+                    );
+                    event_json.insert(
+                        "program_idx".to_string(),
+                        serde_json::Value::Number(serde_json::Number::from(event.program_idx as u64)),
+                    );
+
+                    if let Some(event_id) = &event.event_id {
+                        event_json.insert(
+                            "event_id".to_string(),
+                            serde_json::Value::String(event_id.clone()),
+                        );
+                    }
+
+                    if let Some(program) = &event.program {
+                        event_json.insert(
+                            "program".to_string(),
+                            serde_json::Value::String(program.as_str().to_string()),
+                        );
+                    }
+
+                    if event.data.len() > 8 {
+                        // Extract first 8 bytes as event type
+                        let event_type_bytes = &event.data[0..8];
+                        let event_type = u64::from_le_bytes([
+                            event_type_bytes[0],
+                            event_type_bytes[1],
+                            event_type_bytes[2],
+                            event_type_bytes[3],
+                            event_type_bytes[4],
+                            event_type_bytes[5],
+                            event_type_bytes[6],
+                            event_type_bytes[7],
+                        ]);
+                        event_json.insert(
+                            "event_type".to_string(),
+                            serde_json::Value::Number(serde_json::Number::from(event_type)),
+                        );
+
+                        // Process remaining data
+                        let remaining_data = &event.data[8..];
+                        if !remaining_data.is_empty() {
+                            let parsed_data = parse_event_data_for_json(remaining_data);
+                            event_json.insert("data".to_string(), parsed_data);
+                        }
+                    } else if !event.data.is_empty() {
+                        event_json.insert(
+                            "data_hex".to_string(),
+                            serde_json::Value::String(hex::encode(&event.data)),
+                        );
+                    }
+
+                    events_json.push(serde_json::Value::Object(event_json));
+                }
+
+                let response = serde_json::json!({
+                    "transaction_get": {
+                        "status": if has_failure { "failed" } else { "success" },
+                        "signature": details.signature.as_str(),
+                        "slot": details.slot,
+                        "compute_units_consumed": details.compute_units_consumed,
+                        "state_units_consumed": details.state_units_consumed,
+                        "execution_result": details.execution_result,
+                        "vm_error": details.vm_error,
+                        "vm_error_name": format_vm_error(details.vm_error),
+                        "user_error_code": details.user_error_code,
+                        "events_count": details.events_cnt,
+                        "events_size": details.events_sz,
+                        "pages_used": details.pages_used,
+                        "readwrite_accounts": details.rw_accounts.iter().map(|pk| pk.as_str().to_string()).collect::<Vec<_>>(),
+                        "readonly_accounts": details.ro_accounts.iter().map(|pk| pk.as_str().to_string()).collect::<Vec<_>>(),
+                        "events": events_json
+                    }
+                });
+                output::print_output(response, true);
+            } else {
+                if has_failure {
+                    output::print_error("Transaction failed");
+                } else {
+                    output::print_success("Transaction found");
+                }
+                println!("Signature: {}", details.signature.as_str());
+                println!("Slot: {}", details.slot);
+                println!("Compute Units Consumed: {}", details.compute_units_consumed);
+                println!("State Units Consumed: {}", details.state_units_consumed);
+                println!("Execution Result: {}", details.execution_result);
+                println!("VM Error: {}", format_vm_error(details.vm_error));
+                println!("User Error Code: {}", details.user_error_code);
+                println!("Events Count: {}", details.events_cnt);
+                println!("Events Size: {}", details.events_sz);
+                println!("Pages Used: {}", details.pages_used);
+
+                if !details.rw_accounts.is_empty() {
+                    println!("\nRead-write Accounts:");
+                    for account in &details.rw_accounts {
+                        println!("  {}", account.as_str());
+                    }
+                }
+
+                if !details.ro_accounts.is_empty() {
+                    println!("\nRead-only Accounts:");
+                    for account in &details.ro_accounts {
+                        println!("  {}", account.as_str());
+                    }
+                }
+
+                // Display events if any are present
+                if details.events_cnt > 0 {
+                    println!("\nEvents:");
+                    for (i, event) in details.events.iter().enumerate() {
+                        println!(
+                            "  Event {}: call_idx={}, program_idx={}",
+                            i + 1,
+                            event.call_idx,
+                            event.program_idx
+                        );
+
+                        if let Some(event_id) = &event.event_id {
+                            println!("    Event ID: {}", event_id);
+                        }
+                        if let Some(program) = &event.program {
+                            println!("    Program: {}", program.as_str());
+                        }
+
+                        if event.data.len() > 8 {
+                            // Extract first 8 bytes as event type
+                            let event_type_bytes = &event.data[0..8];
+                            let event_type = u64::from_le_bytes([
+                                event_type_bytes[0],
+                                event_type_bytes[1],
+                                event_type_bytes[2],
+                                event_type_bytes[3],
+                                event_type_bytes[4],
+                                event_type_bytes[5],
+                                event_type_bytes[6],
+                                event_type_bytes[7],
+                            ]);
+                            println!("    Event type: {}", event_type);
+
+                            // Process remaining data
+                            let remaining_data = &event.data[8..];
+                            if !remaining_data.is_empty() {
+                                display_event_data(remaining_data);
+                            }
+                        } else if !event.data.is_empty() {
+                            // If data is 8 bytes or less, just display as hex
+                            println!("    Data (hex): {}", hex::encode(&event.data));
+                        }
+                    }
+                }
+            }
+
+            Ok(())
+        }
+    }
 }
 
 #[cfg(test)]

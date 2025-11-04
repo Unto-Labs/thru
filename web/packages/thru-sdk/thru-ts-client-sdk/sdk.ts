@@ -11,10 +11,12 @@ export * as streaming from "./modules/streaming";
 export * as transactions from "./modules/transactions";
 
 export { ConsensusStatus } from "./proto/thru/common/v1/consensus_pb";
+export { FilterParamValueSchema, FilterSchema } from "./proto/thru/common/v1/filters_pb";
+export type { Filter, FilterParamValue } from "./proto/thru/common/v1/filters_pb";
 
 export type {
-    AccountQueryOptions, CreateAccountOptions, ListOwnedAccountsOptions,
-    RawAccountQueryOptions
+    AccountQueryOptions, CreateAccountOptions,
+    ListAccountsOptions, RawAccountQueryOptions
 } from "./modules/accounts";
 export type { BlockQueryOptions, ListBlocksOptions, RawBlockQueryOptions } from "./modules/blocks";
 export type { GetEventOptions } from "./modules/events";
@@ -31,7 +33,7 @@ export type { GeneratedKeyPair } from "./modules/keys";
 export type { TrackTransactionOptions } from "./modules/streaming";
 export type {
     BuildAndSignTransactionOptions, BuildTransactionOptions, RawTransactionQueryOptions, TransactionAccountsConfig,
-    TransactionContentConfig, TransactionFeePayerConfig, TransactionHeaderConfig, TransactionQueryOptions
+    TransactionFeePayerConfig, TransactionHeaderConfig, TransactionQueryOptions
 } from "./modules/transactions";
 export { Transaction as SdkTransaction } from "./transactions";
 export type { GenerateStateProofOptions } from "./types/types";

@@ -2,17 +2,17 @@ import { create } from "@bufbuild/protobuf";
 
 import { BytesLike } from "@thru/helpers";
 import type { ThruClientContext } from "../core/client";
-import { DEFAULT_ACCOUNT_VIEW, DEFAULT_MIN_CONSENSUS } from "../defaults";
+import { DEFAULT_ACCOUNT_VIEW, DEFAULT_MIN_CONSENSUS, DEFAULT_VERSION_CONTEXT } from "../defaults";
 import { ConsensusStatus, VersionContext } from "../proto/thru/common/v1/consensus_pb";
-import type { Filter } from "../proto/thru/common/v1/filters_pb";
+import { type Filter } from "../proto/thru/common/v1/filters_pb";
 import type { PageRequest } from "../proto/thru/common/v1/pagination_pb";
 import { Account, AccountView, DataSlice, RawAccount } from "../proto/thru/core/v1/account_pb";
 import { StateProofType } from "../proto/thru/core/v1/state_pb";
 import {
     GetAccountRequestSchema,
     GetRawAccountRequestSchema,
-    ListOwnedAccountsRequestSchema,
-    ListOwnedAccountsResponse,
+    ListAccountsRequestSchema,
+    type ListAccountsResponse,
 } from "../proto/thru/services/v1/query_service_pb";
 import type { Transaction } from "../transactions/Transaction";
 import { TransactionBuilder } from "../transactions/TransactionBuilder";
@@ -43,7 +43,7 @@ export interface RawAccountQueryOptions {
     minConsensus?: ConsensusStatus;
 }
 
-export interface ListOwnedAccountsOptions {
+export interface ListAccountsOptions {
     view?: AccountView;
     versionContext?: VersionContext;
     filter?: Filter;
@@ -59,7 +59,7 @@ export function getAccount(
     const request = create(GetAccountRequestSchema, {
         address: toPubkey(address, "address"),
         view: options.view ?? DEFAULT_ACCOUNT_VIEW,
-        versionContext: options.versionContext,
+        versionContext: options.versionContext ?? DEFAULT_VERSION_CONTEXT,
         minConsensus: options.minConsensus ?? DEFAULT_MIN_CONSENSUS,
         dataSlice: options.dataSlice,
     });
@@ -74,26 +74,24 @@ export function getRawAccount(
     const request = create(GetRawAccountRequestSchema, {
         address: toPubkey(address, "address"),
         view: options.view ?? DEFAULT_ACCOUNT_VIEW,
-        versionContext: options.versionContext,
+        versionContext: options.versionContext ?? DEFAULT_VERSION_CONTEXT,
         minConsensus: options.minConsensus ?? DEFAULT_MIN_CONSENSUS,
     });
     return ctx.query.getRawAccount(request);
 }
 
-export function listOwnedAccounts(
+export function listAccounts(
     ctx: ThruClientContext,
-    owner: BytesLike,
-    options: ListOwnedAccountsOptions = {},
-): Promise<ListOwnedAccountsResponse> {
-    const request = create(ListOwnedAccountsRequestSchema, {
-        owner: toPubkey(owner, "owner"),
+    options: ListAccountsOptions,
+): Promise<ListAccountsResponse> {
+    const request = create(ListAccountsRequestSchema, {
         view: options.view ?? DEFAULT_ACCOUNT_VIEW,
-        versionContext: options.versionContext,
+        versionContext: options.versionContext ?? DEFAULT_VERSION_CONTEXT,
         filter: options.filter,
         page: options.page,
         minConsensus: options.minConsensus ?? DEFAULT_MIN_CONSENSUS,
     });
-    return ctx.query.listOwnedAccounts(request);
+    return ctx.query.listAccounts(request);
 }
 
 export async function createAccount(
@@ -136,9 +134,7 @@ export async function createAccount(
         feePayer: { publicKey: feePayer },
         program,
         header,
-        content: {
-            proofs: { feePayerStateProof: proofBytes }
-        }
+        proofs: { feePayerStateProof: proofBytes }
     });
 
     return transaction;

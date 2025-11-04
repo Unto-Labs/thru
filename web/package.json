@@ -3,9 +3,16 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "build": "pnpm -r build"
+    "build": "pnpm -r build",
+    "test": "pnpm -r --filter './packages/*' test:run",
+    "test:watch": "pnpm -r --filter './packages/*' test:watch",
+    "test:coverage": "pnpm -r --filter './packages/*' test:coverage",
+    "test:thru-sdk": "pnpm --filter @thru/thru-sdk test",
+    "test:wallet": "pnpm --filter thru-wallet test"
   },
   "devDependencies": {
-    "tsup": "^8.5.0"
+    "tsup": "^8.5.0",
+    "vitest": "^3.2.4",
+    "@vitest/coverage-v8": "^3.2.4"
   }
 }
