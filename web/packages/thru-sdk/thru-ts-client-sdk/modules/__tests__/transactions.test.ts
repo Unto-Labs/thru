@@ -315,7 +315,7 @@ describe("transactions", () => {
       vi.spyOn(ctx.query, "getAccount").mockResolvedValue(mockAccount);
       vi.spyOn(ctx.query, "getHeight").mockResolvedValue(mockHeight);
       
-      const instructionDataFn = (context: any) => {
+      const instructionDataFn = async (context: any) => {
         // Function that uses context to generate instruction data
         return new Uint8Array([context.accounts.length]);
       };
@@ -349,7 +349,7 @@ describe("transactions", () => {
       // 1. Access the accounts array
       // 2. Use getAccountIndex to find account positions
       // 3. Build instruction data with account indices
-      const instructionDataFn = (context: InstructionContext) => {
+      const instructionDataFn = async (context: InstructionContext) => {
         // Verify context has all accounts in correct order
         expect(context.accounts.length).toBe(5); // feePayer, program, 2 readWrite, 1 readOnly
         expect(context.accounts[0]).toEqual(feePayer);
@@ -420,7 +420,7 @@ describe("transactions", () => {
       const program = generateTestPubkey(0x02);
       const unknownAccount = generateTestPubkey(0x99); // Not in transaction accounts
       
-      const instructionDataFn = (context: {
+      const instructionDataFn = async (context: {
         accounts: Uint8Array[];
         getAccountIndex: (pubkey: Uint8Array) => number;
       }) => {

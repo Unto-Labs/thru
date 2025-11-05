@@ -73,7 +73,7 @@ export interface TransactionHeaderConfig {
  * - A Uint8Array directly
  * - A function that takes an InstructionContext and returns a Uint8Array
  */
-export type InstructionData = Uint8Array | ((context: InstructionContext) => Uint8Array);
+export type InstructionData = Uint8Array | ((context: InstructionContext) => Promise<Uint8Array>);
 
 export interface BuildTransactionOptions {
     feePayer: TransactionFeePayerConfig;
@@ -226,7 +226,7 @@ async function createBuildParams(
     const context = createInstructionContext(feePayerPublicKey, program, accounts);
     
     // Resolve instruction data (functions get resolved here)
-    const instructionData = resolveInstructionData(options.instructionData, context);
+    const instructionData = await resolveInstructionData(options.instructionData, context);
     const proofs = createProofs(options);
 
     return {
@@ -325,17 +325,17 @@ function createInstructionContext(
     return { accounts: allAccounts, getAccountIndex };
 }
 
-function resolveInstructionData(
+async function resolveInstructionData(
     value: InstructionData | BytesLike | undefined,
     context: InstructionContext,
-): BytesLike | undefined {
+): Promise<BytesLike | undefined> {
     if (value === undefined) {
         return undefined;
     }
     
     // If it's a function, resolve it with the context
     if (typeof value === "function") {
-        return value(context);
+        return await value(context);
     }
     
     // If it's already a Uint8Array, pass it through

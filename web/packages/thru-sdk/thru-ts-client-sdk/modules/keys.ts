@@ -1,3 +1,4 @@
+import { getPublicKeyAsync } from "@noble/ed25519";
 import { getWebCrypto, ThruHDWallet } from "@thru/crypto";
 
 export interface GeneratedKeyPair {
@@ -19,6 +20,10 @@ export async function generateKeyPair(): Promise<GeneratedKeyPair> {
         publicKey: account.publicKey,
         privateKey: account.privateKey,
     };
+}
+
+export async function fromPrivateKey(privateKey: Uint8Array): Promise<Uint8Array> {
+    return new Uint8Array(await getPublicKeyAsync(privateKey));
 }
 
 function generateSeed(): Uint8Array {

@@ -71,6 +71,7 @@ interface BoundProofs {
 
 interface BoundKeys {
     generateKeyPair: typeof keysModule.generateKeyPair;
+    fromPrivateKey: typeof keysModule.fromPrivateKey;
 }
 
 interface BoundVersion {
@@ -141,6 +142,7 @@ export function createBoundThruClient(ctx: ThruClientContext): Thru {
         },
         keys: {
             generateKeyPair: keysModule.generateKeyPair,
+            fromPrivateKey: keysModule.fromPrivateKey,
         },
         events: {
             get: bind(ctx, eventsModule.getEvent),

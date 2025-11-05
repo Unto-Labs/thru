@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { generateKeyPair } from "../keys";
+import { fromPrivateKey, generateKeyPair } from "../keys";
 
 describe("keys", () => {
   describe("generateKeyPair", () => {
@@ -49,6 +49,66 @@ describe("keys", () => {
       expect(result.privateKey.length).toBe(32);
       // Address should be valid format
       expect(result.address.length).toBeGreaterThan(0);
+    });
+  });
+
+  describe("fromPrivateKey", () => {
+    it("should derive public key from private key", async () => {
+      const keypair = await generateKeyPair();
+      const derivedPublicKey = await fromPrivateKey(keypair.privateKey);
+      
+      expect(derivedPublicKey).toBeInstanceOf(Uint8Array);
+      expect(derivedPublicKey.length).toBe(32);
+      expect(derivedPublicKey).toEqual(keypair.publicKey);
+    });
+
+    it("should generate 32-byte public key", async () => {
+      const keypair = await generateKeyPair();
+      const publicKey = await fromPrivateKey(keypair.privateKey);
+      
+      expect(publicKey.length).toBe(32);
+    });
+
+    it("should produce consistent public key for same private key", async () => {
+      const keypair = await generateKeyPair();
+      const publicKey1 = await fromPrivateKey(keypair.privateKey);
+      const publicKey2 = await fromPrivateKey(keypair.privateKey);
+      
+      expect(publicKey1).toEqual(publicKey2);
+    });
+
+    it("should produce different public keys for different private keys", async () => {
+      const keypair1 = await generateKeyPair();
+      const keypair2 = await generateKeyPair();
+      
+      const publicKey1 = await fromPrivateKey(keypair1.privateKey);
+      const publicKey2 = await fromPrivateKey(keypair2.privateKey);
+      
+      expect(publicKey1).not.toEqual(publicKey2);
+    });
+
+    it("should work with any valid 32-byte private key", async () => {
+      // Create a deterministic private key for testing
+      const privateKey = new Uint8Array(32);
+      privateKey.fill(0x42);
+      
+      const publicKey = await fromPrivateKey(privateKey);
+      
+      expect(publicKey).toBeInstanceOf(Uint8Array);
+      expect(publicKey.length).toBe(32);
+      // Verify it's not all zeros (which would indicate an error)
+      const isAllZeros = publicKey.every(byte => byte === 0);
+      expect(isAllZeros).toBe(false);
+    });
+
+    it("should return a new Uint8Array instance", async () => {
+      const keypair = await generateKeyPair();
+      const publicKey1 = await fromPrivateKey(keypair.privateKey);
+      const publicKey2 = await fromPrivateKey(keypair.privateKey);
+      
+      // Should be equal but different instances
+      expect(publicKey1).toEqual(publicKey2);
+      expect(publicKey1).not.toBe(publicKey2);
     });
   });
 });
