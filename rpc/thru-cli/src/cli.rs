@@ -116,6 +116,13 @@ pub enum Commands {
         #[command(subcommand)]
         subcommand: TokenCommands,
     },
+
+    /// Developer tools for toolchain and project management
+    #[command(name = "dev")]
+    Dev {
+        #[command(subcommand)]
+        subcommand: DevCommands,
+    },
 }
 
 /// Program-related subcommands
@@ -577,8 +584,9 @@ pub enum TokenCommands {
         /// Seed for mint account derivation (32 bytes hex)
         seed: String,
 
-        /// State proof for mint account creation (hex encoded)
-        state_proof: String,
+        /// State proof for mint account creation (hex encoded, optional - will auto-generate if not provided)
+        #[arg(long)]
+        state_proof: Option<String>,
 
         /// Fee payer account (optional, defaults to 'default')
         #[arg(long)]
@@ -600,8 +608,9 @@ pub enum TokenCommands {
         /// Seed for token account derivation (32 bytes hex)
         seed: String,
 
-        /// State proof for token account creation (hex encoded)
-        state_proof: String,
+        /// State proof for token account creation (hex encoded, optional - will auto-generate if not provided)
+        #[arg(long)]
+        state_proof: Option<String>,
 
         /// Fee payer account (optional, defaults to 'default')
         #[arg(long)]
@@ -766,5 +775,175 @@ pub enum TokenCommands {
         /// Override token program address (ta... or hex)
         #[arg(long = "token-program")]
         token_program: Option<String>,
+    },
+}
+
+/// Developer tools subcommands
+#[derive(Subcommand)]
+pub enum DevCommands {
+    /// Toolchain management commands
+    #[command(name = "toolchain")]
+    Toolchain {
+        #[command(subcommand)]
+        subcommand: ToolchainCommands,
+    },
+
+    /// SDK management commands
+    #[command(name = "sdk")]
+    Sdk {
+        #[command(subcommand)]
+        subcommand: SdkCommands,
+    },
+
+    /// Initialize new projects
+    #[command(name = "init")]
+    Init {
+        #[command(subcommand)]
+        subcommand: InitCommands,
+    },
+}
+
+/// Toolchain management subcommands
+#[derive(Subcommand)]
+pub enum ToolchainCommands {
+    /// Install toolchain from GitHub releases
+    Install {
+        /// Toolchain version (optional, defaults to latest)
+        #[arg(long)]
+        version: Option<String>,
+
+        /// Installation path (optional, defaults to ~/.thru/sdk/toolchain/)
+        #[arg(long)]
+        path: Option<String>,
+
+        /// GitHub repository (format: owner/repo, defaults to Unto-Labs/thru)
+        #[arg(long)]
+        repo: Option<String>,
+    },
+
+    /// Update toolchain to latest version
+    Update {
+        /// Installation path (optional, defaults to ~/.thru/sdk/toolchain/)
+        #[arg(long)]
+        path: Option<String>,
+
+        /// GitHub repository (format: owner/repo, defaults to Unto-Labs/thru)
+        #[arg(long)]
+        repo: Option<String>,
+    },
+
+    /// Uninstall toolchain
+    Uninstall {
+        /// Installation path (optional, defaults to ~/.thru/sdk/toolchain/)
+        #[arg(long)]
+        path: Option<String>,
+
+        /// Skip confirmation prompt
+        #[arg(long)]
+        force: bool,
+    },
+
+    /// Get toolchain installation path
+    Path {
+        /// Installation path (optional, defaults to ~/.thru/sdk/toolchain/)
+        #[arg(long)]
+        path: Option<String>,
+    },
+}
+
+/// SDK management subcommands
+#[derive(Subcommand)]
+pub enum SdkCommands {
+    /// Install SDK from GitHub releases
+    Install {
+        /// SDK language (c, cpp, rust)
+        language: String,
+
+        /// SDK version (optional, defaults to latest)
+        #[arg(long)]
+        version: Option<String>,
+
+        /// Installation path (optional, defaults to ~/.thru/sdk/{language}/)
+        #[arg(long)]
+        path: Option<String>,
+
+        /// GitHub repository (format: owner/repo, defaults to Unto-Labs/thru)
+        #[arg(long)]
+        repo: Option<String>,
+    },
+
+    /// Update SDK to latest version
+    Update {
+        /// SDK language (c, cpp, rust)
+        language: String,
+
+        /// Installation path (optional, defaults to ~/.thru/sdk/{language}/)
+        #[arg(long)]
+        path: Option<String>,
+
+        /// GitHub repository (format: owner/repo, defaults to Unto-Labs/thru)
+        #[arg(long)]
+        repo: Option<String>,
+    },
+
+    /// Uninstall SDK
+    Uninstall {
+        /// SDK language (c, cpp, rust)
+        language: String,
+
+        /// Installation path (optional, defaults to ~/.thru/sdk/{language}/)
+        #[arg(long)]
+        path: Option<String>,
+
+        /// Skip confirmation prompt
+        #[arg(long)]
+        force: bool,
+    },
+
+    /// Get SDK installation path
+    Path {
+        /// SDK language (c, cpp, rust)
+        language: String,
+
+        /// Installation path (optional, defaults to ~/.thru/sdk/{language}/)
+        #[arg(long)]
+        path: Option<String>,
+    },
+}
+
+/// Project initialization subcommands
+#[derive(Subcommand)]
+pub enum InitCommands {
+    /// Initialize a new C project
+    #[command(name = "c")]
+    C {
+        /// Project name
+        project_name: String,
+
+        /// Project directory (optional, defaults to current directory)
+        #[arg(long)]
+        path: Option<String>,
+    },
+
+    /// Initialize a new C++ project (not yet implemented)
+    #[command(name = "cpp")]
+    Cpp {
+        /// Project name
+        project_name: String,
+
+        /// Project directory (optional, defaults to current directory)
+        #[arg(long)]
+        path: Option<String>,
+    },
+
+    /// Initialize a new Rust project (not yet implemented)
+    #[command(name = "rust")]
+    Rust {
+        /// Project name
+        project_name: String,
+
+        /// Project directory (optional, defaults to current directory)
+        #[arg(long)]
+        path: Option<String>,
     },
 }

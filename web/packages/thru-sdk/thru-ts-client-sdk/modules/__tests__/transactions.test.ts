@@ -15,6 +15,7 @@ import { PageRequestSchema } from "../../proto/thru/common/v1/pagination_pb";
 import { TransactionSchema, TransactionView } from "../../proto/thru/core/v1/transaction_pb";
 import { TransactionStatusSchema } from "../../proto/thru/services/v1/query_service_pb";
 import { Transaction } from "../../transactions/Transaction";
+import type { InstructionContext } from "../../transactions/types";
 import {
   batchSendTransactions,
   buildAndSignTransaction,
@@ -348,10 +349,7 @@ describe("transactions", () => {
       // 1. Access the accounts array
       // 2. Use getAccountIndex to find account positions
       // 3. Build instruction data with account indices
-      const instructionDataFn = (context: {
-        accounts: Uint8Array[];
-        getAccountIndex: (pubkey: Uint8Array) => number;
-      }) => {
+      const instructionDataFn = (context: InstructionContext) => {
         // Verify context has all accounts in correct order
         expect(context.accounts.length).toBe(5); // feePayer, program, 2 readWrite, 1 readOnly
         expect(context.accounts[0]).toEqual(feePayer);

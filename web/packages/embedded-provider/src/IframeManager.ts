@@ -7,6 +7,52 @@ import type {
 import { IFRAME_READY_EVENT, POST_MESSAGE_EVENT_TYPE } from './types/messages';
 
 /**
+ * Allowed origins for wallet iframe URLs
+ * Only iframes from these origins can be loaded for security
+ */
+const ALLOWED_IFRAME_ORIGINS = [
+  'https://thru-wallet.up.railway.app',
+  'https://wallet.thru.org',
+  // Allow localhost for development (any port)
+  'http://localhost',
+];
+
+/**
+ * Validates that the iframe URL is from a trusted origin
+ * @throws Error if the origin is not allowed
+ */
+function validateIframeOrigin(iframeUrl: string): void {
+  let url: URL;
+  try {
+    url = new URL(iframeUrl);
+  } catch (error) {
+    throw new Error(
+      `Invalid iframe URL: ${iframeUrl}. URL must be a valid absolute URL.`
+    );
+  }
+
+  const origin = url.origin;
+
+  // Check if origin matches any allowed origin
+  // For localhost, we allow any port (e.g., http://localhost:3000)
+  const isAllowed = ALLOWED_IFRAME_ORIGINS.some((allowedOrigin) => {
+    if (allowedOrigin === 'http://localhost') {
+      // Match exactly http://localhost or http://localhost:port
+      return origin === 'http://localhost' || origin.match(/^http:\/\/localhost:\d+$/);
+    }
+    return origin === allowedOrigin;
+  });
+
+  if (!isAllowed) {
+    throw new Error(
+      `Untrusted iframe origin: ${origin}. ` +
+        `Only trusted wallet origins are allowed: ${ALLOWED_IFRAME_ORIGINS.join(', ')}. ` +
+        `This security check prevents malicious websites from loading unauthorized wallet iframes.`
+    );
+  }
+}
+
+/**
  * Manages iframe lifecycle and postMessage communication
  * Handles creating, showing/hiding iframe, and message passing
  */
@@ -24,6 +70,9 @@ export class IframeManager {
   public onEvent?: (eventType: string, payload: any) => void;
 
   constructor(iframeUrl: string) {
+    // Validate origin before accepting the URL
+    validateIframeOrigin(iframeUrl);
+
     this.iframeUrl = iframeUrl;
     this.iframeOrigin = new URL(iframeUrl).origin;
   }

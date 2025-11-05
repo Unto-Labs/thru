@@ -1,9 +1,11 @@
 //! Command implementations for the Thru CLI
 
 pub mod account;
+pub mod dev;
 pub mod keys;
 pub mod program;
 pub mod rpc;
+pub mod state_proof;
 pub mod token;
 pub mod transfer;
 pub mod txn;

@@ -413,7 +413,7 @@ impl ProgramManager {
             if has_failure {
                 output::print_warning(&format!(
                     "Transaction completed with execution result: {} (hex 0x{:X}) vm_error: {}{}{}",
-                    transaction_details.execution_result,
+                    transaction_details.execution_result as i64,
                     transaction_details.execution_result,
                     vm_error_label,
                     vm_error_suffix,

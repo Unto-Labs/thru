@@ -1,7 +1,7 @@
 import { createThruClient } from "../client";
 import { ConsensusStatus } from "../proto/thru/common/v1/consensus_pb";
 import { StateProofType } from "../proto/thru/core/v1/state_pb";
-import type { TransactionBuilderContext } from "../transactions";
+import type { InstructionContext } from "../transactions";
 
 const sdk = createThruClient({
     // Configure the SDK to connect to the desired Thru cluster
@@ -103,7 +103,7 @@ const incrementCounterAccountInstructionWithFunction = async () => {
     console.log("\n=== Test 2: Using instructionData as a function ===");
     
     // This function dynamically calculates the account index based on the transaction context
-    const instructionDataFunction = (context: TransactionBuilderContext): Uint8Array => {
+    const instructionDataFunction = (context: InstructionContext): Uint8Array => {
         console.log("Function called with context:");
         console.log(`  - Total accounts: ${context.accounts.length}`);
         // Log account addresses as hex for debugging
@@ -317,7 +317,7 @@ const createCounterAccountWithFunction = async (): Promise<string> => {
     const baseInstructionData = await getCreateCounterAccountInstructionData();
     
     // Function that dynamically sets the account index
-    const instructionDataFunction = (context: TransactionBuilderContext): Uint8Array => {
+    const instructionDataFunction = (context: InstructionContext): Uint8Array => {
         console.log("Function called with context:");
         console.log(`  - Total accounts: ${context.accounts.length}`);
         

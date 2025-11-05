@@ -463,7 +463,7 @@ impl UploaderManager {
                 };
                 output::print_warning(&format!(
                     "Transaction completed with execution result: {} vm_error: {}{}",
-                    transaction_details.execution_result, vm_error_label, vm_error_msg
+                    transaction_details.execution_result as i64, vm_error_label, vm_error_msg
                 ));
             }
         }
@@ -478,7 +478,7 @@ impl UploaderManager {
             };
             return Err(CliError::TransactionVerification(format!(
                 "Transaction failed with execution result: {} (VM error: {}{}, User error: {})",
-                transaction_details.execution_result,
+                transaction_details.execution_result as i64,
                 vm_error_label,
                 vm_error_msg,
                 transaction_details.user_error_code

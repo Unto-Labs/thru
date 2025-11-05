@@ -53,6 +53,19 @@ url = "2.5"
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt"] }
 
+# HTTP client for downloading toolchains
+reqwest = { version = "0.11", features = ["stream", "json"] }
+
+# Futures utilities
+futures-util = "0.3"
+
+# Archive extraction
+tar = "0.4"
+flate2 = "1.0"
+
+# Progress indicators
+indicatif = "0.17"
+
 [dev-dependencies]
 tokio-test = "0.4"
 tempfile = "3.8"

@@ -1,4 +1,4 @@
-import { BytesLike, decodeAddress, hexToBytes, isHexString } from "@thru/helpers";
+import { BytesLike, Pubkey, decodeAddress, hexToBytes, isHexString } from "@thru/helpers";
 import type { AccountAddress, ProgramIdentifier } from "./types";
 
 const ACCOUNT_LIMIT = 1024;
@@ -89,7 +89,7 @@ function copyAccount(value: AccountAddress): AccountAddress {
     return new Uint8Array(value);
 }
 
-export function parseAccountIdentifier(value: BytesLike, field: string): AccountAddress {
+export function parseAccountIdentifier(value: Pubkey, field: string): AccountAddress {
     if (value instanceof Uint8Array) {
         if (value.length !== 32) {
             throw new Error(`${field} must contain 32 bytes`);

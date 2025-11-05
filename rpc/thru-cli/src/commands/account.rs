@@ -211,7 +211,7 @@ async fn create_account(
 
         let error_msg = format!(
             "Transaction failed with execution result: {}{}",
-            transaction_details.execution_result, vm_error_msg
+            transaction_details.execution_result as i64, vm_error_msg
         );
 
         let response = output::create_account_create_response(
@@ -427,7 +427,7 @@ async fn compress_account(
             let (vm_error_msg, vm_error_label) = vm_error_strings(transaction_details.vm_error);
             output::print_warning(&format!(
                 "Transaction completed with execution result: {} vm_error: {}{}",
-                transaction_details.execution_result, vm_error_label, vm_error_msg
+                transaction_details.execution_result as i64, vm_error_label, vm_error_msg
             ));
         }
     }
@@ -437,7 +437,7 @@ async fn compress_account(
         let (vm_error_msg, vm_error_label) = vm_error_strings(transaction_details.vm_error);
         return Err(CliError::TransactionSubmission(format!(
             "Transaction failed with execution result: {} (VM error: {}{}, User error: {})",
-            transaction_details.execution_result,
+            transaction_details.execution_result as i64,
             vm_error_label,
             vm_error_msg,
             transaction_details.user_error_code
@@ -685,7 +685,7 @@ async fn decompress_direct(
         let (vm_error_msg, vm_error_label) = vm_error_strings(transaction_details.vm_error);
         return Err(CliError::TransactionSubmission(format!(
             "Transaction failed with execution result: {} (VM error: {}{}, User error: {})",
-            transaction_details.execution_result,
+            transaction_details.execution_result as i64,
             vm_error_label,
             vm_error_msg,
             transaction_details.user_error_code
@@ -860,7 +860,7 @@ async fn decompress_with_uploader(
         let (vm_error_msg, vm_error_label) = vm_error_strings(transaction_details.vm_error);
         return Err(CliError::TransactionSubmission(format!(
             "Transaction failed with execution result: {} (VM error: {}{}, User error: {})",
-            transaction_details.execution_result,
+            transaction_details.execution_result as i64,
             vm_error_label,
             vm_error_msg,
             transaction_details.user_error_code
@@ -1123,7 +1123,7 @@ async fn decompress_with_uploader_huge(
         let (vm_error_msg, vm_error_label) = vm_error_strings(transaction_details.vm_error);
         return Err(CliError::TransactionSubmission(format!(
             "Transaction failed with execution result: {} (VM error: {}{}, User error: {})",
-            transaction_details.execution_result,
+            transaction_details.execution_result as i64,
             vm_error_label,
             vm_error_msg,
             transaction_details.user_error_code

@@ -31,31 +31,31 @@ import {
 } from "../proto/thru/services/v1/query_service_pb";
 import {
     type BuildTransactionParams,
+    type InstructionContext,
     Transaction as LocalTransaction,
     type OptionalProofs,
     type ProgramIdentifier,
     type SignedTransactionResult,
     type TransactionAccountsInput,
     TransactionBuilder,
-    type TransactionBuilderContext,
     type TransactionHeaderInput,
 } from "../transactions";
 import { parseAccountIdentifier, parseInstructionData, resolveProgramIdentifier } from "../transactions/utils";
 import { toSignature } from "./helpers";
 
-import { BytesLike, encodeSignature } from "@thru/helpers";
+import { BytesLike, encodeSignature, Pubkey } from "@thru/helpers";
 import { getAccount } from "./accounts";
 import { getBlockHeight } from "./height";
 import { toPubkey } from "./helpers";
 
 export interface TransactionFeePayerConfig {
-    publicKey: BytesLike;
+    publicKey: Pubkey;
     privateKey?: Uint8Array;
 }
 
 export interface TransactionAccountsConfig {
-    readWrite?: BytesLike[];
-    readOnly?: BytesLike[];
+    readWrite?: Pubkey[];
+    readOnly?: Pubkey[];
 }
 
 export interface TransactionHeaderConfig {
@@ -71,9 +71,9 @@ export interface TransactionHeaderConfig {
 /**
  * Instruction data can be either:
  * - A Uint8Array directly
- * - A function that takes a TransactionBuilderContext and returns a Uint8Array
+ * - A function that takes an InstructionContext and returns a Uint8Array
  */
-export type InstructionData = Uint8Array | ((context: TransactionBuilderContext) => Uint8Array);
+export type InstructionData = Uint8Array | ((context: InstructionContext) => Uint8Array);
 
 export interface BuildTransactionOptions {
     feePayer: TransactionFeePayerConfig;
@@ -141,7 +141,7 @@ export async function getTransactionStatus(ctx: ThruClientContext, signature: By
 
 export async function listTransactionsForAccount(
     ctx: ThruClientContext,
-    account: BytesLike,
+    account: Pubkey,
     options: ListTransactionsForAccountOptions = {},
 ): Promise<ListTransactionsForAccountResponse> {
     const request = create(ListTransactionsForAccountRequestSchema, {
@@ -223,7 +223,7 @@ async function createBuildParams(
     const accounts = parseAccounts(options.accounts);
     
     // Create context for function resolution
-    const context = createBuilderContext(feePayerPublicKey, program, accounts);
+    const context = createInstructionContext(feePayerPublicKey, program, accounts);
     
     // Resolve instruction data (functions get resolved here)
     const instructionData = resolveInstructionData(options.instructionData, context);
@@ -287,11 +287,11 @@ function parseAccounts(accounts?: TransactionAccountsConfig): TransactionAccount
     return result;
 }
 
-function createBuilderContext(
+function createInstructionContext(
     feePayer: Uint8Array,
     program: Uint8Array,
     accounts?: TransactionAccountsInput,
-): TransactionBuilderContext {
+): InstructionContext {
     // Build accounts array in transaction order: [feePayer, program, ...readWrite, ...readOnly]
     const allAccounts: Uint8Array[] = [
         feePayer,
@@ -327,7 +327,7 @@ function createBuilderContext(
 
 function resolveInstructionData(
     value: InstructionData | BytesLike | undefined,
-    context: TransactionBuilderContext,
+    context: InstructionContext,
 ): BytesLike | undefined {
     if (value === undefined) {
         return undefined;

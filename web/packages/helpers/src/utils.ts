@@ -1,6 +1,7 @@
 import { decodeBase64 } from "./encoding";
 
 export type BytesLike = Uint8Array | string;
+export type Pubkey = BytesLike;
 
 export function ensureBytes(value: BytesLike | undefined, field: string): Uint8Array {
     if (value instanceof Uint8Array) {

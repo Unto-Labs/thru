@@ -175,6 +175,21 @@ pub struct Config {
 
     /// Optional authorization token for HTTP requests
     pub auth_token: Option<String>,
+
+    /// Custom toolchain installation path
+    pub toolchain_path: Option<PathBuf>,
+
+    /// Installed toolchain version
+    pub toolchain_version: Option<String>,
+
+    /// Custom SDK installation paths (by language)
+    pub sdk_paths: Option<std::collections::HashMap<String, PathBuf>>,
+
+    /// Installed SDK versions (by language)
+    pub sdk_versions: Option<std::collections::HashMap<String, String>>,
+
+    /// GitHub repository for SDK and toolchain downloads (format: "owner/repo")
+    pub github_repo: Option<String>,
 }
 
 impl Default for Config {
@@ -190,6 +205,11 @@ impl Default for Config {
             timeout_seconds: 30,
             max_retries: 3,
             auth_token: None,
+            toolchain_path: None,
+            toolchain_version: None,
+            sdk_paths: None,
+            sdk_versions: None,
+            github_repo: None,
         }
     }
 }
@@ -212,6 +232,14 @@ impl Config {
         config.validate()?;
 
         Ok(config)
+    }
+
+    /// Save configuration to the default location
+    pub async fn save(&self) -> Result<(), CliError> {
+        let config_path = Self::get_config_path()?;
+        let config_content = Self::generate_config_template(self);
+        tokio::fs::write(&config_path, config_content).await?;
+        Ok(())
     }
 
     /// Validate the configuration

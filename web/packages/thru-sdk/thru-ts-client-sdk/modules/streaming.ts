@@ -1,6 +1,6 @@
 import { create } from "@bufbuild/protobuf";
 
-import { BytesLike } from "@thru/helpers";
+import { BytesLike, Pubkey } from "@thru/helpers";
 import type { ThruClientContext } from "../core/client";
 import { DEFAULT_ACCOUNT_VIEW, DEFAULT_BLOCK_VIEW, DEFAULT_MIN_CONSENSUS } from "../defaults";
 import type { ConsensusStatus } from "../proto/thru/common/v1/consensus_pb";
@@ -58,7 +58,7 @@ export interface StreamAccountUpdatesOptions {
 
 export function streamAccountUpdates(
     ctx: ThruClientContext,
-    address: BytesLike,
+    address: Pubkey,
     options: StreamAccountUpdatesOptions = {},
 ): AsyncIterable<StreamAccountUpdatesResponse> {
     const request = create(StreamAccountUpdatesRequestSchema, {

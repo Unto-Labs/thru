@@ -1,6 +1,6 @@
 import { create } from "@bufbuild/protobuf";
 import { sha256 } from "@noble/hashes/sha2";
-import { BytesLike, decodeAddress, decodeBase64, decodeSignature, encodeAddress, ensureBytes, hexToBytes, isHexString } from "@thru/helpers";
+import { BytesLike, Pubkey as PubkeyType, decodeAddress, decodeBase64, decodeSignature, encodeAddress, ensureBytes, hexToBytes, isHexString } from "@thru/helpers";
 
 import { BlockHash, BlockHashSchema, Pubkey, PubkeySchema, Signature, SignatureSchema } from "../proto/thru/core/v1/types_pb";
 
@@ -24,7 +24,7 @@ export function toSignature(value: BytesLike): Signature {
     return create(SignatureSchema, { value: bytes });
 }
 
-export function toPubkey(value: BytesLike, field: string): Pubkey {
+export function toPubkey(value: PubkeyType, field: string): Pubkey {
     let bytes: Uint8Array;
     if (value instanceof Uint8Array) {
         bytes = value;
@@ -44,7 +44,7 @@ export function toBlockHash(value: BytesLike): BlockHash {
 }
 
 export interface DeriveProgramAddressOptions {
-    programAddress: BytesLike;
+    programAddress: PubkeyType;
     seed: BytesLike;
     ephemeral?: boolean;
 }
@@ -73,7 +73,7 @@ export function deriveProgramAddress(options: DeriveProgramAddressOptions): Deri
     };
 }
 
-function normalizeProgramAddress(value: BytesLike): Uint8Array {
+function normalizeProgramAddress(value: PubkeyType): Uint8Array {
     if (value instanceof Uint8Array) {
         if (value.length !== 32) {
             throw new Error("Program address must contain 32 bytes");

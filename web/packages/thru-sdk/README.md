@@ -8,6 +8,25 @@ Typed TypeScript/JavaScript client for talking to the Thru blockchain. It wraps 
 npm install @thru/thru-sdk
 ```
 
+### TypeScript Configuration
+
+For optimal import resolution, we recommend using modern TypeScript module resolution in your `tsconfig.json`:
+
+```json
+{
+  "compilerOptions": {
+    "moduleResolution": "bundler",
+    "module": "ESNext",
+    "target": "ES2020",
+    "isolatedModules": true
+  }
+}
+```
+
+**Why?** The SDK uses modern `exports` fields in `package.json` for better tree-shaking and bundler compatibility. The `bundler` resolution strategy fully supports these modern package exports, while the older `node` resolution may require importing from `dist` paths directly.
+
+If you're using a bundler (Vite, Webpack, esbuild, etc.) or modern build tools, `moduleResolution: "bundler"` is the recommended setting. For Node.js projects, you can also use `"node16"` or `"nodenext"`.
+
 ## Basic Usage
 
 ```ts

@@ -1,6 +1,7 @@
 //! Transaction signing and execution commands
 
 use crate::cli::TxnCommands;
+use crate::commands::state_proof::make_state_proof as make_state_proof_util;
 use crate::config::Config;
 use crate::crypto;
 use crate::error::CliError;
@@ -9,7 +10,7 @@ use crate::utils::format_vm_error;
 use base64::Engine;
 use base64::engine::general_purpose;
 use std::time::Duration;
-use thru_base::rpc_types::{MakeStateProofConfig, ProofType};
+use thru_base::rpc_types::ProofType;
 use thru_base::tn_tools::{KeyPair, Pubkey};
 use thru_base::txn_lib::{TnPubkey, Transaction};
 use thru_client::{Client, ClientBuilder};
@@ -646,22 +647,11 @@ async fn make_state_proof(
         )));
     };
 
-    // Create state proof config
-    let state_proof_config = MakeStateProofConfig {
-        proof_type: parsed_proof_type,
-        slot,
-    };
-
     // Create RPC client
     let client = create_rpc_client(config)?;
 
-    // Call makeStateProof
-    let proof_data = client
-        .make_state_proof(&account_pubkey, &state_proof_config)
-        .await
-        .map_err(|e| {
-            CliError::TransactionSubmission(format!("Failed to create state proof: {}", e))
-        })?;
+    // Call makeStateProof using the common utility
+    let proof_data = make_state_proof_util(&client, &account_pubkey, parsed_proof_type, slot).await?;
 
     // Encode proof as base64
     let base64_proof = general_purpose::STANDARD.encode(&proof_data);
@@ -974,6 +964,11 @@ mod tests {
             timeout_seconds: 30,
             max_retries: 3,
             auth_token: None,
+            toolchain_path: None,
+            toolchain_version: None,
+            sdk_paths: None,
+            sdk_versions: None,
+            github_repo: None,
         }
     }
 

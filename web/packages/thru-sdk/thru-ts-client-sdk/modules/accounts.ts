@@ -1,6 +1,6 @@
 import { create } from "@bufbuild/protobuf";
 
-import { BytesLike } from "@thru/helpers";
+import { Pubkey } from "@thru/helpers";
 import type { ThruClientContext } from "../core/client";
 import { DEFAULT_ACCOUNT_VIEW, DEFAULT_MIN_CONSENSUS, DEFAULT_VERSION_CONTEXT } from "../defaults";
 import { ConsensusStatus, VersionContext } from "../proto/thru/common/v1/consensus_pb";
@@ -24,7 +24,7 @@ import { generateStateProof } from "./proofs";
 
 export interface CreateAccountOptions {
     /** The new account's public key (fee payer). */
-    publicKey: BytesLike;
+    publicKey: Pubkey;
     /** Optional overrides for the transaction header. */
     header?: Partial<TransactionHeaderInput>;
 }
@@ -53,7 +53,7 @@ export interface ListAccountsOptions {
 
 export function getAccount(
     ctx: ThruClientContext,
-    address: BytesLike,
+    address: Pubkey,
     options: AccountQueryOptions = {},
 ): Promise<Account> {
     const request = create(GetAccountRequestSchema, {
@@ -68,7 +68,7 @@ export function getAccount(
 
 export function getRawAccount(
     ctx: ThruClientContext,
-    address: BytesLike,
+    address: Pubkey,
     options: RawAccountQueryOptions = {},
 ): Promise<RawAccount> {
     const request = create(GetRawAccountRequestSchema, {

@@ -1,0 +1,21 @@
+# Build outputs
+build/
+*.bin
+*.o
+*.a
+*.so
+*.elf
+
+# macOS
+.DS_Store
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# Temporary files
+*.tmp
+*.bak

@@ -5,6 +5,10 @@
   "main": "./dist/sdk.js",
   "types": "./dist/sdk.d.ts",
   "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "exports": {
     ".": {
       "import": "./dist/sdk.js",

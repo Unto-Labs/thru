@@ -6,11 +6,13 @@ use anyhow::Result;
 const TOKEN_PROGRAM_FEE: u64 = 0;
 
 use crate::cli::TokenCommands;
+use crate::commands::state_proof::make_state_proof;
 use crate::config::Config;
 use crate::error::CliError;
 use crate::utils::{format_vm_error, parse_seed_bytes, validate_address_or_hex};
 use std::time::Duration;
 use thru_base::crypto_utils::derive_program_address;
+use thru_base::rpc_types::ProofType;
 use thru_base::tn_public_address::tn_pubkey_to_address_string;
 use thru_base::tn_tools::{KeyPair, Pubkey};
 use thru_base::txn_tools::TransactionBuilder;
@@ -79,6 +81,9 @@ fn check_transaction_result(
     json_format: bool,
 ) -> Result<(), CliError> {
     if transaction_details.execution_result != 0 || transaction_details.vm_error != 0 {
+        let signed_execution_result = transaction_details.execution_result as i64;
+        let signed_user_error = transaction_details.user_error_code as i64;
+
         let vm_error_label = format_vm_error(transaction_details.vm_error);
         let vm_error_msg = if transaction_details.vm_error != 0 {
             format!(" (VM error: {})", vm_error_label)
@@ -86,25 +91,25 @@ fn check_transaction_result(
             String::new()
         };
 
-        let user_error_msg = if transaction_details.user_error_code != 0 {
-            format!(" (TokenError: {})", transaction_details.user_error_code)
+        let user_error_msg = if signed_user_error != 0 {
+            format!(" (TokenError: {})", signed_user_error)
         } else {
             String::new()
         };
 
         let error_msg = format!(
             "Transaction failed with execution result: {}{}{}",
-            transaction_details.execution_result, vm_error_msg, user_error_msg
+            signed_execution_result, vm_error_msg, user_error_msg
         );
 
         if json_format {
             let error_response = serde_json::json!({
                 "error": {
                     "message": error_msg,
-                    "execution_result": transaction_details.execution_result,
+                    "execution_result": signed_execution_result,
                     "vm_error": transaction_details.vm_error,
                     "vm_error_name": vm_error_label,
-                    "user_error_code": transaction_details.user_error_code,
+                    "user_error_code": signed_user_error,
                     "signature": transaction_details.signature.as_str()
                 }
             });
@@ -249,7 +254,7 @@ pub async fn handle_token_command(
                 decimals,
                 &ticker,
                 &seed,
-                &state_proof,
+                state_proof.as_deref(),
                 fee_payer.as_deref(),
                 token_program.as_deref(),
                 json_format,
@@ -269,7 +274,7 @@ pub async fn handle_token_command(
                 &mint,
                 &owner,
                 &seed,
-                &state_proof,
+                state_proof.as_deref(),
                 fee_payer.as_deref(),
                 token_program.as_deref(),
                 json_format,
@@ -429,7 +434,7 @@ async fn initialize_mint(
     decimals: u8,
     ticker: &str,
     seed: &str,
-    state_proof: &str,
+    state_proof: Option<&str>,
     fee_payer: Option<&str>,
     token_program: Option<&str>,
     json_format: bool,
@@ -477,10 +482,6 @@ async fn initialize_mint(
     // Parse seed
     let seed_bytes = parse_seed_bytes(seed)?;
 
-    // Parse state proof from hex
-    let state_proof_bytes = hex::decode(state_proof)
-        .map_err(|e| CliError::Validation(format!("Invalid state proof hex: {}", e)))?;
-
     // Resolve addresses
     let mint_authority_pubkey = validate_address_or_hex(mint_authority)?;
     let freeze_authority_pubkey = match freeze_authority {
@@ -523,6 +524,20 @@ async fn initialize_mint(
     let mint_account_pubkey = mint_account_base_pubkey
         .to_bytes()
         .map_err(|e| CliError::Crypto(format!("Failed to convert mint pubkey to bytes: {}", e)))?;
+
+    // Use provided state proof or auto-generate it
+    let state_proof_bytes = if let Some(proof_hex) = state_proof {
+        hex::decode(proof_hex)
+            .map_err(|e| CliError::Validation(format!("Invalid state proof hex: {}", e)))?
+    } else {
+        make_state_proof(
+            &client,
+            &mint_account_base_pubkey,
+            ProofType::Creating,
+            None,
+        )
+        .await?
+    };
 
     // Build transaction using TransactionBuilder
 
@@ -596,7 +611,7 @@ async fn initialize_account(
     mint: &str,
     owner: &str,
     seed: &str,
-    state_proof: &str,
+    state_proof: Option<&str>,
     fee_payer: Option<&str>,
     token_program: Option<&str>,
     json_format: bool,
@@ -625,10 +640,6 @@ async fn initialize_account(
 
     // Parse seed from hex
     let seed_bytes = parse_seed_bytes(seed)?;
-
-    // Parse state proof from hex
-    let state_proof_bytes = hex::decode(state_proof)
-        .map_err(|e| CliError::Validation(format!("Invalid state proof hex: {}", e)))?;
 
     // Resolve mint and owner addresses
     let mint_pubkey = validate_address_or_hex(mint)?;
@@ -687,6 +698,20 @@ async fn initialize_account(
             e
         ))
     })?;
+
+    // Use provided state proof or auto-generate it
+    let state_proof_bytes = if let Some(proof_hex) = state_proof {
+        hex::decode(proof_hex)
+            .map_err(|e| CliError::Validation(format!("Invalid state proof hex: {}", e)))?
+    } else {
+        make_state_proof(
+            &client,
+            &token_account_base_pubkey,
+            ProofType::Creating,
+            None,
+        )
+        .await?
+    };
 
     // Build transaction using TransactionBuilder
     let mut transaction = TransactionBuilder::build_token_initialize_account(

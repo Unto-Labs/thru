@@ -116,7 +116,7 @@ pub async fn handle_transfer_command(
 
         let error_msg = format!(
             "Transaction failed with execution result: {}{}",
-            transaction_details.execution_result, vm_error_msg
+            transaction_details.execution_result as i64, vm_error_msg
         );
 
         let response = output::create_transfer_response(

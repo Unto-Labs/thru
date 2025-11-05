@@ -31,7 +31,7 @@ async fn main() -> Result<()> {
     let cli = Cli::parse();
 
     // Load configuration
-    let config = Config::load().await?;
+    let mut config = Config::load().await?;
 
     // Execute the command
     let result: Result<(), CliError> = match cli.command {
@@ -72,6 +72,9 @@ async fn main() -> Result<()> {
                 output::OutputFormat::Text
             };
             commands::util::execute_util_command(subcommand, output_format).map_err(CliError::from)
+        }
+        Commands::Dev { subcommand } => {
+            commands::dev::handle_dev_command(&mut config, subcommand, cli.json).await
         }
     };
 
