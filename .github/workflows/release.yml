@@ -62,15 +62,15 @@ jobs:
   # Build toolchain for Linux and macOS
   build-toolchain:
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 60
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-large, macos-15-large]
+        os: [ubuntu-large, macos-latest]
         include:
           - os: ubuntu-large
             arch: x86_64
-          - os: macos-15-large
+          - os: macos-latest
             arch: arm64
 
     steps:
