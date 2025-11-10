@@ -1,0 +1,76 @@
+/* ---------------------------------------------------------------------------
+ *  LLD-compatible linker script for a RISC-V SoC with code
+ *  stored in ROM (0x0000_0000) and copied to/executed from RAM (0x0300_0000)
+ * ------------------------------------------------------------------------- */
+
+OUTPUT_ARCH(riscv)
+ENTRY(_start)
+
+/* ───── Memory map ──────────────────────────────────────────────────────── */
+MEMORY
+{
+  /* Attribute letters follow GNU ld & LLD rules: r = read, w = write, x = exec */
+  ROM (rx)  : ORIGIN = 0x00000000, LENGTH = 16M
+  RAM (rwx) : ORIGIN = 0x03000000, LENGTH = 16M
+}
+
+/* A useful end-of-image symbol that moves with the location counter   */
+PROVIDE(end = .);
+
+/* ───── Section layout ─────────────────────────────────────────────────── */
+SECTIONS
+{
+  /* ----------------------------------------------------------------------
+   * 8-byte program header that must be present at the start of the ROM image
+   * -------------------------------------------------------------------- */
+  .header ORIGIN(ROM) : ALIGN(4)
+  {
+    BYTE(0x01)        /* Thru VM executable version number           */
+    . += 7;           /* pad the rest of the 8-byte header with zeros    */
+  } > ROM             /* VMA & LMA are both in ROM for this section      */
+
+  /* ----------------------------------------------------------------------
+   * Code lives in RAM at run time but is loaded right after the header
+   * (offset +0x08) in the ROM image.  The expression keeps the link robust
+   * if you later change the header length.
+   * -------------------------------------------------------------------- */
+  .text ORIGIN(RAM) : AT(ADDR(.header) + SIZEOF(.header))
+  {
+    KEEP(*(.text._start))
+    KEEP(*(.text.start))
+    *(.text)
+    *(.text.*)
+  } > RAM
+
+  /* -------------------------------------------------------------------- */
+  .rodata ALIGN(4) :
+  {
+    *(.rodata)
+    *(.rodata.*)
+    *(.srodata)
+    *(.srodata.*)
+  } > RAM 
+
+  .data ALIGN(4) :
+  {
+    *(.sdata)
+    *(.data)
+    *(.data.*)
+  } > RAM
+
+  /* Simple 4-byte gap used by the original script                         */
+  .rodata_gap ALIGN(4) :
+  {
+    LONG(0x00000000)
+  } > RAM
+
+  /* -------------------------------------------------------------------- */
+  /* Sections we simply do not need in the final image                     */
+  /DISCARD/ :
+  {
+    *(.eh_frame)
+    *(.note.GNU-stack)
+    *(.comment)
+    *(.riscv.attributes)
+  }
+}

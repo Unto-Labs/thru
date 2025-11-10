@@ -15,7 +15,7 @@ echo "Installing C SDK dependencies to: $THRU_DIR/.thru/sdk/toolchain"
 echo ""
 
 # Install C SDK dependencies
-#"$SCRIPT_DIR/deps.sh" --thru-dir "$THRU_DIR" fetch check install-c
+"$SCRIPT_DIR/deps.sh" --thru-dir "$THRU_DIR" fetch check install-c
 
 # Installing C SDK
 echo "Installing C SDK to: $THRU_DIR/.thru/sdk/c"

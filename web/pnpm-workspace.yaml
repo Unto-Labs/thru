@@ -2,3 +2,4 @@ packages:
   - 'packages/*'
   - 'wallet'
   - 'test-dapp'
+  - 'explorer'

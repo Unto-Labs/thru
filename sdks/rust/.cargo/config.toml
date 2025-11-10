@@ -1,0 +1,9 @@
+[build]
+target = "riscv64imac-unknown-none-elf"
+
+[target.riscv64imac-unknown-none-elf]
+rustflags = [
+  "-C", "target-feature=+crt-static",
+  "-C", "target-feature=-a,+zba,+zbb,+zbc,+zbs",
+  "-C", "link-arg=-Tlink.x",
+]

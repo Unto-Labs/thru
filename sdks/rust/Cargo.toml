@@ -1,0 +1,8 @@
+[workspace]
+members = [
+    "core",
+    "macros",
+]
+
+[profile.release]
+panic = "abort"

@@ -1,0 +1,14 @@
+[package]
+name = "thru-core"
+version = "0.0.1"
+edition = "2021"
+
+
+[dependencies]
+heapless = "0.8.0"
+hash32 = "0.3"
+data-encoding = { version = "2.5.0", default-features = false }
+zerocopy = "0.8.25"
+zerocopy-derive = "0.8.25"
+thiserror-no-std = "2.0.2"
+

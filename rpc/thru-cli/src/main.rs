@@ -15,6 +15,7 @@ mod crypto;
 mod error;
 mod output;
 mod utils;
+mod version_check;
 
 use cli::{Cli, Commands};
 use config::Config;
@@ -29,6 +30,11 @@ async fn main() -> Result<()> {
         .init();
     // Parse command line arguments
     let cli = Cli::parse();
+    
+    // Check for newer version if not in quiet mode and running interactively
+    if !cli.quiet && version_check::is_interactive() {
+        version_check::check_and_notify().await;
+    }
 
     // Load configuration
     let mut config = Config::load().await?;

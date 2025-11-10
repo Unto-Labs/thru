@@ -414,8 +414,8 @@ endian = 'little'
 
 [built-in options]
 # this uses shorter but slower function entry code
-c_args = ['-msave-restore', '-march=rv64imc_zicsr_zba_zbb_zbc_zbs_zknh', '-mabi=lp64', '-mcmodel=medany']
-cpp_args = ['-msave-restore', '-march=rv64imc_zicsr_zba_zbb_zbc_zbs_zknh', '-mabi=lp64', '-mcmodel=medany']
+c_args = ['-msave-restore', '-march=rv64imc_zicsr_zba_zbb_zbc_zbs_zknh', '-mabi=lp64', '-mcmodel=medlow']
+cpp_args = ['-msave-restore', '-march=rv64imc_zicsr_zba_zbb_zbc_zbs_zknh', '-mabi=lp64', '-mcmodel=medlow']
 
 [properties]
 # default multilib is 64 bit

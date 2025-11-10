@@ -7,8 +7,8 @@ include $(THRU_C_SDK_DIR)/config/extra/with-gcc.mk
 
 # Standard flags
 CFLAGS+=-std=c17 \
-	-march=rv64imc_zba_zbb_zbc_zbs_zknh -mabi=lp64 -mcmodel=medany -mstrict-align \
-	-specs=picolibc.specs -O3 -fno-stack-protector -ffreestanding \
+	-march=rv64imc_zba_zbb_zbc_zbs_zknh -mabi=lp64 -mcmodel=medlow -mstrict-align \
+	-specs=picolibc.specs --picolibc-prefix=$(RISCV_TOOLCHAIN_ROOT) -O3 -fno-stack-protector -ffreestanding \
 	-ffunction-sections -fdata-sections -nostartfiles -static-pie -fPIE \
 	-Werror -Wall -Wextra -Wpedantic -Wstrict-aliasing=2 -Wconversion
 
