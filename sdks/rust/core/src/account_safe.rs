@@ -36,6 +36,25 @@ use crate::{
     },
 };
 
+/// Errors that can occur when accessing accounts through AccountManager.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AccountError {
+    /// Account index is out of bounds
+    IndexOutOfBounds { index: u16, max: u16 },
+
+    /// Account is already borrowed (for mutable access)
+    AlreadyBorrowedMutably { index: u16 },
+
+    /// Account is already borrowed (prevents mutable borrow)
+    AlreadyBorrowed { index: u16 },
+
+    /// Account info is not available in memory
+    InfoNotAvailable { index: u16 },
+
+    /// Too many distinct accounts accessed (map is full)
+    TooManyAccountsAccessed { max_capacity: usize },
+}
+
 /// Identity hasher that uses the account index directly as the hash.
 /// This is optimal for small sequential account indices.
 #[derive(Default)]
@@ -289,14 +308,15 @@ impl<const NUM_ACCOUNTS: usize> AccountManager<NUM_ACCOUNTS> {
 
     /// Get account reference with proper access control and borrow checking.
     ///
-    /// Returns `None` if:
+    /// Returns `Err(AccountError)` if:
     /// - Index is out of bounds
     /// - Account is already borrowed incompatibly
     /// - Account data is not available
     /// - Map is full (more than NUM_ACCOUNTS distinct accounts accessed)
-    pub fn get(&self, index: u16) -> Option<AccountRef<'_>> {
-        if index >= self.accounts_count() {
-            return None;
+    pub fn get(&self, index: u16) -> Result<AccountRef<'_>, AccountError> {
+        let max = self.accounts_count();
+        if index >= max {
+            return Err(AccountError::IndexOutOfBounds { index, max });
         }
 
         let (is_mutable, account_type) = match index {
@@ -306,35 +326,46 @@ impl<const NUM_ACCOUNTS: usize> AccountManager<NUM_ACCOUNTS> {
             _ => (false, AccountType::ReadOnly),
         };
 
-        let borrow_cell = self.get_or_insert_borrow_cell(index)?;
+        let borrow_cell = self.get_or_insert_borrow_cell(index)
+            .ok_or(AccountError::TooManyAccountsAccessed {
+                max_capacity: NUM_ACCOUNTS
+            })?;
 
         if is_mutable {
-            let borrow_guard = borrow_cell.try_borrow_mut().ok()?;
+            let borrow_guard = borrow_cell.try_borrow_mut()
+                .map_err(|_| AccountError::AlreadyBorrowed { index })?;
 
-            let account_info = unsafe { get_account_info_at_idx_mut(index)? };
+            let account_info = unsafe {
+                get_account_info_at_idx_mut(index)
+                    .ok_or(AccountError::InfoNotAvailable { index })?
+            };
 
             match account_type {
-                AccountType::FeePayer => Some(AccountRef::FeePayer {
+                AccountType::FeePayer => Ok(AccountRef::FeePayer {
                     account: account_info,
                     _guard: borrow_guard,
                 }),
-                AccountType::ReadWrite => Some(AccountRef::ReadWrite {
+                AccountType::ReadWrite => Ok(AccountRef::ReadWrite {
                     account: account_info,
                     _guard: borrow_guard,
                 }),
                 _ => unreachable!(),
             }
         } else {
-            let borrow_guard = borrow_cell.try_borrow().ok()?;
+            let borrow_guard = borrow_cell.try_borrow()
+                .map_err(|_| AccountError::AlreadyBorrowedMutably { index })?;
 
-            let account_info = unsafe { get_account_info_at_idx(index)? };
+            let account_info = unsafe {
+                get_account_info_at_idx(index)
+                    .ok_or(AccountError::InfoNotAvailable { index })?
+            };
 
             match account_type {
-                AccountType::Program => Some(AccountRef::Program {
+                AccountType::Program => Ok(AccountRef::Program {
                     account: account_info,
                     _guard: borrow_guard,
                 }),
-                AccountType::ReadOnly => Some(AccountRef::ReadOnly {
+                AccountType::ReadOnly => Ok(AccountRef::ReadOnly {
                     account: account_info,
                     _guard: borrow_guard,
                 }),
@@ -449,7 +480,7 @@ impl<'a, const N: usize> Iterator for AccountIter<'a, N> {
             let idx = self.next_idx;
             self.next_idx += 1;
 
-            if let Some(acc) = self.mgr.get(idx) {
+            if let Ok(acc) = self.mgr.get(idx) {
                 return Some((idx, acc));
             }
         }

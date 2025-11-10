@@ -6,7 +6,7 @@ pub mod mem;
 pub mod syscall;
 pub mod types;
 
-pub use account_safe::{next_pow2, AccountManager};
+pub use account_safe::{next_pow2, AccountManager, AccountError};
 pub use account_safe::AccountRef::*;
 pub use mem::get_txn;
 pub use types::pubkey::Pubkey;
