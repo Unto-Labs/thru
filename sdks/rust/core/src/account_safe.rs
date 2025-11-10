@@ -28,7 +28,7 @@ pub const fn next_pow2(n: usize) -> usize {
 
 use crate::{
     get_shadow_stack,
-    mem::{get_account_info_at_idx, get_account_info_at_idx_mut, get_txn},
+    mem::{get_account_info_at_idx, get_account_info_at_idx_mut, get_txn, MemoryError},
     types::{
         account::{AccountInfo, AccountInfoMut},
         pubkey::Pubkey,
@@ -48,14 +48,14 @@ pub enum AccountError {
     /// Account is already borrowed (prevents mutable borrow)
     AlreadyBorrowed { index: u16 },
 
-    /// Account info is not available in memory
-    InfoNotAvailable { index: u16 },
-
     /// Too many distinct accounts accessed (map is full)
     TooManyAccountsAccessed { max_capacity: usize },
 
     /// Transaction version not supported
     UnsupportedTxnVersion { version: u8 },
+
+    /// Failed to access account info from memory
+    InfoAccessFailed { index: u16, err: MemoryError },
 }
 
 /// Identity hasher that uses the account index directly as the hash.
@@ -342,7 +342,7 @@ impl<const NUM_ACCOUNTS: usize> AccountManager<NUM_ACCOUNTS> {
 
             let account_info = unsafe {
                 get_account_info_at_idx_mut(index)
-                    .ok_or(AccountError::InfoNotAvailable { index })?
+                    .map_err(|err| AccountError::InfoAccessFailed { index, err })?
             };
 
             match account_type {
@@ -362,7 +362,7 @@ impl<const NUM_ACCOUNTS: usize> AccountManager<NUM_ACCOUNTS> {
 
             let account_info = unsafe {
                 get_account_info_at_idx(index)
-                    .ok_or(AccountError::InfoNotAvailable { index })?
+                    .map_err(|err| AccountError::InfoAccessFailed { index, err })?
             };
 
             match account_type {
@@ -400,7 +400,7 @@ impl<const NUM_ACCOUNTS: usize> AccountManager<NUM_ACCOUNTS> {
 
         let account_info = unsafe {
             get_account_info_at_idx(index)
-                .ok_or(AccountError::InfoNotAvailable { index })?
+                .map_err(|err| AccountError::InfoAccessFailed { index, err })?
         };
 
         Ok(AccountRef::ReadOnly {
@@ -459,12 +459,13 @@ impl<const NUM_ACCOUNTS: usize> AccountManager<NUM_ACCOUNTS> {
     }
 
     /// Get the account role/type for a given index.
-    pub fn account_role(&self, index: u16) -> Option<AccountType> {
-        if index >= self.accounts_count() {
-            return None;
+    pub fn account_role(&self, index: u16) -> Result<AccountType, AccountError> {
+        let max = self.accounts_count();
+        if index >= max {
+            return Err(AccountError::IndexOutOfBounds { index, max });
         }
 
-        Some(match index {
+        Ok(match index {
             0 => AccountType::FeePayer,
             1 => AccountType::Program,
             i if i >= 2 && i < (2 + self.rw_cnt) => AccountType::ReadWrite,
