@@ -11,6 +11,7 @@ pub use account_safe::AccountRef::*;
 pub use mem::{get_txn, MemoryError};
 pub use types::pubkey::Pubkey;
 pub use types::shadow_stack::get_shadow_stack;
+pub use types::txn::TxnAccessError;
 
 
 /// Error code used by the panic handler
@@ -90,8 +91,8 @@ pub mod program_utils {
 
         // Get all account pubkeys from transaction
         let account_pubkeys = match txn.account_pubkeys() {
-            Some(pubkeys) => pubkeys,
-            None => return false,
+            Ok(pubkeys) => pubkeys,
+            Err(_) => return false,
         };
 
         // If account is the fee payer, it has authorized
@@ -142,8 +143,8 @@ pub mod program_utils {
         };
 
         let account_pubkeys = match txn.account_pubkeys() {
-            Some(pubkeys) => pubkeys,
-            None => return false,
+            Ok(pubkeys) => pubkeys,
+            Err(_) => return false,
         };
         let shadow_stack = get_shadow_stack();
         let current_program_idx = shadow_stack.current_program_acc_idx() as usize;

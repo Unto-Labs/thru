@@ -179,8 +179,8 @@ impl<'a> AccountRef<'a> {
     pub fn is_owned_by_current_program(&self) -> bool {
         let txn = get_txn();
         let account_pubkeys = match txn.account_pubkeys() {
-            Some(pubkeys) => pubkeys,
-            None => return false,
+            Ok(pubkeys) => pubkeys,
+            Err(_) => return false,
         };
         let current_program_idx = get_shadow_stack().current_program_acc_idx() as usize;
         account_pubkeys.get(current_program_idx) == Some(self.owner())
