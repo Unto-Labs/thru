@@ -53,6 +53,9 @@ pub enum AccountError {
 
     /// Too many distinct accounts accessed (map is full)
     TooManyAccountsAccessed { max_capacity: usize },
+
+    /// Transaction version not supported
+    UnsupportedTxnVersion { version: u8 },
 }
 
 /// Identity hasher that uses the account index directly as the hash.
@@ -258,16 +261,18 @@ impl<const NUM_ACCOUNTS: usize> AccountManager<NUM_ACCOUNTS> {
     /// `NUM_ACCOUNTS` specifies the maximum number of distinct accounts that can be
     /// borrowed simultaneously. The transaction may contain more accounts than this,
     /// but you can only have up to `NUM_ACCOUNTS` accounts borrowed at once.
-    pub fn from_txn(txn: &'static Txn) -> Option<Self> {
+    pub fn from_txn(txn: &'static Txn) -> Result<Self, AccountError> {
         if txn.hdr.version() != 1 {
-            return None;
+            return Err(AccountError::UnsupportedTxnVersion {
+                version: txn.hdr.version()
+            });
         }
 
         let rw_cnt = txn.readwrite_accounts_cnt();
         let ro_cnt = txn.readonly_accounts_cnt();
 
         let borrow_states = RefCell::new(IndexMap::<u16, RefCell<()>, BuildHasherDefault<IdentityHasher>, NUM_ACCOUNTS>::new());
-        Some(Self {
+        Ok(Self {
             borrow_states,
             rw_cnt,
             ro_cnt,
@@ -377,17 +382,28 @@ impl<const NUM_ACCOUNTS: usize> AccountManager<NUM_ACCOUNTS> {
     /// Try to get an account as read-only, regardless of its actual permissions.
     /// This is useful when you know you only need to read from an account.
     ///
-    /// Returns `None` if the account is currently borrowed mutably or if the map is full.
-    pub fn get_readonly(&self, index: u16) -> Option<AccountRef<'_>> {
-        if index >= self.accounts_count() {
-            return None;
+    /// Returns `Err(AccountError)` if the account is currently borrowed mutably,
+    /// if the map is full, or if the account index is invalid.
+    pub fn get_readonly(&self, index: u16) -> Result<AccountRef<'_>, AccountError> {
+        let max = self.accounts_count();
+        if index >= max {
+            return Err(AccountError::IndexOutOfBounds { index, max });
         }
 
-        let borrow_cell = self.get_or_insert_borrow_cell(index)?;
-        let borrow_guard = borrow_cell.try_borrow().ok()?;
-        let account_info = unsafe { get_account_info_at_idx(index)? };
+        let borrow_cell = self.get_or_insert_borrow_cell(index)
+            .ok_or(AccountError::TooManyAccountsAccessed {
+                max_capacity: NUM_ACCOUNTS
+            })?;
 
-        Some(AccountRef::ReadOnly {
+        let borrow_guard = borrow_cell.try_borrow()
+            .map_err(|_| AccountError::AlreadyBorrowedMutably { index })?;
+
+        let account_info = unsafe {
+            get_account_info_at_idx(index)
+                .ok_or(AccountError::InfoNotAvailable { index })?
+        };
+
+        Ok(AccountRef::ReadOnly {
             account: account_info,
             _guard: borrow_guard,
         })
