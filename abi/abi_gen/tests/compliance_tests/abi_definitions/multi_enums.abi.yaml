@@ -1,0 +1,70 @@
+abi:
+  package: "compliance.multi_enums"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Multiple enum types in one struct for compliance testing"
+
+types:
+  - name: "DualEnum"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "first_tag"
+            field-type:
+              primitive: u8
+          - name: "second_tag"
+            field-type:
+              primitive: u8
+          - name: "first_enum"
+            field-type:
+              enum:
+                packed: true
+                tag-ref:
+                  field-ref:
+                    path: ["first_tag"]
+                variants:
+                  - name: "Small"
+                    tag-value: 0
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "value"
+                            field-type:
+                              primitive: u8
+                  - name: "Large"
+                    tag-value: 1
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "value"
+                            field-type:
+                              primitive: u32
+          - name: "second_enum"
+            field-type:
+              enum:
+                packed: true
+                tag-ref:
+                  field-ref:
+                    path: ["second_tag"]
+                variants:
+                  - name: "Empty"
+                    tag-value: 0
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields: []
+                  - name: "Pair"
+                    tag-value: 1
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "first"
+                            field-type:
+                              primitive: u16
+                          - name: "second"
+                            field-type:
+                              primitive: u16

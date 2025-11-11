@@ -1,0 +1,65 @@
+abi:
+  package: "compliance.computed_enums"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Enums with computed tag expressions for compliance testing"
+
+types:
+  # Test case: Enum whose tag is computed from multiple fields
+  # Tag = (field1 + field2) & 0xFF
+  - name: "ComputedTagEnum"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "field1"
+            field-type:
+              primitive: u8
+          - name: "field2"
+            field-type:
+              primitive: u8
+          - name: "data"
+            field-type:
+              enum:
+                packed: true
+                tag-ref:
+                  bit-and:
+                    left:
+                      add:
+                        left:
+                          field-ref:
+                            path: ["field1"]
+                        right:
+                          field-ref:
+                            path: ["field2"]
+                    right:
+                      literal:
+                        u32: 255
+                variants:
+                  - name: "Small"
+                    tag-value: 0
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "value"
+                            field-type:
+                              primitive: u8
+                  - name: "Medium"
+                    tag-value: 1
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "value"
+                            field-type:
+                              primitive: u16
+                  - name: "Large"
+                    tag-value: 2
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "value"
+                            field-type:
+                              primitive: u32

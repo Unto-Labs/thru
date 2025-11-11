@@ -1,0 +1,33 @@
+abi:
+  package: "thru.test.fqdn"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Test file using FQDN type references"
+  imports:
+    - "common/primitives.abi.yaml"
+
+types:
+  - name: "Transaction"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "tx_hash"
+            field-type:
+              type-ref:
+                name: "thru.common.primitives.Hash"
+          - name: "timestamp"
+            field-type:
+              type-ref:
+                name: "thru.common.primitives.Timestamp"
+          - name: "sender"
+            field-type:
+              type-ref:
+                name: "Hash"
+          - name: "receiver"
+            field-type:
+              type-ref:
+                name: "Hash"
+          - name: "amount"
+            field-type:
+              primitive: u64

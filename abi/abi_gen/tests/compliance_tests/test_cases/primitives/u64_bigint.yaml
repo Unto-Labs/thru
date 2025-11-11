@@ -1,0 +1,7 @@
+test-case:
+  name: "u64_bigint"
+  abi-file: "../../abi_definitions/primitives.abi.yaml"
+  type: "AllPrimitives"
+  description: "Test u64 value requiring BigInt in TypeScript"
+  tags: ["primitives", "u64", "bigint"]
+  binary-hex: "00 00 00 00 00 00 00 f0 de bc 9a 78 56 34 12 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00"  # u64=0x123456789abcdef0 at offset 7

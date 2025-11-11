@@ -1,0 +1,7 @@
+test-case:
+  name: "all_zeros"
+  abi-file: "../../abi_definitions/primitives.abi.yaml"
+  type: "AllPrimitives"
+  description: "Test all primitive types with zero values"
+  tags: ["primitives", "zero", "baseline"]
+  binary-hex: "00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00"

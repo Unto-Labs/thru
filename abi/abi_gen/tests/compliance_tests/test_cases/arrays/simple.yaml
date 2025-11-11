@@ -1,0 +1,7 @@
+test-case:
+  name: "arrays_simple"
+  abi-file: "../../abi_definitions/arrays.abi.yaml"
+  type: "FixedArrays"
+  description: "Test fixed-size arrays with simple values"
+  tags: ["arrays", "fixed-size"]
+  binary-hex: "01 02 03 04 0a 00 14 00 1e 00 64 00 00 00 c8 00 00 00 ff ff ff ff 00 00 00 00 01 00 00 00 9c ff ff ff 64 00 00 00"  # various array types with values

@@ -1,0 +1,157 @@
+abi:
+  package: "compliance.array_structs"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Array and struct combination types for compliance testing"
+
+types:
+  # Basic struct for use in arrays
+  - name: "Point2D"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "x"
+            field-type:
+              primitive: i32
+          - name: "y"
+            field-type:
+              primitive: i32
+
+  # Test case 1: Struct with array of fixed-size structs
+  - name: "PointArray"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "count"
+            field-type:
+              primitive: u32
+          - name: "points"
+            field-type:
+              array:
+                element-type:
+                  type-ref:
+                    name: "Point2D"
+                size:
+                  literal:
+                    u32: 3
+
+  # Test case 2: Top-level array with TypeRef to fixed-size struct
+  # (This would be a top-level type, just an array)
+  - name: "Point2DArray5"
+    kind:
+      array:
+        element-type:
+          type-ref:
+            name: "Point2D"
+        size:
+          literal:
+            u32: 5
+
+  # Test case 3: Variable-size array in a struct (size depends on field)
+  - name: "DynamicBytes"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "length"
+            field-type:
+              primitive: u32
+          - name: "data"
+            field-type:
+              array:
+                element-type:
+                  primitive: u8
+                size:
+                  field-ref:
+                    path: ["length"]
+
+  # Test case 4: Variable-size array with expression (multiple fields + literal)
+  - name: "Matrix"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "rows"
+            field-type:
+              primitive: u32
+          - name: "cols"
+            field-type:
+              primitive: u32
+          - name: "data"
+            field-type:
+              array:
+                element-type:
+                  primitive: u8
+                size:
+                  add:
+                    left:
+                      mul:
+                        left:
+                          field-ref:
+                            path: ["rows"]
+                        right:
+                          field-ref:
+                            path: ["cols"]
+                    right:
+                      literal:
+                        u32: 1
+
+  # Test case 5: Two variable-size arrays in one struct (interleaved)
+  - name: "DualArrays"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "size1"
+            field-type:
+              primitive: u32
+          - name: "arr1"
+            field-type:
+              array:
+                element-type:
+                  primitive: u8
+                size:
+                  field-ref:
+                    path: ["size1"]
+          - name: "size2"
+            field-type:
+              primitive: u32
+          - name: "arr2"
+            field-type:
+              array:
+                element-type:
+                  primitive: u16
+                size:
+                  field-ref:
+                    path: ["size2"]
+
+  # Test case 6: Two variable-size arrays with sizes first
+  - name: "DualArraysSizesFirst"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "size1"
+            field-type:
+              primitive: u32
+          - name: "size2"
+            field-type:
+              primitive: u32
+          - name: "arr1"
+            field-type:
+              array:
+                element-type:
+                  primitive: u8
+                size:
+                  field-ref:
+                    path: ["size1"]
+          - name: "arr2"
+            field-type:
+              array:
+                element-type:
+                  primitive: u16
+                size:
+                  field-ref:
+                    path: ["size2"]

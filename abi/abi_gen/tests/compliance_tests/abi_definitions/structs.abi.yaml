@@ -1,0 +1,50 @@
+abi:
+  package: "compliance.structs"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Struct types for compliance testing"
+
+types:
+  - name: "Point2D"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "x"
+            field-type:
+              primitive: i32
+          - name: "y"
+            field-type:
+              primitive: i32
+
+  - name: "Rectangle"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "top_left"
+            field-type:
+              type-ref:
+                name: "Point2D"
+          - name: "bottom_right"
+            field-type:
+              type-ref:
+                name: "Point2D"
+          - name: "color"
+            field-type:
+              primitive: u32
+
+  - name: "SimpleStruct"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "id"
+            field-type:
+              primitive: u64
+          - name: "flags"
+            field-type:
+              primitive: u8
+          - name: "value"
+            field-type:
+              primitive: u16

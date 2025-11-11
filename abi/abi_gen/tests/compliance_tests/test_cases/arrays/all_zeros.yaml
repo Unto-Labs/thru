@@ -1,0 +1,7 @@
+test-case:
+  name: "arrays_all_zeros"
+  abi-file: "../../abi_definitions/arrays.abi.yaml"
+  type: "FixedArrays"
+  description: "Test fixed-size arrays with all zero values"
+  tags: ["arrays", "zero", "baseline"]
+  binary-hex: "00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00"  # all arrays filled with zeros (38 bytes total)

@@ -1,0 +1,7 @@
+test-case:
+  name: "structs_rectangle"
+  abi-file: "../../abi_definitions/structs.abi.yaml"
+  type: "Rectangle"
+  description: "Test nested struct composition (Rectangle contains two Point2D structs)"
+  tags: ["structs", "nested", "composition"]
+  binary-hex: "0a 00 00 00 14 00 00 00 64 00 00 00 50 00 00 00 00 00 ff 00"  # top_left + bottom_right Point2D structs

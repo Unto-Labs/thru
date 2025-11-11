@@ -1,0 +1,41 @@
+abi:
+  package: "compliance.deeply_nested_array_structs"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Deeply nested structs with variable-size arrays for compliance testing"
+
+types:
+  # Parent struct with two anonymous inline nested structs
+  # The second nested struct contains an array whose size depends on a field in the first nested struct
+  - name: "ParentWithDeeplyNestedArray"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "first"
+            field-type:
+              struct:
+                packed: true
+                fields:
+                  - name: "x"
+                    field-type:
+                      primitive: u32
+                  - name: "count"
+                    field-type:
+                      primitive: u32
+                  - name: "y"
+                    field-type:
+                      primitive: u32
+          - name: "second"
+            field-type:
+              struct:
+                packed: true
+                fields:
+                  - name: "data"
+                    field-type:
+                      array:
+                        element-type:
+                          primitive: u8
+                        size:
+                          field-ref:
+                            path: ["first", "count"]  # References count field in the first nested struct

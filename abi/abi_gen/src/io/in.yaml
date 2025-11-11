@@ -1,0 +1,166 @@
+
+- name: "box"
+  kind:
+    struct:
+      packed: true
+      fields:
+        - name: "tag"
+          field-type:
+            primitive: u16
+
+- name: "TaggedUnionWithFAM"
+  kind:
+    struct:
+      packed: true
+      comment: "Structure with tag and union containing FAM variant"
+      fields:
+        - name: "hdr"
+          field-type:
+              type-ref:
+                name: "box"
+        - name: "data"
+          field-type:
+            enum:
+              packed: true
+              tag-ref:
+                field-ref:
+                  path: ["hdr", "tag"]
+              variants:
+                - name: "FAMVariant"
+                  tag-value: 10
+                  variant-type:
+                    struct:
+                      packed: true
+                      fields:
+                        - name: "data1"
+                          field-type:
+                            primitive: u8
+                        - name: "arr"
+                          field-type:
+                            array:
+                              element-type:
+                                primitive: u8
+                              size:
+                                field-ref:
+                                  path: ["data1"]
+                        - name: "data2"
+                          field-type:
+                            primitive: u8
+                - name: "U64Variant"
+                  tag-value: 11
+                  variant-type:
+                    primitive: u64
+        - name: "ghostnumber"
+          field-type:
+            primitive: u32
+
+- name: "DynamicBuffer"
+  kind:
+    struct:
+      packed: true
+      fields:
+        - name: "box"
+          field-type:
+            struct:
+              packed: true
+              fields:
+                - name: "first"
+                  field-type:
+                    primitive: u32
+        - name: "second"
+          field-type:
+            primitive: u32
+        - name: "data"
+          field-type:
+            array:
+              size:
+                add:
+                    left:
+                      field-ref:
+                        path: ["box", "first"]
+                    right:
+                      field-ref:
+                        path: ["second"]
+              element-type:
+                type-ref:
+                  name: "CatEnum"
+        - name: "data2"
+          field-type:
+            array:
+              size:
+                field-ref:
+                  path: ["second"]
+              element-type:
+                primitive: u16
+        - name: "mycatenum"
+          field-type:
+              type-ref:
+                name: "CatEnum"
+        - name: "catcatcat"
+          field-type:
+            primitive: u8
+
+- name: "CatEnum"
+  kind:
+    struct:
+      packed: true
+      fields:
+        - name: "tag"
+          field-type:
+            primitive: u8
+        - name: "body"
+          field-type:
+            enum:
+              packed: true
+              tag-ref:
+                field-ref:
+                  path: ["tag"]
+              variants:
+                - name: "BlackCat"
+                  tag-value: 1
+                  variant-type:
+                    primitive: u64
+                - name: "WhiteCat"
+                  tag-value: 2
+                  variant-type:
+                    primitive: u64
+                - name: "CalicoCat"
+                  tag-value: 3
+                  variant-type:
+                    primitive: u64
+
+- name: "myunion"
+  kind:
+    union:
+      packed: true
+      variants:
+        - name: "smallval"
+          variant-type:
+            primitive: u8
+        - name: "largeval"
+          variant-type:
+            primitive: u64
+        - name: "array"
+          variant-type:
+            array:
+              element-type:
+                type-ref:
+                  name: CatEnum
+              size:
+                literal:
+                  u64: 3
+        - name: "structref"
+          variant-type:
+            type-ref:
+              name: "box"
+        - name: "structinline"
+          variant-type:
+            struct:
+              packed: true
+              fields:
+                - name: "a"
+                  field-type:
+                    primitive: u32
+                - name: "b"
+                  field-type:
+                    primitive: u32

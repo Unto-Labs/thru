@@ -1,0 +1,21 @@
+abi:
+  package: "compliance.struct"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Compliance test for simple structs"
+
+types:
+  - name: "SimpleStruct"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "field1"
+            field-type:
+              primitive: u32
+          - name: "field2"
+            field-type:
+              primitive: u64
+          - name: "field3"
+            field-type:
+              primitive: i16

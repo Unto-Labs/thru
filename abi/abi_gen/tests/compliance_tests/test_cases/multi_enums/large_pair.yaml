@@ -1,0 +1,7 @@
+test-case:
+  name: "multi_enums_large_pair"
+  abi-file: "../../abi_definitions/multi_enums.abi.yaml"
+  type: "DualEnum"
+  description: "Test DualEnum with Large (u32) and Pair (2x u16) variants"
+  tags: ["enums", "multi_enum", "tagged"]
+  binary-hex: "01 01 64000000 0a00 1400"  # first_tag=1 (Large), second_tag=1 (Pair), u32 value=100, u16 first=10, u16 second=20

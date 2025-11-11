@@ -1,0 +1,67 @@
+abi:
+  package: "compliance.interleaved_enums"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Interleaved enum types for compliance testing"
+
+types:
+  - name: "InterleavedEnum"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "tag1"
+            field-type:
+              primitive: u8
+          - name: "enum1"
+            field-type:
+              enum:
+                packed: true
+                tag-ref:
+                  field-ref:
+                    path: ["tag1"]
+                variants:
+                  - name: "Byte"
+                    tag-value: 0
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "value"
+                            field-type:
+                              primitive: u8
+                  - name: "Word"
+                    tag-value: 1
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "value"
+                            field-type:
+                              primitive: u16
+          - name: "tag2"
+            field-type:
+              primitive: u8
+          - name: "enum2"
+            field-type:
+              enum:
+                packed: true
+                tag-ref:
+                  field-ref:
+                    path: ["tag2"]
+                variants:
+                  - name: "None"
+                    tag-value: 0
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields: []
+                  - name: "Single"
+                    tag-value: 1
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "data"
+                            field-type:
+                              primitive: u32

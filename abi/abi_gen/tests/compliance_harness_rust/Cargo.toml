@@ -1,0 +1,17 @@
+[package]
+name = "compliance_harness"
+version = "2.0.0"
+edition = "2021"
+
+[[bin]]
+name = "compliance_harness"
+path = "src/main.rs"
+
+[dependencies]
+abi_gen = { path = "../.." }
+serde = { version = "1.0", features = ["derive"] }
+serde_yaml = "0.9"
+serde_json = "1.0"
+anyhow = "1.0"
+clap = { version = "4.0", features = ["derive"] }
+chrono = "0.4"

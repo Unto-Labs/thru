@@ -1,0 +1,7 @@
+test-case:
+  name: "enums_pair"
+  abi-file: "../../abi_definitions/enums.abi.yaml"
+  type: "SimpleEnum"
+  description: "Test enum Pair variant (tag + two u16 fields)"
+  tags: ["enums", "tagged", "variant", "multiple-fields"]
+  binary-hex: "02 6400 c800"  # tag=2 (Pair variant), u16 first=100, u16 second=200 (little-endian)

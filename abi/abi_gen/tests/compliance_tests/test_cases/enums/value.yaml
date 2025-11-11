@@ -1,0 +1,7 @@
+test-case:
+  name: "enums_value"
+  abi-file: "../../abi_definitions/enums.abi.yaml"
+  type: "SimpleEnum"
+  description: "Test enum Value variant (tag + single u32 field)"
+  tags: ["enums", "tagged", "variant", "data"]
+  binary-hex: "01 2a000000"  # tag=1 (Value variant), u32 data=42 (0x0000002a little-endian)

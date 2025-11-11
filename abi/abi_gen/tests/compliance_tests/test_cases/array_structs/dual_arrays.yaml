@@ -1,0 +1,13 @@
+test-case:
+  name: "array_structs_dual_arrays"
+  abi-file: "../../abi_definitions/array_structs.abi.yaml"
+  type: "DualArrays"
+  description: "Struct with two variable-size arrays (size1, arr1, size2, arr2)"
+  tags: ["arrays", "structs", "variable-size", "dual-arrays"]
+
+  # Binary layout:
+  # size1: u32 = 3 (0x03 00 00 00)
+  # arr1[0..2]: u8 = [0x11, 0x22, 0x33]
+  # size2: u32 = 2 (0x02 00 00 00)
+  # arr2[0..1]: u16 = [0x4444, 0x5555] (little-endian: 44 44, 55 55)
+  binary-hex: "03 00 00 00 11 22 33 02 00 00 00 44 44 55 55"

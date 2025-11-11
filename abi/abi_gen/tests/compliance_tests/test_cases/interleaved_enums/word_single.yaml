@@ -1,0 +1,7 @@
+test-case:
+  name: "interleaved_enums_word_single"
+  abi-file: "../../abi_definitions/interleaved_enums.abi.yaml"
+  type: "InterleavedEnum"
+  description: "Test InterleavedEnum with Word (u16) and Single (u32) variants"
+  tags: ["enums", "interleaved", "tagged"]
+  binary-hex: "01 34 12 01 78 56 34 12"  # tag1=1 (Word), u16 value=0x1234, tag2=1 (Single), u32 data=0x12345678

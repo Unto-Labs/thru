@@ -1,0 +1,33 @@
+abi:
+  package: "thru.common.primitives"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Common primitive type definitions"
+  imports: []
+
+types:
+  - name: "Timestamp"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "seconds"
+            field-type:
+              primitive: u64
+          - name: "nanos"
+            field-type:
+              primitive: u32
+
+  - name: "Hash"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "bytes"
+            field-type:
+              array:
+                size:
+                  literal:
+                    u64: 32
+                element-type:
+                  primitive: u8

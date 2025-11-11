@@ -1,0 +1,30 @@
+abi:
+  package: "compliance.nested_array_structs"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Nested struct with variable-size arrays for compliance testing"
+
+types:
+  # Parent struct with anonymous inline nested struct containing a variable-size array
+  # The array size depends on a field in the parent struct (not the nested struct)
+  - name: "ParentWithNestedArray"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "count"
+            field-type:
+              primitive: u32
+          - name: "nested"
+            field-type:
+              struct:
+                packed: true
+                fields:
+                  - name: "data"
+                    field-type:
+                      array:
+                        element-type:
+                          primitive: u8
+                        size:
+                          field-ref:
+                            path: ["count"]  # References count field in the parent struct

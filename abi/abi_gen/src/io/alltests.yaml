@@ -1,0 +1,526 @@
+- name: "TokenAccount"
+  kind:
+    struct:
+      packed: true
+      comment: "Token account structure"
+      fields:
+        - name: "is_initialized"
+          field-type:
+            primitive: u8
+        - name: "is_frozen"
+          field-type:
+            primitive: u8
+        - name: "mint"
+          field-type:
+            array:
+              element-type:
+                primitive: u8
+              size:
+                literal:
+                  u64: 32
+        - name: "owner"
+          field-type:
+            array:
+              element-type:
+                primitive: u8
+              size:
+                literal:
+                  u64: 32
+        - name: "amount"
+          field-type:
+            primitive: u64
+
+- name: "TokenMint"
+  kind:
+    struct:
+      packed: true
+      comment: "Token mint structure"
+      fields:
+        - name: "supply"
+          field-type:
+            primitive: u64
+        - name: "decimals"
+          field-type:
+            primitive: u8
+        - name: "is_initialized"
+          field-type:
+            primitive: u8
+        - name: "freeze_authority"
+          field-type:
+            array:
+              element-type:
+                primitive: u8
+              size:
+                literal:
+                  u64: 32
+
+- name: "TokenAccountUnion"
+  kind:
+    size-discriminated-union:
+      variants:
+        - name: "token_account"
+          expected-size: 74
+          variant-type:
+            type-ref:
+              name: "TokenAccount"
+        - name: "token_mint"
+          expected-size: 42
+          variant-type:
+            type-ref:
+              name: "TokenMint"
+
+- name: "CustomUnion"
+  kind:
+    union:
+      packed: true
+      comment: "Evelyn's union structure"
+      variants:
+        - name: "some_useful_number"
+          variant-type:
+            primitive: u64
+        - name: "token_account"
+          variant-type:
+            type-ref:
+              name: "TokenAccount"
+        - name: "token_mint"
+          variant-type:
+            type-ref:
+              name: "TokenMint"
+
+- name: "CatEnum"
+  kind:
+    struct:
+      packed: true
+      fields:
+        - name: "tag"
+          field-type:
+            primitive: u8
+        - name: "body"
+          field-type:
+            enum:
+              tag-ref:
+                field-ref:
+                  path: ["../tag"]
+              variants:
+                - name: "BlackCat"
+                  tag-value: 1
+                  variant-type:
+                    primitive: u64
+                - name: "WhiteCat"
+                  tag-value: 2
+                  variant-type:
+                    primitive: u64
+                - name: "CalicoCat"
+                  tag-value: 3
+                  variant-type:
+                    primitive: u64
+
+- name: "fd_hash"
+  kind:
+    struct:
+      packed: true
+      comment: "32-byte hash"
+      fields:
+        - name: "bytes"
+          field-type:
+            array:
+              element-type:
+                primitive: u8
+              size:
+                literal:
+                  u64: 32
+
+- name: "fd_pubkey"
+  kind:
+    struct:
+      packed: true
+      comment: "32-byte public key"
+      fields:
+        - name: "bytes"
+          field-type:
+            array:
+              element-type:
+                primitive: u8
+              size:
+                literal:
+                  u64: 32
+
+- name: "tn_state_proof_hdr"
+  kind:
+    struct:
+      packed: true
+      comment: "State proof header with type and slot encoded together"
+      fields:
+        - name: "type_slot"
+          field-type:
+            primitive: u64
+        - name: "path_bitset"
+          field-type:
+            type-ref:
+              name: "fd_hash"
+
+- name: "tn_state_proof"
+  kind:
+    struct:
+      packed: true
+      comment: "Complete state proof structure"
+      fields:
+        - name: "hdr"
+          field-type:
+            type-ref:
+              name: "tn_state_proof_hdr"
+        - name: "some_data"
+          field-type:
+            primitive: u8
+        - name: "proof_body"
+          field-type:
+            enum:
+              name: "proof_body"
+              tag-ref:
+                field-ref:
+                  path: ["../hdr/type_slot"]
+              variants:
+                - name: "proof_keys"
+                  tag-value: 5
+                  variant-type:
+                    array:
+                      element-type:
+                        type-ref:
+                          name: "fd_hash"
+                      size:
+                        add:
+                          left:
+                            literal:
+                              u32: 256
+                          right:
+                            literal:
+                              u32: 2
+                - name: "creation"
+                  tag-value: 6
+                  variant-type:
+                    struct:
+                      fields:
+                        - name: "existing_leaf_pubkey"
+                          field-type:
+                            type-ref:
+                              name: "fd_pubkey"
+                        - name: "existing_leaf_hash"
+                          field-type:
+                            type-ref:
+                              name: "fd_hash"
+                        - name: "sibling_hashes"
+                          field-type:
+                            array:
+                              element-type:
+                                type-ref:
+                                  name: "fd_hash"
+                              size:
+                                literal:
+                                  u32: 256
+                - name: "existing"
+                  tag-value: 7
+                  variant-type:
+                    struct:
+                      fields:
+                        - name: "sibling_hashes"
+                          field-type:
+                            array:
+                              element-type:
+                                type-ref:
+                                  name: "fd_hash"
+                              size:
+                                literal:
+                                  u32: 256
+                - name: "updating"
+                  tag-value: 8
+                  variant-type:
+                    struct:
+                      fields:
+                        - name: "existing_leaf_hash"
+                          field-type:
+                            type-ref:
+                              name: "fd_hash"
+                        - name: "sibling_hashes"
+                          field-type:
+                            array:
+                              element-type:
+                                type-ref:
+                                  name: "fd_hash"
+                              size:
+                                literal:
+                                  u32: 256
+
+- name: "expression_operations"
+  kind:
+    struct:
+      packed: true
+      comment: "Test structure with expr operation (2*4)+16"
+      fields:
+        - name: "size_field"
+          field-type:
+            primitive: u32
+        - name: "expr_array"
+          field-type:
+            array:
+              element-type:
+                primitive: u8
+              size:
+                add:
+                  left:
+                    mul:
+                      left:
+                        literal:
+                          u8: 2
+                      right:
+                        literal:
+                          u32: 4
+                  right:
+                    literal:
+                      u32: 16
+
+- name: "dessert_box"
+  kind:
+    struct:
+      packed: true
+      comment: "to test indent for nested structs"
+      fields:
+        - name: "box_id"
+          field-type:
+            primitive: u32
+        - name: "pastry_choice"
+          field-type:
+            union:
+              variants:
+                - name: "basic_cake"
+                  variant-type:
+                    primitive: u32
+                - name: "custom_cake"
+                  variant-type:
+                    struct:
+                      fields:
+                        - name: "num_layers"
+                          field-type:
+                            primitive: u8
+                        - name: "topping"
+                          field-type:
+                            struct:
+                              fields:
+                                - name: "topping_type"
+                                  field-type:
+                                    primitive: u16
+                                - name: "topping_amount"
+                                  field-type:
+                                    primitive: u8
+
+- name: KitchenItem
+  kind:
+    struct:
+      packed: true
+      fields:
+        - { name: tag, field-type: { primitive: u8 } }
+        - name: item
+          field-type:
+            enum:
+              name: "item_type"
+              tag-ref:
+                field-ref:
+                  path: ["../tag"]
+              variants:
+                - name: knife
+                  tag-value: 10
+                  variant-type:
+                    struct:
+                      fields:
+                        - { name: blade_length_cm, field-type: { primitive: u16 } }
+                        - { name: serrated,        field-type: { primitive: u8 } }
+                - name: pan
+                  tag-value: 11
+                  variant-type:
+                    struct:
+                      fields:
+                        - { name: diameter_cm, field-type: { primitive: u16 } }
+                        - { name: has_lid,     field-type: { primitive: u8 } }
+                - name: spice_jar
+                  tag-value: 12
+                  variant-type:
+                    struct:
+                      fields:
+                        - name: label
+                          field-type:
+                            array:
+                              element-type:
+                                primitive: u8
+                              size:
+                                literal:
+                                  u32: 16
+                        - { name: grams, field-type: { primitive: u16 } }
+                - name: oven
+                  tag-value: 13
+                  variant-type:
+                    struct:
+                      fields:
+                        - { name: temp_c,     field-type: { primitive: u16 } }
+                        - { name: capacity_l, field-type: { primitive: u16 } }
+        - { name: somenumber, field-type: { primitive: u8 } }
+
+- name: Inventory
+  kind:
+    struct:
+      packed: true
+      fields:
+        - name: cat_cnt
+          field-type:
+            primitive: u8
+        - name: type
+          field-type:
+            type-ref:
+              name: KitchenItem
+        - { name: extern, field-type: { primitive: u8 } }
+
+- name: "DynamicBuffer"
+  kind:
+    struct:
+      packed: true
+      fields:
+        - name: "evelynsize"
+          field-type:
+            primitive: u32
+        - name: "data"
+          field-type:
+            array:
+              size:
+                add:
+                    left:
+                      literal:
+                        u8: 2
+                    right:
+                      field-ref:
+                        path: ["evelynsize"]
+              element-type:
+                primitive: u8
+        - name: "catcatcat"
+          field-type:
+            primitive: u8
+
+- name: "Point"
+  kind:
+    struct:
+      packed: true
+      fields:
+        - name: "x"
+          field-type:
+            primitive: u32
+        - name: "y"
+          field-type:
+            primitive: u32
+
+- name: "PointBuffer"
+  kind:
+    struct:
+      packed: true
+      fields:
+        - name: "count"
+          field-type:
+            primitive: u32
+        - name: "points"
+          field-type:
+            array:
+              size:
+                field-ref:
+                  path: ["count"]
+              element-type:
+                type-ref:
+                  name: "Point"
+        - name: "checksum"
+          field-type:
+            primitive: u32
+
+- name: "AccountBuffer"
+  kind:
+    struct:
+      packed: true
+      fields:
+        - name: "num_accounts"
+          field-type:
+            primitive: u32
+        - name: "accounts"
+          field-type:
+            array:
+              size:
+                field-ref:
+                  path: ["num_accounts"]
+              element-type:
+                type-ref:
+                  name: "TokenAccount"
+        - name: "footer"
+          field-type:
+            primitive: u64
+
+- name: "NestedTest"
+  kind:
+    struct:
+      packed: true
+      comment: "Test structure with nested anonymous types"
+      fields:
+        - name: "id"
+          field-type:
+            primitive: u32
+        - name: "data"
+          field-type:
+            struct:
+              packed: true
+              fields:
+                - name: "x"
+                  field-type:
+                    primitive: u16
+                - name: "y"
+                  field-type:
+                    primitive: u16
+                - name: "nested"
+                  field-type:
+                    struct:
+                      packed: true
+                      fields:
+                        - name: "a"
+                          field-type:
+                            primitive: u8
+                        - name: "b"
+                          field-type:
+                            primitive: u8
+        - name: "count"
+          field-type:
+            primitive: u64
+
+- name: "TaggedUnionWithFAM"
+  kind:
+    struct:
+      packed: true
+      comment: "Structure with tag and union containing FAM variant"
+      fields:
+        - name: "mytag"
+          field-type:
+            primitive: u8
+        - name: "data"
+          field-type:
+            union:
+              packed: true
+              variants:
+                - name: "fam_variant"
+                  variant-type:
+                    struct:
+                      packed: true
+                      fields:
+                        - name: "size"
+                          field-type:
+                            primitive: u8
+                        - name: "flexible_data"
+                          field-type:
+                            array:
+                              element-type:
+                                primitive: u8
+                              size:
+                                field-ref:
+                                  path: ["size"]
+                - name: "simple_variant"
+                  variant-type:
+                    primitive: u64

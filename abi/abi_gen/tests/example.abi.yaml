@@ -1,0 +1,50 @@
+abi:
+  package: "thru.example"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Example ABI file with basic types"
+  imports:
+    - "common/primitives.abi.yaml"
+
+types:
+  - name: "Point"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "x"
+            field-type:
+              primitive: u32
+          - name: "y"
+            field-type:
+              primitive: u32
+
+  - name: "Color"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "tag"
+            field-type:
+              primitive: u8
+          - name: "value"
+            field-type:
+              primitive: u8
+
+  - name: "Record"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "id"
+            field-type:
+              type-ref:
+                name: "Hash"
+          - name: "created"
+            field-type:
+              type-ref:
+                name: "Timestamp"
+          - name: "position"
+            field-type:
+              type-ref:
+                name: "Point"

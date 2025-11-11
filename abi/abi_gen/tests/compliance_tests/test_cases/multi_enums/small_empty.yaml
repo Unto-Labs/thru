@@ -1,0 +1,7 @@
+test-case:
+  name: "multi_enums_small_empty"
+  abi-file: "../../abi_definitions/multi_enums.abi.yaml"
+  type: "DualEnum"
+  description: "Test DualEnum with Small (u8) and Empty variants"
+  tags: ["enums", "multi_enum", "tagged"]
+  binary-hex: "00 00 2a"  # first_tag=0 (Small), second_tag=0 (Empty), u8 value=42

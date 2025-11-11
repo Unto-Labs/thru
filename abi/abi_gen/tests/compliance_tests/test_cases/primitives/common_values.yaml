@@ -1,0 +1,7 @@
+test-case:
+  name: "common_values"
+  abi-file: "../../abi_definitions/primitives.abi.yaml"
+  type: "AllPrimitives"
+  description: "Test common primitive values including negatives and floats"
+  tags: ["primitives", "common", "negative", "float"]
+  binary-hex: "2a e8 03 78 56 34 12 f0 de bc 9a 78 56 34 12 d6 2e fb c0 1d fe ff eb 32 a4 f8 ff ff ff ff d0 0f 49 40 69 57 14 8b 0a bf 05 40"  # u8=42, u16=1000, u32=0x12345678, u64=0x123456789abcdef0, i8=-42, i16=-1000, i32=-67305985, i64=-123456789012345678, f32=3.14159, f64=2.718281828459045

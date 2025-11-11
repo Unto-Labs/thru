@@ -1,0 +1,13 @@
+test-case:
+  name: "array_structs_dual_arrays_sizes_first"
+  abi-file: "../../abi_definitions/array_structs.abi.yaml"
+  type: "DualArraysSizesFirst"
+  description: "Struct with two variable-size arrays where size fields come first (size1, size2, arr1, arr2)"
+  tags: ["arrays", "structs", "variable-size", "dual-arrays"]
+
+  # Binary layout:
+  # size1: u32 = 3 (0x03 00 00 00)
+  # size2: u32 = 2 (0x02 00 00 00)
+  # arr1[0..2]: u8 = [0xAA, 0xBB, 0xCC]
+  # arr2[0..1]: u16 = [0x1234, 0x5678] (little-endian: 34 12, 78 56)
+  binary-hex: "03 00 00 00 02 00 00 00 AA BB CC 34 12 78 56"

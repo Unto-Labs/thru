@@ -1,0 +1,7 @@
+test-case:
+  name: "structs_simple"
+  abi-file: "../../abi_definitions/structs.abi.yaml"
+  type: "SimpleStruct"
+  description: "Test simple struct with primitive fields"
+  tags: ["structs", "primitives"]
+  binary-hex: "39 30 00 00 00 00 00 00 42 0f 27"  # fields with various values

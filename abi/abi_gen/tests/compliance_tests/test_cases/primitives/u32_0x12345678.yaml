@@ -1,0 +1,7 @@
+test-case:
+  name: "u32_0x12345678"
+  abi-file: "../../abi_definitions/primitives.abi.yaml"
+  type: "AllPrimitives"
+  description: "Test u32 little-endian encoding - should be [78 56 34 12]"
+  tags: ["primitives", "u32", "endianness"]
+  binary-hex: "00 00 00 78 56 34 12 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00"  # u32=0x12345678 at offset 3

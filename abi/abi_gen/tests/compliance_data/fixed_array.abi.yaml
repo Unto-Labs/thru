@@ -1,0 +1,26 @@
+abi:
+  package: "compliance.array"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Compliance test for fixed arrays"
+
+types:
+  - name: "FixedArrayStruct"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "header"
+            field-type:
+              primitive: u32
+          - name: "data"
+            field-type:
+              array:
+                size:
+                  literal:
+                    u32: 32
+                element-type:
+                  primitive: u8
+          - name: "footer"
+            field-type:
+              primitive: u16

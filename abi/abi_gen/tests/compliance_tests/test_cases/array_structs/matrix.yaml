@@ -1,0 +1,12 @@
+test-case:
+  name: "array_structs_matrix"
+  abi-file: "../../abi_definitions/array_structs.abi.yaml"
+  type: "Matrix"
+  description: "Test struct with variable-size array (size from expression: rows * cols + 1)"
+  tags: ["arrays", "structs", "variable-size", "expression"]
+  # Binary layout:
+  # rows: u32 = 2 (0x02 00 00 00)
+  # cols: u32 = 3 (0x03 00 00 00)
+  # data size = 2 * 3 + 1 = 7 bytes
+  # data[0..6]: u8 = [0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0xFF]
+  binary-hex: "02 00 00 00 03 00 00 00 01 02 03 04 05 06 ff"

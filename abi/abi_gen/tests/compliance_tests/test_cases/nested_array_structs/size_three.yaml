@@ -1,0 +1,11 @@
+test-case:
+  name: "nested_array_structs_size_three"
+  abi-file: "../../abi_definitions/nested_array_structs.abi.yaml"
+  type: "ParentWithNestedArray"
+  description: "Parent struct with anonymous inline nested struct containing variable-size array that depends on parent field"
+  tags: ["arrays", "structs", "nested", "anonymous", "variable-size", "parent-field-ref"]
+
+  # Binary layout:
+  # count: u32 = 3 (0x03 00 00 00)
+  # nested.data[0..2]: u8 = [0xAA, 0xBB, 0xCC]
+  binary-hex: "03 00 00 00 AA BB CC"

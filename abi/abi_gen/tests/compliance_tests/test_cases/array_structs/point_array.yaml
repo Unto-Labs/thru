@@ -1,0 +1,15 @@
+test-case:
+  name: "array_structs_point_array"
+  abi-file: "../../abi_definitions/array_structs.abi.yaml"
+  type: "PointArray"
+  description: "Test struct containing array of fixed-size structs (3 Point2D structs)"
+  tags: ["arrays", "structs", "fixed-size", "type-ref"]
+  # Binary layout:
+  # count: u32 = 3 (0x03 00 00 00)
+  # points[0].x: i32 = 10 (0x0a 00 00 00)
+  # points[0].y: i32 = 20 (0x14 00 00 00)
+  # points[1].x: i32 = 30 (0x1e 00 00 00)
+  # points[1].y: i32 = 40 (0x28 00 00 00)
+  # points[2].x: i32 = 50 (0x32 00 00 00)
+  # points[2].y: i32 = 60 (0x3c 00 00 00)
+  binary-hex: "03 00 00 00 0a 00 00 00 14 00 00 00 1e 00 00 00 28 00 00 00 32 00 00 00 3c 00 00 00"

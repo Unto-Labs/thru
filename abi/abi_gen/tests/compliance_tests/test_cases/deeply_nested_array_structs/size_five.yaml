@@ -1,0 +1,13 @@
+test-case:
+  name: "deeply_nested_array_structs_size_five"
+  abi-file: "../../abi_definitions/deeply_nested_array_structs.abi.yaml"
+  type: "ParentWithDeeplyNestedArray"
+  description: "Parent struct with two anonymous inline nested structs where second depends on first's field"
+  tags: ["arrays", "structs", "nested", "anonymous", "variable-size", "nested-field-ref", "deep"]
+
+  # Binary layout:
+  # first.x: u32 = 1 (0x01 00 00 00)
+  # first.count: u32 = 5 (0x05 00 00 00)
+  # first.y: u32 = 2 (0x02 00 00 00)
+  # second.data[0..4]: u8 = [0x11, 0x22, 0x33, 0x44, 0x55]
+  binary-hex: "01 00 00 00 05 00 00 00 02 00 00 00 11 22 33 44 55"

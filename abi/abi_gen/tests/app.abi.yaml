@@ -1,0 +1,33 @@
+abi:
+  package: "thru.app"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Application-level types using common primitives"
+  imports:
+    - "primitives.abi.yaml"
+
+types:
+  - name: "User"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "id"
+            field-type:
+              type-ref:
+                name: "Hash"
+          - name: "joined"
+            field-type:
+              type-ref:
+                name: "Timestamp"
+          - name: "name_len"
+            field-type:
+              primitive: u32
+          - name: "name"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["name_len"]
+                element-type:
+                  primitive: u8

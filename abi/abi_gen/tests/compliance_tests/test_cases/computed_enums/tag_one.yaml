@@ -1,0 +1,13 @@
+test-case:
+  name: "computed_enums_tag_one"
+  abi-file: "../../abi_definitions/computed_enums.abi.yaml"
+  type: "ComputedTagEnum"
+  description: "Enum with computed tag = (1+0) & 0xFF = 1 (Medium variant)"
+  tags: ["enums", "computed-tag", "expression"]
+
+  # Binary layout:
+  # field1: u8 = 1 (0x01)
+  # field2: u8 = 0 (0x00)
+  # Computed tag = (1 + 0) & 0xFF = 1 -> Medium variant (2 bytes)
+  # data.value: u16 = 0x1234 (little-endian: 34 12)
+  binary-hex: "01 00 34 12"

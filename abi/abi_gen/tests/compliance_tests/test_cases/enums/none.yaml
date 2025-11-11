@@ -1,0 +1,7 @@
+test-case:
+  name: "enums_none"
+  abi-file: "../../abi_definitions/enums.abi.yaml"
+  type: "SimpleEnum"
+  description: "Test enum None variant (tag only, no data)"
+  tags: ["enums", "tagged", "variant"]
+  binary-hex: "00"  # tag=0 (None variant, no data)

@@ -1,0 +1,42 @@
+abi:
+  package: "thru.app.blockchain"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Example showing both simple and FQDN type references"
+  imports:
+    - "common/primitives.abi.yaml"
+
+types:
+  - name: "Account"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "address"
+            field-type:
+              type-ref:
+                name: "Hash"
+          - name: "balance"
+            field-type:
+              primitive: u64
+
+  - name: "Block"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "block_hash"
+            field-type:
+              type-ref:
+                name: "thru.common.primitives.Hash"
+          - name: "timestamp"
+            field-type:
+              type-ref:
+                name: "Timestamp"
+          - name: "miner"
+            field-type:
+              type-ref:
+                name: "thru.app.blockchain.Account"
+          - name: "transaction_count"
+            field-type:
+              primitive: u32

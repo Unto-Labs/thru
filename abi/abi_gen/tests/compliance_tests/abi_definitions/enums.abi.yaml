@@ -1,0 +1,64 @@
+abi:
+  package: "compliance.enums"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Enum types for compliance testing"
+
+types:
+  - name: "SimpleEnum"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "tag"
+            field-type:
+              primitive: u8
+          - name: "body"
+            field-type:
+              enum:
+                packed: true
+                tag-ref:
+                  field-ref:
+                    path: ["tag"]
+                variants:
+                  - name: "None"
+                    tag-value: 0
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields: []
+                  - name: "Value"
+                    tag-value: 1
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "data"
+                            field-type:
+                              primitive: u32
+                  - name: "Pair"
+                    tag-value: 2
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "first"
+                            field-type:
+                              primitive: u16
+                          - name: "second"
+                            field-type:
+                              primitive: u16
+                  - name: "Bytes"
+                    tag-value: 3
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "data"
+                            field-type:
+                              array:
+                                size:
+                                  literal:
+                                    u32: 8
+                                element-type:
+                                  primitive: u8

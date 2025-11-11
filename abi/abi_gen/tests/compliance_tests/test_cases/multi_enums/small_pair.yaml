@@ -1,0 +1,7 @@
+test-case:
+  name: "multi_enums_small_pair"
+  abi-file: "../../abi_definitions/multi_enums.abi.yaml"
+  type: "DualEnum"
+  description: "Test DualEnum with Small (u8) and Pair (2x u16) variants - mixed sizes"
+  tags: ["enums", "multi_enum", "tagged"]
+  binary-hex: "00 01 ff ffff 0001"  # first_tag=0 (Small), second_tag=1 (Pair), u8 value=255, u16 first=65535, u16 second=256

@@ -1,0 +1,10 @@
+test-case:
+  name: "array_structs_dynamic_bytes"
+  abi-file: "../../abi_definitions/array_structs.abi.yaml"
+  type: "DynamicBytes"
+  description: "Test struct with variable-size array (size from field-ref)"
+  tags: ["arrays", "structs", "variable-size", "field-ref"]
+  # Binary layout:
+  # length: u32 = 8 (0x08 00 00 00)
+  # data[0..7]: u8 = [0x48, 0x65, 0x6c, 0x6c, 0x6f, 0x21, 0x21, 0x00] ("Hello!!")
+  binary-hex: "08 00 00 00 48 65 6c 6c 6f 21 21 00"

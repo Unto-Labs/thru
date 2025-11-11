@@ -1,0 +1,21 @@
+[package]
+name = "abi_gen"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+lexpr = "0.2.7"
+serde = "1.0.89"
+serde_derive = "1.0"
+serde-lexpr = "0.1"
+anyhow = "1.0"
+serde_yml = "0.0.12"
+thiserror = "2.0.16"
+clap = { version = "4.5", features = ["derive"] }
+
+[lib]
+path = "src/lib.rs"
+
+[[bin]]
+name = "abi"
+path = "src/main.rs"

@@ -1,0 +1,7 @@
+test-case:
+  name: "enums_bytes"
+  abi-file: "../../abi_definitions/enums.abi.yaml"
+  type: "SimpleEnum"
+  description: "Test enum Bytes variant (tag + 8-byte fixed array)"
+  tags: ["enums", "tagged", "variant", "array"]
+  binary-hex: "03 01 02 03 04 05 06 07 08"  # tag=3 (Bytes variant), u8[8] data=[1,2,3,4,5,6,7,8]

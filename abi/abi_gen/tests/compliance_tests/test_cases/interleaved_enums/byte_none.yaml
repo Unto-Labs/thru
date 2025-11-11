@@ -1,0 +1,7 @@
+test-case:
+  name: "interleaved_enums_byte_none"
+  abi-file: "../../abi_definitions/interleaved_enums.abi.yaml"
+  type: "InterleavedEnum"
+  description: "Test InterleavedEnum with Byte (u8) and None variants"
+  tags: ["enums", "interleaved", "tagged"]
+  binary-hex: "00 2a 00"  # tag1=0 (Byte), u8 value=42, tag2=0 (None)

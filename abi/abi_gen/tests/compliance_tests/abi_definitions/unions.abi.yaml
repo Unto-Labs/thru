@@ -1,0 +1,26 @@
+abi:
+  package: "compliance.unions"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Union types for compliance testing"
+
+types:
+  - name: "SimpleUnion"
+    kind:
+      union:
+        packed: true
+        variants:
+          - name: "int_value"
+            variant-type:
+              primitive: i32
+          - name: "float_value"
+            variant-type:
+              primitive: f32
+          - name: "bytes"
+            variant-type:
+              array:
+                size:
+                  literal:
+                    u32: 4
+                element-type:
+                  primitive: u8

@@ -1,0 +1,42 @@
+abi:
+  package: "compliance.primitives"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Compliance test for primitive types"
+
+types:
+  - name: "AllPrimitives"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "u8_val"
+            field-type:
+              primitive: u8
+          - name: "u16_val"
+            field-type:
+              primitive: u16
+          - name: "u32_val"
+            field-type:
+              primitive: u32
+          - name: "u64_val"
+            field-type:
+              primitive: u64
+          - name: "i8_val"
+            field-type:
+              primitive: i8
+          - name: "i16_val"
+            field-type:
+              primitive: i16
+          - name: "i32_val"
+            field-type:
+              primitive: i32
+          - name: "i64_val"
+            field-type:
+              primitive: i64
+          - name: "f32_val"
+            field-type:
+              primitive: f32
+          - name: "f64_val"
+            field-type:
+              primitive: f64
