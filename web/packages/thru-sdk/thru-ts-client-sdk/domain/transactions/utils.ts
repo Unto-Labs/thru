@@ -1,7 +1,9 @@
 import { BytesLike, Pubkey, decodeAddress, hexToBytes, isHexString } from "@thru/helpers";
+import type { Pubkey as ProtoPubkey } from "../../proto/thru/core/v1/types_pb";
 import type { AccountAddress, ProgramIdentifier } from "./types";
 
 const ACCOUNT_LIMIT = 1024;
+const ACCOUNT_ADDRESS_LENGTH = 32;
 
 export function normalizeAccountList(accounts: AccountAddress[]): AccountAddress[] {
     if (accounts.length === 0) {
@@ -83,7 +85,7 @@ function parseProgramString(value: string): AccountAddress | undefined {
 }
 
 function copyAccount(value: AccountAddress): AccountAddress {
-    if (value.length !== 32) {
+    if (value.length !== ACCOUNT_ADDRESS_LENGTH) {
         throw new Error("Program public key must contain 32 bytes");
     }
     return new Uint8Array(value);
@@ -91,7 +93,7 @@ function copyAccount(value: AccountAddress): AccountAddress {
 
 export function parseAccountIdentifier(value: Pubkey, field: string): AccountAddress {
     if (value instanceof Uint8Array) {
-        if (value.length !== 32) {
+        if (value.length !== ACCOUNT_ADDRESS_LENGTH) {
             throw new Error(`${field} must contain 32 bytes`);
         }
         return new Uint8Array(value);
@@ -103,7 +105,7 @@ export function parseAccountIdentifier(value: Pubkey, field: string): AccountAdd
         }
         if (isHexString(value)) {
             const bytes = hexToBytes(value);
-            if (bytes.length !== 32) {
+            if (bytes.length !== ACCOUNT_ADDRESS_LENGTH) {
                 throw new Error(`${field} hex string must decode to 32 bytes`);
             }
             return bytes;
@@ -129,4 +131,11 @@ export function parseInstructionData(value?: BytesLike): Uint8Array | undefined 
         }
     }
     throw new Error("Instruction data must be provided as hex string or Uint8Array");
+}
+
+export function protoPubkeyToAccountAddress(pubkey?: ProtoPubkey): AccountAddress {
+    if (!pubkey?.value || pubkey.value.length !== ACCOUNT_ADDRESS_LENGTH) {
+        return new Uint8Array(ACCOUNT_ADDRESS_LENGTH);
+    }
+    return new Uint8Array(pubkey.value);
 }

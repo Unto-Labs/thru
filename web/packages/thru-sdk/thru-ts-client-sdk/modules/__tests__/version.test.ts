@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createMockContext } from "../../__tests__/helpers/test-utils";
+import { VersionInfo } from "../../domain/version";
 import { getVersion } from "../version";
 
 describe("version", () => {
@@ -16,8 +17,8 @@ describe("version", () => {
       
       const result = await getVersion(ctx);
       
-      expect(result).toBe(mockResponse);
-      expect(result.versions).toEqual({
+      expect(result).toBeInstanceOf(VersionInfo);
+      expect(result.components).toEqual({
         "component1": "1.0.0",
         "component2": "2.1.0",
       });

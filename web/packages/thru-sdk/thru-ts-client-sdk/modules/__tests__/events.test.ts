@@ -1,6 +1,7 @@
 import { create } from "@bufbuild/protobuf";
 import { describe, expect, it, vi } from "vitest";
 import { createMockContext } from "../../__tests__/helpers/test-utils";
+import { ChainEvent } from "../../domain/events";
 import { CurrentVersionSchema, VersionContextSchema } from "../../proto/thru/common/v1/consensus_pb";
 import { EventSchema } from "../../proto/thru/services/v1/query_service_pb";
 import { getEvent } from "../events";
@@ -18,8 +19,8 @@ describe("events", () => {
       
       const result = await getEvent(ctx, "test-event-id");
       
-      expect(result).toBe(mockEvent);
-      expect(result.eventId).toBe("test-event-id");
+      expect(result).toBeInstanceOf(ChainEvent);
+      expect(result.id).toBe("test-event-id");
       expect(ctx.query.getEvent).toHaveBeenCalledTimes(1);
     });
 
@@ -59,7 +60,7 @@ describe("events", () => {
       expect(() => getEvent(ctx, "")).toThrow("eventId is required");
     });
 
-    it("should not include version context when not provided", async () => {
+    it("should use default version context when not provided", async () => {
       const ctx = createMockContext();
       const mockEvent = create(EventSchema, { eventId: "test-event-id" });
       vi.spyOn(ctx.query, "getEvent").mockResolvedValue(mockEvent);
@@ -67,7 +68,8 @@ describe("events", () => {
       await getEvent(ctx, "test-event-id");
       
       const callArgs = (ctx.query.getEvent as any).mock.calls[0][0];
-      expect(callArgs.versionContext).toBeUndefined();
+      expect(callArgs.versionContext).toBeDefined();
+      expect(callArgs.versionContext.version?.case).toBe("current");
     });
   });
 });

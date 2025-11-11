@@ -1,7 +1,7 @@
-import { describe, it, expect } from "vitest";
-import { TransactionBuilder } from "../TransactionBuilder";
+import { describe, expect, it } from "vitest";
+import { generateTestAddress, generateTestPubkey } from "../../../__tests__/helpers/test-utils";
 import { Transaction } from "../Transaction";
-import { generateTestPubkey, generateTestAddress } from "../../__tests__/helpers/test-utils";
+import { TransactionBuilder } from "../TransactionBuilder";
 import type { BuildTransactionParams } from "../types";
 
 describe("TransactionBuilder", () => {

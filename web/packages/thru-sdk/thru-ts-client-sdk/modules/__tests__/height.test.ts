@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createMockContext, createMockHeightResponse } from "../../__tests__/helpers/test-utils";
+import { HeightSnapshot } from "../../domain/height";
 import { getBlockHeight } from "../height";
 
 describe("height", () => {
@@ -16,7 +17,7 @@ describe("height", () => {
       
       const result = await getBlockHeight(ctx);
       
-      expect(result).toBe(mockResponse);
+      expect(result).toBeInstanceOf(HeightSnapshot);
       expect(result.finalized).toBe(1000n);
       expect(result.locallyExecuted).toBe(1001n);
       expect(result.clusterExecuted).toBe(1002n);

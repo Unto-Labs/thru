@@ -1,4 +1,5 @@
 import { create } from "@bufbuild/protobuf";
+
 import { ConsensusStatus, CurrentVersionSchema, VersionContextSchema } from "./proto/thru/common/v1/consensus_pb";
 import { AccountView } from "./proto/thru/core/v1/account_pb";
 import { BlockView } from "./proto/thru/core/v1/block_pb";
@@ -10,8 +11,6 @@ export const DEFAULT_ACCOUNT_VIEW = AccountView.FULL;
 export const DEFAULT_BLOCK_VIEW = BlockView.FULL;
 export const DEFAULT_TRANSACTION_VIEW = TransactionView.FULL;
 export const DEFAULT_MIN_CONSENSUS = ConsensusStatus.UNSPECIFIED;
-
-// Default version context requests the latest version available at request time
 export const DEFAULT_VERSION_CONTEXT = create(VersionContextSchema, {
     version: {
         case: "current",

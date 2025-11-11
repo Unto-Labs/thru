@@ -2,9 +2,10 @@ import { create } from "@bufbuild/protobuf";
 import { describe, expect, it, vi } from "vitest";
 import { createMockAccount, createMockContext, createMockHeightResponse, generateTestAddress, generateTestPubkey } from "../../__tests__/helpers/test-utils";
 import { ConsensusStatus, CurrentVersionSchema, VersionContextSchema } from "../../proto/thru/common/v1/consensus_pb";
-import { FilterParamValueSchema, FilterSchema } from "../../proto/thru/common/v1/filters_pb";
 import { AccountView } from "../../proto/thru/core/v1/account_pb";
 import { GenerateStateProofResponseSchema, ListAccountsResponseSchema } from "../../proto/thru/services/v1/query_service_pb";
+import { Account } from "../../domain/accounts";
+import { Filter, FilterParamValue } from "../../domain/filters";
 import { createAccount, getAccount, getRawAccount, listAccounts } from "../accounts";
 import { toPubkey } from "../helpers";
 
@@ -18,7 +19,8 @@ describe("accounts", () => {
       const address = generateTestPubkey(0x01);
       const result = await getAccount(ctx, address);
       
-      expect(result).toBe(mockAccount);
+      expect(result).toBeInstanceOf(Account);
+      expect(result.address).toEqual(mockAccount.address?.value);
       expect(ctx.query.getAccount).toHaveBeenCalledTimes(1);
     });
 
@@ -28,10 +30,11 @@ describe("accounts", () => {
       vi.spyOn(ctx.query, "getAccount").mockResolvedValue(mockAccount);
       
       const address = generateTestPubkey(0x01);
-      await getAccount(ctx, address);
+      const result = await getAccount(ctx, address);
       
       const callArgs = (ctx.query.getAccount as any).mock.calls[0][0];
       expect(callArgs.address.value).toEqual(address);
+      expect(result).toBeInstanceOf(Account);
     });
 
     it("should accept address as string", async () => {
@@ -40,10 +43,11 @@ describe("accounts", () => {
       vi.spyOn(ctx.query, "getAccount").mockResolvedValue(mockAccount);
       
       const address = generateTestAddress(0x01);
-      await getAccount(ctx, address);
+      const result = await getAccount(ctx, address);
       
       const callArgs = (ctx.query.getAccount as any).mock.calls[0][0];
       expect(callArgs.address.value.length).toBe(32);
+      expect(result).toBeInstanceOf(Account);
     });
 
     it("should use default view when not provided", async () => {
@@ -77,6 +81,17 @@ describe("accounts", () => {
       
       const callArgs = (ctx.query.getAccount as any).mock.calls[0][0];
       expect(callArgs.minConsensus).toBe(ConsensusStatus.UNSPECIFIED);
+    });
+    it("should use default version context when not provided", async () => {
+      const ctx = createMockContext();
+      const mockAccount = createMockAccount();
+      vi.spyOn(ctx.query, "getAccount").mockResolvedValue(mockAccount);
+      
+      await getAccount(ctx, generateTestPubkey(0x01));
+      
+      const callArgs = (ctx.query.getAccount as any).mock.calls[0][0];
+      expect(callArgs.versionContext).toBeDefined();
+      expect(callArgs.versionContext.version?.case).toBe("current");
     });
 
     it("should use custom minConsensus when provided", async () => {
@@ -152,6 +167,17 @@ describe("accounts", () => {
       expect(callArgs.view).toBe(AccountView.FULL);
       expect(callArgs.minConsensus).toBe(ConsensusStatus.UNSPECIFIED);
     });
+    it("should use default version context when not provided", async () => {
+      const ctx = createMockContext();
+      const mockRawAccount = { address: { value: generateTestPubkey(0x01) } };
+      vi.spyOn(ctx.query, "getRawAccount").mockResolvedValue(mockRawAccount as any);
+      
+      await getRawAccount(ctx, generateTestPubkey(0x01));
+      
+      const callArgs = (ctx.query.getRawAccount as any).mock.calls[0][0];
+      expect(callArgs.versionContext).toBeDefined();
+      expect(callArgs.versionContext.version?.case).toBe("current");
+    });
   });
 
   describe("listAccounts", () => {
@@ -164,22 +190,18 @@ describe("accounts", () => {
       
       const owner = generateTestPubkey(0x01);
       const ownerPubkey = toPubkey(owner, "owner");
-      const ownerFilterParamValue = create(FilterParamValueSchema, {
-        kind: {
-          case: "bytesValue",
-          value: ownerPubkey.value,
-        },
-      });
-      const ownerFilter = create(FilterSchema, {
+      const ownerFilter = new Filter({
         expression: "meta.owner.value == params.owner_bytes",
         params: {
-          owner_bytes: ownerFilterParamValue,
+          owner_bytes: FilterParamValue.bytes(ownerPubkey.value),
         },
       });
       
       const result = await listAccounts(ctx, { filter: ownerFilter });
       
-      expect(result).toBe(mockResponse);
+      expect(result.accounts).toHaveLength(mockResponse.accounts.length);
+      result.accounts.forEach((account) => expect(account).toBeInstanceOf(Account));
+      expect(result.page).toBeUndefined();
       expect(ctx.query.listAccounts).toHaveBeenCalledTimes(1);
     });
 
@@ -190,16 +212,10 @@ describe("accounts", () => {
       
       const owner = generateTestPubkey(0x01);
       const ownerPubkey = toPubkey(owner, "owner");
-      const ownerFilterParamValue = create(FilterParamValueSchema, {
-        kind: {
-          case: "bytesValue",
-          value: ownerPubkey.value,
-        },
-      });
-      const ownerFilter = create(FilterSchema, {
+      const ownerFilter = new Filter({
         expression: "meta.owner.value == params.owner_bytes",
         params: {
-          owner_bytes: ownerFilterParamValue,
+          owner_bytes: FilterParamValue.bytes(ownerPubkey.value),
         },
       });
       
@@ -215,7 +231,7 @@ describe("accounts", () => {
     it("should use custom filter when provided", async () => {
       const ctx = createMockContext();
       const mockResponse = create(ListAccountsResponseSchema, { accounts: [] });
-      const customFilter = create(FilterSchema, {
+      const customFilter = new Filter({
         expression: "custom expression",
       });
       vi.spyOn(ctx.query, "listAccounts").mockResolvedValue(mockResponse);
@@ -233,16 +249,10 @@ describe("accounts", () => {
       
       const owner = generateTestPubkey(0x01);
       const ownerPubkey = toPubkey(owner, "owner");
-      const ownerFilterParamValue = create(FilterParamValueSchema, {
-        kind: {
-          case: "bytesValue",
-          value: ownerPubkey.value,
-        },
-      });
-      const ownerFilter = create(FilterSchema, {
+      const ownerFilter = new Filter({
         expression: "meta.owner.value == params.owner_bytes",
         params: {
-          owner_bytes: ownerFilterParamValue,
+          owner_bytes: FilterParamValue.bytes(ownerPubkey.value),
         },
       });
       
@@ -251,6 +261,17 @@ describe("accounts", () => {
       const callArgs = (ctx.query.listAccounts as any).mock.calls[0][0];
       expect(callArgs.view).toBe(AccountView.FULL);
       expect(callArgs.minConsensus).toBe(ConsensusStatus.UNSPECIFIED);
+    });
+    it("should use default version context when not provided", async () => {
+      const ctx = createMockContext();
+      const mockResponse = create(ListAccountsResponseSchema, { accounts: [] });
+      vi.spyOn(ctx.query, "listAccounts").mockResolvedValue(mockResponse);
+      
+      await listAccounts(ctx, {});
+      
+      const callArgs = (ctx.query.listAccounts as any).mock.calls[0][0];
+      expect(callArgs.versionContext).toBeDefined();
+      expect(callArgs.versionContext.version?.case).toBe("current");
     });
   });
 
@@ -350,7 +371,7 @@ describe("accounts", () => {
       const publicKey = generateTestPubkey(0x01);
       
       await expect(createAccount(ctx, { publicKey })).rejects.toThrow(
-        "State proof generation returned empty proof"
+        "State proof response missing proof"
       );
     });
 

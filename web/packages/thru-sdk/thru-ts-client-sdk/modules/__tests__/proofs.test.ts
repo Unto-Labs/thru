@@ -1,6 +1,7 @@
 import { create } from "@bufbuild/protobuf";
 import { describe, expect, it, vi } from "vitest";
 import { createMockContext, generateTestAddress, generateTestPubkey } from "../../__tests__/helpers/test-utils";
+import { StateProof } from "../../domain/proofs";
 import { StateProofType } from "../../proto/thru/core/v1/state_pb";
 import { GenerateStateProofResponseSchema } from "../../proto/thru/services/v1/query_service_pb";
 import { generateStateProof } from "../proofs";
@@ -12,6 +13,7 @@ describe("proofs", () => {
       const mockResponse = create(GenerateStateProofResponseSchema, {
         proof: {
           proof: new Uint8Array([1, 2, 3, 4]),
+          slot: 1000n,
         },
       });
       vi.spyOn(ctx.query, "generateStateProof").mockResolvedValue(mockResponse);
@@ -23,14 +25,15 @@ describe("proofs", () => {
         targetSlot: 1000n,
       });
       
-      expect(result).toBe(mockResponse);
+      expect(result).toBeInstanceOf(StateProof);
+      expect(result.slot).toBe(1000n);
       expect(ctx.query.generateStateProof).toHaveBeenCalledTimes(1);
     });
 
     it("should accept address as Uint8Array", async () => {
       const ctx = createMockContext();
       const mockResponse = create(GenerateStateProofResponseSchema, {
-        proof: { proof: new Uint8Array([1, 2, 3]) },
+        proof: { proof: new Uint8Array([1, 2, 3]), slot: 0n },
       });
       vi.spyOn(ctx.query, "generateStateProof").mockResolvedValue(mockResponse);
       
@@ -48,7 +51,7 @@ describe("proofs", () => {
     it("should accept address as string", async () => {
       const ctx = createMockContext();
       const mockResponse = create(GenerateStateProofResponseSchema, {
-        proof: { proof: new Uint8Array([1, 2, 3]) },
+        proof: { proof: new Uint8Array([1, 2, 3]), slot: 0n },
       });
       vi.spyOn(ctx.query, "generateStateProof").mockResolvedValue(mockResponse);
       
@@ -66,7 +69,7 @@ describe("proofs", () => {
     it("should include proof type in request", async () => {
       const ctx = createMockContext();
       const mockResponse = create(GenerateStateProofResponseSchema, {
-        proof: { proof: new Uint8Array([1, 2, 3]) },
+        proof: { proof: new Uint8Array([1, 2, 3]), slot: 0n },
       });
       vi.spyOn(ctx.query, "generateStateProof").mockResolvedValue(mockResponse);
       
@@ -83,7 +86,7 @@ describe("proofs", () => {
     it("should include target slot in request", async () => {
       const ctx = createMockContext();
       const mockResponse = create(GenerateStateProofResponseSchema, {
-        proof: { proof: new Uint8Array([1, 2, 3]) },
+        proof: { proof: new Uint8Array([1, 2, 3]), slot: 0n },
       });
       vi.spyOn(ctx.query, "generateStateProof").mockResolvedValue(mockResponse);
       
@@ -102,7 +105,7 @@ describe("proofs", () => {
     it("should allow undefined address", async () => {
       const ctx = createMockContext();
       const mockResponse = create(GenerateStateProofResponseSchema, {
-        proof: { proof: new Uint8Array([1, 2, 3]) },
+        proof: { proof: new Uint8Array([1, 2, 3]), slot: 0n },
       });
       vi.spyOn(ctx.query, "generateStateProof").mockResolvedValue(mockResponse);
       

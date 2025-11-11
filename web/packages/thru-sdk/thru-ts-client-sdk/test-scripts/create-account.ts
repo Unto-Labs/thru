@@ -26,10 +26,9 @@ async function fetchAccountSnapshot(label: string, address: string): Promise<voi
             : "UNKNOWN";
         const slot = account.versionContext?.slot ?? 0n;
         const balance = account.meta?.balance ?? 0n;
-        const stateCounter = account.meta?.stateCounter ?? 0n;
 
         console.log(
-            `${label} account status: consensus=${consensus}, slot=${slot.toString()}, balance=${balance.toString()}, stateCounter=${stateCounter.toString()}`,
+            `${label} account status: consensus=${consensus}, slot=${slot.toString()}, balance=${balance.toString()}`,
         );
     } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
@@ -57,16 +56,9 @@ async function run(): Promise<void> {
     const submittedSignature = await sdk.transactions.send(rawTransaction);
     // Allow some time for the cluster to reflect the new account state.
     await new Promise(resolve => setTimeout(resolve, 2_000));
-    const transactionStatus = await sdk.transactions.getStatus(submittedSignature);
-    console.log("Submitted transaction status:", transactionStatus);
-    console.log("Submitted transaction signature:", submittedSignature);
 
-    // await trackTransaction(submittedSignature);
-
-    // Allow some time for the cluster to reflect the new account state.
-    await new Promise(resolve => setTimeout(resolve, 2_000));
-
-    await fetchAccountSnapshot("Post-create", targetAccountAddress);
+    const account = await sdk.accounts.get(targetAccountAddress);
+    console.log("Account:", account);
 }
 
 run().catch(error => {

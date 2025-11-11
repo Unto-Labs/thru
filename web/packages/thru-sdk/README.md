@@ -1,6 +1,6 @@
 # @thru/thru-sdk
 
-Typed TypeScript/JavaScript client for talking to the Thru blockchain. It wraps the public gRPC-Web endpoints and bundles helpers for working with blocks, accounts, transactions, proofs, and typed identifiers.
+Typed TypeScript/JavaScript client for talking to the Thru blockchain. The SDK exposes rich domain models (blocks, accounts, transactions, events, proofs) that hide the underlying protobuf transport.
 
 ## Installation
 
@@ -10,7 +10,7 @@ npm install @thru/thru-sdk
 
 ### TypeScript Configuration
 
-For optimal import resolution, we recommend using modern TypeScript module resolution in your `tsconfig.json`:
+For optimal import resolution, use modern module resolution:
 
 ```json
 {
@@ -23,119 +23,141 @@ For optimal import resolution, we recommend using modern TypeScript module resol
 }
 ```
 
-**Why?** The SDK uses modern `exports` fields in `package.json` for better tree-shaking and bundler compatibility. The `bundler` resolution strategy fully supports these modern package exports, while the older `node` resolution may require importing from `dist` paths directly.
-
-If you're using a bundler (Vite, Webpack, esbuild, etc.) or modern build tools, `moduleResolution: "bundler"` is the recommended setting. For Node.js projects, you can also use `"node16"` or `"nodenext"`.
+If you rely on Node’s ESM support without a bundler, use `"moduleResolution": "nodenext"`.
 
 ## Basic Usage
 
 ```ts
-import { createThruClient } from '@thru/thru-sdk';
+import { createThruClient } from "@thru/thru-sdk";
+import {
+  Account,
+  Block,
+  ChainEvent,
+  Transaction,
+  TransactionStatusSnapshot,
+} from "@thru/thru-sdk";
 
-// Point at the default public alpha cluster or override with your own URL
 const thru = createThruClient({
-  baseUrl: 'https://grpc-web.alphanet.thruput.org',
+  baseUrl: "https://grpc-web.alphanet.thruput.org",
 });
 
-// Fetch the cluster height and the latest finalized block
-const { finalized } = await thru.blocks.getBlockHeight();
-const latestBlock = await thru.blocks.get({ slot: finalized });
+// Fetch the latest finalized block
+const height = await thru.blocks.getBlockHeight();
+const latestBlock: Block = await thru.blocks.get({ slot: height.finalized });
+console.log(latestBlock.header.blockHash);
 
-// Retrieve an account by address (Base58-like strings starting with "ta")
-const account = await thru.accounts.get('taExampleAddress...');
+// Fetch an account – returns the Account domain object
+const account: Account = await thru.accounts.get("taExampleAddress...");
+console.log(account.meta?.balance);
 
-// Build, sign, and submit a transaction
+// Build, sign, submit, and track a transaction
 const { rawTransaction, signature } = await thru.transactions.buildAndSign({
   feePayer: {
-    publicKey: 'taFeePayerAddress...',
+    publicKey: "taFeePayerAddress...",
     privateKey: feePayerSecretKeyBytes,
   },
   program: programIdentifierBytes,
 });
 await thru.transactions.send(rawTransaction);
+
+// Track the transaction – emits domain snapshots
+for await (const update of thru.streaming.trackTransaction(signature)) {
+  console.log(update.status, update.executionResult?.consumedComputeUnits);
+  if (update.statusCode === ConsensusStatus.FINALIZED) break;
+}
 ```
 
-### Using Filters
+## Domain Models
 
-Many SDK functions support CEL (Common Expression Language) filters to query or stream data based on custom expressions evaluated server-side. Filters are constructed using the `create` function from `@bufbuild/protobuf` (already a dependency of `@thru/thru-sdk`).
+The SDK revolves around immutable domain classes. They copy mutable buffers, expose clear invariants, and provide conversion helpers where needed.
 
-#### Constructing Filters
+| API surface | Domain class |
+| --- | --- |
+| Blocks | `Block`, `BlockHeader`, `BlockFooter` |
+| Accounts | `Account`, `AccountMeta`, `AccountData` |
+| Transactions | `Transaction`, `TransactionStatusSnapshot`, `TrackTransactionUpdate` |
+| Events | `ChainEvent` |
+| Proofs | `StateProof` |
+| Height | `HeightSnapshot` |
+| Node version | `VersionInfo` |
+
+All classes are exported from the root package for easy access:
+
+```ts
+import { Block, Account, ChainEvent } from "@thru/thru-sdk";
+```
+
+## Streaming APIs
+
+Every streaming endpoint yields an async iterable of domain models:
+
+```ts
+// Blocks
+for await (const { block } of thru.streaming.streamBlocks()) {
+  console.log(block.header.slot);
+}
+
+// Account updates
+for await (const { update } of thru.streaming.streamAccountUpdates("taAddress")) {
+  if (update.kind === "snapshot") {
+    console.log(update.snapshot.account.meta?.balance);
+  }
+}
+
+// Events
+for await (const { event } of thru.streaming.streamEvents()) {
+  console.log((event as ChainEvent).timestampNs);
+}
+
+// Transaction tracking
+for await (const update of thru.streaming.trackTransaction(signature)) {
+  console.log(update.status, update.executionResult?.consumedComputeUnits);
+}
+```
+
+## Filters
+
+Server-side filtering is supported everywhere via CEL expressions:
 
 ```ts
 import { create } from "@bufbuild/protobuf";
-import { 
-  FilterSchema, 
+import {
+  FilterSchema,
   FilterParamValueSchema,
-  type Filter,
-  type FilterParamValue 
 } from "@thru/thru-sdk";
 
-// Create a filter parameter value
-const paramValue = create(FilterParamValueSchema, {
-  kind: {
-    case: "bytesValue", // or "stringValue", "boolValue", "intValue", "doubleValue"
-    value: new Uint8Array(32), // the actual value
-  },
-});
-
-// Create the filter with a CEL expression
-const filter = create(FilterSchema, {
-  expression: "meta.owner.value == params.owner_bytes",
-  params: {
-    owner_bytes: paramValue,
-  },
-});
-```
-
-#### Filter Parameter Value Types
-
-Filter parameters support these types:
-- `{ case: "stringValue", value: string }` - for string parameters
-- `{ case: "bytesValue", value: Uint8Array }` - for byte array parameters
-- `{ case: "boolValue", value: boolean }` - for boolean parameters
-- `{ case: "intValue", value: bigint }` - for integer parameters
-- `{ case: "doubleValue", value: number }` - for floating-point parameters
-
-#### Functions That Accept Filters
-
-**Query Functions:**
-- `thru.accounts.list({ filter })` - List accounts with filtering
-- `thru.blocks.list({ filter })` - List blocks with filtering
-- `thru.transactions.listForAccount(account, { filter })` - List transactions for an account with filtering
-
-**Streaming Functions:**
-- `thru.streaming.streamBlocks({ filter })` - Stream blocks with filtering
-- `thru.streaming.streamAccountUpdates(address, { filter })` - Stream account updates with filtering
-- `thru.streaming.streamTransactions({ filter })` - Stream transactions with filtering
-- `thru.streaming.streamEvents({ filter })` - Stream events with filtering
-
-#### Example: Filtering Accounts by Owner
-
-```ts
-// List accounts owned by a specific public key
-const ownerBytes = new Uint8Array(32); // your owner pubkey bytes
-
+const ownerBytes = new Uint8Array(32);
 const ownerParam = create(FilterParamValueSchema, {
-  kind: {
-    case: "bytesValue",
-    value: ownerBytes,
-  },
+  kind: { case: "bytesValue", value: ownerBytes },
 });
 
 const filter = create(FilterSchema, {
   expression: "meta.owner.value == params.owner_bytes",
-  params: {
-    owner_bytes: ownerParam,
-  },
+  params: { owner_bytes: ownerParam },
 });
 
-const response = await thru.accounts.list({ filter });
+const accounts = await thru.accounts.list({ filter });
 ```
 
-### Modules at a Glance
+Accepted parameter kinds:
+- `stringValue`
+- `bytesValue`
+- `boolValue`
+- `intValue`
+- `doubleValue`
 
-- `thru.blocks` — query finalized or raw blocks and stream height information
-- `thru.accounts` — fetch account state, list owned accounts, and generate create-account transactions
-- `thru.transactions` — build transactions locally, sign them, submit, and inspect status
-- `thru.events` / `thru.proofs` — retrieve on-chain events and generate state proofs
-- `thru.helpers` — convert to/from Thru identifiers (addresses, signatures, block hashes) and derive program addresses
+Functions that take filters:
+- List APIs: `thru.accounts.list`, `thru.blocks.list`, `thru.transactions.listForAccount`
+- Streams: `thru.streaming.streamBlocks`, `thru.streaming.streamAccountUpdates`, `thru.streaming.streamTransactions`, `thru.streaming.streamEvents`
+
+## Modules Overview
+
+- `thru.blocks` — fetch/stream blocks and height snapshots
+- `thru.accounts` — read account state or build create-account transactions
+- `thru.transactions` — build, sign, submit, track, and inspect transactions
+- `thru.events` — query event history
+- `thru.proofs` — generate state proofs
+- `thru.streaming` — streaming wrappers for blocks, accounts, transactions, events
+- `thru.helpers` — address, signature, and block-hash conversion helpers
+
+The public surface is fully domain-based; reaching for lower-level protobuf structures is no longer necessary.

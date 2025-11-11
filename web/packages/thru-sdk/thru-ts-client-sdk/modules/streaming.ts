@@ -3,23 +3,25 @@ import { create } from "@bufbuild/protobuf";
 import { BytesLike, Pubkey } from "@thru/helpers";
 import type { ThruClientContext } from "../core/client";
 import { DEFAULT_ACCOUNT_VIEW, DEFAULT_BLOCK_VIEW, DEFAULT_MIN_CONSENSUS } from "../defaults";
-import type { ConsensusStatus } from "../proto/thru/common/v1/consensus_pb";
-import type { Filter } from "../proto/thru/common/v1/filters_pb";
+import { toStreamAccountUpdate, type StreamAccountUpdate } from "../domain/accounts";
+import { Block } from "../domain/blocks";
+import { ChainEvent } from "../domain/events";
+import { Filter } from "../domain/filters";
+import type { TrackTransactionUpdate } from "../domain/transactions";
+import { Transaction, toTrackTransactionUpdate } from "../domain/transactions";
+import { ConsensusStatus } from "../proto/thru/common/v1/consensus_pb";
 import type { AccountView } from "../proto/thru/core/v1/account_pb";
 import type { BlockView } from "../proto/thru/core/v1/block_pb";
 import {
     StreamAccountUpdatesRequestSchema,
-    type StreamAccountUpdatesResponse,
     StreamBlocksRequestSchema,
-    type StreamBlocksResponse,
     StreamEventsRequestSchema,
-    type StreamEventsResponse,
     StreamTransactionsRequestSchema,
-    type StreamTransactionsResponse,
     TrackTransactionRequestSchema,
-    type TrackTransactionResponse,
 } from "../proto/thru/services/v1/streaming_service_pb";
 import { toPubkey, toSignature as toSignatureMessage } from "./helpers";
+
+export type { TrackTransactionUpdate } from "../domain/transactions";
 
 export interface TrackTransactionOptions {
     timeoutMs?: number;
@@ -34,20 +36,35 @@ export interface StreamBlocksOptions {
     signal?: AbortSignal;
 }
 
+export interface StreamBlocksResult {
+    block: Block;
+}
+
 export function streamBlocks(
     ctx: ThruClientContext,
     options: StreamBlocksOptions = {},
-): AsyncIterable<StreamBlocksResponse> {
+): AsyncIterable<StreamBlocksResult> {
     const request = create(StreamBlocksRequestSchema, {
         startSlot: options.startSlot,
-        filter: options.filter,
+        filter: options.filter?.toProto(),
         view: options.view ?? DEFAULT_BLOCK_VIEW,
         minConsensus: options.minConsensus ?? DEFAULT_MIN_CONSENSUS,
     });
 
-    return ctx.streaming.streamBlocks(request, {
+    const iterable = ctx.streaming.streamBlocks(request, {
         signal: options.signal,
     });
+
+    async function* mapper() {
+        for await (const response of iterable) {
+            if (!response.block) {
+                continue;
+            }
+            yield { block: Block.fromProto(response.block) };
+        }
+    }
+
+    return mapper();
 }
 
 export interface StreamAccountUpdatesOptions {
@@ -56,20 +73,36 @@ export interface StreamAccountUpdatesOptions {
     signal?: AbortSignal;
 }
 
+export interface StreamAccountUpdatesResult {
+    update: StreamAccountUpdate;
+}
+
 export function streamAccountUpdates(
     ctx: ThruClientContext,
     address: Pubkey,
     options: StreamAccountUpdatesOptions = {},
-): AsyncIterable<StreamAccountUpdatesResponse> {
+): AsyncIterable<StreamAccountUpdatesResult> {
     const request = create(StreamAccountUpdatesRequestSchema, {
         address: toPubkey(address, "address"),
         view: options.view ?? DEFAULT_ACCOUNT_VIEW,
-        filter: options.filter,
+        filter: options.filter?.toProto(),
     });
 
-    return ctx.streaming.streamAccountUpdates(request, {
+    const iterable = ctx.streaming.streamAccountUpdates(request, {
         signal: options.signal,
     });
+
+    async function* mapper() {
+        for await (const response of iterable) {
+            const update = toStreamAccountUpdate(response);
+            if (!update) {
+                continue;
+            }
+            yield { update };
+        }
+    }
+
+    return mapper();
 }
 
 export interface StreamTransactionsOptions {
@@ -78,18 +111,33 @@ export interface StreamTransactionsOptions {
     signal?: AbortSignal;
 }
 
+export interface StreamTransactionsResult {
+    transaction: Transaction;
+}
+
 export function streamTransactions(
     ctx: ThruClientContext,
     options: StreamTransactionsOptions = {},
-): AsyncIterable<StreamTransactionsResponse> {
+): AsyncIterable<StreamTransactionsResult> {
     const request = create(StreamTransactionsRequestSchema, {
-        filter: options.filter,
+        filter: options.filter?.toProto(),
         minConsensus: options.minConsensus ?? DEFAULT_MIN_CONSENSUS,
     });
 
-    return ctx.streaming.streamTransactions(request, {
+    const iterable = ctx.streaming.streamTransactions(request, {
         signal: options.signal,
     });
+
+    async function* mapper() {
+        for await (const response of iterable) {
+            if (!response.transaction) {
+                continue;
+            }
+            yield { transaction: Transaction.fromProto(response.transaction) };
+        }
+    }
+
+    return mapper();
 }
 
 export interface StreamEventsOptions {
@@ -97,24 +145,36 @@ export interface StreamEventsOptions {
     signal?: AbortSignal;
 }
 
+export interface StreamEventsResult {
+    event: ChainEvent;
+}
+
 export function streamEvents(
     ctx: ThruClientContext,
     options: StreamEventsOptions = {},
-): AsyncIterable<StreamEventsResponse> {
+): AsyncIterable<StreamEventsResult> {
     const request = create(StreamEventsRequestSchema, {
-        filter: options.filter,
+        filter: options.filter?.toProto(),
     });
 
-    return ctx.streaming.streamEvents(request, {
+    const iterable = ctx.streaming.streamEvents(request, {
         signal: options.signal,
     });
+
+    async function* mapper() {
+        for await (const response of iterable) {
+            yield { event: ChainEvent.fromStream(response) };
+        }
+    }
+
+    return mapper();
 }
 
 export function trackTransaction(
     ctx: ThruClientContext,
     signature: BytesLike,
     options: TrackTransactionOptions = {},
-): AsyncIterable<TrackTransactionResponse> {
+): AsyncIterable<TrackTransactionUpdate> {
     const timeoutMs = options.timeoutMs;
     const request = create(TrackTransactionRequestSchema, {
         signature: toSignatureMessage(signature),
@@ -127,7 +187,15 @@ export function trackTransaction(
                 : undefined,
     });
 
-    return ctx.streaming.trackTransaction(request, {
+    const iterable = ctx.streaming.trackTransaction(request, {
         signal: options.signal,
     });
+
+    async function* mapper() {
+        for await (const response of iterable) {
+            yield toTrackTransactionUpdate(response);
+        }
+    }
+
+    return mapper();
 }

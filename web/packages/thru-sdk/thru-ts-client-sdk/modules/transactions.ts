@@ -11,11 +11,25 @@ import {
     DEFAULT_TRANSACTION_VIEW,
     DEFAULT_VERSION_CONTEXT,
 } from "../defaults";
+import { Filter } from "../domain/filters";
+import { PageRequest, PageResponse } from "../domain/pagination";
+import {
+    type BuildTransactionParams,
+    type InstructionContext,
+    Transaction as LocalTransaction,
+    type OptionalProofs,
+    type ProgramIdentifier,
+    type SignedTransactionResult,
+    Transaction,
+    type TransactionAccountsInput,
+    TransactionBuilder,
+    type TransactionHeaderInput,
+    TransactionStatusSnapshot,
+} from "../domain/transactions";
+import { parseAccountIdentifier, parseInstructionData, resolveProgramIdentifier } from "../domain/transactions/utils";
 import type { ConsensusStatus, VersionContext } from "../proto/thru/common/v1/consensus_pb";
-import type { Filter } from "../proto/thru/common/v1/filters_pb";
-import type { PageRequest } from "../proto/thru/common/v1/pagination_pb";
 import { AccountView } from "../proto/thru/core/v1/account_pb";
-import { Transaction as CoreTransaction, RawTransaction, TransactionView } from "../proto/thru/core/v1/transaction_pb";
+import { RawTransaction, TransactionView } from "../proto/thru/core/v1/transaction_pb";
 import {
     BatchSendTransactionsRequestSchema,
     type BatchSendTransactionsResponse,
@@ -26,21 +40,8 @@ import {
     GetTransactionRequestSchema,
     GetTransactionStatusRequestSchema,
     ListTransactionsForAccountRequestSchema,
-    type ListTransactionsForAccountResponse,
-    TransactionStatus,
+    type ListTransactionsForAccountResponse as ProtoListTransactionsForAccountResponse,
 } from "../proto/thru/services/v1/query_service_pb";
-import {
-    type BuildTransactionParams,
-    type InstructionContext,
-    Transaction as LocalTransaction,
-    type OptionalProofs,
-    type ProgramIdentifier,
-    type SignedTransactionResult,
-    type TransactionAccountsInput,
-    TransactionBuilder,
-    type TransactionHeaderInput,
-} from "../transactions";
-import { parseAccountIdentifier, parseInstructionData, resolveProgramIdentifier } from "../transactions/utils";
 import { toSignature } from "./helpers";
 
 import { BytesLike, encodeSignature, Pubkey } from "@thru/helpers";
@@ -103,20 +104,27 @@ export interface RawTransactionQueryOptions {
 export interface ListTransactionsForAccountOptions {
     filter?: Filter;
     page?: PageRequest;
+    transactionOptions?: TransactionQueryOptions;
+}
+
+export interface TransactionList {
+    transactions: Transaction[];
+    page?: PageResponse;
 }
 
 export async function getTransaction(
     ctx: ThruClientContext,
     signature: BytesLike,
     options: TransactionQueryOptions = {},
-): Promise<CoreTransaction> {
+): Promise<Transaction> {
     const request = create(GetTransactionRequestSchema, {
         signature: toSignature(signature),
         view: options.view ?? DEFAULT_TRANSACTION_VIEW,
         versionContext: options.versionContext ?? DEFAULT_VERSION_CONTEXT,
         minConsensus: options.minConsensus ?? DEFAULT_MIN_CONSENSUS,
     });
-    return ctx.query.getTransaction(request);
+    const proto = await ctx.query.getTransaction(request);
+    return Transaction.fromProto(proto);
 }
 
 export async function getRawTransaction(
@@ -132,24 +140,37 @@ export async function getRawTransaction(
     return ctx.query.getRawTransaction(request);
 }
 
-export async function getTransactionStatus(ctx: ThruClientContext, signature: BytesLike): Promise<TransactionStatus> {
+export async function getTransactionStatus(ctx: ThruClientContext, signature: BytesLike): Promise<TransactionStatusSnapshot> {
     const request = create(GetTransactionStatusRequestSchema, {
         signature: toSignature(signature),
     });
-    return ctx.query.getTransactionStatus(request);
+    const proto = await ctx.query.getTransactionStatus(request);
+    return TransactionStatusSnapshot.fromProto(proto);
 }
 
 export async function listTransactionsForAccount(
     ctx: ThruClientContext,
     account: Pubkey,
     options: ListTransactionsForAccountOptions = {},
-): Promise<ListTransactionsForAccountResponse> {
+): Promise<TransactionList> {
     const request = create(ListTransactionsForAccountRequestSchema, {
         account: toPubkey(account, "account"),
-        filter: options.filter,
-        page: options.page,
+        filter: options.filter?.toProto(),
+        page: options.page?.toProto(),
     });
-    return ctx.query.listTransactionsForAccount(request);
+    const response: ProtoListTransactionsForAccountResponse = await ctx.query.listTransactionsForAccount(request);
+    const transactions = await Promise.all(
+        response.signatures.map((signatureMessage) => {
+            if (!signatureMessage.value) {
+                throw new Error("ListTransactionsForAccount returned an empty signature");
+            }
+            return getTransaction(ctx, signatureMessage.value, options.transactionOptions);
+        }),
+    );
+    return {
+        transactions,
+        page: PageResponse.fromProto(response.page),
+    };
 }
 
 export async function buildTransaction(

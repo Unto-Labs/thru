@@ -1,10 +1,11 @@
 import { create } from "@bufbuild/protobuf";
 
 import type { ThruClientContext } from "../core/client";
+import { VersionInfo } from "../domain/version";
 import { GetVersionRequestSchema, type GetVersionResponse } from "../proto/thru/services/v1/query_service_pb";
 
-export function getVersion(ctx: ThruClientContext): Promise<GetVersionResponse> {
-    const request = create(GetVersionRequestSchema, {});
-    return ctx.query.getVersion(request);
+export function getVersion(ctx: ThruClientContext): Promise<VersionInfo> {
+    const request = create(GetVersionRequestSchema);
+    return ctx.query.getVersion(request).then((response: GetVersionResponse) => VersionInfo.fromProto(response));
 }
 

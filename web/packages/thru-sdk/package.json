@@ -23,6 +23,7 @@
     "get-height": "tsx --tsconfig tsconfig.json thru-ts-client-sdk/test-scripts/get-height.ts",
     "counter": "tsx --tsconfig tsconfig.json thru-ts-client-sdk/test-scripts/counter.ts",
     "create-account": "tsx --tsconfig tsconfig.json thru-ts-client-sdk/test-scripts/create-account.ts",
+    "smoketest": "tsx --tsconfig tsconfig.json thru-ts-client-sdk/test-scripts/smoketest.ts",
     "protobufs:pull": "rm -rf proto && cp -a ../../../proto ./proto",
     "protobufs:generate": "buf generate --include-imports",
     "build": "tsup",

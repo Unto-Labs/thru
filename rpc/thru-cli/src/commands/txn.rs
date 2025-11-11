@@ -85,8 +85,17 @@ pub async fn handle_txn_command(
             account,
             slot,
         } => make_state_proof(config, &proof_type, &account, slot, json_format).await,
-        TxnCommands::Get { signature } => {
-            get_transaction(config, &signature, json_format).await
+        TxnCommands::Get {
+            signature,
+            retry_count,
+        } => {
+            get_transaction(
+                config,
+                &signature,
+                json_format,
+                retry_count,
+            )
+            .await
         }
     }
 }
@@ -718,6 +727,7 @@ async fn get_transaction(
     config: &Config,
     signature_str: &str,
     json_format: bool,
+    retry_count: u32,
 ) -> Result<(), CliError> {
     // Parse signature - try ts... format first, then hex
     let signature = if signature_str.starts_with("ts") && signature_str.len() == 90 {
@@ -744,14 +754,18 @@ async fn get_transaction(
         )));
     };
 
+    let timeout_duration = Duration::from_secs(config.timeout_seconds);
+
     // Create RPC client
     let client = create_rpc_client(config)?;
 
     // Get transaction
     let transaction_details = client
-        .get_transaction(&signature)
+        .get_transaction(&signature, timeout_duration, retry_count)
         .await
-        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get transaction: {:?}", e)))?;
+        .map_err(|e| {
+            CliError::TransactionSubmission(format!("Failed to get transaction: {:?}", e))
+        })?;
 
     match transaction_details {
         None => {
@@ -837,12 +851,45 @@ async fn get_transaction(
                     events_json.push(serde_json::Value::Object(event_json));
                 }
 
+                // Extract instruction data from body if available
+                let instruction_data_hex = if let Some(body) = &details.body {
+                    if details.instruction_data_size > 0 && body.len() >= details.instruction_data_size as usize {
+                        Some(hex::encode(&body[0..details.instruction_data_size as usize]))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                };
+
                 let response = serde_json::json!({
                     "transaction_get": {
                         "status": if has_failure { "failed" } else { "success" },
+                        /* Transaction metadata */
                         "signature": details.signature.as_str(),
                         "slot": details.slot,
+                        "block_offset": details.block_offset,
+                        "body": details.body.as_ref().map(|b| hex::encode(b)),
+                        "instruction_data": instruction_data_hex,
+                        /* Transaction header */
+                        "fee_payer_signature": details.fee_payer_signature.as_str(),
+                        "version": details.version,
+                        "flags": details.flags,
+                        "readwrite_accounts_count": details.readwrite_accounts_count,
+                        "readonly_accounts_count": details.readonly_accounts_count,
+                        "instruction_data_size": details.instruction_data_size,
+                        "requested_compute_units": details.requested_compute_units,
+                        "requested_state_units": details.requested_state_units,
+                        "requested_memory_units": details.requested_memory_units,
+                        "expiry_after": details.expiry_after,
+                        "fee": details.fee,
+                        "nonce": details.nonce,
+                        "start_slot": details.start_slot,
+                        "fee_payer_pubkey": details.fee_payer_pubkey.as_str(),
+                        "program_pubkey": details.program_pubkey.as_str(),
+                        /* Execution result */
                         "compute_units_consumed": details.compute_units_consumed,
+                        "memory_units_consumed": details.memory_units_consumed,
                         "state_units_consumed": details.state_units_consumed,
                         "execution_result": details.execution_result,
                         "vm_error": details.vm_error,
@@ -863,9 +910,74 @@ async fn get_transaction(
                 } else {
                     output::print_success("Transaction found");
                 }
+
+                /* Transaction metadata */
+                println!("\n=== Transaction Metadata ===");
                 println!("Signature: {}", details.signature.as_str());
                 println!("Slot: {}", details.slot);
+                if let Some(block_offset) = details.block_offset {
+                    println!("Block Offset: {}", block_offset);
+                }
+
+                /* Parse and display instruction data from body */
+                if let Some(body) = &details.body {
+                    println!("\n=== Transaction Body ===");
+                    println!("Total Body Size: {} bytes", body.len());
+                    println!("Full Body (hex): {}", hex::encode(body));
+
+                    // The body contains the serialized transaction data
+                    // We can display the instruction data portion separately
+                    if details.instruction_data_size > 0 && body.len() >= details.instruction_data_size as usize {
+                        let instruction_data = &body[0..details.instruction_data_size as usize];
+                        println!("\nInstruction Data Size: {} bytes", instruction_data.len());
+                        println!("Instruction Data (hex): {}", hex::encode(instruction_data));
+
+                        // Try to display as ASCII if printable
+                        if let Ok(ascii_str) = std::str::from_utf8(instruction_data) {
+                            if ascii_str.chars().all(|c| c.is_ascii_graphic() || c.is_ascii_whitespace()) {
+                                println!("Instruction Data (ASCII): {}", ascii_str);
+                            }
+                        }
+                    }
+                }
+
+                /* Transaction header */
+                println!("\n=== Transaction Header ===");
+                println!("Fee Payer Signature: {}", details.fee_payer_signature.as_str());
+                println!("Version: {}", details.version);
+                println!("Flags: {}", details.flags);
+                println!("Read-write Accounts Count: {}", details.readwrite_accounts_count);
+                println!("Read-only Accounts Count: {}", details.readonly_accounts_count);
+                println!("Instruction Data Size: {}", details.instruction_data_size);
+                println!("Requested Compute Units: {}", details.requested_compute_units);
+                println!("Requested State Units: {}", details.requested_state_units);
+                println!("Requested Memory Units: {}", details.requested_memory_units);
+                println!("Expiry After: {}", details.expiry_after);
+                println!("Fee: {}", details.fee);
+                println!("Nonce: {}", details.nonce);
+                println!("Start Slot: {}", details.start_slot);
+                println!("Fee Payer Pubkey: {}", details.fee_payer_pubkey.as_str());
+                println!("Program Pubkey: {}", details.program_pubkey.as_str());
+
+                /* Accounts */
+                if !details.rw_accounts.is_empty() {
+                    println!("\n=== Read-write Accounts ===");
+                    for account in &details.rw_accounts {
+                        println!("  {}", account.as_str());
+                    }
+                }
+
+                if !details.ro_accounts.is_empty() {
+                    println!("\n=== Read-only Accounts ===");
+                    for account in &details.ro_accounts {
+                        println!("  {}", account.as_str());
+                    }
+                }
+
+                /* Execution result */
+                println!("\n=== Execution Result ===");
                 println!("Compute Units Consumed: {}", details.compute_units_consumed);
+                println!("Memory Units Consumed: {}", details.memory_units_consumed);
                 println!("State Units Consumed: {}", details.state_units_consumed);
                 println!("Execution Result: {}", details.execution_result);
                 println!("VM Error: {}", format_vm_error(details.vm_error));
@@ -873,20 +985,6 @@ async fn get_transaction(
                 println!("Events Count: {}", details.events_cnt);
                 println!("Events Size: {}", details.events_sz);
                 println!("Pages Used: {}", details.pages_used);
-
-                if !details.rw_accounts.is_empty() {
-                    println!("\nRead-write Accounts:");
-                    for account in &details.rw_accounts {
-                        println!("  {}", account.as_str());
-                    }
-                }
-
-                if !details.ro_accounts.is_empty() {
-                    println!("\nRead-only Accounts:");
-                    for account in &details.ro_accounts {
-                        println!("  {}", account.as_str());
-                    }
-                }
 
                 // Display events if any are present
                 if details.events_cnt > 0 {

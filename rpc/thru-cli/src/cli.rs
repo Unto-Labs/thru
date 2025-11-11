@@ -445,6 +445,10 @@ pub enum TxnCommands {
     Get {
         /// Transaction signature (ts... format or 128 hex characters)
         signature: String,
+
+        /// Number of retry attempts (1-60, default: 1)
+        #[arg(long = "retry-count", value_name = "COUNT", default_value = "1", value_parser = clap::value_parser!(u32).range(1..=60))]
+        retry_count: u32,
     },
 }
 

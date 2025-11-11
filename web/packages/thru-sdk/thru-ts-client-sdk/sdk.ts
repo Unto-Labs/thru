@@ -1,4 +1,4 @@
-import { TransactionBuilder } from "./transactions";
+import { TransactionBuilder } from "./domain/transactions";
 
 // ============================================================================
 // Namespace Exports (for module functions)
@@ -15,34 +15,37 @@ export * as transactions from "./modules/transactions";
 // ============================================================================
 // Value Exports (classes, enums, functions)
 // ============================================================================
+export { Account } from "./domain/accounts";
+export { Block } from "./domain/blocks";
+export { ChainEvent } from "./domain/events";
+export { Filter, FilterParamValue } from "./domain/filters";
+export { HeightSnapshot } from "./domain/height";
+export { PageRequest, PageResponse } from "./domain/pagination";
+export { StateProof } from "./domain/proofs";
+export { Transaction, TransactionStatusSnapshot } from "./domain/transactions";
+export { VersionInfo } from "./domain/version";
 export { deriveProgramAddress, toPubkey } from "./modules/helpers";
 export { ConsensusStatus } from "./proto/thru/common/v1/consensus_pb";
 export {
     FilterParamValueSchema,
     FilterSchema
 } from "./proto/thru/common/v1/filters_pb";
-export { Transaction as SdkTransaction } from "./transactions";
 export { TransactionBuilder };
 
 // ============================================================================
 // Type Exports - Common Types
 // ============================================================================
     export type { Pubkey } from "@thru/helpers";
-
+    export type { PageRequestParams, PageResponseParams } from "./domain/pagination";
 // ============================================================================
 // Type Exports - Proto/Protocol Types
 // ============================================================================
-export type {
-    Filter,
-    FilterParamValue
-} from "./proto/thru/common/v1/filters_pb";
 
 // ============================================================================
 // Type Exports - Accounts Module
 // ============================================================================
 export type {
-    AccountQueryOptions,
-    CreateAccountOptions,
+    AccountList, AccountQueryOptions, CreateAccountOptions,
     ListAccountsOptions,
     RawAccountQueryOptions
 } from "./modules/accounts";
@@ -51,6 +54,7 @@ export type {
 // Type Exports - Blocks Module
 // ============================================================================
 export type {
+    BlockList,
     BlockQueryOptions,
     ListBlocksOptions,
     RawBlockQueryOptions
@@ -78,28 +82,43 @@ export type { GeneratedKeyPair } from "./modules/keys";
 // ============================================================================
 // Type Exports - Streaming Module
 // ============================================================================
-export type { TrackTransactionOptions } from "./modules/streaming";
+export type { StreamAccountUpdate } from "./domain/accounts";
+export type { HeightSnapshotParams } from "./domain/height/HeightSnapshot";
+export type {
+    StreamAccountUpdatesOptions,
+    StreamAccountUpdatesResult,
+    StreamBlocksOptions,
+    StreamBlocksResult,
+    StreamEventsOptions,
+    StreamEventsResult,
+    StreamTransactionsOptions,
+    StreamTransactionsResult,
+    TrackTransactionOptions,
+    TrackTransactionUpdate
+} from "./modules/streaming";
 
 // ============================================================================
 // Type Exports - Transactions Module
 // ============================================================================
 export type {
+    SignedTransactionResult,
+    TransactionExecutionEvent,
+    TransactionExecutionResultData
+} from "./domain/transactions";
+export type {
+    InstructionContext,
+    ProgramIdentifier
+} from "./domain/transactions/types";
+export type {
     BatchSendTransactionsOptions,
     BuildAndSignTransactionOptions,
     BuildTransactionOptions,
     InstructionData,
-    ListTransactionsForAccountOptions,
-    RawTransactionQueryOptions,
+    ListTransactionsForAccountOptions, RawTransactionQueryOptions,
     TransactionAccountsConfig,
     TransactionFeePayerConfig,
-    TransactionHeaderConfig,
-    TransactionQueryOptions
+    TransactionHeaderConfig, TransactionList, TransactionQueryOptions
 } from "./modules/transactions";
-export type { SignedTransactionResult } from "./transactions";
-export type {
-    InstructionContext,
-    ProgramIdentifier
-} from "./transactions/types";
 
 // ============================================================================
 // Type Exports - Proofs Module

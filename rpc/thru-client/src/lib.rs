@@ -31,7 +31,7 @@ use base64::{Engine as _, engine::general_purpose};
 use prost_types::Duration as ProstDuration;
 use tokio::time;
 use tonic::{
-    Request, Status,
+    Request,
     metadata::MetadataValue,
     transport::{Channel, ClientTlsConfig, Endpoint},
 };
@@ -301,12 +301,18 @@ impl Client {
     }
 
     /// Get transaction details by signature.
-    pub async fn get_transaction(&self, signature: &Signature) -> Result<Option<TransactionDetails>> {
-        let signature_bytes = signature.to_bytes()
+    pub async fn get_transaction(
+        &self,
+        signature: &Signature,
+        timeout: Duration,
+        max_attempts: u32,
+    ) -> Result<Option<TransactionDetails>> {
+        let signature_bytes = signature
+            .to_bytes()
             .map_err(|e| ClientError::Validation(format!("Invalid signature: {}", e)))?;
 
         let transaction_proto = self
-            .fetch_transaction_details(&signature_bytes, self.timeout)
+            .fetch_transaction_details(&signature_bytes, timeout, max_attempts)
             .await?;
 
         if transaction_proto.is_none() {
@@ -314,6 +320,36 @@ impl Client {
         }
 
         let transaction_proto = transaction_proto.unwrap();
+
+        /* Extract header fields */
+        let header = transaction_proto.header.as_ref()
+            .ok_or_else(|| ClientError::Rpc("transaction missing header".into()))?;
+
+        let fee_payer_sig_bytes = header.fee_payer_signature.as_ref()
+            .ok_or_else(|| ClientError::Rpc("header missing fee_payer_signature".into()))?
+            .value.clone();
+        let fee_payer_signature = signature_from_bytes(
+            &array_from_vec::<64>(fee_payer_sig_bytes, "fee_payer_signature")
+                .map_err(ClientError::Validation)?
+        )?;
+
+        let fee_payer_pubkey_bytes = header.fee_payer_pubkey.as_ref()
+            .ok_or_else(|| ClientError::Rpc("header missing fee_payer_pubkey".into()))?
+            .value.clone();
+        let fee_payer_pubkey = Pubkey::from_bytes(
+            &array_from_vec::<32>(fee_payer_pubkey_bytes, "fee_payer_pubkey")
+                .map_err(ClientError::Validation)?
+        );
+
+        let program_pubkey_bytes = header.program_pubkey.as_ref()
+            .ok_or_else(|| ClientError::Rpc("header missing program_pubkey".into()))?
+            .value.clone();
+        let program_pubkey = Pubkey::from_bytes(
+            &array_from_vec::<32>(program_pubkey_bytes, "program_pubkey")
+                .map_err(ClientError::Validation)?
+        );
+
+        /* Extract execution result fields */
         let transaction_slot = transaction_proto.slot.unwrap_or(0);
         let execution_proto = transaction_proto.execution_result.clone();
         let execution = execution_proto.unwrap_or_default();
@@ -369,7 +405,10 @@ impl Client {
             .collect::<Vec<_>>();
 
         Ok(Some(TransactionDetails {
+            /* Execution result fields */
             compute_units_consumed: execution.consumed_compute_units as u64,
+            memory_units_consumed: execution.consumed_memory_units,
+            state_units_consumed: execution.consumed_state_units as u64,
             events_cnt: if execution.events_count != 0 {
                 execution.events_count
             } else {
@@ -378,15 +417,37 @@ impl Client {
             events_sz: execution.events_size,
             execution_result,
             pages_used: execution.pages_used,
-            state_units_consumed: execution.consumed_state_units as u64,
             user_error_code,
             vm_error,
-            signature: signature.clone(),
             rw_accounts,
             ro_accounts,
-            slot: transaction_slot,
-            proof_slot: transaction_slot,
             events,
+
+            /* Transaction header fields */
+            fee_payer_signature,
+            version: header.version,
+            flags: header.flags,
+            readwrite_accounts_count: header.readwrite_accounts_count,
+            readonly_accounts_count: header.readonly_accounts_count,
+            instruction_data_size: header.instruction_data_size,
+            requested_compute_units: header.requested_compute_units,
+            requested_state_units: header.requested_state_units,
+            requested_memory_units: header.requested_memory_units,
+            expiry_after: header.expiry_after,
+            fee: header.fee,
+            nonce: header.nonce,
+            start_slot: header.start_slot,
+            fee_payer_pubkey,
+            program_pubkey,
+
+            /* Transaction metadata */
+            signature: signature.clone(),
+            body: transaction_proto.body,
+            slot: transaction_slot,
+            block_offset: transaction_proto.block_offset,
+
+            /* Legacy field */
+            proof_slot: transaction_slot,
         }))
     }
 
@@ -399,13 +460,41 @@ impl Client {
         let signature_bytes = self.send_transaction(transaction).await?;
         let _track_response = self.track_transaction(&signature_bytes, timeout).await?;
         let transaction_proto = self
-            .fetch_transaction_details(&signature_bytes, timeout)
-            .await?;
+            .fetch_transaction_details(&signature_bytes, timeout, 1)
+            .await?
+            .ok_or_else(|| ClientError::Rpc("transaction not found after execution".into()))?;
 
-        let transaction_slot = transaction_proto.as_ref().and_then(|tx| tx.slot).unwrap_or(0);
-        let execution_proto = transaction_proto
-            .as_ref()
-            .and_then(|tx| tx.execution_result.clone());
+        /* Extract header fields */
+        let header = transaction_proto.header.as_ref()
+            .ok_or_else(|| ClientError::Rpc("transaction missing header".into()))?;
+
+        let fee_payer_sig_bytes = header.fee_payer_signature.as_ref()
+            .ok_or_else(|| ClientError::Rpc("header missing fee_payer_signature".into()))?
+            .value.clone();
+        let fee_payer_signature = signature_from_bytes(
+            &array_from_vec::<64>(fee_payer_sig_bytes, "fee_payer_signature")
+                .map_err(ClientError::Validation)?
+        )?;
+
+        let fee_payer_pubkey_bytes = header.fee_payer_pubkey.as_ref()
+            .ok_or_else(|| ClientError::Rpc("header missing fee_payer_pubkey".into()))?
+            .value.clone();
+        let fee_payer_pubkey = Pubkey::from_bytes(
+            &array_from_vec::<32>(fee_payer_pubkey_bytes, "fee_payer_pubkey")
+                .map_err(ClientError::Validation)?
+        );
+
+        let program_pubkey_bytes = header.program_pubkey.as_ref()
+            .ok_or_else(|| ClientError::Rpc("header missing program_pubkey".into()))?
+            .value.clone();
+        let program_pubkey = Pubkey::from_bytes(
+            &array_from_vec::<32>(program_pubkey_bytes, "program_pubkey")
+                .map_err(ClientError::Validation)?
+        );
+
+        /* Extract execution result fields */
+        let transaction_slot = transaction_proto.slot.unwrap_or(0);
+        let execution_proto = transaction_proto.execution_result.clone();
         let execution = execution_proto.unwrap_or_default();
 
         let signature = signature_from_bytes(&signature_bytes)?;
@@ -460,7 +549,10 @@ impl Client {
             .collect::<Vec<_>>();
 
         Ok(TransactionDetails {
+            /* Execution result fields */
             compute_units_consumed: execution.consumed_compute_units as u64,
+            memory_units_consumed: execution.consumed_memory_units,
+            state_units_consumed: execution.consumed_state_units as u64,
             events_cnt: if execution.events_count != 0 {
                 execution.events_count
             } else {
@@ -469,15 +561,37 @@ impl Client {
             events_sz: execution.events_size,
             execution_result,
             pages_used: execution.pages_used,
-            state_units_consumed: execution.consumed_state_units as u64,
             user_error_code,
             vm_error,
-            signature,
             rw_accounts,
             ro_accounts,
-            slot: transaction_slot,
-            proof_slot: transaction_slot,
             events,
+
+            /* Transaction header fields */
+            fee_payer_signature,
+            version: header.version,
+            flags: header.flags,
+            readwrite_accounts_count: header.readwrite_accounts_count,
+            readonly_accounts_count: header.readonly_accounts_count,
+            instruction_data_size: header.instruction_data_size,
+            requested_compute_units: header.requested_compute_units,
+            requested_state_units: header.requested_state_units,
+            requested_memory_units: header.requested_memory_units,
+            expiry_after: header.expiry_after,
+            fee: header.fee,
+            nonce: header.nonce,
+            start_slot: header.start_slot,
+            fee_payer_pubkey,
+            program_pubkey,
+
+            /* Transaction metadata */
+            signature,
+            body: transaction_proto.body,
+            slot: transaction_slot,
+            block_offset: transaction_proto.block_offset,
+
+            /* Legacy field */
+            proof_slot: transaction_slot,
         })
     }
 
@@ -639,13 +753,18 @@ impl Client {
         &self,
         signature: &[u8; 64],
         timeout: Duration,
+        max_attempts: u32,
     ) -> Result<Option<corev1::Transaction>> {
         let mut client = QueryServiceClient::new(self.channel.clone())
             .max_decoding_message_size(128 * 1024 * 1024) /* 128 MB */
             .max_encoding_message_size(128 * 1024 * 1024); /* 128 MB */
         let deadline = Instant::now() + timeout;
 
-        while Instant::now() < deadline {
+        for _ in 0..max_attempts {
+            if Instant::now() >= deadline {
+                break;
+            }
+
             let request = servicesv1::GetTransactionRequest {
                 signature: Some(corev1::Signature {
                     value: signature.to_vec(),
@@ -666,15 +785,14 @@ impl Client {
                         return Ok(Some(transaction));
                     }
                 }
-                Err(status) if should_retry(&status) => {
-                    time::sleep(POLL_INTERVAL).await;
-                    continue;
+
+                Err(status) => {
+                    /* Only retry on NOT_FOUND errors; fail immediately on other errors */
+                    if status.code() != tonic::Code::NotFound {
+                        return Err(ClientError::Rpc(status.to_string()));
+                    }
+                    /* For NOT_FOUND, continue looping and retry */
                 }
-                Err(status) if status.code() == tonic::Code::NotFound => {
-                    time::sleep(POLL_INTERVAL).await;
-                    continue;
-                }
-                Err(status) => return Err(ClientError::Rpc(status.to_string())),
             }
 
             time::sleep(POLL_INTERVAL).await;
@@ -731,13 +849,6 @@ fn is_confirmed(consensus_status: i32) -> bool {
         | Ok(commonv1::ConsensusStatus::Finalized) => true,
         _ => false,
     }
-}
-
-fn should_retry(status: &Status) -> bool {
-    matches!(
-        status.code(),
-        tonic::Code::Unavailable | tonic::Code::DeadlineExceeded | tonic::Code::ResourceExhausted
-    )
 }
 
 fn pubkey_bytes(pubkey: &Pubkey) -> Result<[u8; 32]> {
@@ -877,39 +988,82 @@ impl Default for Event {
 /// Transaction details populated from gRPC responses.
 #[derive(Debug, Clone)]
 pub struct TransactionDetails {
+    /* Execution result fields */
     pub compute_units_consumed: u64,
+    pub memory_units_consumed: u32,
+    pub state_units_consumed: u64,
     pub events_cnt: u32,
     pub events_sz: u32,
     pub execution_result: u64,
     pub pages_used: u32,
-    pub state_units_consumed: u64,
     pub user_error_code: u64,
     pub vm_error: i32,
-    pub signature: Signature,
     pub rw_accounts: Vec<Pubkey>,
     pub ro_accounts: Vec<Pubkey>,
-    pub slot: u64,
-    pub proof_slot: u64,
     pub events: Vec<Event>,
+
+    /* Transaction header fields */
+    pub fee_payer_signature: Signature,
+    pub version: u32,
+    pub flags: u32,
+    pub readwrite_accounts_count: u32,
+    pub readonly_accounts_count: u32,
+    pub instruction_data_size: u32,
+    pub requested_compute_units: u32,
+    pub requested_state_units: u32,
+    pub requested_memory_units: u32,
+    pub expiry_after: u32,
+    pub fee: u64,
+    pub nonce: u64,
+    pub start_slot: u64,
+    pub fee_payer_pubkey: Pubkey,
+    pub program_pubkey: Pubkey,
+
+    /* Transaction metadata */
+    pub signature: Signature,
+    pub body: Option<Vec<u8>>,
+    pub slot: u64,
+    pub block_offset: Option<u32>,
+
+    /* Legacy field */
+    pub proof_slot: u64,
 }
 
 impl Default for TransactionDetails {
     fn default() -> Self {
         Self {
             compute_units_consumed: 0,
+            memory_units_consumed: 0,
+            state_units_consumed: 0,
             events_cnt: 0,
             events_sz: 0,
             execution_result: 0,
             pages_used: 0,
-            state_units_consumed: 0,
             user_error_code: 0,
             vm_error: 0,
-            signature: Signature::from_bytes(&[0u8; 64]),
             rw_accounts: Vec::new(),
             ro_accounts: Vec::new(),
-            slot: 0,
-            proof_slot: 0,
             events: Vec::new(),
+            fee_payer_signature: Signature::from_bytes(&[0u8; 64]),
+            version: 0,
+            flags: 0,
+            readwrite_accounts_count: 0,
+            readonly_accounts_count: 0,
+            instruction_data_size: 0,
+            requested_compute_units: 0,
+            requested_state_units: 0,
+            requested_memory_units: 0,
+            expiry_after: 0,
+            fee: 0,
+            nonce: 0,
+            start_slot: 0,
+            fee_payer_pubkey: Pubkey::from_bytes(&[0u8; 32]),
+            program_pubkey: Pubkey::from_bytes(&[0u8; 32]),
+            signature: Signature::from_bytes(&[0u8; 64]),
+            body: None,
+            slot: 0,
+            block_offset: None,
+            proof_slot: 0,
         }
     }
 }

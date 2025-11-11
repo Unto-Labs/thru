@@ -1,0 +1,1 @@
+export { VersionInfo } from "./VersionInfo";

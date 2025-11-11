@@ -1539,19 +1539,12 @@ mod tests {
 
         let transaction_details = TransactionDetails {
             compute_units_consumed: 1000,
-            events_cnt: 0,
-            events_sz: 0,
-            execution_result: 0,
-            pages_used: 1,
             state_units_consumed: 100,
-            user_error_code: 0,
-            vm_error: 0,
+            pages_used: 1,
             signature: test_signature,
-            rw_accounts: vec![],
-            ro_accounts: vec![],
             slot: 1000,
             proof_slot: 1000,
-            events: vec![],
+            ..Default::default()
         };
 
         let result = check_transaction_result(&transaction_details, false);
@@ -1565,19 +1558,13 @@ mod tests {
 
         let transaction_details = TransactionDetails {
             compute_units_consumed: 1000,
-            events_cnt: 0,
-            events_sz: 0,
-            execution_result: 1,
-            pages_used: 1,
             state_units_consumed: 100,
-            user_error_code: 0,
-            vm_error: 0,
+            pages_used: 1,
+            execution_result: 1,
             signature: test_signature,
-            rw_accounts: vec![],
-            ro_accounts: vec![],
             slot: 1000,
             proof_slot: 1000,
-            events: vec![],
+            ..Default::default()
         };
 
         let result = check_transaction_result(&transaction_details, false);
@@ -1597,19 +1584,13 @@ mod tests {
 
         let transaction_details = TransactionDetails {
             compute_units_consumed: 1000,
-            events_cnt: 0,
-            events_sz: 0,
-            execution_result: 0,
-            pages_used: 1,
             state_units_consumed: 100,
-            user_error_code: 0,
+            pages_used: 1,
             vm_error: 100,
             signature: test_signature,
-            rw_accounts: vec![],
-            ro_accounts: vec![],
             slot: 1000,
             proof_slot: 1000,
-            events: vec![],
+            ..Default::default()
         };
 
         let result = check_transaction_result(&transaction_details, false);
@@ -1626,19 +1607,14 @@ mod tests {
 
         let transaction_details = TransactionDetails {
             compute_units_consumed: 1000,
-            events_cnt: 0,
-            events_sz: 0,
-            execution_result: 1,
-            pages_used: 1,
             state_units_consumed: 100,
-            user_error_code: 0,
+            pages_used: 1,
+            execution_result: 1,
             vm_error: 100,
             signature: test_signature,
-            rw_accounts: vec![],
-            ro_accounts: vec![],
             slot: 1000,
             proof_slot: 1000,
-            events: vec![],
+            ..Default::default()
         };
 
         let result = check_transaction_result(&transaction_details, false);

@@ -1,6 +1,6 @@
 import { decodeAddress } from "@thru/helpers";
 import { describe, expect, it } from "vitest";
-import { generateTestAddress, generateTestPubkey } from "../../__tests__/helpers/test-utils";
+import { generateTestAddress, generateTestPubkey } from "../../../__tests__/helpers/test-utils";
 import {
     normalizeAccountList,
     parseAccountIdentifier,

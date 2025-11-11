@@ -1,6 +1,8 @@
 import { BytesLike } from "@thru/helpers";
 
-import { TransactionHeaderInput } from "../transactions";
+import type { Timestamp } from "@bufbuild/protobuf/wkt";
+import { TransactionHeaderInput } from "../domain/transactions";
+import { ConsensusStatus } from "../proto/thru/common/v1/consensus_pb";
 
 export type BlockSelector = { slot: number | bigint } | { blockHash: BytesLike };
 
@@ -24,4 +26,24 @@ export function mergeTransactionHeader(
         ...defaults,
         ...sanitized,
     };
+}
+
+export function timestampToNanoseconds(timestamp?: Timestamp): bigint {
+    if (!timestamp) {
+        return 0n;
+    }
+    const seconds = BigInt(timestamp.seconds ?? 0);
+    const nanos = BigInt(timestamp.nanos ?? 0);
+    return seconds * 1_000_000_000n + nanos;
+}
+
+export function nanosecondsToTimestamp(ns: bigint): Timestamp {
+    const seconds = ns / 1_000_000_000n;
+    const nanos = Number(ns % 1_000_000_000n);
+    return { seconds, nanos } as Timestamp;
+}
+
+export function consensusStatusToString(status: ConsensusStatus): string {
+    const lookup = ConsensusStatus as unknown as Record<number, string>;
+    return lookup[status] ?? `UNKNOWN(${status})`;
 }

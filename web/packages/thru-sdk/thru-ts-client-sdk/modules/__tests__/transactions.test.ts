@@ -1,51 +1,79 @@
 import { create } from "@bufbuild/protobuf";
 import { describe, expect, it, vi } from "vitest";
 import {
-  createMockAccount,
-  createMockContext,
-  createMockHeightResponse,
-  generateTestAddress,
-  generateTestPubkey,
-  generateTestSignature,
-  generateTestSignatureString,
+    createMockAccount,
+    createMockContext,
+    createMockHeightResponse,
+    generateTestAddress,
+    generateTestPubkey,
+    generateTestSignature,
+    generateTestSignatureString,
 } from "../../__tests__/helpers/test-utils";
+import { Filter } from "../../domain/filters";
+import { PageRequest } from "../../domain/pagination";
+import { TransactionStatusSnapshot } from "../../domain/transactions";
+import { Transaction } from "../../domain/transactions/Transaction";
+import type { InstructionContext } from "../../domain/transactions/types";
 import { ConsensusStatus } from "../../proto/thru/common/v1/consensus_pb";
-import { FilterSchema } from "../../proto/thru/common/v1/filters_pb";
-import { PageRequestSchema } from "../../proto/thru/common/v1/pagination_pb";
 import { TransactionSchema, TransactionView } from "../../proto/thru/core/v1/transaction_pb";
 import { TransactionStatusSchema } from "../../proto/thru/services/v1/query_service_pb";
-import { Transaction } from "../../transactions/Transaction";
-import type { InstructionContext } from "../../transactions/types";
 import {
-  batchSendTransactions,
-  buildAndSignTransaction,
-  buildTransaction,
-  getRawTransaction,
-  getTransaction,
-  getTransactionStatus,
-  listTransactionsForAccount,
-  sendTransaction,
+    batchSendTransactions,
+    buildAndSignTransaction,
+    buildTransaction,
+    getRawTransaction,
+    getTransaction,
+    getTransactionStatus,
+    listTransactionsForAccount,
+    sendTransaction,
 } from "../transactions";
+
+function createMockTransactionProto(overrides: any = {}) {
+  const headerOverrides = overrides.header ?? {};
+  const header = {
+    version: 1,
+    flags: 0,
+    readwriteAccountsCount: 0,
+    readonlyAccountsCount: 0,
+    instructionDataSize: 0,
+    requestedComputeUnits: 0,
+    requestedStateUnits: 0,
+    requestedMemoryUnits: 0,
+    expiryAfter: 0,
+    fee: 1n,
+    nonce: 1n,
+    startSlot: 1n,
+    feePayerPubkey: { value: generateTestPubkey(0x11) },
+    programPubkey: { value: generateTestPubkey(0x22) },
+    ...headerOverrides,
+  };
+
+  return create(TransactionSchema, {
+    header,
+    ...overrides,
+  });
+}
 
 describe("transactions", () => {
   describe("getTransaction", () => {
     it("should return transaction with valid signature", async () => {
       const ctx = createMockContext();
-      const mockTransaction = create(TransactionSchema, {
-        signature: { value: generateTestSignature() },
+      const signature = generateTestSignature();
+      const mockTransaction = createMockTransactionProto({
+        signature: { value: signature },
       });
       vi.spyOn(ctx.query, "getTransaction").mockResolvedValue(mockTransaction);
       
-      const signature = generateTestSignature();
       const result = await getTransaction(ctx, signature);
       
-      expect(result).toBe(mockTransaction);
+      expect(result).toBeInstanceOf(Transaction);
+      expect(result.getSignature()).toEqual(signature);
       expect(ctx.query.getTransaction).toHaveBeenCalledTimes(1);
     });
 
     it("should accept signature as Uint8Array", async () => {
       const ctx = createMockContext();
-      const mockTransaction = create(TransactionSchema, {});
+      const mockTransaction = createMockTransactionProto();
       vi.spyOn(ctx.query, "getTransaction").mockResolvedValue(mockTransaction);
       
       const signature = generateTestSignature();
@@ -57,7 +85,7 @@ describe("transactions", () => {
 
     it("should accept signature as string", async () => {
       const ctx = createMockContext();
-      const mockTransaction = create(TransactionSchema, {});
+      const mockTransaction = createMockTransactionProto();
       vi.spyOn(ctx.query, "getTransaction").mockResolvedValue(mockTransaction);
       
       const signatureString = generateTestSignatureString();
@@ -69,7 +97,7 @@ describe("transactions", () => {
 
     it("should use default view when not provided", async () => {
       const ctx = createMockContext();
-      const mockTransaction = create(TransactionSchema, {});
+      const mockTransaction = createMockTransactionProto();
       vi.spyOn(ctx.query, "getTransaction").mockResolvedValue(mockTransaction);
       
       await getTransaction(ctx, generateTestSignature());
@@ -80,7 +108,7 @@ describe("transactions", () => {
 
     it("should use custom view when provided", async () => {
       const ctx = createMockContext();
-      const mockTransaction = create(TransactionSchema, {});
+      const mockTransaction = createMockTransactionProto();
       vi.spyOn(ctx.query, "getTransaction").mockResolvedValue(mockTransaction);
       
       await getTransaction(ctx, generateTestSignature(), { view: TransactionView.SIGNATURE_ONLY });
@@ -91,7 +119,7 @@ describe("transactions", () => {
 
     it("should use default minConsensus", async () => {
       const ctx = createMockContext();
-      const mockTransaction = create(TransactionSchema, {});
+      const mockTransaction = createMockTransactionProto();
       vi.spyOn(ctx.query, "getTransaction").mockResolvedValue(mockTransaction);
       
       await getTransaction(ctx, generateTestSignature());
@@ -142,7 +170,8 @@ describe("transactions", () => {
       const signature = generateTestSignature();
       const result = await getTransactionStatus(ctx, signature);
       
-      expect(result).toBe(mockStatus);
+      expect(result).toBeInstanceOf(TransactionStatusSnapshot);
+      expect(result.statusCode).toBe(ConsensusStatus.FINALIZED);
       expect(ctx.query.getTransactionStatus).toHaveBeenCalledTimes(1);
     });
   });
@@ -569,11 +598,16 @@ describe("transactions", () => {
         ],
       };
       vi.spyOn(ctx.query, "listTransactionsForAccount").mockResolvedValue(mockResponse as any);
+      vi.spyOn(ctx.query, "getTransaction").mockResolvedValue(createMockTransactionProto());
       
       const account = generateTestPubkey();
       const result = await listTransactionsForAccount(ctx, account);
       
-      expect(result).toBe(mockResponse);
+      expect(result.transactions).toHaveLength(2);
+      expect(result.transactions[0]).toBeInstanceOf(Transaction);
+      expect(result.transactions[1]).toBeInstanceOf(Transaction);
+      expect(result.page).toBeUndefined();
+      expect(ctx.query.getTransaction).toHaveBeenCalledTimes(2);
       expect(ctx.query.listTransactionsForAccount).toHaveBeenCalledTimes(1);
       const callArgs = (ctx.query.listTransactionsForAccount as any).mock.calls[0][0];
       expect(callArgs.account?.value).toEqual(account);
@@ -583,6 +617,7 @@ describe("transactions", () => {
       const ctx = createMockContext();
       const mockResponse = { signatures: [] };
       vi.spyOn(ctx.query, "listTransactionsForAccount").mockResolvedValue(mockResponse as any);
+      vi.spyOn(ctx.query, "getTransaction").mockResolvedValue(createMockTransactionProto());
       
       const account = generateTestPubkey();
       await listTransactionsForAccount(ctx, account);
@@ -595,6 +630,7 @@ describe("transactions", () => {
       const ctx = createMockContext();
       const mockResponse = { signatures: [] };
       vi.spyOn(ctx.query, "listTransactionsForAccount").mockResolvedValue(mockResponse as any);
+      vi.spyOn(ctx.query, "getTransaction").mockResolvedValue(createMockTransactionProto());
       
       const accountString = generateTestAddress();
       await listTransactionsForAccount(ctx, accountString);
@@ -607,9 +643,10 @@ describe("transactions", () => {
       const ctx = createMockContext();
       const mockResponse = { signatures: [] };
       vi.spyOn(ctx.query, "listTransactionsForAccount").mockResolvedValue(mockResponse as any);
+      vi.spyOn(ctx.query, "getTransaction").mockResolvedValue(createMockTransactionProto());
       
       const account = generateTestPubkey();
-      const page = create(PageRequestSchema, { pageSize: 20, pageToken: "token123" });
+      const page = new PageRequest({ pageSize: 20, pageToken: "token123" });
       await listTransactionsForAccount(ctx, account, { page });
       
       const callArgs = (ctx.query.listTransactionsForAccount as any).mock.calls[0][0];
@@ -621,13 +658,28 @@ describe("transactions", () => {
       const ctx = createMockContext();
       const mockResponse = { signatures: [] };
       vi.spyOn(ctx.query, "listTransactionsForAccount").mockResolvedValue(mockResponse as any);
+      vi.spyOn(ctx.query, "getTransaction").mockResolvedValue(createMockTransactionProto());
       
       const account = generateTestPubkey();
-      const filter = create(FilterSchema, { expression: "meta.value > 0" });
+      const filter = new Filter({ expression: "meta.value > 0" });
       await listTransactionsForAccount(ctx, account, { filter });
       
       const callArgs = (ctx.query.listTransactionsForAccount as any).mock.calls[0][0];
       expect(callArgs.filter?.expression).toBe("meta.value > 0");
+    });
+
+    it("should pass transaction options to getTransaction", async () => {
+      const ctx = createMockContext();
+      const signatureValue = generateTestSignature();
+      const mockResponse = { signatures: [{ value: signatureValue }] };
+      vi.spyOn(ctx.query, "listTransactionsForAccount").mockResolvedValue(mockResponse as any);
+      vi.spyOn(ctx.query, "getTransaction").mockResolvedValue(createMockTransactionProto());
+
+      const transactionOptions = { view: TransactionView.SIGNATURE_ONLY };
+      await listTransactionsForAccount(ctx, generateTestPubkey(), { transactionOptions });
+
+      const transactionCall = (ctx.query.getTransaction as any).mock.calls[0][0];
+      expect(transactionCall.view).toBe(TransactionView.SIGNATURE_ONLY);
     });
   });
 

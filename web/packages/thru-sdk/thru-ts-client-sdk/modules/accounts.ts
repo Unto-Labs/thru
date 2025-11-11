@@ -3,20 +3,21 @@ import { create } from "@bufbuild/protobuf";
 import { Pubkey } from "@thru/helpers";
 import type { ThruClientContext } from "../core/client";
 import { DEFAULT_ACCOUNT_VIEW, DEFAULT_MIN_CONSENSUS, DEFAULT_VERSION_CONTEXT } from "../defaults";
+import { Account } from "../domain/accounts";
+import { Filter } from "../domain/filters";
+import { PageRequest, PageResponse } from "../domain/pagination";
+import type { Transaction } from "../domain/transactions/Transaction";
+import { TransactionBuilder } from "../domain/transactions/TransactionBuilder";
+import type { TransactionHeaderInput } from "../domain/transactions/types";
 import { ConsensusStatus, VersionContext } from "../proto/thru/common/v1/consensus_pb";
-import { type Filter } from "../proto/thru/common/v1/filters_pb";
-import type { PageRequest } from "../proto/thru/common/v1/pagination_pb";
-import { Account, AccountView, DataSlice, RawAccount } from "../proto/thru/core/v1/account_pb";
+import { AccountView, DataSlice, RawAccount } from "../proto/thru/core/v1/account_pb";
 import { StateProofType } from "../proto/thru/core/v1/state_pb";
 import {
     GetAccountRequestSchema,
     GetRawAccountRequestSchema,
     ListAccountsRequestSchema,
-    type ListAccountsResponse,
+    type ListAccountsResponse as ProtoListAccountsResponse,
 } from "../proto/thru/services/v1/query_service_pb";
-import type { Transaction } from "../transactions/Transaction";
-import { TransactionBuilder } from "../transactions/TransactionBuilder";
-import type { TransactionHeaderInput } from "../transactions/types";
 import { mergeTransactionHeader } from "../utils/utils";
 import { getBlockHeight } from "./height";
 import { toPubkey } from "./helpers";
@@ -51,6 +52,11 @@ export interface ListAccountsOptions {
     minConsensus?: ConsensusStatus;
 }
 
+export interface AccountList {
+    accounts: Account[];
+    page?: PageResponse;
+}
+
 export function getAccount(
     ctx: ThruClientContext,
     address: Pubkey,
@@ -63,7 +69,7 @@ export function getAccount(
         minConsensus: options.minConsensus ?? DEFAULT_MIN_CONSENSUS,
         dataSlice: options.dataSlice,
     });
-    return ctx.query.getAccount(request);
+    return ctx.query.getAccount(request).then(Account.fromProto);
 }
 
 export function getRawAccount(
@@ -83,15 +89,18 @@ export function getRawAccount(
 export function listAccounts(
     ctx: ThruClientContext,
     options: ListAccountsOptions,
-): Promise<ListAccountsResponse> {
+): Promise<AccountList> {
     const request = create(ListAccountsRequestSchema, {
         view: options.view ?? DEFAULT_ACCOUNT_VIEW,
         versionContext: options.versionContext ?? DEFAULT_VERSION_CONTEXT,
-        filter: options.filter,
-        page: options.page,
+        filter: options.filter?.toProto(),
+        page: options.page?.toProto(),
         minConsensus: options.minConsensus ?? DEFAULT_MIN_CONSENSUS,
     });
-    return ctx.query.listAccounts(request);
+    return ctx.query.listAccounts(request).then((response: ProtoListAccountsResponse) => ({
+        accounts: response.accounts.map((proto) => Account.fromProto(proto)),
+        page: PageResponse.fromProto(response.page),
+    }));
 }
 
 export async function createAccount(
@@ -109,7 +118,7 @@ export async function createAccount(
         targetSlot: startSlot,
     });
 
-    const proofBytes = proofResponse.proof?.proof;
+    const proofBytes = proofResponse.proof;
     if (!proofBytes || proofBytes.length === 0) {
         throw new Error("State proof generation returned empty proof");
     }

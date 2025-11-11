@@ -1,7 +1,7 @@
 import { createThruClient } from "../client";
+import type { InstructionContext } from "../domain/transactions";
 import { ConsensusStatus } from "../proto/thru/common/v1/consensus_pb";
 import { StateProofType } from "../proto/thru/core/v1/state_pb";
-import type { InstructionContext } from "../transactions";
 
 const sdk = createThruClient({
     // Configure the SDK to connect to the desired Thru cluster
@@ -20,6 +20,30 @@ const DEFAULT_COMPUTE_UNITS = 300_000_000;
 const DEFAULT_STATE_UNITS = 10_000;
 const DEFAULT_MEMORY_UNITS = 10_000;
 const DEFAULT_EXPIRY_AFTER = 100;
+
+async function trackTransactionSignature(signature: string | Uint8Array): Promise<void> {
+    let finalized = false;
+    try {
+        for await (const update of sdk.transactions.track(signature, { timeoutMs: 60_000 })) {
+            const statusName = ConsensusStatus[update.statusCode];
+            const consumed = update.executionResult?.consumedComputeUnits ?? 0;
+            console.log(`Track update: ${statusName} (consumed CU: ${consumed})`);
+            if (
+                update.statusCode === ConsensusStatus.FINALIZED ||
+                update.statusCode === ConsensusStatus.CLUSTER_EXECUTED
+            ) {
+                finalized = true;
+                break;
+            }
+        }
+    } catch (err) {
+        console.warn("Track transaction stream ended with error:", err);
+    }
+
+    if (!finalized) {
+        console.warn("Transaction not finalized before timeout");
+    }
+}
 
 // Turn an unsigned integer into a little-endian hex string padded to byteLength bytes
 export function toLittleEndianHex(value: number | bigint, byteLength: number): string {
@@ -91,6 +115,7 @@ const incrementCounterAccountInstructionWithString = async () => {
     const rawTransaction = transaction.toWire();
     const submittedSignature = await sdk.transactions.send(rawTransaction);
     console.log("Submitted transaction signature:", submittedSignature);
+    await trackTransactionSignature(submittedSignature);
     return submittedSignature;
 }
 
@@ -160,6 +185,7 @@ const incrementCounterAccountInstructionWithFunction = async () => {
     const rawTransaction = transaction.toWire();
     const submittedSignature = await sdk.transactions.send(rawTransaction);
     console.log("Submitted transaction signature:", submittedSignature);
+    await trackTransactionSignature(submittedSignature);
     return submittedSignature;
 }
 
@@ -261,7 +287,7 @@ const getCreateCounterAccountInstructionData = async (): Promise<Uint8Array> => 
         targetSlot: blockHeight.finalized,
     });
     
-    if (!stateProof.proof || stateProof.proof.proof.length === 0) {
+    if (!stateProof.proof || stateProof.proof.length === 0) {
         throw new Error("No state proof returned");
     }
     
@@ -275,7 +301,7 @@ const getCreateCounterAccountInstructionData = async (): Promise<Uint8Array> => 
     // - seed (32 bytes)
     // - stateProofSize (u32, 4 bytes)
     // - stateProof (variable length)
-    const stateProofBytes = new Uint8Array(stateProof.proof.proof);
+    const stateProofBytes = new Uint8Array(stateProof.proof);
     const instructionData = new Uint8Array(4 + 2 + 32 + 4 + stateProofBytes.length);
     let offset = 0;
     
@@ -362,34 +388,7 @@ const createCounterAccountWithFunction = async (): Promise<string> => {
     const submittedSignature = await sdk.transactions.send(rawTransaction);
     console.log("Submitted transaction signature:", submittedSignature);
 
-    // Wait for transaction to be processed
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    // Track the transaction
-    let finalized = false;
-    try {
-        for await (const update of sdk.transactions.track(submittedSignature, { timeoutMs: 60000 })) {
-            const consumed = update.executionResult?.consumedComputeUnits ?? 0;
-            const statusKey = ConsensusStatus[update.consensusStatus];
-            console.log("Track update:", statusKey, "consumed CU:", consumed);
-            if (update.executionResult) {
-                finalized = true;
-            }
-            if (
-                update.consensusStatus === ConsensusStatus.FINALIZED ||
-                update.consensusStatus === ConsensusStatus.CLUSTER_EXECUTED
-            ) {
-                finalized = true;
-                break;
-            }
-        }
-    } catch (err) {
-        console.warn("Track transaction stream ended with error:", err);
-    }
-
-    if (!finalized) {
-        console.warn("Transaction not finalized before timeout");
-    }
+    await trackTransactionSignature(submittedSignature);
 
     const transactionStatus = await sdk.transactions.getStatus(submittedSignature);
     console.log("Submitted transaction status:", transactionStatus);
@@ -443,6 +442,7 @@ const createCounterAccountWithString = async (): Promise<string> => {
 
     const submittedSignature = await sdk.transactions.send(rawTransaction);
     console.log("Submitted transaction signature:", submittedSignature);
+    await trackTransactionSignature(submittedSignature);
 
     // Wait and track
     await new Promise(resolve => setTimeout(resolve, 2000));
@@ -451,11 +451,11 @@ const createCounterAccountWithString = async (): Promise<string> => {
     try {
         for await (const update of sdk.transactions.track(submittedSignature, { timeoutMs: 60000 })) {
             const consumed = update.executionResult?.consumedComputeUnits ?? 0;
-            const statusKey = ConsensusStatus[update.consensusStatus];
+            const statusKey = ConsensusStatus[update.statusCode];
             console.log("Track update:", statusKey, "consumed CU:", consumed);
             if (
-                update.consensusStatus === ConsensusStatus.FINALIZED ||
-                update.consensusStatus === ConsensusStatus.CLUSTER_EXECUTED
+                update.statusCode === ConsensusStatus.FINALIZED ||
+                update.statusCode === ConsensusStatus.CLUSTER_EXECUTED
             ) {
                 finalized = true;
                 break;
