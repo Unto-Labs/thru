@@ -27,16 +27,19 @@ export { VersionInfo } from "./domain/version";
 export { deriveProgramAddress, toPubkey } from "./modules/helpers";
 export { ConsensusStatus } from "./proto/thru/common/v1/consensus_pb";
 export {
-    FilterParamValueSchema,
-    FilterSchema
+  FilterParamValueSchema,
+  FilterSchema
 } from "./proto/thru/common/v1/filters_pb";
+export { AccountView } from "./proto/thru/core/v1/account_pb";
+export { BlockView, ExecutionStatus } from "./proto/thru/core/v1/block_pb";
+export { TransactionView, TransactionVmError } from "./proto/thru/core/v1/transaction_pb";
 export { TransactionBuilder };
 
 // ============================================================================
 // Type Exports - Common Types
 // ============================================================================
     export type { Pubkey } from "@thru/helpers";
-    export type { PageRequestParams, PageResponseParams } from "./domain/pagination";
+  export type { PageRequestParams, PageResponseParams } from "./domain/pagination";
 // ============================================================================
 // Type Exports - Proto/Protocol Types
 // ============================================================================
@@ -45,19 +48,19 @@ export { TransactionBuilder };
 // Type Exports - Accounts Module
 // ============================================================================
 export type {
-    AccountList, AccountQueryOptions, CreateAccountOptions,
-    ListAccountsOptions,
-    RawAccountQueryOptions
+  AccountQueryOptions, CreateAccountOptions,
+  ListAccountsOptions,
+  RawAccountQueryOptions
 } from "./modules/accounts";
 
 // ============================================================================
 // Type Exports - Blocks Module
 // ============================================================================
 export type {
-    BlockList,
-    BlockQueryOptions,
-    ListBlocksOptions,
-    RawBlockQueryOptions
+  BlockList,
+  BlockQueryOptions,
+  ListBlocksOptions,
+  RawBlockQueryOptions
 } from "./modules/blocks";
 
 // ============================================================================
@@ -69,9 +72,9 @@ export type { GetEventOptions } from "./modules/events";
 // Type Exports - Helpers Module
 // ============================================================================
 export type {
-    BlockSelector,
-    DeriveProgramAddressOptions,
-    DeriveProgramAddressResult
+  BlockSelector,
+  DeriveProgramAddressOptions,
+  DeriveProgramAddressResult
 } from "./modules/helpers";
 
 // ============================================================================
@@ -85,39 +88,37 @@ export type { GeneratedKeyPair } from "./modules/keys";
 export type { StreamAccountUpdate } from "./domain/accounts";
 export type { HeightSnapshotParams } from "./domain/height/HeightSnapshot";
 export type {
-    StreamAccountUpdatesOptions,
-    StreamAccountUpdatesResult,
-    StreamBlocksOptions,
-    StreamBlocksResult,
-    StreamEventsOptions,
-    StreamEventsResult,
-    StreamTransactionsOptions,
-    StreamTransactionsResult,
-    TrackTransactionOptions,
-    TrackTransactionUpdate
+  StreamAccountUpdatesOptions,
+  StreamAccountUpdatesResult,
+  StreamBlocksOptions,
+  StreamBlocksResult,
+  StreamEventsOptions,
+  StreamEventsResult, StreamTransactionsOptions,
+  StreamTransactionsResult, StreamTransactionUpdate, TrackTransactionOptions,
+  TrackTransactionUpdate
 } from "./modules/streaming";
 
 // ============================================================================
 // Type Exports - Transactions Module
 // ============================================================================
 export type {
-    SignedTransactionResult,
-    TransactionExecutionEvent,
-    TransactionExecutionResultData
+  SignedTransactionResult,
+  TransactionExecutionEvent,
+  TransactionExecutionResultData
 } from "./domain/transactions";
 export type {
-    InstructionContext,
-    ProgramIdentifier
+  InstructionContext,
+  ProgramIdentifier
 } from "./domain/transactions/types";
 export type {
-    BatchSendTransactionsOptions,
-    BuildAndSignTransactionOptions,
-    BuildTransactionOptions,
-    InstructionData,
-    ListTransactionsForAccountOptions, RawTransactionQueryOptions,
-    TransactionAccountsConfig,
-    TransactionFeePayerConfig,
-    TransactionHeaderConfig, TransactionList, TransactionQueryOptions
+  BatchSendTransactionsOptions,
+  BuildAndSignTransactionOptions,
+  BuildTransactionOptions,
+  InstructionData,
+  ListTransactionsForAccountOptions, RawTransactionQueryOptions,
+  TransactionAccountsConfig,
+  TransactionFeePayerConfig,
+  TransactionHeaderConfig, TransactionList, TransactionQueryOptions
 } from "./modules/transactions";
 
 // ============================================================================

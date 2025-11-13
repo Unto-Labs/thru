@@ -52,7 +52,8 @@ export class Block {
             consensusStatus: proto.consensusStatus,
         });
 
-        block.blockTimeNs = timestampToNanoseconds(block.header.expiryTimestamp);
+        // blockTimeNs is not part of the proto Block message, so it remains undefined
+        // It will only be set when parsing from wire format
         block.attestorPayment = block.footer?.consumedComputeUnits ?? 0n;
 
         return block;
@@ -185,7 +186,9 @@ export class Block {
         bytes.fill(0, offset, offset + 4);
         offset += 4;
 
-        const blockTimeNs = this.blockTimeNs ?? expiryTimestampNs;
+        // If blockTimeNs is not available, write 0 instead of defaulting to expiryTimestamp
+        // This preserves the distinction between "not available" and "equals expiryTimestamp"
+        const blockTimeNs = this.blockTimeNs ?? 0n;
         view.setBigUint64(offset, blockTimeNs, true);
 
         return bytes;

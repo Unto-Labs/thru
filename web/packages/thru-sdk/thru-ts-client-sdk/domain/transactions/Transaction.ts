@@ -81,6 +81,7 @@ export class Transaction {
     readonly readOnlyAccounts: AccountAddress[];
 
     readonly instructionData?: Uint8Array;
+    readonly instructionDataSize?: number;
     readonly feePayerStateProof?: Uint8Array;
     readonly feePayerAccountMetaRaw?: Uint8Array;
 
@@ -97,6 +98,7 @@ export class Transaction {
         header: TransactionHeaderInput;
         accounts?: TransactionAccountsInput;
         instructionData?: Uint8Array;
+        instructionDataSize?: number;
         proofs?: OptionalProofs;
     }) {
         this.version = params.version ?? TXN_VERSION_V1;
@@ -124,6 +126,7 @@ export class Transaction {
         if (this.instructionData && this.instructionData.length > MAX_INSTRUCTION_DATA_LENGTH) {
             throw new Error(`Instruction data exceeds maximum length (${MAX_INSTRUCTION_DATA_LENGTH} bytes)`);
         }
+        this.instructionDataSize = params.instructionDataSize;
 
         this.feePayerStateProof = params.proofs?.feePayerStateProof
             ? new Uint8Array(params.proofs.feePayerStateProof)
@@ -268,6 +271,7 @@ export class Transaction {
                 readOnlyAccounts,
             },
             instructionData,
+            instructionDataSize,
             proofs:
                 feePayerStateProof || feePayerAccountMetaRaw
                     ? {
@@ -367,6 +371,7 @@ export class Transaction {
                     readOnlyAccounts: parsed.readOnlyAccounts,
                 },
                 instructionData: parsed.instructionData,
+                instructionDataSize: header.instructionDataSize,
                 proofs:
                     parsed.feePayerStateProof || parsed.feePayerAccountMetaRaw
                         ? {

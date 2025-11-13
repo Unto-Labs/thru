@@ -87,6 +87,117 @@ All classes are exported from the root package for easy access:
 import { Block, Account, ChainEvent } from "@thru/thru-sdk";
 ```
 
+## View Options
+
+When fetching resources, you can control which parts of the resource are returned using view options. This allows you to optimize network usage by only fetching the data you need.
+
+### AccountView
+
+Controls which sections of account resources are returned:
+
+```ts
+import { AccountView } from "@thru/thru-sdk";
+
+// Fetch only the account address (lightweight existence check)
+const account = await thru.accounts.get(address, {
+  view: AccountView.PUBKEY_ONLY,
+});
+
+// Fetch only account metadata (balance, flags, owner, etc.)
+const account = await thru.accounts.get(address, {
+  view: AccountView.META_ONLY,
+});
+
+// Fetch only account data bytes (program data)
+const account = await thru.accounts.get(address, {
+  view: AccountView.DATA_ONLY,
+});
+
+// Fetch everything: address, metadata, and data (default)
+const account = await thru.accounts.get(address, {
+  view: AccountView.FULL,
+});
+```
+
+| View Option | Returns | Use Case |
+| --- | --- | --- |
+| `AccountView.PUBKEY_ONLY` | Only the account `address` | Quick existence check |
+| `AccountView.META_ONLY` | `address` + `meta` (balance, flags, owner, dataSize, seq, nonce) | Display account summary without data |
+| `AccountView.DATA_ONLY` | `address` + `data` (raw bytes) | Fetch program data without metadata |
+| `AccountView.FULL` | `address` + `meta` + `data` | Complete account information |
+
+### BlockView
+
+Controls how much of a block resource is returned:
+
+```ts
+import { BlockView } from "@thru/thru-sdk";
+
+// Fetch only block header (slot, hash, producer, etc.)
+const block = await thru.blocks.get({ slot }, {
+  view: BlockView.HEADER_ONLY,
+});
+
+// Fetch header and footer (execution status)
+const block = await thru.blocks.get({ slot }, {
+  view: BlockView.HEADER_AND_FOOTER,
+});
+
+// Fetch only block body (transactions)
+const block = await thru.blocks.get({ slot }, {
+  view: BlockView.BODY_ONLY,
+});
+
+// Fetch everything: header, body, and footer (default)
+const block = await thru.blocks.get({ slot }, {
+  view: BlockView.FULL,
+});
+```
+
+| View Option | Returns | Use Case |
+| --- | --- | --- |
+| `BlockView.HEADER_ONLY` | Only block `header` (metadata) | Display block summary without transactions |
+| `BlockView.HEADER_AND_FOOTER` | `header` + `footer` (execution status) | Check execution status without transactions |
+| `BlockView.BODY_ONLY` | Only block `body` (transactions) | Fetch transactions without header metadata |
+| `BlockView.FULL` | `header` + `body` + `footer` | Complete block information |
+
+### TransactionView
+
+Controls how much of a transaction resource is returned:
+
+```ts
+import { TransactionView } from "@thru/thru-sdk";
+
+// Fetch only transaction signature
+const tx = await thru.transactions.get(signature, {
+  view: TransactionView.SIGNATURE_ONLY,
+});
+
+// Fetch only transaction header (signature, fee payer, etc.)
+const tx = await thru.transactions.get(signature, {
+  view: TransactionView.HEADER_ONLY,
+});
+
+// Fetch header and body (instructions)
+const tx = await thru.transactions.get(signature, {
+  view: TransactionView.HEADER_AND_BODY,
+});
+
+// Fetch everything: header, body, and execution results (default)
+const tx = await thru.transactions.get(signature, {
+  view: TransactionView.FULL,
+});
+```
+
+| View Option | Returns | Use Case |
+| --- | --- | --- |
+| `TransactionView.SIGNATURE_ONLY` | Only transaction `signature` | Quick existence check |
+| `TransactionView.HEADER_ONLY` | Only transaction `header` (signature, fee payer, compute budget) | Display transaction summary without instructions |
+| `TransactionView.HEADER_AND_BODY` | `header` + `body` (instructions) | Fetch transaction without execution results |
+| `TransactionView.FULL` | `header` + `body` + execution results | Complete transaction information |
+
+**Note:** If no view is specified, the default is `FULL` for all resource types.
+
 ## Streaming APIs
 
 Every streaming endpoint yields an async iterable of domain models:

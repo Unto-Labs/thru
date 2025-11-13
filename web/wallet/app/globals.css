@@ -1,0 +1,5 @@
+@import "tailwindcss";
+@import "@thru/design-system/tailwind.css";
+
+/* Only need @source for external packages - Tailwind v4 auto-detects app files */
+@source "../node_modules/@thru/design-system/src";

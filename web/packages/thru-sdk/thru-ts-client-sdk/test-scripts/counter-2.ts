@@ -13,12 +13,14 @@ const seed = 'counter'
 const derived = sdk.helpers.deriveProgramAddress({ programAddress: counterProgramAddress, seed: seed })
 const derivedAddress = derived.address
 
-const feePayerAddress = 'taZigmmhU81aF8uitpcLXRkzcXLpbbL7AepFlgZDihVVKT'
-const feePayerPrivateKeyHex = '20c3ac368e5a6d3134d844c9d70823bf545d84aae090cdada859d3f3b8666f8d'
+const NUM_FEEPAYERS = 30;
 
-const DEFAULT_COMPUTE_UNITS = 30_000;
-const DEFAULT_STATE_UNITS = 10_000;
-const DEFAULT_MEMORY_UNITS = 10_000;
+// Generate 10 different feepayer accounts
+const feepayerAccounts: Array<{ address: string; publicKey: Uint8Array; privateKey: Uint8Array }> = [];
+
+const DEFAULT_COMPUTE_UNITS = 10_000;
+const DEFAULT_STATE_UNITS = 1;
+const DEFAULT_MEMORY_UNITS = 2;
 const DEFAULT_EXPIRY_AFTER = 100;
 
 async function trackTransactionSignature(signature: string | Uint8Array): Promise<void> {
@@ -86,10 +88,11 @@ function hexToBytes(hex: string): Uint8Array {
 }
 
 // Test 1: Using instructionData as a hex string (backward compatible)
-const incrementCounterAccountInstructionWithString = async () => {
+const incrementCounterAccountInstructionWithString = async (
+    feePayerPublicKey: Uint8Array,
+    feePayerPrivateKey: Uint8Array
+) => {
     const instructionDataHex = await getIncrementCounterAccountInstructionDataHex();
-    const feePayerPublicKey = sdk.helpers.decodeAddress(feePayerAddress);
-    const feePayerPrivateKey = hexToBytes(feePayerPrivateKeyHex);
 
     const transaction = await sdk.transactions.build({
         feePayer: {
@@ -119,8 +122,12 @@ const incrementCounterAccountInstructionWithString = async () => {
 
 // Test 2: Using instructionData as a function (new capability)
 const incrementCounterAccountInstructionWithFunction = async () => {
-    const feePayerPublicKey = sdk.helpers.decodeAddress(feePayerAddress);
-    const feePayerPrivateKey = hexToBytes(feePayerPrivateKeyHex);
+    // Use the first feepayer account
+    if (feepayerAccounts.length === 0) {
+        throw new Error("Feepayer accounts not initialized");
+    }
+    const feePayerPublicKey = feepayerAccounts[0].publicKey;
+    const feePayerPrivateKey = feepayerAccounts[0].privateKey;
     const derivedAddressBytes = sdk.helpers.decodeAddress(derivedAddress);
 
     console.log("\n=== Test 2: Using instructionData as a function ===");
@@ -187,15 +194,39 @@ const incrementCounterAccountInstructionWithFunction = async () => {
     // return submittedSignature;
 }
 
+// Send transactions from all feepayer accounts simultaneously
 const incrementCounterAccountInstruction = async () => {
-    // Run both tests to show both APIs work
-    await incrementCounterAccountInstructionWithString();
-    // await new Promise(resolve => setTimeout(resolve, 2000));
-    // await incrementCounterAccountInstructionWithFunction();
+    const promises = feepayerAccounts.map((account, index) => 
+        incrementCounterAccountInstructionWithString(account.publicKey, account.privateKey)
+            .then(signature => {
+                console.log(`Feepayer ${index + 1}/${NUM_FEEPAYERS} submitted: ${signature}`);
+                return signature;
+            })
+            .catch(error => {
+                console.error(`Feepayer ${index + 1}/${NUM_FEEPAYERS} failed:`, error);
+                throw error;
+            })
+    );
+    
+    await Promise.all(promises);
+    console.log(`All ${NUM_FEEPAYERS} transactions submitted successfully`);
 }
 
 
 async function main() {
+    // Generate 10 feepayer accounts
+    console.log(`\n=== Generating ${NUM_FEEPAYERS} feepayer accounts ===`);
+    for (let i = 0; i < NUM_FEEPAYERS; i++) {
+        const keypair = await sdk.keys.generateKeyPair();
+        feepayerAccounts.push({
+            address: keypair.address,
+            publicKey: keypair.publicKey,
+            privateKey: keypair.privateKey,
+        });
+        console.log(`Feepayer ${i + 1}: ${keypair.address}`);
+    }
+    console.log(`Generated ${feepayerAccounts.length} feepayer accounts\n`);
+
     // Check if counter account exists
     let accountData1;
     let accountExists = false;
@@ -220,6 +251,24 @@ async function main() {
         }
     } else {
         console.log("Counter account does not exist, creating it...");
+        
+        // Use the first feepayer account to create the counter account
+        const createAccountKeypair = feepayerAccounts[0];
+        const feePayerPublicKey = createAccountKeypair.publicKey;
+        const feePayerPrivateKey = createAccountKeypair.privateKey;
+        
+        // Create account for the first feepayer if needed
+        try {
+            await sdk.accounts.get(createAccountKeypair.address);
+        } catch (error: any) {
+            if (error?.code === 5 || error?.rawMessage?.includes("not found")) {
+                console.log(`Creating account for feepayer 1: ${createAccountKeypair.address}`);
+                const createTx = await sdk.accounts.create({ publicKey: feePayerPublicKey });
+                await createTx.sign(feePayerPrivateKey);
+                await sdk.transactions.send(createTx.toWire());
+                await new Promise(resolve => setTimeout(resolve, 2000));
+            }
+        }
         
         // Choose which method to use (function or string)
         // Using function method to demonstrate the new capability
@@ -249,8 +298,26 @@ async function main() {
         }
     }
 
+    // Create accounts for all feepayers if they don't exist
+    console.log(`\n=== Ensuring all ${NUM_FEEPAYERS} feepayer accounts exist ===`);
+    const createAccountPromises = feepayerAccounts.map(async (account, index) => {
+        try {
+            await sdk.accounts.get(account.address);
+        } catch (error: any) {
+            if (error?.code === 5 || error?.rawMessage?.includes("not found")) {
+                console.log(`Creating account for feepayer ${index + 1}: ${account.address}`);
+                const createTx = await sdk.accounts.create({ publicKey: account.publicKey });
+                await createTx.sign(account.privateKey);
+                await sdk.transactions.send(createTx.toWire());
+            }
+        }
+    });
+    await Promise.all(createAccountPromises);
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    console.log("All feepayer accounts ready\n");
+
     // Now increment the counter
-    console.log("\n=== Incrementing Counter ===");
+    console.log("\n=== Incrementing Counter (using all feepayers concurrently) ===");
 
     while (true) {
         await incrementCounterAccountInstruction();
@@ -325,8 +392,12 @@ const getCreateCounterAccountInstructionData = async (): Promise<Uint8Array> => 
 
 // Create counter account using instructionData as a function
 const createCounterAccountWithFunction = async (): Promise<string> => {
-    const feePayerPublicKey = sdk.helpers.decodeAddress(feePayerAddress);
-    const feePayerPrivateKey = hexToBytes(feePayerPrivateKeyHex);
+    // Use the first feepayer account
+    if (feepayerAccounts.length === 0) {
+        throw new Error("Feepayer accounts not initialized");
+    }
+    const feePayerPublicKey = feepayerAccounts[0].publicKey;
+    const feePayerPrivateKey = feepayerAccounts[0].privateKey;
     const derivedAddressBytes = sdk.helpers.decodeAddress(derivedAddress);
 
     console.log("\n=== Creating Counter Account (using function) ===");
@@ -390,8 +461,12 @@ const createCounterAccountWithFunction = async (): Promise<string> => {
 
 // Create counter account using instructionData as hex string
 const createCounterAccountWithString = async (): Promise<string> => {
-    const feePayerPublicKey = sdk.helpers.decodeAddress(feePayerAddress);
-    const feePayerPrivateKey = hexToBytes(feePayerPrivateKeyHex);
+    // Use the first feepayer account
+    if (feepayerAccounts.length === 0) {
+        throw new Error("Feepayer accounts not initialized");
+    }
+    const feePayerPublicKey = feepayerAccounts[0].publicKey;
+    const feePayerPrivateKey = feepayerAccounts[0].privateKey;
 
     console.log("\n=== Creating Counter Account (using hex string) ===");
     

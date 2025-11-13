@@ -7,8 +7,8 @@ import { toStreamAccountUpdate, type StreamAccountUpdate } from "../domain/accou
 import { Block } from "../domain/blocks";
 import { ChainEvent } from "../domain/events";
 import { Filter } from "../domain/filters";
-import type { TrackTransactionUpdate } from "../domain/transactions";
-import { Transaction, toTrackTransactionUpdate } from "../domain/transactions";
+import type { StreamTransactionUpdate, TrackTransactionUpdate } from "../domain/transactions";
+import { toStreamTransactionUpdate, toTrackTransactionUpdate } from "../domain/transactions";
 import { ConsensusStatus } from "../proto/thru/common/v1/consensus_pb";
 import type { AccountView } from "../proto/thru/core/v1/account_pb";
 import type { BlockView } from "../proto/thru/core/v1/block_pb";
@@ -21,7 +21,7 @@ import {
 } from "../proto/thru/services/v1/streaming_service_pb";
 import { toPubkey, toSignature as toSignatureMessage } from "./helpers";
 
-export type { TrackTransactionUpdate } from "../domain/transactions";
+export type { StreamTransactionUpdate, TrackTransactionUpdate } from "../domain/transactions";
 
 export interface TrackTransactionOptions {
     timeoutMs?: number;
@@ -111,9 +111,7 @@ export interface StreamTransactionsOptions {
     signal?: AbortSignal;
 }
 
-export interface StreamTransactionsResult {
-    transaction: Transaction;
-}
+export type StreamTransactionsResult = StreamTransactionUpdate;
 
 export function streamTransactions(
     ctx: ThruClientContext,
@@ -128,12 +126,16 @@ export function streamTransactions(
         signal: options.signal,
     });
 
-    async function* mapper() {
+    async function* mapper(): AsyncGenerator<StreamTransactionsResult> {
         for await (const response of iterable) {
             if (!response.transaction) {
                 continue;
             }
-            yield { transaction: Transaction.fromProto(response.transaction) };
+            try {
+                yield toStreamTransactionUpdate(response.transaction);
+            } catch (err) {
+                console.error("streamTransactions: failed to decode transaction update", err);
+            }
         }
     }
 
