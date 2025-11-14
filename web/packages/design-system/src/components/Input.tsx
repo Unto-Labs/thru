@@ -22,7 +22,7 @@ export const Input = React.forwardRef<HTMLInputElement, InputProps>(
     const inputWrapper = (
       <div
         className={cn(
-          'border bg-surface-higher p-4 transition-colors cursor-text flex items-center',
+          'border bg-surface-higher p-4 transition-colors cursor-pointer flex items-center',
           'focus-within:border-border-primary focus-within:bg-golden',
           error
             ? 'border-border-brand bg-surface-brick focus-within:bg-surface-brick'

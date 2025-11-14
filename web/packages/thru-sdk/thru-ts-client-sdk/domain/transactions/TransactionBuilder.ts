@@ -2,7 +2,7 @@ import { Transaction } from "./Transaction";
 import type {
     BuildTransactionParams,
     SignedTransactionResult,
-    TransactionAccountsInput
+    TransactionAccountsInput,
 } from "./types";
 import { normalizeAccountList, parseInstructionData, resolveProgramIdentifier } from "./utils";
 
@@ -31,16 +31,6 @@ export class TransactionBuilder {
         });
     }
 
-    async buildAndSign(params: BuildTransactionParams): Promise<SignedTransactionResult> {
-        if (!params.feePayer.privateKey) {
-            throw new Error("Fee payer private key is required to sign the transaction");
-        }
-        const transaction = this.build(params);
-        const signature = await transaction.sign(params.feePayer.privateKey);
-        const rawTransaction = transaction.toWire();
-        return { transaction, signature, rawTransaction };
-    }
-
     private normalizeAccounts(accounts?: TransactionAccountsInput): TransactionAccountsInput | undefined {
         if (!accounts) {
             return undefined;
@@ -49,5 +39,15 @@ export class TransactionBuilder {
             readWriteAccounts: normalizeAccountList(accounts.readWriteAccounts ?? []),
             readOnlyAccounts: normalizeAccountList(accounts.readOnlyAccounts ?? []),
         };
+    }
+
+    async buildAndSign(params: BuildTransactionParams): Promise<SignedTransactionResult> {
+        if (!params.feePayer.privateKey) {
+            throw new Error("Fee payer private key is required to sign the transaction");
+        }
+        const transaction = this.build(params);
+        const signature = await transaction.sign(params.feePayer.privateKey);
+        const rawTransaction = transaction.toWire();
+        return { transaction, signature, rawTransaction };
     }
 }

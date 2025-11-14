@@ -11,10 +11,10 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     const baseStyles = 'font-semibold transition-colors focus:outline-none cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed';
     
     const variants = {
-      primary: 'bg-surface-lower-inverse text-text-primary-inverse hover:bg-surface-higher-inverse',
-      secondary: 'bg-surface-brick text-text-primary-inverse hover:opacity-90',
-      outline: 'border border-border-primary text-text-primary hover:bg-surface-lower',
-      ghost: 'text-text-primary hover:bg-surface-lower',
+      primary: 'bg-surface-lower-inverse text-text-primary-inverse hover:bg-surface-higher-inverse focus:bg-surface-higher-inverse',
+      secondary: 'bg-surface-brick text-text-primary-inverse hover:opacity-90 focus:opacity-90',
+      outline: 'border border-border-primary text-text-primary hover:bg-surface-lower focus:bg-surface-lower',
+      ghost: 'text-text-primary hover:bg-surface-lower focus:bg-surface-lower',
     };
 
     const sizes = {

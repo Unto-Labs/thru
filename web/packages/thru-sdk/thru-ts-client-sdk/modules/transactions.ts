@@ -26,7 +26,7 @@ import {
     type TransactionHeaderInput,
     TransactionStatusSnapshot,
 } from "../domain/transactions";
-import { parseAccountIdentifier, parseInstructionData, resolveProgramIdentifier } from "../domain/transactions/utils";
+import { normalizeAccountList, parseAccountIdentifier, parseInstructionData, resolveProgramIdentifier } from "../domain/transactions/utils";
 import type { ConsensusStatus, VersionContext } from "../proto/thru/common/v1/consensus_pb";
 import { AccountView } from "../proto/thru/core/v1/account_pb";
 import { RawTransaction, TransactionView } from "../proto/thru/core/v1/transaction_pb";
@@ -295,10 +295,10 @@ function parseAccounts(accounts?: TransactionAccountsConfig): TransactionAccount
 
     const result: TransactionAccountsInput = {};
     if (readWrite && readWrite.length > 0) {
-        result.readWriteAccounts = readWrite;
+        result.readWriteAccounts = normalizeAccountList(readWrite);
     }
     if (readOnly && readOnly.length > 0) {
-        result.readOnlyAccounts = readOnly;
+        result.readOnlyAccounts = normalizeAccountList(readOnly);
     }
 
     if (!result.readWriteAccounts && !result.readOnlyAccounts) {
