@@ -2,6 +2,19 @@ use crate::types::account::{AccountInfo, AccountInfoMut, AccountMeta, TSDK_ACCOU
 use crate::types::block_ctx::BlockCtx;
 use crate::types::txn::{TXN_MAX_SZ, Txn};
 
+/// Errors that can occur when accessing memory segments.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MemoryError {
+    /// Account has incompatible version
+    IncompatibleAccountVersion { expected: u8, found: u8 },
+
+    /// Block context too far in the past
+    BlockTooOld { requested: usize, available: usize },
+
+    /// Arithmetic overflow when computing block offset
+    BlockOffsetOverflow,
+}
+
 pub const SEG_TYPE_MASK: usize = 0xFF_0000_000000_usize;
 pub const SEG_IDX_MASK: usize = 0x00_FFFF_000000_usize;
 pub const SEG_OFFSET_MASK: usize = 0x00_0000_FFFFFF_usize;
@@ -56,62 +69,66 @@ pub fn get_block_ctx() -> &'static BlockCtx {
     unsafe { &*(BLOCK_CTX_PTR as *const BlockCtx) }
 }
 
-pub fn get_past_block_ctx(blocks_ago: usize) -> Option<&'static BlockCtx> {
+pub fn get_past_block_ctx(blocks_ago: usize) -> Result<&'static BlockCtx, MemoryError> {
     let current_ctx = get_block_ctx();
     if blocks_ago == 0 {
-        return Some(current_ctx);
+        return Ok(current_ctx);
     }
     if blocks_ago > current_ctx.slot as usize {
-        return None;
+        return Err(MemoryError::BlockTooOld {
+            requested: blocks_ago,
+            available: current_ctx.slot as usize,
+        });
     }
-    let offset = blocks_ago.checked_mul(BLOCK_CTX_VM_SPACING)?;
+    let offset = blocks_ago
+        .checked_mul(BLOCK_CTX_VM_SPACING)
+        .ok_or(MemoryError::BlockOffsetOverflow)?;
     let addr = compute_addr!(SEG_TYPE_READONLY_DATA, SEG_IDX_BLOCK_CTX, offset) as *const BlockCtx;
-    Some(unsafe { &*addr })
+    Ok(unsafe { &*addr })
 }
 
-pub unsafe fn get_account_meta_at_idx(account_idx: u16) -> Option<&'static AccountMeta> {
+pub unsafe fn get_account_meta_at_idx(account_idx: u16) -> Result<&'static AccountMeta, MemoryError> {
     let account_meta_ptr: *const AccountMeta =
         compute_addr!(SEG_TYPE_ACCOUNT_METADATA, account_idx, 0x000000_usize) as *const AccountMeta;
 
     let account_meta: &AccountMeta = unsafe { &*account_meta_ptr };
-    
+
     if account_meta.version == TSDK_ACCOUNT_VERSION_V1  {
-        Some(account_meta)
+        Ok(account_meta)
     } else {
-        None
-    }
-}
-
-pub unsafe fn get_account_data_at_idx(account_idx: u16) -> Option<&'static [u8]> {
-    if let Some(account_meta) = unsafe { get_account_meta_at_idx(account_idx) } {
-        let account_data_ptr: *const u8 =
-            compute_addr!(SEG_TYPE_ACCOUNT_DATA, account_idx, 0x000000_usize) as *const u8;
-
-        let account_data: &[u8] =
-            unsafe { core::slice::from_raw_parts(account_data_ptr, account_meta.data_sz as usize) };
-        Some(account_data)
-    } else {
-        None
-    }
-}
-
-pub unsafe fn get_account_info_at_idx_mut(account_idx: u16) -> Option<AccountInfoMut<'static>> {
-    if let Some(account_meta) = unsafe { get_account_meta_at_idx(account_idx) } {
-        let account_data_ptr: *mut u8 =
-            compute_addr!(SEG_TYPE_ACCOUNT_DATA, account_idx, 0x000000_usize) as *mut u8;
-
-        let account_data: &mut [u8] = unsafe {
-            core::slice::from_raw_parts_mut(account_data_ptr, account_meta.data_sz as usize)
-        };
-        Some(AccountInfoMut {
-            meta: account_meta,
-            data: account_data,
+        Err(MemoryError::IncompatibleAccountVersion {
+            expected: TSDK_ACCOUNT_VERSION_V1,
+            found: account_meta.version,
         })
-    } else {
-        None
     }
 }
 
-pub unsafe fn get_account_info_at_idx(account_idx: u16) -> Option<AccountInfo<'static>> {
+pub unsafe fn get_account_data_at_idx(account_idx: u16) -> Result<&'static [u8], MemoryError> {
+    let account_meta = unsafe { get_account_meta_at_idx(account_idx)? };
+
+    let account_data_ptr: *const u8 =
+        compute_addr!(SEG_TYPE_ACCOUNT_DATA, account_idx, 0x000000_usize) as *const u8;
+
+    let account_data: &[u8] =
+        unsafe { core::slice::from_raw_parts(account_data_ptr, account_meta.data_sz as usize) };
+    Ok(account_data)
+}
+
+pub unsafe fn get_account_info_at_idx_mut(account_idx: u16) -> Result<AccountInfoMut<'static>, MemoryError> {
+    let account_meta = unsafe { get_account_meta_at_idx(account_idx)? };
+
+    let account_data_ptr: *mut u8 =
+        compute_addr!(SEG_TYPE_ACCOUNT_DATA, account_idx, 0x000000_usize) as *mut u8;
+
+    let account_data: &mut [u8] = unsafe {
+        core::slice::from_raw_parts_mut(account_data_ptr, account_meta.data_sz as usize)
+    };
+    Ok(AccountInfoMut {
+        meta: account_meta,
+        data: account_data,
+    })
+}
+
+pub unsafe fn get_account_info_at_idx(account_idx: u16) -> Result<AccountInfo<'static>, MemoryError> {
     unsafe { get_account_info_at_idx_mut(account_idx).map(Into::into) }
 }
