@@ -451,6 +451,58 @@ impl Client {
         }))
     }
 
+    /// Poll for a transaction that was just sent until it is fetched.
+    /// Polls twice per second (every 500ms) until the transaction is found or timeout is reached.
+    pub async fn track_transaction_polling(
+        &self,
+        signature: &[u8; 64],
+        timeout: Duration,
+    ) -> Result<TransactionDetails> {
+        let mut client = QueryServiceClient::new(self.channel.clone())
+            .max_decoding_message_size(128 * 1024 * 1024) /* 128 MB */
+            .max_encoding_message_size(128 * 1024 * 1024); /* 128 MB */
+        let deadline = Instant::now() + timeout;
+
+        loop {
+            if Instant::now() >= deadline {
+                return Err(ClientError::TransactionVerification(
+                    "Transaction not found within timeout".to_string(),
+                ));
+            }
+
+            let request = servicesv1::GetTransactionRequest {
+                signature: Some(corev1::Signature {
+                    value: signature.to_vec(),
+                }),
+                view: Some(corev1::TransactionView::Full as i32),
+                version_context: Some(current_version_context()),
+                min_consensus: Some(commonv1::ConsensusStatus::Included as i32),
+            };
+
+            let mut grpc_request = Request::new(request);
+            self.apply_metadata(&mut grpc_request);
+            grpc_request.set_timeout(self.timeout);
+
+            match client.get_transaction(grpc_request).await {
+                Ok(response) => {
+                    let transaction_proto = response.into_inner();
+                    if transaction_proto.slot.unwrap_or(0) != 0 {
+                        return self.transaction_proto_to_details(transaction_proto, signature).await;
+                    }
+                }
+                Err(status) => {
+                    /* Only retry on NOT_FOUND errors; fail immediately on other errors */
+                    if status.code() != tonic::Code::NotFound {
+                        return Err(ClientError::Rpc(status.to_string()));
+                    }
+                    /* For NOT_FOUND, continue looping and retry */
+                }
+            }
+
+            time::sleep(POLL_INTERVAL).await;
+        }
+    }
+
     /// Submit a transaction and wait for execution or timeout.
     pub async fn execute_transaction(
         &self,
@@ -458,141 +510,7 @@ impl Client {
         timeout: Duration,
     ) -> Result<TransactionDetails> {
         let signature_bytes = self.send_transaction(transaction).await?;
-        let _track_response = self.track_transaction(&signature_bytes, timeout).await?;
-        let transaction_proto = self
-            .fetch_transaction_details(&signature_bytes, timeout, 1)
-            .await?
-            .ok_or_else(|| ClientError::Rpc("transaction not found after execution".into()))?;
-
-        /* Extract header fields */
-        let header = transaction_proto.header.as_ref()
-            .ok_or_else(|| ClientError::Rpc("transaction missing header".into()))?;
-
-        let fee_payer_sig_bytes = header.fee_payer_signature.as_ref()
-            .ok_or_else(|| ClientError::Rpc("header missing fee_payer_signature".into()))?
-            .value.clone();
-        let fee_payer_signature = signature_from_bytes(
-            &array_from_vec::<64>(fee_payer_sig_bytes, "fee_payer_signature")
-                .map_err(ClientError::Validation)?
-        )?;
-
-        let fee_payer_pubkey_bytes = header.fee_payer_pubkey.as_ref()
-            .ok_or_else(|| ClientError::Rpc("header missing fee_payer_pubkey".into()))?
-            .value.clone();
-        let fee_payer_pubkey = Pubkey::from_bytes(
-            &array_from_vec::<32>(fee_payer_pubkey_bytes, "fee_payer_pubkey")
-                .map_err(ClientError::Validation)?
-        );
-
-        let program_pubkey_bytes = header.program_pubkey.as_ref()
-            .ok_or_else(|| ClientError::Rpc("header missing program_pubkey".into()))?
-            .value.clone();
-        let program_pubkey = Pubkey::from_bytes(
-            &array_from_vec::<32>(program_pubkey_bytes, "program_pubkey")
-                .map_err(ClientError::Validation)?
-        );
-
-        /* Extract execution result fields */
-        let transaction_slot = transaction_proto.slot.unwrap_or(0);
-        let execution_proto = transaction_proto.execution_result.clone();
-        let execution = execution_proto.unwrap_or_default();
-
-        let signature = signature_from_bytes(&signature_bytes)?;
-        let execution_result = execution.execution_result;
-        let vm_error = execution.vm_error as i32;
-        let user_error_code = execution.user_error_code;
-
-        let rw_accounts = execution
-            .readwrite_accounts
-            .iter()
-            .map(|pk| {
-                let bytes =
-                    array_from_vec::<32>(pk.value.clone(), "readwrite account").map_err(|e| {
-                        ClientError::Validation(format!("invalid readwrite account pubkey: {}", e))
-                    })?;
-                Ok(Pubkey::from_bytes(&bytes))
-            })
-            .collect::<Result<Vec<_>>>()?;
-
-        let ro_accounts = execution
-            .readonly_accounts
-            .iter()
-            .map(|pk| {
-                let bytes =
-                    array_from_vec::<32>(pk.value.clone(), "readonly account").map_err(|e| {
-                        ClientError::Validation(format!("invalid readonly account pubkey: {}", e))
-                    })?;
-                Ok(Pubkey::from_bytes(&bytes))
-            })
-            .collect::<Result<Vec<_>>>()?;
-
-        let events = execution
-            .events
-            .into_iter()
-            .map(|event| {
-                let program = event
-                    .program
-                    .and_then(|pk| array_from_vec::<32>(pk.value, "event program").ok())
-                    .map(|bytes| Pubkey::from_bytes(&bytes));
-                Event {
-                    call_idx: event.call_idx,
-                    program_idx: event.program_idx,
-                    data: event.payload,
-                    event_id: if event.event_id.is_empty() {
-                        None
-                    } else {
-                        Some(event.event_id)
-                    },
-                    program,
-                }
-            })
-            .collect::<Vec<_>>();
-
-        Ok(TransactionDetails {
-            /* Execution result fields */
-            compute_units_consumed: execution.consumed_compute_units as u64,
-            memory_units_consumed: execution.consumed_memory_units,
-            state_units_consumed: execution.consumed_state_units as u64,
-            events_cnt: if execution.events_count != 0 {
-                execution.events_count
-            } else {
-                events.len() as u32
-            },
-            events_sz: execution.events_size,
-            execution_result,
-            pages_used: execution.pages_used,
-            user_error_code,
-            vm_error,
-            rw_accounts,
-            ro_accounts,
-            events,
-
-            /* Transaction header fields */
-            fee_payer_signature,
-            version: header.version,
-            flags: header.flags,
-            readwrite_accounts_count: header.readwrite_accounts_count,
-            readonly_accounts_count: header.readonly_accounts_count,
-            instruction_data_size: header.instruction_data_size,
-            requested_compute_units: header.requested_compute_units,
-            requested_state_units: header.requested_state_units,
-            requested_memory_units: header.requested_memory_units,
-            expiry_after: header.expiry_after,
-            fee: header.fee,
-            nonce: header.nonce,
-            start_slot: header.start_slot,
-            fee_payer_pubkey,
-            program_pubkey,
-
-            /* Transaction metadata */
-            signature,
-            body: transaction_proto.body,
-            slot: transaction_slot,
-            block_offset: transaction_proto.block_offset,
-
-            /* Legacy field */
-            proof_slot: transaction_slot,
-        })
+        self.track_transaction_polling(&signature_bytes, timeout).await
     }
 
     /// Generate a state proof using the gRPC service.
@@ -799,6 +717,143 @@ impl Client {
         }
 
         Ok(None)
+    }
+
+    async fn transaction_proto_to_details(
+        &self,
+        transaction_proto: corev1::Transaction,
+        signature_bytes: &[u8; 64],
+    ) -> Result<TransactionDetails> {
+        let signature = signature_from_bytes(signature_bytes)?;
+
+        /* Extract header fields */
+        let header = transaction_proto.header.as_ref()
+            .ok_or_else(|| ClientError::Rpc("transaction missing header".into()))?;
+
+        let fee_payer_sig_bytes = header.fee_payer_signature.as_ref()
+            .ok_or_else(|| ClientError::Rpc("header missing fee_payer_signature".into()))?
+            .value.clone();
+        let fee_payer_signature = signature_from_bytes(
+            &array_from_vec::<64>(fee_payer_sig_bytes, "fee_payer_signature")
+                .map_err(ClientError::Validation)?
+        )?;
+
+        let fee_payer_pubkey_bytes = header.fee_payer_pubkey.as_ref()
+            .ok_or_else(|| ClientError::Rpc("header missing fee_payer_pubkey".into()))?
+            .value.clone();
+        let fee_payer_pubkey = Pubkey::from_bytes(
+            &array_from_vec::<32>(fee_payer_pubkey_bytes, "fee_payer_pubkey")
+                .map_err(ClientError::Validation)?
+        );
+
+        let program_pubkey_bytes = header.program_pubkey.as_ref()
+            .ok_or_else(|| ClientError::Rpc("header missing program_pubkey".into()))?
+            .value.clone();
+        let program_pubkey = Pubkey::from_bytes(
+            &array_from_vec::<32>(program_pubkey_bytes, "program_pubkey")
+                .map_err(ClientError::Validation)?
+        );
+
+        /* Extract execution result fields */
+        let transaction_slot = transaction_proto.slot.unwrap_or(0);
+        let execution_proto = transaction_proto.execution_result.clone();
+        let execution = execution_proto.unwrap_or_default();
+
+        let execution_result = execution.execution_result;
+        let vm_error = execution.vm_error as i32;
+        let user_error_code = execution.user_error_code;
+
+        let rw_accounts = execution
+            .readwrite_accounts
+            .iter()
+            .map(|pk| {
+                let bytes =
+                    array_from_vec::<32>(pk.value.clone(), "readwrite account").map_err(|e| {
+                        ClientError::Validation(format!("invalid readwrite account pubkey: {}", e))
+                    })?;
+                Ok(Pubkey::from_bytes(&bytes))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let ro_accounts = execution
+            .readonly_accounts
+            .iter()
+            .map(|pk| {
+                let bytes =
+                    array_from_vec::<32>(pk.value.clone(), "readonly account").map_err(|e| {
+                        ClientError::Validation(format!("invalid readonly account pubkey: {}", e))
+                    })?;
+                Ok(Pubkey::from_bytes(&bytes))
+            })
+            .collect::<Result<Vec<_>>>()?;
+
+        let events = execution
+            .events
+            .into_iter()
+            .map(|event| {
+                let program = event
+                    .program
+                    .and_then(|pk| array_from_vec::<32>(pk.value, "event program").ok())
+                    .map(|bytes| Pubkey::from_bytes(&bytes));
+                Event {
+                    call_idx: event.call_idx,
+                    program_idx: event.program_idx,
+                    data: event.payload,
+                    event_id: if event.event_id.is_empty() {
+                        None
+                    } else {
+                        Some(event.event_id)
+                    },
+                    program,
+                }
+            })
+            .collect::<Vec<_>>();
+
+        Ok(TransactionDetails {
+            /* Execution result fields */
+            compute_units_consumed: execution.consumed_compute_units as u64,
+            memory_units_consumed: execution.consumed_memory_units,
+            state_units_consumed: execution.consumed_state_units as u64,
+            events_cnt: if execution.events_count != 0 {
+                execution.events_count
+            } else {
+                events.len() as u32
+            },
+            events_sz: execution.events_size,
+            execution_result,
+            pages_used: execution.pages_used,
+            user_error_code,
+            vm_error,
+            rw_accounts,
+            ro_accounts,
+            events,
+
+            /* Transaction header fields */
+            fee_payer_signature,
+            version: header.version,
+            flags: header.flags,
+            readwrite_accounts_count: header.readwrite_accounts_count,
+            readonly_accounts_count: header.readonly_accounts_count,
+            instruction_data_size: header.instruction_data_size,
+            requested_compute_units: header.requested_compute_units,
+            requested_state_units: header.requested_state_units,
+            requested_memory_units: header.requested_memory_units,
+            expiry_after: header.expiry_after,
+            fee: header.fee,
+            nonce: header.nonce,
+            start_slot: header.start_slot,
+            fee_payer_pubkey,
+            program_pubkey,
+
+            /* Transaction metadata */
+            signature,
+            body: transaction_proto.body,
+            slot: transaction_slot,
+            block_offset: transaction_proto.block_offset,
+
+            /* Legacy field */
+            proof_slot: transaction_slot,
+        })
     }
 
     async fn get_raw_account(&self, pubkey: &Pubkey) -> Result<corev1::RawAccount> {
