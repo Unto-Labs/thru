@@ -1,7 +1,7 @@
+use crate::types::state_proof::{ProofParseError, StateProof};
 use crate::types::{account::AccountMeta, ed25519::Ed25519Sig};
 use crate::types::{pubkey::Pubkey, signature::Signature};
 use core::{mem::MaybeUninit, slice};
-use crate::types::state_proof::{ProofParseError, StateProof};
 
 // Constants from tn_txn.h
 pub const TN_TXN_V1: u8 = 0x01;
@@ -83,11 +83,18 @@ impl TxnHdr {
         unsafe { &self.v1 }
     }
 
-    pub fn as_v1_safe(&self) -> Option<&TxnHdrV1> {
-        if self.version() == 1 {
-            Some(unsafe { &self.v1 })
+    /// Safe access to V1 header fields.
+    ///
+    /// # Errors
+    /// Returns `TxnAccessError::NotV1` if the transaction is not version 1.
+    pub fn as_v1_safe(&self) -> Result<&TxnHdrV1, TxnAccessError> {
+        let version = self.version();
+        if version == 1 {
+            Ok(unsafe { &self.v1 })
         } else {
-            None
+            Err(TxnAccessError::NotV1 {
+                actual_version: version,
+            })
         }
     }
 }
@@ -120,6 +127,15 @@ pub enum TxnParseError {
     Truncated,
     TooShort(usize),
     BadVersion(u8),
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum TxnAccessError {
+    /// Transaction is not version 1
+    NotV1 { actual_version: u8 },
+
+    /// Account index out of bounds
+    InvalidAccountIndex { index: u16, max: u16 },
 }
 
 impl Txn {
@@ -165,35 +181,56 @@ impl Txn {
 }
 
 impl Txn {
-    /// Returns the fee-payer signature when the header is V1.
-    pub fn fee_payer_signature(&self) -> Option<&Ed25519Sig> {
-        Some(&self.hdr.as_v1_safe()?.fee_payer_signature.0)
+    /// Returns the fee-payer signature.
+    ///
+    /// # Errors
+    /// Returns `TxnAccessError::NotV1` if the transaction is not version 1.
+    pub fn fee_payer_signature(&self) -> Result<&Ed25519Sig, TxnAccessError> {
+        Ok(&self.hdr.as_v1_safe()?.fee_payer_signature.0)
     }
 
-    pub fn account_pubkeys(&self) -> Option<&[Pubkey]> {
+    /// Returns all account public keys as a slice.
+    ///
+    /// # Errors
+    /// Returns `TxnAccessError::NotV1` if the transaction is not version 1.
+    pub fn account_pubkeys(&self) -> Result<&[Pubkey], TxnAccessError> {
         let v1 = self.hdr.as_v1_safe()?;
         let accounts_ptr_start = &v1.fee_payer_pubkey as *const Pubkey;
         let num_accounts = self.accounts_cnt();
         unsafe {
-            Some(core::slice::from_raw_parts(
+            Ok(core::slice::from_raw_parts(
                 accounts_ptr_start,
                 num_accounts as usize,
             ))
         }
     }
 
-    pub fn account_pubkey(&self, account_index: u16) -> Option<&Pubkey> {
+    /// Returns the public key for the account at the specified index.
+    ///
+    /// # Errors
+    /// - Returns `TxnAccessError::NotV1` if the transaction is not version 1.
+    /// - Returns `TxnAccessError::InvalidAccountIndex` if the index is out of bounds.
+    pub fn account_pubkey(&self, account_index: u16) -> Result<&Pubkey, TxnAccessError> {
         let v1 = self.hdr.as_v1_safe()?;
         if account_index == 0 {
-            return Some(&v1.fee_payer_pubkey);
+            Ok(&v1.fee_payer_pubkey)
         } else if account_index == 1 {
-            return Some(&v1.program_pubkey);
+            Ok(&v1.program_pubkey)
         } else {
-            self.input_pubkeys.get((account_index - 2) as usize)
+            self.input_pubkeys.get((account_index - 2) as usize).ok_or(
+                TxnAccessError::InvalidAccountIndex {
+                    index: account_index,
+                    max: self.accounts_cnt(),
+                },
+            )
         }
     }
 
-    pub fn program_pubkey(&self) -> Option<&Pubkey> {
+    /// Returns the program public key (account at index 1).
+    ///
+    /// # Errors
+    /// Returns `TxnAccessError::NotV1` if the transaction is not version 1.
+    pub fn program_pubkey(&self) -> Result<&Pubkey, TxnAccessError> {
         self.account_pubkey(1)
     }
 }
@@ -269,30 +306,24 @@ impl Txn {
     /// # let bytes: &[u8] = /* on-wire bytes */ unimplemented!();
     /// let txn = parse_txn(bytes)?;
     ///
-    /// if let Some(addrs) = txn.accounts_iter() {
-    ///     for (i, addr) in addrs.enumerate() {
-    ///         match addr {
-    ///             AccountAddrs::FeePayer(pk)  => tsdk_println!("{i}: fee-payer  {pk}"),
-    ///             AccountAddrs::Program(pk)   => tsdk_println!("{i}: program    {pk}"),
-    ///             AccountAddrs::ReadWrite(pk) => tsdk_println!("{i}: rw acct    {pk}"),
-    ///             AccountAddrs::ReadOnly(pk)  => tsdk_println!("{i}: ro acct    {pk}"),
-    ///         }
+    /// let addrs = txn.accounts_iter()?;
+    /// for (i, addr) in addrs.enumerate() {
+    ///     match addr {
+    ///         AccountAddrs::FeePayer(pk)  => tsdk_println!("{i}: fee-payer  {pk}"),
+    ///         AccountAddrs::Program(pk)   => tsdk_println!("{i}: program    {pk}"),
+    ///         AccountAddrs::ReadWrite(pk) => tsdk_println!("{i}: rw acct    {pk}"),
+    ///         AccountAddrs::ReadOnly(pk)  => tsdk_println!("{i}: ro acct    {pk}"),
     ///     }
     /// }
     /// ```
-    pub fn accounts_iter(&self) -> Option<AccountAddrsIter<'_>> {
-        if self.hdr.version() != 1 {
-            return None;
-        }
-
-        // SAFETY: variant proven V1
-        let v1: &TxnHdrV1 = unsafe { self.hdr.as_v1() };
+    pub fn accounts_iter(&self) -> Result<AccountAddrsIter<'_>, TxnAccessError> {
+        let v1 = self.hdr.as_v1_safe()?;
 
         let rw_cnt = v1.readwrite_accounts_cnt as usize;
         let ro_cnt = v1.readonly_accounts_cnt as usize;
 
         debug_assert_eq!(self.input_pubkeys.len(), rw_cnt + ro_cnt);
-        Some(AccountAddrsIter {
+        Ok(AccountAddrsIter {
             fee_payer: Some(&v1.fee_payer_pubkey),
             program: Some(&v1.program_pubkey),
             rw_iter: self.input_pubkeys[..rw_cnt].iter(),
@@ -303,8 +334,10 @@ impl Txn {
     /*------------------------------------------------------------------*/
     /*  Safe accessor for instruction data                               */
     /*------------------------------------------------------------------*/
-    /// Slice of instruction data (`instr_data_sz` bytes) when
-    /// the transaction is Version-1, otherwise `None`.
+    /// Returns a slice of instruction data (`instr_data_sz` bytes).
+    ///
+    /// # Errors
+    /// Returns `TxnAccessError::NotV1` if the transaction is not version 1.
     ///
     /// ```
     ///  +--------------------------------------------------------------+
@@ -317,21 +350,25 @@ impl Txn {
     ///   acct_addrs() --┘                       |
     ///     instr_data() ------------------------┘
     /// ```
-    pub fn instr_data(&self) -> Option<&[u8]> {
+    pub fn instr_data(&self) -> Result<&[u8], TxnAccessError> {
         let v1 = self.hdr.as_v1_safe()?;
 
-        let instr_data_offset = size_of::<TxnHdr>() + size_of::<Pubkey>() * (self.accounts_cnt() as usize - 2);
-        return Some(unsafe { core::slice::from_raw_parts(
-            (self as *const Txn as *const u8).offset(instr_data_offset as isize),
-            v1.instr_data_sz as usize)
-        });
+        let instr_data_offset =
+            size_of::<TxnHdr>() + size_of::<Pubkey>() * (self.accounts_cnt() as usize - 2);
+        Ok(unsafe {
+            core::slice::from_raw_parts(
+                (self as *const Txn as *const u8).offset(instr_data_offset as isize),
+                v1.instr_data_sz as usize,
+            )
+        })
     }
 
     pub fn fee_payer_proof(&self) -> Result<&StateProof, ProofParseError> {
-        let proof_start = self.instr_data()
-                                         .ok_or(ProofParseError::NotSupported)?
-                                         .as_ptr_range()
-                                         .end;
+        let proof_start = self
+            .instr_data()
+            .map_err(|_| ProofParseError::NotSupported)?
+            .as_ptr_range()
+            .end;
         if (unsafe { self.hdr.as_v1() }.flags & TN_TXN_FLAG_HAS_FEE_PAYER_PROOF) == 0 {
             return Err(ProofParseError::NotAvailable);
         }
@@ -340,13 +377,13 @@ impl Txn {
         Ok(unsafe { StateProof::parse_proof_unchecked(proof_start) })
     }
 
-    pub fn fee_payer_meta(&self) -> Option<&AccountMeta> {
-        let proof = self.fee_payer_proof().ok()?;
+    pub fn fee_payer_meta(&self) -> Result<&AccountMeta, ProofParseError> {
+        let proof = self.fee_payer_proof()?;
         let meta = unsafe {
             let ptr = (proof as *const StateProof as *const u8).add(proof.footprint_unchecked());
             &*(ptr as *const AccountMeta)
         };
-        Some(meta)
+        Ok(meta)
     }
 
     pub fn fee(&self) -> u64 {

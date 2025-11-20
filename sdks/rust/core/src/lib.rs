@@ -6,11 +6,12 @@ pub mod mem;
 pub mod syscall;
 pub mod types;
 
-pub use account_safe::{next_pow2, AccountManager};
+pub use account_safe::{next_pow2, AccountManager, AccountError};
 pub use account_safe::AccountRef::*;
-pub use mem::get_txn;
+pub use mem::{get_txn, MemoryError};
 pub use types::pubkey::Pubkey;
 pub use types::shadow_stack::get_shadow_stack;
+pub use types::txn::TxnAccessError;
 
 
 /// Error code used by the panic handler
@@ -90,8 +91,8 @@ pub mod program_utils {
 
         // Get all account pubkeys from transaction
         let account_pubkeys = match txn.account_pubkeys() {
-            Some(pubkeys) => pubkeys,
-            None => return false,
+            Ok(pubkeys) => pubkeys,
+            Err(_) => return false,
         };
 
         // If account is the fee payer, it has authorized
@@ -137,13 +138,13 @@ pub mod program_utils {
             get_account_meta_at_idx(account_idx)
         };
         let account_meta = match account_meta {
-            Some(meta) => meta,
-            None => return false,
+            Ok(meta) => meta,
+            Err(_) => return false,
         };
 
         let account_pubkeys = match txn.account_pubkeys() {
-            Some(pubkeys) => pubkeys,
-            None => return false,
+            Ok(pubkeys) => pubkeys,
+            Err(_) => return false,
         };
         let shadow_stack = get_shadow_stack();
         let current_program_idx = shadow_stack.current_program_acc_idx() as usize;
