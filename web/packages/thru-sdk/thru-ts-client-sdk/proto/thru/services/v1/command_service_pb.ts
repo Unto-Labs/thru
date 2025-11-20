@@ -2,21 +2,27 @@
 // @generated from file thru/services/v1/command_service.proto (package thru.services.v1, syntax proto3)
 /* eslint-disable */
 
-import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
-import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
+import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
+import { enumDesc, fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
 import { file_google_api_annotations } from "../../../google/api/annotations_pb";
 import { file_google_api_client } from "../../../google/api/client_pb";
+import type { Signature } from "../../common/v1/primitives_pb";
+import { file_thru_common_v1_primitives } from "../../common/v1/primitives_pb";
+import type { ConsensusStatus } from "../../common/v1/consensus_pb";
+import { file_thru_common_v1_consensus } from "../../common/v1/consensus_pb";
 import { file_google_api_field_behavior } from "../../../google/api/field_behavior_pb";
+import type { TransactionExecutionResult } from "../../core/v1/transaction_pb";
 import { file_thru_core_v1_transaction } from "../../core/v1/transaction_pb";
-import type { Signature } from "../../core/v1/types_pb";
 import { file_thru_core_v1_types } from "../../core/v1/types_pb";
+import type { Duration } from "@bufbuild/protobuf/wkt";
+import { file_google_protobuf_duration } from "@bufbuild/protobuf/wkt";
 import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file thru/services/v1/command_service.proto.
  */
 export const file_thru_services_v1_command_service: GenFile = /*@__PURE__*/
-  fileDesc("CiZ0aHJ1L3NlcnZpY2VzL3YxL2NvbW1hbmRfc2VydmljZS5wcm90bxIQdGhydS5zZXJ2aWNlcy52MSI2ChZTZW5kVHJhbnNhY3Rpb25SZXF1ZXN0EhwKD3Jhd190cmFuc2FjdGlvbhgBIAEoDEID4EECIkoKF1NlbmRUcmFuc2FjdGlvblJlc3BvbnNlEi8KCXNpZ25hdHVyZRgBIAEoCzIXLnRocnUuY29yZS52MS5TaWduYXR1cmVCA+BBAiJSChxCYXRjaFNlbmRUcmFuc2FjdGlvbnNSZXF1ZXN0Eh0KEHJhd190cmFuc2FjdGlvbnMYASADKAxCA+BBAhITCgtudW1fcmV0cmllcxgCIAEoBSJoCh1CYXRjaFNlbmRUcmFuc2FjdGlvbnNSZXNwb25zZRIwCgpzaWduYXR1cmVzGAEgAygLMhcudGhydS5jb3JlLnYxLlNpZ25hdHVyZUID4EECEhUKCGFjY2VwdGVkGAIgAygIQgPgQQIyyQIKDkNvbW1hbmRTZXJ2aWNlEoMBCg9TZW5kVHJhbnNhY3Rpb24SKC50aHJ1LnNlcnZpY2VzLnYxLlNlbmRUcmFuc2FjdGlvblJlcXVlc3QaKS50aHJ1LnNlcnZpY2VzLnYxLlNlbmRUcmFuc2FjdGlvblJlc3BvbnNlIhuC0+STAhU6ASoiEC92MS90cmFuc2FjdGlvbnMSmwEKFUJhdGNoU2VuZFRyYW5zYWN0aW9ucxIuLnRocnUuc2VydmljZXMudjEuQmF0Y2hTZW5kVHJhbnNhY3Rpb25zUmVxdWVzdBovLnRocnUuc2VydmljZXMudjEuQmF0Y2hTZW5kVHJhbnNhY3Rpb25zUmVzcG9uc2UiIYLT5JMCGzoBKiIWL3YxL3RyYW5zYWN0aW9ucy9iYXRjaBoTykEQYXBpLnRocnUubmV0d29ya0LeAQoUY29tLnRocnUuc2VydmljZXMudjFCE0NvbW1hbmRTZXJ2aWNlUHJvdG9QAVpIZ2l0aHViLmNvbS9VbnRvLUxhYnMvdGhydS1uZXQvZ3JwYy9wa2cvcHJvdG8vdGhydS9zZXJ2aWNlcy92MTtzZXJ2aWNlc3YxogIDVFNYqgIQVGhydS5TZXJ2aWNlcy5WMboCBFRIVVPKAhBUaHJ1XFNlcnZpY2VzXFYx4gIcVGhydVxTZXJ2aWNlc1xWMVxHUEJNZXRhZGF0YeoCElRocnU6OlNlcnZpY2VzOjpWMWIGcHJvdG8z", [file_google_api_annotations, file_google_api_client, file_google_api_field_behavior, file_thru_core_v1_transaction, file_thru_core_v1_types]);
+  fileDesc("CiZ0aHJ1L3NlcnZpY2VzL3YxL2NvbW1hbmRfc2VydmljZS5wcm90bxIQdGhydS5zZXJ2aWNlcy52MSI2ChZTZW5kVHJhbnNhY3Rpb25SZXF1ZXN0EhwKD3Jhd190cmFuc2FjdGlvbhgBIAEoDEID4EECIkwKF1NlbmRUcmFuc2FjdGlvblJlc3BvbnNlEjEKCXNpZ25hdHVyZRgBIAEoCzIZLnRocnUuY29tbW9uLnYxLlNpZ25hdHVyZUID4EECIlIKHEJhdGNoU2VuZFRyYW5zYWN0aW9uc1JlcXVlc3QSHQoQcmF3X3RyYW5zYWN0aW9ucxgBIAMoDEID4EECEhMKC251bV9yZXRyaWVzGAIgASgFImoKHUJhdGNoU2VuZFRyYW5zYWN0aW9uc1Jlc3BvbnNlEjIKCnNpZ25hdHVyZXMYASADKAsyGS50aHJ1LmNvbW1vbi52MS5TaWduYXR1cmVCA+BBAhIVCghhY2NlcHRlZBgCIAMoCEID4EECIl4KFlNlbmRBbmRUcmFja1R4blJlcXVlc3QSGAoLdHJhbnNhY3Rpb24YASABKAxCA+BBAhIqCgd0aW1lb3V0GAIgASgLMhkuZ29vZ2xlLnByb3RvYnVmLkR1cmF0aW9uIv8BChdTZW5kQW5kVHJhY2tUeG5SZXNwb25zZRI3CgZzdGF0dXMYASABKA4yIi50aHJ1LnNlcnZpY2VzLnYxLlN1Ym1pc3Npb25TdGF0dXNCA+BBAhIsCglzaWduYXR1cmUYAiABKAsyGS50aHJ1LmNvbW1vbi52MS5TaWduYXR1cmUSOQoQY29uc2Vuc3VzX3N0YXR1cxgDIAEoDjIfLnRocnUuY29tbW9uLnYxLkNvbnNlbnN1c1N0YXR1cxJCChBleGVjdXRpb25fcmVzdWx0GAQgASgLMigudGhydS5jb3JlLnYxLlRyYW5zYWN0aW9uRXhlY3V0aW9uUmVzdWx0KnUKEFN1Ym1pc3Npb25TdGF0dXMSIQodU1VCTUlTU0lPTl9TVEFUVVNfVU5TUEVDSUZJRUQQABIeChpTVUJNSVNTSU9OX1NUQVRVU19SRUNFSVZFRBABEh4KGlNVQk1JU1NJT05fU1RBVFVTX0FDQ0VQVEVEEAIy1wMKDkNvbW1hbmRTZXJ2aWNlEoMBCg9TZW5kVHJhbnNhY3Rpb24SKC50aHJ1LnNlcnZpY2VzLnYxLlNlbmRUcmFuc2FjdGlvblJlcXVlc3QaKS50aHJ1LnNlcnZpY2VzLnYxLlNlbmRUcmFuc2FjdGlvblJlc3BvbnNlIhuC0+STAhU6ASoiEC92MS90cmFuc2FjdGlvbnMSmwEKFUJhdGNoU2VuZFRyYW5zYWN0aW9ucxIuLnRocnUuc2VydmljZXMudjEuQmF0Y2hTZW5kVHJhbnNhY3Rpb25zUmVxdWVzdBovLnRocnUuc2VydmljZXMudjEuQmF0Y2hTZW5kVHJhbnNhY3Rpb25zUmVzcG9uc2UiIYLT5JMCGzoBKiIWL3YxL3RyYW5zYWN0aW9ucy9iYXRjaBKLAQoPU2VuZEFuZFRyYWNrVHhuEigudGhydS5zZXJ2aWNlcy52MS5TZW5kQW5kVHJhY2tUeG5SZXF1ZXN0GikudGhydS5zZXJ2aWNlcy52MS5TZW5kQW5kVHJhY2tUeG5SZXNwb25zZSIhgtPkkwIbOgEqIhYvdjEvdHJhbnNhY3Rpb25zL3RyYWNrMAEaE8pBEGFwaS50aHJ1Lm5ldHdvcmtC3gEKFGNvbS50aHJ1LnNlcnZpY2VzLnYxQhNDb21tYW5kU2VydmljZVByb3RvUAFaSGdpdGh1Yi5jb20vVW50by1MYWJzL3RocnUtbmV0L2dycGMvcGtnL3Byb3RvL3RocnUvc2VydmljZXMvdjE7c2VydmljZXN2MaICA1RTWKoCEFRocnUuU2VydmljZXMuVjG6AgRUSFVTygIQVGhydVxTZXJ2aWNlc1xWMeICHFRocnVcU2VydmljZXNcVjFcR1BCTWV0YWRhdGHqAhJUaHJ1OjpTZXJ2aWNlczo6VjFiBnByb3RvMw", [file_google_api_annotations, file_google_api_client, file_thru_common_v1_primitives, file_thru_common_v1_consensus, file_google_api_field_behavior, file_thru_core_v1_transaction, file_thru_core_v1_types, file_google_protobuf_duration]);
 
 /**
  * SendTransactionRequest submits a transaction to the cluster.
@@ -46,7 +52,7 @@ export const SendTransactionRequestSchema: GenMessage<SendTransactionRequest> = 
  */
 export type SendTransactionResponse = Message<"thru.services.v1.SendTransactionResponse"> & {
   /**
-   * @generated from field: thru.core.v1.Signature signature = 1;
+   * @generated from field: thru.common.v1.Signature signature = 1;
    */
   signature?: Signature;
 };
@@ -95,7 +101,7 @@ export type BatchSendTransactionsResponse = Message<"thru.services.v1.BatchSendT
   /**
    * Signatures for each transaction (in same order as request).
    *
-   * @generated from field: repeated thru.core.v1.Signature signatures = 1;
+   * @generated from field: repeated thru.common.v1.Signature signatures = 1;
    */
   signatures: Signature[];
 
@@ -113,6 +119,111 @@ export type BatchSendTransactionsResponse = Message<"thru.services.v1.BatchSendT
  */
 export const BatchSendTransactionsResponseSchema: GenMessage<BatchSendTransactionsResponse> = /*@__PURE__*/
   messageDesc(file_thru_services_v1_command_service, 3);
+
+/**
+ * SendAndTrackTxnRequest submits a transaction and tracks its execution.
+ *
+ * @generated from message thru.services.v1.SendAndTrackTxnRequest
+ */
+export type SendAndTrackTxnRequest = Message<"thru.services.v1.SendAndTrackTxnRequest"> & {
+  /**
+   * Raw transaction bytes encoded according to chain specification.
+   *
+   * @generated from field: bytes transaction = 1;
+   */
+  transaction: Uint8Array;
+
+  /**
+   * Optional timeout for tracking the transaction execution.
+   * If not specified, the stream will remain open until the transaction is executed or the client cancels.
+   *
+   * @generated from field: google.protobuf.Duration timeout = 2;
+   */
+  timeout?: Duration;
+};
+
+/**
+ * Describes the message thru.services.v1.SendAndTrackTxnRequest.
+ * Use `create(SendAndTrackTxnRequestSchema)` to create a new message.
+ */
+export const SendAndTrackTxnRequestSchema: GenMessage<SendAndTrackTxnRequest> = /*@__PURE__*/
+  messageDesc(file_thru_services_v1_command_service, 4);
+
+/**
+ * SendAndTrackTxnResponse streams transaction status updates.
+ *
+ * @generated from message thru.services.v1.SendAndTrackTxnResponse
+ */
+export type SendAndTrackTxnResponse = Message<"thru.services.v1.SendAndTrackTxnResponse"> & {
+  /**
+   * Current submission status of the transaction.
+   *
+   * @generated from field: thru.services.v1.SubmissionStatus status = 1;
+   */
+  status: SubmissionStatus;
+
+  /**
+   * Transaction signature (populated for tracking messages).
+   *
+   * @generated from field: thru.common.v1.Signature signature = 2;
+   */
+  signature?: Signature;
+
+  /**
+   * Consensus status (populated for tracking messages).
+   *
+   * @generated from field: thru.common.v1.ConsensusStatus consensus_status = 3;
+   */
+  consensusStatus: ConsensusStatus;
+
+  /**
+   * Execution result (populated for tracking messages when execution completes).
+   *
+   * @generated from field: thru.core.v1.TransactionExecutionResult execution_result = 4;
+   */
+  executionResult?: TransactionExecutionResult;
+};
+
+/**
+ * Describes the message thru.services.v1.SendAndTrackTxnResponse.
+ * Use `create(SendAndTrackTxnResponseSchema)` to create a new message.
+ */
+export const SendAndTrackTxnResponseSchema: GenMessage<SendAndTrackTxnResponse> = /*@__PURE__*/
+  messageDesc(file_thru_services_v1_command_service, 5);
+
+/**
+ * SubmissionStatus represents the status of a transaction in the submission pipeline.
+ *
+ * @generated from enum thru.services.v1.SubmissionStatus
+ */
+export enum SubmissionStatus {
+  /**
+   * Submission status is unspecified (default value).
+   *
+   * @generated from enum value: SUBMISSION_STATUS_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * Transaction has been received by the gRPC server.
+   *
+   * @generated from enum value: SUBMISSION_STATUS_RECEIVED = 1;
+   */
+  RECEIVED = 1,
+
+  /**
+   * Transaction has been accepted by the forwarder via UDS.
+   *
+   * @generated from enum value: SUBMISSION_STATUS_ACCEPTED = 2;
+   */
+  ACCEPTED = 2,
+}
+
+/**
+ * Describes the enum thru.services.v1.SubmissionStatus.
+ */
+export const SubmissionStatusSchema: GenEnum<SubmissionStatus> = /*@__PURE__*/
+  enumDesc(file_thru_services_v1_command_service, 0);
 
 /**
  * CommandService defines transactional RPCs that mutate state or perform
@@ -140,6 +251,18 @@ export const CommandService: GenService<{
     methodKind: "unary";
     input: typeof BatchSendTransactionsRequestSchema;
     output: typeof BatchSendTransactionsResponseSchema;
+  },
+  /**
+   * Submit a transaction and track its execution status.
+   * Returns a stream of status updates starting with RECEIVED, then ACCEPTED,
+   * followed by consensus and execution updates, closing after the transaction is executed.
+   *
+   * @generated from rpc thru.services.v1.CommandService.SendAndTrackTxn
+   */
+  sendAndTrackTxn: {
+    methodKind: "server_streaming";
+    input: typeof SendAndTrackTxnRequestSchema;
+    output: typeof SendAndTrackTxnResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_thru_services_v1_command_service, 0);

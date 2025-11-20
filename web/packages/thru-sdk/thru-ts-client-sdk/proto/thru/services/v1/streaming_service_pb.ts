@@ -6,6 +6,8 @@ import type { GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegen
 import { fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
 import { file_buf_validate_validate } from "../../../buf/validate/validate_pb";
 import { file_google_api_field_behavior } from "../../../google/api/field_behavior_pb";
+import type { Pubkey, Signature } from "../../common/v1/primitives_pb";
+import { file_thru_common_v1_primitives } from "../../common/v1/primitives_pb";
 import type { Duration, Timestamp } from "@bufbuild/protobuf/wkt";
 import { file_google_protobuf_duration, file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
 import type { ConsensusStatus } from "../../common/v1/consensus_pb";
@@ -18,7 +20,6 @@ import type { Block, BlockView } from "../../core/v1/block_pb";
 import { file_thru_core_v1_block } from "../../core/v1/block_pb";
 import type { Transaction, TransactionExecutionResult } from "../../core/v1/transaction_pb";
 import { file_thru_core_v1_transaction } from "../../core/v1/transaction_pb";
-import type { Pubkey, Signature } from "../../core/v1/types_pb";
 import { file_thru_core_v1_types } from "../../core/v1/types_pb";
 import type { Message } from "@bufbuild/protobuf";
 
@@ -26,10 +27,97 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file thru/services/v1/streaming_service.proto.
  */
 export const file_thru_services_v1_streaming_service: GenFile = /*@__PURE__*/
-  fileDesc("Cih0aHJ1L3NlcnZpY2VzL3YxL3N0cmVhbWluZ19zZXJ2aWNlLnByb3RvEhB0aHJ1LnNlcnZpY2VzLnYxIo0CChNTdHJlYW1CbG9ja3NSZXF1ZXN0EhwKCnN0YXJ0X3Nsb3QYASABKARCA+BBAUgAiAEBEjAKBmZpbHRlchgCIAEoCzIWLnRocnUuY29tbW9uLnYxLkZpbHRlckID4EEBSAGIAQESLwoEdmlldxgDIAEoDjIXLnRocnUuY29yZS52MS5CbG9ja1ZpZXdCA+BBAUgCiAEBEkAKDW1pbl9jb25zZW5zdXMYBCABKA4yHy50aHJ1LmNvbW1vbi52MS5Db25zZW5zdXNTdGF0dXNCA+BBAUgDiAEBQg0KC19zdGFydF9zbG90QgkKB19maWx0ZXJCBwoFX3ZpZXdCEAoOX21pbl9jb25zZW5zdXMiPwoUU3RyZWFtQmxvY2tzUmVzcG9uc2USJwoFYmxvY2sYASABKAsyEy50aHJ1LmNvcmUudjEuQmxvY2tCA+BBAiLCAQobU3RyZWFtQWNjb3VudFVwZGF0ZXNSZXF1ZXN0EioKB2FkZHJlc3MYASABKAsyFC50aHJ1LmNvcmUudjEuUHVia2V5QgPgQQISMQoEdmlldxgCIAEoDjIZLnRocnUuY29yZS52MS5BY2NvdW50Vmlld0ID4EEBSACIAQESMAoGZmlsdGVyGAQgASgLMhYudGhydS5jb21tb24udjEuRmlsdGVyQgPgQQFIAYgBAUIHCgVfdmlld0IJCgdfZmlsdGVyIr8BCg1BY2NvdW50VXBkYXRlEhEKBHNsb3QYASABKARCA+BBAhIxCgRwYWdlGAIgASgLMhkudGhydS5jb3JlLnYxLkFjY291bnRQYWdlQgPgQQFIAIgBARIxCgRtZXRhGAMgASgLMhkudGhydS5jb3JlLnYxLkFjY291bnRNZXRhQgPgQQFIAYgBARIYCgZkZWxldGUYBCABKAhCA+BBAUgCiAEBQgcKBV9wYWdlQgcKBV9tZXRhQgkKB19kZWxldGUihwEKHFN0cmVhbUFjY291bnRVcGRhdGVzUmVzcG9uc2USKQoIc25hcHNob3QYASABKAsyFS50aHJ1LmNvcmUudjEuQWNjb3VudEgAEjEKBnVwZGF0ZRgCIAEoCzIfLnRocnUuc2VydmljZXMudjEuQWNjb3VudFVwZGF0ZUgAQgkKB21lc3NhZ2UirAEKGVN0cmVhbVRyYW5zYWN0aW9uc1JlcXVlc3QSMAoGZmlsdGVyGAEgASgLMhYudGhydS5jb21tb24udjEuRmlsdGVyQgPgQQFIAIgBARJACg1taW5fY29uc2Vuc3VzGAIgASgOMh8udGhydS5jb21tb24udjEuQ29uc2Vuc3VzU3RhdHVzQgPgQQFIAYgBAUIJCgdfZmlsdGVyQhAKDl9taW5fY29uc2Vuc3VzIlEKGlN0cmVhbVRyYW5zYWN0aW9uc1Jlc3BvbnNlEjMKC3RyYW5zYWN0aW9uGAEgASgLMhkudGhydS5jb3JlLnYxLlRyYW5zYWN0aW9uQgPgQQIiUgoTU3RyZWFtRXZlbnRzUmVxdWVzdBIwCgZmaWx0ZXIYASABKAsyFi50aHJ1LmNvbW1vbi52MS5GaWx0ZXJCA+BBAUgAiAEBQgkKB19maWx0ZXIiogIKFFN0cmVhbUV2ZW50c1Jlc3BvbnNlEhUKCGV2ZW50X2lkGAEgASgJQgPgQQISGQoHcGF5bG9hZBgCIAEoDEID4EEBSACIAQESNwoJdGltZXN0YW1wGAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEID4EEBSAGIAQESKgoHcHJvZ3JhbRgEIAEoCzIULnRocnUuY29yZS52MS5QdWJrZXlCA+BBAhIVCghjYWxsX2lkeBgFIAEoDUID4EECEi8KCXNpZ25hdHVyZRgGIAEoCzIXLnRocnUuY29yZS52MS5TaWduYXR1cmVCA+BBAhIRCgRzbG90GAcgASgEQgPgQQJCCgoIX3BheWxvYWRCDAoKX3RpbWVzdGFtcCKMAQoXVHJhY2tUcmFuc2FjdGlvblJlcXVlc3QSLwoJc2lnbmF0dXJlGAEgASgLMhcudGhydS5jb3JlLnYxLlNpZ25hdHVyZUID4EECEjQKB3RpbWVvdXQYAiABKAsyGS5nb29nbGUucHJvdG9idWYuRHVyYXRpb25CA+BBAUgAiAEBQgoKCF90aW1lb3V0ItQBChhUcmFja1RyYW5zYWN0aW9uUmVzcG9uc2USLwoJc2lnbmF0dXJlGAEgASgLMhcudGhydS5jb3JlLnYxLlNpZ25hdHVyZUID4EECEj4KEGNvbnNlbnN1c19zdGF0dXMYAiABKA4yHy50aHJ1LmNvbW1vbi52MS5Db25zZW5zdXNTdGF0dXNCA+BBARJHChBleGVjdXRpb25fcmVzdWx0GAMgASgLMigudGhydS5jb3JlLnYxLlRyYW5zYWN0aW9uRXhlY3V0aW9uUmVzdWx0QgPgQQEyrQQKEFN0cmVhbWluZ1NlcnZpY2USXwoMU3RyZWFtQmxvY2tzEiUudGhydS5zZXJ2aWNlcy52MS5TdHJlYW1CbG9ja3NSZXF1ZXN0GiYudGhydS5zZXJ2aWNlcy52MS5TdHJlYW1CbG9ja3NSZXNwb25zZTABEncKFFN0cmVhbUFjY291bnRVcGRhdGVzEi0udGhydS5zZXJ2aWNlcy52MS5TdHJlYW1BY2NvdW50VXBkYXRlc1JlcXVlc3QaLi50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbUFjY291bnRVcGRhdGVzUmVzcG9uc2UwARJxChJTdHJlYW1UcmFuc2FjdGlvbnMSKy50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbVRyYW5zYWN0aW9uc1JlcXVlc3QaLC50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbVRyYW5zYWN0aW9uc1Jlc3BvbnNlMAESXwoMU3RyZWFtRXZlbnRzEiUudGhydS5zZXJ2aWNlcy52MS5TdHJlYW1FdmVudHNSZXF1ZXN0GiYudGhydS5zZXJ2aWNlcy52MS5TdHJlYW1FdmVudHNSZXNwb25zZTABEmsKEFRyYWNrVHJhbnNhY3Rpb24SKS50aHJ1LnNlcnZpY2VzLnYxLlRyYWNrVHJhbnNhY3Rpb25SZXF1ZXN0GioudGhydS5zZXJ2aWNlcy52MS5UcmFja1RyYW5zYWN0aW9uUmVzcG9uc2UwAULgAQoUY29tLnRocnUuc2VydmljZXMudjFCFVN0cmVhbWluZ1NlcnZpY2VQcm90b1ABWkhnaXRodWIuY29tL1VudG8tTGFicy90aHJ1LW5ldC9ncnBjL3BrZy9wcm90by90aHJ1L3NlcnZpY2VzL3YxO3NlcnZpY2VzdjGiAgNUU1iqAhBUaHJ1LlNlcnZpY2VzLlYxugIEVEhVU8oCEFRocnVcU2VydmljZXNcVjHiAhxUaHJ1XFNlcnZpY2VzXFYxXEdQQk1ldGFkYXRh6gISVGhydTo6U2VydmljZXM6OlYxYgZwcm90bzM", [file_buf_validate_validate, file_google_api_field_behavior, file_google_protobuf_duration, file_google_protobuf_timestamp, file_thru_common_v1_consensus, file_thru_common_v1_filters, file_thru_core_v1_account, file_thru_core_v1_block, file_thru_core_v1_transaction, file_thru_core_v1_types]);
+  fileDesc("Cih0aHJ1L3NlcnZpY2VzL3YxL3N0cmVhbWluZ19zZXJ2aWNlLnByb3RvEhB0aHJ1LnNlcnZpY2VzLnYxIo0CChNTdHJlYW1CbG9ja3NSZXF1ZXN0EhwKCnN0YXJ0X3Nsb3QYASABKARCA+BBAUgAiAEBEjAKBmZpbHRlchgCIAEoCzIWLnRocnUuY29tbW9uLnYxLkZpbHRlckID4EEBSAGIAQESLwoEdmlldxgDIAEoDjIXLnRocnUuY29yZS52MS5CbG9ja1ZpZXdCA+BBAUgCiAEBEkAKDW1pbl9jb25zZW5zdXMYBCABKA4yHy50aHJ1LmNvbW1vbi52MS5Db25zZW5zdXNTdGF0dXNCA+BBAUgDiAEBQg0KC19zdGFydF9zbG90QgkKB19maWx0ZXJCBwoFX3ZpZXdCEAoOX21pbl9jb25zZW5zdXMiPwoUU3RyZWFtQmxvY2tzUmVzcG9uc2USJwoFYmxvY2sYASABKAsyEy50aHJ1LmNvcmUudjEuQmxvY2tCA+BBAiLEAQobU3RyZWFtQWNjb3VudFVwZGF0ZXNSZXF1ZXN0EiwKB2FkZHJlc3MYASABKAsyFi50aHJ1LmNvbW1vbi52MS5QdWJrZXlCA+BBAhIxCgR2aWV3GAIgASgOMhkudGhydS5jb3JlLnYxLkFjY291bnRWaWV3QgPgQQFIAIgBARIwCgZmaWx0ZXIYBCABKAsyFi50aHJ1LmNvbW1vbi52MS5GaWx0ZXJCA+BBAUgBiAEBQgcKBV92aWV3QgkKB19maWx0ZXIivwEKDUFjY291bnRVcGRhdGUSEQoEc2xvdBgBIAEoBEID4EECEjEKBHBhZ2UYAiABKAsyGS50aHJ1LmNvcmUudjEuQWNjb3VudFBhZ2VCA+BBAUgAiAEBEjEKBG1ldGEYAyABKAsyGS50aHJ1LmNvcmUudjEuQWNjb3VudE1ldGFCA+BBAUgBiAEBEhgKBmRlbGV0ZRgEIAEoCEID4EEBSAKIAQFCBwoFX3BhZ2VCBwoFX21ldGFCCQoHX2RlbGV0ZSIiCg1CbG9ja0ZpbmlzaGVkEhEKBHNsb3QYASABKARCA+BBAiK8AQocU3RyZWFtQWNjb3VudFVwZGF0ZXNSZXNwb25zZRIpCghzbmFwc2hvdBgBIAEoCzIVLnRocnUuY29yZS52MS5BY2NvdW50SAASMQoGdXBkYXRlGAIgASgLMh8udGhydS5zZXJ2aWNlcy52MS5BY2NvdW50VXBkYXRlSAASMwoIZmluaXNoZWQYAyABKAsyHy50aHJ1LnNlcnZpY2VzLnYxLkJsb2NrRmluaXNoZWRIAEIJCgdtZXNzYWdlIqwBChlTdHJlYW1UcmFuc2FjdGlvbnNSZXF1ZXN0EjAKBmZpbHRlchgBIAEoCzIWLnRocnUuY29tbW9uLnYxLkZpbHRlckID4EEBSACIAQESQAoNbWluX2NvbnNlbnN1cxgCIAEoDjIfLnRocnUuY29tbW9uLnYxLkNvbnNlbnN1c1N0YXR1c0ID4EEBSAGIAQFCCQoHX2ZpbHRlckIQCg5fbWluX2NvbnNlbnN1cyJRChpTdHJlYW1UcmFuc2FjdGlvbnNSZXNwb25zZRIzCgt0cmFuc2FjdGlvbhgBIAEoCzIZLnRocnUuY29yZS52MS5UcmFuc2FjdGlvbkID4EECIlIKE1N0cmVhbUV2ZW50c1JlcXVlc3QSMAoGZmlsdGVyGAEgASgLMhYudGhydS5jb21tb24udjEuRmlsdGVyQgPgQQFIAIgBAUIJCgdfZmlsdGVyIqYCChRTdHJlYW1FdmVudHNSZXNwb25zZRIVCghldmVudF9pZBgBIAEoCUID4EECEhkKB3BheWxvYWQYAiABKAxCA+BBAUgAiAEBEjcKCXRpbWVzdGFtcBgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBCA+BBAUgBiAEBEiwKB3Byb2dyYW0YBCABKAsyFi50aHJ1LmNvbW1vbi52MS5QdWJrZXlCA+BBAhIVCghjYWxsX2lkeBgFIAEoDUID4EECEjEKCXNpZ25hdHVyZRgGIAEoCzIZLnRocnUuY29tbW9uLnYxLlNpZ25hdHVyZUID4EECEhEKBHNsb3QYByABKARCA+BBAkIKCghfcGF5bG9hZEIMCgpfdGltZXN0YW1wIo4BChdUcmFja1RyYW5zYWN0aW9uUmVxdWVzdBIxCglzaWduYXR1cmUYASABKAsyGS50aHJ1LmNvbW1vbi52MS5TaWduYXR1cmVCA+BBAhI0Cgd0aW1lb3V0GAIgASgLMhkuZ29vZ2xlLnByb3RvYnVmLkR1cmF0aW9uQgPgQQFIAIgBAUIKCghfdGltZW91dCLWAQoYVHJhY2tUcmFuc2FjdGlvblJlc3BvbnNlEjEKCXNpZ25hdHVyZRgBIAEoCzIZLnRocnUuY29tbW9uLnYxLlNpZ25hdHVyZUID4EECEj4KEGNvbnNlbnN1c19zdGF0dXMYAiABKA4yHy50aHJ1LmNvbW1vbi52MS5Db25zZW5zdXNTdGF0dXNCA+BBARJHChBleGVjdXRpb25fcmVzdWx0GAMgASgLMigudGhydS5jb3JlLnYxLlRyYW5zYWN0aW9uRXhlY3V0aW9uUmVzdWx0QgPgQQEiFQoTU3RyZWFtSGVpZ2h0UmVxdWVzdCJsChRTdHJlYW1IZWlnaHRSZXNwb25zZRIWCglmaW5hbGl6ZWQYASABKARCA+BBAhIdChBsb2NhbGx5X2V4ZWN1dGVkGAIgASgEQgPgQQISHQoQY2x1c3Rlcl9leGVjdXRlZBgDIAEoBEID4EECMo4FChBTdHJlYW1pbmdTZXJ2aWNlEl8KDFN0cmVhbUJsb2NrcxIlLnRocnUuc2VydmljZXMudjEuU3RyZWFtQmxvY2tzUmVxdWVzdBomLnRocnUuc2VydmljZXMudjEuU3RyZWFtQmxvY2tzUmVzcG9uc2UwARJ3ChRTdHJlYW1BY2NvdW50VXBkYXRlcxItLnRocnUuc2VydmljZXMudjEuU3RyZWFtQWNjb3VudFVwZGF0ZXNSZXF1ZXN0Gi4udGhydS5zZXJ2aWNlcy52MS5TdHJlYW1BY2NvdW50VXBkYXRlc1Jlc3BvbnNlMAEScQoSU3RyZWFtVHJhbnNhY3Rpb25zEisudGhydS5zZXJ2aWNlcy52MS5TdHJlYW1UcmFuc2FjdGlvbnNSZXF1ZXN0GiwudGhydS5zZXJ2aWNlcy52MS5TdHJlYW1UcmFuc2FjdGlvbnNSZXNwb25zZTABEl8KDFN0cmVhbUV2ZW50cxIlLnRocnUuc2VydmljZXMudjEuU3RyZWFtRXZlbnRzUmVxdWVzdBomLnRocnUuc2VydmljZXMudjEuU3RyZWFtRXZlbnRzUmVzcG9uc2UwARJrChBUcmFja1RyYW5zYWN0aW9uEikudGhydS5zZXJ2aWNlcy52MS5UcmFja1RyYW5zYWN0aW9uUmVxdWVzdBoqLnRocnUuc2VydmljZXMudjEuVHJhY2tUcmFuc2FjdGlvblJlc3BvbnNlMAESXwoMU3RyZWFtSGVpZ2h0EiUudGhydS5zZXJ2aWNlcy52MS5TdHJlYW1IZWlnaHRSZXF1ZXN0GiYudGhydS5zZXJ2aWNlcy52MS5TdHJlYW1IZWlnaHRSZXNwb25zZTABQuABChRjb20udGhydS5zZXJ2aWNlcy52MUIVU3RyZWFtaW5nU2VydmljZVByb3RvUAFaSGdpdGh1Yi5jb20vVW50by1MYWJzL3RocnUtbmV0L2dycGMvcGtnL3Byb3RvL3RocnUvc2VydmljZXMvdjE7c2VydmljZXN2MaICA1RTWKoCEFRocnUuU2VydmljZXMuVjG6AgRUSFVTygIQVGhydVxTZXJ2aWNlc1xWMeICHFRocnVcU2VydmljZXNcVjFcR1BCTWV0YWRhdGHqAhJUaHJ1OjpTZXJ2aWNlczo6VjFiBnByb3RvMw", [file_buf_validate_validate, file_google_api_field_behavior, file_thru_common_v1_primitives, file_google_protobuf_duration, file_google_protobuf_timestamp, file_thru_common_v1_consensus, file_thru_common_v1_filters, file_thru_core_v1_account, file_thru_core_v1_block, file_thru_core_v1_transaction, file_thru_core_v1_types]);
 
 /**
  * StreamBlocksRequest subscribes to real-time block updates.
+ *
+ * Filter expressions support the following params:
+ *
+ * - params.slot (int64): Slot number for comparison
+ *   Example: block.block.header.slot == params.slot
+ *
+ * - params.min_slot (int64): Minimum slot for range filtering
+ *   Example: block.block.header.slot >= params.min_slot
+ *
+ * - params.start_slot (int64): Starting slot for filtering
+ *   Example: block.block.header.slot >= params.start_slot
+ *
+ * - params.u64 (int64): Generic 64-bit value for numeric comparisons
+ *   Examples:
+ *     block.block.header.max_compute_units > params.u64
+ *     block.block.header.price >= params.u64
+ *
+ * - params.producer (bytes|Pubkey): Producer pubkey for filtering
+ *   Examples:
+ *     block.block.header.producer.value == params.producer
+ *     has(block.block.header.producer) && block.block.header.producer.value == params.producer
+ *
+ * Available block header fields:
+ *   block.block.header.slot, block.block.header.version,
+ *   block.block.header.start_slot, block.block.header.expiry_after,
+ *   block.block.header.max_block_size, block.block.header.max_compute_units,
+ *   block.block.header.max_state_units, block.block.header.price,
+ *   block.block.header.producer, block.block.header.producer.value
+ *
+ * Available block footer fields:
+ *   block.block.footer.status, block.block.footer.consumed_compute_units,
+ *   block.block.footer.consumed_state_units
+ *
+ * Available consensus status field:
+ *   block.block.consensus_status
+ *
+ * Filter expression examples:
+ *
+ * 1. Filter by specific slot:
+ *    Expression: "block.block.header.slot == params.slot"
+ *    Params: {"slot": 12345}
+ *
+ * 2. Filter by slot range:
+ *    Expression: "block.block.header.slot >= params.min_slot"
+ *    Params: {"min_slot": 1000}
+ *
+ * 3. Filter by block version:
+ *    Expression: "block.block.header.version >= uint(0)"
+ *
+ * 4. Filter by specific producer:
+ *    Expression: "has(block.block.header.producer) && block.block.header.producer.value == params.producer"
+ *    Params: {"producer": <32-byte pubkey>}
+ *
+ * 5. Filter by max compute units:
+ *    Expression: "block.block.header.max_compute_units > uint(0)"
+ *
+ * 6. Filter by max state units:
+ *    Expression: "block.block.header.max_state_units > uint(0)"
+ *
+ * 7. Filter by block price:
+ *    Expression: "block.block.header.price >= uint(0)"
+ *
+ * 8. Filter by footer status:
+ *    Expression: "has(block.block.footer) && block.block.footer.status == int(1)"
+ *    Note: EXECUTION_STATUS_PENDING = 1, EXECUTION_STATUS_EXECUTED = 2
+ *
+ * 9. Filter by consumed compute units:
+ *    Expression: "has(block.block.footer) && block.block.footer.consumed_compute_units > uint(0)"
+ *
+ * 10. Filter by consumed state units:
+ *     Expression: "has(block.block.footer) && block.block.footer.consumed_state_units > uint(0)"
+ *
+ * 11. Filter by consensus status:
+ *     Expression: "block.block.consensus_status == int(2)"
+ *     Note: CONSENSUS_STATUS_UNSPECIFIED = 0, CONSENSUS_STATUS_OBSERVED = 1,
+ *           CONSENSUS_STATUS_INCLUDED = 2
+ *
+ * 12. Check for optional fields presence:
+ *     Expression: "has(block.block.header) && has(block.block.footer)"
+ *
+ * 13. Combined filters (multiple conditions):
+ *     Expression: "block.block.header.slot >= params.min_slot && has(block.block.footer) && block.block.footer.consumed_compute_units > uint(0)"
+ *     Params: {"min_slot": 1000}
+ *
+ * 14. Numeric comparison with params:
+ *     Expression: "block.block.header.max_compute_units > params.u64"
+ *     Params: {"u64": 1000000}
  *
  * @generated from message thru.services.v1.StreamBlocksRequest
  */
@@ -84,11 +172,102 @@ export const StreamBlocksResponseSchema: GenMessage<StreamBlocksResponse> = /*@_
 /**
  * StreamAccountUpdatesRequest subscribes to account delta events.
  *
+ * Filter expressions support the following params:
+ *
+ * - params.min_slot (uint64): Minimum slot for filtering updates
+ *   Example: account_update.slot >= params.min_slot
+ *
+ * - params.min_balance (uint64): Minimum balance for filtering
+ *   Example: snapshot.meta.balance >= params.min_balance
+ *
+ * - params.owner (bytes|Pubkey): Owner pubkey for filtering
+ *   Examples:
+ *     snapshot.meta.owner.value == params.owner
+ *     account_update.meta.owner.value == params.owner
+ *
+ * - params.address (bytes|Pubkey): Account address for filtering
+ *   Example: snapshot.address.value == params.address
+ *
+ * Available snapshot fields (thru.core.v1.Account):
+ *   snapshot.address, snapshot.address.value (bytes),
+ *   snapshot.meta.balance (uint64), snapshot.meta.seq (uint64),
+ *   snapshot.meta.nonce (uint64), snapshot.meta.data_size (uint32),
+ *   snapshot.meta.version (uint32), snapshot.meta.flags (AccountFlags),
+ *   snapshot.meta.flags.is_program (bool), snapshot.meta.flags.is_privileged (bool),
+ *   snapshot.meta.flags.is_uncompressable (bool), snapshot.meta.flags.is_ephemeral (bool),
+ *   snapshot.meta.flags.is_deleted (bool), snapshot.meta.flags.is_new (bool),
+ *   snapshot.meta.flags.is_compressed (bool),
+ *   snapshot.meta.owner, snapshot.meta.owner.value (bytes)
+ *
+ * Available account_update fields (AccountUpdate):
+ *   account_update.slot (uint64), account_update.delete (bool),
+ *   account_update.meta.balance (uint64), account_update.meta.seq (uint64),
+ *   account_update.meta.nonce (uint64), account_update.meta.data_size (uint32),
+ *   account_update.meta.version (uint32), account_update.meta.flags (AccountFlags),
+ *   account_update.meta.flags.is_program (bool), account_update.meta.flags.is_privileged (bool),
+ *   account_update.meta.flags.is_uncompressable (bool), account_update.meta.flags.is_ephemeral (bool),
+ *   account_update.meta.flags.is_deleted (bool), account_update.meta.flags.is_new (bool),
+ *   account_update.meta.flags.is_compressed (bool),
+ *   account_update.meta.owner, account_update.meta.owner.value (bytes)
+ *
+ * Filter expression examples:
+ *
+ * 1. Filter by minimum balance (snapshot or update):
+ *    Expression: "(has(snapshot.meta) && snapshot.meta.balance >= uint(1000000)) || (has(account_update.meta) && account_update.meta.balance >= uint(1000000))"
+ *
+ * 2. Filter by account owner using params:
+ *    Expression: "(has(snapshot.meta) && has(snapshot.meta.owner) && snapshot.meta.owner.value == params.owner) || (has(account_update.meta) && has(account_update.meta.owner) && account_update.meta.owner.value == params.owner)"
+ *    Params: {"owner": <32-byte pubkey>}
+ *
+ * 3. Filter by specific account address:
+ *    Expression: "has(snapshot.address) && snapshot.address.value == params.address"
+ *    Params: {"address": <32-byte pubkey>}
+ *
+ * 4. Filter by minimum slot for updates:
+ *    Expression: "has(account_update.meta) && account_update.slot >= params.min_slot"
+ *    Params: {"min_slot": 1000}
+ *
+ * 5. Filter by nonce greater than value:
+ *    Expression: "(has(snapshot.meta) && snapshot.meta.nonce >= uint(5)) || (has(account_update.meta) && account_update.meta.nonce >= uint(5))"
+ *
+ * 6. Filter by sequence number:
+ *    Expression: "(has(snapshot.meta) && snapshot.meta.seq >= uint(100)) || (has(account_update.meta) && account_update.meta.seq >= uint(100))"
+ *
+ * 7. Filter by data size:
+ *    Expression: "(has(snapshot.meta) && snapshot.meta.data_size >= uint(1024)) || (has(account_update.meta) && account_update.meta.data_size >= uint(1024))"
+ *
+ * 8. Filter by account version:
+ *    Expression: "(has(snapshot.meta) && snapshot.meta.version >= uint(1)) || (has(account_update.meta) && account_update.meta.version >= uint(1))"
+ *
+ * 9. Filter by account flags (check if account is a program):
+ *    Expression: "(has(snapshot.meta) && has(snapshot.meta.flags) && snapshot.meta.flags.is_program) || (has(account_update.meta) && has(account_update.meta.flags) && account_update.meta.flags.is_program)"
+ *
+ * 10. Filter by privileged flag:
+ *     Expression: "(has(snapshot.meta) && has(snapshot.meta.flags) && snapshot.meta.flags.is_privileged) || (has(account_update.meta) && has(account_update.meta.flags) && account_update.meta.flags.is_privileged)"
+ *
+ * 11. Filter non-delete updates:
+ *     Expression: "has(snapshot.meta) || (has(account_update.meta) && (!has(account_update.delete) || !account_update.delete))"
+ *
+ * 12. Check for snapshot or update presence:
+ *     Expression: "has(snapshot.meta) || has(account_update.meta)"
+ *
+ * 13. Combined filters (multiple conditions):
+ *     Expression: "has(snapshot.meta) || (has(account_update.meta) && account_update.slot >= params.min_slot && account_update.meta.balance >= params.min_balance)"
+ *     Params: {"min_slot": 1000, "min_balance": 1000000}
+ *
+ * 14. Filter by minimum balance using params:
+ *     Expression: "(has(snapshot.meta) && snapshot.meta.balance >= params.min_balance) || (has(account_update.meta) && account_update.meta.balance >= params.min_balance)"
+ *     Params: {"min_balance": 5000000000}
+ *
+ * Note: The response contains either a snapshot (initial state), an update (delta),
+ * or a BlockFinished message. Filters should handle both snapshot and update cases
+ * using OR logic to match either message type.
+ *
  * @generated from message thru.services.v1.StreamAccountUpdatesRequest
  */
 export type StreamAccountUpdatesRequest = Message<"thru.services.v1.StreamAccountUpdatesRequest"> & {
   /**
-   * @generated from field: thru.core.v1.Pubkey address = 1;
+   * @generated from field: thru.common.v1.Pubkey address = 1;
    */
   address?: Pubkey;
 
@@ -145,6 +324,25 @@ export const AccountUpdateSchema: GenMessage<AccountUpdate> = /*@__PURE__*/
   messageDesc(file_thru_services_v1_streaming_service, 3);
 
 /**
+ * BlockFinished is sent when block's execution is complete.
+ *
+ * @generated from message thru.services.v1.BlockFinished
+ */
+export type BlockFinished = Message<"thru.services.v1.BlockFinished"> & {
+  /**
+   * @generated from field: uint64 slot = 1;
+   */
+  slot: bigint;
+};
+
+/**
+ * Describes the message thru.services.v1.BlockFinished.
+ * Use `create(BlockFinishedSchema)` to create a new message.
+ */
+export const BlockFinishedSchema: GenMessage<BlockFinished> = /*@__PURE__*/
+  messageDesc(file_thru_services_v1_streaming_service, 4);
+
+/**
  * StreamAccountUpdatesResponse contains either an initial snapshot or a delta.
  *
  * @generated from message thru.services.v1.StreamAccountUpdatesResponse
@@ -165,6 +363,12 @@ export type StreamAccountUpdatesResponse = Message<"thru.services.v1.StreamAccou
      */
     value: AccountUpdate;
     case: "update";
+  } | {
+    /**
+     * @generated from field: thru.services.v1.BlockFinished finished = 3;
+     */
+    value: BlockFinished;
+    case: "finished";
   } | { case: undefined; value?: undefined };
 };
 
@@ -173,10 +377,101 @@ export type StreamAccountUpdatesResponse = Message<"thru.services.v1.StreamAccou
  * Use `create(StreamAccountUpdatesResponseSchema)` to create a new message.
  */
 export const StreamAccountUpdatesResponseSchema: GenMessage<StreamAccountUpdatesResponse> = /*@__PURE__*/
-  messageDesc(file_thru_services_v1_streaming_service, 4);
+  messageDesc(file_thru_services_v1_streaming_service, 5);
 
 /**
  * StreamTransactionsRequest subscribes to transaction confirmations.
+ *
+ * Filter expressions support the following params:
+ *
+ * - params.min_slot (uint64): Minimum slot for filtering transactions
+ *   Example: transaction.slot >= params.min_slot
+ *
+ * - params.max_slot (uint64): Maximum slot for filtering transactions
+ *   Example: transaction.slot <= params.max_slot
+ *
+ * - params.slot (uint64): Specific slot for exact match filtering
+ *   Example: transaction.slot == params.slot
+ *
+ * - params.min_fee (uint64): Minimum fee for filtering transactions
+ *   Example: transaction.header.fee >= params.min_fee
+ *
+ * - params.fee_payer (bytes|Pubkey): Fee payer pubkey for filtering
+ *   Example: transaction.header.fee_payer_pubkey.value == params.fee_payer
+ *
+ * - params.signature (bytes|Signature): Transaction signature for filtering
+ *   Example: transaction.signature.value == params.signature
+ *
+ * Available transaction fields (thru.core.v1.Transaction):
+ *   transaction.signature, transaction.signature.value (bytes),
+ *   transaction.slot (uint64), transaction.block_offset (uint32),
+ *   transaction.header, transaction.header.version (uint32),
+ *   transaction.header.fee (uint64),
+ *   transaction.header.fee_payer_pubkey, transaction.header.fee_payer_pubkey.value (bytes),
+ *   transaction.execution_result, transaction.execution_result.user_error_code (uint32),
+ *   transaction.execution_result.vm_error (int32)
+ *
+ * Available consensus_status field:
+ *   consensus_status (int32) - Current consensus status of the transaction
+ *   Values: CONSENSUS_STATUS_UNSPECIFIED = 0, CONSENSUS_STATUS_OBSERVED = 1,
+ *           CONSENSUS_STATUS_INCLUDED = 2
+ *
+ * Filter expression examples:
+ *
+ * 1. Filter by minimum slot:
+ *    Expression: "has(transaction.slot) && transaction.slot >= params.min_slot"
+ *    Params: {"min_slot": 1000}
+ *
+ * 2. Filter by slot range:
+ *    Expression: "has(transaction.slot) && transaction.slot >= params.min_slot && transaction.slot <= params.max_slot"
+ *    Params: {"min_slot": 1000, "max_slot": 2000}
+ *
+ * 3. Filter by specific slot:
+ *    Expression: "has(transaction.slot) && transaction.slot == params.slot"
+ *    Params: {"slot": 12345}
+ *
+ * 4. Filter by minimum fee:
+ *    Expression: "has(transaction.header) && transaction.header.fee >= params.min_fee"
+ *    Params: {"min_fee": 5000}
+ *
+ * 5. Filter by fee payer:
+ *    Expression: "has(transaction.header.fee_payer_pubkey) && transaction.header.fee_payer_pubkey.value == params.fee_payer"
+ *    Params: {"fee_payer": <32-byte pubkey>}
+ *
+ * 6. Filter by transaction signature:
+ *    Expression: "has(transaction.signature) && transaction.signature.value == params.signature"
+ *    Params: {"signature": <64-byte signature>}
+ *
+ * 7. Filter by header version:
+ *    Expression: "has(transaction.header) && transaction.header.version >= uint(0)"
+ *
+ * 8. Filter by successful execution:
+ *    Expression: "has(transaction.execution_result) && transaction.execution_result.vm_error == int(0)"
+ *
+ * 9. Filter by user error code:
+ *    Expression: "has(transaction.execution_result) && transaction.execution_result.user_error_code == uint(0)"
+ *
+ * 10. Filter by consensus status:
+ *     Expression: "consensus_status >= int(2)"
+ *     Note: Use >= int(2) for CONSENSUS_STATUS_INCLUDED and above
+ *
+ * 11. Check for execution result presence:
+ *     Expression: "has(transaction.execution_result)"
+ *
+ * 12. Filter by transaction with header and slot:
+ *     Expression: "has(transaction.slot) && transaction.slot >= uint(0) && has(transaction.header)"
+ *
+ * 13. Combined filters (slot, fee, and status):
+ *     Expression: "has(transaction.slot) && transaction.slot >= params.min_slot && has(transaction.header) && transaction.header.fee >= params.min_fee && consensus_status >= int(2)"
+ *     Params: {"min_slot": 1000, "min_fee": 5000}
+ *
+ * 14. Filter successful transactions with minimum fee:
+ *     Expression: "has(transaction.execution_result) && transaction.execution_result.vm_error == int(0) && has(transaction.header) && transaction.header.fee >= params.min_fee"
+ *     Params: {"min_fee": 10000}
+ *
+ * Note: The min_consensus field in the request provides built-in consensus filtering
+ * without requiring a CEL expression. Use it in combination with filter expressions
+ * for more complex filtering logic.
  *
  * @generated from message thru.services.v1.StreamTransactionsRequest
  */
@@ -197,7 +492,7 @@ export type StreamTransactionsRequest = Message<"thru.services.v1.StreamTransact
  * Use `create(StreamTransactionsRequestSchema)` to create a new message.
  */
 export const StreamTransactionsRequestSchema: GenMessage<StreamTransactionsRequest> = /*@__PURE__*/
-  messageDesc(file_thru_services_v1_streaming_service, 5);
+  messageDesc(file_thru_services_v1_streaming_service, 6);
 
 /**
  * StreamTransactionsResponse delivers transaction events.
@@ -216,10 +511,41 @@ export type StreamTransactionsResponse = Message<"thru.services.v1.StreamTransac
  * Use `create(StreamTransactionsResponseSchema)` to create a new message.
  */
 export const StreamTransactionsResponseSchema: GenMessage<StreamTransactionsResponse> = /*@__PURE__*/
-  messageDesc(file_thru_services_v1_streaming_service, 6);
+  messageDesc(file_thru_services_v1_streaming_service, 7);
 
 /**
  * StreamEventsRequest subscribes to chain events.
+ *
+ * Filter expressions support the following params:
+ *
+ * - params.prefix (bytes): Byte prefix for payload filtering
+ *   Example: bytesPrefix(event.payload, params.prefix)
+ *
+ * - params.slot (uint64): Slot number for comparison
+ *   Example: event.slot >= params.slot
+ *
+ * - params.u64 (uint64): Generic 64-bit value for payload extraction
+ *   Examples:
+ *     first8Bytes(event.payload) == params.u64
+ *     first4Bytes(event.payload) == params.u64
+ *     first1Byte(event.payload) == params.u64
+ *
+ * - params.signature (bytes|Signature|TsSignature): Signature for comparison
+ *   Examples:
+ *     event.signature == params.signature              // TsSignature type
+ *     event.signature.value == params.signature        // bytes type
+ *     bytesPrefix(event.signature.value, params.signature)
+ *
+ * - params.address (bytes|Pubkey|TaPubkey): Address/pubkey for comparison
+ *   Examples:
+ *     event.program == params.address                  // TaPubkey type
+ *     event.program.value == params.address            // bytes type
+ *     bytesPrefix(event.program.value, params.address)
+ *
+ * Available event fields:
+ *   event.event_id, event.slot, event.payload, event.call_idx,
+ *   event.signature (Signature), event.signature.value (bytes),
+ *   event.program (Pubkey), event.program.value (bytes)
  *
  * @generated from message thru.services.v1.StreamEventsRequest
  */
@@ -235,7 +561,7 @@ export type StreamEventsRequest = Message<"thru.services.v1.StreamEventsRequest"
  * Use `create(StreamEventsRequestSchema)` to create a new message.
  */
 export const StreamEventsRequestSchema: GenMessage<StreamEventsRequest> = /*@__PURE__*/
-  messageDesc(file_thru_services_v1_streaming_service, 7);
+  messageDesc(file_thru_services_v1_streaming_service, 8);
 
 /**
  * StreamEventsResponse delivers event payloads.
@@ -259,7 +585,7 @@ export type StreamEventsResponse = Message<"thru.services.v1.StreamEventsRespons
   timestamp?: Timestamp;
 
   /**
-   * @generated from field: thru.core.v1.Pubkey program = 4;
+   * @generated from field: thru.common.v1.Pubkey program = 4;
    */
   program?: Pubkey;
 
@@ -269,7 +595,7 @@ export type StreamEventsResponse = Message<"thru.services.v1.StreamEventsRespons
   callIdx: number;
 
   /**
-   * @generated from field: thru.core.v1.Signature signature = 6;
+   * @generated from field: thru.common.v1.Signature signature = 6;
    */
   signature?: Signature;
 
@@ -284,7 +610,7 @@ export type StreamEventsResponse = Message<"thru.services.v1.StreamEventsRespons
  * Use `create(StreamEventsResponseSchema)` to create a new message.
  */
 export const StreamEventsResponseSchema: GenMessage<StreamEventsResponse> = /*@__PURE__*/
-  messageDesc(file_thru_services_v1_streaming_service, 8);
+  messageDesc(file_thru_services_v1_streaming_service, 9);
 
 /**
  * TrackTransactionRequest subscribes to status updates for a transaction.
@@ -293,7 +619,7 @@ export const StreamEventsResponseSchema: GenMessage<StreamEventsResponse> = /*@_
  */
 export type TrackTransactionRequest = Message<"thru.services.v1.TrackTransactionRequest"> & {
   /**
-   * @generated from field: thru.core.v1.Signature signature = 1;
+   * @generated from field: thru.common.v1.Signature signature = 1;
    */
   signature?: Signature;
 
@@ -308,7 +634,7 @@ export type TrackTransactionRequest = Message<"thru.services.v1.TrackTransaction
  * Use `create(TrackTransactionRequestSchema)` to create a new message.
  */
 export const TrackTransactionRequestSchema: GenMessage<TrackTransactionRequest> = /*@__PURE__*/
-  messageDesc(file_thru_services_v1_streaming_service, 9);
+  messageDesc(file_thru_services_v1_streaming_service, 10);
 
 /**
  * TrackTransactionResponse reports status transitions for a transaction.
@@ -317,7 +643,7 @@ export const TrackTransactionRequestSchema: GenMessage<TrackTransactionRequest> 
  */
 export type TrackTransactionResponse = Message<"thru.services.v1.TrackTransactionResponse"> & {
   /**
-   * @generated from field: thru.core.v1.Signature signature = 1;
+   * @generated from field: thru.common.v1.Signature signature = 1;
    */
   signature?: Signature;
 
@@ -337,7 +663,51 @@ export type TrackTransactionResponse = Message<"thru.services.v1.TrackTransactio
  * Use `create(TrackTransactionResponseSchema)` to create a new message.
  */
 export const TrackTransactionResponseSchema: GenMessage<TrackTransactionResponse> = /*@__PURE__*/
-  messageDesc(file_thru_services_v1_streaming_service, 10);
+  messageDesc(file_thru_services_v1_streaming_service, 11);
+
+/**
+ * StreamHeightRequest subscribes to real-time height updates.
+ *
+ * @generated from message thru.services.v1.StreamHeightRequest
+ */
+export type StreamHeightRequest = Message<"thru.services.v1.StreamHeightRequest"> & {
+};
+
+/**
+ * Describes the message thru.services.v1.StreamHeightRequest.
+ * Use `create(StreamHeightRequestSchema)` to create a new message.
+ */
+export const StreamHeightRequestSchema: GenMessage<StreamHeightRequest> = /*@__PURE__*/
+  messageDesc(file_thru_services_v1_streaming_service, 12);
+
+/**
+ * StreamHeightResponse delivers height update events.
+ *
+ * @generated from message thru.services.v1.StreamHeightResponse
+ */
+export type StreamHeightResponse = Message<"thru.services.v1.StreamHeightResponse"> & {
+  /**
+   * @generated from field: uint64 finalized = 1;
+   */
+  finalized: bigint;
+
+  /**
+   * @generated from field: uint64 locally_executed = 2;
+   */
+  locallyExecuted: bigint;
+
+  /**
+   * @generated from field: uint64 cluster_executed = 3;
+   */
+  clusterExecuted: bigint;
+};
+
+/**
+ * Describes the message thru.services.v1.StreamHeightResponse.
+ * Use `create(StreamHeightResponseSchema)` to create a new message.
+ */
+export const StreamHeightResponseSchema: GenMessage<StreamHeightResponse> = /*@__PURE__*/
+  messageDesc(file_thru_services_v1_streaming_service, 13);
 
 /**
  * StreamingService serves server-streaming gRPC APIs for real-time data.
@@ -384,6 +754,14 @@ export const StreamingService: GenService<{
     methodKind: "server_streaming";
     input: typeof TrackTransactionRequestSchema;
     output: typeof TrackTransactionResponseSchema;
+  },
+  /**
+   * @generated from rpc thru.services.v1.StreamingService.StreamHeight
+   */
+  streamHeight: {
+    methodKind: "server_streaming";
+    input: typeof StreamHeightRequestSchema;
+    output: typeof StreamHeightResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_thru_services_v1_streaming_service, 0);

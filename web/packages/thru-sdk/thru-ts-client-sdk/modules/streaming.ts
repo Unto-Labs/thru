@@ -2,6 +2,7 @@ import { create } from "@bufbuild/protobuf";
 
 import { BytesLike, Pubkey } from "@thru/helpers";
 import type { ThruClientContext } from "../core/client";
+import { withCallOptions } from "../core/client";
 import { DEFAULT_ACCOUNT_VIEW, DEFAULT_BLOCK_VIEW, DEFAULT_MIN_CONSENSUS } from "../defaults";
 import { toStreamAccountUpdate, type StreamAccountUpdate } from "../domain/accounts";
 import { Block } from "../domain/blocks";
@@ -51,9 +52,7 @@ export function streamBlocks(
         minConsensus: options.minConsensus ?? DEFAULT_MIN_CONSENSUS,
     });
 
-    const iterable = ctx.streaming.streamBlocks(request, {
-        signal: options.signal,
-    });
+    const iterable = ctx.streaming.streamBlocks(request, withCallOptions(ctx, { signal: options.signal }));
 
     async function* mapper() {
         for await (const response of iterable) {
@@ -88,9 +87,7 @@ export function streamAccountUpdates(
         filter: options.filter?.toProto(),
     });
 
-    const iterable = ctx.streaming.streamAccountUpdates(request, {
-        signal: options.signal,
-    });
+    const iterable = ctx.streaming.streamAccountUpdates(request, withCallOptions(ctx, { signal: options.signal }));
 
     async function* mapper() {
         for await (const response of iterable) {
@@ -122,9 +119,7 @@ export function streamTransactions(
         minConsensus: options.minConsensus ?? DEFAULT_MIN_CONSENSUS,
     });
 
-    const iterable = ctx.streaming.streamTransactions(request, {
-        signal: options.signal,
-    });
+    const iterable = ctx.streaming.streamTransactions(request, withCallOptions(ctx, { signal: options.signal }));
 
     async function* mapper(): AsyncGenerator<StreamTransactionsResult> {
         for await (const response of iterable) {
@@ -159,9 +154,7 @@ export function streamEvents(
         filter: options.filter?.toProto(),
     });
 
-    const iterable = ctx.streaming.streamEvents(request, {
-        signal: options.signal,
-    });
+    const iterable = ctx.streaming.streamEvents(request, withCallOptions(ctx, { signal: options.signal }));
 
     async function* mapper() {
         for await (const response of iterable) {
@@ -189,9 +182,7 @@ export function trackTransaction(
                 : undefined,
     });
 
-    const iterable = ctx.streaming.trackTransaction(request, {
-        signal: options.signal,
-    });
+    const iterable = ctx.streaming.trackTransaction(request, withCallOptions(ctx, { signal: options.signal }));
 
     async function* mapper() {
         for await (const response of iterable) {
@@ -200,4 +191,67 @@ export function trackTransaction(
     }
 
     return mapper();
+}
+
+export interface CollectStreamOptions {
+    limit?: number;
+    signal?: AbortSignal;
+}
+
+export async function collectStream<T>(
+    iterable: AsyncIterable<T>,
+    options: CollectStreamOptions = {},
+): Promise<T[]> {
+    const { limit, signal } = options;
+    throwIfAborted(signal);
+    if (limit != null && limit <= 0) {
+        return [];
+    }
+    const results: T[] = [];
+    let count = 0;
+    for await (const value of iterable) {
+        throwIfAborted(signal);
+        results.push(value);
+        count += 1;
+        if (limit != null && count >= limit) {
+            break;
+        }
+    }
+    return results;
+}
+
+export async function firstStreamValue<T>(
+    iterable: AsyncIterable<T>,
+    options: { signal?: AbortSignal } = {},
+): Promise<T | undefined> {
+    const values = await collectStream(iterable, { ...options, limit: 1 });
+    return values[0];
+}
+
+export async function forEachStreamValue<T>(
+    iterable: AsyncIterable<T>,
+    handler: (value: T, index: number) => void | Promise<void>,
+    options: { signal?: AbortSignal } = {},
+): Promise<void> {
+    let index = 0;
+    for await (const value of iterable) {
+        throwIfAborted(options.signal);
+        await handler(value, index++);
+    }
+}
+
+function throwIfAborted(signal?: AbortSignal): void {
+    if (!signal) {
+        return;
+    }
+    if (signal.aborted) {
+        const reason = signal.reason;
+        if (reason instanceof Error) {
+            throw reason;
+        }
+        if (reason !== undefined) {
+            throw new Error(String(reason));
+        }
+        throw new DOMException("The operation was aborted.", "AbortError");
+    }
 }

@@ -76,14 +76,25 @@ fn emit_footprint_fn_struct(resolved_type: &ResolvedType) -> String {
         }
     }
 
+    // Collect tag parameters for size-discriminated union fields
+    let mut sdu_tag_params: Vec<String> = Vec::new();
+    if let ResolvedTypeKind::Struct { fields, .. } = &resolved_type.kind {
+        for field in fields {
+            if matches!(&field.field_type.kind, ResolvedTypeKind::SizeDiscriminatedUnion { .. }) {
+                sdu_tag_params.push(format!("uint8_t {}_tag", field.name));
+            }
+        }
+    }
+
     // intake all as int64_t for now (so we can do asserts and expr calculations)
     write!(output, "uint64_t {}_footprint( ", type_name).unwrap();
-    if all_field_refs.is_empty() {
+    if all_field_refs.is_empty() && sdu_tag_params.is_empty() {
         write!(output, "void ) {{\n").unwrap();
     } else {
-        let params: Vec<String> = all_field_refs.keys()
+        let mut params: Vec<String> = all_field_refs.keys()
             .map(|ref_path| format!("int64_t {}", ref_path.replace(".", "_")))
             .collect();
+        params.extend(sdu_tag_params);
         write!(output, "{} ) {{\n", params.join(", ")).unwrap();
     }
 
@@ -92,8 +103,8 @@ fn emit_footprint_fn_struct(resolved_type: &ResolvedType) -> String {
     for field in fields {
         let is_fam = matches!(&field.field_type.size, Size::Variable(..));
         if is_fam && !after_variable_size_data {
-            /* For enum fields, the body is inline bytes after the tag, not an actual struct field */
-            if matches!(&field.field_type.kind, ResolvedTypeKind::Enum { .. }) {
+            /* For enum fields and size-discriminated unions, the body is inline bytes, not an actual struct field */
+            if matches!(&field.field_type.kind, ResolvedTypeKind::Enum { .. } | ResolvedTypeKind::SizeDiscriminatedUnion { .. }) {
                 write!(output, "  uint64_t offset = sizeof( {}_t );\n", type_name).unwrap();
             } else {
                 write!(output, "  uint64_t offset = offsetof( {}_t, {} );\n", type_name, field.name).unwrap();
@@ -190,7 +201,20 @@ fn emit_footprint_fn_struct(resolved_type: &ResolvedType) -> String {
                         }
                     }
                 }
-                ResolvedTypeKind::Struct { .. } | ResolvedTypeKind::Union { .. } | ResolvedTypeKind::SizeDiscriminatedUnion { .. } => {
+                ResolvedTypeKind::SizeDiscriminatedUnion { variants } => {
+                    // Size-discriminated union: size determined from tag parameter
+                    let tag_param = format!("{}_tag", field.name);
+                    write!(output, "  switch( {} ) {{\n", tag_param).unwrap();
+                    for (idx, variant) in variants.iter().enumerate() {
+                        write!(output, "    case {}:\n", idx).unwrap();
+                        write!(output, "      offset += {};\n", variant.expected_size).unwrap();
+                        write!(output, "      break;\n").unwrap();
+                    }
+                    write!(output, "    default:\n").unwrap();
+                    write!(output, "      break;\n").unwrap();
+                    write!(output, "  }}\n").unwrap();
+                }
+                ResolvedTypeKind::Struct { .. } | ResolvedTypeKind::Union { .. } => {
                     if let Size::Variable( .. ) = &field.field_type.size {
                         // Handle variable size nested structs/unions
                         if let Size::Variable(variable_refs) = &resolved_type.size {

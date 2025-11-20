@@ -3,13 +3,18 @@ import type { ThruClientContext } from "./client";
 import { decodeAddress, decodeSignature, encodeAddress, encodeSignature } from "@thru/helpers";
 import * as accountsModule from "../modules/accounts";
 import * as blocksModule from "../modules/blocks";
+import * as consensusModule from "../modules/consensus";
 import * as eventsModule from "../modules/events";
 import * as heightModule from "../modules/height";
 import {
     deriveProgramAddress,
     toBlockHash,
     toPubkey,
+    toPubkeyBytes,
     toSignature,
+    toSignatureBytes,
+    toTaPubkey,
+    toTsSignature,
     type DeriveProgramAddressOptions,
     type DeriveProgramAddressResult,
 } from "../modules/helpers";
@@ -18,7 +23,8 @@ import * as proofsModule from "../modules/proofs";
 import * as streamingModule from "../modules/streaming";
 import * as transactionsModule from "../modules/transactions";
 import * as versionModule from "../modules/version";
-import { BlockHash, Pubkey, Signature } from "../proto/thru/core/v1/types_pb";
+import { Pubkey, Signature, TaPubkey, TsSignature } from "../proto/thru/common/v1/primitives_pb";
+import { BlockHash } from "../proto/thru/core/v1/types_pb";
 
 type ContextualParameters<F> = F extends (ctx: ThruClientContext, ...args: infer P) => any ? P : never;
 
@@ -78,9 +84,23 @@ interface BoundVersion {
     get: BoundFunction<typeof versionModule.getVersion>;
 }
 
+interface BoundConsensus {
+    statusToString: typeof consensusModule.consensusStatusToString;
+    versionContext: typeof consensusModule.versionContext;
+    currentVersionContext: typeof consensusModule.currentVersionContext;
+    currentOrHistoricalVersionContext: typeof consensusModule.currentOrHistoricalVersionContext;
+    slotVersionContext: typeof consensusModule.slotVersionContext;
+    timestampVersionContext: typeof consensusModule.timestampVersionContext;
+    seqVersionContext: typeof consensusModule.seqVersionContext;
+}
+
 interface Helpers {
     toSignature(value: Uint8Array | string): Signature;
+    toSignatureBytes(value: Uint8Array | string): Uint8Array;
+    toTsSignature(value: Uint8Array | string): TsSignature;
     toPubkey(value: Uint8Array | string, field: string): Pubkey;
+    toPubkeyBytes(value: Uint8Array | string, field: string): Uint8Array;
+    toTaPubkey(value: Uint8Array | string, field?: string): TaPubkey;
     toBlockHash(value: Uint8Array | string): BlockHash;
     encodeSignature(bytes: Uint8Array): string;
     decodeSignature(value: string): Uint8Array;
@@ -98,6 +118,7 @@ export interface Thru {
     proofs: BoundProofs;
     keys: BoundKeys;
     version: BoundVersion;
+    consensus: BoundConsensus;
     helpers: Helpers;
 }
 
@@ -132,7 +153,11 @@ export function createBoundThruClient(ctx: ThruClientContext): Thru {
         },
         helpers: {
             toSignature,
+            toSignatureBytes,
+            toTsSignature,
             toPubkey,
+            toPubkeyBytes,
+            toTaPubkey,
             toBlockHash,
             encodeSignature,
             decodeSignature,
@@ -153,6 +178,15 @@ export function createBoundThruClient(ctx: ThruClientContext): Thru {
         },
         version: {
             get: bind(ctx, versionModule.getVersion),
+        },
+        consensus: {
+            statusToString: consensusModule.consensusStatusToString,
+            versionContext: consensusModule.versionContext,
+            currentVersionContext: consensusModule.currentVersionContext,
+            currentOrHistoricalVersionContext: consensusModule.currentOrHistoricalVersionContext,
+            slotVersionContext: consensusModule.slotVersionContext,
+            timestampVersionContext: consensusModule.timestampVersionContext,
+            seqVersionContext: consensusModule.seqVersionContext,
         },
     };
 }

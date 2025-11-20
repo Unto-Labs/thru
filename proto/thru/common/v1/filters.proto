@@ -4,6 +4,7 @@ package thru.common.v1;
 
 import "buf/validate/validate.proto";
 import "google/api/field_behavior.proto";
+import "thru/common/v1/primitives.proto";
 
 option go_package = "github.com/Unto-Labs/thru-net/grpc/pkg/proto/thru/common/v1;commonv1";
 option java_multiple_files = true;
@@ -33,7 +34,12 @@ message FilterParamValue {
     bytes bytes_value = 2 [(google.api.field_behavior) = OPTIONAL];
     bool bool_value = 3 [(google.api.field_behavior) = OPTIONAL];
     sint64 int_value = 4 [(google.api.field_behavior) = OPTIONAL];
-    double double_value = 5 [(google.api.field_behavior) = OPTIONAL];
+    uint64 uint_value = 5 [(google.api.field_behavior) = OPTIONAL];
+    double double_value = 6 [(google.api.field_behavior) = OPTIONAL];
+    Pubkey pubkey_value = 7 [(google.api.field_behavior) = OPTIONAL];
+    Signature signature_value = 8 [(google.api.field_behavior) = OPTIONAL];
+    TaPubkey ta_pubkey_value = 9 [(google.api.field_behavior) = OPTIONAL];
+    TsSignature ts_signature_value = 10 [(google.api.field_behavior) = OPTIONAL];
   }
 }
 

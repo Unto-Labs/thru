@@ -8,21 +8,25 @@ import { file_buf_validate_validate } from "../../../buf/validate/validate_pb";
 import { file_google_api_annotations } from "../../../google/api/annotations_pb";
 import { file_google_api_client } from "../../../google/api/client_pb";
 import { file_google_api_field_behavior } from "../../../google/api/field_behavior_pb";
+import type { Timestamp } from "@bufbuild/protobuf/wkt";
+import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
 import type { ConsensusStatus, VersionContext } from "../../common/v1/consensus_pb";
 import { file_thru_common_v1_consensus } from "../../common/v1/consensus_pb";
 import type { Filter } from "../../common/v1/filters_pb";
 import { file_thru_common_v1_filters } from "../../common/v1/filters_pb";
 import type { PageRequest, PageResponse } from "../../common/v1/pagination_pb";
 import { file_thru_common_v1_pagination } from "../../common/v1/pagination_pb";
+import type { Pubkey, Signature } from "../../common/v1/primitives_pb";
+import { file_thru_common_v1_primitives } from "../../common/v1/primitives_pb";
 import type { Account, AccountSchema, AccountView, DataSlice, RawAccountSchema } from "../../core/v1/account_pb";
 import { file_thru_core_v1_account } from "../../core/v1/account_pb";
 import type { Block, BlockSchema, BlockView, RawBlockSchema } from "../../core/v1/block_pb";
 import { file_thru_core_v1_block } from "../../core/v1/block_pb";
 import type { StateProof, StateProofRequest } from "../../core/v1/state_pb";
 import { file_thru_core_v1_state } from "../../core/v1/state_pb";
-import type { RawTransactionSchema, TransactionExecutionResult, TransactionSchema, TransactionView } from "../../core/v1/transaction_pb";
+import type { RawTransactionSchema, Transaction, TransactionExecutionResult, TransactionSchema, TransactionView } from "../../core/v1/transaction_pb";
 import { file_thru_core_v1_transaction } from "../../core/v1/transaction_pb";
-import type { BlockHash, Pubkey, Signature } from "../../core/v1/types_pb";
+import type { BlockHash } from "../../core/v1/types_pb";
 import { file_thru_core_v1_types } from "../../core/v1/types_pb";
 import type { Message } from "@bufbuild/protobuf";
 
@@ -30,7 +34,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file thru/services/v1/query_service.proto.
  */
 export const file_thru_services_v1_query_service: GenFile = /*@__PURE__*/
-  fileDesc("CiR0aHJ1L3NlcnZpY2VzL3YxL3F1ZXJ5X3NlcnZpY2UucHJvdG8SEHRocnUuc2VydmljZXMudjEi0wIKEUdldEFjY291bnRSZXF1ZXN0EioKB2FkZHJlc3MYASABKAsyFC50aHJ1LmNvcmUudjEuUHVia2V5QgPgQQISMQoEdmlldxgCIAEoDjIZLnRocnUuY29yZS52MS5BY2NvdW50Vmlld0ID4EEBSACIAQESPAoPdmVyc2lvbl9jb250ZXh0GAMgASgLMh4udGhydS5jb21tb24udjEuVmVyc2lvbkNvbnRleHRCA+BBAhJACg1taW5fY29uc2Vuc3VzGAQgASgOMh8udGhydS5jb21tb24udjEuQ29uc2Vuc3VzU3RhdHVzQgPgQQFIAYgBARI1CgpkYXRhX3NsaWNlGAUgASgLMhcudGhydS5jb3JlLnYxLkRhdGFTbGljZUID4EEBSAKIAQFCBwoFX3ZpZXdCEAoOX21pbl9jb25zZW5zdXNCDQoLX2RhdGFfc2xpY2UikAIKFEdldFJhd0FjY291bnRSZXF1ZXN0EioKB2FkZHJlc3MYASABKAsyFC50aHJ1LmNvcmUudjEuUHVia2V5QgPgQQISMQoEdmlldxgCIAEoDjIZLnRocnUuY29yZS52MS5BY2NvdW50Vmlld0ID4EEBSACIAQESPAoPdmVyc2lvbl9jb250ZXh0GAMgASgLMh4udGhydS5jb21tb24udjEuVmVyc2lvbkNvbnRleHRCA+BBAhJACg1taW5fY29uc2Vuc3VzGAQgASgOMh8udGhydS5jb21tb24udjEuQ29uc2Vuc3VzU3RhdHVzQgPgQQFIAYgBAUIHCgVfdmlld0IQCg5fbWluX2NvbnNlbnN1cyKaAgoVR2V0VHJhbnNhY3Rpb25SZXF1ZXN0Ei8KCXNpZ25hdHVyZRgBIAEoCzIXLnRocnUuY29yZS52MS5TaWduYXR1cmVCA+BBAhI1CgR2aWV3GAIgASgOMh0udGhydS5jb3JlLnYxLlRyYW5zYWN0aW9uVmlld0ID4EEBSACIAQESPAoPdmVyc2lvbl9jb250ZXh0GAMgASgLMh4udGhydS5jb21tb24udjEuVmVyc2lvbkNvbnRleHRCA+BBAhJACg1taW5fY29uc2Vuc3VzGAQgASgOMh8udGhydS5jb21tb24udjEuQ29uc2Vuc3VzU3RhdHVzQgPgQQFIAYgBAUIHCgVfdmlld0IQCg5fbWluX2NvbnNlbnN1cyLdAQoYR2V0UmF3VHJhbnNhY3Rpb25SZXF1ZXN0Ei8KCXNpZ25hdHVyZRgBIAEoCzIXLnRocnUuY29yZS52MS5TaWduYXR1cmVCA+BBAhI8Cg92ZXJzaW9uX2NvbnRleHQYAiABKAsyHi50aHJ1LmNvbW1vbi52MS5WZXJzaW9uQ29udGV4dEID4EECEkAKDW1pbl9jb25zZW5zdXMYAyABKA4yHy50aHJ1LmNvbW1vbi52MS5Db25zZW5zdXNTdGF0dXNCA+BBAUgAiAEBQhAKDl9taW5fY29uc2Vuc3VzIlIKGUdlbmVyYXRlU3RhdGVQcm9vZlJlcXVlc3QSNQoHcmVxdWVzdBgBIAEoCzIfLnRocnUuY29yZS52MS5TdGF0ZVByb29mUmVxdWVzdEID4EECIkoKGkdlbmVyYXRlU3RhdGVQcm9vZlJlc3BvbnNlEiwKBXByb29mGAEgASgLMhgudGhydS5jb3JlLnYxLlN0YXRlUHJvb2ZCA+BBAiLeAgoPR2V0QmxvY2tSZXF1ZXN0EhMKBHNsb3QYASABKARCA+BBAUgAEjIKCmJsb2NrX2hhc2gYAiABKAsyFy50aHJ1LmNvcmUudjEuQmxvY2tIYXNoQgPgQQFIABIvCgR2aWV3GAMgASgOMhcudGhydS5jb3JlLnYxLkJsb2NrVmlld0ID4EEBSAGIAQESQAoNbWluX2NvbnNlbnN1cxgEIAEoDjIfLnRocnUuY29tbW9uLnYxLkNvbnNlbnN1c1N0YXR1c0ID4EEBSAKIAQE6aLpIZRpjChJibG9ja19zZWxlY3Rvcl9zZXQSJWVpdGhlciBzbG90IG9yIGJsb2NrX2hhc2ggbXVzdCBiZSBzZXQaJmhhcyh0aGlzLnNsb3QpIHx8IGhhcyh0aGlzLmJsb2NrX2hhc2gpQgoKCHNlbGVjdG9yQgcKBV92aWV3QhAKDl9taW5fY29uc2Vuc3VzIqsCChJHZXRSYXdCbG9ja1JlcXVlc3QSEwoEc2xvdBgBIAEoBEID4EEBSAASMgoKYmxvY2tfaGFzaBgCIAEoCzIXLnRocnUuY29yZS52MS5CbG9ja0hhc2hCA+BBAUgAEkAKDW1pbl9jb25zZW5zdXMYAyABKA4yHy50aHJ1LmNvbW1vbi52MS5Db25zZW5zdXNTdGF0dXNCA+BBAUgBiAEBOmy6SGkaZwoWcmF3X2Jsb2NrX3NlbGVjdG9yX3NldBIlZWl0aGVyIHNsb3Qgb3IgYmxvY2tfaGFzaCBtdXN0IGJlIHNldBomaGFzKHRoaXMuc2xvdCkgfHwgaGFzKHRoaXMuYmxvY2tfaGFzaClCCgoIc2VsZWN0b3JCEAoOX21pbl9jb25zZW5zdXMi9wIKE0xpc3RBY2NvdW50c1JlcXVlc3QSMQoEdmlldxgBIAEoDjIZLnRocnUuY29yZS52MS5BY2NvdW50Vmlld0ID4EEBSACIAQESQQoPdmVyc2lvbl9jb250ZXh0GAIgASgLMh4udGhydS5jb21tb24udjEuVmVyc2lvbkNvbnRleHRCA+BBAUgBiAEBEjAKBmZpbHRlchgDIAEoCzIWLnRocnUuY29tbW9uLnYxLkZpbHRlckID4EEBSAKIAQESMwoEcGFnZRgEIAEoCzIbLnRocnUuY29tbW9uLnYxLlBhZ2VSZXF1ZXN0QgPgQQFIA4gBARJACg1taW5fY29uc2Vuc3VzGAUgASgOMh8udGhydS5jb21tb24udjEuQ29uc2Vuc3VzU3RhdHVzQgPgQQFIBIgBAUIHCgVfdmlld0ISChBfdmVyc2lvbl9jb250ZXh0QgkKB19maWx0ZXJCBwoFX3BhZ2VCEAoOX21pbl9jb25zZW5zdXMigwEKFExpc3RBY2NvdW50c1Jlc3BvbnNlEiwKCGFjY291bnRzGAEgAygLMhUudGhydS5jb3JlLnYxLkFjY291bnRCA+BBARI0CgRwYWdlGAIgASgLMhwudGhydS5jb21tb24udjEuUGFnZVJlc3BvbnNlQgPgQQFIAIgBAUIHCgVfcGFnZSKcAgoRTGlzdEJsb2Nrc1JlcXVlc3QSMAoGZmlsdGVyGAEgASgLMhYudGhydS5jb21tb24udjEuRmlsdGVyQgPgQQFIAIgBARIzCgRwYWdlGAIgASgLMhsudGhydS5jb21tb24udjEuUGFnZVJlcXVlc3RCA+BBAUgBiAEBEi8KBHZpZXcYAyABKA4yFy50aHJ1LmNvcmUudjEuQmxvY2tWaWV3QgPgQQFIAogBARJACg1taW5fY29uc2Vuc3VzGAQgASgOMh8udGhydS5jb21tb24udjEuQ29uc2Vuc3VzU3RhdHVzQgPgQQFIA4gBAUIJCgdfZmlsdGVyQgcKBV9wYWdlQgcKBV92aWV3QhAKDl9taW5fY29uc2Vuc3VzIn0KEkxpc3RCbG9ja3NSZXNwb25zZRIoCgZibG9ja3MYASADKAsyEy50aHJ1LmNvcmUudjEuQmxvY2tCA+BBARI0CgRwYWdlGAIgASgLMhwudGhydS5jb21tb24udjEuUGFnZVJlc3BvbnNlQgPgQQFIAIgBAUIHCgVfcGFnZSLKAQohTGlzdFRyYW5zYWN0aW9uc0ZvckFjY291bnRSZXF1ZXN0EioKB2FjY291bnQYASABKAsyFC50aHJ1LmNvcmUudjEuUHVia2V5QgPgQQISMwoEcGFnZRgCIAEoCzIbLnRocnUuY29tbW9uLnYxLlBhZ2VSZXF1ZXN0QgPgQQFIAIgBARIwCgZmaWx0ZXIYAyABKAsyFi50aHJ1LmNvbW1vbi52MS5GaWx0ZXJCA+BBAUgBiAEBQgcKBV9wYWdlQgkKB19maWx0ZXIilQEKIkxpc3RUcmFuc2FjdGlvbnNGb3JBY2NvdW50UmVzcG9uc2USMAoKc2lnbmF0dXJlcxgBIAMoCzIXLnRocnUuY29yZS52MS5TaWduYXR1cmVCA+BBARI0CgRwYWdlGAIgASgLMhwudGhydS5jb21tb24udjEuUGFnZVJlc3BvbnNlQgPgQQFIAIgBAUIHCgVfcGFnZSITChFHZXRWZXJzaW9uUmVxdWVzdCKQAQoSR2V0VmVyc2lvblJlc3BvbnNlEkkKCHZlcnNpb25zGAEgAygLMjIudGhydS5zZXJ2aWNlcy52MS5HZXRWZXJzaW9uUmVzcG9uc2UuVmVyc2lvbnNFbnRyeUID4EECGi8KDVZlcnNpb25zRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4ASKHAQoPR2V0RXZlbnRSZXF1ZXN0Eh0KCGV2ZW50X2lkGAEgASgJQgvgQQK6SAVyAxiAARJBCg92ZXJzaW9uX2NvbnRleHQYAiABKAsyHi50aHJ1LmNvbW1vbi52MS5WZXJzaW9uQ29udGV4dEID4EEBSACIAQFCEgoQX3ZlcnNpb25fY29udGV4dCLpAgoFRXZlbnQSFQoIZXZlbnRfaWQYASABKAlCA+BBAhI7ChV0cmFuc2FjdGlvbl9zaWduYXR1cmUYAiABKAsyFy50aHJ1LmNvcmUudjEuU2lnbmF0dXJlQgPgQQISLwoHcHJvZ3JhbRgDIAEoCzIULnRocnUuY29yZS52MS5QdWJrZXlCA+BBAUgAiAEBEhkKB3BheWxvYWQYBCABKAxCA+BBAUgBiAEBEhYKBHNsb3QYBSABKARCA+BBAUgCiAEBEhoKCGNhbGxfaWR4GAYgASgNQgPgQQFIA4gBARIdCgtwcm9ncmFtX2lkeBgHIAEoDUID4EEBSASIAQESHgoMcGF5bG9hZF9zaXplGAggASgNQgPgQQFIBYgBAUIKCghfcHJvZ3JhbUIKCghfcGF5bG9hZEIHCgVfc2xvdEILCglfY2FsbF9pZHhCDgoMX3Byb2dyYW1faWR4Qg8KDV9wYXlsb2FkX3NpemUiTgobR2V0VHJhbnNhY3Rpb25TdGF0dXNSZXF1ZXN0Ei8KCXNpZ25hdHVyZRgBIAEoCzIXLnRocnUuY29yZS52MS5TaWduYXR1cmVCA+BBAiKBAgoRVHJhbnNhY3Rpb25TdGF0dXMSLwoJc2lnbmF0dXJlGAEgASgLMhcudGhydS5jb3JlLnYxLlNpZ25hdHVyZUID4EECEkMKEGNvbnNlbnN1c19zdGF0dXMYAiABKA4yHy50aHJ1LmNvbW1vbi52MS5Db25zZW5zdXNTdGF0dXNCA+BBAUgAiAEBEkwKEGV4ZWN1dGlvbl9yZXN1bHQYAyABKAsyKC50aHJ1LmNvcmUudjEuVHJhbnNhY3Rpb25FeGVjdXRpb25SZXN1bHRCA+BBAUgBiAEBQhMKEV9jb25zZW5zdXNfc3RhdHVzQhMKEV9leGVjdXRpb25fcmVzdWx0IhIKEEdldEhlaWdodFJlcXVlc3QiaQoRR2V0SGVpZ2h0UmVzcG9uc2USFgoJZmluYWxpemVkGAEgASgEQgPgQQISHQoQbG9jYWxseV9leGVjdXRlZBgCIAEoBEID4EECEh0KEGNsdXN0ZXJfZXhlY3V0ZWQYAyABKARCA+BBAjKpDwoMUXVlcnlTZXJ2aWNlEmgKCUdldEhlaWdodBIiLnRocnUuc2VydmljZXMudjEuR2V0SGVpZ2h0UmVxdWVzdBojLnRocnUuc2VydmljZXMudjEuR2V0SGVpZ2h0UmVzcG9uc2UiEoLT5JMCDBIKL3YxL2hlaWdodBJ4CgpHZXRBY2NvdW50EiMudGhydS5zZXJ2aWNlcy52MS5HZXRBY2NvdW50UmVxdWVzdBoVLnRocnUuY29yZS52MS5BY2NvdW50Ii7aQQdhZGRyZXNzgtPkkwIeEhwvdjEvYWNjb3VudHMve2FkZHJlc3MudmFsdWV9EoUBCg1HZXRSYXdBY2NvdW50EiYudGhydS5zZXJ2aWNlcy52MS5HZXRSYXdBY2NvdW50UmVxdWVzdBoYLnRocnUuY29yZS52MS5SYXdBY2NvdW50IjLaQQdhZGRyZXNzgtPkkwIiEiAvdjEvYWNjb3VudHMve2FkZHJlc3MudmFsdWV9OnJhdxKMAQoOR2V0VHJhbnNhY3Rpb24SJy50aHJ1LnNlcnZpY2VzLnYxLkdldFRyYW5zYWN0aW9uUmVxdWVzdBoZLnRocnUuY29yZS52MS5UcmFuc2FjdGlvbiI22kEJc2lnbmF0dXJlgtPkkwIkEiIvdjEvdHJhbnNhY3Rpb25zL3tzaWduYXR1cmUudmFsdWV9EpkBChFHZXRSYXdUcmFuc2FjdGlvbhIqLnRocnUuc2VydmljZXMudjEuR2V0UmF3VHJhbnNhY3Rpb25SZXF1ZXN0GhwudGhydS5jb3JlLnYxLlJhd1RyYW5zYWN0aW9uIjraQQlzaWduYXR1cmWC0+STAigSJi92MS90cmFuc2FjdGlvbnMve3NpZ25hdHVyZS52YWx1ZX06cmF3EoYBCghHZXRCbG9jaxIhLnRocnUuc2VydmljZXMudjEuR2V0QmxvY2tSZXF1ZXN0GhMudGhydS5jb3JlLnYxLkJsb2NrIkKC0+STAjxaJxIlL3YxL2Jsb2Nrcy9ieS1oYXNoL3tibG9ja19oYXNoLnZhbHVlfRIRL3YxL2Jsb2Nrcy97c2xvdH0SlwEKC0dldFJhd0Jsb2NrEiQudGhydS5zZXJ2aWNlcy52MS5HZXRSYXdCbG9ja1JlcXVlc3QaFi50aHJ1LmNvcmUudjEuUmF3QmxvY2siSoLT5JMCRForEikvdjEvYmxvY2tzL2J5LWhhc2gve2Jsb2NrX2hhc2gudmFsdWV9OnJhdxIVL3YxL2Jsb2Nrcy97c2xvdH06cmF3EnMKDExpc3RBY2NvdW50cxIlLnRocnUuc2VydmljZXMudjEuTGlzdEFjY291bnRzUmVxdWVzdBomLnRocnUuc2VydmljZXMudjEuTGlzdEFjY291bnRzUmVzcG9uc2UiFILT5JMCDhIML3YxL2FjY291bnRzEmsKCkxpc3RCbG9ja3MSIy50aHJ1LnNlcnZpY2VzLnYxLkxpc3RCbG9ja3NSZXF1ZXN0GiQudGhydS5zZXJ2aWNlcy52MS5MaXN0QmxvY2tzUmVzcG9uc2UiEoLT5JMCDBIKL3YxL2Jsb2NrcxLEAQoaTGlzdFRyYW5zYWN0aW9uc0ZvckFjY291bnQSMy50aHJ1LnNlcnZpY2VzLnYxLkxpc3RUcmFuc2FjdGlvbnNGb3JBY2NvdW50UmVxdWVzdBo0LnRocnUuc2VydmljZXMudjEuTGlzdFRyYW5zYWN0aW9uc0ZvckFjY291bnRSZXNwb25zZSI72kEHYWNjb3VudILT5JMCKxIpL3YxL2FjY291bnRzL3thY2NvdW50LnZhbHVlfS90cmFuc2FjdGlvbnMScAoIR2V0RXZlbnQSIS50aHJ1LnNlcnZpY2VzLnYxLkdldEV2ZW50UmVxdWVzdBoXLnRocnUuc2VydmljZXMudjEuRXZlbnQiKNpBCGV2ZW50X2lkgtPkkwIXEhUvdjEvZXZlbnRzL3tldmVudF9pZH0SqQEKFEdldFRyYW5zYWN0aW9uU3RhdHVzEi0udGhydS5zZXJ2aWNlcy52MS5HZXRUcmFuc2FjdGlvblN0YXR1c1JlcXVlc3QaIy50aHJ1LnNlcnZpY2VzLnYxLlRyYW5zYWN0aW9uU3RhdHVzIj3aQQlzaWduYXR1cmWC0+STAisSKS92MS90cmFuc2FjdGlvbnMve3NpZ25hdHVyZS52YWx1ZX06c3RhdHVzEpQBChJHZW5lcmF0ZVN0YXRlUHJvb2YSKy50aHJ1LnNlcnZpY2VzLnYxLkdlbmVyYXRlU3RhdGVQcm9vZlJlcXVlc3QaLC50aHJ1LnNlcnZpY2VzLnYxLkdlbmVyYXRlU3RhdGVQcm9vZlJlc3BvbnNlIiOC0+STAh06ASoiGC92MS9zdGF0ZXByb29mczpnZW5lcmF0ZRJsCgpHZXRWZXJzaW9uEiMudGhydS5zZXJ2aWNlcy52MS5HZXRWZXJzaW9uUmVxdWVzdBokLnRocnUuc2VydmljZXMudjEuR2V0VmVyc2lvblJlc3BvbnNlIhOC0+STAg0SCy92MS92ZXJzaW9uGhPKQRBhcGkudGhydS5uZXR3b3JrQtwBChRjb20udGhydS5zZXJ2aWNlcy52MUIRUXVlcnlTZXJ2aWNlUHJvdG9QAVpIZ2l0aHViLmNvbS9VbnRvLUxhYnMvdGhydS1uZXQvZ3JwYy9wa2cvcHJvdG8vdGhydS9zZXJ2aWNlcy92MTtzZXJ2aWNlc3YxogIDVFNYqgIQVGhydS5TZXJ2aWNlcy5WMboCBFRIVVPKAhBUaHJ1XFNlcnZpY2VzXFYx4gIcVGhydVxTZXJ2aWNlc1xWMVxHUEJNZXRhZGF0YeoCElRocnU6OlNlcnZpY2VzOjpWMWIGcHJvdG8z", [file_buf_validate_validate, file_google_api_annotations, file_google_api_client, file_google_api_field_behavior, file_thru_common_v1_consensus, file_thru_common_v1_filters, file_thru_common_v1_pagination, file_thru_core_v1_account, file_thru_core_v1_block, file_thru_core_v1_state, file_thru_core_v1_transaction, file_thru_core_v1_types]);
+  fileDesc("CiR0aHJ1L3NlcnZpY2VzL3YxL3F1ZXJ5X3NlcnZpY2UucHJvdG8SEHRocnUuc2VydmljZXMudjEi1QIKEUdldEFjY291bnRSZXF1ZXN0EiwKB2FkZHJlc3MYASABKAsyFi50aHJ1LmNvbW1vbi52MS5QdWJrZXlCA+BBAhIxCgR2aWV3GAIgASgOMhkudGhydS5jb3JlLnYxLkFjY291bnRWaWV3QgPgQQFIAIgBARI8Cg92ZXJzaW9uX2NvbnRleHQYAyABKAsyHi50aHJ1LmNvbW1vbi52MS5WZXJzaW9uQ29udGV4dEID4EECEkAKDW1pbl9jb25zZW5zdXMYBCABKA4yHy50aHJ1LmNvbW1vbi52MS5Db25zZW5zdXNTdGF0dXNCA+BBAUgBiAEBEjUKCmRhdGFfc2xpY2UYBSABKAsyFy50aHJ1LmNvcmUudjEuRGF0YVNsaWNlQgPgQQFIAogBAUIHCgVfdmlld0IQCg5fbWluX2NvbnNlbnN1c0INCgtfZGF0YV9zbGljZSKSAgoUR2V0UmF3QWNjb3VudFJlcXVlc3QSLAoHYWRkcmVzcxgBIAEoCzIWLnRocnUuY29tbW9uLnYxLlB1YmtleUID4EECEjEKBHZpZXcYAiABKA4yGS50aHJ1LmNvcmUudjEuQWNjb3VudFZpZXdCA+BBAUgAiAEBEjwKD3ZlcnNpb25fY29udGV4dBgDIAEoCzIeLnRocnUuY29tbW9uLnYxLlZlcnNpb25Db250ZXh0QgPgQQISQAoNbWluX2NvbnNlbnN1cxgEIAEoDjIfLnRocnUuY29tbW9uLnYxLkNvbnNlbnN1c1N0YXR1c0ID4EEBSAGIAQFCBwoFX3ZpZXdCEAoOX21pbl9jb25zZW5zdXMinAIKFUdldFRyYW5zYWN0aW9uUmVxdWVzdBIxCglzaWduYXR1cmUYASABKAsyGS50aHJ1LmNvbW1vbi52MS5TaWduYXR1cmVCA+BBAhI1CgR2aWV3GAIgASgOMh0udGhydS5jb3JlLnYxLlRyYW5zYWN0aW9uVmlld0ID4EEBSACIAQESPAoPdmVyc2lvbl9jb250ZXh0GAMgASgLMh4udGhydS5jb21tb24udjEuVmVyc2lvbkNvbnRleHRCA+BBAhJACg1taW5fY29uc2Vuc3VzGAQgASgOMh8udGhydS5jb21tb24udjEuQ29uc2Vuc3VzU3RhdHVzQgPgQQFIAYgBAUIHCgVfdmlld0IQCg5fbWluX2NvbnNlbnN1cyLfAQoYR2V0UmF3VHJhbnNhY3Rpb25SZXF1ZXN0EjEKCXNpZ25hdHVyZRgBIAEoCzIZLnRocnUuY29tbW9uLnYxLlNpZ25hdHVyZUID4EECEjwKD3ZlcnNpb25fY29udGV4dBgCIAEoCzIeLnRocnUuY29tbW9uLnYxLlZlcnNpb25Db250ZXh0QgPgQQISQAoNbWluX2NvbnNlbnN1cxgDIAEoDjIfLnRocnUuY29tbW9uLnYxLkNvbnNlbnN1c1N0YXR1c0ID4EEBSACIAQFCEAoOX21pbl9jb25zZW5zdXMiUgoZR2VuZXJhdGVTdGF0ZVByb29mUmVxdWVzdBI1CgdyZXF1ZXN0GAEgASgLMh8udGhydS5jb3JlLnYxLlN0YXRlUHJvb2ZSZXF1ZXN0QgPgQQIiSgoaR2VuZXJhdGVTdGF0ZVByb29mUmVzcG9uc2USLAoFcHJvb2YYASABKAsyGC50aHJ1LmNvcmUudjEuU3RhdGVQcm9vZkID4EECIt4CCg9HZXRCbG9ja1JlcXVlc3QSEwoEc2xvdBgBIAEoBEID4EEBSAASMgoKYmxvY2tfaGFzaBgCIAEoCzIXLnRocnUuY29yZS52MS5CbG9ja0hhc2hCA+BBAUgAEi8KBHZpZXcYAyABKA4yFy50aHJ1LmNvcmUudjEuQmxvY2tWaWV3QgPgQQFIAYgBARJACg1taW5fY29uc2Vuc3VzGAQgASgOMh8udGhydS5jb21tb24udjEuQ29uc2Vuc3VzU3RhdHVzQgPgQQFIAogBATpoukhlGmMKEmJsb2NrX3NlbGVjdG9yX3NldBIlZWl0aGVyIHNsb3Qgb3IgYmxvY2tfaGFzaCBtdXN0IGJlIHNldBomaGFzKHRoaXMuc2xvdCkgfHwgaGFzKHRoaXMuYmxvY2tfaGFzaClCCgoIc2VsZWN0b3JCBwoFX3ZpZXdCEAoOX21pbl9jb25zZW5zdXMiqwIKEkdldFJhd0Jsb2NrUmVxdWVzdBITCgRzbG90GAEgASgEQgPgQQFIABIyCgpibG9ja19oYXNoGAIgASgLMhcudGhydS5jb3JlLnYxLkJsb2NrSGFzaEID4EEBSAASQAoNbWluX2NvbnNlbnN1cxgDIAEoDjIfLnRocnUuY29tbW9uLnYxLkNvbnNlbnN1c1N0YXR1c0ID4EEBSAGIAQE6bLpIaRpnChZyYXdfYmxvY2tfc2VsZWN0b3Jfc2V0EiVlaXRoZXIgc2xvdCBvciBibG9ja19oYXNoIG11c3QgYmUgc2V0GiZoYXModGhpcy5zbG90KSB8fCBoYXModGhpcy5ibG9ja19oYXNoKUIKCghzZWxlY3RvckIQCg5fbWluX2NvbnNlbnN1cyL3AgoTTGlzdEFjY291bnRzUmVxdWVzdBIxCgR2aWV3GAEgASgOMhkudGhydS5jb3JlLnYxLkFjY291bnRWaWV3QgPgQQFIAIgBARJBCg92ZXJzaW9uX2NvbnRleHQYAiABKAsyHi50aHJ1LmNvbW1vbi52MS5WZXJzaW9uQ29udGV4dEID4EEBSAGIAQESMAoGZmlsdGVyGAMgASgLMhYudGhydS5jb21tb24udjEuRmlsdGVyQgPgQQFIAogBARIzCgRwYWdlGAQgASgLMhsudGhydS5jb21tb24udjEuUGFnZVJlcXVlc3RCA+BBAUgDiAEBEkAKDW1pbl9jb25zZW5zdXMYBSABKA4yHy50aHJ1LmNvbW1vbi52MS5Db25zZW5zdXNTdGF0dXNCA+BBAUgEiAEBQgcKBV92aWV3QhIKEF92ZXJzaW9uX2NvbnRleHRCCQoHX2ZpbHRlckIHCgVfcGFnZUIQCg5fbWluX2NvbnNlbnN1cyKDAQoUTGlzdEFjY291bnRzUmVzcG9uc2USLAoIYWNjb3VudHMYASADKAsyFS50aHJ1LmNvcmUudjEuQWNjb3VudEID4EEBEjQKBHBhZ2UYAiABKAsyHC50aHJ1LmNvbW1vbi52MS5QYWdlUmVzcG9uc2VCA+BBAUgAiAEBQgcKBV9wYWdlIpwCChFMaXN0QmxvY2tzUmVxdWVzdBIwCgZmaWx0ZXIYASABKAsyFi50aHJ1LmNvbW1vbi52MS5GaWx0ZXJCA+BBAUgAiAEBEjMKBHBhZ2UYAiABKAsyGy50aHJ1LmNvbW1vbi52MS5QYWdlUmVxdWVzdEID4EEBSAGIAQESLwoEdmlldxgDIAEoDjIXLnRocnUuY29yZS52MS5CbG9ja1ZpZXdCA+BBAUgCiAEBEkAKDW1pbl9jb25zZW5zdXMYBCABKA4yHy50aHJ1LmNvbW1vbi52MS5Db25zZW5zdXNTdGF0dXNCA+BBAUgDiAEBQgkKB19maWx0ZXJCBwoFX3BhZ2VCBwoFX3ZpZXdCEAoOX21pbl9jb25zZW5zdXMifQoSTGlzdEJsb2Nrc1Jlc3BvbnNlEigKBmJsb2NrcxgBIAMoCzITLnRocnUuY29yZS52MS5CbG9ja0ID4EEBEjQKBHBhZ2UYAiABKAsyHC50aHJ1LmNvbW1vbi52MS5QYWdlUmVzcG9uc2VCA+BBAUgAiAEBQgcKBV9wYWdlIswBCiFMaXN0VHJhbnNhY3Rpb25zRm9yQWNjb3VudFJlcXVlc3QSLAoHYWNjb3VudBgBIAEoCzIWLnRocnUuY29tbW9uLnYxLlB1YmtleUID4EECEjMKBHBhZ2UYAiABKAsyGy50aHJ1LmNvbW1vbi52MS5QYWdlUmVxdWVzdEID4EEBSACIAQESMAoGZmlsdGVyGAMgASgLMhYudGhydS5jb21tb24udjEuRmlsdGVyQgPgQQFIAYgBAUIHCgVfcGFnZUIJCgdfZmlsdGVyIs0BCiJMaXN0VHJhbnNhY3Rpb25zRm9yQWNjb3VudFJlc3BvbnNlEjIKCnNpZ25hdHVyZXMYASADKAsyGS50aHJ1LmNvbW1vbi52MS5TaWduYXR1cmVCA+BBARI0CgRwYWdlGAIgASgLMhwudGhydS5jb21tb24udjEuUGFnZVJlc3BvbnNlQgPgQQFIAIgBARI0Cgx0cmFuc2FjdGlvbnMYAyADKAsyGS50aHJ1LmNvcmUudjEuVHJhbnNhY3Rpb25CA+BBAUIHCgVfcGFnZSITChFHZXRWZXJzaW9uUmVxdWVzdCKQAQoSR2V0VmVyc2lvblJlc3BvbnNlEkkKCHZlcnNpb25zGAEgAygLMjIudGhydS5zZXJ2aWNlcy52MS5HZXRWZXJzaW9uUmVzcG9uc2UuVmVyc2lvbnNFbnRyeUID4EECGi8KDVZlcnNpb25zRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4ASKHAQoPR2V0RXZlbnRSZXF1ZXN0Eh0KCGV2ZW50X2lkGAEgASgJQgvgQQK6SAVyAxiAARJBCg92ZXJzaW9uX2NvbnRleHQYAiABKAsyHi50aHJ1LmNvbW1vbi52MS5WZXJzaW9uQ29udGV4dEID4EEBSACIAQFCEgoQX3ZlcnNpb25fY29udGV4dCLlAwoFRXZlbnQSFQoIZXZlbnRfaWQYASABKAlCA+BBAhI9ChV0cmFuc2FjdGlvbl9zaWduYXR1cmUYAiABKAsyGS50aHJ1LmNvbW1vbi52MS5TaWduYXR1cmVCA+BBAhIxCgdwcm9ncmFtGAMgASgLMhYudGhydS5jb21tb24udjEuUHVia2V5QgPgQQFIAIgBARIZCgdwYXlsb2FkGAQgASgMQgPgQQFIAYgBARIWCgRzbG90GAUgASgEQgPgQQFIAogBARIaCghjYWxsX2lkeBgGIAEoDUID4EEBSAOIAQESHQoLcHJvZ3JhbV9pZHgYByABKA1CA+BBAUgEiAEBEh4KDHBheWxvYWRfc2l6ZRgIIAEoDUID4EEBSAWIAQESHgoMYmxvY2tfb2Zmc2V0GAkgASgNQgPgQQFIBogBARI3Cgl0aW1lc3RhbXAYCiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wQgPgQQFIB4gBAUIKCghfcHJvZ3JhbUIKCghfcGF5bG9hZEIHCgVfc2xvdEILCglfY2FsbF9pZHhCDgoMX3Byb2dyYW1faWR4Qg8KDV9wYXlsb2FkX3NpemVCDwoNX2Jsb2NrX29mZnNldEIMCgpfdGltZXN0YW1wIrkCChFMaXN0RXZlbnRzUmVxdWVzdBIwCgZmaWx0ZXIYASABKAsyFi50aHJ1LmNvbW1vbi52MS5GaWx0ZXJCA+BBAUgAiAEBEjMKBHBhZ2UYAiABKAsyGy50aHJ1LmNvbW1vbi52MS5QYWdlUmVxdWVzdEID4EEBSAGIAQESQQoPdmVyc2lvbl9jb250ZXh0GAMgASgLMh4udGhydS5jb21tb24udjEuVmVyc2lvbkNvbnRleHRCA+BBAUgCiAEBEkAKDW1pbl9jb25zZW5zdXMYBCABKA4yHy50aHJ1LmNvbW1vbi52MS5Db25zZW5zdXNTdGF0dXNCA+BBAUgDiAEBQgkKB19maWx0ZXJCBwoFX3BhZ2VCEgoQX3ZlcnNpb25fY29udGV4dEIQCg5fbWluX2NvbnNlbnN1cyKBAQoSTGlzdEV2ZW50c1Jlc3BvbnNlEiwKBmV2ZW50cxgBIAMoCzIXLnRocnUuc2VydmljZXMudjEuRXZlbnRCA+BBARI0CgRwYWdlGAIgASgLMhwudGhydS5jb21tb24udjEuUGFnZVJlc3BvbnNlQgPgQQFIAIgBAUIHCgVfcGFnZSLyAgoXTGlzdFRyYW5zYWN0aW9uc1JlcXVlc3QSMAoGZmlsdGVyGAEgASgLMhYudGhydS5jb21tb24udjEuRmlsdGVyQgPgQQFIAIgBARIzCgRwYWdlGAIgASgLMhsudGhydS5jb21tb24udjEuUGFnZVJlcXVlc3RCA+BBAUgBiAEBEh8KDXJldHVybl9ldmVudHMYAyABKAhCA+BBAUgCiAEBEkEKD3ZlcnNpb25fY29udGV4dBgEIAEoCzIeLnRocnUuY29tbW9uLnYxLlZlcnNpb25Db250ZXh0QgPgQQFIA4gBARJACg1taW5fY29uc2Vuc3VzGAUgASgOMh8udGhydS5jb21tb24udjEuQ29uc2Vuc3VzU3RhdHVzQgPgQQFIBIgBAUIJCgdfZmlsdGVyQgcKBV9wYWdlQhAKDl9yZXR1cm5fZXZlbnRzQhIKEF92ZXJzaW9uX2NvbnRleHRCEAoOX21pbl9jb25zZW5zdXMijwEKGExpc3RUcmFuc2FjdGlvbnNSZXNwb25zZRI0Cgx0cmFuc2FjdGlvbnMYASADKAsyGS50aHJ1LmNvcmUudjEuVHJhbnNhY3Rpb25CA+BBARI0CgRwYWdlGAIgASgLMhwudGhydS5jb21tb24udjEuUGFnZVJlc3BvbnNlQgPgQQFIAIgBAUIHCgVfcGFnZSJQChtHZXRUcmFuc2FjdGlvblN0YXR1c1JlcXVlc3QSMQoJc2lnbmF0dXJlGAEgASgLMhkudGhydS5jb21tb24udjEuU2lnbmF0dXJlQgPgQQIigwIKEVRyYW5zYWN0aW9uU3RhdHVzEjEKCXNpZ25hdHVyZRgBIAEoCzIZLnRocnUuY29tbW9uLnYxLlNpZ25hdHVyZUID4EECEkMKEGNvbnNlbnN1c19zdGF0dXMYAiABKA4yHy50aHJ1LmNvbW1vbi52MS5Db25zZW5zdXNTdGF0dXNCA+BBAUgAiAEBEkwKEGV4ZWN1dGlvbl9yZXN1bHQYAyABKAsyKC50aHJ1LmNvcmUudjEuVHJhbnNhY3Rpb25FeGVjdXRpb25SZXN1bHRCA+BBAUgBiAEBQhMKEV9jb25zZW5zdXNfc3RhdHVzQhMKEV9leGVjdXRpb25fcmVzdWx0IhIKEEdldEhlaWdodFJlcXVlc3QiaQoRR2V0SGVpZ2h0UmVzcG9uc2USFgoJZmluYWxpemVkGAEgASgEQgPgQQISHQoQbG9jYWxseV9leGVjdXRlZBgCIAEoBEID4EECEh0KEGNsdXN0ZXJfZXhlY3V0ZWQYAyABKARCA+BBAjKcEQoMUXVlcnlTZXJ2aWNlEmgKCUdldEhlaWdodBIiLnRocnUuc2VydmljZXMudjEuR2V0SGVpZ2h0UmVxdWVzdBojLnRocnUuc2VydmljZXMudjEuR2V0SGVpZ2h0UmVzcG9uc2UiEoLT5JMCDBIKL3YxL2hlaWdodBJ4CgpHZXRBY2NvdW50EiMudGhydS5zZXJ2aWNlcy52MS5HZXRBY2NvdW50UmVxdWVzdBoVLnRocnUuY29yZS52MS5BY2NvdW50Ii7aQQdhZGRyZXNzgtPkkwIeEhwvdjEvYWNjb3VudHMve2FkZHJlc3MudmFsdWV9EoUBCg1HZXRSYXdBY2NvdW50EiYudGhydS5zZXJ2aWNlcy52MS5HZXRSYXdBY2NvdW50UmVxdWVzdBoYLnRocnUuY29yZS52MS5SYXdBY2NvdW50IjLaQQdhZGRyZXNzgtPkkwIiEiAvdjEvYWNjb3VudHMve2FkZHJlc3MudmFsdWV9OnJhdxKMAQoOR2V0VHJhbnNhY3Rpb24SJy50aHJ1LnNlcnZpY2VzLnYxLkdldFRyYW5zYWN0aW9uUmVxdWVzdBoZLnRocnUuY29yZS52MS5UcmFuc2FjdGlvbiI22kEJc2lnbmF0dXJlgtPkkwIkEiIvdjEvdHJhbnNhY3Rpb25zL3tzaWduYXR1cmUudmFsdWV9EpkBChFHZXRSYXdUcmFuc2FjdGlvbhIqLnRocnUuc2VydmljZXMudjEuR2V0UmF3VHJhbnNhY3Rpb25SZXF1ZXN0GhwudGhydS5jb3JlLnYxLlJhd1RyYW5zYWN0aW9uIjraQQlzaWduYXR1cmWC0+STAigSJi92MS90cmFuc2FjdGlvbnMve3NpZ25hdHVyZS52YWx1ZX06cmF3EoYBCghHZXRCbG9jaxIhLnRocnUuc2VydmljZXMudjEuR2V0QmxvY2tSZXF1ZXN0GhMudGhydS5jb3JlLnYxLkJsb2NrIkKC0+STAjxaJxIlL3YxL2Jsb2Nrcy9ieS1oYXNoL3tibG9ja19oYXNoLnZhbHVlfRIRL3YxL2Jsb2Nrcy97c2xvdH0SlwEKC0dldFJhd0Jsb2NrEiQudGhydS5zZXJ2aWNlcy52MS5HZXRSYXdCbG9ja1JlcXVlc3QaFi50aHJ1LmNvcmUudjEuUmF3QmxvY2siSoLT5JMCRForEikvdjEvYmxvY2tzL2J5LWhhc2gve2Jsb2NrX2hhc2gudmFsdWV9OnJhdxIVL3YxL2Jsb2Nrcy97c2xvdH06cmF3EnMKDExpc3RBY2NvdW50cxIlLnRocnUuc2VydmljZXMudjEuTGlzdEFjY291bnRzUmVxdWVzdBomLnRocnUuc2VydmljZXMudjEuTGlzdEFjY291bnRzUmVzcG9uc2UiFILT5JMCDhIML3YxL2FjY291bnRzEmsKCkxpc3RCbG9ja3MSIy50aHJ1LnNlcnZpY2VzLnYxLkxpc3RCbG9ja3NSZXF1ZXN0GiQudGhydS5zZXJ2aWNlcy52MS5MaXN0QmxvY2tzUmVzcG9uc2UiEoLT5JMCDBIKL3YxL2Jsb2NrcxLEAQoaTGlzdFRyYW5zYWN0aW9uc0ZvckFjY291bnQSMy50aHJ1LnNlcnZpY2VzLnYxLkxpc3RUcmFuc2FjdGlvbnNGb3JBY2NvdW50UmVxdWVzdBo0LnRocnUuc2VydmljZXMudjEuTGlzdFRyYW5zYWN0aW9uc0ZvckFjY291bnRSZXNwb25zZSI72kEHYWNjb3VudILT5JMCKxIpL3YxL2FjY291bnRzL3thY2NvdW50LnZhbHVlfS90cmFuc2FjdGlvbnMScAoIR2V0RXZlbnQSIS50aHJ1LnNlcnZpY2VzLnYxLkdldEV2ZW50UmVxdWVzdBoXLnRocnUuc2VydmljZXMudjEuRXZlbnQiKNpBCGV2ZW50X2lkgtPkkwIXEhUvdjEvZXZlbnRzL3tldmVudF9pZH0SawoKTGlzdEV2ZW50cxIjLnRocnUuc2VydmljZXMudjEuTGlzdEV2ZW50c1JlcXVlc3QaJC50aHJ1LnNlcnZpY2VzLnYxLkxpc3RFdmVudHNSZXNwb25zZSISgtPkkwIMEgovdjEvZXZlbnRzEoMBChBMaXN0VHJhbnNhY3Rpb25zEikudGhydS5zZXJ2aWNlcy52MS5MaXN0VHJhbnNhY3Rpb25zUmVxdWVzdBoqLnRocnUuc2VydmljZXMudjEuTGlzdFRyYW5zYWN0aW9uc1Jlc3BvbnNlIhiC0+STAhISEC92MS90cmFuc2FjdGlvbnMSqQEKFEdldFRyYW5zYWN0aW9uU3RhdHVzEi0udGhydS5zZXJ2aWNlcy52MS5HZXRUcmFuc2FjdGlvblN0YXR1c1JlcXVlc3QaIy50aHJ1LnNlcnZpY2VzLnYxLlRyYW5zYWN0aW9uU3RhdHVzIj3aQQlzaWduYXR1cmWC0+STAisSKS92MS90cmFuc2FjdGlvbnMve3NpZ25hdHVyZS52YWx1ZX06c3RhdHVzEpQBChJHZW5lcmF0ZVN0YXRlUHJvb2YSKy50aHJ1LnNlcnZpY2VzLnYxLkdlbmVyYXRlU3RhdGVQcm9vZlJlcXVlc3QaLC50aHJ1LnNlcnZpY2VzLnYxLkdlbmVyYXRlU3RhdGVQcm9vZlJlc3BvbnNlIiOC0+STAh06ASoiGC92MS9zdGF0ZXByb29mczpnZW5lcmF0ZRJsCgpHZXRWZXJzaW9uEiMudGhydS5zZXJ2aWNlcy52MS5HZXRWZXJzaW9uUmVxdWVzdBokLnRocnUuc2VydmljZXMudjEuR2V0VmVyc2lvblJlc3BvbnNlIhOC0+STAg0SCy92MS92ZXJzaW9uGhPKQRBhcGkudGhydS5uZXR3b3JrQtwBChRjb20udGhydS5zZXJ2aWNlcy52MUIRUXVlcnlTZXJ2aWNlUHJvdG9QAVpIZ2l0aHViLmNvbS9VbnRvLUxhYnMvdGhydS1uZXQvZ3JwYy9wa2cvcHJvdG8vdGhydS9zZXJ2aWNlcy92MTtzZXJ2aWNlc3YxogIDVFNYqgIQVGhydS5TZXJ2aWNlcy5WMboCBFRIVVPKAhBUaHJ1XFNlcnZpY2VzXFYx4gIcVGhydVxTZXJ2aWNlc1xWMVxHUEJNZXRhZGF0YeoCElRocnU6OlNlcnZpY2VzOjpWMWIGcHJvdG8z", [file_buf_validate_validate, file_google_api_annotations, file_google_api_client, file_google_api_field_behavior, file_google_protobuf_timestamp, file_thru_common_v1_consensus, file_thru_common_v1_filters, file_thru_common_v1_pagination, file_thru_common_v1_primitives, file_thru_core_v1_account, file_thru_core_v1_block, file_thru_core_v1_state, file_thru_core_v1_transaction, file_thru_core_v1_types]);
 
 /**
  * GetAccountRequest retrieves a decoded account by public key.
@@ -39,7 +43,7 @@ export const file_thru_services_v1_query_service: GenFile = /*@__PURE__*/
  */
 export type GetAccountRequest = Message<"thru.services.v1.GetAccountRequest"> & {
   /**
-   * @generated from field: thru.core.v1.Pubkey address = 1;
+   * @generated from field: thru.common.v1.Pubkey address = 1;
    */
   address?: Pubkey;
 
@@ -78,7 +82,7 @@ export const GetAccountRequestSchema: GenMessage<GetAccountRequest> = /*@__PURE_
  */
 export type GetRawAccountRequest = Message<"thru.services.v1.GetRawAccountRequest"> & {
   /**
-   * @generated from field: thru.core.v1.Pubkey address = 1;
+   * @generated from field: thru.common.v1.Pubkey address = 1;
    */
   address?: Pubkey;
 
@@ -112,7 +116,7 @@ export const GetRawAccountRequestSchema: GenMessage<GetRawAccountRequest> = /*@_
  */
 export type GetTransactionRequest = Message<"thru.services.v1.GetTransactionRequest"> & {
   /**
-   * @generated from field: thru.core.v1.Signature signature = 1;
+   * @generated from field: thru.common.v1.Signature signature = 1;
    */
   signature?: Signature;
 
@@ -146,7 +150,7 @@ export const GetTransactionRequestSchema: GenMessage<GetTransactionRequest> = /*
  */
 export type GetRawTransactionRequest = Message<"thru.services.v1.GetRawTransactionRequest"> & {
   /**
-   * @generated from field: thru.core.v1.Signature signature = 1;
+   * @generated from field: thru.common.v1.Signature signature = 1;
    */
   signature?: Signature;
 
@@ -286,6 +290,95 @@ export const GetRawBlockRequestSchema: GenMessage<GetRawBlockRequest> = /*@__PUR
 /**
  * ListAccountsRequest lists accounts using CEL filters.
  *
+ * The filter expression supports filtering on account metadata fields using CEL (Common Expression Language).
+ * A filter expression is REQUIRED for all ListAccounts requests.
+ *
+ * Available fields for filtering:
+ *   - account.address.value (bytes): The account's public key address
+ *   - account.meta.owner.value (bytes): The account owner's public key
+ *   - account.meta.balance (uint64): Account balance in native units
+ *   - account.meta.seq (uint64): Account sequence number / state counter
+ *   - account.meta.nonce (uint64): Account transaction nonce
+ *   - account.meta.data_size (uint32): Size of account data in bytes
+ *   - account.meta.version (uint32): Account version number
+ *   - account.meta.flags (AccountFlags): Account capability flags (message type)
+ *
+ * Available CEL functions:
+ *   - has(field): Check if optional field exists
+ *   - uint(value): Convert to uint type
+ *   - int(value): Convert to int type
+ *   - string(value): Convert to string type
+ *   - bytes(value): Convert to bytes type
+ *
+ * Available filter parameters (accessible via params.* in expressions):
+ *   - params.owner_bytes (bytes): Owner public key for owner filtering (REQUIRED when filtering by owner)
+ *   - params.prefix (bytes): Byte prefix for range-based filtering
+ *   - params.tag (any): Custom tag parameter
+ *   - params.min_slot (uint64): Minimum slot parameter
+ *
+ * Filter examples:
+ *
+ * 1. Filter by balance:
+ *      filter.expression = "account.meta.balance > uint(1000000)"
+ *
+ * 2. Filter by balance range:
+ *      filter.expression = "account.meta.balance >= uint(100) && account.meta.balance <= uint(10000)"
+ *
+ * 3. Filter by owner (requires params.owner_bytes):
+ *      filter.expression = "account.meta.owner.value == params.owner_bytes"
+ *      filter.params["owner_bytes"].bytes_value = <32-byte owner pubkey>
+ *
+ * 4. Filter by data size:
+ *      filter.expression = "account.meta.data_size > uint(0)"
+ *      filter.expression = "account.meta.data_size >= uint(100) && account.meta.data_size <= uint(1000)"
+ *
+ * 5. Filter by nonce:
+ *      filter.expression = "account.meta.nonce == uint(0)"
+ *
+ * 6. Filter by sequence number:
+ *      filter.expression = "account.meta.seq >= uint(100)"
+ *
+ * 7. Filter by version:
+ *      filter.expression = "account.meta.version == uint(1)"
+ *
+ * 8. Filter by specific address (using inline bytes literal with octal escaping):
+ *      filter.expression = "account.address.value == b'\001\002\003...'"
+ *      Note: Binary bytes must be properly escaped using octal notation (\NNN) for non-printable bytes
+ *
+ * 9. Filter by address prefix (using range comparison):
+ *      filter.expression = "account.address.value >= b'\001\002\003\004' && account.address.value <= b'\001\002\003\004\377\377...'"
+ *      Note: Create upper bound by appending 0xff bytes after prefix
+ *
+ * 10. Combine multiple conditions with AND:
+ *      filter.expression = "account.meta.balance > uint(0) && account.meta.data_size == uint(0)"
+ *
+ * 11. Combine multiple conditions with OR:
+ *      filter.expression = "account.meta.balance == uint(0) || account.meta.balance > uint(50000)"
+ *
+ * 12. Complex combined filters:
+ *      filter.expression = "(account.meta.balance > uint(100) && account.meta.balance < uint(10000)) || account.meta.data_size > uint(1000)"
+ *
+ * 13. Check for optional field existence:
+ *      filter.expression = "has(account.address.value)"
+ *      filter.expression = "has(account.meta.owner.value)"  // Requires params.owner_bytes
+ *
+ * 14. Use inequality operators:
+ *      filter.expression = "account.meta.balance < uint(5000)"
+ *      filter.expression = "account.meta.balance <= uint(5000)"
+ *      filter.expression = "account.meta.balance >= uint(100)"
+ *      filter.expression = "account.meta.balance != uint(999)"
+ *
+ * 15. Type conversions:
+ *      filter.expression = "account.meta.balance == uint(100)"
+ *      filter.expression = "uint(account.meta.data_size) > uint(0)"
+ *
+ * Limitations:
+ *   - The startsWith() function only works with strings, not bytes
+ *   - The bytesPrefix() function is NOT available for ListAccounts (use range comparison instead)
+ *   - Individual flag fields (e.g., account.meta.flags.is_program) are NOT exposed
+ *   - Parameter names other than owner_bytes, prefix, tag, min_slot are NOT permitted
+ *   - All filters are pushed down to SQL for optimal performance where possible
+ *
  * @generated from message thru.services.v1.ListAccountsRequest
  */
 export type ListAccountsRequest = Message<"thru.services.v1.ListAccountsRequest"> & {
@@ -300,10 +393,7 @@ export type ListAccountsRequest = Message<"thru.services.v1.ListAccountsRequest"
   versionContext?: VersionContext;
 
   /**
-   * Optional CEL filter applied server-side. To emulate the legacy
-   * ListOwnedAccounts RPC, set:
-   *   filter.expression = "meta.owner.value == params.owner_bytes"
-   *   filter.params["owner_bytes"].bytes_value = <32-byte owner pubkey>
+   * CEL filter expression (REQUIRED). See message documentation for examples.
    *
    * @generated from field: optional thru.common.v1.Filter filter = 3;
    */
@@ -354,10 +444,160 @@ export const ListAccountsResponseSchema: GenMessage<ListAccountsResponse> = /*@_
 /**
  * ListBlocksRequest lists blocks with pagination and filtering.
  *
+ * Returns blocks ordered from latest slot to earliest (slot DESC) by default.
+ * Supports filtering on block header and footer fields using CEL expressions.
+ *
+ * Available fields for filtering:
+ *
+ * Header fields:
+ *   - block.header.slot (uint64): Block slot number
+ *   - block.header.version (uint32): Block version number
+ *   - block.header.start_slot (uint64): Start slot for block production
+ *   - block.header.producer.value (bytes): Block producer's public key
+ *   - block.header.expiry_after (uint32): Expiry duration in slots
+ *   - block.header.expiry_timestamp (google.protobuf.Timestamp): Expiry timestamp
+ *   - block.header.max_block_size (uint32): Maximum block size in bytes
+ *   - block.header.max_compute_units (uint64): Maximum compute units allowed
+ *   - block.header.max_state_units (uint32): Maximum state units allowed
+ *   - block.header.price (uint64): Block production price
+ *   - block.header.block_hash.value (bytes): Block hash
+ *   - block.header.header_signature.value (bytes): Header signature
+ *   - block.header.block_time (google.protobuf.Timestamp): Block timestamp
+ *
+ * Footer fields:
+ *   - block.footer.signature.value (bytes): Block signature
+ *   - block.footer.status (int32): Block execution status (2 = EXECUTION_STATUS_EXECUTED)
+ *   - block.footer.consumed_compute_units (uint64): Total compute units consumed by all transactions
+ *   - block.footer.consumed_state_units (uint32): Total state units consumed by all transactions
+ *
+ * Consensus status:
+ *   - block.consensus_status (int32): Consensus status (always CONSENSUS_STATUS_INCLUDED for persisted blocks)
+ *
+ * Available CEL functions:
+ *   - has(field): Check if optional field exists
+ *   - uint(value): Convert to uint type
+ *   - int(value): Convert to int type
+ *   - bytes(value): Convert to bytes type
+ *   - timestamp(value): Convert to timestamp type
+ *   - duration(value): Convert to duration type
+ *
+ * Available filter parameters (accessible via params.* in expressions):
+ *   - params.slot (uint64): Slot number for filtering
+ *   - params.u64 (uint64): Generic uint64 parameter
+ *   - params.producer (bytes): Producer public key for filtering
+ *
+ * Filter examples:
+ *
+ * 1. Filter by specific slot:
+ *      filter.expression = "block.header.slot == uint(1234)"
+ *
+ * 2. Filter by slot range:
+ *      filter.expression = "block.header.slot >= uint(1000) && block.header.slot <= uint(2000)"
+ *
+ * 3. Filter by slot using parameter:
+ *      filter.expression = "block.header.slot == params.slot"
+ *      filter.params["slot"].uint_value = 1234
+ *
+ * 4. Filter by block version:
+ *      filter.expression = "block.header.version == uint(1)"
+ *
+ * 5. Filter by producer (using parameter):
+ *      filter.expression = "block.header.producer.value == params.producer"
+ *      filter.params["producer"].bytes_value = <32-byte producer pubkey>
+ *
+ * 6. Filter by max compute units:
+ *      filter.expression = "block.header.max_compute_units > uint(1000000)"
+ *      filter.expression = "block.header.max_compute_units >= uint(0) && block.header.max_compute_units <= uint(10000000)"
+ *
+ * 7. Filter by max state units:
+ *      filter.expression = "block.header.max_state_units > uint(0)"
+ *
+ * 8. Filter by price:
+ *      filter.expression = "block.header.price >= uint(0)"
+ *      filter.expression = "block.header.price > uint(1000)"
+ *
+ * 9. Filter by start_slot:
+ *      filter.expression = "block.header.start_slot <= uint(5000)"
+ *
+ * 10. Filter by expiry_after:
+ *      filter.expression = "block.header.expiry_after > uint(0)"
+ *
+ * 11. Filter by max_block_size:
+ *      filter.expression = "block.header.max_block_size >= uint(1000000)"
+ *
+ * 12. Filter by execution status:
+ *      filter.expression = "block.footer.status == int(2)"  // EXECUTION_STATUS_EXECUTED
+ *
+ * 13. Filter by consumed compute units:
+ *      filter.expression = "block.footer.consumed_compute_units > uint(0)"
+ *      filter.expression = "block.footer.consumed_compute_units >= uint(100) && block.footer.consumed_compute_units <= uint(1000000)"
+ *
+ * 14. Filter by consumed state units:
+ *      filter.expression = "block.footer.consumed_state_units >= uint(0)"
+ *      filter.expression = "block.footer.consumed_state_units > uint(10)"
+ *
+ * 15. Check for footer signature existence:
+ *      filter.expression = "has(block.footer.signature)"
+ *
+ * 16. Check for footer existence:
+ *      filter.expression = "has(block.footer)"
+ *
+ * 17. Check for producer existence:
+ *      filter.expression = "has(block.header.producer)"
+ *
+ * 18. Check for block hash existence:
+ *      filter.expression = "has(block.header.block_hash)"
+ *
+ * 19. Check for header signature existence:
+ *      filter.expression = "has(block.header.header_signature)"
+ *
+ * 20. Check for expiry timestamp existence:
+ *      filter.expression = "has(block.header.expiry_timestamp)"
+ *
+ * 21. Check for block time existence:
+ *      filter.expression = "has(block.header.block_time)"
+ *
+ * 22. Combine multiple header conditions with AND:
+ *      filter.expression = "block.header.slot >= uint(1000) && block.header.max_compute_units > uint(1000000)"
+ *
+ * 23. Combine multiple footer conditions with AND:
+ *      filter.expression = "block.footer.consumed_compute_units > uint(0) && block.footer.consumed_state_units > uint(0)"
+ *
+ * 24. Combine header and footer conditions:
+ *      filter.expression = "block.header.slot >= uint(1000) && block.footer.consumed_compute_units > uint(100000)"
+ *
+ * 25. Combine multiple conditions with OR:
+ *      filter.expression = "block.header.slot == uint(100) || block.header.slot == uint(200)"
+ *      filter.expression = "block.footer.consumed_compute_units > uint(1000000) || block.footer.consumed_state_units > uint(10000)"
+ *
+ * 26. Complex combined filters:
+ *      filter.expression = "(block.header.slot >= uint(1000) && block.header.slot <= uint(2000)) || block.footer.consumed_compute_units > uint(5000000)"
+ *
+ * 27. Use inequality operators:
+ *      filter.expression = "block.header.max_compute_units < uint(10000000)"
+ *      filter.expression = "block.header.max_compute_units <= uint(10000000)"
+ *      filter.expression = "block.header.price >= uint(100)"
+ *      filter.expression = "block.footer.consumed_compute_units != uint(0)"
+ *
+ * 28. Combine has() with value checks:
+ *      filter.expression = "has(block.header.producer) && block.header.producer.value == params.producer"
+ *      filter.params["producer"].bytes_value = <32-byte producer pubkey>
+ *
+ * 29. Filter by multiple resource limits:
+ *      filter.expression = "block.header.max_compute_units > uint(1000000) && block.header.max_state_units > uint(1000) && block.header.max_block_size > uint(1000000)"
+ *
+ * 30. Filter blocks with high resource consumption:
+ *      filter.expression = "block.footer.consumed_compute_units > uint(block.header.max_compute_units / 2)"
+ *
+ * Note: All filters are pushed down to SQL for optimal performance where possible.
+ * When SQL pushdown is not possible, filters are evaluated in-memory on fetched results.
+ *
  * @generated from message thru.services.v1.ListBlocksRequest
  */
 export type ListBlocksRequest = Message<"thru.services.v1.ListBlocksRequest"> & {
   /**
+   * CEL filter expression (OPTIONAL). See message documentation for examples.
+   *
    * @generated from field: optional thru.common.v1.Filter filter = 1;
    */
   filter?: Filter;
@@ -410,13 +650,135 @@ export const ListBlocksResponseSchema: GenMessage<ListBlocksResponse> = /*@__PUR
   messageDesc(file_thru_services_v1_query_service, 11);
 
 /**
- * ListTransactionsForAccountRequest lists transaction signatures involving an account.
+ * ListTransactionsForAccountRequest lists transactions involving a specific account.
+ *
+ * This RPC returns all transactions where the specified account appears in any
+ * capacity (fee payer, signer, or affected account). Results can be filtered
+ * using CEL expressions on transaction properties.
+ *
+ * ## Available Filter Fields
+ *
+ * - `transaction.slot` (uint64): Block slot number
+ * - `transaction.block_offset` (uint32): Position within block
+ * - `transaction.execution_result.consumed_compute_units` (uint64): Compute units used
+ * - `transaction.execution_result.consumed_memory_units` (uint64): Memory units used
+ * - `transaction.execution_result.consumed_state_units` (uint64): State units used
+ * - `transaction.execution_result.user_error_code` (uint32): User-defined error code (0 = success)
+ * - `transaction.execution_result.vm_error` (TransactionVmError enum): VM execution status
+ * - `transaction.execution_result.events_count` (uint32): Number of events emitted
+ * - `transaction.execution_result.events_size` (uint32): Total size of event data in bytes
+ *
+ * ## Filter Examples
+ *
+ * ### Filter by slot
+ * ```
+ * filter {
+ *   expression: "transaction.slot == params.slot"
+ *   params {
+ *     key: "slot"
+ *     value { int_value: 12345 }
+ *   }
+ * }
+ * ```
+ *
+ * ### Filter by block offset
+ * ```
+ * filter {
+ *   expression: "transaction.block_offset == uint(5)"
+ * }
+ * ```
+ *
+ * ### Filter by compute units (high usage)
+ * ```
+ * filter {
+ *   expression: "transaction.execution_result.consumed_compute_units >= uint(1000000)"
+ * }
+ * ```
+ *
+ * ### Filter by memory units
+ * ```
+ * filter {
+ *   expression: "transaction.execution_result.consumed_memory_units > uint(0)"
+ * }
+ * ```
+ *
+ * ### Filter by state units
+ * ```
+ * filter {
+ *   expression: "transaction.execution_result.consumed_state_units > uint(0)"
+ * }
+ * ```
+ *
+ * ### Filter successful transactions (by error code)
+ * ```
+ * filter {
+ *   expression: "transaction.execution_result.user_error_code == uint(0)"
+ * }
+ * ```
+ *
+ * ### Filter by VM execution status
+ * ```
+ * filter {
+ *   expression: "transaction.execution_result.vm_error == int(0)"
+ * }
+ * ```
+ *
+ * ### Filter transactions with events
+ * ```
+ * filter {
+ *   expression: "transaction.execution_result.events_count > uint(0)"
+ * }
+ * ```
+ *
+ * ### Filter by event data size
+ * ```
+ * filter {
+ *   expression: "transaction.execution_result.events_size > uint(0)"
+ * }
+ * ```
+ *
+ * ### Check for optional fields using has()
+ * ```
+ * filter {
+ *   expression: "has(transaction.execution_result)"
+ * }
+ * ```
+ *
+ * ### Combined filters with AND/OR
+ * ```
+ * filter {
+ *   expression: "transaction.execution_result.consumed_compute_units >= uint(1000000) && transaction.execution_result.user_error_code == uint(0)"
+ * }
+ * ```
+ *
+ * ### Using params for dynamic values
+ * ```
+ * filter {
+ *   expression: "transaction.execution_result.consumed_compute_units >= params.u64"
+ *   params {
+ *     key: "u64"
+ *     value { int_value: 500000 }
+ *   }
+ * }
+ * ```
+ *
+ * ## Available Functions
+ *
+ * - `has(field)`: Check if optional field is present
+ * - `uint(value)`: Convert to unsigned integer
+ * - `int(value)`: Convert to signed integer
+ *
+ * ## Performance Notes
+ *
+ * Filters on `transaction.slot`, `transaction.block_offset`, and
+ * `transaction.execution_result.*` fields are optimized with SQL pushdown
+ * for better performance. Complex expressions may fall back to in-memory evaluation.
  *
  * @generated from message thru.services.v1.ListTransactionsForAccountRequest
  */
 export type ListTransactionsForAccountRequest = Message<"thru.services.v1.ListTransactionsForAccountRequest"> & {
   /**
-   * @generated from field: thru.core.v1.Pubkey account = 1;
+   * @generated from field: thru.common.v1.Pubkey account = 1;
    */
   account?: Pubkey;
 
@@ -441,13 +803,16 @@ export const ListTransactionsForAccountRequestSchema: GenMessage<ListTransaction
   messageDesc(file_thru_services_v1_query_service, 12);
 
 /**
- * ListTransactionsForAccountResponse contains transaction signatures.
+ * ListTransactionsForAccountResponse contains transaction data.
+ *
+ * The `signatures` field is provided for backward compatibility. New clients
+ * should use the `transactions` field which contains full transaction details.
  *
  * @generated from message thru.services.v1.ListTransactionsForAccountResponse
  */
 export type ListTransactionsForAccountResponse = Message<"thru.services.v1.ListTransactionsForAccountResponse"> & {
   /**
-   * @generated from field: repeated thru.core.v1.Signature signatures = 1;
+   * @generated from field: repeated thru.common.v1.Signature signatures = 1;
    */
   signatures: Signature[];
 
@@ -455,6 +820,11 @@ export type ListTransactionsForAccountResponse = Message<"thru.services.v1.ListT
    * @generated from field: optional thru.common.v1.PageResponse page = 2;
    */
   page?: PageResponse;
+
+  /**
+   * @generated from field: repeated thru.core.v1.Transaction transactions = 3;
+   */
+  transactions: Transaction[];
 };
 
 /**
@@ -534,12 +904,12 @@ export type Event = Message<"thru.services.v1.Event"> & {
   eventId: string;
 
   /**
-   * @generated from field: thru.core.v1.Signature transaction_signature = 2;
+   * @generated from field: thru.common.v1.Signature transaction_signature = 2;
    */
   transactionSignature?: Signature;
 
   /**
-   * @generated from field: optional thru.core.v1.Pubkey program = 3;
+   * @generated from field: optional thru.common.v1.Pubkey program = 3;
    */
   program?: Pubkey;
 
@@ -567,6 +937,16 @@ export type Event = Message<"thru.services.v1.Event"> & {
    * @generated from field: optional uint32 payload_size = 8;
    */
   payloadSize?: number;
+
+  /**
+   * @generated from field: optional uint32 block_offset = 9;
+   */
+  blockOffset?: number;
+
+  /**
+   * @generated from field: optional google.protobuf.Timestamp timestamp = 10;
+   */
+  timestamp?: Timestamp;
 };
 
 /**
@@ -577,13 +957,388 @@ export const EventSchema: GenMessage<Event> = /*@__PURE__*/
   messageDesc(file_thru_services_v1_query_service, 17);
 
 /**
+ * ListEventsRequest lists events with CEL filtering and pagination.
+ *
+ * Returns events ordered from most recent to older (slot DESC, block_offset DESC, call_idx DESC).
+ * Supports filtering on event metadata and payload using CEL expressions with specialized byte functions.
+ *
+ * Available fields for filtering:
+ *   - event.event_id (string): Unique event identifier (format: "ts{slot}_{block_offset}_{call_idx}")
+ *   - event.transaction_signature.value (bytes): Transaction signature that emitted the event
+ *   - event.slot (uint64): Block slot number where event was emitted
+ *   - event.call_idx (uint32): Instruction call index within transaction
+ *   - event.block_offset (uint32): Transaction's position within the block
+ *   - event.timestamp (google.protobuf.Timestamp): Event emission timestamp
+ *   - event.program.value (bytes): Program public key that emitted the event
+ *   - event.payload (bytes): Event payload data
+ *
+ * Available CEL functions:
+ *   - has(field): Check if optional field exists
+ *   - startsWith(string, prefix): Check if string starts with prefix (string fields only)
+ *   - first1Byte(bytes): Extract first byte as uint8
+ *   - first4Bytes(bytes): Extract first 4 bytes as uint32 (little-endian)
+ *   - first8Bytes(bytes): Extract first 8 bytes as uint64 (little-endian)
+ *   - bytesPrefix(bytes, prefix): Check if bytes start with prefix
+ *   - uint(value): Convert to uint type
+ *   - int(value): Convert to int type
+ *   - string(value): Convert to string type
+ *   - bytes(value): Convert to bytes type
+ *   - double(value): Convert to double type
+ *   - timestamp(value): Convert to timestamp type
+ *   - duration(value): Convert to duration type
+ *
+ * Available filter parameters (accessible via params.* in expressions):
+ *   - params.slot (uint64): Slot number for filtering
+ *   - params.u64 (uint64): Generic uint64 parameter for payload matching
+ *   - params.signature.value (bytes): Transaction signature for filtering
+ *   - params.address.value (bytes): Program address for filtering
+ *   - params.prefix (bytes): Byte prefix for payload filtering
+ *
+ * Filter examples:
+ *
+ * 1. Filter by slot:
+ *      filter.expression = "event.slot > uint(1000)"
+ *      filter.expression = "event.slot >= uint(100) && event.slot <= uint(200)"
+ *
+ * 2. Filter by slot using parameter:
+ *      filter.expression = "event.slot >= params.slot"
+ *      filter.params["slot"].int_value = 1234
+ *
+ * 3. Filter by call index:
+ *      filter.expression = "event.call_idx == uint(0)"  // First instruction
+ *      filter.expression = "event.call_idx > uint(0)"   // Nested instructions
+ *
+ * 4. Filter by block offset:
+ *      filter.expression = "event.block_offset >= uint(0)"
+ *      filter.expression = "event.block_offset == uint(5)"
+ *
+ * 5. Filter by transaction signature (using parameter):
+ *      filter.expression = "event.transaction_signature.value == params.signature"
+ *      filter.params["signature"].signature_value.value = <64-byte signature>
+ *
+ * 6. Filter by program address (using parameter):
+ *      filter.expression = "has(event.program) && event.program.value == params.address"
+ *      filter.params["address"].pubkey_value.value = <32-byte program pubkey>
+ *
+ * 7. Filter by event ID prefix using startsWith:
+ *      filter.expression = "event.event_id.startsWith(\"ts\")"
+ *      filter.expression = "event.event_id.startsWith(\"ts1000_\")"
+ *
+ * 8. Check for payload existence:
+ *      filter.expression = "has(event.payload)"
+ *
+ * 9. Check for program existence:
+ *      filter.expression = "has(event.program)"
+ *
+ * 10. Filter by payload first byte (event type):
+ *      filter.expression = "has(event.payload) && first1Byte(event.payload) == uint(1)"  // MESSAGE events
+ *      filter.expression = "has(event.payload) && first1Byte(event.payload) == uint(2)"  // Other type
+ *
+ * 11. Filter by payload first 4 bytes (uint32 event type):
+ *      filter.expression = "has(event.payload) && first4Bytes(event.payload) == uint(2)"  // COUNTER events
+ *      filter.expression = "has(event.payload) && first4Bytes(event.payload) == params.u64"
+ *      filter.params["u64"].int_value = 2
+ *
+ * 12. Filter by payload first 8 bytes (uint64 event type):
+ *      filter.expression = "has(event.payload) && first8Bytes(event.payload) == uint(6)"  // PATTERN events
+ *      filter.expression = "has(event.payload) && first8Bytes(event.payload) == params.u64"
+ *      filter.params["u64"].int_value = 6
+ *
+ * 13. Filter by payload byte prefix:
+ *      filter.expression = "bytesPrefix(event.payload, params.prefix)"
+ *      filter.params["prefix"].bytes_value = <byte prefix to match>
+ *
+ * 14. Combine slot and call_idx filters:
+ *      filter.expression = "event.slot > uint(1000) && event.call_idx == uint(0)"
+ *
+ * 15. Combine slot, call_idx, and payload existence:
+ *      filter.expression = "event.slot > uint(1000) && event.call_idx == uint(0) && has(event.payload)"
+ *
+ * 16. Filter by program and payload type:
+ *      filter.expression = "has(event.program) && event.program.value == params.address && first1Byte(event.payload) == uint(1)"
+ *      filter.params["address"].pubkey_value.value = <32-byte program pubkey>
+ *
+ * 17. Filter MESSAGE events (type 1) with specific program:
+ *      filter.expression = "has(event.payload) && first1Byte(event.payload) == uint(1) && event.program.value == params.address"
+ *      filter.params["address"].pubkey_value.value = <32-byte program pubkey>
+ *
+ * 18. Filter COUNTER events (type 2) in slot range:
+ *      filter.expression = "has(event.payload) && first4Bytes(event.payload) == uint(2) && event.slot >= uint(100) && event.slot <= uint(200)"
+ *
+ * 19. Filter PATTERN events (type 6) with payload prefix:
+ *      filter.expression = "has(event.payload) && first8Bytes(event.payload) == uint(6) && bytesPrefix(event.payload, params.prefix)"
+ *      filter.params["prefix"].bytes_value = <pattern prefix bytes>
+ *
+ * 20. Complex combined filter:
+ *      filter.expression = "(event.slot > uint(1000) && event.call_idx == uint(0)) || first1Byte(event.payload) == uint(1)"
+ *
+ * 21. Filter events from specific transaction:
+ *      filter.expression = "event.transaction_signature.value == params.signature && has(event.payload)"
+ *      filter.params["signature"].signature_value.value = <64-byte signature>
+ *
+ * 22. Filter by multiple payload type options:
+ *      filter.expression = "has(event.payload) && (first1Byte(event.payload) == uint(1) || first1Byte(event.payload) == uint(2))"
+ *
+ * 23. Filter nested instruction events:
+ *      filter.expression = "event.call_idx > uint(0) && has(event.program)"
+ *
+ * 24. Filter first instruction events only:
+ *      filter.expression = "event.call_idx == uint(0)"
+ *
+ * 25. Filter events with payload longer than specific size (using bytesPrefix with empty prefix):
+ *      filter.expression = "has(event.payload)"
+ *
+ * 26. Combine has() checks:
+ *      filter.expression = "has(event.program) && has(event.payload) && has(event.timestamp)"
+ *
+ * 27. Use inequality operators:
+ *      filter.expression = "event.slot < uint(10000)"
+ *      filter.expression = "event.slot <= uint(10000)"
+ *      filter.expression = "event.call_idx >= uint(0)"
+ *      filter.expression = "event.block_offset != uint(0)"
+ *
+ * 28. Filter by timestamp (if available):
+ *      filter.expression = "has(event.timestamp)"
+ *
+ * 29. Match specific event ID pattern:
+ *      filter.expression = "event.event_id.startsWith(\"ts1234_0_\")"
+ *
+ * 30. Complex payload and metadata filter:
+ *      filter.expression = "event.slot >= params.slot && has(event.payload) && first8Bytes(event.payload) == params.u64 && event.program.value == params.address"
+ *      filter.params["slot"].int_value = 1000
+ *      filter.params["u64"].int_value = 6
+ *      filter.params["address"].pubkey_value.value = <32-byte program pubkey>
+ *
+ * Note: Filters on slot, call_idx, block_offset, transaction_signature, and program are pushed down to SQL
+ * for optimal performance. Payload filters (first1Byte, first4Bytes, first8Bytes, bytesPrefix) are evaluated
+ * in-memory on fetched results.
+ *
+ * @generated from message thru.services.v1.ListEventsRequest
+ */
+export type ListEventsRequest = Message<"thru.services.v1.ListEventsRequest"> & {
+  /**
+   * CEL filter expression (OPTIONAL). See message documentation for examples.
+   *
+   * @generated from field: optional thru.common.v1.Filter filter = 1;
+   */
+  filter?: Filter;
+
+  /**
+   * @generated from field: optional thru.common.v1.PageRequest page = 2;
+   */
+  page?: PageRequest;
+
+  /**
+   * @generated from field: optional thru.common.v1.VersionContext version_context = 3;
+   */
+  versionContext?: VersionContext;
+
+  /**
+   * @generated from field: optional thru.common.v1.ConsensusStatus min_consensus = 4;
+   */
+  minConsensus?: ConsensusStatus;
+};
+
+/**
+ * Describes the message thru.services.v1.ListEventsRequest.
+ * Use `create(ListEventsRequestSchema)` to create a new message.
+ */
+export const ListEventsRequestSchema: GenMessage<ListEventsRequest> = /*@__PURE__*/
+  messageDesc(file_thru_services_v1_query_service, 18);
+
+/**
+ * ListEventsResponse returns paginated events.
+ *
+ * @generated from message thru.services.v1.ListEventsResponse
+ */
+export type ListEventsResponse = Message<"thru.services.v1.ListEventsResponse"> & {
+  /**
+   * @generated from field: repeated thru.services.v1.Event events = 1;
+   */
+  events: Event[];
+
+  /**
+   * @generated from field: optional thru.common.v1.PageResponse page = 2;
+   */
+  page?: PageResponse;
+};
+
+/**
+ * Describes the message thru.services.v1.ListEventsResponse.
+ * Use `create(ListEventsResponseSchema)` to create a new message.
+ */
+export const ListEventsResponseSchema: GenMessage<ListEventsResponse> = /*@__PURE__*/
+  messageDesc(file_thru_services_v1_query_service, 19);
+
+/**
+ * ListTransactionsRequest lists executed transactions with CEL filtering and pagination.
+ *
+ * Returns transactions ordered from most recent to older (slot DESC, block_offset DESC).
+ * Supports filtering on transaction metadata and execution results using CEL expressions.
+ *
+ * Available fields for filtering:
+ *   - transaction.slot (uint64): Block slot number where transaction was executed
+ *   - transaction.block_offset (uint32): Transaction's position within the block
+ *   - transaction.signature.value (bytes): Transaction signature
+ *   - transaction.execution_result.vm_error (int32): VM error code (0 = success)
+ *   - transaction.execution_result.user_error_code (uint64): User-defined error code
+ *   - transaction.execution_result.consumed_compute_units (uint64): Compute units consumed
+ *   - transaction.execution_result.consumed_memory_units (uint64): Memory units consumed
+ *   - transaction.execution_result.consumed_state_units (uint64): State units consumed
+ *   - transaction.execution_result.events_count (uint32): Number of events emitted
+ *   - transaction.execution_result.events_size (uint32): Total size of events in bytes
+ *
+ * Available CEL functions:
+ *   - has(field): Check if optional field exists
+ *   - uint(value): Convert to uint type
+ *   - int(value): Convert to int type
+ *
+ * Available filter parameters (accessible via params.* in expressions):
+ *   - params.slot (uint64): Slot number for filtering
+ *   - params.u64 (uint64): Generic uint64 parameter
+ *
+ * Filter examples:
+ *
+ * 1. Filter by slot range:
+ *      filter.expression = "transaction.slot >= uint(1000) && transaction.slot <= uint(2000)"
+ *
+ * 2. Filter by successful transactions (no error):
+ *      filter.expression = "transaction.execution_result.user_error_code == uint(0)"
+ *      filter.expression = "transaction.execution_result.vm_error == int(0)"
+ *
+ * 3. Filter by specific VM error:
+ *      filter.expression = "transaction.execution_result.vm_error == int(2)"  // VM_REVERT
+ *      filter.expression = "transaction.execution_result.vm_error == int(4)"  // NONCE_TOO_LOW
+ *      filter.expression = "transaction.execution_result.vm_error == int(5)"  // NONCE_TOO_HIGH
+ *
+ * 4. Filter by resource usage:
+ *      filter.expression = "transaction.execution_result.consumed_compute_units > uint(1000)"
+ *      filter.expression = "transaction.execution_result.consumed_memory_units > uint(0)"
+ *      filter.expression = "transaction.execution_result.consumed_state_units >= uint(0)"
+ *
+ * 5. Filter by compute units range:
+ *      filter.expression = "transaction.execution_result.consumed_compute_units >= uint(0) && transaction.execution_result.consumed_compute_units < uint(1000000)"
+ *
+ * 6. Filter by events count:
+ *      filter.expression = "transaction.execution_result.events_count == uint(0)"  // No events (transfers)
+ *      filter.expression = "transaction.execution_result.events_count > uint(0)"   // Has events
+ *      filter.expression = "transaction.execution_result.events_count == uint(1)"  // Exactly 1 event
+ *
+ * 7. Filter by events size:
+ *      filter.expression = "transaction.execution_result.events_size == uint(0)"  // No events
+ *      filter.expression = "transaction.execution_result.events_size > uint(0)"   // Has events
+ *      filter.expression = "transaction.execution_result.events_size >= uint(100)" // Large events
+ *      filter.expression = "transaction.execution_result.events_size >= uint(50) && transaction.execution_result.events_size <= uint(200)"
+ *
+ * 8. Filter by block offset:
+ *      filter.expression = "transaction.block_offset >= uint(0)"
+ *      filter.expression = "transaction.block_offset == uint(5)"
+ *
+ * 9. Combine multiple conditions with AND:
+ *      filter.expression = "transaction.execution_result.user_error_code == uint(0) && transaction.execution_result.consumed_compute_units > uint(0)"
+ *
+ * 10. Combine multiple conditions with OR:
+ *      filter.expression = "transaction.execution_result.user_error_code == uint(0) || transaction.execution_result.user_error_code != uint(0)"
+ *      filter.expression = "transaction.execution_result.vm_error == int(2) || transaction.execution_result.vm_error == int(4)"
+ *
+ * 11. Complex combined filters:
+ *      filter.expression = "(transaction.slot >= uint(0) && transaction.execution_result.user_error_code == uint(0)) || transaction.execution_result.consumed_compute_units > uint(100000)"
+ *
+ * 12. Check for field existence:
+ *      filter.expression = "has(transaction.execution_result)"
+ *
+ * 13. Use inequality operators:
+ *      filter.expression = "transaction.execution_result.consumed_compute_units < uint(1000000)"
+ *      filter.expression = "transaction.execution_result.consumed_compute_units <= uint(1000000)"
+ *      filter.expression = "transaction.execution_result.consumed_compute_units >= uint(0)"
+ *      filter.expression = "transaction.execution_result.user_error_code != uint(999)"
+ *
+ * 14. Use params.slot parameter:
+ *      filter.expression = "transaction.slot == params.slot"
+ *      filter.params["slot"].uint_value = 1234
+ *
+ * 15. Use params.u64 with type conversion:
+ *      filter.expression = "transaction.execution_result.consumed_compute_units < uint(params.u64)"
+ *      filter.params["u64"].uint_value = 1000000
+ *
+ * The return_events flag controls whether event data is included in the response:
+ *   - return_events = false (default): Only event counts/sizes are returned, not actual event data
+ *   - return_events = true: Full event data is included in execution results
+ *
+ * Note: All filters are pushed down to SQL for optimal performance where possible.
+ *
+ * @generated from message thru.services.v1.ListTransactionsRequest
+ */
+export type ListTransactionsRequest = Message<"thru.services.v1.ListTransactionsRequest"> & {
+  /**
+   * CEL filter expression (OPTIONAL). See message documentation for examples.
+   *
+   * @generated from field: optional thru.common.v1.Filter filter = 1;
+   */
+  filter?: Filter;
+
+  /**
+   * @generated from field: optional thru.common.v1.PageRequest page = 2;
+   */
+  page?: PageRequest;
+
+  /**
+   * Whether to include event data in results (default: false)
+   *
+   * @generated from field: optional bool return_events = 3;
+   */
+  returnEvents?: boolean;
+
+  /**
+   * @generated from field: optional thru.common.v1.VersionContext version_context = 4;
+   */
+  versionContext?: VersionContext;
+
+  /**
+   * @generated from field: optional thru.common.v1.ConsensusStatus min_consensus = 5;
+   */
+  minConsensus?: ConsensusStatus;
+};
+
+/**
+ * Describes the message thru.services.v1.ListTransactionsRequest.
+ * Use `create(ListTransactionsRequestSchema)` to create a new message.
+ */
+export const ListTransactionsRequestSchema: GenMessage<ListTransactionsRequest> = /*@__PURE__*/
+  messageDesc(file_thru_services_v1_query_service, 20);
+
+/**
+ * ListTransactionsResponse returns paginated executed transactions.
+ *
+ * @generated from message thru.services.v1.ListTransactionsResponse
+ */
+export type ListTransactionsResponse = Message<"thru.services.v1.ListTransactionsResponse"> & {
+  /**
+   * @generated from field: repeated thru.core.v1.Transaction transactions = 1;
+   */
+  transactions: Transaction[];
+
+  /**
+   * @generated from field: optional thru.common.v1.PageResponse page = 2;
+   */
+  page?: PageResponse;
+};
+
+/**
+ * Describes the message thru.services.v1.ListTransactionsResponse.
+ * Use `create(ListTransactionsResponseSchema)` to create a new message.
+ */
+export const ListTransactionsResponseSchema: GenMessage<ListTransactionsResponse> = /*@__PURE__*/
+  messageDesc(file_thru_services_v1_query_service, 21);
+
+/**
  * GetTransactionStatusRequest fetches execution status for a transaction.
  *
  * @generated from message thru.services.v1.GetTransactionStatusRequest
  */
 export type GetTransactionStatusRequest = Message<"thru.services.v1.GetTransactionStatusRequest"> & {
   /**
-   * @generated from field: thru.core.v1.Signature signature = 1;
+   * @generated from field: thru.common.v1.Signature signature = 1;
    */
   signature?: Signature;
 };
@@ -593,7 +1348,7 @@ export type GetTransactionStatusRequest = Message<"thru.services.v1.GetTransacti
  * Use `create(GetTransactionStatusRequestSchema)` to create a new message.
  */
 export const GetTransactionStatusRequestSchema: GenMessage<GetTransactionStatusRequest> = /*@__PURE__*/
-  messageDesc(file_thru_services_v1_query_service, 18);
+  messageDesc(file_thru_services_v1_query_service, 22);
 
 /**
  * TransactionStatus captures status metadata for a transaction.
@@ -602,7 +1357,7 @@ export const GetTransactionStatusRequestSchema: GenMessage<GetTransactionStatusR
  */
 export type TransactionStatus = Message<"thru.services.v1.TransactionStatus"> & {
   /**
-   * @generated from field: thru.core.v1.Signature signature = 1;
+   * @generated from field: thru.common.v1.Signature signature = 1;
    */
   signature?: Signature;
 
@@ -622,7 +1377,7 @@ export type TransactionStatus = Message<"thru.services.v1.TransactionStatus"> & 
  * Use `create(TransactionStatusSchema)` to create a new message.
  */
 export const TransactionStatusSchema: GenMessage<TransactionStatus> = /*@__PURE__*/
-  messageDesc(file_thru_services_v1_query_service, 19);
+  messageDesc(file_thru_services_v1_query_service, 23);
 
 /**
  *
@@ -637,7 +1392,7 @@ export type GetHeightRequest = Message<"thru.services.v1.GetHeightRequest"> & {
  * Use `create(GetHeightRequestSchema)` to create a new message.
  */
 export const GetHeightRequestSchema: GenMessage<GetHeightRequest> = /*@__PURE__*/
-  messageDesc(file_thru_services_v1_query_service, 20);
+  messageDesc(file_thru_services_v1_query_service, 24);
 
 /**
  * GetHeightResponse
@@ -666,7 +1421,7 @@ export type GetHeightResponse = Message<"thru.services.v1.GetHeightResponse"> & 
  * Use `create(GetHeightResponseSchema)` to create a new message.
  */
 export const GetHeightResponseSchema: GenMessage<GetHeightResponse> = /*@__PURE__*/
-  messageDesc(file_thru_services_v1_query_service, 21);
+  messageDesc(file_thru_services_v1_query_service, 25);
 
 /**
  * QueryService defines unary RPCs for accessing blockchain data.
@@ -783,6 +1538,26 @@ export const QueryService: GenService<{
     methodKind: "unary";
     input: typeof GetEventRequestSchema;
     output: typeof EventSchema;
+  },
+  /**
+   * List events with CEL filtering and pagination. Returns events ordered from most recent to older.
+   *
+   * @generated from rpc thru.services.v1.QueryService.ListEvents
+   */
+  listEvents: {
+    methodKind: "unary";
+    input: typeof ListEventsRequestSchema;
+    output: typeof ListEventsResponseSchema;
+  },
+  /**
+   * List executed transactions with CEL filtering and pagination. Returns transactions ordered from most recent to older.
+   *
+   * @generated from rpc thru.services.v1.QueryService.ListTransactions
+   */
+  listTransactions: {
+    methodKind: "unary";
+    input: typeof ListTransactionsRequestSchema;
+    output: typeof ListTransactionsResponseSchema;
   },
   /**
    * Get derived transaction status metadata.

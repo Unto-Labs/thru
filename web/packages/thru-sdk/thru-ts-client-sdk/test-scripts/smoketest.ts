@@ -373,13 +373,13 @@ async function main(): Promise<void> {
 
     const accountList = sampleAccountAddress
         ? await runStep("List accounts for owner", async () => {
-              const ownerBytes = sdk.helpers.decodeAddress(sampleAccountAddress!);
-              const filter = new Filter({
-                  expression: "meta.owner.value == params.owner_bytes",
-                  params: {
-                      owner_bytes: FilterParamValue.bytes(ownerBytes),
-                  },
-              });
+             const ownerBytes = sdk.helpers.decodeAddress(sampleAccountAddress!);
+             const filter = new Filter({
+                 expression: "account.meta.owner.value == params.owner_bytes",
+                 params: {
+                     owner_bytes: FilterParamValue.bytes(ownerBytes),
+                 },
+             });
               const response = await sdk.accounts.list({
                   filter,
                   page: new PageRequest({ pageSize: 3 }),

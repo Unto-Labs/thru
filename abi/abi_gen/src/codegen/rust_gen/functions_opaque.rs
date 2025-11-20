@@ -397,6 +397,14 @@ pub fn emit_opaque_functions(resolved_type: &ResolvedType) -> String {
                     }
                 }
             }
+
+            // Add tag parameters for size-discriminated union fields
+            for field in fields {
+                if matches!(&field.field_type.kind, ResolvedTypeKind::SizeDiscriminatedUnion { .. }) {
+                    write!(output, ", {}_tag: u8", field.name).unwrap();
+                }
+            }
+
             write!(output, ") -> Result<usize, &'static str> {{\n").unwrap();
 
             // Calculate required size by summing all field sizes
@@ -428,6 +436,17 @@ pub fn emit_opaque_functions(resolved_type: &ResolvedType) -> String {
                         write!(output, "            _ => return Err(\"Invalid enum tag\"),\n").unwrap();
                         write!(output, "        }};\n").unwrap();
                         write!(output, "        required_size += {}_size;\n\n", field.name).unwrap();
+                    }
+                    ResolvedTypeKind::SizeDiscriminatedUnion { variants } => {
+                        // Size-discriminated union: size is determined from tag parameter
+                        let tag_param = format!("{}_tag", field.name);
+                        write!(output, "        let {}_size = match {} {{\n", field.name, tag_param).unwrap();
+                        for (idx, variant) in variants.iter().enumerate() {
+                            write!(output, "            {} => {},\n", idx, variant.expected_size).unwrap();
+                        }
+                        write!(output, "            _ => return Err(\"Invalid tag for size-discriminated union '{}'\"),\n", field.name).unwrap();
+                        write!(output, "        }};\n").unwrap();
+                        write!(output, "        required_size += {}_size; // {} (size-discriminated union)\n", field.name, field.name).unwrap();
                     }
                     ResolvedTypeKind::Array { element_type, size_expression, .. } => {
                         // Add array size
@@ -515,6 +534,17 @@ pub fn emit_opaque_functions(resolved_type: &ResolvedType) -> String {
                     ResolvedTypeKind::Enum { .. } => {
                         // Enums are set via setters after new() - skip the variable-sized space
                         write!(output, "        offset += {}_size; // skip enum '{}' (set via setters)\n\n", field.name, field.name).unwrap();
+                    }
+                    ResolvedTypeKind::SizeDiscriminatedUnion { variants } => {
+                        // Size-discriminated unions have variable size - calculate size from tag
+                        let tag_param = format!("{}_tag", field.name);
+                        write!(output, "        let {}_size = match {} {{\n", field.name, tag_param).unwrap();
+                        for (idx, variant) in variants.iter().enumerate() {
+                            write!(output, "            {} => {},\n", idx, variant.expected_size).unwrap();
+                        }
+                        write!(output, "            _ => return Err(\"Invalid tag for size-discriminated union '{}'\"),\n", field.name).unwrap();
+                        write!(output, "        }};\n").unwrap();
+                        write!(output, "        offset += {}_size; // skip size-discriminated union '{}' (set via setters)\n\n", field.name, field.name).unwrap();
                     }
                     ResolvedTypeKind::Array { element_type, size_expression, .. } => {
                         // Skip array (set via setters after new())
@@ -723,6 +753,109 @@ pub fn emit_opaque_functions(resolved_type: &ResolvedType) -> String {
                         write!(output, "        &self.data[offset..offset + size]\n").unwrap();
                         write!(output, "    }}\n\n").unwrap();
                     }
+                    ResolvedTypeKind::SizeDiscriminatedUnion { variants } => {
+                        // Generate tag function for size-discriminated union
+                        let type_name_snake = field.name.replace("-", "_");
+                        write!(output, "    pub fn {}_tag(&self) -> u8 {{\n", type_name_snake).unwrap();
+                        
+                        // Calculate offset to size-discriminated union
+                        if field_idx == 0 {
+                            write!(output, "        let offset = 0;\n").unwrap();
+                        } else {
+                            write!(output, "        let mut offset = 0;\n").unwrap();
+                            for prev_field in &fields[0..field_idx] {
+                                match &prev_field.field_type.kind {
+                                    ResolvedTypeKind::Primitive { prim_type: prev_prim } => {
+                                        let size = primitive_size(prev_prim);
+                                        write!(output, "        offset += {}; // {}\n", size, prev_field.name).unwrap();
+                                    }
+                                    ResolvedTypeKind::Enum { .. } => {
+                                        write!(output, "        offset += self.{}_size(); // {} (variable size)\n", prev_field.name, prev_field.name).unwrap();
+                                    }
+                                    ResolvedTypeKind::SizeDiscriminatedUnion { .. } => {
+                                        write!(output, "        offset += self.{}_size(); // {} (variable size)\n", prev_field.name, prev_field.name).unwrap();
+                                    }
+                                    ResolvedTypeKind::Array { .. } => {
+                                        if let crate::abi::resolved::Size::Const(size) = prev_field.field_type.size {
+                                            write!(output, "        offset += {}; // {} (array)\n", size, prev_field.name).unwrap();
+                                        }
+                                    }
+                                    ResolvedTypeKind::TypeRef { .. } => {
+                                        if let crate::abi::resolved::Size::Const(size) = prev_field.field_type.size {
+                                            write!(output, "        offset += {}; // {} (nested struct)\n", size, prev_field.name).unwrap();
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+                        
+                        // Calculate available size and match against variants
+                        write!(output, "        let available_size = self.data.len() - offset;\n").unwrap();
+                        write!(output, "        match available_size {{\n").unwrap();
+                        for (idx, variant) in variants.iter().enumerate() {
+                            write!(output, "            {} => {},\n", variant.expected_size, idx).unwrap();
+                        }
+                        write!(output, "            _ => 255, // Invalid size - no matching variant\n").unwrap();
+                        write!(output, "        }}\n").unwrap();
+                        write!(output, "    }}\n\n").unwrap();
+
+                        // Generate size helper function
+                        write!(output, "    pub fn {}_size(&self) -> usize {{\n", type_name_snake).unwrap();
+                        write!(output, "        let tag = self.{}_tag();\n", type_name_snake).unwrap();
+                        write!(output, "        match tag {{\n").unwrap();
+                        for (idx, variant) in variants.iter().enumerate() {
+                            write!(output, "            {} => {},\n", idx, variant.expected_size).unwrap();
+                        }
+                        write!(output, "            _ => 0, // Invalid tag\n").unwrap();
+                        write!(output, "        }}\n").unwrap();
+                        write!(output, "    }}\n\n").unwrap();
+
+                        // Generate variant-specific getters for each variant (like enums)
+                        for variant in variants {
+                            let variant_name_snake = variant.name.to_lowercase().replace("-", "_");
+                            // Type name format matches collect_nested_type_definitions: {parent}_{field}_inner_{variant}_inner
+                            // But for opaque wrappers, it's just {parent}_{field}_{variant}
+                            let variant_type_name = format!("{}_{}_{}", type_name, field.name, variant.name);
+                            
+                            write!(output, "    pub fn {}_{}(&self) -> {}<'_> {{\n", field.name, variant_name_snake, variant_type_name).unwrap();
+                            
+                            // Calculate offset to size-discriminated union
+                            if field_idx == 0 {
+                                write!(output, "        let offset = 0;\n").unwrap();
+                            } else {
+                                write!(output, "        let mut offset = 0;\n").unwrap();
+                                for prev_field in &fields[0..field_idx] {
+                                    match &prev_field.field_type.kind {
+                                        ResolvedTypeKind::Primitive { prim_type: prev_prim } => {
+                                            let size = primitive_size(prev_prim);
+                                            write!(output, "        offset += {}; // {}\n", size, prev_field.name).unwrap();
+                                        }
+                                        ResolvedTypeKind::Enum { .. } => {
+                                            write!(output, "        offset += self.{}_size(); // {} (variable size)\n", prev_field.name, prev_field.name).unwrap();
+                                        }
+                                        ResolvedTypeKind::SizeDiscriminatedUnion { .. } => {
+                                            write!(output, "        offset += self.{}_size(); // {} (variable size)\n", prev_field.name, prev_field.name).unwrap();
+                                        }
+                                        ResolvedTypeKind::Array { .. } => {
+                                            if let crate::abi::resolved::Size::Const(size) = prev_field.field_type.size {
+                                                write!(output, "        offset += {}; // {} (array)\n", size, prev_field.name).unwrap();
+                                            }
+                                        }
+                                        ResolvedTypeKind::TypeRef { .. } => {
+                                            if let crate::abi::resolved::Size::Const(size) = prev_field.field_type.size {
+                                                write!(output, "        offset += {}; // {} (nested struct)\n", size, prev_field.name).unwrap();
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                            }
+                            
+                            write!(output, "        {} {{ data: &self.data[offset..offset + {}] }}\n", variant_type_name, variant.expected_size).unwrap();
+                            write!(output, "    }}\n\n").unwrap();
+                        }
+                    }
                     ResolvedTypeKind::Array { element_type, size_constant_status, .. } => {
                         // For arrays, return a slice
                         use crate::abi::resolved::ConstantStatus;
@@ -755,6 +888,9 @@ pub fn emit_opaque_functions(resolved_type: &ResolvedType) -> String {
                                                 write!(output, "        offset += {}; // {}\n", size, prev_field.name).unwrap();
                                             }
                                             ResolvedTypeKind::Enum { .. } => {
+                                                write!(output, "        offset += self.{}_size(); // {} (variable size)\n", prev_field.name, prev_field.name).unwrap();
+                                            }
+                                            ResolvedTypeKind::SizeDiscriminatedUnion { .. } => {
                                                 write!(output, "        offset += self.{}_size(); // {} (variable size)\n", prev_field.name, prev_field.name).unwrap();
                                             }
                                             ResolvedTypeKind::Array { .. } => {
@@ -1231,6 +1367,21 @@ pub fn emit_opaque_functions(resolved_type: &ResolvedType) -> String {
                         write!(output, "        }}\n").unwrap();
                         write!(output, "        offset += variant_size; // enum body\n\n").unwrap();
                     }
+                    ResolvedTypeKind::SizeDiscriminatedUnion { variants } => {
+                        // Size-discriminated union: determine variant based on available size
+                        write!(output, "        let available_size = data.len() - offset;\n").unwrap();
+                        write!(output, "        let variant_size = match available_size {{\n").unwrap();
+                        for variant in variants {
+                            write!(output, "            {} => {},\n", variant.expected_size, variant.expected_size).unwrap();
+                        }
+                        write!(output, "            _ => return Err(\"No matching variant for size-discriminated union '{}'\"),\n", field.name).unwrap();
+                        write!(output, "        }};\n\n").unwrap();
+
+                        write!(output, "        if offset + variant_size > data.len() {{\n").unwrap();
+                        write!(output, "            return Err(\"Buffer too small for size-discriminated union '{}'\");\n", field.name).unwrap();
+                        write!(output, "        }}\n").unwrap();
+                        write!(output, "        offset += variant_size; // size-discriminated union\n\n").unwrap();
+                    }
                     ResolvedTypeKind::Array { .. } => {
                         // Validate array field size
                         if let crate::abi::resolved::Size::Const(size) = field.field_type.size {
@@ -1703,6 +1854,9 @@ pub fn emit_opaque_functions(resolved_type: &ResolvedType) -> String {
                                     ResolvedTypeKind::Enum { .. } => {
                                         write!(output, "        offset += ({{ let temp = {} {{ data: &self.data }}; temp.{}_size() }}); // {} (variable size)\n", type_name, prev_field.name, prev_field.name).unwrap();
                                     }
+                                    ResolvedTypeKind::SizeDiscriminatedUnion { .. } => {
+                                        write!(output, "        offset += ({{ let temp = {} {{ data: &self.data }}; temp.{}_size() }}); // {} (variable size)\n", type_name, prev_field.name, prev_field.name).unwrap();
+                                    }
                                     ResolvedTypeKind::Array { element_type, size_expression, .. } => {
                                         if let crate::abi::resolved::Size::Const(size) = prev_field.field_type.size {
                                             write!(output, "        offset += {}; // {} (array)\n", size, prev_field.name).unwrap();
@@ -1725,9 +1879,64 @@ pub fn emit_opaque_functions(resolved_type: &ResolvedType) -> String {
                             }
                         }
 
-                        write!(output, "        self.data[offset..offset + body.len()].copy_from_slice(body);\n").unwrap();
+                        write!(output, "        self.data[offset..offset + expected_size].copy_from_slice(body);\n").unwrap();
                         write!(output, "        Ok(())\n").unwrap();
                         write!(output, "    }}\n\n").unwrap();
+                    }
+                    ResolvedTypeKind::SizeDiscriminatedUnion { variants } => {
+                        // Generate variant-specific setters for each variant (like enums)
+                        for variant in variants {
+                            let variant_name_snake = variant.name.to_lowercase().replace("-", "_");
+                            // Type name format matches collect_nested_type_definitions: {parent}_{field}_inner_{variant}_inner
+                            // But for opaque wrappers, it's just {parent}_{field}_{variant}
+                            let variant_type_name = format!("{}_{}_{}", type_name, field.name, variant.name);
+                            
+                            write!(output, "    pub fn {}_set_{}(&mut self, value: &{}<'_>) -> Result<(), &'static str> {{\n", 
+                                   field.name, variant_name_snake, variant_type_name).unwrap();
+
+                            // Calculate offset to size-discriminated union body
+                            if field_idx == 0 {
+                                write!(output, "        let offset = 0;\n").unwrap();
+                            } else {
+                                write!(output, "        let mut offset = 0;\n").unwrap();
+                                for prev_field in &fields[0..field_idx] {
+                                    match &prev_field.field_type.kind {
+                                        ResolvedTypeKind::Primitive { prim_type: prev_prim } => {
+                                            let size = primitive_size(prev_prim);
+                                            write!(output, "        offset += {}; // {}\n", size, prev_field.name).unwrap();
+                                        }
+                                        ResolvedTypeKind::Enum { .. } => {
+                                            write!(output, "        offset += ({{ let temp = {} {{ data: &self.data }}; temp.{}_size() }}); // {} (variable size)\n", type_name, prev_field.name, prev_field.name).unwrap();
+                                        }
+                                        ResolvedTypeKind::SizeDiscriminatedUnion { .. } => {
+                                            write!(output, "        offset += ({{ let temp = {} {{ data: &self.data }}; temp.{}_size() }}); // {} (variable size)\n", type_name, prev_field.name, prev_field.name).unwrap();
+                                        }
+                                        ResolvedTypeKind::Array { element_type, size_expression, .. } => {
+                                            if let crate::abi::resolved::Size::Const(size) = prev_field.field_type.size {
+                                                write!(output, "        offset += {}; // {} (array)\n", size, prev_field.name).unwrap();
+                                            } else {
+                                                // Variable-size array - calculate size using inline field access
+                                                if let crate::abi::resolved::Size::Const(elem_size) = element_type.size {
+                                                    let size_expr = size_expression_to_rust_getter_code(size_expression, "self");
+                                                    write!(output, "        offset += (({}) as usize) * {}; // {} (variable array)\n",
+                                                           size_expr, elem_size, prev_field.name).unwrap();
+                                                }
+                                            }
+                                        }
+                                        ResolvedTypeKind::TypeRef { .. } => {
+                                            if let crate::abi::resolved::Size::Const(size) = prev_field.field_type.size {
+                                                write!(output, "        offset += {}; // {} (nested struct)\n", size, prev_field.name).unwrap();
+                                            }
+                                        }
+                                        _ => {}
+                                    }
+                                }
+                            }
+
+                            write!(output, "        self.data[offset..offset + {}].copy_from_slice(&value.data);\n", variant.expected_size).unwrap();
+                            write!(output, "        Ok(())\n").unwrap();
+                            write!(output, "    }}\n\n").unwrap();
+                        }
                     }
                     ResolvedTypeKind::Array { element_type, size_constant_status, .. } => {
                         // Generate array element setter

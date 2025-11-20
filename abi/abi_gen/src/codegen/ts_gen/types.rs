@@ -182,6 +182,19 @@ fn emit_struct_class(
     }
   }
 
+  /* Emit property-style getters and setters for each field */
+  after_fam = false;
+
+  for field in fields {
+    if matches!(field.field_type.size, Size::Variable(..)) {
+      after_fam = true;
+    }
+
+    if !after_fam {
+      emit_struct_field_property_accessors(class_name, &field.name, &field.field_type, output);
+    }
+  }
+
   write!(output, "}}\n\n").unwrap();
 }
 
@@ -438,6 +451,102 @@ fn emit_struct_field_setter(
     }
     _ => {
       /* Other complex types - skip setters for now */
+    }
+  }
+}
+
+/* Emit property-style getters and setters for a struct field */
+fn emit_struct_field_property_accessors(
+  _struct_name: &str,
+  field_name: &str,
+  field_type: &ResolvedType,
+  output: &mut String,
+) {
+  let escaped_name = escape_ts_keyword(field_name);
+
+  match &field_type.kind {
+    ResolvedTypeKind::Primitive { prim_type } => {
+      let ts_type = primitive_to_ts_return_type(prim_type);
+
+      /* Emit property getter */
+      write!(output, "  get {}(): {} {{\n", escaped_name, ts_type).unwrap();
+      write!(output, "    return this.get_{}();\n", escaped_name).unwrap();
+      write!(output, "  }}\n\n").unwrap();
+
+      /* Emit property setter */
+      write!(output, "  set {}(value: {}) {{\n", escaped_name, ts_type).unwrap();
+      write!(output, "    this.set_{}(value);\n", escaped_name).unwrap();
+      write!(output, "  }}\n\n").unwrap();
+    }
+    ResolvedTypeKind::Array { element_type, size_expression, .. } => {
+      if size_expression.is_constant() {
+        /* Fixed-size array */
+        if let ResolvedTypeKind::Primitive { prim_type } = &element_type.kind {
+          let ts_type = primitive_to_ts_return_type(prim_type);
+
+          /* Emit property getter */
+          write!(output, "  get {}(): {}[] {{\n", escaped_name, ts_type).unwrap();
+          write!(output, "    return this.get_{}();\n", escaped_name).unwrap();
+          write!(output, "  }}\n\n").unwrap();
+
+          /* Emit property setter */
+          write!(output, "  set {}(value: {}[]) {{\n", escaped_name, ts_type).unwrap();
+          write!(output, "    this.set_{}(value);\n", escaped_name).unwrap();
+          write!(output, "  }}\n\n").unwrap();
+        } else if let ResolvedTypeKind::TypeRef { target_name, .. } = &element_type.kind {
+          /* Array of structs */
+          /* Emit property getter */
+          write!(output, "  get {}(): {}[] {{\n", escaped_name, target_name).unwrap();
+          write!(output, "    return this.get_{}();\n", escaped_name).unwrap();
+          write!(output, "  }}\n\n").unwrap();
+
+          /* Emit property setter */
+          write!(output, "  set {}(value: {}[]) {{\n", escaped_name, target_name).unwrap();
+          write!(output, "    this.set_{}(value);\n", escaped_name).unwrap();
+          write!(output, "  }}\n\n").unwrap();
+        }
+      } else {
+        /* Variable-size array (FAM) - emit property accessors */
+        if let ResolvedTypeKind::Primitive { prim_type } = &element_type.kind {
+          let ts_type = primitive_to_ts_return_type(prim_type);
+
+          /* Emit property getter */
+          write!(output, "  get {}(): {}[] {{\n", escaped_name, ts_type).unwrap();
+          write!(output, "    return this.get_{}();\n", escaped_name).unwrap();
+          write!(output, "  }}\n\n").unwrap();
+
+          /* Emit property setter */
+          write!(output, "  set {}(value: {}[]) {{\n", escaped_name, ts_type).unwrap();
+          write!(output, "    this.set_{}(value);\n", escaped_name).unwrap();
+          write!(output, "  }}\n\n").unwrap();
+        } else if let ResolvedTypeKind::TypeRef { target_name, .. } = &element_type.kind {
+          /* Variable-size array of structs */
+          /* Emit property getter */
+          write!(output, "  get {}(): {}[] {{\n", escaped_name, target_name).unwrap();
+          write!(output, "    return this.get_{}();\n", escaped_name).unwrap();
+          write!(output, "  }}\n\n").unwrap();
+
+          /* Emit property setter */
+          write!(output, "  set {}(value: {}[]) {{\n", escaped_name, target_name).unwrap();
+          write!(output, "    this.set_{}(value);\n", escaped_name).unwrap();
+          write!(output, "  }}\n\n").unwrap();
+        }
+      }
+    }
+    ResolvedTypeKind::TypeRef { target_name, .. } => {
+      /* Nested struct */
+      /* Emit property getter */
+      write!(output, "  get {}(): {} {{\n", escaped_name, target_name).unwrap();
+      write!(output, "    return this.get_{}();\n", escaped_name).unwrap();
+      write!(output, "  }}\n\n").unwrap();
+
+      /* Emit property setter */
+      write!(output, "  set {}(value: {}) {{\n", escaped_name, target_name).unwrap();
+      write!(output, "    this.set_{}(value);\n", escaped_name).unwrap();
+      write!(output, "  }}\n\n").unwrap();
+    }
+    _ => {
+      /* Other complex types - skip property accessors for now */
     }
   }
 }

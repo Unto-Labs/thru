@@ -3,3 +3,4 @@ packages:
   - 'wallet'
   - 'test-dapp'
   - 'explorer'
+  - 'mint'

@@ -51,7 +51,7 @@ THRU_CLI_BIN="${THRU_CLI_BIN:-$THRU_CLI_BIN_DEFAULT}"
 readonly THRU_CLI_BIN_DEFAULT THRU_CLI_BIN
 
 EVENT_PROGRAM_BIN="$REPO_ROOT/build/thruvm/bin/tn_event_emission_program_c.bin"
-EVENT_PROGRAM_MANAGER="taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMD"
+EVENT_PROGRAM_MANAGER="taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQE"
 readonly EVENT_PROGRAM_BIN
 readonly EVENT_PROGRAM_MANAGER
 
@@ -345,8 +345,8 @@ keys:
   joe: "2222222222222222222222222222222222222222222222222222222222222222"
   alice: "3333333333333333333333333333333333333333333333333333333333333333"
   bob: "4444444444444444444444444444444444444444444444444444444444444444"
-uploader_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEB"
-manager_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMD"
+uploader_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIC"
+manager_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQE"
 token_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKqq"
 timeout_seconds: 120
 max_retries: 5
@@ -520,6 +520,24 @@ scenario_txn() {
   local account_pubkey
   account_pubkey=$(printf '%s' "$proof_json" | jq -er '.makeStateProof.account')
   [[ -n "$account_pubkey" ]] || die "State proof account missing"
+
+  local test_transfer_json
+  test_transfer_json=$(run_cli_json "transfer for txn get test" transfer red_queen alice 1)
+  assert_jq_eq "$test_transfer_json" '.transfer.status' 'success'
+
+  local test_signature
+  test_signature=$(printf '%s' "$test_transfer_json" | jq -er '.transfer.signature')
+  [[ -n "$test_signature" ]] || die "Transfer signature missing"
+
+  local txn_get_json
+  txn_get_json=$(run_cli_json_retry "txn get" txn get "$test_signature")
+  assert_jq_eq "$txn_get_json" '.transaction_get.status' 'success'
+
+  local retrieved_signature
+  retrieved_signature=$(printf '%s' "$txn_get_json" | jq -er '.transaction_get.signature')
+  [[ "$retrieved_signature" == "$test_signature" ]] || die "Retrieved signature mismatch: expected '$test_signature', got '$retrieved_signature'"
+
+  printf '%s' "$txn_get_json" | jq -e '.transaction_get.execution_result' >/dev/null || die "Missing execution_result in txn get response"
 }
 
 scenario_programs() {

@@ -4,9 +4,12 @@ package thru.services.v1;
 
 import "google/api/annotations.proto";
 import "google/api/client.proto";
+import "thru/common/v1/primitives.proto";
+import "thru/common/v1/consensus.proto";
 import "google/api/field_behavior.proto";
 import "thru/core/v1/transaction.proto";
 import "thru/core/v1/types.proto";
+import "google/protobuf/duration.proto";
 
 option go_package = "github.com/Unto-Labs/thru-net/grpc/pkg/proto/thru/services/v1;servicesv1";
 option java_multiple_files = true;
@@ -24,7 +27,7 @@ message SendTransactionRequest {
 
 // SendTransactionResponse echoes submission metadata.
 message SendTransactionResponse {
-  thru.core.v1.Signature signature = 1 [(google.api.field_behavior) = REQUIRED];
+  thru.common.v1.Signature signature = 1 [(google.api.field_behavior) = REQUIRED];
 }
 
 // BatchSendTransactionsRequest submits multiple transactions to the cluster.
@@ -39,10 +42,47 @@ message BatchSendTransactionsRequest {
 // BatchSendTransactionsResponse returns submission results for each transaction.
 message BatchSendTransactionsResponse {
   // Signatures for each transaction (in same order as request).
-  repeated thru.core.v1.Signature signatures = 1 [(google.api.field_behavior) = REQUIRED];
+  repeated thru.common.v1.Signature signatures = 1 [(google.api.field_behavior) = REQUIRED];
 
   // Acceptance status for each transaction (true if accepted, false if not).
   repeated bool accepted = 2 [(google.api.field_behavior) = REQUIRED];
+}
+
+// SubmissionStatus represents the status of a transaction in the submission pipeline.
+enum SubmissionStatus {
+  // Submission status is unspecified (default value).
+  SUBMISSION_STATUS_UNSPECIFIED = 0;
+
+  // Transaction has been received by the gRPC server.
+  SUBMISSION_STATUS_RECEIVED = 1;
+
+  // Transaction has been accepted by the forwarder via UDS.
+  SUBMISSION_STATUS_ACCEPTED = 2;
+}
+
+// SendAndTrackTxnRequest submits a transaction and tracks its execution.
+message SendAndTrackTxnRequest {
+  // Raw transaction bytes encoded according to chain specification.
+  bytes transaction = 1 [(google.api.field_behavior) = REQUIRED];
+
+  // Optional timeout for tracking the transaction execution.
+  // If not specified, the stream will remain open until the transaction is executed or the client cancels.
+  google.protobuf.Duration timeout = 2;
+}
+
+// SendAndTrackTxnResponse streams transaction status updates.
+message SendAndTrackTxnResponse {
+  // Current submission status of the transaction.
+  SubmissionStatus status = 1 [(google.api.field_behavior) = REQUIRED];
+
+  // Transaction signature (populated for tracking messages).
+  thru.common.v1.Signature signature = 2;
+
+  // Consensus status (populated for tracking messages).
+  thru.common.v1.ConsensusStatus consensus_status = 3;
+
+  // Execution result (populated for tracking messages when execution completes).
+  thru.core.v1.TransactionExecutionResult execution_result = 4;
 }
 
 // CommandService defines transactional RPCs that mutate state or perform
@@ -64,6 +104,17 @@ service CommandService {
       returns (BatchSendTransactionsResponse) {
     option (google.api.http) = {
       post: "/v1/transactions/batch"
+      body: "*"
+    };
+  }
+
+  // Submit a transaction and track its execution status.
+  // Returns a stream of status updates starting with RECEIVED, then ACCEPTED,
+  // followed by consensus and execution updates, closing after the transaction is executed.
+  rpc SendAndTrackTxn(SendAndTrackTxnRequest)
+      returns (stream SendAndTrackTxnResponse) {
+    option (google.api.http) = {
+      post: "/v1/transactions/track"
       body: "*"
     };
   }

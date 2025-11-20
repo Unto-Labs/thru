@@ -1,8 +1,14 @@
 import { create } from "@bufbuild/protobuf";
 import { describe, expect, it } from "vitest";
 
-import { FilterParamValueSchema, FilterSchema } from "../../../proto/thru/common/v1/filters_pb";
 import { Filter, FilterParamValue } from "../";
+import {
+    generateTestAddress,
+    generateTestPubkey,
+    generateTestSignature,
+    generateTestSignatureString,
+} from "../../../__tests__/helpers/test-utils";
+import { FilterParamValueSchema, FilterSchema } from "../../../proto/thru/common/v1/filters_pb";
 
 describe("Filter domain model", () => {
     it("creates a domain filter from proto", () => {
@@ -76,6 +82,32 @@ describe("Filter domain model", () => {
         const cleared = updated.withoutParam("min_slot");
         expect(cleared.hasParam("min_slot")).toBe(false);
         expect(updated.hasParam("min_slot")).toBe(true);
+    });
+
+    it("supports new primitive helpers", () => {
+        const pubkeyBytes = generateTestPubkey();
+        const pubkeyParam = FilterParamValue.pubkey(pubkeyBytes);
+        expect(pubkeyParam.getPubkey()).toEqual(pubkeyBytes);
+        expect(pubkeyParam.toProto().kind.case).toBe("pubkeyValue");
+
+        const signatureBytes = generateTestSignature();
+        const signatureParam = FilterParamValue.signature(signatureBytes);
+        expect(signatureParam.getSignature()).toEqual(signatureBytes);
+        expect(signatureParam.toProto().kind.case).toBe("signatureValue");
+
+        const taAddress = generateTestAddress();
+        const taParam = FilterParamValue.taPubkey(taAddress);
+        expect(taParam.getTaPubkey()).toBe(taAddress);
+        expect(taParam.toProto().kind.case).toBe("taPubkeyValue");
+
+        const tsSignature = generateTestSignatureString();
+        const tsParam = FilterParamValue.tsSignature(tsSignature);
+        expect(tsParam.getTsSignature()).toBe(tsSignature);
+        expect(tsParam.toProto().kind.case).toBe("tsSignatureValue");
+
+        const uintParam = FilterParamValue.uint(42);
+        expect(uintParam.getUint()).toBe(42n);
+        expect(uintParam.toProto().kind.case).toBe("uintValue");
     });
 });
 

@@ -656,7 +656,7 @@ set -e
 
 # Generate TypeScript code
 cargo run -- codegen --files tests/all_features.abi.yaml \
-  --language type-script --output generated-ts
+  --language typescript --output generated-ts
 
 # Compile with strict TypeScript
 cd generated-ts

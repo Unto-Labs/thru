@@ -215,10 +215,14 @@ fn emit_recursive_types(resolved_type: &ResolvedType, output: &mut String) {
 
   /* Then emit this type if it's a struct/union/sdu (not primitive, TypeRef, or Enum) */
   /* Skip enums - they're ghost fields in opaque wrapper approach */
+  /* Skip size-discriminated unions - they're ghost fields in opaque wrapper approach */
   match &resolved_type.kind {
-    ResolvedTypeKind::Struct { .. } | ResolvedTypeKind::Union { .. } | ResolvedTypeKind::SizeDiscriminatedUnion { .. } => {
+    ResolvedTypeKind::Struct { .. } | ResolvedTypeKind::Union { .. } => {
       output.push_str(&emit_single_type(resolved_type));
       output.push('\n');
+    }
+    ResolvedTypeKind::SizeDiscriminatedUnion { .. } => {
+      /* Skip - SDUs are ghost fields, handled via accessor methods only */
     }
     _ => {}
   }

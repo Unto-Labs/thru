@@ -2,6 +2,7 @@ import { create } from "@bufbuild/protobuf";
 
 import { Pubkey } from "@thru/helpers";
 import type { ThruClientContext } from "../core/client";
+import { withCallOptions } from "../core/client";
 import { DEFAULT_ACCOUNT_VIEW, DEFAULT_MIN_CONSENSUS, DEFAULT_VERSION_CONTEXT } from "../defaults";
 import { Account } from "../domain/accounts";
 import { Filter } from "../domain/filters";
@@ -69,7 +70,7 @@ export function getAccount(
         minConsensus: options.minConsensus ?? DEFAULT_MIN_CONSENSUS,
         dataSlice: options.dataSlice,
     });
-    return ctx.query.getAccount(request).then(Account.fromProto);
+    return ctx.query.getAccount(request, withCallOptions(ctx)).then(Account.fromProto);
 }
 
 export function getRawAccount(
@@ -83,7 +84,7 @@ export function getRawAccount(
         versionContext: options.versionContext ?? DEFAULT_VERSION_CONTEXT,
         minConsensus: options.minConsensus ?? DEFAULT_MIN_CONSENSUS,
     });
-    return ctx.query.getRawAccount(request);
+    return ctx.query.getRawAccount(request, withCallOptions(ctx));
 }
 
 export function listAccounts(
@@ -97,7 +98,7 @@ export function listAccounts(
         page: options.page?.toProto(),
         minConsensus: options.minConsensus ?? DEFAULT_MIN_CONSENSUS,
     });
-    return ctx.query.listAccounts(request).then((response: ProtoListAccountsResponse) => ({
+    return ctx.query.listAccounts(request, withCallOptions(ctx)).then((response: ProtoListAccountsResponse) => ({
         accounts: response.accounts.map((proto) => Account.fromProto(proto)),
         page: PageResponse.fromProto(response.page),
     }));

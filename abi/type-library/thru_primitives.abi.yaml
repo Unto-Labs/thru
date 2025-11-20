@@ -1,0 +1,53 @@
+abi:
+  package: "thru.common.primitives"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Basic primitive types for Thru blockchain (signatures, hashes, pubkeys)"
+  imports: []
+
+types:
+  # Hash: 32-byte hash value (SHA-256)
+  - name: "Hash"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "bytes"
+            field-type:
+              array:
+                size:
+                  literal:
+                    u64: 32
+                element-type:
+                  primitive: u8
+
+  # Pubkey: 32-byte public key or account address
+  - name: "Pubkey"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "bytes"
+            field-type:
+              array:
+                size:
+                  literal:
+                    u64: 32
+                element-type:
+                  primitive: u8
+
+  # Signature: 64-byte Ed25519 signature
+  - name: "Signature"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "bytes"
+            field-type:
+              array:
+                size:
+                  literal:
+                    u64: 64
+                element-type:
+                  primitive: u8
+

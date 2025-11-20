@@ -176,31 +176,15 @@ fn collect_nested_type_definitions(
       write!(output, "}}\n\n").unwrap();
     }
     TypeKind::SizeDiscriminatedUnion(sdu_type) => {
-      // First, recursively handle nested types in variants
+      // Generate opaque wrappers for variant structs (if they are structs)
+      // SDUs themselves are ghost fields - no union type needed
       for variant in &sdu_type.variants {
         if is_nested_complex_type(&variant.variant_type) {
           let nested_parent_name = format!("{}_{}_inner", parent_name, field_name);
           collect_nested_type_definitions(&nested_parent_name, &variant.name, &variant.variant_type, parent_attributes, output);
         }
       }
-
-      // Then emit this SDU definition
-      let inner_type_name = format!("{}_{}_inner", parent_name, field_name);
-      let mut union_content = String::new();
-      for variant in &sdu_type.variants {
-        let escaped_name = escape_rust_keyword(&variant.name);
-        let variant_type_str = if is_nested_complex_type(&variant.variant_type) {
-          format!("{}_{}_inner", inner_type_name, variant.name)
-        } else {
-          format_type_to_rust(&variant.variant_type, INDENT_FIELD)
-        };
-        write!(union_content, "    pub {}: {},  // expected size: {}\n", escaped_name, variant_type_str, variant.expected_size).unwrap();
-      }
-
-      write!(output, "{}\n", emit_repr_attributes(parent_attributes)).unwrap();
-      write!(output, "pub union {} {{\n", inner_type_name).unwrap();
-      write!(output, "{}", union_content).unwrap();
-      write!(output, "}}\n\n").unwrap();
+      // No union type generation - SDU is a ghost field handled via accessor methods
     }
     _ => {}
   }
@@ -433,6 +417,13 @@ pub fn emit_type(type_def: &TypeDef) -> String {
           _ => format!("{}", variant.name), // fallback for non-TypeRef variants
         };
         write!(output, "const _: () = assert!(std::mem::size_of::<{}>() == {});\n", type_name, variant.expected_size).unwrap();
+      }
+      write!(output, "\n").unwrap();
+
+      // Add tag constants for each variant (0-indexed)
+      write!(output, "/* TAG CONSTANTS FOR SIZE-DISCRIMINATED UNION: {} */\n", type_def.name.to_uppercase()).unwrap();
+      for (idx, variant) in sdu_type.variants.iter().enumerate() {
+        write!(output, "pub const {}_TAG_{}: u8 = {};\n", type_def.name.to_uppercase(), variant.name.to_uppercase(), idx).unwrap();
       }
       write!(output, "\n").unwrap();
 

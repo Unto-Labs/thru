@@ -1,0 +1,58 @@
+abi:
+  package: "thru.blockchain.account"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Account metadata structures"
+  imports:
+    - "thru_primitives.abi.yaml"
+
+types:
+  # Account metadata structure
+  # This is a packed structure matching tn_account_meta_t
+  - name: "AccountMeta"
+    kind:
+      struct:
+        packed: true
+        fields:
+          # Magic number for validation (0xC7A3)
+          - name: "magic"
+            field-type:
+              primitive: u16
+          # Account version (currently 0x01)
+          - name: "version"
+            field-type:
+              primitive: u8
+          # Account flags (bitfield):
+          #   0x01: PROGRAM - Account is a program
+          #   0x02: PRIVILEGED - Account has privileged permissions
+          #   0x04: UNCOMPRESSABLE - Account cannot be compressed
+          #   0x08: EPHEMERAL - Account is ephemeral
+          #   0x10: DELETED - Account is deleted
+          #   0x20: NEW - Account is newly created
+          #   0x40: COMPRESSED - Account data is compressed
+          - name: "flags"
+            field-type:
+              primitive: u8
+          # Size of account data in bytes (excluding metadata)
+          - name: "data_sz"
+            field-type:
+              primitive: u32
+          # Account sequence number (state counter)
+          - name: "seq"
+            field-type:
+              primitive: u64
+          # Owner program pubkey (32 bytes)
+          - name: "owner"
+            field-type:
+              type-ref:
+                name: "Pubkey"
+                package: "thru.common.primitives"
+          # Account balance in base units
+          - name: "balance"
+            field-type:
+              primitive: u64
+          # Account nonce
+          - name: "nonce"
+            field-type:
+              primitive: u64
+

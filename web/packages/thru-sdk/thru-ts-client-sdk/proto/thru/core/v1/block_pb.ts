@@ -8,9 +8,11 @@ import { file_buf_validate_validate } from "../../../buf/validate/validate_pb";
 import { file_google_api_field_behavior } from "../../../google/api/field_behavior_pb";
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import { file_google_protobuf_timestamp } from "@bufbuild/protobuf/wkt";
+import type { Pubkey, Signature } from "../../common/v1/primitives_pb";
+import { file_thru_common_v1_primitives } from "../../common/v1/primitives_pb";
 import type { ConsensusStatus } from "../../common/v1/consensus_pb";
 import { file_thru_common_v1_consensus } from "../../common/v1/consensus_pb";
-import type { BlockHash, Pubkey, Signature } from "./types_pb";
+import type { BlockHash } from "./types_pb";
 import { file_thru_core_v1_types } from "./types_pb";
 import type { Message } from "@bufbuild/protobuf";
 
@@ -18,7 +20,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file thru/core/v1/block.proto.
  */
 export const file_thru_core_v1_block: GenFile = /*@__PURE__*/
-  fileDesc("Chh0aHJ1L2NvcmUvdjEvYmxvY2sucHJvdG8SDHRocnUuY29yZS52MSKrAwoLQmxvY2tIZWFkZXISEQoEc2xvdBgBIAEoBEID4EECEjAKCmJsb2NrX2hhc2gYAiABKAsyFy50aHJ1LmNvcmUudjEuQmxvY2tIYXNoQgPgQQISNgoQaGVhZGVyX3NpZ25hdHVyZRgDIAEoCzIXLnRocnUuY29yZS52MS5TaWduYXR1cmVCA+BBAhIUCgd2ZXJzaW9uGAQgASgNQgPgQQISKwoIcHJvZHVjZXIYBSABKAsyFC50aHJ1LmNvcmUudjEuUHVia2V5QgPgQQISOQoQZXhwaXJ5X3RpbWVzdGFtcBgGIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBCA+BBAhIXCgpzdGFydF9zbG90GAcgASgEQgPgQQISGQoMZXhwaXJ5X2FmdGVyGAggASgNQgPgQQISGwoObWF4X2Jsb2NrX3NpemUYCSABKA1CA+BBAhIeChFtYXhfY29tcHV0ZV91bml0cxgKIAEoBEID4EECEhwKD21heF9zdGF0ZV91bml0cxgLIAEoDUID4EECEhIKBXByaWNlGAwgASgEQgPgQQIiugEKC0Jsb2NrRm9vdGVyEi8KCXNpZ25hdHVyZRgBIAEoCzIXLnRocnUuY29yZS52MS5TaWduYXR1cmVCA+BBAhIyCgZzdGF0dXMYAiABKA4yHS50aHJ1LmNvcmUudjEuRXhlY3V0aW9uU3RhdHVzQgPgQQISIwoWY29uc3VtZWRfY29tcHV0ZV91bml0cxgDIAEoBEID4EECEiEKFGNvbnN1bWVkX3N0YXRlX3VuaXRzGAQgASgNQgPgQQIi/AEKBUJsb2NrEi4KBmhlYWRlchgBIAEoCzIZLnRocnUuY29yZS52MS5CbG9ja0hlYWRlckID4EECEjMKBmZvb3RlchgCIAEoCzIZLnRocnUuY29yZS52MS5CbG9ja0Zvb3RlckID4EEBSACIAQESIAoEYm9keRgDIAEoDEIN4EEBukgHegUYgICAEEgBiAEBEkMKEGNvbnNlbnN1c19zdGF0dXMYBCABKA4yHy50aHJ1LmNvbW1vbi52MS5Db25zZW5zdXNTdGF0dXNCA+BBAUgCiAEBQgkKB19mb290ZXJCBwoFX2JvZHlCEwoRX2NvbnNlbnN1c19zdGF0dXMiPwoIUmF3QmxvY2sSEQoEc2xvdBgBIAEoBEID4EECEiAKCXJhd19ibG9jaxgCIAEoDEIN4EECukgHegUYgICAECqUAQoJQmxvY2tWaWV3EhoKFkJMT0NLX1ZJRVdfVU5TUEVDSUZJRUQQABIaChZCTE9DS19WSUVXX0hFQURFUl9PTkxZEAESIAocQkxPQ0tfVklFV19IRUFERVJfQU5EX0ZPT1RFUhACEhgKFEJMT0NLX1ZJRVdfQk9EWV9PTkxZEAMSEwoPQkxPQ0tfVklFV19GVUxMEAQqjQEKD0V4ZWN1dGlvblN0YXR1cxIgChxFWEVDVVRJT05fU1RBVFVTX1VOU1BFQ0lGSUVEEAASHAoYRVhFQ1VUSU9OX1NUQVRVU19QRU5ESU5HEAESHQoZRVhFQ1VUSU9OX1NUQVRVU19FWEVDVVRFRBACEhsKF0VYRUNVVElPTl9TVEFUVVNfRkFJTEVEEANCuQEKEGNvbS50aHJ1LmNvcmUudjFCCkJsb2NrUHJvdG9QAVpAZ2l0aHViLmNvbS9VbnRvLUxhYnMvdGhydS1uZXQvZ3JwYy9wa2cvcHJvdG8vdGhydS9jb3JlL3YxO2NvcmV2MaICA1RDWKoCDFRocnUuQ29yZS5WMboCBFRIVUPKAgxUaHJ1XENvcmVcVjHiAhhUaHJ1XENvcmVcVjFcR1BCTWV0YWRhdGHqAg5UaHJ1OjpDb3JlOjpWMWIGcHJvdG8z", [file_buf_validate_validate, file_google_api_field_behavior, file_google_protobuf_timestamp, file_thru_common_v1_consensus, file_thru_core_v1_types]);
+  fileDesc("Chh0aHJ1L2NvcmUvdjEvYmxvY2sucHJvdG8SDHRocnUuY29yZS52MSLkAwoLQmxvY2tIZWFkZXISEQoEc2xvdBgBIAEoBEID4EECEjAKCmJsb2NrX2hhc2gYAiABKAsyFy50aHJ1LmNvcmUudjEuQmxvY2tIYXNoQgPgQQISOAoQaGVhZGVyX3NpZ25hdHVyZRgDIAEoCzIZLnRocnUuY29tbW9uLnYxLlNpZ25hdHVyZUID4EECEhQKB3ZlcnNpb24YBCABKA1CA+BBAhItCghwcm9kdWNlchgFIAEoCzIWLnRocnUuY29tbW9uLnYxLlB1YmtleUID4EECEjkKEGV4cGlyeV90aW1lc3RhbXAYBiABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wQgPgQQISFwoKc3RhcnRfc2xvdBgHIAEoBEID4EECEhkKDGV4cGlyeV9hZnRlchgIIAEoDUID4EECEhsKDm1heF9ibG9ja19zaXplGAkgASgNQgPgQQISHgoRbWF4X2NvbXB1dGVfdW5pdHMYCiABKARCA+BBAhIcCg9tYXhfc3RhdGVfdW5pdHMYCyABKA1CA+BBAhISCgVwcmljZRgMIAEoBEID4EECEjMKCmJsb2NrX3RpbWUYDSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wQgPgQQIivAEKC0Jsb2NrRm9vdGVyEjEKCXNpZ25hdHVyZRgBIAEoCzIZLnRocnUuY29tbW9uLnYxLlNpZ25hdHVyZUID4EECEjIKBnN0YXR1cxgCIAEoDjIdLnRocnUuY29yZS52MS5FeGVjdXRpb25TdGF0dXNCA+BBAhIjChZjb25zdW1lZF9jb21wdXRlX3VuaXRzGAMgASgEQgPgQQISIQoUY29uc3VtZWRfc3RhdGVfdW5pdHMYBCABKA1CA+BBAiL8AQoFQmxvY2sSLgoGaGVhZGVyGAEgASgLMhkudGhydS5jb3JlLnYxLkJsb2NrSGVhZGVyQgPgQQISMwoGZm9vdGVyGAIgASgLMhkudGhydS5jb3JlLnYxLkJsb2NrRm9vdGVyQgPgQQFIAIgBARIgCgRib2R5GAMgASgMQg3gQQG6SAd6BRiAgIAQSAGIAQESQwoQY29uc2Vuc3VzX3N0YXR1cxgEIAEoDjIfLnRocnUuY29tbW9uLnYxLkNvbnNlbnN1c1N0YXR1c0ID4EEBSAKIAQFCCQoHX2Zvb3RlckIHCgVfYm9keUITChFfY29uc2Vuc3VzX3N0YXR1cyI/CghSYXdCbG9jaxIRCgRzbG90GAEgASgEQgPgQQISIAoJcmF3X2Jsb2NrGAIgASgMQg3gQQK6SAd6BRiAgIAQKpQBCglCbG9ja1ZpZXcSGgoWQkxPQ0tfVklFV19VTlNQRUNJRklFRBAAEhoKFkJMT0NLX1ZJRVdfSEVBREVSX09OTFkQARIgChxCTE9DS19WSUVXX0hFQURFUl9BTkRfRk9PVEVSEAISGAoUQkxPQ0tfVklFV19CT0RZX09OTFkQAxITCg9CTE9DS19WSUVXX0ZVTEwQBCqNAQoPRXhlY3V0aW9uU3RhdHVzEiAKHEVYRUNVVElPTl9TVEFUVVNfVU5TUEVDSUZJRUQQABIcChhFWEVDVVRJT05fU1RBVFVTX1BFTkRJTkcQARIdChlFWEVDVVRJT05fU1RBVFVTX0VYRUNVVEVEEAISGwoXRVhFQ1VUSU9OX1NUQVRVU19GQUlMRUQQA0K5AQoQY29tLnRocnUuY29yZS52MUIKQmxvY2tQcm90b1ABWkBnaXRodWIuY29tL1VudG8tTGFicy90aHJ1LW5ldC9ncnBjL3BrZy9wcm90by90aHJ1L2NvcmUvdjE7Y29yZXYxogIDVENYqgIMVGhydS5Db3JlLlYxugIEVEhVQ8oCDFRocnVcQ29yZVxWMeICGFRocnVcQ29yZVxWMVxHUEJNZXRhZGF0YeoCDlRocnU6OkNvcmU6OlYxYgZwcm90bzM", [file_buf_validate_validate, file_google_api_field_behavior, file_google_protobuf_timestamp, file_thru_common_v1_primitives, file_thru_common_v1_consensus, file_thru_core_v1_types]);
 
 /**
  * BlockHeader describes metadata about a block.
@@ -37,7 +39,7 @@ export type BlockHeader = Message<"thru.core.v1.BlockHeader"> & {
   blockHash?: BlockHash;
 
   /**
-   * @generated from field: thru.core.v1.Signature header_signature = 3;
+   * @generated from field: thru.common.v1.Signature header_signature = 3;
    */
   headerSignature?: Signature;
 
@@ -47,7 +49,7 @@ export type BlockHeader = Message<"thru.core.v1.BlockHeader"> & {
   version: number;
 
   /**
-   * @generated from field: thru.core.v1.Pubkey producer = 5;
+   * @generated from field: thru.common.v1.Pubkey producer = 5;
    */
   producer?: Pubkey;
 
@@ -85,6 +87,11 @@ export type BlockHeader = Message<"thru.core.v1.BlockHeader"> & {
    * @generated from field: uint64 price = 12;
    */
   price: bigint;
+
+  /**
+   * @generated from field: google.protobuf.Timestamp block_time = 13;
+   */
+  blockTime?: Timestamp;
 };
 
 /**
@@ -101,7 +108,7 @@ export const BlockHeaderSchema: GenMessage<BlockHeader> = /*@__PURE__*/
  */
 export type BlockFooter = Message<"thru.core.v1.BlockFooter"> & {
   /**
-   * @generated from field: thru.core.v1.Signature signature = 1;
+   * @generated from field: thru.common.v1.Signature signature = 1;
    */
   signature?: Signature;
 

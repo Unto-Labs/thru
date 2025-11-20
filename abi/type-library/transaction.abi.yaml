@@ -1,0 +1,168 @@
+abi:
+  package: "thru.blockchain.transaction"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Transaction structures for Thru blockchain"
+  imports:
+    - "thru_primitives.abi.yaml"
+    - "state_proof.abi.yaml"
+    - "account_meta.abi.yaml"
+
+types:
+  # Transaction header V1 structure
+  # This is a packed structure matching tn_txn_hdr_v1_t
+  - name: "TransactionHeaderV1"
+    kind:
+      struct:
+        packed: true
+        fields:
+          # Fee payer signature (64 bytes)
+          - name: "fee_payer_signature"
+            field-type:
+              type-ref:
+                name: "Signature"
+                package: "thru.common.primitives"
+          # Transaction version (currently 0x01)
+          - name: "transaction_version"
+            field-type:
+              primitive: u8
+          # Transaction flags (bitfield):
+          #   Bit 0: HAS_FEE_PAYER_PROOF - Fee payer has a state proof
+          #   Bit 1: MAY_COMPRESS_ACCOUNT - Account may be compressed
+          - name: "flags"
+            field-type:
+              primitive: u8
+          # Number of read-write accounts (excluding fee payer and program)
+          - name: "readwrite_accounts_cnt"
+            field-type:
+              primitive: u16
+          # Number of read-only accounts
+          - name: "readonly_accounts_cnt"
+            field-type:
+              primitive: u16
+          # Size of instruction data in bytes
+          - name: "instr_data_sz"
+            field-type:
+              primitive: u16
+          # Requested compute units
+          - name: "req_compute_units"
+            field-type:
+              primitive: u32
+          # Requested state units
+          - name: "req_state_units"
+            field-type:
+              primitive: u16
+          # Requested memory units
+          - name: "req_memory_units"
+            field-type:
+              primitive: u16
+          # Transaction fee in base units
+          - name: "fee"
+            field-type:
+              primitive: u64
+          # Transaction nonce
+          - name: "nonce"
+            field-type:
+              primitive: u64
+          # Starting slot for transaction validity
+          - name: "start_slot"
+            field-type:
+              primitive: u64
+          # Expiry duration in slots (transaction expires at start_slot + expiry_after)
+          - name: "expiry_after"
+            field-type:
+              primitive: u32
+          # Padding to maintain alignment
+          - name: "padding_0"
+            field-type:
+              primitive: u32
+          # Fee payer public key (32 bytes)
+          - name: "fee_payer_pubkey"
+            field-type:
+              type-ref:
+                name: "Pubkey"
+                package: "thru.common.primitives"
+          # Program public key (32 bytes)
+          - name: "program_pubkey"
+            field-type:
+              type-ref:
+                name: "Pubkey"
+                package: "thru.common.primitives"
+
+  # Complete transaction structure
+  # The transaction has a flexible layout with multiple variable-size components:
+  # 1. Fixed header (TransactionHeaderV1)
+  # 2. Variable number of input pubkeys (readwrite + readonly accounts)
+  # 3. Variable instruction data
+  # 4. Optional fee payer state proof (if flags bit 0 is set)
+  # 5. Optional fee payer account meta (if proof exists and type is EXISTING)
+  #
+  # Note: The C struct tn_txn_t only includes the header and input_pubkeys flexible array.
+  # The instruction data, state proof, and account meta are accessed via pointer arithmetic
+  # but are part of the serialized format. This ABI represents the complete serialized structure.
+  - name: "Transaction"
+    kind:
+      struct:
+        packed: true
+        fields:
+          # Transaction header
+          - name: "hdr"
+            field-type:
+              type-ref:
+                name: "TransactionHeaderV1"
+          # Input account pubkeys (flexible array member)
+          # Total count = readwrite_accounts_cnt + readonly_accounts_cnt
+          # Layout: [readwrite_accounts...][readonly_accounts...]
+          # Note: Fee payer (index 0) and program (index 1) are in the header,
+          # so input_pubkeys starts at index 2
+          - name: "input_pubkeys"
+            field-type:
+              array:
+                size:
+                  expr:
+                    add:
+                      - field-ref:
+                          path: ["hdr", "readwrite_accounts_cnt"]
+                      - field-ref:
+                          path: ["hdr", "readonly_accounts_cnt"]
+                element-type:
+                  type-ref:
+                    name: "Pubkey"
+                    package: "thru.common.primitives"
+          # Instruction data (flexible array member, variable size)
+          # Size determined by hdr.instr_data_sz
+          # This follows the input_pubkeys array
+          - name: "instr_data"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["hdr", "instr_data_sz"]
+                element-type:
+                  primitive: u8
+          # Fee payer state proof (conditionally present)
+          # This follows instr_data in the serialized format.
+          # PRESENCE: Only serialized if hdr.flags bit 0 (HAS_FEE_PAYER_PROOF) is set
+          # SIZE: Variable, determined by proof type and sibling count (see StateProof)
+          # ACCESS: Use tn_txn_fee_payer_state_proof() to get pointer
+          # NOTE: The StateProof union is fixed-size (largest variant), but the actual
+          #       serialized size may be smaller based on proof type. Use
+          #       tn_state_proof_footprint_from_header() to get actual size.
+          - name: "fee_payer_state_proof"
+            field-type:
+              type-ref:
+                name: "StateProof"
+                package: "thru.blockchain.state_proof"
+          # Fee payer account meta (conditionally present)
+          # This follows fee_payer_state_proof in the serialized format.
+          # PRESENCE: Only serialized if:
+          #   - hdr.flags bit 0 is set (has proof)
+          #   - Proof type extracted from proof header is EXISTING (0)
+          # SIZE: Fixed (sizeof(AccountMeta) = 64 bytes)
+          # ACCESS: Use tn_txn_fee_payer_account_meta() to get pointer
+          - name: "fee_payer_account_meta"
+            field-type:
+              type-ref:
+                name: "AccountMeta"
+                package: "thru.blockchain.account"
+

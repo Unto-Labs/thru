@@ -5,6 +5,7 @@ package thru.core.v1;
 import "google/api/field_behavior.proto";
 import "thru/core/v1/types.proto";
 
+import "thru/common/v1/primitives.proto";
 option go_package = "github.com/Unto-Labs/thru-net/grpc/pkg/proto/thru/core/v1;corev1";
 option java_multiple_files = true;
 option java_package = "network.thru.core.v1";
@@ -23,7 +24,7 @@ enum StateProofType {
 
 // StateProofRequest describes a request to generate an account state proof.
 message StateProofRequest {
-  Pubkey address = 1 [(google.api.field_behavior) = REQUIRED];
+  thru.common.v1.Pubkey address = 1 [(google.api.field_behavior) = REQUIRED];
   StateProofType proof_type = 2 [(google.api.field_behavior) = REQUIRED];
   optional uint64 target_slot = 3 [(google.api.field_behavior) = OPTIONAL];
 }

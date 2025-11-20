@@ -6,13 +6,15 @@ import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import { fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
 import { file_buf_validate_validate } from "../../../buf/validate/validate_pb";
 import { file_google_api_field_behavior } from "../../../google/api/field_behavior_pb";
+import type { Pubkey, Signature, TaPubkey, TsSignature } from "./primitives_pb";
+import { file_thru_common_v1_primitives } from "./primitives_pb";
 import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file thru/common/v1/filters.proto.
  */
 export const file_thru_common_v1_filters: GenFile = /*@__PURE__*/
-  fileDesc("Chx0aHJ1L2NvbW1vbi92MS9maWx0ZXJzLnByb3RvEg50aHJ1LmNvbW1vbi52MSLHAQoGRmlsdGVyEiQKCmV4cHJlc3Npb24YASABKAlCC+BBAbpIBXIDGIAgSACIAQESNwoGcGFyYW1zGAIgAygLMiIudGhydS5jb21tb24udjEuRmlsdGVyLlBhcmFtc0VudHJ5QgPgQQEaTwoLUGFyYW1zRW50cnkSCwoDa2V5GAEgASgJEi8KBXZhbHVlGAIgASgLMiAudGhydS5jb21tb24udjEuRmlsdGVyUGFyYW1WYWx1ZToCOAFCDQoLX2V4cHJlc3Npb24ipQEKEEZpbHRlclBhcmFtVmFsdWUSGwoMc3RyaW5nX3ZhbHVlGAEgASgJQgPgQQFIABIaCgtieXRlc192YWx1ZRgCIAEoDEID4EEBSAASGQoKYm9vbF92YWx1ZRgDIAEoCEID4EEBSAASGAoJaW50X3ZhbHVlGAQgASgSQgPgQQFIABIbCgxkb3VibGVfdmFsdWUYBSABKAFCA+BBAUgAQgYKBGtpbmQioQEKE0NlbEZpbHRlclZhbGlkYXRpb24SJwoRYWxsb3dlZF9mdW5jdGlvbnMYASADKAlCDOBBAbpIBpIBAxCAARIkCg5hbGxvd2VkX2ZpZWxkcxgCIAMoCUIM4EEBukgGkgEDEIACEigKDm1heF9jb21wbGV4aXR5GAMgASgNQgvgQQG6SAUqAxjoB0gAiAEBQhEKD19tYXhfY29tcGxleGl0eULIAQoSY29tLnRocnUuY29tbW9uLnYxQgxGaWx0ZXJzUHJvdG9QAVpEZ2l0aHViLmNvbS9VbnRvLUxhYnMvdGhydS1uZXQvZ3JwYy9wa2cvcHJvdG8vdGhydS9jb21tb24vdjE7Y29tbW9udjGiAgNUQ1iqAg5UaHJ1LkNvbW1vbi5WMboCA1RIVcoCDlRocnVcQ29tbW9uXFYx4gIaVGhydVxDb21tb25cVjFcR1BCTWV0YWRhdGHqAhBUaHJ1OjpDb21tb246OlYxYgZwcm90bzM", [file_buf_validate_validate, file_google_api_field_behavior]);
+  fileDesc("Chx0aHJ1L2NvbW1vbi92MS9maWx0ZXJzLnByb3RvEg50aHJ1LmNvbW1vbi52MSLHAQoGRmlsdGVyEiQKCmV4cHJlc3Npb24YASABKAlCC+BBAbpIBXIDGIAgSACIAQESNwoGcGFyYW1zGAIgAygLMiIudGhydS5jb21tb24udjEuRmlsdGVyLlBhcmFtc0VudHJ5QgPgQQEaTwoLUGFyYW1zRW50cnkSCwoDa2V5GAEgASgJEi8KBXZhbHVlGAIgASgLMiAudGhydS5jb21tb24udjEuRmlsdGVyUGFyYW1WYWx1ZToCOAFCDQoLX2V4cHJlc3Npb24iqgMKEEZpbHRlclBhcmFtVmFsdWUSGwoMc3RyaW5nX3ZhbHVlGAEgASgJQgPgQQFIABIaCgtieXRlc192YWx1ZRgCIAEoDEID4EEBSAASGQoKYm9vbF92YWx1ZRgDIAEoCEID4EEBSAASGAoJaW50X3ZhbHVlGAQgASgSQgPgQQFIABIZCgp1aW50X3ZhbHVlGAUgASgEQgPgQQFIABIbCgxkb3VibGVfdmFsdWUYBiABKAFCA+BBAUgAEjMKDHB1YmtleV92YWx1ZRgHIAEoCzIWLnRocnUuY29tbW9uLnYxLlB1YmtleUID4EEBSAASOQoPc2lnbmF0dXJlX3ZhbHVlGAggASgLMhkudGhydS5jb21tb24udjEuU2lnbmF0dXJlQgPgQQFIABI4Cg90YV9wdWJrZXlfdmFsdWUYCSABKAsyGC50aHJ1LmNvbW1vbi52MS5UYVB1YmtleUID4EEBSAASPgoSdHNfc2lnbmF0dXJlX3ZhbHVlGAogASgLMhsudGhydS5jb21tb24udjEuVHNTaWduYXR1cmVCA+BBAUgAQgYKBGtpbmQioQEKE0NlbEZpbHRlclZhbGlkYXRpb24SJwoRYWxsb3dlZF9mdW5jdGlvbnMYASADKAlCDOBBAbpIBpIBAxCAARIkCg5hbGxvd2VkX2ZpZWxkcxgCIAMoCUIM4EEBukgGkgEDEIACEigKDm1heF9jb21wbGV4aXR5GAMgASgNQgvgQQG6SAUqAxjoB0gAiAEBQhEKD19tYXhfY29tcGxleGl0eULIAQoSY29tLnRocnUuY29tbW9uLnYxQgxGaWx0ZXJzUHJvdG9QAVpEZ2l0aHViLmNvbS9VbnRvLUxhYnMvdGhydS1uZXQvZ3JwYy9wa2cvcHJvdG8vdGhydS9jb21tb24vdjE7Y29tbW9udjGiAgNUQ1iqAg5UaHJ1LkNvbW1vbi5WMboCA1RIVcoCDlRocnVcQ29tbW9uXFYx4gIaVGhydVxDb21tb25cVjFcR1BCTWV0YWRhdGHqAhBUaHJ1OjpDb21tb246OlYxYgZwcm90bzM", [file_buf_validate_validate, file_google_api_field_behavior, file_thru_common_v1_primitives]);
 
 /**
  * Filter represents a CEL-based expression applied to query or stream results.
@@ -77,10 +79,40 @@ export type FilterParamValue = Message<"thru.common.v1.FilterParamValue"> & {
     case: "intValue";
   } | {
     /**
-     * @generated from field: double double_value = 5;
+     * @generated from field: uint64 uint_value = 5;
+     */
+    value: bigint;
+    case: "uintValue";
+  } | {
+    /**
+     * @generated from field: double double_value = 6;
      */
     value: number;
     case: "doubleValue";
+  } | {
+    /**
+     * @generated from field: thru.common.v1.Pubkey pubkey_value = 7;
+     */
+    value: Pubkey;
+    case: "pubkeyValue";
+  } | {
+    /**
+     * @generated from field: thru.common.v1.Signature signature_value = 8;
+     */
+    value: Signature;
+    case: "signatureValue";
+  } | {
+    /**
+     * @generated from field: thru.common.v1.TaPubkey ta_pubkey_value = 9;
+     */
+    value: TaPubkey;
+    case: "taPubkeyValue";
+  } | {
+    /**
+     * @generated from field: thru.common.v1.TsSignature ts_signature_value = 10;
+     */
+    value: TsSignature;
+    case: "tsSignatureValue";
   } | { case: undefined; value?: undefined };
 };
 

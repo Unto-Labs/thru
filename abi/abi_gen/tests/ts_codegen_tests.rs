@@ -24,7 +24,7 @@ fn generate_ts_code(abi_file: &str, output_dir: &PathBuf) -> Result<(), String> 
             "--files",
             abi_file,
             "--language",
-            "type-script",
+            "typescript",
             "--output",
             output_dir.to_str().unwrap(),
         ])

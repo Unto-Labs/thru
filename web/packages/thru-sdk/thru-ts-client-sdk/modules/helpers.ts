@@ -1,42 +1,49 @@
 import { create } from "@bufbuild/protobuf";
 import { sha256 } from "@noble/hashes/sha2";
-import { BytesLike, Pubkey as PubkeyType, decodeAddress, decodeBase64, decodeSignature, encodeAddress, ensureBytes, hexToBytes, isHexString } from "@thru/helpers";
+import { BytesLike, Pubkey as PubkeyType, encodeAddress, ensureBytes, hexToBytes, isHexString } from "@thru/helpers";
 
-import { BlockHash, BlockHashSchema, Pubkey, PubkeySchema, Signature, SignatureSchema } from "../proto/thru/core/v1/types_pb";
+import { Pubkey, Signature, TaPubkey, TsSignature } from "../proto/thru/common/v1/primitives_pb";
+import { BlockHash, BlockHashSchema } from "../proto/thru/core/v1/types_pb";
+import {
+    TsSignatureInput,
+    pubkeyBytesFromInput,
+    signatureBytesFromInput,
+    toPubkeyProto,
+    toSignatureProto,
+    toTaPubkeyProto,
+    toTsSignatureProto,
+} from "../utils/primitives";
 
 export type BlockSelector = { slot: number | bigint } | { blockHash: BytesLike };
 
 export function toSignature(value: BytesLike): Signature {
-    let bytes: Uint8Array;
-    if (value instanceof Uint8Array) {
-        if (value.length !== 64) {
-            throw new Error("signature must contain 64 bytes");
-        }
-        bytes = value;
-    } else if (typeof value === "string") {
-        bytes = value.startsWith("ts") ? decodeSignature(value) : decodeBase64(value);
-    } else {
-        throw new Error("signature is required");
+    return toSignatureProto(value);
+}
+
+export function toSignatureBytes(value: BytesLike): Uint8Array {
+    return signatureBytesFromInput(value);
+}
+
+export function toTsSignature(value: TsSignatureInput | BytesLike, field = "tsSignature"): TsSignature {
+    if (typeof value === "string" && value.startsWith("ts")) {
+        return toTsSignatureProto(value as TsSignatureInput, field);
     }
-    if (bytes.length !== 64) {
-        throw new Error("signature must contain 64 bytes");
-    }
-    return create(SignatureSchema, { value: bytes });
+    return toTsSignatureProto(signatureBytesFromInput(value as BytesLike, field), field);
 }
 
 export function toPubkey(value: PubkeyType, field: string): Pubkey {
-    let bytes: Uint8Array;
-    if (value instanceof Uint8Array) {
-        bytes = value;
-    } else if (typeof value === "string") {
-        bytes = value.startsWith("ta") ? decodeAddress(value) : decodeBase64(value);
-    } else {
-        throw new Error(`${field} is required`);
+    return toPubkeyProto(value, field);
+}
+
+export function toPubkeyBytes(value: PubkeyType, field: string): Uint8Array {
+    return pubkeyBytesFromInput(value, field);
+}
+
+export function toTaPubkey(value: PubkeyType | string, field = "taPubkey"): TaPubkey {
+    if (typeof value === "string" && value.startsWith("ta")) {
+        return toTaPubkeyProto(value, field);
     }
-    if (bytes.length !== 32) {
-        throw new Error(`${field} must contain 32 bytes`);
-    }
-    return create(PubkeySchema, { value: bytes });
+    return toTaPubkeyProto(pubkeyBytesFromInput(value as PubkeyType, field), field);
 }
 
 export function toBlockHash(value: BytesLike): BlockHash {
@@ -74,25 +81,7 @@ export function deriveProgramAddress(options: DeriveProgramAddressOptions): Deri
 }
 
 function normalizeProgramAddress(value: PubkeyType): Uint8Array {
-    if (value instanceof Uint8Array) {
-        if (value.length !== 32) {
-            throw new Error("Program address must contain 32 bytes");
-        }
-        return new Uint8Array(value);
-    }
-    if (typeof value === "string") {
-        if (value.startsWith("ta") && value.length === 46) {
-            return decodeAddress(value);
-        }
-        if (isHexString(value)) {
-            const bytes = hexToBytes(value);
-            if (bytes.length !== 32) {
-                throw new Error("Program address hex string must decode to 32 bytes");
-            }
-            return bytes;
-        }
-    }
-    throw new Error("Program address must be a 32-byte value, ta-address, or 64-character hex string");
+    return pubkeyBytesFromInput(value, "Program address");
 }
 
 function normalizeSeed(value: BytesLike | string): Uint8Array {

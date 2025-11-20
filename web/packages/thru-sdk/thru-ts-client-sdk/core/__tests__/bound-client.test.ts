@@ -56,6 +56,7 @@ describe("createBoundThruClient", () => {
     expect(client.proofs).toBeDefined();
     expect(client.keys).toBeDefined();
     expect(client.version).toBeDefined();
+    expect(client.consensus).toBeDefined();
     expect(client.helpers).toBeDefined();
   });
 
@@ -192,13 +193,26 @@ describe("createBoundThruClient", () => {
     const client = createBoundThruClient(ctx);
     
     expect(typeof client.helpers.toSignature).toBe("function");
+    expect(typeof client.helpers.toSignatureBytes).toBe("function");
+    expect(typeof client.helpers.toTsSignature).toBe("function");
     expect(typeof client.helpers.toPubkey).toBe("function");
+    expect(typeof client.helpers.toPubkeyBytes).toBe("function");
+    expect(typeof client.helpers.toTaPubkey).toBe("function");
     expect(typeof client.helpers.toBlockHash).toBe("function");
     expect(typeof client.helpers.encodeSignature).toBe("function");
     expect(typeof client.helpers.decodeSignature).toBe("function");
     expect(typeof client.helpers.encodeAddress).toBe("function");
     expect(typeof client.helpers.decodeAddress).toBe("function");
     expect(typeof client.helpers.deriveProgramAddress).toBe("function");
+  });
+
+  it("should expose consensus helpers", () => {
+    const ctx = createMockContext();
+    const client = createBoundThruClient(ctx);
+
+    expect(typeof client.consensus.currentVersionContext).toBe("function");
+    expect(typeof client.consensus.slotVersionContext).toBe("function");
+    expect(client.consensus.statusToString(ConsensusStatus.INCLUDED)).toBe("INCLUDED");
   });
 
   it("should inject context into bound functions", async () => {

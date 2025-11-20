@@ -1,0 +1,8 @@
+test-case:
+  name: "small_variant"
+  abi-file: "../../abi_definitions/size_discriminated_unions.abi.yaml"
+  type: "MessageWithSDU"
+  binary-hex: "0102030405"
+  description: "Test size-discriminated union with small variant (4 bytes)"
+  tags: ["size-discriminated-union", "small", "variant"]
+

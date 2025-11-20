@@ -5,6 +5,7 @@ package thru.core.v1;
 import "buf/validate/validate.proto";
 import "google/api/field_behavior.proto";
 import "thru/core/v1/types.proto";
+import "thru/common/v1/primitives.proto";
 
 option go_package = "github.com/Unto-Labs/thru-net/grpc/pkg/proto/thru/core/v1;corev1";
 option java_multiple_files = true;
@@ -68,7 +69,7 @@ enum TransactionVmError {
 
 // TransactionHeader carries structured metadata for a transaction.
 message TransactionHeader {
-  Signature fee_payer_signature = 1 [(google.api.field_behavior) = REQUIRED];
+  thru.common.v1.Signature fee_payer_signature = 1 [(google.api.field_behavior) = REQUIRED];
   uint32 version = 2 [(google.api.field_behavior) = REQUIRED];
   uint32 flags = 3 [(google.api.field_behavior) = REQUIRED];
   uint32 readwrite_accounts_count = 4 [(google.api.field_behavior) = REQUIRED];
@@ -81,8 +82,8 @@ message TransactionHeader {
   uint64 fee = 11 [(google.api.field_behavior) = REQUIRED];
   uint64 nonce = 12 [(google.api.field_behavior) = REQUIRED];
   uint64 start_slot = 13 [(google.api.field_behavior) = REQUIRED];
-  Pubkey fee_payer_pubkey = 14 [(google.api.field_behavior) = REQUIRED];
-  Pubkey program_pubkey = 15 [(google.api.field_behavior) = REQUIRED];
+  thru.common.v1.Pubkey fee_payer_pubkey = 14 [(google.api.field_behavior) = REQUIRED];
+  thru.common.v1.Pubkey program_pubkey = 15 [(google.api.field_behavior) = REQUIRED];
 }
 
 // TransactionExecutionResult captures execution outcomes.
@@ -96,9 +97,9 @@ message TransactionExecutionResult {
   uint32 pages_used = 7 [(google.api.field_behavior) = REQUIRED];
   uint32 events_count = 8 [(google.api.field_behavior) = REQUIRED];
   uint32 events_size = 9 [(google.api.field_behavior) = REQUIRED];
-  repeated Pubkey readwrite_accounts = 10
+  repeated thru.common.v1.Pubkey readwrite_accounts = 10
       [(google.api.field_behavior) = OPTIONAL];
-  repeated Pubkey readonly_accounts = 11
+  repeated thru.common.v1.Pubkey readonly_accounts = 11
       [(google.api.field_behavior) = OPTIONAL];
   repeated TransactionEvent events = 12
       [(google.api.field_behavior) = OPTIONAL];
@@ -108,13 +109,13 @@ message TransactionEvent {
   string event_id = 1 [(google.api.field_behavior) = REQUIRED];
   uint32 call_idx = 2 [(google.api.field_behavior) = REQUIRED];
   uint32 program_idx = 3 [(google.api.field_behavior) = REQUIRED];
-  Pubkey program = 4 [(google.api.field_behavior) = REQUIRED];
+  thru.common.v1.Pubkey program = 4 [(google.api.field_behavior) = REQUIRED];
   bytes payload = 5 [(google.api.field_behavior) = REQUIRED];
 }
 
 // Transaction describes a fully decoded transaction resource.
 message Transaction {
-  Signature signature = 1 [(google.api.field_behavior) = REQUIRED];
+  thru.common.v1.Signature signature = 1 [(google.api.field_behavior) = REQUIRED];
   TransactionHeader header = 2 [(google.api.field_behavior) = REQUIRED];
   optional bytes body = 3 [
     (google.api.field_behavior) = OPTIONAL,
@@ -128,7 +129,7 @@ message Transaction {
 
 // RawTransaction provides direct access to serialized transaction bytes.
 message RawTransaction {
-  Signature signature = 1 [(google.api.field_behavior) = REQUIRED];
+  thru.common.v1.Signature signature = 1 [(google.api.field_behavior) = REQUIRED];
   bytes raw_transaction = 2 [
     (google.api.field_behavior) = REQUIRED,
     (buf.validate.field).bytes.max_len = 16777216

@@ -1,0 +1,136 @@
+abi:
+  package: "thru.blockchain.block"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Block header and footer structures for Thru blockchain"
+  imports:
+    - "thru_primitives.abi.yaml"
+
+types:
+  # Block header body structure
+  # Contains the main block metadata fields
+  - name: "BlockHeaderBody"
+    kind:
+      struct:
+        packed: false
+        fields:
+          # Block format version (currently only 0x01 is valid)
+          - name: "block_version"
+            field-type:
+              primitive: u8
+          # Padding bytes (must be zeros or block is invalid)
+          - name: "padding"
+            field-type:
+              array:
+                size:
+                  literal:
+                    u64: 7
+                element-type:
+                  primitive: u8
+          # Public key of the block producer that built this block
+          - name: "block_producer"
+            field-type:
+              type-ref:
+                name: "Pubkey"
+                package: "thru.common.primitives"
+          # Bond amount locked up by the block producer
+          - name: "bond_amount_lock_up"
+            field-type:
+              primitive: u64
+          # Expiry timestamp for the block
+          - name: "expiry_timestamp"
+            field-type:
+              primitive: u64
+          # Starting slot for the block
+          - name: "start_slot"
+            field-type:
+              primitive: u64
+          # Expiry duration in slots (block expires at start_slot + expiry_after)
+          - name: "expiry_after"
+            field-type:
+              primitive: u32
+          # Maximum block size in bytes
+          - name: "max_block_size"
+            field-type:
+              primitive: u32
+          # Maximum compute units allowed in this block
+          - name: "max_compute_units"
+            field-type:
+              primitive: u64
+          # Maximum state units allowed in this block
+          - name: "max_state_units"
+            field-type:
+              primitive: u32
+          # Reserved bytes for future use
+          - name: "reserved"
+            field-type:
+              array:
+                size:
+                  literal:
+                    u64: 4
+                element-type:
+                  primitive: u8
+          # Block time in nanoseconds
+          - name: "block_time_ns"
+            field-type:
+              primitive: u64
+
+  # Complete block header structure
+  # Contains the header signature and body
+  - name: "BlockHeader"
+    kind:
+      struct:
+        packed: false
+        fields:
+          # Block header signature (different signing domain than block signature)
+          # Signs the header body fields
+          - name: "block_header_sig"
+            field-type:
+              type-ref:
+                name: "Signature"
+                package: "thru.common.primitives"
+          # Block header body containing metadata
+          - name: "body"
+            field-type:
+              type-ref:
+                name: "BlockHeaderBody"
+
+  # Block footer body structure
+  - name: "BlockFooterBody"
+    kind:
+      struct:
+        packed: false
+        fields:
+          # Payment amount to the attestor
+          - name: "attestor_payment"
+            field-type:
+              primitive: u64
+
+  # Complete block footer structure
+  # Contains the footer body, block hash, and block signature
+  - name: "BlockFooter"
+    kind:
+      struct:
+        packed: false
+        fields:
+          # Footer body containing attestor payment
+          - name: "body"
+            field-type:
+              type-ref:
+                name: "BlockFooterBody"
+          # Block hash (64 bytes, Blake3 hash of the block)
+          - name: "block_hash"
+            field-type:
+              array:
+                size:
+                  literal:
+                    u64: 64
+                element-type:
+                  primitive: u8
+          # Block signature (signature of the Blake3 hash of the block)
+          - name: "block_sig"
+            field-type:
+              type-ref:
+                name: "Signature"
+                package: "thru.common.primitives"
+

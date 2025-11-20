@@ -63,6 +63,10 @@ message VersionContext {
     // Request the version nearest to the provided block timestamp.
     google.protobuf.Timestamp timestamp = 4
         [(google.api.field_behavior) = OPTIONAL];
+
+    // Request the version for a specific seq number.
+    // Relevant only for GetAccount and GetRawAccount requests.
+    uint64 seq = 5 [(google.api.field_behavior) = OPTIONAL];
   }
 }
 

@@ -67,6 +67,29 @@ for await (const update of thru.streaming.trackTransaction(signature)) {
 }
 ```
 
+## Client Configuration
+
+`createThruClient` accepts advanced transport options so you can customize networking, interceptors, and default call behaviour:
+
+```ts
+const thru = createThruClient({
+  baseUrl: "https://grpc-web.alphanet.thruput.org",
+  transportOptions: {
+    useBinaryFormat: false,
+    defaultTimeoutMs: 10_000,
+  },
+  interceptors: [authInterceptor],
+  callOptions: {
+    timeoutMs: 5_000,
+    headers: [["x-team", "sdk"]],
+  },
+});
+```
+
+- `transportOptions` are passed to `createGrpcWebTransport`. Provide custom fetch implementations, JSON/binary options, or merge additional interceptors.
+- `interceptors` let you append cross-cutting logic (auth, metrics) without re-implementing transports.
+- `callOptions` act as defaults for **every** RPC. You can set timeouts, headers, or a shared `AbortSignal`, and each module call merges in per-request overrides.
+
 ## Domain Models
 
 The SDK revolves around immutable domain classes. They copy mutable buffers, expose clear invariants, and provide conversion helpers where needed.
@@ -231,23 +254,17 @@ for await (const update of thru.streaming.trackTransaction(signature)) {
 Server-side filtering is supported everywhere via CEL expressions:
 
 ```ts
-import { create } from "@bufbuild/protobuf";
-import {
-  FilterSchema,
-  FilterParamValueSchema,
-} from "@thru/thru-sdk";
+import { Filter, FilterParamValue } from "@thru/thru-sdk";
 
-const ownerBytes = new Uint8Array(32);
-const ownerParam = create(FilterParamValueSchema, {
-  kind: { case: "bytesValue", value: ownerBytes },
+const ownerFilter = new Filter({
+  expression: "account.meta.owner.value == params.owner",
+  params: {
+    owner: FilterParamValue.pubkey("taExampleAddress..."),
+    min_balance: FilterParamValue.uint(1_000_000n),
+  },
 });
 
-const filter = create(FilterSchema, {
-  expression: "meta.owner.value == params.owner_bytes",
-  params: { owner_bytes: ownerParam },
-});
-
-const accounts = await thru.accounts.list({ filter });
+const accounts = await thru.accounts.list({ filter: ownerFilter });
 ```
 
 Accepted parameter kinds:
@@ -256,10 +273,17 @@ Accepted parameter kinds:
 - `boolValue`
 - `intValue`
 - `doubleValue`
+- `uintValue`
+- `pubkeyValue`
+- `signatureValue`
+- `taPubkeyValue`
+- `tsSignatureValue`
 
 Functions that take filters:
 - List APIs: `thru.accounts.list`, `thru.blocks.list`, `thru.transactions.listForAccount`
 - Streams: `thru.streaming.streamBlocks`, `thru.streaming.streamAccountUpdates`, `thru.streaming.streamTransactions`, `thru.streaming.streamEvents`
+
+Use the helper constructors on `FilterParamValue` to safely build parameters from raw bytes, ta/ts-encoded strings, or simple numbers.
 
 ## Modules Overview
 
@@ -268,7 +292,24 @@ Functions that take filters:
 - `thru.transactions` — build, sign, submit, track, and inspect transactions
 - `thru.events` — query event history
 - `thru.proofs` — generate state proofs
+- `thru.consensus` — build version contexts and stringify consensus states
 - `thru.streaming` — streaming wrappers for blocks, accounts, transactions, events
 - `thru.helpers` — address, signature, and block-hash conversion helpers
 
 The public surface is fully domain-based; reaching for lower-level protobuf structures is no longer necessary.
+
+## Streaming helpers
+
+Async iterable utilities make it easier to consume streaming APIs:
+
+```ts
+import { collectStream, firstStreamValue } from "@thru/thru-sdk";
+
+const updates = await collectStream(thru.streaming.streamBlocks({ startSlot: height.finalized }), {
+  limit: 5,
+});
+
+const firstEvent = await firstStreamValue(thru.streaming.streamEvents());
+```
+
+`collectStream` gathers values (optionally respecting `AbortSignal`s), `firstStreamValue` returns the first item, and `forEachStreamValue` lets you run async handlers for each streamed update.

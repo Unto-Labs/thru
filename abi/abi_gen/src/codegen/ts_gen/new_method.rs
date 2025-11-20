@@ -123,6 +123,11 @@ fn emit_struct_new_method(resolved_type: &ResolvedType) -> String {
           /* Enums are variable-size */
           has_variable_size = true;
         }
+        ResolvedTypeKind::SizeDiscriminatedUnion { .. } => {
+          /* Size-discriminated unions are variable-size and need tag parameter */
+          has_variable_size = true;
+          params.push(format!("{}_tag: number", escaped_name));
+        }
         _ => {}
       }
     }
@@ -152,10 +157,25 @@ fn emit_struct_new_method(resolved_type: &ResolvedType) -> String {
             extract_field_refs(tag_expression, &mut field_refs);
           }
         }
+        /* For size-discriminated unions, add tag parameter to footprint call */
+        if let ResolvedTypeKind::SizeDiscriminatedUnion { .. } = &field.field_type.kind {
+          // Tag parameter is already in params, will be passed to footprint
+        }
       }
 
       /* Convert HashSet to sorted Vec for consistent parameter ordering (matches footprint signature) */
       let mut size_params: Vec<String> = field_refs.into_iter().collect();
+      size_params.sort();
+
+      /* Add tag parameters for size-discriminated unions */
+      for field in fields {
+        if let ResolvedTypeKind::SizeDiscriminatedUnion { .. } = &field.field_type.kind {
+          let tag_param = format!("{}_tag", escape_ts_keyword(&field.name));
+          if !size_params.contains(&tag_param) {
+            size_params.push(tag_param);
+          }
+        }
+      }
       size_params.sort();
 
       write!(output, "{});\n", size_params.join(", ")).unwrap();
@@ -167,6 +187,7 @@ fn emit_struct_new_method(resolved_type: &ResolvedType) -> String {
     write!(output, "    const view = new DataView(buffer.buffer);\n\n").unwrap();
 
     /* Initialize fields */
+    write!(output, "    let offset = 0;\n").unwrap();
     let mut offset: u64 = 0;
     let mut offset_var = false;
 
@@ -183,6 +204,26 @@ fn emit_struct_new_method(resolved_type: &ResolvedType) -> String {
             /* Variable-size enum - can't track offset statically anymore */
             offset_var = true;
           }
+        }
+        ResolvedTypeKind::SizeDiscriminatedUnion { variants } => {
+          /* Size-discriminated union fields are ghost fields - they're inline data, not actual fields
+           * Size is determined from tag parameter */
+          let tag_param = format!("{}_tag", escaped_name);
+          write!(output, "    /* Size-discriminated union '{}' size based on tag */\n", field.name).unwrap();
+          write!(output, "    const {}_size = (() => {{\n", escaped_name).unwrap();
+          write!(output, "      switch ({}) {{\n", tag_param).unwrap();
+          for (idx, variant) in variants.iter().enumerate() {
+            write!(output, "        case {}: return {};\n", idx, variant.expected_size).unwrap();
+          }
+          write!(output, "        default: throw new Error(`Invalid tag for size-discriminated union '{}'`);\n", field.name).unwrap();
+          write!(output, "      }}\n").unwrap();
+          write!(output, "    }})();\n").unwrap();
+          if !offset_var {
+            write!(output, "    offset += {}_size;\n", escaped_name).unwrap();
+          } else {
+            write!(output, "    offset = offset + {}_size;\n", escaped_name).unwrap();
+          }
+          offset_var = true;
         }
         ResolvedTypeKind::Primitive { prim_type } => {
           let setter = primitive_to_dataview_setter(prim_type);

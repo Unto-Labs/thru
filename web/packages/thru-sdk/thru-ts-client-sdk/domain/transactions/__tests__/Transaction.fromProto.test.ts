@@ -1,8 +1,8 @@
 import { create } from "@bufbuild/protobuf";
 import { describe, expect, it } from "vitest";
 
+import { PubkeySchema } from "../../../proto/thru/common/v1/primitives_pb";
 import { TransactionSchema } from "../../../proto/thru/core/v1/transaction_pb";
-import { PubkeySchema } from "../../../proto/thru/core/v1/types_pb";
 import { TXN_HEADER_SIZE } from "../../../wire-format";
 import { Transaction } from "../Transaction";
 

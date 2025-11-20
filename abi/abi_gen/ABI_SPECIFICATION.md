@@ -427,6 +427,13 @@ Alignment: 8 bytes (alignment of u64)
 
 Unions where the active variant is determined by the **total byte size** of the field rather than an explicit tag value. The deserializer determines which variant to use based on how many bytes are available or consumed.
 
+**CRITICAL CONSTRAINTS**:
+- **All variants must have constant sizes** - Variable-size variants (with FAMs or variable-size nested types) are not allowed
+- **All variants must have different expected sizes** - Each variant must have a unique `expected-size` value
+- **Must be anonymous** - Size-discriminated unions cannot be used as typerefs and must be defined inline
+- **Only one per struct** - A struct can contain at most one size-discriminated union field
+- **Tag function** - A function is generated that takes a size parameter and returns the variant tag (0-indexed integer constant)
+
 #### 3.5.1 Memory Layout
 
 ```
@@ -436,7 +443,7 @@ Unions where the active variant is determined by the **total byte size** of the 
 └─────────────────────────────────────┘
 ```
 
-Each variant specifies an `expected-size` in bytes. The variant whose expected size matches the actual data size is considered active.
+Each variant specifies an `expected-size` in bytes. The variant whose expected size matches the actual data size is considered active. The `expected-size` must exactly match the actual size of the variant's type (validated at type resolution time).
 
 #### 3.5.2 Variant Selection
 
@@ -474,53 +481,85 @@ If 16 bytes available → LargeMessage is active
 **1. Variable-size protocol fields**:
 ```
 struct Packet {
-  header: u32           (4 bytes)
-  data: VariantData     (size-discriminated)
+  header: u8            (1 byte)
+  data: VariantData     (size-discriminated union, anonymous)
   footer: u16           (2 bytes)
 }
 
 The size of 'data' field determines which variant is deserialized.
 ```
 
-**2. Nested FAMs in variants**:
-Size-discriminated unions can contain variants with flexible array members:
-
+**Example: Message with different payload sizes**:
 ```
-size-discriminated-union Data {
-  FAMVariant: expected-size = 8
-    struct {
-      count: u8
-      items: [u8; count]  ← FAM
-    }
-
-  FixedVariant: expected-size = 8
-    struct {
-      values: [u16; 4]    ← Fixed size
-    }
+struct Message {
+  header: u8
+  payload:
+    size-discriminated-union:
+      variants:
+        - name: "small"
+          expected-size: 4
+          variant-type:
+            struct:
+              fields:
+                - name: "value"
+                  field-type:
+                    primitive: u32
+        - name: "medium"
+          expected-size: 8
+          variant-type:
+            struct:
+              fields:
+                - name: "value1"
+                  field-type:
+                    primitive: u32
+                - name: "value2"
+                  field-type:
+                    primitive: u32
+        - name: "large"
+          expected-size: 16
+          variant-type:
+            struct:
+              fields:
+                - name: "value1"
+                  field-type:
+                    primitive: u64
+                - name: "value2"
+                  field-type:
+                    primitive: u64
 }
 ```
 
-**When count = 7**:
-- FAMVariant size = 1 (count) + 7 (items) = 8 bytes ✓
-- Matches expected-size, so FAMVariant is active
+**Note**: All variants must have constant sizes. Flexible array members (FAMs) are not allowed in size-discriminated union variants.
 
 #### 3.5.4 Validation
 
-**Size validation rules**:
-1. Parse variant data according to its type
-2. Calculate total bytes consumed (including any FAMs)
-3. Verify: `consumed_bytes == expected_size`
-4. If no variant matches the size, deserialization fails
+**Type definition validation rules**:
+1. All variants must have constant sizes (no FAMs, no variable-size nested types)
+2. Each variant's `expected-size` must exactly match its actual computed size
+3. All variants must have different `expected-size` values (no duplicates)
+4. Size-discriminated unions cannot be used as typerefs (must be anonymous/inline)
+5. A struct can contain at most one size-discriminated union field
 
-**Important**: The expected-size includes:
-- All constant-size fields
-- All variable-size fields at their runtime sizes
-- Any padding required by packing/alignment
+**Runtime size validation rules**:
+1. Determine available data size for the size-discriminated union field
+2. Match available size against each variant's `expected-size`
+3. If exactly one variant matches, that variant is active
+4. If no variant matches or multiple variants match, deserialization fails
+
+**Tag function**:
+A tag function is generated that takes a size parameter and returns the variant tag:
+- **C**: `uint8_t TypeName_tag(uint64_t size)` - Returns tag constant (0, 1, 2, ...) or 255 if no match
+- **Rust**: `pub fn type_name_tag(size: u64) -> u8` - Returns tag constant or 255 if no match
+- **Tag constants**: Each variant gets a tag constant (0-indexed):
+  - **C**: `#define TYPE_NAME_TAG_VARIANT_NAME 0` (or 1, 2, ...)
+  - **Rust**: `pub const TYPE_NAME_TAG_VARIANT_NAME: u8 = 0` (or 1, 2, ...)
 
 **Error conditions**:
 - Available data size doesn't match any variant's expected-size
-- Multiple variants have the same expected-size (ambiguous)
-- Variant's actual size differs from expected-size (type mismatch)
+- Multiple variants have the same expected-size (validation error at type definition time)
+- Variant's actual size differs from expected-size (validation error at type definition time)
+- Attempting to use size-discriminated union as typeref (validation error)
+- Multiple size-discriminated unions in same struct (validation error)
 
 ## 4. Type References
 

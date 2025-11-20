@@ -29,6 +29,8 @@ int memcmp(void const* s1, void const* s2, ulong n) {
   while (n--) {
     if (*p1 != *p2)
       return *p1 - *p2;
+    p1++;
+    p2++;
   }
   return 0;
 }

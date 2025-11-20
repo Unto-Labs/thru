@@ -179,6 +179,10 @@ fn emit_struct_footprint(resolved_type: &ResolvedType) -> String {
               extract_field_refs_from_expr(tag_expression, &mut field_refs_set);
             }
           }
+          /* For size-discriminated unions, tag parameter is passed directly (not extracted from expression) */
+          if let ResolvedTypeKind::SizeDiscriminatedUnion { .. } = &field.field_type.kind {
+            // Tag parameter will be added separately below
+          }
           /* For nested inline structs, extract field refs from their fields */
           if let ResolvedTypeKind::Struct { fields: nested_fields, .. } = &field.field_type.kind {
             for nested_field in nested_fields {
@@ -224,6 +228,13 @@ fn emit_struct_footprint(resolved_type: &ResolvedType) -> String {
                   params.push(format!("{}: number", tag_param));
                 }
               }
+            }
+          }
+          /* Add tag parameters for size-discriminated unions */
+          if let ResolvedTypeKind::SizeDiscriminatedUnion { .. } = &field.field_type.kind {
+            let tag_param = format!("{}_tag", field.name);
+            if !params.iter().any(|p| p.contains(&tag_param)) {
+              params.push(format!("{}: number", tag_param));
             }
           }
         }
@@ -303,6 +314,26 @@ fn emit_struct_footprint(resolved_type: &ResolvedType) -> String {
                   first = false;
                 }
               }
+            }
+
+            /* Add size-discriminated union size calculation */
+            if let ResolvedTypeKind::SizeDiscriminatedUnion { variants } = &field.field_type.kind {
+              let tag_param = format!("{}_tag", field.name);
+
+              if !first {
+                offset_expr.push_str(" + ");
+              }
+
+              /* Generate inline switch expression for size-discriminated union size based on tag */
+              write!(offset_expr, "((() => {{\n").unwrap();
+              write!(offset_expr, "      switch ({}) {{\n", tag_param).unwrap();
+              for (idx, variant) in variants.iter().enumerate() {
+                write!(offset_expr, "        case {}: return {};\n", idx, variant.expected_size).unwrap();
+              }
+              write!(offset_expr, "        default: throw new Error('Invalid tag for size-discriminated union');\n").unwrap();
+              write!(offset_expr, "      }}\n").unwrap();
+              write!(offset_expr, "    }})())").unwrap();
+              first = false;
             }
 
             /* Add nested inline struct size calculation */

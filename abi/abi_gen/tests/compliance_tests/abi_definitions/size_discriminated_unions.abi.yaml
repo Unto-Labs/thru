@@ -1,0 +1,53 @@
+abi:
+  package: "compliance.size_discriminated_unions"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Size-discriminated union types for compliance testing"
+
+types:
+  - name: "MessageWithSDU"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "header"
+            field-type:
+              primitive: u8
+          - name: "data"
+            field-type:
+              size-discriminated-union:
+                variants:
+                  - name: "small"
+                    expected-size: 4
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "value"
+                            field-type:
+                              primitive: u32
+                  - name: "medium"
+                    expected-size: 8
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "value1"
+                            field-type:
+                              primitive: u32
+                          - name: "value2"
+                            field-type:
+                              primitive: u32
+                  - name: "large"
+                    expected-size: 16
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "value1"
+                            field-type:
+                              primitive: u64
+                          - name: "value2"
+                            field-type:
+                              primitive: u64
+

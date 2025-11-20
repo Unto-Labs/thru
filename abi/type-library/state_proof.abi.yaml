@@ -1,0 +1,130 @@
+abi:
+  package: "thru.blockchain.state_proof"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "State proof structures for Merkle tree verification"
+  imports:
+    - "thru_primitives.abi.yaml"
+
+types:
+  # State proof header containing type, slot, and path bitset
+  - name: "StateProofHeader"
+    kind:
+      struct:
+        packed: true
+        fields:
+          # High 2 bits: proof type (0=EXISTING, 1=UPDATING, 2=CREATION)
+          # Low 62 bits: slot number
+          - name: "type_slot"
+            field-type:
+              primitive: u64
+          # Path bitset indicating the path through the Merkle tree
+          - name: "path_bitset"
+            field-type:
+              type-ref:
+                name: "Hash"
+                package: "thru.common.primitives"
+
+  # Complete state proof structure
+  # The proof body is a union where the active variant is determined by
+  # extracting bits 62-63 from hdr.type_slot.
+  # Type 0 (EXISTING): only sibling_hashes array is valid
+  # Type 1 (UPDATING): existing_leaf_hash + sibling_hashes array are valid
+  # Type 2 (CREATION): existing_leaf_pubkey + existing_leaf_hash + sibling_hashes array are valid
+  # Note: The union is fixed-size (largest variant), but the actual serialized
+  # size may be smaller based on proof type and sibling count (see tn_state_proof_footprint).
+  - name: "StateProof"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "hdr"
+            field-type:
+              type-ref:
+                name: "StateProofHeader"
+          # Proof body union - type determined by hdr.type_slot bits 62-63
+          # The union is fixed-size (largest variant = CREATION)
+          - name: "proof_body"
+            field-type:
+              union:
+                variants:
+                  # Raw access to all proof keys (TN_STATE_PROOF_KEYS_MAX+2 = 258 hashes)
+                  - name: "proof_keys"
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "keys"
+                            field-type:
+                              array:
+                                size:
+                                  literal:
+                                    u64: 258
+                                element-type:
+                                  type-ref:
+                                    name: "Hash"
+                                    package: "thru.common.primitives"
+                  # EXISTING variant (type=0): only sibling hashes
+                  - name: "existing"
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "sibling_hashes"
+                            field-type:
+                              array:
+                                size:
+                                  literal:
+                                    u64: 256
+                                element-type:
+                                  type-ref:
+                                    name: "Hash"
+                                    package: "thru.common.primitives"
+                  # UPDATING variant (type=1): existing leaf hash + sibling hashes
+                  - name: "updating"
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "existing_leaf_hash"
+                            field-type:
+                              type-ref:
+                                name: "Hash"
+                                package: "thru.common.primitives"
+                          - name: "sibling_hashes"
+                            field-type:
+                              array:
+                                size:
+                                  literal:
+                                    u64: 256
+                                element-type:
+                                  type-ref:
+                                    name: "Hash"
+                                    package: "thru.common.primitives"
+                  # CREATION variant (type=2): existing leaf pubkey + hash + sibling hashes
+                  - name: "creation"
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "existing_leaf_pubkey"
+                            field-type:
+                              type-ref:
+                                name: "Pubkey"
+                                package: "thru.common.primitives"
+                          - name: "existing_leaf_hash"
+                            field-type:
+                              type-ref:
+                                name: "Hash"
+                                package: "thru.common.primitives"
+                          - name: "sibling_hashes"
+                            field-type:
+                              array:
+                                size:
+                                  literal:
+                                    u64: 256
+                                element-type:
+                                  type-ref:
+                                    name: "Hash"
+                                    package: "thru.common.primitives"
+

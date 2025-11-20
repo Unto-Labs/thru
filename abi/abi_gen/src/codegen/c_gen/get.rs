@@ -99,7 +99,7 @@ pub fn emit_accessor_fn_struct(resolved_type: &ResolvedType) -> String {
         }
         write!(output, "}}\n\n").unwrap();
       }
-      ResolvedTypeKind::Struct { .. } | ResolvedTypeKind::Union { .. } | ResolvedTypeKind::SizeDiscriminatedUnion { .. } => {
+      ResolvedTypeKind::Struct { .. } | ResolvedTypeKind::Union { .. } => {
         /* Nested structs/unions - generate both const and mutable getters */
 
         /* Const getter */
@@ -200,12 +200,121 @@ pub fn emit_accessor_fn_struct(resolved_type: &ResolvedType) -> String {
           write!(output, "}}\n\n").unwrap();
         }
       }
+      ResolvedTypeKind::SizeDiscriminatedUnion { variants } => {
+        /* For size-discriminated union fields in structs, generate tag and size functions */
+        
+        /* Generate tag function - takes size parameter and returns variant tag */
+        /* Note: This is a standalone function, not a getter, since we need the size as input */
+        write!(output, "/* Tag function for size-discriminated union field '{}' */\n", field.name).unwrap();
+        write!(output, "uint8_t {}_{}_tag_from_size( uint64_t size ) {{\n", type_name, escaped_name).unwrap();
+        write!(output, "  switch( size ) {{\n").unwrap();
+        for (idx, variant) in variants.iter().enumerate() {
+          write!(output, "    case {}: return {};\n", variant.expected_size, idx).unwrap();
+        }
+        write!(output, "    default: return 255; /* Invalid size - no matching variant */\n").unwrap();
+        write!(output, "  }}\n").unwrap();
+        write!(output, "}}\n\n").unwrap();
+
+        /* Generate size function - takes tag and returns size */
+        write!(output, "uint64_t {}_{}_size_from_tag( uint8_t tag ) {{\n", type_name, escaped_name).unwrap();
+        write!(output, "  switch( tag ) {{\n").unwrap();
+        for (idx, variant) in variants.iter().enumerate() {
+          write!(output, "    case {}: return {};\n", idx, variant.expected_size).unwrap();
+        }
+        write!(output, "    default: return 0; /* Invalid tag */\n").unwrap();
+        write!(output, "  }}\n").unwrap();
+        write!(output, "}}\n\n").unwrap();
+
+        /* Generate size getter - takes struct pointer and buffer size, returns size based on available buffer */
+        write!(output, "/* Size getter for size-discriminated union field '{}' */\n", field.name).unwrap();
+        write!(output, "uint64_t {}_{}_size( {}_t const * self, uint64_t buffer_size ) {{\n", type_name, escaped_name, type_name).unwrap();
+        
+        /* Calculate offset to this field */
+        if after_variable_size_data {
+          output.push_str(&fam_offset_code);
+          write!(output, "  uint64_t available_size = buffer_size - offset;\n").unwrap();
+          write!(output, "  /* Match available size against variant sizes */\n").unwrap();
+          write!(output, "  switch( available_size ) {{\n").unwrap();
+          for variant in variants.iter() {
+            write!(output, "    case {}: return {};\n", variant.expected_size, variant.expected_size).unwrap();
+          }
+          write!(output, "    default: return 0; /* Invalid size */\n").unwrap();
+          write!(output, "  }}\n").unwrap();
+        } else {
+          /* Before variable-size data - calculate offset statically */
+          let mut static_offset = 0u64;
+          for prev_field in fields.iter() {
+            if prev_field.name == field.name {
+              break;
+            }
+            if let Size::Const(size) = prev_field.field_type.size {
+              static_offset += size;
+            } else {
+              /* Can't calculate statically */
+              static_offset = 0;
+              break;
+            }
+          }
+          write!(output, "  uint64_t available_size = buffer_size - {};\n", static_offset).unwrap();
+          write!(output, "  /* Match available size against variant sizes */\n").unwrap();
+          write!(output, "  switch( available_size ) {{\n").unwrap();
+          for variant in variants.iter() {
+            write!(output, "    case {}: return {};\n", variant.expected_size, variant.expected_size).unwrap();
+          }
+          write!(output, "    default: return 0; /* Invalid size */\n").unwrap();
+          write!(output, "  }}\n").unwrap();
+        }
+        write!(output, "}}\n\n").unwrap();
+
+        /* Generate variant-specific getters for each variant (like enums) */
+        for variant in variants {
+          let variant_escaped = escape_c_keyword(&variant.name);
+          let variant_type_name = if is_nested_complex_type(&variant.variant_type) {
+            format!("{}_{}_{}_inner_t", type_name, escaped_name, variant_escaped)
+          } else {
+            format_type_to_c(&variant.variant_type)
+          };
+
+          /* Const getter - name includes SDU field name (like enum pattern: {type}_{field}_get_{variant}_const) */
+          write!(output, "{} const * {}_{}_get_{}_const( {}_t const * self ) {{\n",
+                 variant_type_name, type_name, escaped_name, variant_escaped, type_name).unwrap();
+          if after_variable_size_data {
+            output.push_str(&fam_offset_code);
+            write!(output, "  return ({} const *)((unsigned char const *)self + offset);\n", variant_type_name).unwrap();
+          } else {
+            /* Before variable-size data - calculate offset statically */
+            let mut static_offset = 0u64;
+            for prev_field in fields.iter() {
+              if prev_field.name == field.name {
+                break;
+              }
+              if let Size::Const(size) = prev_field.field_type.size {
+                static_offset += size;
+              } else {
+                /* Can't calculate statically */
+                static_offset = 0;
+                break;
+              }
+            }
+            write!(output, "  return ({} const *)((unsigned char const *)self + {});\n",
+                   variant_type_name, static_offset).unwrap();
+          }
+          write!(output, "}}\n\n").unwrap();
+
+          /* Mutable getter - name includes SDU field name (like enum pattern: {type}_{field}_get_{variant}) */
+          write!(output, "{} * {}_{}_get_{}( {}_t * self ) {{\n",
+                 variant_type_name, type_name, escaped_name, variant_escaped, type_name).unwrap();
+          write!(output, "  return ({} *)(void *){}_{}_get_{}_const( ({}_t const *)self );\n",
+                 variant_type_name, type_name, escaped_name, variant_escaped, type_name).unwrap();
+          write!(output, "}}\n\n").unwrap();
+        }
+      }
     }
 
     if is_fam {
       if !after_variable_size_data {
-        /* For enum fields, body is inline bytes, not an actual struct field */
-        if matches!(&field.field_type.kind, ResolvedTypeKind::Enum { .. }) {
+        /* For enum fields and size-discriminated unions, body is inline bytes, not an actual struct field */
+        if matches!(&field.field_type.kind, ResolvedTypeKind::Enum { .. } | ResolvedTypeKind::SizeDiscriminatedUnion { .. }) {
           write!(fam_offset_code, "  uint64_t offset = sizeof( {}_t );\n", type_name).unwrap();
         } else {
           write!(fam_offset_code, "  uint64_t offset = offsetof( {}_t, {} );\n", type_name, field.name).unwrap();
@@ -352,7 +461,20 @@ pub fn emit_accessor_fn_struct(resolved_type: &ResolvedType) -> String {
             write!(fam_offset_code, "  offset += sizeof( {}_{}_inner_t );\n", type_name, field.name).unwrap();
           }
         }
-        ResolvedTypeKind::Struct { .. } | ResolvedTypeKind::Union { .. } | ResolvedTypeKind::SizeDiscriminatedUnion { .. } => {
+        ResolvedTypeKind::SizeDiscriminatedUnion { variants } => {
+          /* Size-discriminated unions have variable runtime size */
+          /* Calculate available size and determine variant */
+          write!(fam_offset_code, "  uint64_t available_size_{} = data_len - offset;\n", escaped_name).unwrap();
+          write!(fam_offset_code, "  uint64_t {}_size;\n", escaped_name).unwrap();
+          write!(fam_offset_code, "  switch( available_size_{} ) {{\n", escaped_name).unwrap();
+          for variant in variants {
+            write!(fam_offset_code, "    case {}: {}_size = {}; break;\n", variant.expected_size, escaped_name, variant.expected_size).unwrap();
+          }
+          write!(fam_offset_code, "    default: return -1; /* No matching variant for size-discriminated union '{}' */\n", field.name).unwrap();
+          write!(fam_offset_code, "  }}\n").unwrap();
+          write!(fam_offset_code, "  offset += {}_size;\n", escaped_name).unwrap();
+        }
+        ResolvedTypeKind::Struct { .. } | ResolvedTypeKind::Union { .. } => {
           if let Size::Variable( .. ) = &field.field_type.size {
             if let Size::Variable(field_map) = &field.field_type.size {
               if let Some(field_refs) = field_map.get(&field.name) {
@@ -472,8 +594,23 @@ pub fn emit_accessor_fn(resolved_type: &ResolvedType) -> String {
   match &resolved_type.kind {
     ResolvedTypeKind::Struct { .. } => emit_accessor_fn_struct(resolved_type),
     ResolvedTypeKind::Union { .. } => emit_accessor_fn_union(resolved_type),
-    ResolvedTypeKind::SizeDiscriminatedUnion { .. } => {
-      format!("/* TODO: EMIT ACCESSORS FOR SizeDiscriminatedUnion */\n\n")
+    ResolvedTypeKind::SizeDiscriminatedUnion { variants } => {
+      let mut output = String::new();
+      let type_name = &resolved_type.name;
+      let escaped_type_name = escape_c_keyword(type_name);
+
+      // Generate tag function: takes size and returns variant tag
+      write!(output, "/* Tag function for size-discriminated union '{}' */\n", type_name).unwrap();
+      write!(output, "uint8_t {}_tag( uint64_t size ) {{\n", escaped_type_name).unwrap();
+      write!(output, "  switch( size ) {{\n").unwrap();
+      for (idx, variant) in variants.iter().enumerate() {
+        write!(output, "    case {}: return {}_TAG_{};\n", variant.expected_size, escaped_type_name.to_uppercase(), variant.name.to_uppercase()).unwrap();
+      }
+      write!(output, "    default: return 255; /* Invalid size - no matching variant */\n").unwrap();
+      write!(output, "  }}\n").unwrap();
+      write!(output, "}}\n\n").unwrap();
+
+      output
     }
     _ => {
       /* Unsupported type*/

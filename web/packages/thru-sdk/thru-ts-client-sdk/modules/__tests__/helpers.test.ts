@@ -5,7 +5,11 @@ import {
     deriveProgramAddress,
     toBlockHash,
     toPubkey,
+    toPubkeyBytes,
     toSignature,
+    toSignatureBytes,
+    toTaPubkey,
+    toTsSignature,
 } from "../helpers";
 
 describe("helpers", () => {
@@ -44,8 +48,8 @@ describe("helpers", () => {
     });
 
     it("should throw error for invalid input type", () => {
-      expect(() => toSignature(null as any)).toThrow("signature is required");
-      expect(() => toSignature(undefined as any)).toThrow("signature is required");
+      expect(() => toSignature(null as any)).toThrow("signature must be provided as Uint8Array, ts-encoded string, hex string, or base64 string");
+      expect(() => toSignature(undefined as any)).toThrow("signature must be provided as Uint8Array, ts-encoded string, hex string, or base64 string");
     });
   });
 
@@ -84,14 +88,42 @@ describe("helpers", () => {
     });
 
     it("should throw error for invalid input type", () => {
-      expect(() => toPubkey(null as any, "testField")).toThrow("testField is required");
-      expect(() => toPubkey(undefined as any, "testField")).toThrow("testField is required");
+      expect(() => toPubkey(null as any, "testField")).toThrow("testField must be a 32-byte value, ta-address, hex string, or base64 string");
+      expect(() => toPubkey(undefined as any, "testField")).toThrow("testField must be a 32-byte value, ta-address, hex string, or base64 string");
     });
 
     it("should include field name in error message", () => {
       const invalidPubkey = new Uint8Array(64);
       
       expect(() => toPubkey(invalidPubkey, "myCustomField")).toThrow("myCustomField must contain 32 bytes");
+    });
+  });
+
+  describe("new primitive helpers", () => {
+    it("converts to raw pubkey bytes", () => {
+      const pubkeyBytes = generateTestPubkey();
+      const result = toPubkeyBytes(pubkeyBytes, "testField");
+      expect(result).toEqual(pubkeyBytes);
+    });
+
+    it("converts to raw signature bytes", () => {
+      const signatureBytes = generateTestSignature();
+      const result = toSignatureBytes(signatureBytes);
+      expect(result).toEqual(signatureBytes);
+    });
+
+    it("wraps ta pubkeys from bytes", () => {
+      const pubkeyBytes = generateTestPubkey();
+      const taProto = toTaPubkey(pubkeyBytes);
+      expect(taProto.value.startsWith("ta")).toBe(true);
+      expect(taProto.value.length).toBeGreaterThan(0);
+    });
+
+    it("wraps ts signatures from bytes", () => {
+      const signatureBytes = generateTestSignature();
+      const tsProto = toTsSignature(signatureBytes);
+      expect(tsProto.value.startsWith("ts")).toBe(true);
+      expect(tsProto.value.length).toBeGreaterThan(0);
     });
   });
 
@@ -281,7 +313,7 @@ describe("helpers", () => {
       expect(() => deriveProgramAddress({
         programAddress: invalidProgramAddress,
         seed,
-      })).toThrow("Program address must be a 32-byte value, ta-address, or 64-character hex string");
+      })).toThrow("Program address must be a 32-byte value, ta-address, hex string, or base64 string");
     });
   });
 });

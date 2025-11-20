@@ -125,7 +125,7 @@ impl LanguageRunner for CRunner {
         }
 
         /* Extract field information for opaque wrapper API */
-        let (referenced_primitive_fields, non_referenced_primitive_fields, enum_fields, array_fields, nested_fields, package) = match extract_field_info_opaque(abi_file_path, &test_case.type_name) {
+        let (referenced_primitive_fields, non_referenced_primitive_fields, enum_fields, array_fields, nested_fields, size_discriminated_union_fields, package) = match extract_field_info_opaque(abi_file_path, &test_case.type_name) {
             Ok(info) => info,
             Err(e) => {
                 return Ok(TestResult {
@@ -147,6 +147,38 @@ impl LanguageRunner for CRunner {
         let binary_file_path = temp_dir.join("test_data.bin");
         fs::write(&binary_file_path, binary_data)?;
 
+        /* Extract SDU variant info from ABI */
+        let abi_content = fs::read_to_string(abi_file_path)?;
+        let abi: AbiFile = serde_yaml::from_str(&abi_content)?;
+        let sdu_fields_with_variants: Vec<SDUFieldInfo> = abi.get_types().iter()
+            .find(|t| t.name == test_case.type_name)
+            .and_then(|t| {
+                if let TypeKind::Struct(struct_type) = &t.kind {
+                    Some(struct_type.fields.iter()
+                        .filter_map(|f| {
+                            match &f.field_type {
+                                TypeKind::SizeDiscriminatedUnion(sdu_type) => {
+                                    let variants: Vec<SDUVariantInfo> = sdu_type.variants.iter()
+                                        .map(|v| SDUVariantInfo {
+                                            name: v.name.clone(),
+                                            expected_size: v.expected_size,
+                                        })
+                                        .collect();
+                                    Some(SDUFieldInfo {
+                                        field_name: f.name.clone(),
+                                        variants,
+                                    })
+                                },
+                                _ => None,
+                            }
+                        })
+                        .collect())
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_default();
+
         /* Generate C test runner code using opaque wrapper API */
         let test_runner_code = generate_c_test_runner_code_opaque(
             &test_case.type_name,
@@ -156,6 +188,8 @@ impl LanguageRunner for CRunner {
             &enum_fields,
             &array_fields,
             &nested_fields,
+            &size_discriminated_union_fields,
+            &sdu_fields_with_variants,
             &package,
         );
 
@@ -338,6 +372,20 @@ struct EnumFieldInfo {
     variants: Vec<EnumVariantInfo>, /* All variants for this enum */
 }
 
+/* SDU variant information */
+#[derive(Debug, Clone)]
+struct SDUVariantInfo {
+    name: String,
+    expected_size: u64,
+}
+
+/* SDU field information (one per SDU field in the struct) */
+#[derive(Debug)]
+struct SDUFieldInfo {
+    field_name: String,          /* Name of the SDU field */
+    variants: Vec<SDUVariantInfo>, /* All variants for this SDU */
+}
+
 /* Field classification for test generation */
 #[derive(Debug)]
 struct FieldClassification {
@@ -347,7 +395,7 @@ struct FieldClassification {
 }
 
 /* Extract field information for opaque wrapper API */
-fn extract_field_info_opaque(abi_file_path: &Path, type_name: &str) -> Result<(Vec<String>, Vec<String>, Vec<String>, Vec<(String, bool, bool, Option<String>)>, Vec<(String, String, Vec<String>, u64)>, String)> {
+fn extract_field_info_opaque(abi_file_path: &Path, type_name: &str) -> Result<(Vec<String>, Vec<String>, Vec<String>, Vec<(String, bool, bool, Option<String>)>, Vec<(String, String, Vec<String>, u64)>, Vec<String>, String)> {
     use std::collections::HashSet;
 
     let abi_content = fs::read_to_string(abi_file_path)?;
@@ -436,6 +484,27 @@ fn extract_field_info_opaque(abi_file_path: &Path, type_name: &str) -> Result<(V
                     .filter_map(|f| {
                         match &f.field_type {
                             TypeKind::Enum(_) => Some(f.name.clone()),
+                            _ => None,
+                        }
+                    })
+                    .collect();
+
+                /* Extract SDU fields with variant information */
+                let size_discriminated_union_fields: Vec<SDUFieldInfo> = struct_type.fields.iter()
+                    .filter_map(|f| {
+                        match &f.field_type {
+                            TypeKind::SizeDiscriminatedUnion(sdu_type) => {
+                                let variants: Vec<SDUVariantInfo> = sdu_type.variants.iter()
+                                    .map(|v| SDUVariantInfo {
+                                        name: v.name.clone(),
+                                        expected_size: v.expected_size,
+                                    })
+                                    .collect();
+                                Some(SDUFieldInfo {
+                                    field_name: f.name.clone(),
+                                    variants,
+                                })
+                            },
                             _ => None,
                         }
                     })
@@ -542,7 +611,12 @@ fn extract_field_info_opaque(abi_file_path: &Path, type_name: &str) -> Result<(V
                     })
                     .collect();
 
-                return Ok((referenced_primitive_fields, non_referenced_primitive_fields, enum_fields, array_fields, nested_fields, package));
+                /* Convert SDUFieldInfo to Vec<String> for backward compatibility in function signature */
+                let size_discriminated_union_field_names: Vec<String> = size_discriminated_union_fields.iter()
+                    .map(|sdu| sdu.field_name.clone())
+                    .collect();
+                
+                return Ok((referenced_primitive_fields, non_referenced_primitive_fields, enum_fields, array_fields, nested_fields, size_discriminated_union_field_names, package));
             }
         }
     }
@@ -906,6 +980,8 @@ fn generate_c_test_runner_code_opaque(
     enum_fields: &[String],
     array_fields: &[(String, bool, bool, Option<String>)],  /* (field_name, is_byte_array, is_struct_array, element_type_name) */
     nested_fields: &[(String, String, Vec<String>, u64)],  /* (field_name, nested_type_name, nested_struct_field_names, size) */
+    size_discriminated_union_fields: &[String],
+    sdu_fields_with_variants: &[SDUFieldInfo],
     package: &str,
 ) -> String {
     let mut code = String::new();
@@ -976,22 +1052,32 @@ int main( void ) {{
         type_name,
     ));
 
-    if referenced_primitive_fields.is_empty() {
-        /* No referenced fields - just create empty instance */
+    if referenced_primitive_fields.is_empty() && size_discriminated_union_fields.is_empty() {
+        /* No referenced fields or SDU fields - just create empty instance */
         code.push_str(&format!(
             "  int new_result = {}_new( reencoded_data, file_size, &reencoded_size );\n",
             type_name
         ));
     } else {
-        /* Has referenced fields - pass them to new() constructor */
+        /* Has referenced fields or SDU fields - pass them to new() constructor */
         code.push_str(&format!("  int new_result = {}_new( reencoded_data, file_size,\n", type_name));
 
-        /* Generate getter calls for referenced primitive fields only */
-        for (idx, field_name) in referenced_primitive_fields.iter().enumerate() {
-            if idx > 0 {
+        let mut param_count = 0;
+        /* Generate getter calls for referenced primitive fields */
+        for field_name in referenced_primitive_fields {
+            if param_count > 0 {
                 code.push_str(",\n");
             }
             code.push_str(&format!("    {}_get_{}( original )", type_name, field_name));
+            param_count += 1;
+        }
+        /* Generate tag getter calls for size-discriminated union fields */
+        for field_name in size_discriminated_union_fields {
+            if param_count > 0 {
+                code.push_str(",\n");
+            }
+            code.push_str(&format!("    {}_{}_tag_from_size( {}_{}_size( original, file_size ) )", type_name, field_name.replace("-", "_"), type_name, field_name.replace("-", "_")));
+            param_count += 1;
         }
         code.push_str(",\n    &reencoded_size );\n");
     }
@@ -1033,6 +1119,41 @@ int main( void ) {{
             code.push_str("      free( original_data );\n");
             code.push_str("      free( reencoded_data );\n");
             code.push_str("      return 1;\n");
+            code.push_str("    }\n");
+            code.push_str("  }\n");
+        }
+    }
+
+    /* Set size-discriminated union fields via variant-specific setters (like enums) */
+    if !sdu_fields_with_variants.is_empty() {
+        code.push_str("\n  /* Set size-discriminated union fields via variant-specific setters */\n");
+        for sdu_field in sdu_fields_with_variants {
+            let field_name_escaped = sdu_field.field_name.replace("-", "_");
+            code.push_str(&format!("  {{\n"));
+            code.push_str(&format!("    /* Determine variant from size */\n"));
+            code.push_str(&format!("    uint64_t {}_size = {}_{}_size( original, file_size );\n",
+                                 field_name_escaped, type_name, field_name_escaped));
+            code.push_str(&format!("    uint8_t {}_tag = {}_{}_tag_from_size( {}_size );\n",
+                                 field_name_escaped, type_name, field_name_escaped, field_name_escaped));
+            code.push_str(&format!("    switch( {}_tag ) {{\n", field_name_escaped));
+            
+            for (idx, variant) in sdu_field.variants.iter().enumerate() {
+                let variant_name_escaped = variant.name.replace("-", "_");
+                code.push_str(&format!("      case {}: {{\n", idx));
+                code.push_str(&format!("        {}_{}_set_{}( reencoded_data, {}_{}_get_{}_const( original ) );\n",
+                                     type_name, field_name_escaped, variant_name_escaped,
+                                     type_name, field_name_escaped, variant_name_escaped));
+                code.push_str("        break;\n");
+                code.push_str("      }\n");
+            }
+            
+            code.push_str("      default:\n");
+            code.push_str(&format!("        fprintf( stderr, \"Invalid SDU tag for {}: %d\\n\", {}_tag );\n",
+                                 sdu_field.field_name, field_name_escaped));
+            code.push_str("        printf( \"REENCODE:error\\n\" );\n");
+            code.push_str("        free( original_data );\n");
+            code.push_str("        free( reencoded_data );\n");
+            code.push_str("        return 1;\n");
             code.push_str("    }\n");
             code.push_str("  }\n");
         }

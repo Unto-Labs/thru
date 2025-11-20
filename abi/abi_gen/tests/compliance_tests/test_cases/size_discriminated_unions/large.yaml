@@ -1,0 +1,8 @@
+test-case:
+  name: "large_variant"
+  abi-file: "../../abi_definitions/size_discriminated_unions.abi.yaml"
+  type: "MessageWithSDU"
+  binary-hex: "010102030405060708090a0b0c0d0e0f10"
+  description: "Test size-discriminated union with large variant (16 bytes)"
+  tags: ["size-discriminated-union", "large", "variant"]
+

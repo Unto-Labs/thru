@@ -1,5 +1,6 @@
-import { BytesLike, Pubkey, decodeAddress, hexToBytes, isHexString } from "@thru/helpers";
-import type { Pubkey as ProtoPubkey } from "../../proto/thru/core/v1/types_pb";
+import { BytesLike, Pubkey, hexToBytes, isHexString } from "@thru/helpers";
+import type { Pubkey as ProtoPubkey } from "../../proto/thru/common/v1/primitives_pb";
+import { protoPubkeyToBytes, pubkeyBytesFromInput } from "../../utils/primitives";
 import type { AccountAddress, ProgramIdentifier } from "./types";
 
 const ACCOUNT_LIMIT = 1024;
@@ -53,66 +54,11 @@ function toHex(bytes: Uint8Array): string {
 }
 
 export function resolveProgramIdentifier(identifier: ProgramIdentifier): AccountAddress {
-    if (identifier instanceof Uint8Array) {
-        if (identifier.length !== 32) {
-            throw new Error("Program public key must contain 32 bytes");
-        }
-        return copyAccount(identifier);
-    }
-
-    if (typeof identifier === "string") {
-        const parsed = parseProgramString(identifier);
-        if (parsed) {
-            return parsed;
-        }
-    }
-
-    throw new Error("Unsupported program identifier format");
-}
-
-function parseProgramString(value: string): AccountAddress | undefined {
-    if (value.startsWith("ta") && value.length === 46) {
-        return copyAccount(decodeAddress(value));
-    }
-    if (isHexString(value)) {
-        const bytes = hexToBytes(value);
-        if (bytes.length !== 32) {
-            throw new Error("Hex-encoded program key must contain 32 bytes");
-        }
-        return bytes;
-    }
-    return undefined;
-}
-
-function copyAccount(value: AccountAddress): AccountAddress {
-    if (value.length !== ACCOUNT_ADDRESS_LENGTH) {
-        throw new Error("Program public key must contain 32 bytes");
-    }
-    return new Uint8Array(value);
+    return pubkeyBytesFromInput(identifier, "program");
 }
 
 export function parseAccountIdentifier(value: Pubkey, field: string): AccountAddress {
-    if (value instanceof Uint8Array) {
-        if (value.length !== ACCOUNT_ADDRESS_LENGTH) {
-            throw new Error(`${field} must contain 32 bytes`);
-        }
-        return new Uint8Array(value);
-    }
-
-    if (typeof value === "string") {
-        if (value.startsWith("ta") && value.length === 46) {
-            return copyAccount(decodeAddress(value));
-        }
-        if (isHexString(value)) {
-            const bytes = hexToBytes(value);
-            if (bytes.length !== ACCOUNT_ADDRESS_LENGTH) {
-                throw new Error(`${field} hex string must decode to 32 bytes`);
-            }
-            return bytes;
-        }
-    }
-
-    throw new Error(`${field} must be a 32-byte value, ta-address, or 64-character hex string`);
+    return pubkeyBytesFromInput(value, field);
 }
 
 export function parseInstructionData(value?: BytesLike): Uint8Array | undefined {
@@ -134,8 +80,5 @@ export function parseInstructionData(value?: BytesLike): Uint8Array | undefined 
 }
 
 export function protoPubkeyToAccountAddress(pubkey?: ProtoPubkey): AccountAddress {
-    if (!pubkey?.value || pubkey.value.length !== ACCOUNT_ADDRESS_LENGTH) {
-        return new Uint8Array(ACCOUNT_ADDRESS_LENGTH);
-    }
-    return new Uint8Array(pubkey.value);
+    return protoPubkeyToBytes(pubkey);
 }

@@ -4,6 +4,7 @@ package thru.core.v1;
 
 import "buf/validate/validate.proto";
 import "google/api/field_behavior.proto";
+import "thru/common/v1/primitives.proto";
 
 option go_package = "github.com/Unto-Labs/thru-net/grpc/pkg/proto/thru/core/v1;corev1";
 option java_multiple_files = true;
@@ -12,15 +13,6 @@ option csharp_namespace = "Thru.Core.V1";
 option ruby_package = "Thru::Core::V1";
 option objc_class_prefix = "THUC";
 option swift_prefix = "THUC";
-
-// Pubkey represents a 32-byte public key value.
-message Pubkey {
-  // 32-byte public key buffer.
-  bytes value = 1 [
-    (google.api.field_behavior) = REQUIRED,
-    (buf.validate.field).bytes.len = 32
-  ];
-}
 
 // Hash represents a 32-byte hash value.
 message Hash {
@@ -34,15 +26,6 @@ message Hash {
 // BlockHash represents a 64-byte hash for block identifiers.
 message BlockHash {
   // 64-byte block hash buffer.
-  bytes value = 1 [
-    (google.api.field_behavior) = REQUIRED,
-    (buf.validate.field).bytes.len = 64
-  ];
-}
-
-// Signature represents a 64-byte signature value.
-message Signature {
-  // 64-byte signature buffer.
   bytes value = 1 [
     (google.api.field_behavior) = REQUIRED,
     (buf.validate.field).bytes.len = 64

@@ -61,6 +61,7 @@ enum Language {
   /* Generate Rust code (.rs files) */
   Rust,
   /* Generate TypeScript code (.ts files) */
+  #[value(name = "typescript")]
   TypeScript,
 }
 

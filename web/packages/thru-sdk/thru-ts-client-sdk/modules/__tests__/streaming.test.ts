@@ -8,7 +8,16 @@ import { Transaction } from "../../domain/transactions/Transaction";
 import { ConsensusStatus } from "../../proto/thru/common/v1/consensus_pb";
 import { TransactionExecutionResultSchema, TransactionSchema } from "../../proto/thru/core/v1/transaction_pb";
 import { AccountUpdateSchema, StreamAccountUpdatesResponseSchema, StreamEventsResponseSchema, TrackTransactionResponseSchema } from "../../proto/thru/services/v1/streaming_service_pb";
-import { streamAccountUpdates, streamBlocks, streamEvents, streamTransactions, trackTransaction } from "../streaming";
+import {
+  collectStream,
+  firstStreamValue,
+  forEachStreamValue,
+  streamAccountUpdates,
+  streamBlocks,
+  streamEvents,
+  streamTransactions,
+  trackTransaction
+} from "../streaming";
 
 describe("streaming", () => {
   function createMockTransactionProto(overrides: any = {}) {
@@ -395,6 +404,38 @@ describe("streaming", () => {
       }
 
       expect(updates[0].executionResult?.consumedComputeUnits).toBe(10);
+    });
+  });
+
+  describe("stream helpers", () => {
+    async function* asAsync<T>(values: T[]): AsyncIterable<T> {
+      for (const value of values) {
+        yield value;
+      }
+    }
+
+    it("collectStream gathers values", async () => {
+      const values = await collectStream(asAsync([1, 2, 3]));
+      expect(values).toEqual([1, 2, 3]);
+    });
+
+    it("firstStreamValue returns the first element", async () => {
+      const value = await firstStreamValue(asAsync(["a", "b", "c"]));
+      expect(value).toBe("a");
+    });
+
+    it("forEachStreamValue iterates sequentially", async () => {
+      const seen: number[] = [];
+      await forEachStreamValue(asAsync([1, 2, 3]), async (value) => {
+        seen.push(value);
+      });
+      expect(seen).toEqual([1, 2, 3]);
+    });
+
+    it("collectStream respects pre-aborted signal", async () => {
+      const controller = new AbortController();
+      controller.abort();
+      await expect(collectStream(asAsync([1, 2, 3]), { signal: controller.signal })).rejects.toThrow(/aborted/i);
     });
   });
 });

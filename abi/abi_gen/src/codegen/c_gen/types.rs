@@ -239,6 +239,18 @@ fn emit_recursive_types(type_def: &ResolvedType, type_path: Option<&str>, output
         Some(path) => format!("{}_inner", path),
       };
 
+      // Add tag constants/macros for each variant (0-indexed)
+      if type_path.is_none() {
+        // Only emit tag constants for top-level types, not nested ones
+        write!(output, "/* TAG CONSTANTS FOR SIZE-DISCRIMINATED UNION: {} */\n", type_def.name.to_uppercase()).unwrap();
+        for (idx, variant) in variants.iter().enumerate() {
+          let variant_name_upper = variant.name.to_uppercase();
+          let type_name_upper = type_def.name.to_uppercase();
+          write!(output, "#define {}_TAG_{} {}\n", type_name_upper, variant_name_upper, idx).unwrap();
+        }
+        write!(output, "\n").unwrap();
+      }
+
       let mut union_content = String::new();
       let field_prefix = type_path.unwrap_or(&type_def.name).to_string();
 
@@ -282,12 +294,22 @@ pub fn emit_type(type_def: &ResolvedType) -> String {
       /* Opaque type - type alias for uint8_t, const-correctness via pointer type */
       write!(output, "typedef uint8_t {}_t;\n\n", type_name).unwrap();
 
-      /* Recursively emit type definitions for inline nested structs */
+      /* Recursively emit type definitions for inline nested structs and SDU variant structs */
       /* Note: Functions for nested structs are generated on the parent type, not as separate functions */
       for field in fields {
         if let ResolvedTypeKind::Struct { .. } = &field.field_type.kind {
           /* This is an inline nested struct - emit its type definition only (not functions) */
           output.push_str(&emit_type(&field.field_type));
+        }
+        if let ResolvedTypeKind::SizeDiscriminatedUnion { variants } = &field.field_type.kind {
+          /* Emit type definitions for SDU variant structs */
+          let field_prefix = format!("{}_{}", type_name, field.name);
+          for variant in variants {
+            if is_nested_complex_type(&variant.variant_type) {
+              let nested_path = format!("{}_{}", field_prefix, variant.name);
+              emit_recursive_types(&variant.variant_type, Some(&nested_path), &mut output);
+            }
+          }
         }
       }
     }

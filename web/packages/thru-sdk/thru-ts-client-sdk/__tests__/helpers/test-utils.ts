@@ -47,6 +47,7 @@ export function createMockContext(overrides: Partial<ThruClientContext> = {}): T
       streamEvents: vi.fn(),
       ...overrides.streaming,
     } as any,
+    callOptions: overrides.callOptions,
     ...overrides,
   };
 }

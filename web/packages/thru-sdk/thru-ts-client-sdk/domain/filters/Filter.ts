@@ -1,4 +1,5 @@
 import { create } from "@bufbuild/protobuf";
+import { BytesLike, Pubkey as PubkeyInput } from "@thru/helpers";
 
 import {
     FilterParamValueSchema,
@@ -6,18 +7,48 @@ import {
     Filter as ProtoFilter,
     FilterParamValue as ProtoFilterParamValue,
 } from "../../proto/thru/common/v1/filters_pb";
+import {
+    protoPubkeyToBytes,
+    protoSignatureToBytes,
+    protoTaPubkeyToString,
+    protoTsSignatureToString,
+    pubkeyBytesFromInput,
+    signatureBytesFromInput,
+    toPubkeyProto,
+    toSignatureProto,
+    toTaPubkeyProto,
+    toTsSignatureProto,
+} from "../../utils/primitives";
 
 export type FilterParamValueCase =
     | "stringValue"
     | "bytesValue"
     | "boolValue"
     | "intValue"
-    | "doubleValue";
+    | "doubleValue"
+    | "uintValue"
+    | "pubkeyValue"
+    | "signatureValue"
+    | "taPubkeyValue"
+    | "tsSignatureValue";
 
 function copyBytes(source: Uint8Array): Uint8Array {
     const bytes = new Uint8Array(source.length);
     bytes.set(source);
     return bytes;
+}
+
+function toUint(value: number | bigint): bigint {
+    if (typeof value === "bigint") {
+        if (value < 0n) {
+            throw new Error("FilterParamValue.uint requires a non-negative value");
+        }
+        return value;
+    }
+    if (!Number.isFinite(value) || !Number.isInteger(value) || value < 0) {
+        throw new Error("FilterParamValue.uint requires a non-negative integer");
+    }
+    return BigInt(value);
 }
 
 export class FilterParamValue {
@@ -66,6 +97,36 @@ export class FilterParamValue {
                 }
                 this.value = params.value;
                 return;
+            case "uintValue":
+                if (typeof params.value !== "bigint") {
+                    throw new Error("FilterParamValue.uint requires a bigint value");
+                }
+                this.value = params.value;
+                return;
+            case "pubkeyValue":
+                if (!(params.value instanceof Uint8Array)) {
+                    throw new Error("FilterParamValue.pubkey requires a Uint8Array value");
+                }
+                this.value = copyBytes(params.value);
+                return;
+            case "signatureValue":
+                if (!(params.value instanceof Uint8Array)) {
+                    throw new Error("FilterParamValue.signature requires a Uint8Array value");
+                }
+                this.value = copyBytes(params.value);
+                return;
+            case "taPubkeyValue":
+                if (typeof params.value !== "string") {
+                    throw new Error("FilterParamValue.taPubkey requires a string value");
+                }
+                this.value = params.value;
+                return;
+            case "tsSignatureValue":
+                if (typeof params.value !== "string") {
+                    throw new Error("FilterParamValue.tsSignature requires a string value");
+                }
+                this.value = params.value;
+                return;
             default:
                 this.value = undefined;
         }
@@ -98,6 +159,38 @@ export class FilterParamValue {
         return new FilterParamValue({ case: "doubleValue", value });
     }
 
+    static uint(value: number | bigint): FilterParamValue {
+        return new FilterParamValue({ case: "uintValue", value: toUint(value) });
+    }
+
+    static pubkey(value: PubkeyInput, field = "filter.pubkey"): FilterParamValue {
+        return new FilterParamValue({
+            case: "pubkeyValue",
+            value: pubkeyBytesFromInput(value, field),
+        });
+    }
+
+    static signature(value: BytesLike, field = "filter.signature"): FilterParamValue {
+        return new FilterParamValue({
+            case: "signatureValue",
+            value: signatureBytesFromInput(value, field),
+        });
+    }
+
+    static taPubkey(value: PubkeyInput | string, field = "filter.taPubkey"): FilterParamValue {
+        return new FilterParamValue({
+            case: "taPubkeyValue",
+            value: toTaPubkeyProto(value as any, field).value,
+        });
+    }
+
+    static tsSignature(value: BytesLike | string, field = "filter.tsSignature"): FilterParamValue {
+        return new FilterParamValue({
+            case: "tsSignatureValue",
+            value: toTsSignatureProto(value as any, field).value,
+        });
+    }
+
     static fromProto(proto: ProtoFilterParamValue): FilterParamValue {
         const kind = proto.kind;
         if (!kind.case) {
@@ -115,6 +208,16 @@ export class FilterParamValue {
                 return FilterParamValue.int(kind.value);
             case "doubleValue":
                 return FilterParamValue.double(kind.value);
+            case "uintValue":
+                return FilterParamValue.uint(kind.value);
+            case "pubkeyValue":
+                return FilterParamValue.pubkey(protoPubkeyToBytes(kind.value));
+            case "signatureValue":
+                return FilterParamValue.signature(protoSignatureToBytes(kind.value) ?? new Uint8Array());
+            case "taPubkeyValue":
+                return FilterParamValue.taPubkey(protoTaPubkeyToString(kind.value) ?? "");
+            case "tsSignatureValue":
+                return FilterParamValue.tsSignature(protoTsSignatureToString(kind.value) ?? "");
             default:
                 return FilterParamValue.none();
         }
@@ -161,6 +264,41 @@ export class FilterParamValue {
                         value: this.value as number,
                     },
                 });
+            case "uintValue":
+                return create(FilterParamValueSchema, {
+                    kind: {
+                        case: "uintValue",
+                        value: this.value as bigint,
+                    },
+                });
+            case "pubkeyValue":
+                return create(FilterParamValueSchema, {
+                    kind: {
+                        case: "pubkeyValue",
+                        value: toPubkeyProto(this.value as Uint8Array),
+                    },
+                });
+            case "signatureValue":
+                return create(FilterParamValueSchema, {
+                    kind: {
+                        case: "signatureValue",
+                        value: toSignatureProto(this.value as Uint8Array),
+                    },
+                });
+            case "taPubkeyValue":
+                return create(FilterParamValueSchema, {
+                    kind: {
+                        case: "taPubkeyValue",
+                        value: toTaPubkeyProto(this.value as string),
+                    },
+                });
+            case "tsSignatureValue":
+                return create(FilterParamValueSchema, {
+                    kind: {
+                        case: "tsSignatureValue",
+                        value: toTsSignatureProto(this.value as string),
+                    },
+                });
             default:
                 throw new Error("FilterParamValue has an unknown kind");
         }
@@ -189,8 +327,34 @@ export class FilterParamValue {
         return this.case === "intValue" ? (this.value as bigint) : undefined;
     }
 
+    getUint(): bigint | undefined {
+        return this.case === "uintValue" ? (this.value as bigint) : undefined;
+    }
+
     getDouble(): number | undefined {
         return this.case === "doubleValue" ? (this.value as number) : undefined;
+    }
+
+    getPubkey(): Uint8Array | undefined {
+        if (this.case !== "pubkeyValue") {
+            return undefined;
+        }
+        return copyBytes(this.value as Uint8Array);
+    }
+
+    getSignature(): Uint8Array | undefined {
+        if (this.case !== "signatureValue") {
+            return undefined;
+        }
+        return copyBytes(this.value as Uint8Array);
+    }
+
+    getTaPubkey(): string | undefined {
+        return this.case === "taPubkeyValue" ? (this.value as string) : undefined;
+    }
+
+    getTsSignature(): string | undefined {
+        return this.case === "tsSignatureValue" ? (this.value as string) : undefined;
     }
 }
 

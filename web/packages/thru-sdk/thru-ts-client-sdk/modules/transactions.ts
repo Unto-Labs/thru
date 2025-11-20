@@ -1,6 +1,7 @@
 import { create } from "@bufbuild/protobuf";
 
 import type { ThruClientContext } from "../core/client";
+import { withCallOptions } from "../core/client";
 import {
     DEFAULT_COMPUTE_UNITS,
     DEFAULT_EXPIRY_AFTER,
@@ -123,7 +124,7 @@ export async function getTransaction(
         versionContext: options.versionContext ?? DEFAULT_VERSION_CONTEXT,
         minConsensus: options.minConsensus ?? DEFAULT_MIN_CONSENSUS,
     });
-    const proto = await ctx.query.getTransaction(request);
+    const proto = await ctx.query.getTransaction(request, withCallOptions(ctx));
     return Transaction.fromProto(proto);
 }
 
@@ -137,14 +138,14 @@ export async function getRawTransaction(
         versionContext: options.versionContext ?? DEFAULT_VERSION_CONTEXT,
         minConsensus: options.minConsensus ?? DEFAULT_MIN_CONSENSUS,
     });
-    return ctx.query.getRawTransaction(request);
+    return ctx.query.getRawTransaction(request, withCallOptions(ctx));
 }
 
 export async function getTransactionStatus(ctx: ThruClientContext, signature: BytesLike): Promise<TransactionStatusSnapshot> {
     const request = create(GetTransactionStatusRequestSchema, {
         signature: toSignature(signature),
     });
-    const proto = await ctx.query.getTransactionStatus(request);
+    const proto = await ctx.query.getTransactionStatus(request, withCallOptions(ctx));
     return TransactionStatusSnapshot.fromProto(proto);
 }
 
@@ -158,7 +159,10 @@ export async function listTransactionsForAccount(
         filter: options.filter?.toProto(),
         page: options.page?.toProto(),
     });
-    const response: ProtoListTransactionsForAccountResponse = await ctx.query.listTransactionsForAccount(request);
+    const response: ProtoListTransactionsForAccountResponse = await ctx.query.listTransactionsForAccount(
+        request,
+        withCallOptions(ctx),
+    );
     const transactions = await Promise.all(
         response.signatures.map((signatureMessage) => {
             if (!signatureMessage.value) {
@@ -218,12 +222,12 @@ export async function batchSendTransactions(
         rawTransactions,
         numRetries: options.numRetries ?? 0,
     });
-    return ctx.command.batchSendTransactions(request);
+    return ctx.command.batchSendTransactions(request, withCallOptions(ctx));
 }
 
 async function sendRawTransaction(ctx: ThruClientContext, rawTransaction: Uint8Array): Promise<string> {
     const request = create(SendTransactionRequestSchema, { rawTransaction });
-    const response = await ctx.command.sendTransaction(request);
+    const response = await ctx.command.sendTransaction(request, withCallOptions(ctx));
     if (!response.signature?.value) {
         throw new Error("No signature returned from sendTransaction");
     }

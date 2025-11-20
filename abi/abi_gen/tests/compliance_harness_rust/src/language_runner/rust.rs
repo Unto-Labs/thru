@@ -148,7 +148,7 @@ path = "src/main.rs"
         copy_dir_recursive(&generated_code_dir, &generated_dir)?;
 
         /* Extract field names and package from ABI file */
-        let (referenced_primitive_fields, non_referenced_primitive_fields, enum_fields, array_fields, nested_fields, _package) = match extract_field_info(abi_file_path, &test_case.type_name) {
+        let (referenced_primitive_fields, non_referenced_primitive_fields, enum_fields, array_fields, nested_fields, size_discriminated_union_fields, package) = match extract_field_info(abi_file_path, &test_case.type_name) {
             Ok(info) => info,
             Err(e) => {
                 return Ok(TestResult {
@@ -170,6 +170,32 @@ path = "src/main.rs"
         let binary_file_path = temp_dir.join("test_data.bin");
         fs::write(&binary_file_path, binary_data)?;
 
+        /* Extract SDU variant info from ABI */
+        let abi_content = fs::read_to_string(abi_file_path)?;
+        let abi: AbiFile = serde_yaml::from_str(&abi_content)?;
+        let sdu_fields_with_variants: Vec<(String, Vec<(String, u64)>)> = abi.get_types().iter()
+            .find(|t| t.name == test_case.type_name)
+            .and_then(|t| {
+                if let TypeKind::Struct(struct_type) = &t.kind {
+                    Some(struct_type.fields.iter()
+                        .filter_map(|f| {
+                            match &f.field_type {
+                                TypeKind::SizeDiscriminatedUnion(sdu_type) => {
+                                    let variants: Vec<(String, u64)> = sdu_type.variants.iter()
+                                        .map(|v| (v.name.clone(), v.expected_size))
+                                        .collect();
+                                    Some((f.name.clone(), variants))
+                                },
+                                _ => None,
+                            }
+                        })
+                        .collect())
+                } else {
+                    None
+                }
+            })
+            .unwrap_or_default();
+
         /* Generate test runner code */
         let test_runner_code = generate_rust_test_runner_code(
             &test_case.type_name,
@@ -179,7 +205,9 @@ path = "src/main.rs"
             &enum_fields,
             &array_fields,
             &nested_fields,
-            &_package,
+            &size_discriminated_union_fields,
+            &sdu_fields_with_variants,
+            &package,
         );
         fs::write(src_dir.join("main.rs"), test_runner_code)?;
 
@@ -422,7 +450,7 @@ fn extract_field_refs_from_expr(expr: &abi_gen::abi::expr::ExprKind, refs: &mut 
 }
 
 /* Extract field names and package from ABI file for a specific type */
-fn extract_field_info(abi_file_path: &Path, type_name: &str) -> Result<(Vec<String>, Vec<String>, Vec<String>, Vec<(String, bool, bool)>, Vec<(String, Vec<String>)>, String)> {
+fn extract_field_info(abi_file_path: &Path, type_name: &str) -> Result<(Vec<String>, Vec<String>, Vec<String>, Vec<(String, bool, bool)>, Vec<(String, Vec<String>)>, Vec<String>, String)> {
     use std::collections::HashSet;
 
     let abi_content = fs::read_to_string(abi_file_path)?;
@@ -516,6 +544,15 @@ fn extract_field_info(abi_file_path: &Path, type_name: &str) -> Result<(Vec<Stri
                     })
                     .collect();
 
+                let size_discriminated_union_fields: Vec<String> = struct_type.fields.iter()
+                    .filter_map(|f| {
+                        match &f.field_type {
+                            TypeKind::SizeDiscriminatedUnion(_) => Some(f.name.clone()),
+                            _ => None,
+                        }
+                    })
+                    .collect();
+
                 /* Also collect array fields for post-new() initialization
                    Format: (field_name, is_byte_array, is_struct_array) */
                 let array_fields: Vec<(String, bool, bool)> = struct_type.fields.iter()
@@ -585,7 +622,7 @@ fn extract_field_info(abi_file_path: &Path, type_name: &str) -> Result<(Vec<Stri
                     })
                     .collect();
 
-                return Ok((referenced_primitive_fields, non_referenced_primitive_fields, enum_fields, array_fields, nested_fields, package));
+                return Ok((referenced_primitive_fields, non_referenced_primitive_fields, enum_fields, array_fields, nested_fields, size_discriminated_union_fields, package));
             }
         }
     }
@@ -602,6 +639,8 @@ fn generate_rust_test_runner_code(
     enum_fields: &[String],
     array_fields: &[(String, bool, bool)],  /* (field_name, is_byte_array, is_struct_array) */
     nested_fields: &[(String, Vec<String>)],  /* (field_name, nested_struct_field_names) */
+    size_discriminated_union_fields: &[String],
+    sdu_fields_with_variants: &[(String, Vec<(String, u64)>)],
     package: &str,
 ) -> String {
     let mut code = String::new();
@@ -651,29 +690,39 @@ fn main() {{
         type_name,
     ));
 
-    if referenced_primitive_fields.is_empty() {
-        /* No referenced fields - just create empty instance */
+    if referenced_primitive_fields.is_empty() && size_discriminated_union_fields.is_empty() {
+        /* No referenced fields or SDU fields - just create empty instance */
         code.push_str(&format!(
             "    let reencoded_size = {}::{}::new(&mut reencoded_buffer).expect(\"new() failed\");\n",
             module_path, type_name
         ));
     } else {
-        /* Has referenced fields - use new() constructor with referenced primitive field values */
+        /* Has referenced fields or SDU fields - use new() constructor with values */
         code.push_str("    let reencoded_size = ");
         code.push_str(&format!("{}::{}::new(&mut reencoded_buffer,\n", module_path, type_name));
 
-        /* Generate getter calls for referenced primitive fields only */
-        for (idx, field_name) in referenced_primitive_fields.iter().enumerate() {
-            if idx > 0 {
+        let mut param_count = 0;
+        /* Generate getter calls for referenced primitive fields */
+        for field_name in referenced_primitive_fields {
+            if param_count > 0 {
                 code.push_str(",\n");
             }
             code.push_str(&format!("        original.{}()", field_name));
+            param_count += 1;
+        }
+        /* Generate tag getter calls for size-discriminated union fields */
+        for field_name in size_discriminated_union_fields {
+            if param_count > 0 {
+                code.push_str(",\n");
+            }
+            code.push_str(&format!("        original.{}_tag()", field_name));
+            param_count += 1;
         }
         code.push_str("\n    ).expect(\"new() failed\");\n");
     }
 
-    /* Set non-referenced primitive fields, enums, arrays, and nested structs via setters */
-    if !non_referenced_primitive_fields.is_empty() || !enum_fields.is_empty() || !array_fields.is_empty() || !nested_fields.is_empty() {
+    /* Set non-referenced primitive fields, enums, arrays, nested structs, and size-discriminated unions via setters */
+    if !non_referenced_primitive_fields.is_empty() || !enum_fields.is_empty() || !array_fields.is_empty() || !nested_fields.is_empty() || !size_discriminated_union_fields.is_empty() {
         code.push_str("\n    /* Set non-referenced fields using mutable wrapper */\n");
         code.push_str(&format!("    {{\n"));
         code.push_str(&format!("        let mut reencoded_mut = {}::{}Mut::from_slice_mut(&mut reencoded_buffer[..reencoded_size]).expect(\"from_slice_mut failed\");\n", module_path, type_name));
@@ -690,6 +739,28 @@ fn main() {{
                 code.push_str(&format!("        {{\n"));
                 code.push_str(&format!("            let body = original.{}_body();\n", field_name));
                 code.push_str(&format!("            reencoded_mut.set_{}_body(body).expect(\"Failed to set enum body\");\n", field_name));
+                code.push_str("        }\n");
+            }
+        }
+
+        /* Set size-discriminated union fields using variant-specific getters and setters (like enums) */
+        if !sdu_fields_with_variants.is_empty() {
+            code.push_str("\n        /* Set size-discriminated union fields using variant-specific getters and setters */\n");
+            for (field_name, variants) in sdu_fields_with_variants {
+                code.push_str("        {\n");
+                code.push_str(&format!("            let tag = original.{}_tag();\n", field_name));
+                code.push_str(&format!("            match tag {{\n"));
+                
+                for (idx, (variant_name, _expected_size)) in variants.iter().enumerate() {
+                    let variant_name_snake = variant_name.to_lowercase().replace("-", "_");
+                    code.push_str(&format!("                {} => {{\n", idx));
+                    code.push_str(&format!("                    let variant = original.{}_{}();\n", field_name, variant_name_snake));
+                    code.push_str(&format!("                    reencoded_mut.{}_set_{}(&variant).expect(\"Failed to set SDU variant\");\n", field_name, variant_name_snake));
+                    code.push_str("                }\n");
+                }
+                
+                code.push_str(&format!("                _ => panic!(\"Invalid SDU tag for {}: {{}}\", tag),\n", field_name));
+                code.push_str("            }\n");
                 code.push_str("        }\n");
             }
         }

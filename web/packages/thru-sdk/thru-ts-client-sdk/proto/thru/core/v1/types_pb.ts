@@ -6,34 +6,14 @@ import type { GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import { fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
 import { file_buf_validate_validate } from "../../../buf/validate/validate_pb";
 import { file_google_api_field_behavior } from "../../../google/api/field_behavior_pb";
+import { file_thru_common_v1_primitives } from "../../common/v1/primitives_pb";
 import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file thru/core/v1/types.proto.
  */
 export const file_thru_core_v1_types: GenFile = /*@__PURE__*/
-  fileDesc("Chh0aHJ1L2NvcmUvdjEvdHlwZXMucHJvdG8SDHRocnUuY29yZS52MSIjCgZQdWJrZXkSGQoFdmFsdWUYASABKAxCCuBBArpIBHoCaCAiIQoESGFzaBIZCgV2YWx1ZRgBIAEoDEIK4EECukgEegJoICImCglCbG9ja0hhc2gSGQoFdmFsdWUYASABKAxCCuBBArpIBHoCaEAiJgoJU2lnbmF0dXJlEhkKBXZhbHVlGAEgASgMQgrgQQK6SAR6AmhAQrkBChBjb20udGhydS5jb3JlLnYxQgpUeXBlc1Byb3RvUAFaQGdpdGh1Yi5jb20vVW50by1MYWJzL3RocnUtbmV0L2dycGMvcGtnL3Byb3RvL3RocnUvY29yZS92MTtjb3JldjGiAgNUQ1iqAgxUaHJ1LkNvcmUuVjG6AgRUSFVDygIMVGhydVxDb3JlXFYx4gIYVGhydVxDb3JlXFYxXEdQQk1ldGFkYXRh6gIOVGhydTo6Q29yZTo6VjFiBnByb3RvMw", [file_buf_validate_validate, file_google_api_field_behavior]);
-
-/**
- * Pubkey represents a 32-byte public key value.
- *
- * @generated from message thru.core.v1.Pubkey
- */
-export type Pubkey = Message<"thru.core.v1.Pubkey"> & {
-  /**
-   * 32-byte public key buffer.
-   *
-   * @generated from field: bytes value = 1;
-   */
-  value: Uint8Array;
-};
-
-/**
- * Describes the message thru.core.v1.Pubkey.
- * Use `create(PubkeySchema)` to create a new message.
- */
-export const PubkeySchema: GenMessage<Pubkey> = /*@__PURE__*/
-  messageDesc(file_thru_core_v1_types, 0);
+  fileDesc("Chh0aHJ1L2NvcmUvdjEvdHlwZXMucHJvdG8SDHRocnUuY29yZS52MSIhCgRIYXNoEhkKBXZhbHVlGAEgASgMQgrgQQK6SAR6AmggIiYKCUJsb2NrSGFzaBIZCgV2YWx1ZRgBIAEoDEIK4EECukgEegJoQEK5AQoQY29tLnRocnUuY29yZS52MUIKVHlwZXNQcm90b1ABWkBnaXRodWIuY29tL1VudG8tTGFicy90aHJ1LW5ldC9ncnBjL3BrZy9wcm90by90aHJ1L2NvcmUvdjE7Y29yZXYxogIDVENYqgIMVGhydS5Db3JlLlYxugIEVEhVQ8oCDFRocnVcQ29yZVxWMeICGFRocnVcQ29yZVxWMVxHUEJNZXRhZGF0YeoCDlRocnU6OkNvcmU6OlYxYgZwcm90bzM", [file_buf_validate_validate, file_google_api_field_behavior, file_thru_common_v1_primitives]);
 
 /**
  * Hash represents a 32-byte hash value.
@@ -54,7 +34,7 @@ export type Hash = Message<"thru.core.v1.Hash"> & {
  * Use `create(HashSchema)` to create a new message.
  */
 export const HashSchema: GenMessage<Hash> = /*@__PURE__*/
-  messageDesc(file_thru_core_v1_types, 1);
+  messageDesc(file_thru_core_v1_types, 0);
 
 /**
  * BlockHash represents a 64-byte hash for block identifiers.
@@ -75,26 +55,5 @@ export type BlockHash = Message<"thru.core.v1.BlockHash"> & {
  * Use `create(BlockHashSchema)` to create a new message.
  */
 export const BlockHashSchema: GenMessage<BlockHash> = /*@__PURE__*/
-  messageDesc(file_thru_core_v1_types, 2);
-
-/**
- * Signature represents a 64-byte signature value.
- *
- * @generated from message thru.core.v1.Signature
- */
-export type Signature = Message<"thru.core.v1.Signature"> & {
-  /**
-   * 64-byte signature buffer.
-   *
-   * @generated from field: bytes value = 1;
-   */
-  value: Uint8Array;
-};
-
-/**
- * Describes the message thru.core.v1.Signature.
- * Use `create(SignatureSchema)` to create a new message.
- */
-export const SignatureSchema: GenMessage<Signature> = /*@__PURE__*/
-  messageDesc(file_thru_core_v1_types, 3);
+  messageDesc(file_thru_core_v1_types, 1);
 

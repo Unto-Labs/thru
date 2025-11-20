@@ -18,7 +18,7 @@ impl LanguageRunner for TypeScriptRunner {
     }
 
     fn codegen_language_param(&self) -> &str {
-        "type-script"
+        "typescript"
     }
 
     fn run_test(
@@ -455,10 +455,12 @@ async function main() {{
         type_name,
     ));
 
-    /* For variable-size types (enums), use byte-level copying instead of constructor */
+    /* For variable-size types (enums, size-discriminated unions), use byte-level copying instead of constructor */
     code.push_str(&format!(
         r#"  /* Create a copy by allocating a buffer and copying bytes */
-  const originalBytes = (original as any).buffer as Uint8Array;
+  /* Get the underlying buffer from the wrapper */
+  const originalBuffer = (original as any).buffer;
+  const originalBytes = originalBuffer instanceof Uint8Array ? originalBuffer : new Uint8Array(originalBuffer.buffer, originalBuffer.byteOffset, originalBuffer.byteLength);
   const copyBuffer = new Uint8Array(originalBytes.length);
   copyBuffer.set(originalBytes);
   const copy = {}.from_array(copyBuffer);
@@ -470,7 +472,8 @@ async function main() {{
   console.log('REENCODE:ok');
 
   /* Stage 4: Compare binaries */
-  const copyBytes = (copy as any).buffer as Uint8Array;
+  const copyBuffer2 = (copy as any).buffer;
+  const copyBytes = copyBuffer2 instanceof Uint8Array ? copyBuffer2 : new Uint8Array(copyBuffer2.buffer, copyBuffer2.byteOffset, copyBuffer2.byteLength);
 "#,
         type_name
     ));

@@ -5,15 +5,16 @@
 import type { GenEnum, GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import { enumDesc, fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
 import { file_google_api_field_behavior } from "../../../google/api/field_behavior_pb";
-import type { Pubkey } from "./types_pb";
 import { file_thru_core_v1_types } from "./types_pb";
+import type { Pubkey } from "../../common/v1/primitives_pb";
+import { file_thru_common_v1_primitives } from "../../common/v1/primitives_pb";
 import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file thru/core/v1/state.proto.
  */
 export const file_thru_core_v1_state: GenFile = /*@__PURE__*/
-  fileDesc("Chh0aHJ1L2NvcmUvdjEvc3RhdGUucHJvdG8SDHRocnUuY29yZS52MSKlAQoRU3RhdGVQcm9vZlJlcXVlc3QSKgoHYWRkcmVzcxgBIAEoCzIULnRocnUuY29yZS52MS5QdWJrZXlCA+BBAhI1Cgpwcm9vZl90eXBlGAIgASgOMhwudGhydS5jb3JlLnYxLlN0YXRlUHJvb2ZUeXBlQgPgQQISHQoLdGFyZ2V0X3Nsb3QYAyABKARCA+BBAUgAiAEBQg4KDF90YXJnZXRfc2xvdCIzCgpTdGF0ZVByb29mEhIKBXByb29mGAEgASgMQgPgQQISEQoEc2xvdBgCIAEoBEID4EECKo8BCg5TdGF0ZVByb29mVHlwZRIgChxTVEFURV9QUk9PRl9UWVBFX1VOU1BFQ0lGSUVEEAASHQoZU1RBVEVfUFJPT0ZfVFlQRV9DUkVBVElORxABEh0KGVNUQVRFX1BST09GX1RZUEVfVVBEQVRJTkcQAhIdChlTVEFURV9QUk9PRl9UWVBFX0VYSVNUSU5HEANCuQEKEGNvbS50aHJ1LmNvcmUudjFCClN0YXRlUHJvdG9QAVpAZ2l0aHViLmNvbS9VbnRvLUxhYnMvdGhydS1uZXQvZ3JwYy9wa2cvcHJvdG8vdGhydS9jb3JlL3YxO2NvcmV2MaICA1RDWKoCDFRocnUuQ29yZS5WMboCBFRIVUPKAgxUaHJ1XENvcmVcVjHiAhhUaHJ1XENvcmVcVjFcR1BCTWV0YWRhdGHqAg5UaHJ1OjpDb3JlOjpWMWIGcHJvdG8z", [file_google_api_field_behavior, file_thru_core_v1_types]);
+  fileDesc("Chh0aHJ1L2NvcmUvdjEvc3RhdGUucHJvdG8SDHRocnUuY29yZS52MSKnAQoRU3RhdGVQcm9vZlJlcXVlc3QSLAoHYWRkcmVzcxgBIAEoCzIWLnRocnUuY29tbW9uLnYxLlB1YmtleUID4EECEjUKCnByb29mX3R5cGUYAiABKA4yHC50aHJ1LmNvcmUudjEuU3RhdGVQcm9vZlR5cGVCA+BBAhIdCgt0YXJnZXRfc2xvdBgDIAEoBEID4EEBSACIAQFCDgoMX3RhcmdldF9zbG90IjMKClN0YXRlUHJvb2YSEgoFcHJvb2YYASABKAxCA+BBAhIRCgRzbG90GAIgASgEQgPgQQIqjwEKDlN0YXRlUHJvb2ZUeXBlEiAKHFNUQVRFX1BST09GX1RZUEVfVU5TUEVDSUZJRUQQABIdChlTVEFURV9QUk9PRl9UWVBFX0NSRUFUSU5HEAESHQoZU1RBVEVfUFJPT0ZfVFlQRV9VUERBVElORxACEh0KGVNUQVRFX1BST09GX1RZUEVfRVhJU1RJTkcQA0K5AQoQY29tLnRocnUuY29yZS52MUIKU3RhdGVQcm90b1ABWkBnaXRodWIuY29tL1VudG8tTGFicy90aHJ1LW5ldC9ncnBjL3BrZy9wcm90by90aHJ1L2NvcmUvdjE7Y29yZXYxogIDVENYqgIMVGhydS5Db3JlLlYxugIEVEhVQ8oCDFRocnVcQ29yZVxWMeICGFRocnVcQ29yZVxWMVxHUEJNZXRhZGF0YeoCDlRocnU6OkNvcmU6OlYxYgZwcm90bzM", [file_google_api_field_behavior, file_thru_core_v1_types, file_thru_common_v1_primitives]);
 
 /**
  * StateProofRequest describes a request to generate an account state proof.
@@ -22,7 +23,7 @@ export const file_thru_core_v1_state: GenFile = /*@__PURE__*/
  */
 export type StateProofRequest = Message<"thru.core.v1.StateProofRequest"> & {
   /**
-   * @generated from field: thru.core.v1.Pubkey address = 1;
+   * @generated from field: thru.common.v1.Pubkey address = 1;
    */
   address?: Pubkey;
 

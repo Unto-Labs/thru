@@ -163,7 +163,7 @@ impl Client {
         let pubkey_bytes = pubkey_bytes(pubkey)?;
 
         let request = servicesv1::GetAccountRequest {
-            address: Some(corev1::Pubkey {
+            address: Some(commonv1::Pubkey {
                 value: pubkey_bytes.to_vec(),
             }),
             view: Some(corev1::AccountView::Full as i32),
@@ -269,7 +269,7 @@ impl Client {
         };
 
         let request = servicesv1::ListTransactionsForAccountRequest {
-            account: Some(corev1::Pubkey {
+            account: Some(commonv1::Pubkey {
                 value: pubkey_bytes.to_vec(),
             }),
             page,
@@ -471,7 +471,7 @@ impl Client {
             }
 
             let request = servicesv1::GetTransactionRequest {
-                signature: Some(corev1::Signature {
+                signature: Some(commonv1::Signature {
                     value: signature.to_vec(),
                 }),
                 view: Some(corev1::TransactionView::Full as i32),
@@ -531,7 +531,7 @@ impl Client {
 
         let request = servicesv1::GenerateStateProofRequest {
             request: Some(corev1::StateProofRequest {
-                address: Some(corev1::Pubkey {
+                address: Some(commonv1::Pubkey {
                     value: pubkey_bytes.to_vec(),
                 }),
                 proof_type,
@@ -624,7 +624,7 @@ impl Client {
             .max_decoding_message_size(128 * 1024 * 1024) /* 128 MB */
             .max_encoding_message_size(128 * 1024 * 1024); /* 128 MB */
         let request = servicesv1::TrackTransactionRequest {
-            signature: Some(corev1::Signature {
+            signature: Some(commonv1::Signature {
                 value: signature.to_vec(),
             }),
             timeout: Some(ProstDuration {
@@ -684,7 +684,7 @@ impl Client {
             }
 
             let request = servicesv1::GetTransactionRequest {
-                signature: Some(corev1::Signature {
+                signature: Some(commonv1::Signature {
                     value: signature.to_vec(),
                 }),
                 view: Some(corev1::TransactionView::Full as i32),
@@ -863,7 +863,7 @@ impl Client {
         let pubkey_bytes = pubkey_bytes(pubkey)?;
 
         let request = servicesv1::GetRawAccountRequest {
-            address: Some(corev1::Pubkey {
+            address: Some(commonv1::Pubkey {
                 value: pubkey_bytes.to_vec(),
             }),
             view: Some(corev1::AccountView::Full as i32),

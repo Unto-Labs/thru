@@ -2,8 +2,6 @@
 # Run all compliance tests
 # Usage: ./run_all_tests.sh [--verbose] [--language LANG] [--no-cleanup]
 
-set -e
-
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 TEST_CASES_DIR="${SCRIPT_DIR}/../compliance_tests/test_cases"
 

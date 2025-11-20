@@ -6,6 +6,7 @@ import "buf/validate/validate.proto";
 import "google/api/field_behavior.proto";
 import "google/protobuf/timestamp.proto";
 import "thru/common/v1/consensus.proto";
+import "thru/common/v1/primitives.proto";
 import "thru/core/v1/types.proto";
 
 option go_package = "github.com/Unto-Labs/thru-net/grpc/pkg/proto/thru/core/v1;corev1";
@@ -55,7 +56,7 @@ message AccountMeta {
   uint32 data_size = 3 [(google.api.field_behavior) = REQUIRED];
   // Account sequence number
   uint64 seq = 4 [(google.api.field_behavior) = REQUIRED];
-  Pubkey owner = 5 [(google.api.field_behavior) = REQUIRED];
+  thru.common.v1.Pubkey owner = 5 [(google.api.field_behavior) = REQUIRED];
   uint64 balance = 6 [(google.api.field_behavior) = REQUIRED];
   uint64 nonce = 7 [(google.api.field_behavior) = REQUIRED];
 }
@@ -112,7 +113,7 @@ message VersionContextMetadata {
 
 // Account models a fully decoded account resource.
 message Account {
-  Pubkey address = 1 [(google.api.field_behavior) = REQUIRED];
+  thru.common.v1.Pubkey address = 1 [(google.api.field_behavior) = REQUIRED];
   optional AccountMeta meta = 2 [(google.api.field_behavior) = OPTIONAL];
   optional AccountData data = 3 [(google.api.field_behavior) = OPTIONAL];
   optional VersionContextMetadata version_context = 4
@@ -123,7 +124,7 @@ message Account {
 
 // RawAccount captures raw serialized account bytes.
 message RawAccount {
-  Pubkey address = 1 [(google.api.field_behavior) = REQUIRED];
+  thru.common.v1.Pubkey address = 1 [(google.api.field_behavior) = REQUIRED];
   bytes raw_meta = 2 [
     (google.api.field_behavior) = REQUIRED,
     (buf.validate.field).bytes.max_len = 4096

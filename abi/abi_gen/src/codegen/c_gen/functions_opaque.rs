@@ -5,7 +5,7 @@ use crate::abi::types::{IntegralType, FloatingPointType, PrimitiveType};
 use crate::abi::expr::ExprKind;
 use std::fmt::Write;
 use std::collections::HashSet;
-use super::helpers::format_expr_to_c;
+use super::helpers::{format_expr_to_c, escape_c_keyword, is_nested_complex_type, format_type_to_c};
 
 /* Convert size expression to C code that calls getter functions */
 fn size_expression_to_c_getter_code(expr: &ExprKind, type_name: &str, self_name: &str) -> String {
@@ -416,6 +416,13 @@ pub fn emit_opaque_functions(resolved_type: &ResolvedType) -> String {
                 }
             }
 
+            /* Add tag parameters for size-discriminated union fields */
+            for field in fields {
+                if matches!(&field.field_type.kind, ResolvedTypeKind::SizeDiscriminatedUnion { .. }) {
+                    write!(output, ", uint8_t {}_tag", field.name).unwrap();
+                }
+            }
+
             write!(output, ", uint64_t * out_size ) {{\n").unwrap();
 
             /* Calculate required size */
@@ -449,6 +456,19 @@ pub fn emit_opaque_functions(resolved_type: &ResolvedType) -> String {
                         write!(output, "        default: return -1; /* Invalid enum tag */\n").unwrap();
                         write!(output, "    }}\n").unwrap();
                         write!(output, "    required_size += {}_size;\n\n", field.name).unwrap();
+                    }
+                    ResolvedTypeKind::SizeDiscriminatedUnion { variants } => {
+                        /* Size-discriminated union: size is determined from tag parameter */
+                        let tag_param = format!("{}_tag", field.name);
+                        write!(output, "    /* Size-discriminated union '{}' size based on tag */\n", field.name).unwrap();
+                        write!(output, "    uint64_t {}_size;\n", field.name).unwrap();
+                        write!(output, "    switch( {} ) {{\n", tag_param).unwrap();
+                        for (idx, variant) in variants.iter().enumerate() {
+                            write!(output, "        case {}: {}_size = {}; break;\n", idx, field.name, variant.expected_size).unwrap();
+                        }
+                        write!(output, "        default: return -1; /* Invalid tag for size-discriminated union '{}' */\n", field.name).unwrap();
+                        write!(output, "    }}\n").unwrap();
+                        write!(output, "    required_size += {}_size; /* {} (size-discriminated union) */\n\n", field.name, field.name).unwrap();
                     }
                     ResolvedTypeKind::Array { element_type, size_expression, .. } => {
                         if let crate::abi::resolved::Size::Const(array_size) = field.field_type.size {
@@ -540,6 +560,11 @@ pub fn emit_opaque_functions(resolved_type: &ResolvedType) -> String {
                     ResolvedTypeKind::Enum { .. } => {
                         // Enums have variable size - skip the dynamic size we calculated earlier
                         write!(output, "    offset += {}_size; /* skip enum '{}' (set via setters) */\n\n",
+                               field.name, field.name).unwrap();
+                    }
+                    ResolvedTypeKind::SizeDiscriminatedUnion { .. } => {
+                        // Size-discriminated unions have variable size - skip the size passed as parameter
+                        write!(output, "    offset += {}_size; /* skip size-discriminated union '{}' (set via setters) */\n\n",
                                field.name, field.name).unwrap();
                     }
                     ResolvedTypeKind::Array { element_type, size_expression, .. } => {
@@ -1181,6 +1206,62 @@ pub fn emit_opaque_functions(resolved_type: &ResolvedType) -> String {
                 }
             }
 
+            /* Generate variant-specific setters for size-discriminated union fields (like enums) */
+            for (field_idx, field) in fields.iter().enumerate() {
+                if let ResolvedTypeKind::SizeDiscriminatedUnion { variants } = &field.field_type.kind {
+                    let escaped_name = escape_c_keyword(&field.name);
+                    
+                    /* Generate variant-specific setters for each variant */
+                    for variant in variants {
+                        let variant_escaped = escape_c_keyword(&variant.name);
+                        let variant_type_name = format!("{}_{}_{}_inner_t", type_name, escaped_name, variant_escaped);
+
+                        /* Generate setter for this variant - name includes SDU field name (like enum pattern) */
+                        write!(output, "void {}_{}_set_{}( {}_t * self, {} const * value ) {{\n",
+                               type_name, escaped_name, variant_escaped, type_name, variant_type_name).unwrap();
+
+                        /* Calculate offset to SDU body */
+                        write!(output, "    uint8_t * data = (uint8_t *)self;\n").unwrap();
+                        write!(output, "    uint64_t offset = 0;\n").unwrap();
+                        if field_idx > 0 {
+                            for prev_field in &fields[0..field_idx] {
+                                match &prev_field.field_type.kind {
+                                    ResolvedTypeKind::Primitive { prim_type: prev_prim } => {
+                                        let size = primitive_size(prev_prim);
+                                        write!(output, "    offset += {}; /* {} */\n", size, prev_field.name).unwrap();
+                                    }
+                                    ResolvedTypeKind::Enum { .. } => {
+                                        write!(output, "    offset += {}_get_{}_size( ({}_t const *)self ); /* {} (enum) */\n",
+                                               type_name, prev_field.name, type_name, prev_field.name).unwrap();
+                                    }
+                                    ResolvedTypeKind::SizeDiscriminatedUnion { .. } => {
+                                        /* Can't calculate SDU size statically - but there can only be one SDU per struct */
+                                        write!(output, "    /* SDU '{}' size is variable - offset calculation stops here */\n", prev_field.name).unwrap();
+                                    }
+                                    ResolvedTypeKind::Array { .. } => {
+                                        if let crate::abi::resolved::Size::Const(size) = prev_field.field_type.size {
+                                            write!(output, "    offset += {}; /* {} (array) */\n",
+                                                   size, prev_field.name).unwrap();
+                                        }
+                                    }
+                                    ResolvedTypeKind::TypeRef { .. } => {
+                                        if let crate::abi::resolved::Size::Const(size) = prev_field.field_type.size {
+                                            write!(output, "    offset += {}; /* {} (nested) */\n",
+                                                   size, prev_field.name).unwrap();
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                            }
+                        }
+
+                        /* Copy variant data */
+                        write!(output, "    memcpy( &data[offset], value, sizeof( {} ) );\n", variant_type_name).unwrap();
+                        write!(output, "}}\n\n").unwrap();
+                    }
+                }
+            }
+
             /* Identify fields that affect size (no setters for these) */
             let size_affecting_fields = identify_size_affecting_fields(fields);
 
@@ -1587,6 +1668,35 @@ pub fn emit_opaque_functions(resolved_type: &ResolvedType) -> String {
                         write!(output, "    }}\n").unwrap();
                         write!(output, "    offset += {};\n\n", size_var).unwrap();
                     }
+                    ResolvedTypeKind::SizeDiscriminatedUnion { variants } => {
+                        /* Size-discriminated union: determine variant based on available size */
+                        let available_size_var = format!("available_size_{}", field.name);
+                        let tag_var = format!("tag_{}", field.name);
+                        let size_var = format!("variant_size_{}", field.name);
+
+                        /* Calculate available size (remaining buffer) */
+                        write!(output, "    uint64_t {} = data_len - offset;\n", available_size_var).unwrap();
+
+                        /* Match available size against variant expected sizes */
+                        write!(output, "    uint8_t {};\n", tag_var).unwrap();
+                        write!(output, "    uint64_t {};\n", size_var).unwrap();
+                        write!(output, "    switch( {} ) {{\n", available_size_var).unwrap();
+                        for (idx, variant) in variants.iter().enumerate() {
+                            write!(output, "        case {}: {} = {}; {} = {}; break;\n",
+                                   variant.expected_size,
+                                   tag_var,
+                                   idx,
+                                   size_var,
+                                   variant.expected_size).unwrap();
+                        }
+                        write!(output, "        default: return -1; /* No matching variant for size {} */\n", available_size_var).unwrap();
+                        write!(output, "    }}\n\n").unwrap();
+
+                        write!(output, "    if( offset + {} > data_len ) {{\n", size_var).unwrap();
+                        write!(output, "        return -1; /* Buffer too small for size-discriminated union '{}' */\n", field.name).unwrap();
+                        write!(output, "    }}\n").unwrap();
+                        write!(output, "    offset += {};\n\n", size_var).unwrap();
+                    }
                     ResolvedTypeKind::Array { .. } => {
                         if let crate::abi::resolved::Size::Const(size) = field.field_type.size {
                             write!(output, "    if( offset + {} > data_len ) {{\n", size).unwrap();
@@ -1871,6 +1981,121 @@ pub fn emit_opaque_functions(resolved_type: &ResolvedType) -> String {
             }
         }
         _ => {}
+    }
+
+    /* Generate SDU tag/size helper functions and variant getters */
+    if let ResolvedTypeKind::Struct { fields, .. } = &resolved_type.kind {
+        let type_name = resolved_type.name.replace("::", "_");
+        for (field_idx, field) in fields.iter().enumerate() {
+            if let ResolvedTypeKind::SizeDiscriminatedUnion { variants } = &field.field_type.kind {
+                let escaped_name = escape_c_keyword(&field.name);
+                
+                /* Generate tag function - takes size parameter and returns variant tag */
+                write!(output, "/* Tag function for size-discriminated union field '{}' */\n", field.name).unwrap();
+                write!(output, "uint8_t {}_{}_tag_from_size( uint64_t size ) {{\n", type_name, escaped_name).unwrap();
+                write!(output, "  switch( size ) {{\n").unwrap();
+                for (idx, variant) in variants.iter().enumerate() {
+                    write!(output, "    case {}: return {};\n", variant.expected_size, idx).unwrap();
+                }
+                write!(output, "    default: return 255; /* Invalid size - no matching variant */\n").unwrap();
+                write!(output, "  }}\n").unwrap();
+                write!(output, "}}\n\n").unwrap();
+
+                /* Generate size function - takes tag and returns size */
+                write!(output, "uint64_t {}_{}_size_from_tag( uint8_t tag ) {{\n", type_name, escaped_name).unwrap();
+                write!(output, "  switch( tag ) {{\n").unwrap();
+                for (idx, variant) in variants.iter().enumerate() {
+                    write!(output, "    case {}: return {};\n", idx, variant.expected_size).unwrap();
+                }
+                write!(output, "    default: return 0; /* Invalid tag */\n").unwrap();
+                write!(output, "  }}\n").unwrap();
+                write!(output, "}}\n\n").unwrap();
+
+                /* Generate size getter - takes struct pointer and buffer size, returns size based on available buffer */
+                write!(output, "/* Size getter for size-discriminated union field '{}' */\n", field.name).unwrap();
+                write!(output, "uint64_t {}_{}_size( {}_t const * self, uint64_t buffer_size ) {{\n", type_name, escaped_name, type_name).unwrap();
+                
+                /* Calculate offset to this field - sum all constant-size fields before it */
+                let mut static_offset = 0u64;
+                for prev_field in fields.iter() {
+                    if prev_field.name == field.name {
+                        break;
+                    }
+                    if let crate::abi::resolved::Size::Const(size) = prev_field.field_type.size {
+                        static_offset += size;
+                    } else {
+                        /* Variable-size field before SDU - can't calculate statically */
+                        static_offset = 0;
+                        break;
+                    }
+                }
+                write!(output, "  uint64_t available_size = buffer_size - {};\n", static_offset).unwrap();
+                write!(output, "  /* Match available size against variant sizes */\n").unwrap();
+                write!(output, "  switch( available_size ) {{\n").unwrap();
+                for variant in variants.iter() {
+                    write!(output, "    case {}: return {};\n", variant.expected_size, variant.expected_size).unwrap();
+                }
+                write!(output, "    default: return 0; /* Invalid size */\n").unwrap();
+                write!(output, "  }}\n").unwrap();
+                write!(output, "}}\n\n").unwrap();
+                
+                /* Generate variant-specific getters for each variant */
+                for variant in variants {
+                    let variant_escaped = escape_c_keyword(&variant.name);
+                    let variant_type_name = if is_nested_complex_type(&variant.variant_type) {
+                        format!("{}_{}_{}_inner_t", type_name, escaped_name, variant_escaped)
+                    } else {
+                        format_type_to_c(&variant.variant_type)
+                    };
+
+                    /* Const getter */
+                    write!(output, "{} const * {}_{}_get_{}_const( {}_t const * self ) {{\n",
+                           variant_type_name, type_name, escaped_name, variant_escaped, type_name).unwrap();
+                    /* Calculate offset - same logic as setters */
+                    write!(output, "    uint8_t const * data = (uint8_t const *)self;\n").unwrap();
+                    write!(output, "    uint64_t offset = 0;\n").unwrap();
+                    if field_idx > 0 {
+                        for prev_field in &fields[0..field_idx] {
+                            match &prev_field.field_type.kind {
+                                ResolvedTypeKind::Primitive { prim_type: prev_prim } => {
+                                    let size = primitive_size(prev_prim);
+                                    write!(output, "    offset += {}; /* {} */\n", size, prev_field.name).unwrap();
+                                }
+                                ResolvedTypeKind::Enum { .. } => {
+                                    write!(output, "    offset += {}_get_{}_size( self ); /* {} (enum) */\n",
+                                           type_name, prev_field.name, prev_field.name).unwrap();
+                                }
+                                ResolvedTypeKind::SizeDiscriminatedUnion { .. } => {
+                                    write!(output, "    /* SDU '{}' size is variable - offset calculation stops here */\n", prev_field.name).unwrap();
+                                }
+                                ResolvedTypeKind::Array { .. } => {
+                                    if let crate::abi::resolved::Size::Const(size) = prev_field.field_type.size {
+                                        write!(output, "    offset += {}; /* {} (array) */\n",
+                                               size, prev_field.name).unwrap();
+                                    }
+                                }
+                                ResolvedTypeKind::TypeRef { .. } => {
+                                    if let crate::abi::resolved::Size::Const(size) = prev_field.field_type.size {
+                                        write!(output, "    offset += {}; /* {} (nested) */\n",
+                                               size, prev_field.name).unwrap();
+                                    }
+                                }
+                                _ => {}
+                            }
+                        }
+                    }
+                    write!(output, "    return ({} const *)(data + offset);\n", variant_type_name).unwrap();
+                    write!(output, "}}\n\n").unwrap();
+
+                    /* Mutable getter */
+                    write!(output, "{} * {}_{}_get_{}( {}_t * self ) {{\n",
+                           variant_type_name, type_name, escaped_name, variant_escaped, type_name).unwrap();
+                    write!(output, "    return ({} *)(void *){}_{}_get_{}_const( ({}_t const *)self );\n",
+                           variant_type_name, type_name, escaped_name, variant_escaped, type_name).unwrap();
+                    write!(output, "}}\n\n").unwrap();
+                }
+            }
+        }
     }
 
     output

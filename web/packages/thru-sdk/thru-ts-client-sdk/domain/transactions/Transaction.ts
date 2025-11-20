@@ -1,13 +1,13 @@
 import { create } from "@bufbuild/protobuf";
 import { signAsync } from "@noble/ed25519";
+import { PubkeySchema } from "../../proto/thru/common/v1/primitives_pb";
 import {
     TransactionEventSchema,
     TransactionExecutionResultSchema,
     TransactionVmError,
     type Transaction as CoreTransaction,
-    type TransactionExecutionResult as CoreTransactionExecutionResult
+    type TransactionExecutionResult as CoreTransactionExecutionResult,
 } from "../../proto/thru/core/v1/transaction_pb";
-import { PubkeySchema } from "../../proto/thru/core/v1/types_pb";
 import {
     ACCOUNT_META_FOOTPRINT,
     HASH_SIZE,

@@ -175,8 +175,66 @@ pub fn emit_forward_declarations(resolved_type: &ResolvedType) -> String {
           }
         }
       }
+
+      /* Add tag parameters for size-discriminated union fields */
+      for field in fields {
+        if matches!(&field.field_type.kind, ResolvedTypeKind::SizeDiscriminatedUnion { .. }) {
+          output.push_str(&format!(", uint8_t {}_tag", field.name));
+        }
+      }
+
       output.push_str(", uint64_t * out_size );\n");
       } /* end if !is_nested */
+
+      /* footprint() forward declaration */
+      if matches!(resolved_type.size, Size::Const(_)) {
+        /* Constant size */
+        output.push_str(&format!("uint64_t {}_footprint( void );\n", type_name));
+      } else {
+        /* Variable size - need parameters */
+        let mut all_field_refs: BTreeMap<String, PrimitiveType> = BTreeMap::new();
+        if let Size::Variable(variable_refs) = &resolved_type.size {
+          for refs in variable_refs.values() {
+            for (ref_path, prim_type) in refs {
+              all_field_refs.entry(ref_path.clone()).or_insert_with(|| prim_type.clone());
+            }
+          }
+        }
+
+        // Collect tag parameters for size-discriminated union fields
+        let mut sdu_tag_params: Vec<String> = Vec::new();
+        for field in fields {
+          if matches!(&field.field_type.kind, ResolvedTypeKind::SizeDiscriminatedUnion { .. }) {
+            sdu_tag_params.push(format!("uint8_t {}_tag", field.name));
+          }
+        }
+
+        let non_constant_refs: Vec<String> = all_field_refs.keys().cloned().collect();
+        output.push_str(&format!("uint64_t {}_footprint( ", type_name));
+        if non_constant_refs.is_empty() && sdu_tag_params.is_empty() {
+          output.push_str("void );\n");
+        } else {
+          let mut first = true;
+          for field_ref in &non_constant_refs {
+            if !field_ref.starts_with("_typeref_") {
+              if !first {
+                output.push_str(", ");
+              }
+              let param_name = field_ref.replace(".", "_");
+              output.push_str(&format!("int64_t {}", param_name));
+              first = false;
+            }
+          }
+          for tag_param in &sdu_tag_params {
+            if !first {
+              output.push_str(", ");
+            }
+            output.push_str(tag_param);
+            first = false;
+          }
+          output.push_str(" );\n");
+        }
+      }
 
       /* validate() */
       output.push_str(&format!("int {}_validate( uint8_t const * data, uint64_t data_len, uint64_t * out_size );\n",
@@ -201,7 +259,20 @@ pub fn emit_forward_declarations(resolved_type: &ResolvedType) -> String {
         }
       }
 
-      if fields.iter().any(|f| matches!(&f.field_type.kind, ResolvedTypeKind::Enum { .. })) {
+      /* Forward declarations for size-discriminated union tag and size helpers */
+      for field in fields.iter() {
+        if let ResolvedTypeKind::SizeDiscriminatedUnion { .. } = &field.field_type.kind {
+          let escaped_name = escape_c_keyword(&field.name);
+          output.push_str(&format!("uint8_t {}_{}_tag_from_size( uint64_t size );\n",
+                                 type_name, escaped_name));
+          output.push_str(&format!("uint64_t {}_{}_size_from_tag( uint8_t tag );\n",
+                                 type_name, escaped_name));
+          output.push_str(&format!("uint64_t {}_{}_size( {}_t const * self, uint64_t buffer_size );\n",
+                                 type_name, escaped_name, type_name));
+        }
+      }
+
+      if fields.iter().any(|f| matches!(&f.field_type.kind, ResolvedTypeKind::Enum { .. } | ResolvedTypeKind::SizeDiscriminatedUnion { .. })) {
         output.push_str("\n");
       }
 
@@ -212,6 +283,21 @@ pub fn emit_forward_declarations(resolved_type: &ResolvedType) -> String {
                                  type_name, field.name, type_name));
           output.push_str(&format!("int {}_set_{}_body( {}_t * self, uint8_t const * body, uint64_t body_len );\n",
                                  type_name, field.name, type_name));
+        }
+      }
+
+      /* Forward declarations for size-discriminated union variant getters and setters (like enums) */
+      for field in fields.iter() {
+        if let ResolvedTypeKind::SizeDiscriminatedUnion { variants } = &field.field_type.kind {
+          let escaped_name = escape_c_keyword(&field.name);
+          for variant in variants {
+            let variant_escaped = escape_c_keyword(&variant.name);
+            let variant_type_name = format!("{}_{}_{}_inner_t", type_name, escaped_name, variant_escaped);
+            /* Variant getters are generated in get.rs - forward declarations added there */
+            /* Variant setters */
+            output.push_str(&format!("void {}_{}_set_{}( {}_t * self, {} const * value );\n",
+                                   type_name, escaped_name, variant_escaped, type_name, variant_type_name));
+          }
         }
       }
 

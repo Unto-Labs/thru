@@ -8,8 +8,8 @@ const sdk = createThruClient({
     // endpoint: "https://api.thru.network", // Example endpoint
 });
 
-const counterProgramAddress = 'ta0gi1r3f877dIdhzKUPNHNnkNeQ_ojfTz8vW2xPkTpBFH'
-const seed = 'counter57'
+const counterProgramAddress = 'taLNrGlb3VsLLXIlT61QtUwVsrI7M5432DxpJRBfY1tOF3'
+const seed = 'counter'
 const derived = sdk.helpers.deriveProgramAddress({ programAddress: counterProgramAddress, seed: seed })
 const derivedAddress = derived.address
 

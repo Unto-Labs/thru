@@ -95,17 +95,19 @@ describe("transaction utils", () => {
     it("should throw error for Uint8Array with wrong length", () => {
       const invalidProgram = new Uint8Array(31);
       
-      expect(() => resolveProgramIdentifier(invalidProgram)).toThrow("Program public key must contain 32 bytes");
+      expect(() => resolveProgramIdentifier(invalidProgram)).toThrow("program must contain 32 bytes");
     });
 
     it("should throw error for invalid string format", () => {
-      expect(() => resolveProgramIdentifier("invalid-format")).toThrow("Unsupported program identifier format");
+      expect(() => resolveProgramIdentifier("invalid-format")).toThrow(
+        "program must be a 32-byte value, ta-address, hex string, or base64 string"
+      );
     });
 
     it("should throw error for hex string with wrong length", () => {
       const shortHex = "0123"; // Too short
       
-      expect(() => resolveProgramIdentifier(shortHex)).toThrow("Hex-encoded program key must contain 32 bytes");
+      expect(() => resolveProgramIdentifier(shortHex)).toThrow("program must contain 32 bytes");
     });
   });
 
@@ -147,7 +149,7 @@ describe("transaction utils", () => {
 
     it("should throw error for invalid string format", () => {
       expect(() => parseAccountIdentifier("invalid-format", "testField")).toThrow(
-        "testField must be a 32-byte value, ta-address, or 64-character hex string"
+        "testField must be a 32-byte value, ta-address, hex string, or base64 string"
       );
     });
 

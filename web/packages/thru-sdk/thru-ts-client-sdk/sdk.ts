@@ -5,6 +5,7 @@ import { TransactionBuilder } from "./domain/transactions";
 // ============================================================================
 export * as accounts from "./modules/accounts";
 export * as blocks from "./modules/blocks";
+export * as consensus from "./modules/consensus";
 export * as events from "./modules/events";
 export * as height from "./modules/height";
 export * as keys from "./modules/keys";
@@ -24,7 +25,17 @@ export { PageRequest, PageResponse } from "./domain/pagination";
 export { StateProof } from "./domain/proofs";
 export { Transaction, TransactionStatusSnapshot } from "./domain/transactions";
 export { VersionInfo } from "./domain/version";
-export { deriveProgramAddress, toPubkey } from "./modules/helpers";
+export {
+  deriveProgramAddress,
+  toBlockHash,
+  toPubkey,
+  toPubkeyBytes,
+  toSignature,
+  toSignatureBytes,
+  toTaPubkey,
+  toTsSignature
+} from "./modules/helpers";
+export { collectStream, firstStreamValue, forEachStreamValue } from "./modules/streaming";
 export { ConsensusStatus } from "./proto/thru/common/v1/consensus_pb";
 export {
   FilterParamValueSchema,
@@ -40,6 +51,7 @@ export { TransactionBuilder };
 // ============================================================================
     export type { Pubkey } from "@thru/helpers";
   export type { PageRequestParams, PageResponseParams } from "./domain/pagination";
+  export type { VersionContextInput } from "./modules/consensus";
 // ============================================================================
 // Type Exports - Proto/Protocol Types
 // ============================================================================

@@ -5,6 +5,7 @@ package thru.core.v1;
 import "buf/validate/validate.proto";
 import "google/api/field_behavior.proto";
 import "google/protobuf/timestamp.proto";
+import "thru/common/v1/primitives.proto";
 import "thru/common/v1/consensus.proto";
 import "thru/core/v1/types.proto";
 
@@ -29,9 +30,9 @@ enum BlockView {
 message BlockHeader {
   uint64 slot = 1 [(google.api.field_behavior) = REQUIRED];
   BlockHash block_hash = 2 [(google.api.field_behavior) = REQUIRED];
-  Signature header_signature = 3 [(google.api.field_behavior) = REQUIRED];
+  thru.common.v1.Signature header_signature = 3 [(google.api.field_behavior) = REQUIRED];
   uint32 version = 4 [(google.api.field_behavior) = REQUIRED];
-  Pubkey producer = 5 [(google.api.field_behavior) = REQUIRED];
+  thru.common.v1.Pubkey producer = 5 [(google.api.field_behavior) = REQUIRED];
   google.protobuf.Timestamp expiry_timestamp = 6
       [(google.api.field_behavior) = REQUIRED];
   uint64 start_slot = 7 [(google.api.field_behavior) = REQUIRED];
@@ -40,6 +41,7 @@ message BlockHeader {
   uint64 max_compute_units = 10 [(google.api.field_behavior) = REQUIRED];
   uint32 max_state_units = 11 [(google.api.field_behavior) = REQUIRED];
   uint64 price = 12 [(google.api.field_behavior) = REQUIRED];
+  google.protobuf.Timestamp block_time = 13 [(google.api.field_behavior) = REQUIRED];
 }
 
 // ExecutionStatus enumerates block execution results.
@@ -52,7 +54,7 @@ enum ExecutionStatus {
 
 // BlockFooter captures execution result metadata for a block.
 message BlockFooter {
-  Signature signature = 1 [(google.api.field_behavior) = REQUIRED];
+  thru.common.v1.Signature signature = 1 [(google.api.field_behavior) = REQUIRED];
   ExecutionStatus status = 2 [(google.api.field_behavior) = REQUIRED];
   uint64 consumed_compute_units = 3 [(google.api.field_behavior) = REQUIRED];
   uint32 consumed_state_units = 4 [(google.api.field_behavior) = REQUIRED];

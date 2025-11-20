@@ -193,6 +193,14 @@ impl TypeResolver {
           // Type reference is resolved - we can copy the target type info
           let target_type = self.types.get(&type_ref.name).unwrap();
 
+          // CRITICAL: Size-discriminated unions cannot be used as typerefs (must be anonymous)
+          if matches!(&target_type.kind, ResolvedTypeKind::SizeDiscriminatedUnion { .. }) {
+            return Err(ResolutionError::InvalidTypeDefinition(format!(
+              "Type '{}' references size-discriminated union '{}'. Size-discriminated unions cannot be used as typerefs and must be anonymous.",
+              type_name, type_ref.name
+            )));
+          }
+
           // Check if the referenced type has constant size
           if let Size::Variable(_) = target_type.size {
             return Err(ResolutionError::NonConstantTypeReference(format!(
@@ -220,6 +228,7 @@ impl TypeResolver {
         let mut max_alignment = 1u64;
         let mut all_sizes_known = true;
         let mut field_references: HashMap<String, HashMap<String, PrimitiveType>> = HashMap::new();
+        let mut size_disc_union_count = 0u32;
 
         // First pass: resolve types without context to build the struct
         let mut temp_resolved = ResolvedType {
@@ -237,6 +246,16 @@ impl TypeResolver {
         let struct_field_names: HashSet<String> = struct_type.fields.iter().map(|field| field.name.clone()).collect();
 
         for field in &struct_type.fields {
+          // Check if this field is a size-discriminated union
+          if matches!(&field.field_type, TypeKind::SizeDiscriminatedUnion(_)) {
+            size_disc_union_count += 1;
+            if size_disc_union_count > 1 {
+              return Err(ResolutionError::InvalidTypeDefinition(format!(
+                "Struct '{}' has multiple size-discriminated union fields. Only one size-discriminated union is allowed per struct.",
+                type_name
+              )));
+            }
+          }
           // For inline nested structs, pass the parent context so they can reference parent fields
           // If this IS a nested struct (parent_context.is_some()), pass that parent context
           // Otherwise, pass temp_resolved as the context for normal struct field resolution
@@ -618,7 +637,7 @@ impl TypeResolver {
       TypeKind::SizeDiscriminatedUnion(size_disc_union) => {
         let mut variants = Vec::new();
         let mut max_alignment = 1u64;
-        let mut field_references: HashMap<String, HashMap<String, PrimitiveType>> = HashMap::new();
+        let mut expected_sizes = HashSet::new();
 
         for variant in &size_disc_union.variants {
           // Check if variant is a TypeRef pointing to a non-constant sized type
@@ -636,26 +655,41 @@ impl TypeResolver {
           let variant_type = self.resolve_type_kind(&variant.variant_type, format!("{}::{}", type_name, variant.name), parent_context)?;
           max_alignment = max_alignment.max(variant_type.alignment);
 
-          // Collect field references from variants with variable size
-          if let Size::Variable(variant_refs) = &variant_type.size {
-            for (_, inner_refs) in variant_refs {
-              for (ref_path, prim_type) in inner_refs {
-                field_references
-                  .entry(variant.name.clone())
-                  .or_insert_with(HashMap::new)
-                  .insert(format!("{}.{}", variant.name, ref_path), prim_type.clone());
+          // CRITICAL: All variants must have constant sizes for size-discriminated unions
+          match &variant_type.size {
+            Size::Const(actual_size) => {
+              // Verify that the expected_size matches the actual size
+              if *actual_size != variant.expected_size {
+                return Err(ResolutionError::InvalidTypeDefinition(format!(
+                  "Size-discriminated union '{}' variant '{}' has expected_size {} but actual size is {}",
+                  type_name, variant.name, variant.expected_size, actual_size
+                )));
               }
+
+              // Check for duplicate expected sizes
+              if !expected_sizes.insert(variant.expected_size) {
+                return Err(ResolutionError::InvalidTypeDefinition(format!(
+                  "Size-discriminated union '{}' has multiple variants with the same expected size ({}). All variants must have different sizes.",
+                  type_name, variant.expected_size
+                )));
+              }
+            }
+            Size::Variable(_) => {
+              return Err(ResolutionError::InvalidTypeDefinition(format!(
+                "Size-discriminated union '{}' variant '{}' has variable size. All variants must have constant sizes.",
+                type_name, variant.name
+              )));
             }
           }
 
           variants.push(ResolvedSizeDiscriminatedVariant { name: variant.name.clone(), expected_size: variant.expected_size, variant_type });
         }
 
-        // Size-discriminated unions always have variable size since it depends on which variant is allocated
-        // But we also propagate any field references from variable-sized variants
+        // Size-discriminated unions have variable runtime size since it depends on which variant is active
+        // But all variants themselves have constant sizes
         Ok(ResolvedType {
           name: type_name,
-          size: Size::Variable(field_references), // Size is determined at allocation time, plus any field refs
+          size: Size::Variable(HashMap::new()), // Variable runtime size, but no field references since all variants are constant-size
           alignment: max_alignment,
           comment: size_disc_union.container_attributes.comment.clone(),
           kind: ResolvedTypeKind::SizeDiscriminatedUnion { variants },

@@ -1,0 +1,8 @@
+test-case:
+  name: "medium_variant"
+  abi-file: "../../abi_definitions/size_discriminated_unions.abi.yaml"
+  type: "MessageWithSDU"
+  binary-hex: "010203040506070809"
+  description: "Test size-discriminated union with medium variant (8 bytes)"
+  tags: ["size-discriminated-union", "medium", "variant"]
+

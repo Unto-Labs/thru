@@ -320,6 +320,39 @@ fn emit_struct_from_array(resolved_type: &ResolvedType) -> String {
           }
         }
 
+        /* Check if we have size-discriminated union fields that need tag parameters */
+        let mut has_sdu_fields = false;
+        let mut sdu_field_info: Option<(String, Vec<(u64, usize)>)> = None;
+        for field in fields {
+          if let ResolvedTypeKind::SizeDiscriminatedUnion { variants } = &field.field_type.kind {
+            has_sdu_fields = true;
+            let variants_info: Vec<(u64, usize)> = variants.iter().enumerate().map(|(idx, v)| (v.expected_size, idx)).collect();
+            sdu_field_info = Some((field.name.clone(), variants_info));
+            break; /* Only one SDU per struct */
+          }
+        }
+
+        let tag_param_name = if has_sdu_fields {
+          /* For size-discriminated unions, calculate tag from buffer size before calling footprint */
+          if let Some((ref field_name, ref variants_info)) = sdu_field_info {
+            let tag_param = format!("{}_tag", field_name);
+            write!(output, "\n    const {} = (() => {{\n", tag_param).unwrap();
+            write!(output, "      const available_size = buffer.length - 1; /* offset to SDU field */\n").unwrap();
+            write!(output, "      switch (available_size) {{\n").unwrap();
+            for (expected_size, idx) in variants_info {
+              write!(output, "        case {}: return {};\n", expected_size, idx).unwrap();
+            }
+            write!(output, "        default: return 255; /* Invalid size */\n").unwrap();
+            write!(output, "      }}\n").unwrap();
+            write!(output, "    }})();\n").unwrap();
+            Some(tag_param)
+          } else {
+            None
+          }
+        } else {
+          None
+        };
+
         /* Calculate total required size including enum bodies */
         write!(output, "\n    let required_size = {}.footprint(", class_name).unwrap();
 
@@ -361,7 +394,17 @@ fn emit_struct_from_array(resolved_type: &ResolvedType) -> String {
         let mut size_params: Vec<String> = field_refs.into_iter().collect();
         size_params.sort();
 
-        write!(output, "{});\n", size_params.join(", ")).unwrap();
+        /* Add tag parameter for size-discriminated union if present */
+        if let Some(ref tag_param) = tag_param_name {
+          size_params.push(tag_param.clone());
+          size_params.sort();
+        }
+
+        if size_params.is_empty() {
+          write!(output, ");\n").unwrap();
+        } else {
+          write!(output, "{});\n", size_params.join(", ")).unwrap();
+        }
 
         write!(output, "    if (buffer.length < required_size) {{\n").unwrap();
         write!(output, "      return null; /* Buffer too small for variable fields */\n").unwrap();
@@ -393,6 +436,46 @@ fn emit_struct_from_array(resolved_type: &ResolvedType) -> String {
         write!(output, "    if (!valid_tags_{}.includes(tag_{})) {{\n", field.name, field.name).unwrap();
         write!(output, "      return null; /* Invalid tag value */\n").unwrap();
         write!(output, "    }}\n\n").unwrap();
+      }
+      if let ResolvedTypeKind::SizeDiscriminatedUnion { variants } = &field.field_type.kind {
+        write!(output, "    /* Validate size-discriminated union field '{}' */\n", field.name).unwrap();
+        // Calculate offset to this field by summing previous constant-size fields
+        let mut offset_calc = String::new();
+        let mut first = true;
+        for prev_field in fields {
+          if prev_field.name == field.name {
+            break; // Stop before this field
+          }
+          match &prev_field.field_type.kind {
+            ResolvedTypeKind::Primitive { .. } => {
+              if let Size::Const(size) = prev_field.field_type.size {
+                if !first {
+                  offset_calc.push_str(" + ");
+                }
+                write!(offset_calc, "{}", size).unwrap();
+                first = false;
+              }
+            }
+            ResolvedTypeKind::Enum { .. } | ResolvedTypeKind::SizeDiscriminatedUnion { .. } => {
+              // Variable-size fields - can't calculate offset statically
+              offset_calc = "0".to_string(); // Fallback - will need runtime calculation
+              break;
+            }
+            _ => {}
+          }
+        }
+        if offset_calc.is_empty() {
+          offset_calc = "0".to_string();
+        }
+        write!(output, "    let offset_{} = {};\n", field.name, offset_calc).unwrap();
+        write!(output, "    const available_size_{} = buffer.length - offset_{};\n", field.name, field.name).unwrap();
+        write!(output, "    const valid_sizes_{} = [", field.name).unwrap();
+        let valid_sizes: Vec<String> = variants.iter().map(|v| v.expected_size.to_string()).collect();
+        write!(output, "{}];\n", valid_sizes.join(", ")).unwrap();
+        write!(output, "    if (!valid_sizes_{}.includes(available_size_{})) {{\n", field.name, field.name).unwrap();
+        write!(output, "      return null; /* No matching variant for size-discriminated union '{}' */\n", field.name).unwrap();
+        write!(output, "    }}\n").unwrap();
+        write!(output, "    const {}_size = available_size_{};\n", field.name, field.name).unwrap();
       }
     }
   }

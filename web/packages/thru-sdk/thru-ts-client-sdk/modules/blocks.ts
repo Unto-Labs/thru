@@ -1,6 +1,7 @@
 import { create } from "@bufbuild/protobuf";
 
 import type { ThruClientContext } from "../core/client";
+import { withCallOptions } from "../core/client";
 import { DEFAULT_BLOCK_VIEW, DEFAULT_MIN_CONSENSUS } from "../defaults";
 import { Block } from "../domain/blocks";
 import { Filter } from "../domain/filters";
@@ -52,7 +53,7 @@ export async function getBlock(
         view: options.view ?? DEFAULT_BLOCK_VIEW,
         minConsensus: options.minConsensus ?? DEFAULT_MIN_CONSENSUS,
     });
-    const proto = await ctx.query.getBlock(request);
+    const proto = await ctx.query.getBlock(request, withCallOptions(ctx));
     const protoBlock = Block.fromProto(proto);
 
     // Try to enrich with raw block metadata (block time, attestor payment) when available.
@@ -86,7 +87,7 @@ export function getRawBlock(
             : { case: "blockHash", value: toBlockHash(selector.blockHash) },
         minConsensus: options.minConsensus ?? DEFAULT_MIN_CONSENSUS,
     });
-    return ctx.query.getRawBlock(request);
+    return ctx.query.getRawBlock(request, withCallOptions(ctx));
 }
 
 export async function listBlocks(
@@ -99,7 +100,7 @@ export async function listBlocks(
         view: options.view ?? DEFAULT_BLOCK_VIEW,
         minConsensus: options.minConsensus ?? DEFAULT_MIN_CONSENSUS,
     });
-    const response: ProtoListBlocksResponse = await ctx.query.listBlocks(request);
+    const response: ProtoListBlocksResponse = await ctx.query.listBlocks(request, withCallOptions(ctx));
     return {
         blocks: response.blocks.map((proto) => Block.fromProto(proto)),
         page: PageResponse.fromProto(response.page),
