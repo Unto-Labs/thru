@@ -1,12 +1,6 @@
-import { decodeAddress } from "@thru/helpers";
 import { describe, expect, it } from "vitest";
-import { generateTestAddress, generateTestPubkey } from "../../../__tests__/helpers/test-utils";
-import {
-    normalizeAccountList,
-    parseAccountIdentifier,
-    parseInstructionData,
-    resolveProgramIdentifier,
-} from "../utils";
+import { generateTestPubkey } from "../../../__tests__/helpers/test-utils";
+import { normalizeAccountList, parseInstructionData } from "../utils";
 
 describe("transaction utils", () => {
   describe("normalizeAccountList", () => {
@@ -57,106 +51,8 @@ describe("transaction utils", () => {
 
     it("should throw error for invalid account length", () => {
       const invalidAccount = new Uint8Array(31); // Should be 32
-      
-      expect(() => normalizeAccountList([invalidAccount])).toThrow("Account addresses must contain 32 bytes");
-    });
-  });
 
-  describe("resolveProgramIdentifier", () => {
-    it("should accept Uint8Array with 32 bytes", () => {
-      const program = generateTestPubkey(0x01);
-      const result = resolveProgramIdentifier(program);
-      
-      expect(result).toEqual(program);
-      expect(result).not.toBe(program); // Should be a copy
-    });
-
-    it("should accept ta- prefixed address string", () => {
-      const address = generateTestAddress(0x01);
-      const result = resolveProgramIdentifier(address);
-      
-      expect(result.length).toBe(32);
-      const decoded = decodeAddress(address);
-      expect(result).toEqual(decoded);
-    });
-
-    it("should accept hex string", () => {
-      const programBytes = generateTestPubkey(0x01);
-      const hexString = Array.from(programBytes)
-        .map(b => b.toString(16).padStart(2, "0"))
-        .join("");
-      
-      const result = resolveProgramIdentifier(hexString);
-      
-      expect(result.length).toBe(32);
-      expect(result).toEqual(programBytes);
-    });
-
-    it("should throw error for Uint8Array with wrong length", () => {
-      const invalidProgram = new Uint8Array(31);
-      
-      expect(() => resolveProgramIdentifier(invalidProgram)).toThrow("program must contain 32 bytes");
-    });
-
-    it("should throw error for invalid string format", () => {
-      expect(() => resolveProgramIdentifier("invalid-format")).toThrow(
-        "program must be a 32-byte value, ta-address, hex string, or base64 string"
-      );
-    });
-
-    it("should throw error for hex string with wrong length", () => {
-      const shortHex = "0123"; // Too short
-      
-      expect(() => resolveProgramIdentifier(shortHex)).toThrow("program must contain 32 bytes");
-    });
-  });
-
-  describe("parseAccountIdentifier", () => {
-    it("should accept Uint8Array with 32 bytes", () => {
-      const account = generateTestPubkey(0x01);
-      const result = parseAccountIdentifier(account, "testField");
-      
-      expect(result).toEqual(account);
-      expect(result).not.toBe(account); // Should be a copy
-    });
-
-    it("should accept ta- prefixed address string", () => {
-      const address = generateTestAddress(0x01);
-      const result = parseAccountIdentifier(address, "testField");
-      
-      expect(result.length).toBe(32);
-      const decoded = decodeAddress(address);
-      expect(result).toEqual(decoded);
-    });
-
-    it("should accept hex string", () => {
-      const accountBytes = generateTestPubkey(0x01);
-      const hexString = Array.from(accountBytes)
-        .map(b => b.toString(16).padStart(2, "0"))
-        .join("");
-      
-      const result = parseAccountIdentifier(hexString, "testField");
-      
-      expect(result.length).toBe(32);
-      expect(result).toEqual(accountBytes);
-    });
-
-    it("should throw error for Uint8Array with wrong length", () => {
-      const invalidAccount = new Uint8Array(31);
-      
-      expect(() => parseAccountIdentifier(invalidAccount, "testField")).toThrow("testField must contain 32 bytes");
-    });
-
-    it("should throw error for invalid string format", () => {
-      expect(() => parseAccountIdentifier("invalid-format", "testField")).toThrow(
-        "testField must be a 32-byte value, ta-address, hex string, or base64 string"
-      );
-    });
-
-    it("should include field name in error message", () => {
-      const invalidAccount = new Uint8Array(31);
-      
-      expect(() => parseAccountIdentifier(invalidAccount, "myCustomField")).toThrow("myCustomField must contain 32 bytes");
+      expect(() => normalizeAccountList([invalidAccount])).toThrow("Must contain 32 bytes");
     });
   });
 

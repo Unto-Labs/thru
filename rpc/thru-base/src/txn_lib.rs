@@ -5,9 +5,12 @@ pub type TnPubkey = [u8; 32];
 pub type TnHash = [u8; 32];
 pub type TnSignature = [u8; 64];
 
-use crate::{StateProofType, tn_state_proof::StateProof};
+use crate::{
+    tn_signature::{sign_transaction, verify_transaction},
+    tn_state_proof::StateProof,
+    StateProofType,
+};
 use bytemuck::{Pod, Zeroable, bytes_of, from_bytes};
-use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
 
 pub const TN_TXN_FLAG_HAS_FEE_PAYER_PROOF_BIT: u8 = 0; // Bit position (matching C #define TN_TXN_FLAG_HAS_FEE_PAYER_PROOF (0U))
 pub const TN_TXN_FLAG_MAY_COMPRESS_ACCOUNT_BIT: u8 = 1; // Bit position (matching C #define TN_TXN_FLAG_MAY_COMPRESS_ACCOUNT (1U))
@@ -331,23 +334,18 @@ impl Transaction {
 
     /// Sign the transaction with a 32-byte Ed25519 private key
     pub fn sign(&mut self, private_key: &[u8; 32]) -> Result<(), Box<dyn std::error::Error>> {
-        let signing_key = SigningKey::from_bytes(private_key);
-        // Sign the wire format bytes (excluding signature field)
         let wire_bytes = self.to_wire_for_signing();
-        let sig = signing_key.sign(&wire_bytes);
-        self.signature = Some(sig.to_bytes());
+        let sig = sign_transaction(&wire_bytes, &self.fee_payer, private_key)
+            .map_err(|e| Box::<dyn std::error::Error>::from(e))?;
+        self.signature = Some(sig);
         Ok(())
     }
 
     /// Verify the transaction signature
     pub fn verify(&self) -> bool {
         if let Some(sig_bytes) = &self.signature {
-            if let Ok(verifying_key) = VerifyingKey::from_bytes(&self.fee_payer) {
-                let sig = Signature::from_bytes(sig_bytes);
-                // Verify against the wire format bytes (excluding signature field)
-                let wire_bytes = self.to_wire_for_signing();
-                return verifying_key.verify(&wire_bytes, &sig).is_ok();
-            }
+            let wire_bytes = self.to_wire_for_signing();
+            return verify_transaction(&wire_bytes, sig_bytes, &self.fee_payer).is_ok();
         }
         false
     }
@@ -825,16 +823,14 @@ pub fn validate_wire_transaction(bytes: &[u8]) -> Result<(), RpcError> {
         return Err(RpcError::trailing_bytes(offset, bytes.len()));
     }
     // 5. Signature check (fee payer signature)
-    if hdr.fee_payer_signature.len() != 64 {
-        return Err(RpcError::invalid_transaction_signature());
-    }
-    let sig = Signature::from_bytes(&hdr.fee_payer_signature);
-    let wire_for_signing = bytes[64..].to_vec(); // Exclude signature field
-    let verifying_key = match VerifyingKey::from_bytes(&hdr.fee_payer_pubkey) {
-        Ok(key) => key,
-        Err(_) => return Err(RpcError::invalid_transaction_signature()),
-    };
-    if verifying_key.verify(&wire_for_signing, &sig).is_err() {
+    let wire_for_signing = &bytes[64..]; // Exclude signature field
+    if verify_transaction(
+        wire_for_signing,
+        &hdr.fee_payer_signature,
+        &hdr.fee_payer_pubkey,
+    )
+    .is_err()
+    {
         return Err(RpcError::invalid_transaction_signature());
     }
 

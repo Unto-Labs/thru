@@ -3,8 +3,8 @@
  * Handles seed storage, derivation, and automatic zeroization
  */
 
-import { signAsync } from '@noble/ed25519';
 import { EncryptedData, EncryptionService, ThruHDWallet } from '@thru/crypto';
+import { signWithDomain, SignatureDomain } from '@thru/thru-sdk';
 
 function decodeBase64String(value: string): Uint8Array {
   const binary = atob(value);
@@ -123,7 +123,9 @@ export class KeyManager {
     // Derive keypair for signing
     const account = await ThruHDWallet.getAccount(this.seed, accountIndex);
 
-    return signAsync(message, account.privateKey);
+    // Use domain-separated signing with transaction domain
+    const publicKey = new Uint8Array(32); // Dummy, not used in simple approach
+    return signWithDomain(message, account.privateKey, publicKey, SignatureDomain.TXN);
   }
 
   /**
@@ -148,7 +150,16 @@ export class KeyManager {
 
     const account = await ThruHDWallet.getAccount(this.seed, accountIndex);
     const payloadBytes = decodeBase64String(serializedTransaction);
-    const signature = await signAsync(payloadBytes, account.privateKey);
+    
+    // Use domain-separated signing with transaction domain
+    // Public key parameter is not needed for the simple approach, but kept for API compatibility
+    const publicKey = new Uint8Array(32); // Dummy, not used in simple approach
+    const signature = await signWithDomain(
+      payloadBytes,
+      account.privateKey,
+      publicKey,
+      SignatureDomain.TXN,
+    );
 
     const result = new Uint8Array(signature.length + payloadBytes.length);
     result.set(signature, 0);

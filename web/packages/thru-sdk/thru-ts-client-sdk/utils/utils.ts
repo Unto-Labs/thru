@@ -1,10 +1,9 @@
-import { BytesLike } from "@thru/helpers";
 
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import { TransactionHeaderInput } from "../domain/transactions";
+import { BlockSelector } from "../modules/helpers";
 import { ConsensusStatus } from "../proto/thru/common/v1/consensus_pb";
 
-export type BlockSelector = { slot: number | bigint } | { blockHash: BytesLike };
 
 export function isSlotSelector(selector: BlockSelector): selector is { slot: number | bigint } {
     return "slot" in selector;

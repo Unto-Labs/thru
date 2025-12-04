@@ -22,18 +22,12 @@ export { ChainEvent } from "./domain/events";
 export { Filter, FilterParamValue } from "./domain/filters";
 export { HeightSnapshot } from "./domain/height";
 export { PageRequest, PageResponse } from "./domain/pagination";
+export { Pubkey, Signature } from "./domain/primitives";
 export { StateProof } from "./domain/proofs";
 export { Transaction, TransactionStatusSnapshot } from "./domain/transactions";
 export { VersionInfo } from "./domain/version";
 export {
-  deriveProgramAddress,
-  toBlockHash,
-  toPubkey,
-  toPubkeyBytes,
-  toSignature,
-  toSignatureBytes,
-  toTaPubkey,
-  toTsSignature
+  deriveProgramAddress
 } from "./modules/helpers";
 export { collectStream, firstStreamValue, forEachStreamValue } from "./modules/streaming";
 export { ConsensusStatus } from "./proto/thru/common/v1/consensus_pb";
@@ -45,12 +39,13 @@ export { AccountView } from "./proto/thru/core/v1/account_pb";
 export { BlockView, ExecutionStatus } from "./proto/thru/core/v1/block_pb";
 export { TransactionView, TransactionVmError } from "./proto/thru/core/v1/transaction_pb";
 export { TransactionBuilder };
+export { signWithDomain, verifyWithDomain, SignatureDomain } from "./domain/transactions/domain-signing";
 
 // ============================================================================
 // Type Exports - Common Types
 // ============================================================================
-    export type { Pubkey } from "@thru/helpers";
-  export type { PageRequestParams, PageResponseParams } from "./domain/pagination";
+    export type { PageRequestParams, PageResponseParams } from "./domain/pagination";
+  export type { PubkeyInput, SignatureInput } from "./domain/primitives";
   export type { VersionContextInput } from "./modules/consensus";
 // ============================================================================
 // Type Exports - Proto/Protocol Types
@@ -119,8 +114,7 @@ export type {
   TransactionExecutionResultData
 } from "./domain/transactions";
 export type {
-  InstructionContext,
-  ProgramIdentifier
+  InstructionContext
 } from "./domain/transactions/types";
 export type {
   BatchSendTransactionsOptions,

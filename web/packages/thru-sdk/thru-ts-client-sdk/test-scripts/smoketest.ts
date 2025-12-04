@@ -5,6 +5,7 @@ import type { Block } from "../domain/blocks";
 import type { ChainEvent } from "../domain/events";
 import { Filter, FilterParamValue } from "../domain/filters";
 import { PageRequest } from "../domain/pagination";
+import { Pubkey, Signature } from "../domain/primitives";
 import type { Transaction as TransactionModel } from "../domain/transactions";
 import type { TrackTransactionUpdate } from "../modules/streaming";
 import { ConsensusStatus } from "../proto/thru/common/v1/consensus_pb";
@@ -113,7 +114,7 @@ const encodeAddress = (bytes?: Uint8Array | null): string | undefined => {
         return undefined;
     }
     try {
-        return sdk.helpers.encodeAddress(bytes);
+        return Pubkey.from(bytes).toThruFmt();
     } catch (_error) {
         return toHex(bytes);
     }
@@ -124,7 +125,7 @@ const encodeSignature = (bytes?: Uint8Array | null): string | undefined => {
         return undefined;
     }
     try {
-        return sdk.helpers.encodeSignature(bytes);
+        return Signature.from(bytes).toThruFmt();
     } catch (_error) {
         return toHex(bytes, 16);
     }
@@ -147,7 +148,7 @@ function logBlockSummary(block: Block): void {
 }
 
 function logAccountSummary(account: Account): void {
-    console.log(` - Address: ${encodeAddress(account.address)}`);
+    console.log(` - Address: ${encodeAddress(account.address.toBytes())}`);
     if (account.meta) {
         console.log(
             `   Meta → version=${account.meta.version} seq=${account.meta.seq} balance=${account.meta.balance} nonce=${account.meta.nonce}`,
@@ -168,9 +169,9 @@ function logAccountSummary(account: Account): void {
 }
 
 function logTransactionSummary(transaction: TransactionModel): void {
-    console.log(` - Signature: ${encodeSignature(transaction.getSignature())}`);
-    console.log(`   Fee payer: ${encodeAddress(transaction.feePayer)}`);
-    console.log(`   Program: ${encodeAddress(transaction.program)}`);
+    console.log(` - Signature: ${transaction.getSignature()?.toThruFmt()}`);
+    console.log(`   Fee payer: ${encodeAddress(transaction.feePayer.toBytes())}`);
+    console.log(`   Program: ${encodeAddress(transaction.program.toBytes())}`);
     console.log(
         `   Header → fee=${transaction.fee} nonce=${transaction.nonce} startSlot=${transaction.startSlot} expiryAfter=${transaction.expiryAfter}`,
     );
@@ -276,8 +277,8 @@ async function main(): Promise<void> {
 
         if (creationTransaction) {
             const sendResult = await runStep("Sign and send account creation transaction", async () => {
-                const signatureBytes = await creationTransaction.sign(demoKeyPair.privateKey);
-                console.log(` - Local signature: ${toHex(signatureBytes, 16)}`);
+                const signature = await creationTransaction.sign(demoKeyPair.privateKey);
+                console.log(` - Local signature: ${signature.toThruFmt()}`);
                 const submittedSignature = await sdk.transactions.send(creationTransaction.toWire());
                 console.log(` - Submitted signature: ${submittedSignature}`);
                 return { submittedSignature };
@@ -365,7 +366,7 @@ async function main(): Promise<void> {
         const transactions = block.getTransactions();
         const txWithSignature = transactions.find((tx) => tx.getSignature());
         if (txWithSignature) {
-            sampleSignature = encodeSignature(txWithSignature.getSignature());
+            sampleSignature = txWithSignature.getSignature()?.toThruFmt();
             sampleTransactionSignature = sampleSignature ?? sampleTransactionSignature;
             break;
         }
@@ -373,7 +374,7 @@ async function main(): Promise<void> {
 
     const accountList = sampleAccountAddress
         ? await runStep("List accounts for owner", async () => {
-             const ownerBytes = sdk.helpers.decodeAddress(sampleAccountAddress!);
+             const ownerBytes = Pubkey.from(sampleAccountAddress!).toBytes();
              const filter = new Filter({
                  expression: "account.meta.owner.value == params.owner_bytes",
                  params: {
@@ -393,7 +394,7 @@ async function main(): Promise<void> {
         : (console.log("\n=== List accounts ==="), console.log("Skipping account list – no known account owner"), undefined);
 
     if (!sampleAccountAddress && accountList && accountList.length > 0) {
-        sampleAccountAddress = encodeAddress(accountList[0].address);
+        sampleAccountAddress = encodeAddress(accountList[0].address.toBytes());
     }
 
     if (sampleAccountAddress) {
@@ -447,7 +448,7 @@ async function main(): Promise<void> {
         : undefined;
 
     if (!sampleSignature && transactionsForAccount && transactionsForAccount.length > 0) {
-        sampleSignature = encodeSignature(transactionsForAccount[0].getSignature());
+        sampleSignature = transactionsForAccount[0].getSignature()?.toThruFmt();
         sampleTransactionSignature = sampleSignature;
     }
 
@@ -482,8 +483,14 @@ async function main(): Promise<void> {
 
     await runStep("Stream recent transactions", async () => {
         const stream = sdk.transactions.stream({ signal: AbortSignal.timeout(5000) });
-        await streamWithLimit(stream, 2, "transactions", ({ transaction }, index) => {
-            console.log(` - Streamed transaction #${index + 1} signature=${encodeSignature(transaction.getSignature())}`);
+        await streamWithLimit(stream, 2, "transactions", (update, index) => {
+            if (update.kind === "full") {
+                const transaction = update.transaction;
+                console.log(` - Streamed transaction #${index + 1} signature=${transaction.getSignature()?.toThruFmt()}`);
+            } else if (update.kind === "partial") {
+                const signature = update.signature;
+                console.log(` - Streamed transaction #${index + 1} signature=${encodeSignature(signature)}`);
+            }
         });
     });
 
@@ -523,29 +530,27 @@ async function main(): Promise<void> {
             console.log(" - No sample account address available");
             return;
         }
-        const decoded = sdk.helpers.decodeAddress(sampleAccountAddress);
+        const decoded = Pubkey.from(sampleAccountAddress).toBytes();
         console.log(` - Decoded address bytes: ${decoded.length}`);
-        console.log(` - Re-encoded address matches: ${sdk.helpers.encodeAddress(decoded) === sampleAccountAddress}`);
+        console.log(` - Re-encoded address matches: ${encodeAddress(decoded) === sampleAccountAddress}`);
         const derived = sdk.helpers.deriveProgramAddress({
             programAddress: sampleAccountAddress,
             seed: "catchall-demo",
         });
         console.log(` - Derived program address: ${derived.address}`);
         if (latestBlock?.header?.blockHash?.length) {
-            const blockHash = sdk.helpers.toBlockHash(latestBlock.header.blockHash);
-            console.log(` - Block hash proto bytes: ${blockHash.value.length}`);
+            console.log(` - Block hash proto bytes: ${latestBlock.header.blockHash.length}`);
         }
         if (sampleSignature) {
-            const signatureBytes = sdk.helpers.decodeSignature(sampleSignature);
-            const signatureProto = sdk.helpers.toSignature(signatureBytes);
-            console.log(` - Signature proto bytes: ${signatureProto.value.length}`);
-            console.log(` - Signature round trip: ${sdk.helpers.encodeSignature(signatureProto.value) === sampleSignature}`);
+            const signature = sdk.helpers.createSignature(sampleSignature);
+            console.log(` - Signature bytes: ${signature.toBytes().length}`);
+            console.log(` - Signature round trip: ${signature.toThruFmt() === sampleSignature}`);
         }
-        const pubkeyProto = sdk.helpers.toPubkey(decoded, "demoAddress");
-        console.log(` - Pubkey proto bytes: ${pubkeyProto.value.length}`);
+        const pubkey = sdk.helpers.createPubkey(sampleAccountAddress);
+        console.log(` - Pubkey bytes: ${pubkey.toBytes().length}`);
     });
 
-    const envFeePayerPublicKey = FEE_PAYER_ADDRESS ? sdk.helpers.decodeAddress(FEE_PAYER_ADDRESS) : undefined;
+    const envFeePayerPublicKey = FEE_PAYER_ADDRESS ? Pubkey.from(FEE_PAYER_ADDRESS) : undefined;
     const envFeePayerPrivateKey = FEE_PAYER_PRIVATE_KEY_HEX
         ? (() => {
               try {
@@ -601,7 +606,7 @@ async function main(): Promise<void> {
                 },
                 instructionData: new Uint8Array([0x01, 0x02, 0x03]),
             });
-            console.log(` - Local signature bytes: ${result.signature.length}`);
+            console.log(` - Local signature bytes: ${result.signature.toBytes().length}`);
             return result;
         });
 

@@ -168,10 +168,11 @@ constexpr ulong TSDK_ACCOUNT_META_FOOTPRINT = TN_ACCOUNT_META_FOOTPRINT;
 struct __attribute__((packed)) tn_block_ctx {
   ulong slot;                 // Current block slot number
   ulong block_time;           // Block timestamp (Unix epoch in nanoseconds)
-  ulong global_state_counter; // Global state counter
+  ulong block_price;          // Block price
   pubkey_t parent_blockhash;  // Hash of the parent block
   pubkey_t block_producer;    // Public key of the block producer
   pubkey_t state_root;        // Merkle root of the state tree
+  pubkey_t cur_block_hash;    // Current block hash (truncated)
 };
 
 // Block context constants

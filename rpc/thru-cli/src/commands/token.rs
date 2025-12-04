@@ -58,13 +58,13 @@ fn resolve_token_program(
 
 fn derive_mint_account_pubkey(
     token_program_pubkey: &Pubkey,
-    mint_authority_pubkey: &[u8; 32],
+    creator_pubkey: &[u8; 32],
     seed_bytes: &[u8; 32],
 ) -> Result<Pubkey, CliError> {
     use sha2::{Digest, Sha256};
 
     let mut hasher = Sha256::new();
-    hasher.update(mint_authority_pubkey);
+    hasher.update(creator_pubkey);
     hasher.update(seed_bytes);
 
     let hash = hasher.finalize();
@@ -76,7 +76,7 @@ fn derive_mint_account_pubkey(
 }
 
 /// Helper function to check transaction execution results and return appropriate errors
-fn check_transaction_result(
+pub(crate) fn check_transaction_result(
     transaction_details: &TransactionDetails,
     json_format: bool,
 ) -> Result<(), CliError> {
@@ -238,6 +238,7 @@ pub async fn handle_token_command(
 ) -> Result<(), CliError> {
     match subcommand {
         TokenCommands::InitializeMint {
+            creator,
             mint_authority,
             freeze_authority,
             decimals,
@@ -249,7 +250,8 @@ pub async fn handle_token_command(
         } => {
             initialize_mint(
                 config,
-                &mint_authority,
+                &creator,
+                mint_authority.as_deref(),
                 freeze_authority.as_deref(),
                 decimals,
                 &ticker,
@@ -410,13 +412,13 @@ pub async fn handle_token_command(
             .await
         }
         TokenCommands::DeriveMintAccount {
-            mint_authority,
+            creator,
             seed,
             token_program,
         } => {
             derive_mint_account(
                 config,
-                &mint_authority,
+                &creator,
                 &seed,
                 token_program.as_deref(),
                 json_format,
@@ -429,7 +431,8 @@ pub async fn handle_token_command(
 /// Initialize a new token mint
 async fn initialize_mint(
     config: &Config,
-    mint_authority: &str,
+    creator: &str,
+    mint_authority: Option<&str>,
     freeze_authority: Option<&str>,
     decimals: u8,
     ticker: &str,
@@ -468,9 +471,13 @@ async fn initialize_mint(
         return Err(CliError::Validation(error_msg.to_string()));
     }
 
+    // Default mint_authority to creator if not provided
+    let mint_authority_str = mint_authority.unwrap_or(creator);
+
     if !json_format {
         println!("Initialize mint:");
-        println!("  Mint Authority: {}", mint_authority);
+        println!("  Creator: {}", creator);
+        println!("  Mint Authority: {}", mint_authority_str);
         if let Some(freeze_auth) = freeze_authority {
             println!("  Freeze Authority: {}", freeze_auth);
         }
@@ -483,7 +490,8 @@ async fn initialize_mint(
     let seed_bytes = parse_seed_bytes(seed)?;
 
     // Resolve addresses
-    let mint_authority_pubkey = validate_address_or_hex(mint_authority)?;
+    let creator_pubkey = validate_address_or_hex(creator)?;
+    let mint_authority_pubkey = validate_address_or_hex(mint_authority_str)?;
     let freeze_authority_pubkey = match freeze_authority {
         Some(addr) => Some(validate_address_or_hex(addr)?),
         None => None,
@@ -517,9 +525,9 @@ async fn initialize_mint(
         CliError::TransactionSubmission(format!("Failed to get block height: {}", e))
     })?;
 
-    // Derive mint account address using the provided seed and token program as owner
+    // Derive mint account address using the creator and seed
     let mint_account_base_pubkey =
-        derive_mint_account_pubkey(&token_program_pubkey, &mint_authority_pubkey, &seed_bytes)?;
+        derive_mint_account_pubkey(&token_program_pubkey, &creator_pubkey, &seed_bytes)?;
 
     let mint_account_pubkey = mint_account_base_pubkey
         .to_bytes()
@@ -545,6 +553,7 @@ async fn initialize_mint(
         fee_payer_keypair.public_key,
         token_program_bytes,
         mint_account_pubkey,
+        creator_pubkey,
         mint_authority_pubkey,
         freeze_authority_pubkey,
         decimals,
@@ -587,7 +596,8 @@ async fn initialize_mint(
                 "mint_account": mint_account_address,
                 "ticker": ticker,
                 "decimals": decimals,
-                "mint_authority": mint_authority,
+                "creator": creator,
+                "mint_authority": mint_authority_str,
                 "freeze_authority": freeze_authority,
                 "seed": seed,
                 "signature": transaction_details.signature.as_str(),
@@ -1455,10 +1465,10 @@ async fn derive_token_account(
     Ok(())
 }
 
-/// Derive mint account address from mint authority and seed
+/// Derive mint account address from creator and seed
 async fn derive_mint_account(
     config: &Config,
-    mint_authority: &str,
+    creator: &str,
     seed: &str,
     token_program: Option<&str>,
     json_format: bool,
@@ -1479,18 +1489,18 @@ async fn derive_mint_account(
 
     let seed_bytes = parse_seed_bytes(seed)?;
 
-    let mint_authority_pubkey = validate_address_or_hex(mint_authority)?;
+    let creator_pubkey = validate_address_or_hex(creator)?;
 
     if !json_format {
         println!("Derive mint account:");
-        println!("  Mint Authority: {}", mint_authority);
+        println!("  Creator: {}", creator);
         println!("  Seed: {}", seed);
     }
 
     let (token_program_pubkey, _) = resolve_token_program(config, token_program)?;
 
     let mint_account_base_pubkey =
-        derive_mint_account_pubkey(&token_program_pubkey, &mint_authority_pubkey, &seed_bytes)?;
+        derive_mint_account_pubkey(&token_program_pubkey, &creator_pubkey, &seed_bytes)?;
 
     let mint_account_pubkey = mint_account_base_pubkey.to_bytes().map_err(|e| {
         CliError::Crypto(format!(
@@ -1506,7 +1516,7 @@ async fn derive_mint_account(
         let response = serde_json::json!({
             "derive_mint_account": {
                 "mint_account_address": mint_account_address,
-                "mint_authority": mint_authority,
+                "creator": creator,
                 "seed": seed
             }
         });

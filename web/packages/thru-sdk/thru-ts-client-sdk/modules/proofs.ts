@@ -2,12 +2,12 @@ import { create } from "@bufbuild/protobuf";
 
 import type { ThruClientContext } from "../core/client";
 import { withCallOptions } from "../core/client";
+import { Pubkey } from "../domain/primitives";
 import { StateProof } from "../domain/proofs";
 import { StateProofRequestSchema } from "../proto/thru/core/v1/state_pb";
 import { GenerateStateProofRequestSchema, GenerateStateProofResponse } from "../proto/thru/services/v1/query_service_pb";
 import { GenerateStateProofOptions } from "../types/types";
 import { getBlockHeight } from "./height";
-import { toPubkey } from "./helpers";
 
 export async function generateStateProof(
     ctx: ThruClientContext,
@@ -20,7 +20,7 @@ export async function generateStateProof(
     }
 
     const request = create(StateProofRequestSchema, {
-        address: options.address ? toPubkey(options.address, "address") : undefined,
+        address: options.address ? Pubkey.from(options.address).toProtoPubkey() : undefined,
         proofType: options.proofType,
         targetSlot,
     });

@@ -1,12 +1,9 @@
-import { BytesLike, Pubkey, hexToBytes, isHexString } from "@thru/helpers";
-import type { Pubkey as ProtoPubkey } from "../../proto/thru/common/v1/primitives_pb";
-import { protoPubkeyToBytes, pubkeyBytesFromInput } from "../../utils/primitives";
-import type { AccountAddress, ProgramIdentifier } from "./types";
+import { hexToBytes, isHexString } from "@thru/helpers";
+import { Pubkey, PubkeyInput } from "../primitives";
 
 const ACCOUNT_LIMIT = 1024;
-const ACCOUNT_ADDRESS_LENGTH = 32;
 
-export function normalizeAccountList(accounts: AccountAddress[]): AccountAddress[] {
+export function normalizeAccountList(accounts: PubkeyInput[]): Uint8Array[] {
     if (accounts.length === 0) {
         return [];
     }
@@ -19,16 +16,17 @@ export function normalizeAccountList(accounts: AccountAddress[]): AccountAddress
     return deduped;
 }
 
-function dedupeAccountList(accounts: AccountAddress[]): AccountAddress[] {
-    const seen = new Map<string, AccountAddress>();
-    for (const account of accounts) {
-        if (account.length !== 32) {
+function dedupeAccountList(accounts: PubkeyInput[]): Uint8Array[] {
+    const pubkeys = accounts.map(Pubkey.from).map((pubkey) => pubkey.toBytes());
+    const seen = new Map<string, Uint8Array>();
+    for (const pubkey of pubkeys) {
+        if (pubkey.length !== 32) {
             throw new Error("Account addresses must contain 32 bytes");
         }
 
-        const key = toHex(account);
+        const key = toHex(pubkey);
         if (!seen.has(key)) {
-            seen.set(key, new Uint8Array(account));
+            seen.set(key, pubkey);
         }
     }
 
@@ -53,15 +51,7 @@ function toHex(bytes: Uint8Array): string {
     return result;
 }
 
-export function resolveProgramIdentifier(identifier: ProgramIdentifier): AccountAddress {
-    return pubkeyBytesFromInput(identifier, "program");
-}
-
-export function parseAccountIdentifier(value: Pubkey, field: string): AccountAddress {
-    return pubkeyBytesFromInput(value, field);
-}
-
-export function parseInstructionData(value?: BytesLike): Uint8Array | undefined {
+export function parseInstructionData(value?: Uint8Array | string): Uint8Array | undefined {
     if (value === undefined) {
         return undefined;
     }
@@ -77,8 +67,4 @@ export function parseInstructionData(value?: BytesLike): Uint8Array | undefined 
         }
     }
     throw new Error("Instruction data must be provided as hex string or Uint8Array");
-}
-
-export function protoPubkeyToAccountAddress(pubkey?: ProtoPubkey): AccountAddress {
-    return protoPubkeyToBytes(pubkey);
 }

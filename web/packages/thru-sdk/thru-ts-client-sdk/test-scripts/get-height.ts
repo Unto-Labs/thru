@@ -1,8 +1,13 @@
 import { createThruClient } from "../client";
+import { PageRequest } from "../sdk";
 
 const thru = createThruClient({
   baseUrl: "https://grpc-web.alphanet.thruput.org",
 });
 
-const transaction = await thru.transactions.get("ts3TQtscybPcD1keVEkaWAa4rZSa70K0knukd75uti-k26T5CscJnNobK9d48o3dHIvTkLqLjnnmuK_WJx-yNEBCPi");
-console.log(transaction.executionResult?.events);
+const transaction = await thru.transactions.listForAccount("taLNrGlb3VsLLXIlT61QtUwVsrI7M5432DxpJRBfY1tOF3", {
+  page: new PageRequest({
+    pageSize: 1,
+  }),
+});
+console.log(transaction);

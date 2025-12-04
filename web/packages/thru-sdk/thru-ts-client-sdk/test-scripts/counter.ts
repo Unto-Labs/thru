@@ -2,6 +2,7 @@ import { createThruClient } from "../client";
 import type { InstructionContext } from "../domain/transactions";
 import { ConsensusStatus } from "../proto/thru/common/v1/consensus_pb";
 import { StateProofType } from "../proto/thru/core/v1/state_pb";
+import { Pubkey } from "../sdk";
 
 const sdk = createThruClient({
     // Configure the SDK to connect to the desired Thru cluster
@@ -88,7 +89,7 @@ function hexToBytes(hex: string): Uint8Array {
 // Test 1: Using instructionData as a hex string (backward compatible)
 const incrementCounterAccountInstructionWithString = async () => {
     const instructionDataHex = await getIncrementCounterAccountInstructionDataHex();
-    const feePayerPublicKey = sdk.helpers.decodeAddress(feePayerAddress);
+    const feePayerPublicKey = Pubkey.from(feePayerAddress);
     const feePayerPrivateKey = hexToBytes(feePayerPrivateKeyHex);
 
     const transaction = await sdk.transactions.build({
@@ -119,9 +120,9 @@ const incrementCounterAccountInstructionWithString = async () => {
 
 // Test 2: Using instructionData as a function (new capability)
 const incrementCounterAccountInstructionWithFunction = async () => {
-    const feePayerPublicKey = sdk.helpers.decodeAddress(feePayerAddress);
+    const feePayerPublicKey = Pubkey.from(feePayerAddress);
     const feePayerPrivateKey = hexToBytes(feePayerPrivateKeyHex);
-    const derivedAddressBytes = sdk.helpers.decodeAddress(derivedAddress);
+    const derivedAddressBytes = Pubkey.from(derivedAddress).toBytes();
 
     console.log("\n=== Test 2: Using instructionData as a function ===");
     
@@ -131,7 +132,7 @@ const incrementCounterAccountInstructionWithFunction = async () => {
         console.log(`  - Total accounts: ${context.accounts.length}`);
         // Log account addresses as hex for debugging
         context.accounts.forEach((acc, i) => {
-            const hex = Array.from(acc).map(b => b.toString(16).padStart(2, "0")).join("");
+            const hex = acc.toThruFmt();
             console.log(`  - Account [${i}]: ${hex.substring(0, 16)}...`);
         });
         
@@ -325,9 +326,9 @@ const getCreateCounterAccountInstructionData = async (): Promise<Uint8Array> => 
 
 // Create counter account using instructionData as a function
 const createCounterAccountWithFunction = async (): Promise<string> => {
-    const feePayerPublicKey = sdk.helpers.decodeAddress(feePayerAddress);
+    const feePayerPublicKey = Pubkey.from(feePayerAddress);
     const feePayerPrivateKey = hexToBytes(feePayerPrivateKeyHex);
-    const derivedAddressBytes = sdk.helpers.decodeAddress(derivedAddress);
+    const derivedAddressBytes = Pubkey.from(derivedAddress).toBytes();
 
     console.log("\n=== Creating Counter Account (using function) ===");
     
@@ -375,7 +376,7 @@ const createCounterAccountWithFunction = async (): Promise<string> => {
         instructionData: instructionDataFunction,
     });
 
-    console.log("Local signature:", Array.from(signature, b => b.toString(16).padStart(2, "0")).join(""));
+    console.log("Local signature:", signature.toThruFmt());
 
     const submittedSignature = await sdk.transactions.send(rawTransaction);
     console.log("Submitted transaction signature:", submittedSignature);
@@ -390,7 +391,7 @@ const createCounterAccountWithFunction = async (): Promise<string> => {
 
 // Create counter account using instructionData as hex string
 const createCounterAccountWithString = async (): Promise<string> => {
-    const feePayerPublicKey = sdk.helpers.decodeAddress(feePayerAddress);
+    const feePayerPublicKey = Pubkey.from(feePayerAddress);
     const feePayerPrivateKey = hexToBytes(feePayerPrivateKeyHex);
 
     console.log("\n=== Creating Counter Account (using hex string) ===");
@@ -430,7 +431,7 @@ const createCounterAccountWithString = async (): Promise<string> => {
         instructionData: instructionDataHex,
     });
 
-    console.log("Local signature:", Array.from(signature, b => b.toString(16).padStart(2, "0")).join(""));
+    console.log("Local signature:", signature.toThruFmt());
 
     const submittedSignature = await sdk.transactions.send(rawTransaction);
     console.log("Submitted transaction signature:", submittedSignature);

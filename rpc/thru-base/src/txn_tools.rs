@@ -5,6 +5,7 @@ use crate::{
 };
 use anyhow::Result;
 use hex;
+use std::collections::HashMap;
 
 /// No-op program identifier (32-byte array with 0x03 in the last byte)
 pub const NOOP_PROGRAM: [u8; 32] = {
@@ -25,6 +26,11 @@ pub const EOA_PROGRAM: [u8; 32] = {
 pub const UPLOADER_PROGRAM: [u8; 32] = {
     let mut arr = [0u8; 32];
     arr[31] = 0x02;
+    arr
+};
+pub const FAUCET_PROGRAM: [u8; 32] = {
+    let mut arr = [0u8; 32];
+    arr[31] = 0xFA;
     arr
 };
 
@@ -567,6 +573,219 @@ mod tests {
         let parsed_to = u16::from_le_bytes([instruction[14], instruction[15]]);
         assert_eq!(parsed_to, to_idx, "To index should match input");
     }
+
+    #[test]
+    fn test_faucet_deposit_instruction_layout_with_fee_payer_depositor() {
+        let fee_payer = [1u8; 32];
+        let faucet_program = FAUCET_PROGRAM;
+        let faucet_account = [2u8; 32];
+        let depositor_account = fee_payer;
+        let amount = 500u64;
+
+        let tx = TransactionBuilder::build_faucet_deposit(
+            fee_payer,
+            faucet_program,
+            faucet_account,
+            depositor_account,
+            EOA_PROGRAM,
+            amount,
+            0,
+            42,
+            100,
+        )
+        .expect("build faucet deposit");
+
+        let rw_accs = tx.rw_accs.expect("rw accounts must exist");
+        assert_eq!(rw_accs.len(), 1);
+        assert_eq!(rw_accs[0], faucet_account);
+
+        let ro_accs = tx.r_accs.expect("ro accounts must exist");
+        assert_eq!(ro_accs.len(), 1);
+        assert_eq!(ro_accs[0], EOA_PROGRAM);
+
+        let instruction = tx.instructions.expect("instruction bytes must exist");
+        assert_eq!(instruction.len(), 18, "Deposit instruction must be 18 bytes");
+
+        let discriminant =
+            u32::from_le_bytes([instruction[0], instruction[1], instruction[2], instruction[3]]);
+        assert_eq!(discriminant, 0, "Deposit discriminant should be 0");
+
+        let faucet_idx = u16::from_le_bytes([instruction[4], instruction[5]]);
+        let depositor_idx = u16::from_le_bytes([instruction[6], instruction[7]]);
+        let eoa_idx = u16::from_le_bytes([instruction[8], instruction[9]]);
+        let parsed_amount = u64::from_le_bytes([
+            instruction[10],
+            instruction[11],
+            instruction[12],
+            instruction[13],
+            instruction[14],
+            instruction[15],
+            instruction[16],
+            instruction[17],
+        ]);
+
+        assert_eq!(faucet_idx, 2, "Faucet account should be first RW account");
+        assert_eq!(depositor_idx, 0, "Depositor shares the fee payer index");
+        assert_eq!(eoa_idx, 3, "EOA program should follow RW accounts");
+        assert_eq!(parsed_amount, amount, "Amount should match input");
+    }
+
+    #[test]
+    fn test_build_token_initialize_mint() {
+        // Create test keypairs and addresses
+        let fee_payer = [1u8; 32];
+        let token_program = [2u8; 32];
+        let mint_account = [3u8; 32];
+        let creator = [4u8; 32];
+        let mint_authority = [5u8; 32];
+        let freeze_authority = [6u8; 32];
+
+        let decimals = 9u8;
+        let ticker = "TEST";
+        let seed = [7u8; 32];
+        let state_proof = vec![8u8; 64];
+
+        // Test with freeze authority
+        let result = TransactionBuilder::build_token_initialize_mint(
+            fee_payer,
+            token_program,
+            mint_account,
+            creator,
+            mint_authority,
+            Some(freeze_authority),
+            decimals,
+            ticker,
+            seed,
+            state_proof.clone(),
+            1000, // fee
+            1,    // nonce
+            100,  // start_slot
+        );
+
+        assert!(result.is_ok(), "Should build valid transaction with freeze authority");
+        let tx = result.unwrap();
+        assert!(tx.instructions.is_some(), "Transaction should have instructions");
+
+        // Test without freeze authority
+        let result_no_freeze = TransactionBuilder::build_token_initialize_mint(
+            fee_payer,
+            token_program,
+            mint_account,
+            creator,
+            mint_authority,
+            None,
+            decimals,
+            ticker,
+            seed,
+            state_proof,
+            1000,
+            1,
+            100,
+        );
+
+        assert!(result_no_freeze.is_ok(), "Should build valid transaction without freeze authority");
+    }
+
+    #[test]
+    fn test_build_token_initialize_mint_instruction_format() {
+        let mint_account_idx = 2u16;
+        let decimals = 9u8;
+        let creator = [1u8; 32];
+        let mint_authority = [2u8; 32];
+        let freeze_authority = [3u8; 32];
+        let ticker = "TST";
+        let seed = [4u8; 32];
+        let state_proof = vec![5u8; 10];
+
+        let instruction = build_token_initialize_mint_instruction(
+            mint_account_idx,
+            decimals,
+            creator,
+            mint_authority,
+            Some(freeze_authority),
+            ticker,
+            seed,
+            state_proof.clone(),
+        )
+        .unwrap();
+
+        // Verify instruction structure
+        // Tag (1) + mint_account_idx (2) + decimals (1) + creator (32) + mint_authority (32) + 
+        // freeze_authority (32) + has_freeze_authority (1) + ticker_len (1) + ticker_bytes (8) + seed (32) + proof
+        let expected_min_size = 1 + 2 + 1 + 32 + 32 + 32 + 1 + 1 + 8 + 32 + state_proof.len();
+        assert_eq!(instruction.len(), expected_min_size);
+
+        // Verify tag
+        assert_eq!(instruction[0], 0, "First byte should be InitializeMint tag (0)");
+
+        // Verify mint account index
+        let parsed_idx = u16::from_le_bytes([instruction[1], instruction[2]]);
+        assert_eq!(parsed_idx, mint_account_idx);
+
+        // Verify decimals
+        assert_eq!(instruction[3], decimals);
+
+        // Verify creator is at correct position (bytes 4-35)
+        assert_eq!(&instruction[4..36], &creator);
+
+        // Verify mint_authority is at correct position (bytes 36-67)
+        assert_eq!(&instruction[36..68], &mint_authority);
+
+        // Verify freeze_authority is at correct position (bytes 68-99)
+        assert_eq!(&instruction[68..100], &freeze_authority);
+
+        // Verify has_freeze_authority flag
+        assert_eq!(instruction[100], 1);
+    }
+
+    #[test]
+    fn test_token_initialize_mint_creator_vs_mint_authority() {
+        // Test that creator and mint_authority can be different
+        let fee_payer = [1u8; 32];
+        let token_program = [2u8; 32];
+        let mint_account = [3u8; 32];
+        let creator = [4u8; 32];
+        let mint_authority = [5u8; 32]; // Different from creator
+        let seed = [6u8; 32];
+        let state_proof = vec![7u8; 32];
+
+        let result = TransactionBuilder::build_token_initialize_mint(
+            fee_payer,
+            token_program,
+            mint_account,
+            creator,
+            mint_authority,
+            None,
+            9,
+            "TEST",
+            seed,
+            state_proof,
+            1000,
+            1,
+            100,
+        );
+
+        assert!(result.is_ok(), "Should allow different creator and mint_authority");
+
+        // Test that creator and mint_authority can be the same
+        let result_same = TransactionBuilder::build_token_initialize_mint(
+            fee_payer,
+            token_program,
+            mint_account,
+            creator,
+            creator, // Same as creator
+            None,
+            9,
+            "TEST",
+            seed,
+            vec![7u8; 32],
+            1000,
+            1,
+            100,
+        );
+
+        assert!(result_same.is_ok(), "Should allow same creator and mint_authority");
+    }
 }
 
 /// Uploader program instruction discriminants
@@ -826,7 +1045,7 @@ impl TransactionBuilder {
         let mut tx = Transaction::new(fee_payer, uploader_program, fee, nonce)
             .with_start_slot(start_slot)
             .with_expiry_after(10000)
-            .with_compute_units(50_000 + 180 * buffer_size as u32)
+            .with_compute_units(50_000 + 200 * buffer_size as u32)
             .with_memory_units(5000)
             .with_state_units(5000);
 
@@ -1764,23 +1983,85 @@ pub const TOKEN_INSTRUCTION_CLOSE_ACCOUNT: u8 = 0x05;
 pub const TOKEN_INSTRUCTION_FREEZE_ACCOUNT: u8 = 0x06;
 pub const TOKEN_INSTRUCTION_THAW_ACCOUNT: u8 = 0x07;
 
+/* WTHRU instruction discriminants */
+pub const TN_WTHRU_INSTRUCTION_INITIALIZE_MINT: u32 = 0;
+pub const TN_WTHRU_INSTRUCTION_DEPOSIT: u32 = 1;
+pub const TN_WTHRU_INSTRUCTION_WITHDRAW: u32 = 2;
+// lease, resolve (lil library), show lease info, 
+// cost to lease, renew, record management, listing records for domain, 
+// subdomain management 
+
+/* Name service instruction discriminants */
+pub const TN_NAME_SERVICE_INSTRUCTION_INITIALIZE_ROOT: u32 = 0;
+pub const TN_NAME_SERVICE_INSTRUCTION_REGISTER_SUBDOMAIN: u32 = 1;
+pub const TN_NAME_SERVICE_INSTRUCTION_APPEND_RECORD: u32 = 2;
+pub const TN_NAME_SERVICE_INSTRUCTION_DELETE_RECORD: u32 = 3;
+pub const TN_NAME_SERVICE_INSTRUCTION_UNREGISTER: u32 = 4;
+
+/* Name service proof discriminants */
+pub const TN_NAME_SERVICE_PROOF_INLINE: u32 = 0;
+
+/* Name service limits */
+pub const TN_NAME_SERVICE_MAX_DOMAIN_LENGTH: usize = 64;
+pub const TN_NAME_SERVICE_MAX_KEY_LENGTH: usize = 32;
+pub const TN_NAME_SERVICE_MAX_VALUE_LENGTH: usize = 256;
+
+// Thru registrar instruction types (u32 discriminants)
+pub const TN_THRU_REGISTRAR_INSTRUCTION_INITIALIZE_REGISTRY: u32 = 0;
+pub const TN_THRU_REGISTRAR_INSTRUCTION_PURCHASE_DOMAIN: u32 = 1;
+pub const TN_THRU_REGISTRAR_INSTRUCTION_RENEW_LEASE: u32 = 2;
+pub const TN_THRU_REGISTRAR_INSTRUCTION_CLAIM_EXPIRED_DOMAIN: u32 = 3;
+
 /// Helper function to add sorted accounts and return their indices
 fn add_sorted_accounts(tx: Transaction, accounts: &[(TnPubkey, bool)]) -> (Transaction, Vec<u16>) {
-    let mut sorted_accounts: Vec<_> = accounts.iter().enumerate().collect();
-    sorted_accounts.sort_by(|a, b| a.1.0.cmp(&b.1.0));
+    // Separate RW and RO accounts, sort each group separately
+    let mut rw_accounts: Vec<_> = accounts.iter().enumerate()
+        .filter(|(_, (_, writable))| *writable)
+        .collect();
+    let mut ro_accounts: Vec<_> = accounts.iter().enumerate()
+        .filter(|(_, (_, writable))| !*writable)
+        .collect();
+    
+    // Sort each group by pubkey
+    rw_accounts.sort_by(|a, b| a.1.0.cmp(&b.1.0));
+    ro_accounts.sort_by(|a, b| a.1.0.cmp(&b.1.0));
 
     let mut updated_tx = tx;
     let mut indices = vec![0u16; accounts.len()];
+    let mut seen: HashMap<TnPubkey, u16> = HashMap::new();
+    seen.insert(updated_tx.fee_payer, 0u16);
+    seen.insert(updated_tx.program, 1u16);
 
-    for (original_idx, (i, (account, writable))) in sorted_accounts.iter().enumerate() {
-        let account_idx = (original_idx + 2) as u16; // Skip fee_payer(0) and program(1)
+    let mut next_idx = 2u16;
+
+    // Process RW accounts first (in sorted order)
+    for (i, (account, _)) in rw_accounts.iter() {
+        if let Some(idx) = seen.get(account) {
+            indices[*i] = *idx;
+            continue;
+        }
+
+        let account_idx = next_idx;
+        next_idx = next_idx.saturating_add(1);
+        seen.insert(*account, account_idx);
         indices[*i] = account_idx;
 
-        if *writable {
-            updated_tx = updated_tx.add_rw_account(*account);
-        } else {
-            updated_tx = updated_tx.add_r_account(*account);
+        updated_tx = updated_tx.add_rw_account(*account);
+    }
+
+    // Then process RO accounts (in sorted order)
+    for (i, (account, _)) in ro_accounts.iter() {
+        if let Some(idx) = seen.get(account) {
+            indices[*i] = *idx;
+            continue;
         }
+
+        let account_idx = next_idx;
+        next_idx = next_idx.saturating_add(1);
+        seen.insert(*account, account_idx);
+        indices[*i] = account_idx;
+
+        updated_tx = updated_tx.add_r_account(*account);
     }
 
     (updated_tx, indices)
@@ -1833,6 +2114,7 @@ impl TransactionBuilder {
         fee_payer: TnPubkey,
         token_program: TnPubkey,
         mint_account: TnPubkey,
+        creator: TnPubkey,
         mint_authority: TnPubkey,
         freeze_authority: Option<TnPubkey>,
         decimals: u8,
@@ -1851,6 +2133,7 @@ impl TransactionBuilder {
         let instruction_data = build_token_initialize_mint_instruction(
             mint_account_idx,
             decimals,
+            creator,
             mint_authority,
             freeze_authority,
             ticker,
@@ -2198,12 +2481,856 @@ impl TransactionBuilder {
 
         Ok(tx.with_instructions(instruction_data))
     }
+
+    /// Build WTHRU initialize transaction
+    pub fn build_wthru_initialize_mint(
+        fee_payer: TnPubkey,
+        wthru_program: TnPubkey,
+        token_program: TnPubkey,
+        mint_account: TnPubkey,
+        vault_account: TnPubkey,
+        decimals: u8,
+        mint_seed: [u8; 32],
+        mint_proof: Vec<u8>,
+        vault_proof: Vec<u8>,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let mut tx = Transaction::new(fee_payer, wthru_program, fee, nonce)
+            .with_start_slot(start_slot)
+            .with_expiry_after(100)
+            .with_compute_units(500_000)
+            .with_state_units(10_000)
+            .with_memory_units(10_000);
+
+        let accounts = [
+            (mint_account, true),
+            (vault_account, true),
+            (token_program, false),
+        ];
+
+        let (tx_with_accounts, indices) = add_sorted_accounts(tx, &accounts);
+        tx = tx_with_accounts;
+
+        let mint_account_idx = indices[0];
+        let vault_account_idx = indices[1];
+        let token_program_idx = indices[2];
+
+        let instruction_data = build_wthru_initialize_mint_instruction(
+            token_program_idx,
+            mint_account_idx,
+            vault_account_idx,
+            decimals,
+            mint_seed,
+            mint_proof,
+            vault_proof,
+        )?;
+
+        Ok(tx.with_instructions(instruction_data))
+    }
+
+    /// Build WTHRU deposit transaction
+    pub fn build_wthru_deposit(
+        fee_payer: TnPubkey,
+        wthru_program: TnPubkey,
+        token_program: TnPubkey,
+        mint_account: TnPubkey,
+        vault_account: TnPubkey,
+        dest_token_account: TnPubkey,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let mut tx = Transaction::new(fee_payer, wthru_program, fee, nonce)
+            .with_start_slot(start_slot)
+            .with_expiry_after(100)
+            .with_compute_units(400_000)
+            .with_state_units(10_000)
+            .with_memory_units(10_000);
+
+        let accounts = [
+            (mint_account, true),
+            (vault_account, true),
+            (dest_token_account, true),
+            (token_program, false),
+        ];
+
+        let (tx_with_accounts, indices) = add_sorted_accounts(tx, &accounts);
+        tx = tx_with_accounts;
+
+        let mint_account_idx = indices[0];
+        let vault_account_idx = indices[1];
+        let dest_account_idx = indices[2];
+        let token_program_idx = indices[3];
+
+        let instruction_data = build_wthru_deposit_instruction(
+            token_program_idx,
+            vault_account_idx,
+            mint_account_idx,
+            dest_account_idx,
+        )?;
+
+        Ok(tx.with_instructions(instruction_data))
+    }
+
+    /// Build WTHRU withdraw transaction
+    pub fn build_wthru_withdraw(
+        fee_payer: TnPubkey,
+        wthru_program: TnPubkey,
+        token_program: TnPubkey,
+        mint_account: TnPubkey,
+        vault_account: TnPubkey,
+        wthru_token_account: TnPubkey,
+        recipient_account: TnPubkey,
+        amount: u64,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let mut tx = Transaction::new(fee_payer, wthru_program, fee, nonce)
+            .with_start_slot(start_slot)
+            .with_expiry_after(100)
+            .with_compute_units(400_000)
+            .with_state_units(10_000)
+            .with_memory_units(10_000);
+
+        let accounts = [
+            (mint_account, true),
+            (vault_account, true),
+            (wthru_token_account, true),
+            (recipient_account, true),
+            (token_program, false),
+        ];
+
+        let (tx_with_accounts, indices) = add_sorted_accounts(tx, &accounts);
+        tx = tx_with_accounts;
+
+        let mint_account_idx = indices[0];
+        let vault_account_idx = indices[1];
+        let token_account_idx = indices[2];
+        let recipient_account_idx = indices[3];
+        let token_program_idx = indices[4];
+
+        let owner_account_idx = 0u16; // fee payer/owner
+
+        let instruction_data = build_wthru_withdraw_instruction(
+            token_program_idx,
+            vault_account_idx,
+            mint_account_idx,
+            token_account_idx,
+            owner_account_idx,
+            recipient_account_idx,
+            amount,
+        )?;
+
+        Ok(tx.with_instructions(instruction_data))
+    }
+
+    /// Build faucet program Deposit transaction
+    /// The faucet program will invoke the EOA program to transfer from depositor to faucet account
+    pub fn build_faucet_deposit(
+        fee_payer: TnPubkey,
+        faucet_program: TnPubkey,
+        faucet_account: TnPubkey,
+        depositor_account: TnPubkey,
+        eoa_program: TnPubkey,
+        amount: u64,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let tx = Transaction::new(fee_payer, faucet_program, fee, nonce)
+            .with_start_slot(start_slot)
+            .with_expiry_after(100)
+            .with_compute_units(300_000)
+            .with_state_units(10_000)
+            .with_memory_units(10_000);
+
+        let (tx, depositor_account_idx) = Self::ensure_rw_account(tx, depositor_account);
+        let (tx, faucet_account_idx) = Self::ensure_rw_account(tx, faucet_account);
+        let (tx, eoa_program_idx) = Self::ensure_ro_account(tx, eoa_program);
+
+        let instruction_data = build_faucet_deposit_instruction(
+            faucet_account_idx,
+            depositor_account_idx,
+            eoa_program_idx,
+            amount,
+        )?;
+
+        Ok(tx.with_instructions(instruction_data))
+    }
+
+    fn resolve_account_index(tx: &Transaction, target: &TnPubkey) -> Option<u16> {
+        if *target == tx.fee_payer {
+            return Some(0u16);
+        }
+
+        if *target == tx.program {
+            return Some(1u16);
+        }
+
+        if let Some(ref rw) = tx.rw_accs {
+            if let Some(pos) = rw.iter().position(|acc| acc == target) {
+                return Some(2u16 + pos as u16);
+            }
+        }
+
+        if let Some(ref ro) = tx.r_accs {
+            let base = 2u16 + tx.rw_accs.as_ref().map_or(0u16, |v| v.len() as u16);
+            if let Some(pos) = ro.iter().position(|acc| acc == target) {
+                return Some(base + pos as u16);
+            }
+        }
+
+        None
+    }
+
+    fn ensure_rw_account(mut tx: Transaction, account: TnPubkey) -> (Transaction, u16) {
+        if let Some(idx) = Self::resolve_account_index(&tx, &account) {
+            return (tx, idx);
+        }
+
+        tx = tx.add_rw_account(account);
+        let idx = Self::resolve_account_index(&tx, &account)
+            .expect("read-write account index should exist after insertion");
+
+        (tx, idx)
+    }
+
+    fn ensure_ro_account(mut tx: Transaction, account: TnPubkey) -> (Transaction, u16) {
+        if let Some(idx) = Self::resolve_account_index(&tx, &account) {
+            return (tx, idx);
+        }
+
+        tx = tx.add_r_account(account);
+        let idx = Self::resolve_account_index(&tx, &account)
+            .expect("read-only account index should exist after insertion");
+
+        (tx, idx)
+    }
+
+    /// Build faucet program Withdraw transaction
+    pub fn build_faucet_withdraw(
+        fee_payer: TnPubkey,
+        faucet_program: TnPubkey,
+        faucet_account: TnPubkey,
+        recipient_account: TnPubkey,
+        amount: u64,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let mut tx = Transaction::new(fee_payer, faucet_program, fee, nonce)
+            .with_start_slot(start_slot)
+            .with_expiry_after(100)
+            .with_compute_units(300_000)
+            .with_state_units(10_000)
+            .with_memory_units(10_000);
+
+        // Determine account indices, handling duplicates with fee_payer and between accounts
+        // Check for duplicates first
+        let faucet_is_fee_payer = faucet_account == fee_payer;
+        let recipient_is_fee_payer = recipient_account == fee_payer;
+        let recipient_is_faucet = recipient_account == faucet_account;
+
+        let (faucet_account_idx, recipient_account_idx) = if faucet_is_fee_payer && recipient_is_fee_payer {
+            // Both are fee_payer (same account)
+            (0u16, 0u16)
+        } else if faucet_is_fee_payer {
+            // Faucet is fee_payer, recipient is different
+            tx = tx.add_rw_account(recipient_account);
+            (0u16, 2u16)
+        } else if recipient_is_fee_payer {
+            // Recipient is fee_payer, faucet is different
+            tx = tx.add_rw_account(faucet_account);
+            (2u16, 0u16)
+        } else if recipient_is_faucet {
+            // Both are same account (but not fee_payer)
+            tx = tx.add_rw_account(faucet_account);
+            (2u16, 2u16)
+        } else {
+            // Both are different accounts, add in sorted order
+            if faucet_account < recipient_account {
+                tx = tx.add_rw_account(faucet_account);
+                tx = tx.add_rw_account(recipient_account);
+                (2u16, 3u16)
+            } else {
+                tx = tx.add_rw_account(recipient_account);
+                tx = tx.add_rw_account(faucet_account);
+                (3u16, 2u16)
+            }
+        };
+
+        let instruction_data = build_faucet_withdraw_instruction(
+            faucet_account_idx,
+            recipient_account_idx,
+            amount,
+        )?;
+
+        Ok(tx.with_instructions(instruction_data))
+    }
+
+    /// Build name service InitializeRoot transaction
+    pub fn build_name_service_initialize_root(
+        fee_payer: TnPubkey,
+        name_service_program: TnPubkey,
+        registrar_account: TnPubkey,
+        authority_account: TnPubkey,
+        root_name: &str,
+        state_proof: Vec<u8>,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let mut tx = Transaction::new(fee_payer, name_service_program, fee, nonce)
+            .with_start_slot(start_slot)
+            .with_expiry_after(100)
+            .with_compute_units(500_000)
+            .with_state_units(10_000)
+            .with_memory_units(10_000);
+
+        let accounts = [(registrar_account, true), (authority_account, false)];
+        let (tx_with_accounts, indices) = add_sorted_accounts(tx, &accounts);
+        tx = tx_with_accounts;
+
+        let registrar_account_idx = indices[0];
+        let authority_account_idx = indices[1];
+
+        let instruction_data = build_name_service_initialize_root_instruction(
+            registrar_account_idx,
+            authority_account_idx,
+            root_name,
+            state_proof,
+        )?;
+
+        Ok(tx.with_instructions(instruction_data))
+    }
+
+    /// Build name service RegisterSubdomain transaction
+    pub fn build_name_service_register_subdomain(
+        fee_payer: TnPubkey,
+        name_service_program: TnPubkey,
+        domain_account: TnPubkey,
+        parent_account: TnPubkey,
+        owner_account: TnPubkey,
+        authority_account: TnPubkey,
+        domain_name: &str,
+        state_proof: Vec<u8>,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let mut tx = Transaction::new(fee_payer, name_service_program, fee, nonce)
+            .with_start_slot(start_slot)
+            .with_expiry_after(100)
+            .with_compute_units(500_000)
+            .with_state_units(10_000)
+            .with_memory_units(10_000);
+
+        let accounts = [
+            (domain_account, true),
+            (parent_account, true),
+            (owner_account, false),
+            (authority_account, false),
+        ];
+        let (tx_with_accounts, indices) = add_sorted_accounts(tx, &accounts);
+        tx = tx_with_accounts;
+
+        let domain_account_idx = indices[0];
+        let parent_account_idx = indices[1];
+        let owner_account_idx = indices[2];
+        let authority_account_idx = indices[3];
+
+        let instruction_data = build_name_service_register_subdomain_instruction(
+            domain_account_idx,
+            parent_account_idx,
+            owner_account_idx,
+            authority_account_idx,
+            domain_name,
+            state_proof,
+        )?;
+
+        Ok(tx.with_instructions(instruction_data))
+    }
+
+    /// Build name service AppendRecord transaction
+    pub fn build_name_service_append_record(
+        fee_payer: TnPubkey,
+        name_service_program: TnPubkey,
+        domain_account: TnPubkey,
+        owner_account: TnPubkey,
+        key: &[u8],
+        value: &[u8],
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let mut tx = Transaction::new(fee_payer, name_service_program, fee, nonce)
+            .with_start_slot(start_slot)
+            .with_expiry_after(100)
+            .with_compute_units(250_000)
+            .with_state_units(10_000)
+            .with_memory_units(10_000);
+
+        let accounts = [(domain_account, true), (owner_account, false)];
+        let (tx_with_accounts, indices) = add_sorted_accounts(tx, &accounts);
+        tx = tx_with_accounts;
+
+        let domain_account_idx = indices[0];
+        let owner_account_idx = indices[1];
+
+        let instruction_data = build_name_service_append_record_instruction(
+            domain_account_idx,
+            owner_account_idx,
+            key,
+            value,
+        )?;
+
+        Ok(tx.with_instructions(instruction_data))
+    }
+
+    /// Build name service DeleteRecord transaction
+    pub fn build_name_service_delete_record(
+        fee_payer: TnPubkey,
+        name_service_program: TnPubkey,
+        domain_account: TnPubkey,
+        owner_account: TnPubkey,
+        key: &[u8],
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let mut tx = Transaction::new(fee_payer, name_service_program, fee, nonce)
+            .with_start_slot(start_slot)
+            .with_expiry_after(100)
+            .with_compute_units(200_000)
+            .with_state_units(10_000)
+            .with_memory_units(10_000);
+
+        let accounts = [(domain_account, true), (owner_account, false)];
+        let (tx_with_accounts, indices) = add_sorted_accounts(tx, &accounts);
+        tx = tx_with_accounts;
+
+        let domain_account_idx = indices[0];
+        let owner_account_idx = indices[1];
+
+        let instruction_data = build_name_service_delete_record_instruction(
+            domain_account_idx,
+            owner_account_idx,
+            key,
+        )?;
+
+        Ok(tx.with_instructions(instruction_data))
+    }
+
+    /// Build name service UnregisterSubdomain transaction
+    pub fn build_name_service_unregister_subdomain(
+        fee_payer: TnPubkey,
+        name_service_program: TnPubkey,
+        domain_account: TnPubkey,
+        owner_account: TnPubkey,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let mut tx = Transaction::new(fee_payer, name_service_program, fee, nonce)
+            .with_start_slot(start_slot)
+            .with_expiry_after(100)
+            .with_compute_units(200_000)
+            .with_state_units(10_000)
+            .with_memory_units(10_000);
+
+        let accounts = [(domain_account, true), (owner_account, false)];
+        let (tx_with_accounts, indices) = add_sorted_accounts(tx, &accounts);
+        tx = tx_with_accounts;
+
+        let domain_account_idx = indices[0];
+        let owner_account_idx = indices[1];
+
+        let instruction_data = build_name_service_unregister_subdomain_instruction(
+            domain_account_idx,
+            owner_account_idx,
+        )?;
+
+        Ok(tx.with_instructions(instruction_data))
+    }
+
+    /// Build thru registrar InitializeRegistry transaction
+    pub fn build_thru_registrar_initialize_registry(
+        fee_payer: TnPubkey,
+        thru_registrar_program: TnPubkey,
+        config_account: TnPubkey,
+        name_service_program: TnPubkey,
+        root_registrar_account: TnPubkey,
+        treasurer_account: TnPubkey,
+        token_mint_account: TnPubkey,
+        token_program: TnPubkey,
+        root_domain_name: &str,
+        price_per_year: u64,
+        config_proof: Vec<u8>,
+        registrar_proof: Vec<u8>,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let mut tx = Transaction::new(fee_payer, thru_registrar_program, fee, nonce)
+            .with_start_slot(start_slot)
+            .with_expiry_after(100)
+            .with_compute_units(500_000)
+            .with_state_units(10_000)
+            .with_memory_units(10_000);
+
+        // Add accounts in sorted order (read-write first, then read-only)
+        // Registrar must be writable because the base name service CPI creates/resizes it.
+        let mut rw_accounts = vec![config_account, root_registrar_account];
+        rw_accounts.sort();
+
+        let mut ro_accounts = vec![
+            name_service_program,
+            treasurer_account,
+            token_mint_account,
+            token_program,
+        ];
+        ro_accounts.sort();
+
+        // Add RW accounts
+        let mut config_account_idx = 0u16;
+        let mut root_registrar_account_idx = 0u16;
+        for (i, account) in rw_accounts.iter().enumerate() {
+            let idx = (2 + i) as u16;
+            if *account == config_account {
+                config_account_idx = idx;
+            } else if *account == root_registrar_account {
+                root_registrar_account_idx = idx;
+            }
+            tx = tx.add_rw_account(*account);
+        }
+
+        // Add RO accounts
+        let base_ro_idx = 2 + rw_accounts.len() as u16;
+        let mut name_service_program_idx = 0u16;
+        let mut treasurer_account_idx = 0u16;
+        let mut token_mint_account_idx = 0u16;
+        let mut token_program_idx = 0u16;
+
+        for (i, account) in ro_accounts.iter().enumerate() {
+            let idx = base_ro_idx + i as u16;
+            if *account == name_service_program {
+                name_service_program_idx = idx;
+            } else if *account == root_registrar_account {
+                root_registrar_account_idx = idx;
+            } else if *account == treasurer_account {
+                treasurer_account_idx = idx;
+            } else if *account == token_mint_account {
+                token_mint_account_idx = idx;
+            } else if *account == token_program {
+                token_program_idx = idx;
+            }
+            tx = tx.add_r_account(*account);
+        }
+
+        let instruction_data = build_thru_registrar_initialize_registry_instruction(
+            config_account_idx,
+            name_service_program_idx,
+            root_registrar_account_idx,
+            treasurer_account_idx,
+            token_mint_account_idx,
+            token_program_idx,
+            root_domain_name,
+            price_per_year,
+            config_proof,
+            registrar_proof,
+        )?;
+
+        Ok(tx.with_instructions(instruction_data))
+    }
+
+    /// Build thru registrar PurchaseDomain transaction
+    pub fn build_thru_registrar_purchase_domain(
+        fee_payer: TnPubkey,
+        thru_registrar_program: TnPubkey,
+        config_account: TnPubkey,
+        lease_account: TnPubkey,
+        domain_account: TnPubkey,
+        name_service_program: TnPubkey,
+        root_registrar_account: TnPubkey,
+        treasurer_account: TnPubkey,
+        payer_token_account: TnPubkey,
+        token_mint_account: TnPubkey,
+        token_program: TnPubkey,
+        domain_name: &str,
+        years: u8,
+        lease_proof: Vec<u8>,
+        domain_proof: Vec<u8>,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let mut tx = Transaction::new(fee_payer, thru_registrar_program, fee, nonce)
+            .with_start_slot(start_slot)
+            .with_expiry_after(100)
+            .with_compute_units(500_000)
+            .with_state_units(10_000)
+            .with_memory_units(10_000);
+
+        // Add accounts in sorted order
+        // Token accounts must be writable for transfer; lease/domain are created; root registrar and config are updated via CPI.
+        let mut rw_accounts = vec![
+            config_account,
+            lease_account,
+            domain_account,
+            treasurer_account,
+            payer_token_account,
+            root_registrar_account,
+        ];
+        rw_accounts.sort();
+
+        let mut ro_accounts = vec![
+            name_service_program,
+            token_mint_account,
+            token_program,
+        ];
+        ro_accounts.sort();
+
+        // Add RW accounts
+        let mut config_account_idx = 0u16;
+        let mut lease_account_idx = 0u16;
+        let mut domain_account_idx = 0u16;
+        let mut treasurer_account_idx = 0u16;
+        let mut payer_token_account_idx = 0u16;
+        let mut root_registrar_account_idx = 0u16;
+        for (i, account) in rw_accounts.iter().enumerate() {
+            let idx = (2 + i) as u16;
+            if *account == config_account {
+                config_account_idx = idx;
+            } else if *account == lease_account {
+                lease_account_idx = idx;
+            } else if *account == domain_account {
+                domain_account_idx = idx;
+            } else if *account == treasurer_account {
+                treasurer_account_idx = idx;
+            } else if *account == payer_token_account {
+                payer_token_account_idx = idx;
+            } else if *account == root_registrar_account {
+                root_registrar_account_idx = idx;
+            }
+            tx = tx.add_rw_account(*account);
+        }
+
+        // Add RO accounts
+        let base_ro_idx = 2 + rw_accounts.len() as u16;
+        let mut name_service_program_idx = 0u16;
+        let mut token_mint_account_idx = 0u16;
+        let mut token_program_idx = 0u16;
+
+        for (i, account) in ro_accounts.iter().enumerate() {
+            let idx = base_ro_idx + i as u16;
+            if *account == config_account {
+                config_account_idx = idx; // Should remain zero; config moved to RW set
+            } else if *account == name_service_program {
+                name_service_program_idx = idx;
+            } else if *account == root_registrar_account {
+                root_registrar_account_idx = idx;
+            } else if *account == treasurer_account {
+                treasurer_account_idx = idx;
+            } else if *account == payer_token_account {
+                payer_token_account_idx = idx;
+            } else if *account == token_mint_account {
+                token_mint_account_idx = idx;
+            } else if *account == token_program {
+                token_program_idx = idx;
+            }
+            tx = tx.add_r_account(*account);
+        }
+
+        let instruction_data = build_thru_registrar_purchase_domain_instruction(
+            config_account_idx,
+            lease_account_idx,
+            domain_account_idx,
+            name_service_program_idx,
+            root_registrar_account_idx,
+            treasurer_account_idx,
+            payer_token_account_idx,
+            token_mint_account_idx,
+            token_program_idx,
+            domain_name,
+            years,
+            lease_proof,
+            domain_proof,
+        )?;
+
+        Ok(tx.with_instructions(instruction_data))
+    }
+
+    /// Build thru registrar RenewLease transaction
+    pub fn build_thru_registrar_renew_lease(
+        fee_payer: TnPubkey,
+        thru_registrar_program: TnPubkey,
+        config_account: TnPubkey,
+        lease_account: TnPubkey,
+        treasurer_account: TnPubkey,
+        payer_token_account: TnPubkey,
+        token_mint_account: TnPubkey,
+        token_program: TnPubkey,
+        years: u8,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let mut tx = Transaction::new(fee_payer, thru_registrar_program, fee, nonce)
+            .with_start_slot(start_slot)
+            .with_expiry_after(100)
+            .with_compute_units(300_000)
+            .with_state_units(10_000)
+            .with_memory_units(10_000);
+
+        // Add accounts in sorted order
+        // Token accounts must be writable for transfer.
+        let mut rw_accounts = vec![lease_account, treasurer_account, payer_token_account];
+        rw_accounts.sort();
+
+        let mut ro_accounts = vec![
+            config_account,
+            token_mint_account,
+            token_program,
+        ];
+        ro_accounts.sort();
+
+        // Add RW accounts
+        let mut lease_account_idx = 0u16;
+        let mut treasurer_account_idx = 0u16;
+        let mut payer_token_account_idx = 0u16;
+        for (i, account) in rw_accounts.iter().enumerate() {
+            let idx = (2 + i) as u16;
+            if *account == lease_account {
+                lease_account_idx = idx;
+            } else if *account == treasurer_account {
+                treasurer_account_idx = idx;
+            } else if *account == payer_token_account {
+                payer_token_account_idx = idx;
+            }
+            tx = tx.add_rw_account(*account);
+        }
+
+        // Add RO accounts
+        let base_ro_idx = 2 + rw_accounts.len() as u16;
+        let mut config_account_idx = 0u16;
+        let mut token_mint_account_idx = 0u16;
+        let mut token_program_idx = 0u16;
+
+        for (i, account) in ro_accounts.iter().enumerate() {
+            let idx = base_ro_idx + i as u16;
+            if *account == config_account {
+                config_account_idx = idx;
+            } else if *account == token_mint_account {
+                token_mint_account_idx = idx;
+            } else if *account == token_program {
+                token_program_idx = idx;
+            }
+            tx = tx.add_r_account(*account);
+        }
+
+        let instruction_data = build_thru_registrar_renew_lease_instruction(
+            config_account_idx,
+            lease_account_idx,
+            treasurer_account_idx,
+            payer_token_account_idx,
+            token_mint_account_idx,
+            token_program_idx,
+            years,
+        )?;
+
+        Ok(tx.with_instructions(instruction_data))
+    }
+
+    /// Build thru registrar ClaimExpiredDomain transaction
+    pub fn build_thru_registrar_claim_expired_domain(
+        fee_payer: TnPubkey,
+        thru_registrar_program: TnPubkey,
+        config_account: TnPubkey,
+        lease_account: TnPubkey,
+        treasurer_account: TnPubkey,
+        payer_token_account: TnPubkey,
+        token_mint_account: TnPubkey,
+        token_program: TnPubkey,
+        years: u8,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let mut tx = Transaction::new(fee_payer, thru_registrar_program, fee, nonce)
+            .with_start_slot(start_slot)
+            .with_expiry_after(100)
+            .with_compute_units(300_000)
+            .with_state_units(10_000)
+            .with_memory_units(10_000);
+
+        // Add accounts in sorted order
+        // Token accounts must be writable for transfer.
+        let mut rw_accounts = vec![lease_account, treasurer_account, payer_token_account];
+        rw_accounts.sort();
+
+        let mut ro_accounts = vec![
+            config_account,
+            token_mint_account,
+            token_program,
+        ];
+        ro_accounts.sort();
+
+        // Add RW accounts
+        let mut lease_account_idx = 0u16;
+        let mut treasurer_account_idx = 0u16;
+        let mut payer_token_account_idx = 0u16;
+        for (i, account) in rw_accounts.iter().enumerate() {
+            let idx = (2 + i) as u16;
+            if *account == lease_account {
+                lease_account_idx = idx;
+            } else if *account == treasurer_account {
+                treasurer_account_idx = idx;
+            } else if *account == payer_token_account {
+                payer_token_account_idx = idx;
+            }
+            tx = tx.add_rw_account(*account);
+        }
+
+        // Add RO accounts
+        let base_ro_idx = 2 + rw_accounts.len() as u16;
+        let mut config_account_idx = 0u16;
+        let mut token_mint_account_idx = 0u16;
+        let mut token_program_idx = 0u16;
+
+        for (i, account) in ro_accounts.iter().enumerate() {
+            let idx = base_ro_idx + i as u16;
+            if *account == config_account {
+                config_account_idx = idx;
+            } else if *account == token_mint_account {
+                token_mint_account_idx = idx;
+            } else if *account == token_program {
+                token_program_idx = idx;
+            }
+            tx = tx.add_r_account(*account);
+        }
+
+        let instruction_data = build_thru_registrar_claim_expired_domain_instruction(
+            config_account_idx,
+            lease_account_idx,
+            treasurer_account_idx,
+            payer_token_account_idx,
+            token_mint_account_idx,
+            token_program_idx,
+            years,
+        )?;
+
+        Ok(tx.with_instructions(instruction_data))
+    }
 }
 
 /// Build token InitializeMint instruction data
 fn build_token_initialize_mint_instruction(
     mint_account_idx: u16,
     decimals: u8,
+    creator: TnPubkey,
     mint_authority: TnPubkey,
     freeze_authority: Option<TnPubkey>,
     ticker: &str,
@@ -2220,6 +3347,9 @@ fn build_token_initialize_mint_instruction(
 
     // decimals (u8)
     instruction_data.push(decimals);
+
+    // creator (32 bytes)
+    instruction_data.extend_from_slice(&creator);
 
     // mint_authority (32 bytes)
     instruction_data.extend_from_slice(&mint_authority);
@@ -2425,6 +3555,542 @@ fn build_token_close_account_instruction(
 
     // authority_index (u16)
     instruction_data.extend_from_slice(&authority_idx.to_le_bytes());
+
+    Ok(instruction_data)
+}
+
+fn build_wthru_initialize_mint_instruction(
+    token_program_idx: u16,
+    mint_account_idx: u16,
+    vault_account_idx: u16,
+    decimals: u8,
+    mint_seed: [u8; 32],
+    mint_proof: Vec<u8>,
+    vault_proof: Vec<u8>,
+) -> Result<Vec<u8>> {
+    let mint_proof_len =
+        u64::try_from(mint_proof.len()).map_err(|_| anyhow::anyhow!("mint proof too large"))?;
+    let vault_proof_len =
+        u64::try_from(vault_proof.len()).map_err(|_| anyhow::anyhow!("vault proof too large"))?;
+
+    let mut instruction_data = Vec::new();
+    instruction_data.extend_from_slice(&TN_WTHRU_INSTRUCTION_INITIALIZE_MINT.to_le_bytes());
+    instruction_data.extend_from_slice(&token_program_idx.to_le_bytes());
+    instruction_data.extend_from_slice(&mint_account_idx.to_le_bytes());
+    instruction_data.extend_from_slice(&vault_account_idx.to_le_bytes());
+    instruction_data.push(decimals);
+    instruction_data.extend_from_slice(&mint_seed);
+    instruction_data.extend_from_slice(&mint_proof_len.to_le_bytes());
+    instruction_data.extend_from_slice(&vault_proof_len.to_le_bytes());
+    instruction_data.extend_from_slice(&mint_proof);
+    instruction_data.extend_from_slice(&vault_proof);
+
+    Ok(instruction_data)
+}
+
+fn build_wthru_deposit_instruction(
+    token_program_idx: u16,
+    vault_account_idx: u16,
+    mint_account_idx: u16,
+    dest_account_idx: u16,
+) -> Result<Vec<u8>> {
+    let mut instruction_data = Vec::new();
+    instruction_data.extend_from_slice(&TN_WTHRU_INSTRUCTION_DEPOSIT.to_le_bytes());
+    instruction_data.extend_from_slice(&token_program_idx.to_le_bytes());
+    instruction_data.extend_from_slice(&vault_account_idx.to_le_bytes());
+    instruction_data.extend_from_slice(&mint_account_idx.to_le_bytes());
+    instruction_data.extend_from_slice(&dest_account_idx.to_le_bytes());
+
+    Ok(instruction_data)
+}
+
+fn build_wthru_withdraw_instruction(
+    token_program_idx: u16,
+    vault_account_idx: u16,
+    mint_account_idx: u16,
+    wthru_token_account_idx: u16,
+    owner_account_idx: u16,
+    recipient_account_idx: u16,
+    amount: u64,
+) -> Result<Vec<u8>> {
+    let mut instruction_data = Vec::new();
+    instruction_data.extend_from_slice(&TN_WTHRU_INSTRUCTION_WITHDRAW.to_le_bytes());
+    instruction_data.extend_from_slice(&token_program_idx.to_le_bytes());
+    instruction_data.extend_from_slice(&vault_account_idx.to_le_bytes());
+    instruction_data.extend_from_slice(&mint_account_idx.to_le_bytes());
+    instruction_data.extend_from_slice(&wthru_token_account_idx.to_le_bytes());
+    instruction_data.extend_from_slice(&owner_account_idx.to_le_bytes());
+    instruction_data.extend_from_slice(&recipient_account_idx.to_le_bytes());
+    instruction_data.extend_from_slice(&amount.to_le_bytes());
+
+    Ok(instruction_data)
+}
+
+/// Build faucet Deposit instruction data
+fn build_faucet_deposit_instruction(
+    faucet_account_idx: u16,
+    depositor_account_idx: u16,
+    eoa_program_idx: u16,
+    amount: u64,
+) -> Result<Vec<u8>> {
+    let mut instruction_data = Vec::new();
+
+    // Discriminant: TN_FAUCET_INSTRUCTION_DEPOSIT = 0 (u32, 4 bytes little-endian)
+    instruction_data.extend_from_slice(&0u32.to_le_bytes());
+
+    // tn_faucet_deposit_args_t structure:
+    // - faucet_account_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&faucet_account_idx.to_le_bytes());
+
+    // - depositor_account_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&depositor_account_idx.to_le_bytes());
+
+    // - eoa_program_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&eoa_program_idx.to_le_bytes());
+
+    // - amount (u64, 8 bytes little-endian)
+    instruction_data.extend_from_slice(&amount.to_le_bytes());
+
+    Ok(instruction_data)
+}
+
+/// Build faucet Withdraw instruction data
+fn build_faucet_withdraw_instruction(
+    faucet_account_idx: u16,
+    recipient_account_idx: u16,
+    amount: u64,
+) -> Result<Vec<u8>> {
+    let mut instruction_data = Vec::new();
+
+    // Discriminant: TN_FAUCET_INSTRUCTION_WITHDRAW = 1 (u32, 4 bytes little-endian)
+    instruction_data.extend_from_slice(&1u32.to_le_bytes());
+
+    // tn_faucet_withdraw_args_t structure:
+    // - faucet_account_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&faucet_account_idx.to_le_bytes());
+
+    // - recipient_account_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&recipient_account_idx.to_le_bytes());
+
+    // - amount (u64, 8 bytes little-endian)
+    instruction_data.extend_from_slice(&amount.to_le_bytes());
+
+    Ok(instruction_data)
+}
+
+#[repr(C, packed)]
+struct NameServiceInitializeRootArgs {
+    registrar_account_idx: u16,
+    authority_account_idx: u16,
+    root_name: [u8; TN_NAME_SERVICE_MAX_DOMAIN_LENGTH],
+    root_name_length: u32,
+}
+
+#[repr(C, packed)]
+struct NameServiceRegisterSubdomainArgs {
+    domain_account_idx: u16,
+    parent_account_idx: u16,
+    owner_account_idx: u16,
+    authority_account_idx: u16,
+    name: [u8; TN_NAME_SERVICE_MAX_DOMAIN_LENGTH],
+    name_length: u32,
+}
+
+#[repr(C, packed)]
+struct NameServiceAppendRecordArgs {
+    domain_account_idx: u16,
+    owner_account_idx: u16,
+    key_length: u32,
+    key: [u8; TN_NAME_SERVICE_MAX_KEY_LENGTH],
+    value_length: u32,
+    value: [u8; TN_NAME_SERVICE_MAX_VALUE_LENGTH],
+}
+
+#[repr(C, packed)]
+struct NameServiceDeleteRecordArgs {
+    domain_account_idx: u16,
+    owner_account_idx: u16,
+    key_length: u32,
+    key: [u8; TN_NAME_SERVICE_MAX_KEY_LENGTH],
+}
+
+#[repr(C, packed)]
+struct NameServiceUnregisterSubdomainArgs {
+    domain_account_idx: u16,
+    owner_account_idx: u16,
+}
+
+/// Build name service InitializeRoot instruction data
+fn build_name_service_initialize_root_instruction(
+    registrar_account_idx: u16,
+    authority_account_idx: u16,
+    root_name: &str,
+    state_proof: Vec<u8>,
+) -> Result<Vec<u8>> {
+    let root_name_bytes = root_name.as_bytes();
+    if root_name_bytes.is_empty()
+        || root_name_bytes.len() > TN_NAME_SERVICE_MAX_DOMAIN_LENGTH
+    {
+        return Err(anyhow::anyhow!(
+            "Root name length must be between 1 and {}",
+            TN_NAME_SERVICE_MAX_DOMAIN_LENGTH
+        ));
+    }
+
+    let mut args = NameServiceInitializeRootArgs {
+        registrar_account_idx,
+        authority_account_idx,
+        root_name: [0u8; TN_NAME_SERVICE_MAX_DOMAIN_LENGTH],
+        root_name_length: root_name_bytes.len() as u32,
+    };
+    args.root_name[..root_name_bytes.len()].copy_from_slice(root_name_bytes);
+
+    let mut instruction_data = Vec::new();
+    instruction_data.extend_from_slice(&TN_NAME_SERVICE_INSTRUCTION_INITIALIZE_ROOT.to_le_bytes());
+
+    let args_bytes = unsafe {
+        std::slice::from_raw_parts(
+            &args as *const _ as *const u8,
+            std::mem::size_of::<NameServiceInitializeRootArgs>(),
+        )
+    };
+    instruction_data.extend_from_slice(args_bytes);
+
+    instruction_data.extend_from_slice(&TN_NAME_SERVICE_PROOF_INLINE.to_le_bytes());
+    instruction_data.extend_from_slice(&state_proof);
+
+    Ok(instruction_data)
+}
+
+/// Build name service RegisterSubdomain instruction data
+fn build_name_service_register_subdomain_instruction(
+    domain_account_idx: u16,
+    parent_account_idx: u16,
+    owner_account_idx: u16,
+    authority_account_idx: u16,
+    domain_name: &str,
+    state_proof: Vec<u8>,
+) -> Result<Vec<u8>> {
+    let domain_bytes = domain_name.as_bytes();
+    if domain_bytes.is_empty()
+        || domain_bytes.len() > TN_NAME_SERVICE_MAX_DOMAIN_LENGTH
+    {
+        return Err(anyhow::anyhow!(
+            "Domain name length must be between 1 and {}",
+            TN_NAME_SERVICE_MAX_DOMAIN_LENGTH
+        ));
+    }
+
+    let mut args = NameServiceRegisterSubdomainArgs {
+        domain_account_idx,
+        parent_account_idx,
+        owner_account_idx,
+        authority_account_idx,
+        name: [0u8; TN_NAME_SERVICE_MAX_DOMAIN_LENGTH],
+        name_length: domain_bytes.len() as u32,
+    };
+    args.name[..domain_bytes.len()].copy_from_slice(domain_bytes);
+
+    let mut instruction_data = Vec::new();
+    instruction_data.extend_from_slice(&TN_NAME_SERVICE_INSTRUCTION_REGISTER_SUBDOMAIN.to_le_bytes());
+
+    let args_bytes = unsafe {
+        std::slice::from_raw_parts(
+            &args as *const _ as *const u8,
+            std::mem::size_of::<NameServiceRegisterSubdomainArgs>(),
+        )
+    };
+    instruction_data.extend_from_slice(args_bytes);
+
+    instruction_data.extend_from_slice(&TN_NAME_SERVICE_PROOF_INLINE.to_le_bytes());
+    instruction_data.extend_from_slice(&state_proof);
+
+    Ok(instruction_data)
+}
+
+/// Build name service AppendRecord instruction data
+fn build_name_service_append_record_instruction(
+    domain_account_idx: u16,
+    owner_account_idx: u16,
+    key: &[u8],
+    value: &[u8],
+) -> Result<Vec<u8>> {
+    if key.is_empty() || key.len() > TN_NAME_SERVICE_MAX_KEY_LENGTH {
+        return Err(anyhow::anyhow!(
+            "Key length must be between 1 and {} bytes",
+            TN_NAME_SERVICE_MAX_KEY_LENGTH
+        ));
+    }
+    if value.len() > TN_NAME_SERVICE_MAX_VALUE_LENGTH {
+        return Err(anyhow::anyhow!(
+            "Value length must be <= {} bytes",
+            TN_NAME_SERVICE_MAX_VALUE_LENGTH
+        ));
+    }
+
+    let mut args = NameServiceAppendRecordArgs {
+        domain_account_idx,
+        owner_account_idx,
+        key_length: key.len() as u32,
+        key: [0u8; TN_NAME_SERVICE_MAX_KEY_LENGTH],
+        value_length: value.len() as u32,
+        value: [0u8; TN_NAME_SERVICE_MAX_VALUE_LENGTH],
+    };
+    args.key[..key.len()].copy_from_slice(key);
+    args.value[..value.len()].copy_from_slice(value);
+
+    let mut instruction_data = Vec::new();
+    instruction_data.extend_from_slice(&TN_NAME_SERVICE_INSTRUCTION_APPEND_RECORD.to_le_bytes());
+
+    let args_bytes = unsafe {
+        std::slice::from_raw_parts(
+            &args as *const _ as *const u8,
+            std::mem::size_of::<NameServiceAppendRecordArgs>(),
+        )
+    };
+    instruction_data.extend_from_slice(args_bytes);
+
+    Ok(instruction_data)
+}
+
+/// Build name service DeleteRecord instruction data
+fn build_name_service_delete_record_instruction(
+    domain_account_idx: u16,
+    owner_account_idx: u16,
+    key: &[u8],
+) -> Result<Vec<u8>> {
+    if key.is_empty() || key.len() > TN_NAME_SERVICE_MAX_KEY_LENGTH {
+        return Err(anyhow::anyhow!(
+            "Key length must be between 1 and {} bytes",
+            TN_NAME_SERVICE_MAX_KEY_LENGTH
+        ));
+    }
+
+    let mut args = NameServiceDeleteRecordArgs {
+        domain_account_idx,
+        owner_account_idx,
+        key_length: key.len() as u32,
+        key: [0u8; TN_NAME_SERVICE_MAX_KEY_LENGTH],
+    };
+    args.key[..key.len()].copy_from_slice(key);
+
+    let mut instruction_data = Vec::new();
+    instruction_data.extend_from_slice(&TN_NAME_SERVICE_INSTRUCTION_DELETE_RECORD.to_le_bytes());
+
+    let args_bytes = unsafe {
+        std::slice::from_raw_parts(
+            &args as *const _ as *const u8,
+            std::mem::size_of::<NameServiceDeleteRecordArgs>(),
+        )
+    };
+    instruction_data.extend_from_slice(args_bytes);
+
+    Ok(instruction_data)
+}
+
+/// Build name service UnregisterSubdomain instruction data
+fn build_name_service_unregister_subdomain_instruction(
+    domain_account_idx: u16,
+    owner_account_idx: u16,
+) -> Result<Vec<u8>> {
+    let args = NameServiceUnregisterSubdomainArgs {
+        domain_account_idx,
+        owner_account_idx,
+    };
+
+    let mut instruction_data = Vec::new();
+    instruction_data.extend_from_slice(&TN_NAME_SERVICE_INSTRUCTION_UNREGISTER.to_le_bytes());
+
+    let args_bytes = unsafe {
+        std::slice::from_raw_parts(
+            &args as *const _ as *const u8,
+            std::mem::size_of::<NameServiceUnregisterSubdomainArgs>(),
+        )
+    };
+    instruction_data.extend_from_slice(args_bytes);
+
+    Ok(instruction_data)
+}
+
+/// Build thru registrar InitializeRegistry instruction data
+fn build_thru_registrar_initialize_registry_instruction(
+    config_account_idx: u16,
+    name_service_program_idx: u16,
+    root_registrar_account_idx: u16,
+    treasurer_account_idx: u16,
+    token_mint_account_idx: u16,
+    token_program_idx: u16,
+    root_domain_name: &str,
+    price_per_year: u64,
+    config_proof: Vec<u8>,
+    registrar_proof: Vec<u8>,
+) -> Result<Vec<u8>> {
+    let mut instruction_data = Vec::new();
+
+    // Discriminant: TN_THRU_REGISTRAR_INSTRUCTION_INITIALIZE_REGISTRY = 0 (u32, 4 bytes little-endian)
+    instruction_data.extend_from_slice(&TN_THRU_REGISTRAR_INSTRUCTION_INITIALIZE_REGISTRY.to_le_bytes());
+
+    // tn_thru_registrar_initialize_registry_args_t structure:
+    // - config_account_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&config_account_idx.to_le_bytes());
+    // - name_service_program_account_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&name_service_program_idx.to_le_bytes());
+    // - root_registrar_account_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&root_registrar_account_idx.to_le_bytes());
+    // - treasurer_account_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&treasurer_account_idx.to_le_bytes());
+    // - token_mint_account_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&token_mint_account_idx.to_le_bytes());
+    // - token_program_account_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&token_program_idx.to_le_bytes());
+    // - root_domain_name (64 bytes, padded with zeros)
+    let domain_bytes = root_domain_name.as_bytes();
+    if domain_bytes.len() > 64 {
+        return Err(anyhow::anyhow!("Root domain name must be 64 characters or less"));
+    }
+    let mut domain_padded = [0u8; 64];
+    domain_padded[..domain_bytes.len()].copy_from_slice(domain_bytes);
+    instruction_data.extend_from_slice(&domain_padded);
+    // - root_domain_name_length (u32, 4 bytes little-endian)
+    instruction_data.extend_from_slice(&(domain_bytes.len() as u32).to_le_bytes());
+    // - price_per_year (u64, 8 bytes little-endian)
+    instruction_data.extend_from_slice(&price_per_year.to_le_bytes());
+
+    // Variable-length proofs follow:
+    // - config_proof (variable length)
+    instruction_data.extend_from_slice(&config_proof);
+    // - registrar_proof (variable length)
+    instruction_data.extend_from_slice(&registrar_proof);
+
+    Ok(instruction_data)
+}
+
+/// Build thru registrar PurchaseDomain instruction data
+fn build_thru_registrar_purchase_domain_instruction(
+    config_account_idx: u16,
+    lease_account_idx: u16,
+    domain_account_idx: u16,
+    name_service_program_idx: u16,
+    root_registrar_account_idx: u16,
+    treasurer_account_idx: u16,
+    payer_token_account_idx: u16,
+    token_mint_account_idx: u16,
+    token_program_idx: u16,
+    domain_name: &str,
+    years: u8,
+    lease_proof: Vec<u8>,
+    domain_proof: Vec<u8>,
+) -> Result<Vec<u8>> {
+    let mut instruction_data = Vec::new();
+
+    // Discriminant: TN_THRU_REGISTRAR_INSTRUCTION_PURCHASE_DOMAIN = 1 (u32, 4 bytes little-endian)
+    instruction_data.extend_from_slice(&TN_THRU_REGISTRAR_INSTRUCTION_PURCHASE_DOMAIN.to_le_bytes());
+
+    // tn_thru_registrar_purchase_domain_args_t structure:
+    // - config_account_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&config_account_idx.to_le_bytes());
+    // - lease_account_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&lease_account_idx.to_le_bytes());
+    // - domain_account_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&domain_account_idx.to_le_bytes());
+    // - name_service_program_account_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&name_service_program_idx.to_le_bytes());
+    // - root_registrar_account_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&root_registrar_account_idx.to_le_bytes());
+    // - treasurer_account_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&treasurer_account_idx.to_le_bytes());
+    // - payer_token_account_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&payer_token_account_idx.to_le_bytes());
+    // - token_mint_account_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&token_mint_account_idx.to_le_bytes());
+    // - token_program_account_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&token_program_idx.to_le_bytes());
+    // - domain_name (64 bytes, padded with zeros)
+    let domain_bytes = domain_name.as_bytes();
+    if domain_bytes.len() > 64 {
+        return Err(anyhow::anyhow!("Domain name must be 64 characters or less"));
+    }
+    let mut domain_padded = [0u8; 64];
+    domain_padded[..domain_bytes.len()].copy_from_slice(domain_bytes);
+    instruction_data.extend_from_slice(&domain_padded);
+    // - domain_name_length (u32, 4 bytes little-endian)
+    instruction_data.extend_from_slice(&(domain_bytes.len() as u32).to_le_bytes());
+    // - years (u8, 1 byte)
+    instruction_data.push(years);
+
+    // Variable-length proofs follow:
+    // - lease_proof (variable length)
+    instruction_data.extend_from_slice(&lease_proof);
+    // - domain_proof (variable length)
+    instruction_data.extend_from_slice(&domain_proof);
+
+    Ok(instruction_data)
+}
+
+/// Build thru registrar RenewLease instruction data
+fn build_thru_registrar_renew_lease_instruction(
+    config_account_idx: u16,
+    lease_account_idx: u16,
+    treasurer_account_idx: u16,
+    payer_token_account_idx: u16,
+    token_mint_account_idx: u16,
+    token_program_idx: u16,
+    years: u8,
+) -> Result<Vec<u8>> {
+    let mut instruction_data = Vec::new();
+
+    // Discriminant: TN_THRU_REGISTRAR_INSTRUCTION_RENEW_LEASE = 2 (u32, 4 bytes little-endian)
+    instruction_data.extend_from_slice(&TN_THRU_REGISTRAR_INSTRUCTION_RENEW_LEASE.to_le_bytes());
+
+    // tn_thru_registrar_renew_lease_args_t structure:
+    // - config_account_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&config_account_idx.to_le_bytes());
+    // - lease_account_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&lease_account_idx.to_le_bytes());
+    // - treasurer_account_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&treasurer_account_idx.to_le_bytes());
+    // - payer_token_account_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&payer_token_account_idx.to_le_bytes());
+    // - token_mint_account_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&token_mint_account_idx.to_le_bytes());
+    // - token_program_account_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&token_program_idx.to_le_bytes());
+    // - years (u8, 1 byte)
+    instruction_data.push(years);
+
+    Ok(instruction_data)
+}
+
+/// Build thru registrar ClaimExpiredDomain instruction data
+fn build_thru_registrar_claim_expired_domain_instruction(
+    config_account_idx: u16,
+    lease_account_idx: u16,
+    treasurer_account_idx: u16,
+    payer_token_account_idx: u16,
+    token_mint_account_idx: u16,
+    token_program_idx: u16,
+    years: u8,
+) -> Result<Vec<u8>> {
+    let mut instruction_data = Vec::new();
+
+    // Discriminant: TN_THRU_REGISTRAR_INSTRUCTION_CLAIM_EXPIRED_DOMAIN = 3 (u32, 4 bytes little-endian)
+    instruction_data.extend_from_slice(&TN_THRU_REGISTRAR_INSTRUCTION_CLAIM_EXPIRED_DOMAIN.to_le_bytes());
+
+    // tn_thru_registrar_claim_expired_domain_args_t structure:
+    // - config_account_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&config_account_idx.to_le_bytes());
+    // - lease_account_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&lease_account_idx.to_le_bytes());
+    // - treasurer_account_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&treasurer_account_idx.to_le_bytes());
+    // - payer_token_account_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&payer_token_account_idx.to_le_bytes());
+    // - token_mint_account_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&token_mint_account_idx.to_le_bytes());
+    // - token_program_account_idx (u16, 2 bytes little-endian)
+    instruction_data.extend_from_slice(&token_program_idx.to_le_bytes());
+    // - years (u8, 1 byte)
+    instruction_data.push(years);
 
     Ok(instruction_data)
 }

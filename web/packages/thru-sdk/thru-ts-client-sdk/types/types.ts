@@ -1,8 +1,8 @@
-import { Pubkey } from "@thru/helpers";
+import type { PubkeyInput } from "../domain/primitives";
 import { StateProofType } from "../proto/thru/core/v1/state_pb";
 
 export type GenerateStateProofOptions = {
-    address?: Pubkey;
+    address?: PubkeyInput;
     proofType: StateProofType;
     targetSlot?: bigint;
 }

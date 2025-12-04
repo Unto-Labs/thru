@@ -1,26 +1,25 @@
+import { Pubkey } from "../primitives";
 import { Transaction } from "./Transaction";
 import type {
     BuildTransactionParams,
     SignedTransactionResult,
     TransactionAccountsInput,
 } from "./types";
-import { normalizeAccountList, parseInstructionData, resolveProgramIdentifier } from "./utils";
+import { normalizeAccountList, parseInstructionData } from "./utils";
 
 const FLAG_HAS_FEE_PAYER_PROOF = 1 << 0;
 
 export class TransactionBuilder {
     build(params: BuildTransactionParams): Transaction {
-        const program = resolveProgramIdentifier(params.program);
         const accounts = this.normalizeAccounts(params.accounts);
         const baseFlags = params.header.flags ?? 0;
         const flags = params.proofs?.feePayerStateProof ? baseFlags | FLAG_HAS_FEE_PAYER_PROOF : baseFlags;
 
-        /* Parse instruction data from BytesLike */
         const instructionData = parseInstructionData(params.instructionData);
 
         return new Transaction({
-            feePayer: params.feePayer.publicKey,
-            program,
+            feePayer: Pubkey.from(params.feePayer.publicKey),
+            program: Pubkey.from(params.program),
             header: {
                 ...params.header,
                 flags,

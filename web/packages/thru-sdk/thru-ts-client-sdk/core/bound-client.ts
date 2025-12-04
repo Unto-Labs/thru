@@ -1,6 +1,6 @@
 import type { ThruClientContext } from "./client";
 
-import { decodeAddress, decodeSignature, encodeAddress, encodeSignature } from "@thru/helpers";
+import { Pubkey, Signature, type PubkeyInput, type SignatureInput } from "../domain/primitives";
 import * as accountsModule from "../modules/accounts";
 import * as blocksModule from "../modules/blocks";
 import * as consensusModule from "../modules/consensus";
@@ -8,23 +8,14 @@ import * as eventsModule from "../modules/events";
 import * as heightModule from "../modules/height";
 import {
     deriveProgramAddress,
-    toBlockHash,
-    toPubkey,
-    toPubkeyBytes,
-    toSignature,
-    toSignatureBytes,
-    toTaPubkey,
-    toTsSignature,
     type DeriveProgramAddressOptions,
-    type DeriveProgramAddressResult,
+    type DeriveProgramAddressResult
 } from "../modules/helpers";
 import * as keysModule from "../modules/keys";
 import * as proofsModule from "../modules/proofs";
 import * as streamingModule from "../modules/streaming";
 import * as transactionsModule from "../modules/transactions";
 import * as versionModule from "../modules/version";
-import { Pubkey, Signature, TaPubkey, TsSignature } from "../proto/thru/common/v1/primitives_pb";
-import { BlockHash } from "../proto/thru/core/v1/types_pb";
 
 type ContextualParameters<F> = F extends (ctx: ThruClientContext, ...args: infer P) => any ? P : never;
 
@@ -95,17 +86,8 @@ interface BoundConsensus {
 }
 
 interface Helpers {
-    toSignature(value: Uint8Array | string): Signature;
-    toSignatureBytes(value: Uint8Array | string): Uint8Array;
-    toTsSignature(value: Uint8Array | string): TsSignature;
-    toPubkey(value: Uint8Array | string, field: string): Pubkey;
-    toPubkeyBytes(value: Uint8Array | string, field: string): Uint8Array;
-    toTaPubkey(value: Uint8Array | string, field?: string): TaPubkey;
-    toBlockHash(value: Uint8Array | string): BlockHash;
-    encodeSignature(bytes: Uint8Array): string;
-    decodeSignature(value: string): Uint8Array;
-    encodeAddress(bytes: Uint8Array): string;
-    decodeAddress(value: string): Uint8Array;
+    createSignature(value: SignatureInput): Signature;
+    createPubkey(value: PubkeyInput): Pubkey;
     deriveProgramAddress(options: DeriveProgramAddressOptions): DeriveProgramAddressResult;
 }
 
@@ -152,17 +134,8 @@ export function createBoundThruClient(ctx: ThruClientContext): Thru {
             track: bind(ctx, streamingModule.trackTransaction),
         },
         helpers: {
-            toSignature,
-            toSignatureBytes,
-            toTsSignature,
-            toPubkey,
-            toPubkeyBytes,
-            toTaPubkey,
-            toBlockHash,
-            encodeSignature,
-            decodeSignature,
-            encodeAddress,
-            decodeAddress,
+            createSignature: Signature.from,
+            createPubkey: Pubkey.from,
             deriveProgramAddress,
         },
         keys: {

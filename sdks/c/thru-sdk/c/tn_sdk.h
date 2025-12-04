@@ -2,8 +2,8 @@
 #define HEADER_tn_src_thru_programs_sdk_tn_sdk_h
 
 #include "tn_sdk_base.h"
-#include "tn_sdk_types.h"
 #include "tn_sdk_txn.h"
+#include "tn_sdk_types.h"
 
 /* TODO: macro for syscall code */
 
@@ -37,15 +37,16 @@
     }                                                                          \
   } while (0)
 
-#define TSDK_ACCOUNT_DATA_SZ_MAX  ( 16UL*1024UL*1024UL ) /* Max account data size (excluding metadata) */
+#define TSDK_ACCOUNT_DATA_SZ_MAX                                               \
+  (16UL * 1024UL * 1024UL) /* Max account data size (excluding metadata) */
 
-#define TSDK_ACCOUNT_FLAG_PROGRAM        ((uchar)0x01U)
-#define TSDK_ACCOUNT_FLAG_PRIVILEGED     ((uchar)0x02U)
+#define TSDK_ACCOUNT_FLAG_PROGRAM ((uchar)0x01U)
+#define TSDK_ACCOUNT_FLAG_PRIVILEGED ((uchar)0x02U)
 #define TSDK_ACCOUNT_FLAG_UNCOMPRESSABLE ((uchar)0x04U)
-#define TSDK_ACCOUNT_FLAG_EPHEMERAL      ((uchar)0x08U)
-#define TSDK_ACCOUNT_FLAG_DELETED        ((uchar)0x10U)
-#define TSDK_ACCOUNT_FLAG_NEW            ((uchar)0x20U)
-#define TSDK_ACCOUNT_FLAG_COMPRESSED     ((uchar)0x40U)
+#define TSDK_ACCOUNT_FLAG_EPHEMERAL ((uchar)0x08U)
+#define TSDK_ACCOUNT_FLAG_DELETED ((uchar)0x10U)
+#define TSDK_ACCOUNT_FLAG_NEW ((uchar)0x20U)
+#define TSDK_ACCOUNT_FLAG_COMPRESSED ((uchar)0x40U)
 
 #define TN_SEED_SIZE (32UL)
 
@@ -61,8 +62,12 @@
 
    Example: uint value = TSDK_LOAD( uint, unaligned_ptr ); */
 
-#define TSDK_LOAD( T, src ) \
-  (__extension__({ T _tsdk_load_tmp; memcpy( &_tsdk_load_tmp, (T const *)(src), sizeof(T) ); _tsdk_load_tmp; }))
+#define TSDK_LOAD(T, src)                                                      \
+  (__extension__({                                                             \
+    T _tsdk_load_tmp;                                                          \
+    memcpy(&_tsdk_load_tmp, (T const*)(src), sizeof(T));                       \
+    _tsdk_load_tmp;                                                            \
+  }))
 
 /* TSDK_STORE( T, dst, val ) safely stores val of type T to potentially
    unaligned memory location dst. This macro provides safe access to
@@ -79,8 +84,11 @@
 
    Example: TSDK_STORE( ulong, unaligned_dest, 0x123456789abcdefUL ); */
 
-#define TSDK_STORE( T, dst, val ) \
-  (__extension__({ T _tsdk_store_tmp = (val); (T *)memcpy( (T *)(dst), &_tsdk_store_tmp, sizeof(T) ); }))
+#define TSDK_STORE(T, dst, val)                                                \
+  (__extension__({                                                             \
+    T _tsdk_store_tmp = (val);                                                 \
+    (T*)memcpy((T*)(dst), &_tsdk_store_tmp, sizeof(T));                        \
+  }))
 
 TSDK_PROTOTYPES_BEGIN
 
@@ -135,11 +143,9 @@ int tsdk_is_account_owned_by_current_program(ushort account_idx);
 
 int tsdk_is_program_reentrant(void);
 
-tn_pubkey_t *
-tsdk_create_program_defined_account_address( tn_pubkey_t const * owner,
-                                             uchar          is_ephemeral,
-                                             uchar const    seed[TN_SEED_SIZE],
-                                             tn_pubkey_t *  out_pubkey );
+tn_pubkey_t* tsdk_create_program_defined_account_address(
+    tn_pubkey_t const* owner, uchar is_ephemeral,
+    uchar const seed[TN_SEED_SIZE], tn_pubkey_t* out_pubkey);
 
 TSDK_PROTOTYPES_END
 

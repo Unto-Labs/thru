@@ -1,6 +1,5 @@
 import { create } from "@bufbuild/protobuf";
 
-import { BytesLike, Pubkey } from "@thru/helpers";
 import type { ThruClientContext } from "../core/client";
 import { withCallOptions } from "../core/client";
 import { DEFAULT_ACCOUNT_VIEW, DEFAULT_BLOCK_VIEW, DEFAULT_MIN_CONSENSUS } from "../defaults";
@@ -8,6 +7,7 @@ import { toStreamAccountUpdate, type StreamAccountUpdate } from "../domain/accou
 import { Block } from "../domain/blocks";
 import { ChainEvent } from "../domain/events";
 import { Filter } from "../domain/filters";
+import { Pubkey, Signature, type PubkeyInput, type SignatureInput } from "../domain/primitives";
 import type { StreamTransactionUpdate, TrackTransactionUpdate } from "../domain/transactions";
 import { toStreamTransactionUpdate, toTrackTransactionUpdate } from "../domain/transactions";
 import { ConsensusStatus } from "../proto/thru/common/v1/consensus_pb";
@@ -20,7 +20,6 @@ import {
     StreamTransactionsRequestSchema,
     TrackTransactionRequestSchema,
 } from "../proto/thru/services/v1/streaming_service_pb";
-import { toPubkey, toSignature as toSignatureMessage } from "./helpers";
 
 export type { StreamTransactionUpdate, TrackTransactionUpdate } from "../domain/transactions";
 
@@ -78,11 +77,11 @@ export interface StreamAccountUpdatesResult {
 
 export function streamAccountUpdates(
     ctx: ThruClientContext,
-    address: Pubkey,
+    address: PubkeyInput,
     options: StreamAccountUpdatesOptions = {},
 ): AsyncIterable<StreamAccountUpdatesResult> {
     const request = create(StreamAccountUpdatesRequestSchema, {
-        address: toPubkey(address, "address"),
+        address: Pubkey.from(address).toProtoPubkey(),
         view: options.view ?? DEFAULT_ACCOUNT_VIEW,
         filter: options.filter?.toProto(),
     });
@@ -167,12 +166,12 @@ export function streamEvents(
 
 export function trackTransaction(
     ctx: ThruClientContext,
-    signature: BytesLike,
+    signature: SignatureInput,
     options: TrackTransactionOptions = {},
 ): AsyncIterable<TrackTransactionUpdate> {
     const timeoutMs = options.timeoutMs;
     const request = create(TrackTransactionRequestSchema, {
-        signature: toSignatureMessage(signature),
+        signature: Signature.from(signature).toProtoSignature(),
         timeout:
             timeoutMs != null
                 ? {

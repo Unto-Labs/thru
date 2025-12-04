@@ -283,11 +283,13 @@ impl Client {
         let response = client.list_transactions_for_account(grpc_request).await?;
         let message = response.into_inner();
 
-        let mut signatures = Vec::with_capacity(message.signatures.len());
-        for sig in message.signatures {
-            let sig_bytes =
-                array_from_vec::<64>(sig.value, "signature").map_err(ClientError::Rpc)?;
-            signatures.push(signature_from_bytes(&sig_bytes)?);
+        let mut signatures = Vec::with_capacity(message.transactions.len());
+        for txn in message.transactions {
+            if let Some(sig) = txn.signature {
+                let sig_bytes =
+                    array_from_vec::<64>(sig.value, "signature").map_err(ClientError::Rpc)?;
+                signatures.push(signature_from_bytes(&sig_bytes)?);
+            }
         }
 
         let next_page_token = message.page.and_then(|page| {

@@ -121,6 +121,34 @@ pub enum Commands {
         subcommand: TokenCommands,
     },
 
+    /// Faucet program commands
+    #[command(name = "faucet")]
+    Faucet {
+        #[command(subcommand)]
+        subcommand: FaucetCommands,
+    },
+
+    /// Registrar program commands
+    #[command(name = "registrar")]
+    Registrar {
+        #[command(subcommand)]
+        subcommand: RegistrarCommands,
+    },
+
+    /// Name service program commands
+    #[command(name = "nameservice")]
+    NameService {
+        #[command(subcommand)]
+        subcommand: NameServiceCommands,
+    },
+
+    /// Wrapped Thru (WTHRU) program commands
+    #[command(name = "wthru")]
+    Wthru {
+        #[command(subcommand)]
+        subcommand: WthruCommands,
+    },
+
     /// Developer tools for toolchain and project management
     #[command(name = "dev")]
     Dev {
@@ -575,8 +603,12 @@ pub enum SignatureConvertCommands {
 pub enum TokenCommands {
     /// Initialize a new token mint
     InitializeMint {
-        /// Mint authority address
-        mint_authority: String,
+        /// Creator address (must be authorized to create)
+        creator: String,
+
+        /// Mint authority address (optional, defaults to creator)
+        #[arg(long)]
+        mint_authority: Option<String>,
 
         /// Freeze authority address (optional)
         #[arg(long)]
@@ -772,13 +804,434 @@ pub enum TokenCommands {
         token_program: Option<String>,
     },
 
-    /// Derive mint account address from mint authority and seed
+    /// Derive mint account address from creator and seed
     DeriveMintAccount {
-        /// Mint authority address
-        mint_authority: String,
+        /// Creator address
+        creator: String,
 
         /// Seed for derivation (32 bytes hex)
         seed: String,
+
+        /// Override token program address (ta... or hex)
+        #[arg(long = "token-program")]
+        token_program: Option<String>,
+    },
+}
+
+/// Faucet program subcommands
+#[derive(Subcommand)]
+pub enum FaucetCommands {
+    /// Deposit tokens into the faucet
+    Deposit {
+        /// Account identifier (key name or ta.../hex pubkey) to use as depositor (must match fee payer)
+        account: String,
+
+        /// Amount to deposit
+        amount: u64,
+
+        /// Fee payer account name (defaults to 'default')
+        #[arg(long)]
+        fee_payer: Option<String>,
+    },
+
+    /// Withdraw tokens from the faucet
+    Withdraw {
+        /// Account identifier (key name or ta.../hex pubkey) to use as recipient
+        account: String,
+
+        /// Amount to withdraw (max 10000 per transaction)
+        amount: u64,
+
+        /// Fee payer account name (defaults to 'default')
+        #[arg(long)]
+        fee_payer: Option<String>,
+    },
+}
+
+/// Thru registrar program subcommands
+#[derive(Subcommand)]
+pub enum RegistrarCommands {
+    /// Initialize the .thru registry
+    InitializeRegistry {
+        /// Name service program address
+        #[arg(long = "name-service-program")]
+        name_service_program: Option<String>,
+
+        /// Root registrar account address
+        root_registrar_account: String,
+
+        /// Treasurer token account address
+        treasurer_account: String,
+
+        /// Token mint address (the mint itself, not a holder account)
+        token_mint_account: String,
+
+        /// Token program address
+        #[arg(long = "token-program")]
+        token_program: Option<String>,
+
+        /// Price per year in base units
+        price_per_year: u64,
+
+        /// Root domain name (e.g., "thru")
+        #[arg(default_value = "thru")]
+        root_domain_name: String,
+
+        /// State proof for config account creation (hex encoded, optional - will auto-generate if not provided)
+        #[arg(long)]
+        config_proof: Option<String>,
+
+        /// State proof for registrar account creation (hex encoded, optional - will auto-generate if not provided)
+        #[arg(long)]
+        registrar_proof: Option<String>,
+
+        /// Fee payer account (optional, defaults to 'default')
+        #[arg(long)]
+        fee_payer: Option<String>,
+
+        /// Override thru registrar program address (ta... or hex)
+        #[arg(long = "thru-registrar-program", alias = "thru-name-service-program")]
+        thru_registrar_program: Option<String>,
+    },
+
+    /// Purchase a .thru domain
+    PurchaseDomain {
+        /// Domain name without .thru suffix (e.g., "example")
+        domain_name: String,
+
+        /// Number of years to purchase (must be > 0)
+        years: u8,
+
+        /// Config account address (must exist and be initialized)
+        config_account: String,
+
+        /// Payer token account (must be an account for the registry mint owned by fee payer)
+        payer_token_account: String,
+
+        /// State proof for lease account creation (hex encoded, optional - will auto-generate if not provided)
+        #[arg(long)]
+        lease_proof: Option<String>,
+
+        /// State proof for domain account creation (hex encoded, optional - will auto-generate if not provided)
+        #[arg(long)]
+        domain_proof: Option<String>,
+
+        /// Fee payer account (optional, defaults to 'default')
+        #[arg(long)]
+        fee_payer: Option<String>,
+
+        /// Override thru registrar program address (ta... or hex)
+        #[arg(long = "thru-registrar-program", alias = "thru-name-service-program")]
+        thru_registrar_program: Option<String>,
+    },
+
+    /// Renew an existing domain lease
+    RenewLease {
+        /// Lease account address
+        lease_account: String,
+
+        /// Number of years to extend the lease (must be > 0)
+        years: u8,
+
+        /// Config account address (must exist and be initialized)
+        config_account: String,
+
+        /// Payer token account (must be an account for the registry mint owned by fee payer)
+        payer_token_account: String,
+
+        /// Fee payer account (optional, defaults to 'default')
+        #[arg(long)]
+        fee_payer: Option<String>,
+
+        /// Override thru registrar program address (ta... or hex)
+        #[arg(long = "thru-registrar-program", alias = "thru-name-service-program")]
+        thru_registrar_program: Option<String>,
+    },
+
+    /// Claim an expired domain
+    ClaimExpiredDomain {
+        /// Lease account address
+        lease_account: String,
+
+        /// Number of years to claim the domain (must be > 0)
+        years: u8,
+
+        /// Config account address (must exist and be initialized)
+        config_account: String,
+
+        /// Payer token account (must be an account for the registry mint owned by fee payer)
+        payer_token_account: String,
+
+        /// Fee payer account (optional, defaults to 'default')
+        #[arg(long)]
+        fee_payer: Option<String>,
+
+        /// Override thru registrar program address (ta... or hex)
+        #[arg(long = "thru-registrar-program", alias = "thru-name-service-program")]
+        thru_registrar_program: Option<String>,
+    },
+}
+
+/// Name service program subcommands
+#[derive(Subcommand)]
+pub enum NameServiceCommands {
+    /// Append a key/value record to a domain
+    #[command(name = "append-record")]
+    AppendRecord {
+        /// Domain account address
+        domain_account: String,
+
+        /// Record key (<=32 bytes)
+        key: String,
+
+        /// Record value (<=256 bytes)
+        value: String,
+
+        /// Owner account pubkey (defaults to fee payer)
+        #[arg(long)]
+        owner: Option<String>,
+
+        /// Fee payer account (defaults to 'default')
+        #[arg(long)]
+        fee_payer: Option<String>,
+
+        /// Name service program address
+        #[arg(long = "name-service-program")]
+        name_service_program: Option<String>,
+    },
+
+    /// Delete a key/value record from a domain
+    #[command(name = "delete-record")]
+    DeleteRecord {
+        /// Domain account address
+        domain_account: String,
+
+        /// Record key to delete
+        key: String,
+
+        /// Owner account pubkey (defaults to fee payer)
+        #[arg(long)]
+        owner: Option<String>,
+
+        /// Fee payer account (defaults to 'default')
+        #[arg(long)]
+        fee_payer: Option<String>,
+
+        /// Name service program address
+        #[arg(long = "name-service-program")]
+        name_service_program: Option<String>,
+    },
+
+    /// Derive config account address
+    DeriveConfigAccount {
+        /// Override thru registrar program address (ta... or hex)
+        #[arg(long = "thru-registrar-program", alias = "thru-name-service-program")]
+        thru_registrar_program: Option<String>,
+    },
+
+    /// Derive a domain account address from parent and name
+    #[command(name = "derive-domain-account")]
+    DeriveDomainAccount {
+        /// Parent registrar or domain account address
+        parent_account: String,
+
+        /// Domain name segment (e.g., "example")
+        domain_name: String,
+
+        /// Name service program address
+        #[arg(long = "name-service-program")]
+        name_service_program: Option<String>,
+    },
+
+    /// Derive lease account address from domain name
+    DeriveLeaseAccount {
+        /// Domain name without .thru suffix (e.g., "example")
+        domain_name: String,
+
+        /// Override thru registrar program address (ta... or hex)
+        #[arg(long = "thru-registrar-program", alias = "thru-name-service-program")]
+        thru_registrar_program: Option<String>,
+    },
+
+    /// Derive a root registrar account address from the root name
+    #[command(name = "derive-registrar-account")]
+    DeriveRegistrarAccount {
+        /// Root domain name segment
+        root_name: String,
+
+        /// Name service program address
+        #[arg(long = "name-service-program")]
+        name_service_program: Option<String>,
+    },
+
+    /// Initialize a root registrar for the base name service program
+    #[command(name = "init-root")]
+    InitRoot {
+        /// Root domain name (e.g., "thru")
+        root_name: String,
+
+        /// Name service program address
+        #[arg(long = "name-service-program")]
+        name_service_program: Option<String>,
+
+        /// Registrar account address (derived automatically if omitted)
+        #[arg(long)]
+        registrar_account: Option<String>,
+
+        /// Authority account pubkey (defaults to fee payer)
+        #[arg(long)]
+        authority: Option<String>,
+
+        /// State proof for registrar account creation (hex encoded, optional - auto-generated if not provided)
+        #[arg(long)]
+        proof: Option<String>,
+
+        /// Fee payer account (defaults to 'default')
+        #[arg(long)]
+        fee_payer: Option<String>,
+    },
+
+    /// List records stored on a domain
+    #[command(name = "list-records")]
+    ListRecords {
+        /// Domain account address
+        domain_account: String,
+
+        /// Name service program address
+        #[arg(long = "name-service-program")]
+        name_service_program: Option<String>,
+    },
+
+    /// Register a subdomain under a parent registrar or domain
+    #[command(name = "register-subdomain")]
+    RegisterSubdomain {
+        /// Subdomain name segment (e.g., "example")
+        domain_name: String,
+
+        /// Parent registrar or domain account address
+        parent_account: String,
+
+        /// Name service program address
+        #[arg(long = "name-service-program")]
+        name_service_program: Option<String>,
+
+        /// Domain account address (derived automatically if omitted)
+        #[arg(long)]
+        domain_account: Option<String>,
+
+        /// Owner account pubkey (defaults to fee payer)
+        #[arg(long)]
+        owner: Option<String>,
+
+        /// Authority account pubkey (defaults to owner)
+        #[arg(long)]
+        authority: Option<String>,
+
+        /// State proof for domain account creation (hex encoded, optional - auto-generated if not provided)
+        #[arg(long)]
+        proof: Option<String>,
+
+        /// Fee payer account (defaults to 'default')
+        #[arg(long)]
+        fee_payer: Option<String>,
+    },
+
+    /// Resolve a domain account and optionally retrieve a record value
+    #[command(name = "resolve")]
+    Resolve {
+        /// Domain account address
+        domain_account: String,
+
+        /// Optional record key to fetch
+        #[arg(long)]
+        key: Option<String>,
+
+        /// Name service program address
+        #[arg(long = "name-service-program")]
+        name_service_program: Option<String>,
+    },
+
+    /// Unregister (delete) a subdomain
+    #[command(name = "unregister-subdomain")]
+    UnregisterSubdomain {
+        /// Domain account address
+        domain_account: String,
+
+        /// Owner account pubkey (defaults to fee payer)
+        #[arg(long)]
+        owner: Option<String>,
+
+        /// Fee payer account (defaults to 'default')
+        #[arg(long)]
+        fee_payer: Option<String>,
+
+        /// Name service program address
+        #[arg(long = "name-service-program")]
+        name_service_program: Option<String>,
+    },
+}
+
+/// WTHRU program subcommands
+#[derive(Subcommand)]
+pub enum WthruCommands {
+    /// Initialize the WTHRU mint and vault accounts
+    Initialize {
+        /// Fee payer account name (defaults to 'default')
+        #[arg(long)]
+        fee_payer: Option<String>,
+
+        /// Override WTHRU program address (ta... or hex)
+        #[arg(long = "program")]
+        program: Option<String>,
+
+        /// Override token program address (ta... or hex)
+        #[arg(long = "token-program")]
+        token_program: Option<String>,
+    },
+
+    /// Deposit native THRU and receive WTHRU tokens
+    Deposit {
+        /// Destination WTHRU token account address
+        dest_token_account: String,
+
+        /// Amount of native THRU to wrap (lamports)
+        amount: u64,
+
+        /// Fee payer account name (defaults to 'default')
+        #[arg(long)]
+        fee_payer: Option<String>,
+
+        /// Override WTHRU program address (ta... or hex)
+        #[arg(long = "program")]
+        program: Option<String>,
+
+        /// Override token program address (ta... or hex)
+        #[arg(long = "token-program")]
+        token_program: Option<String>,
+
+        /// Skip the native transfer (only run the deposit instruction)
+        #[arg(long = "skip-transfer")]
+        skip_transfer: bool,
+    },
+
+    /// Withdraw native THRU by burning WTHRU tokens
+    Withdraw {
+        /// Source WTHRU token account address
+        wthru_token_account: String,
+
+        /// Recipient native account address (ta...)
+        recipient: String,
+
+        /// Amount of WTHRU to unwrap (lamports)
+        amount: u64,
+
+        /// Fee payer/owner account name (defaults to 'default')
+        #[arg(long)]
+        fee_payer: Option<String>,
+
+        /// Override WTHRU program address (ta... or hex)
+        #[arg(long = "program")]
+        program: Option<String>,
 
         /// Override token program address (ta... or hex)
         #[arg(long = "token-program")]

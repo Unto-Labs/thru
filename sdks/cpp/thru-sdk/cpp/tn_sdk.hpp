@@ -158,9 +158,7 @@ inline ulong get_time() { return get_context()->block_time; }
 
 inline ulong get_slot() { return get_context()->slot; }
 
-inline ulong get_global_state_counter() {
-  return get_context()->global_state_counter;
-}
+inline ulong get_block_price() { return get_context()->block_price; }
 
 inline const pubkey_t& get_parent_blockhash() {
   return get_context()->parent_blockhash;

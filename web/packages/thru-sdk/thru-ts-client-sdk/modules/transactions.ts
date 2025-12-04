@@ -19,15 +19,14 @@ import {
     type InstructionContext,
     Transaction as LocalTransaction,
     type OptionalProofs,
-    type ProgramIdentifier,
     type SignedTransactionResult,
     Transaction,
     type TransactionAccountsInput,
     TransactionBuilder,
     type TransactionHeaderInput,
-    TransactionStatusSnapshot,
+    TransactionStatusSnapshot
 } from "../domain/transactions";
-import { normalizeAccountList, parseAccountIdentifier, parseInstructionData, resolveProgramIdentifier } from "../domain/transactions/utils";
+import { normalizeAccountList, parseInstructionData } from "../domain/transactions/utils";
 import type { ConsensusStatus, VersionContext } from "../proto/thru/common/v1/consensus_pb";
 import { AccountView } from "../proto/thru/core/v1/account_pb";
 import { RawTransaction, TransactionView } from "../proto/thru/core/v1/transaction_pb";
@@ -43,21 +42,20 @@ import {
     ListTransactionsForAccountRequestSchema,
     type ListTransactionsForAccountResponse as ProtoListTransactionsForAccountResponse,
 } from "../proto/thru/services/v1/query_service_pb";
-import { toSignature } from "./helpers";
 
-import { BytesLike, encodeSignature, Pubkey } from "@thru/helpers";
+import { encodeSignature } from "@thru/helpers";
+import { Pubkey, type PubkeyInput, Signature, type SignatureInput } from "../domain/primitives";
 import { getAccount } from "./accounts";
 import { getBlockHeight } from "./height";
-import { toPubkey } from "./helpers";
 
 export interface TransactionFeePayerConfig {
-    publicKey: Pubkey;
+    publicKey: PubkeyInput;
     privateKey?: Uint8Array;
 }
 
 export interface TransactionAccountsConfig {
-    readWrite?: Pubkey[];
-    readOnly?: Pubkey[];
+    readWrite?: PubkeyInput[];
+    readOnly?: PubkeyInput[];
 }
 
 export interface TransactionHeaderConfig {
@@ -75,14 +73,14 @@ export interface TransactionHeaderConfig {
  * - A Uint8Array directly
  * - A function that takes an InstructionContext and returns a Uint8Array
  */
-export type InstructionData = Uint8Array | ((context: InstructionContext) => Promise<Uint8Array>);
+export type InstructionData = Uint8Array | string| ((context: InstructionContext) => Promise<Uint8Array>);
 
 export interface BuildTransactionOptions {
     feePayer: TransactionFeePayerConfig;
-    program: ProgramIdentifier;
+    program: PubkeyInput;
     header?: TransactionHeaderConfig;
     accounts?: TransactionAccountsConfig;
-    instructionData?: InstructionData | BytesLike;
+    instructionData?: InstructionData;
     feePayerStateProof?: Uint8Array;
     feePayerAccountMetaRaw?: Uint8Array;
 }
@@ -115,11 +113,11 @@ export interface TransactionList {
 
 export async function getTransaction(
     ctx: ThruClientContext,
-    signature: BytesLike,
+    signature: SignatureInput,
     options: TransactionQueryOptions = {},
 ): Promise<Transaction> {
     const request = create(GetTransactionRequestSchema, {
-        signature: toSignature(signature),
+        signature: Signature.from(signature).toProtoSignature(),
         view: options.view ?? DEFAULT_TRANSACTION_VIEW,
         versionContext: options.versionContext ?? DEFAULT_VERSION_CONTEXT,
         minConsensus: options.minConsensus ?? DEFAULT_MIN_CONSENSUS,
@@ -130,20 +128,20 @@ export async function getTransaction(
 
 export async function getRawTransaction(
     ctx: ThruClientContext,
-    signature: BytesLike,
+    signature: SignatureInput,
     options: RawTransactionQueryOptions = {},
 ): Promise<RawTransaction> {
     const request = create(GetRawTransactionRequestSchema, {
-        signature: toSignature(signature),
+        signature: Signature.from(signature).toProtoSignature(),
         versionContext: options.versionContext ?? DEFAULT_VERSION_CONTEXT,
         minConsensus: options.minConsensus ?? DEFAULT_MIN_CONSENSUS,
     });
     return ctx.query.getRawTransaction(request, withCallOptions(ctx));
 }
 
-export async function getTransactionStatus(ctx: ThruClientContext, signature: BytesLike): Promise<TransactionStatusSnapshot> {
+export async function getTransactionStatus(ctx: ThruClientContext, signature: SignatureInput): Promise<TransactionStatusSnapshot> {
     const request = create(GetTransactionStatusRequestSchema, {
-        signature: toSignature(signature),
+        signature: Signature.from(signature).toProtoSignature(),
     });
     const proto = await ctx.query.getTransactionStatus(request, withCallOptions(ctx));
     return TransactionStatusSnapshot.fromProto(proto);
@@ -151,11 +149,11 @@ export async function getTransactionStatus(ctx: ThruClientContext, signature: By
 
 export async function listTransactionsForAccount(
     ctx: ThruClientContext,
-    account: Pubkey,
+    account: PubkeyInput,
     options: ListTransactionsForAccountOptions = {},
 ): Promise<TransactionList> {
     const request = create(ListTransactionsForAccountRequestSchema, {
-        account: toPubkey(account, "account"),
+        account: Pubkey.from(account).toProtoPubkey(),
         filter: options.filter?.toProto(),
         page: options.page?.toProto(),
     });
@@ -163,12 +161,13 @@ export async function listTransactionsForAccount(
         request,
         withCallOptions(ctx),
     );
+    const protoTransactionSignatures = (response.transactions ?? []).map((transaction) => transaction.signature);
     const transactions = await Promise.all(
-        response.signatures.map((signatureMessage) => {
-            if (!signatureMessage.value) {
+        protoTransactionSignatures.map((signature) => {
+            if (!signature) {
                 throw new Error("ListTransactionsForAccount returned an empty signature");
             }
-            return getTransaction(ctx, signatureMessage.value, options.transactionOptions);
+            return getTransaction(ctx, signature.value, options.transactionOptions);
         }),
     );
     return {
@@ -242,8 +241,8 @@ async function createBuildParams(
     ctx: ThruClientContext,
     options: BuildTransactionOptions,
 ): Promise<BuildTransactionParams> {
-    const feePayerPublicKey = parseAccountIdentifier(options.feePayer.publicKey, "feePayer.publicKey");
-    const program = resolveProgramIdentifier(options.program);
+    const feePayerPublicKey = Pubkey.from(options.feePayer.publicKey).toBytes();
+    const program = Pubkey.from(options.program).toBytes();
     const header = await createTransactionHeader(ctx, options.header ?? {}, feePayerPublicKey);
     const accounts = parseAccounts(options.accounts);
     
@@ -259,7 +258,7 @@ async function createBuildParams(
             publicKey: feePayerPublicKey,
             privateKey: options.feePayer.privateKey,
         },
-        program: options.program,
+        program: Pubkey.from(options.program).toBytes(),
         header,
         accounts,
         instructionData,
@@ -291,10 +290,10 @@ function parseAccounts(accounts?: TransactionAccountsConfig): TransactionAccount
         return undefined;
     }
     const readWrite = accounts.readWrite?.map((value, index) =>
-        parseAccountIdentifier(value, `accounts.readWrite[${index}]`),
+        Pubkey.from(value).toBytes(),
     );
     const readOnly = accounts.readOnly?.map((value, index) =>
-        parseAccountIdentifier(value, `accounts.readOnly[${index}]`),
+        Pubkey.from(value).toBytes(),
     );
 
     const result: TransactionAccountsInput = {};
@@ -313,34 +312,22 @@ function parseAccounts(accounts?: TransactionAccountsConfig): TransactionAccount
 }
 
 function createInstructionContext(
-    feePayer: Uint8Array,
-    program: Uint8Array,
+    feePayer: PubkeyInput,
+    program: PubkeyInput,
     accounts?: TransactionAccountsInput,
 ): InstructionContext {
     // Build accounts array in transaction order: [feePayer, program, ...readWrite, ...readOnly]
-    const allAccounts: Uint8Array[] = [
-        feePayer,
-        program,
-        ...(accounts?.readWriteAccounts ?? []),
-        ...(accounts?.readOnlyAccounts ?? []),
+    const allAccounts: Pubkey[] = [
+        Pubkey.from(feePayer),
+        Pubkey.from(program),
+        ...(accounts?.readWriteAccounts?.map((value) => Pubkey.from(value)) ?? []),
+        ...(accounts?.readOnlyAccounts?.map((value) => Pubkey.from(value)) ?? []),
     ];
 
     // Helper to compare two account addresses
-    const accountsEqual = (a: Uint8Array, b: Uint8Array): boolean => {
-        if (a.length !== 32 || b.length !== 32) {
-            return false;
-        }
-        for (let i = 0; i < 32; i++) {
-            if (a[i] !== b[i]) {
-                return false;
-            }
-        }
-        return true;
-    };
-
-    const getAccountIndex = (pubkey: Uint8Array): number => {
+    const getAccountIndex = (pubkey: PubkeyInput): number => {
         for (let i = 0; i < allAccounts.length; i++) {
-            if (accountsEqual(allAccounts[i], pubkey)) {
+            if (allAccounts[i].equals(Pubkey.from(pubkey))) {
                 return i;
             }
         }
@@ -351,9 +338,9 @@ function createInstructionContext(
 }
 
 async function resolveInstructionData(
-    value: InstructionData | BytesLike | undefined,
+    value: InstructionData | undefined,
     context: InstructionContext,
-): Promise<BytesLike | undefined> {
+): Promise<Uint8Array | undefined> {
     if (value === undefined) {
         return undefined;
     }
@@ -368,7 +355,6 @@ async function resolveInstructionData(
         return value;
     }
     
-    // Otherwise, parse BytesLike (string) to Uint8Array
     return parseInstructionData(value);
 }
 

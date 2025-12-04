@@ -42,8 +42,8 @@ function buildHeaderProto(tx: Transaction) {
         fee: tx.fee,
         nonce: tx.nonce,
         startSlot: tx.startSlot,
-        feePayerPubkey: create(PubkeySchema, { value: new Uint8Array(tx.feePayer) }),
-        programPubkey: create(PubkeySchema, { value: new Uint8Array(tx.program) }),
+        feePayerPubkey: create(PubkeySchema, { value: tx.feePayer.toBytes() }),
+        programPubkey: create(PubkeySchema, { value: tx.program.toBytes() }),
     };
 }
 
@@ -62,8 +62,12 @@ describe("Transaction.fromProto", () => {
         expect(parsed.fee).toBe(transaction.fee);
         expect(parsed.nonce).toBe(transaction.nonce);
         expect(parsed.startSlot).toBe(transaction.startSlot);
-        expect(parsed.readWriteAccounts).toEqual(transaction.readWriteAccounts);
-        expect(parsed.readOnlyAccounts).toEqual(transaction.readOnlyAccounts);
+        expect(parsed.readWriteAccounts.map((account) => account.toBytes())).toEqual(
+            transaction.readWriteAccounts.map((account) => account.toBytes()),
+        );
+        expect(parsed.readOnlyAccounts.map((account) => account.toBytes())).toEqual(
+            transaction.readOnlyAccounts.map((account) => account.toBytes()),
+        );
         expect(parsed.instructionData).toEqual(transaction.instructionData);
     });
 
@@ -82,8 +86,12 @@ describe("Transaction.fromProto", () => {
         expect(parsed.fee).toBe(transaction.fee);
         expect(parsed.nonce).toBe(transaction.nonce);
         expect(parsed.startSlot).toBe(transaction.startSlot);
-        expect(parsed.readWriteAccounts).toEqual(transaction.readWriteAccounts);
-        expect(parsed.readOnlyAccounts).toEqual(transaction.readOnlyAccounts);
+        expect(parsed.readWriteAccounts.map((account) => account.toBytes())).toEqual(
+            transaction.readWriteAccounts.map((account) => account.toBytes()),
+        );
+        expect(parsed.readOnlyAccounts.map((account) => account.toBytes())).toEqual(
+            transaction.readOnlyAccounts.map((account) => account.toBytes()),
+        );
         expect(parsed.instructionData).toEqual(transaction.instructionData);
     });
 });

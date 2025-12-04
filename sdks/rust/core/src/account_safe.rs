@@ -60,7 +60,6 @@ impl Hasher32 for IdentityHasher {
     }
 }
 
-
 /// Represents the different types of accounts in a transaction.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AccountType {
@@ -227,7 +226,8 @@ pub struct AccountManager<const NUM_ACCOUNTS: usize> {
      * Uses IndexMap to allow sparse access patterns (only accessed accounts are stored).
      * RefCell provides interior mutability for lazy insertion on first access.
      * Uses identity hasher where the account index is used directly as the hash. */
-    borrow_states: RefCell<IndexMap<u16, RefCell<()>, BuildHasherDefault<IdentityHasher>, NUM_ACCOUNTS>>,
+    borrow_states:
+        RefCell<IndexMap<u16, RefCell<()>, BuildHasherDefault<IdentityHasher>, NUM_ACCOUNTS>>,
     rw_cnt: u16, /* count of read-write accounts */
     ro_cnt: u16, /* count of read-only accounts */
     pub txn: &'static Txn,
@@ -239,7 +239,12 @@ impl<const NUM_ACCOUNTS: usize> AccountManager<NUM_ACCOUNTS> {
     /// `NUM_ACCOUNTS` specifies the maximum number of distinct accounts that can be
     /// borrowed simultaneously. The transaction may contain more accounts than this,
     /// but you can only have up to `NUM_ACCOUNTS` accounts borrowed at once.
-    pub fn from_txn(txn: &'static Txn) -> Option<Self> {
+    ///
+    /// # Safety
+    ///
+    /// At most one `AccountManager` may be created per program execution.
+    #[doc(hidden)]
+    pub unsafe fn from_txn(txn: &'static Txn) -> Option<Self> {
         if txn.hdr.version() != 1 {
             return None;
         }
@@ -247,7 +252,12 @@ impl<const NUM_ACCOUNTS: usize> AccountManager<NUM_ACCOUNTS> {
         let rw_cnt = txn.readwrite_accounts_cnt();
         let ro_cnt = txn.readonly_accounts_cnt();
 
-        let borrow_states = RefCell::new(IndexMap::<u16, RefCell<()>, BuildHasherDefault<IdentityHasher>, NUM_ACCOUNTS>::new());
+        let borrow_states = RefCell::new(IndexMap::<
+            u16,
+            RefCell<()>,
+            BuildHasherDefault<IdentityHasher>,
+            NUM_ACCOUNTS,
+        >::new());
         Some(Self {
             borrow_states,
             rw_cnt,
@@ -274,7 +284,7 @@ impl<const NUM_ACCOUNTS: usize> AccountManager<NUM_ACCOUNTS> {
                 map.insert(index, RefCell::new(())).ok()?;
             }
         } /* Drop the mutable borrow */
-        
+
         /* SAFETY: The IndexMap is stored inline in the RefCell and never moves.
          * We never remove entries from the map, only add them. The RefCell<()> values
          * have stable addresses as long as the IndexMap exists. We use unsafe here to
@@ -407,7 +417,7 @@ impl<const NUM_ACCOUNTS: usize> AccountManager<NUM_ACCOUNTS> {
         self.borrow_states
             .borrow()
             .get(&index)
-            .map(|cell| cell.try_borrow().is_err())
+            .map(|cell| cell.try_borrow_mut().is_err())
             .unwrap_or(false)
     }
 
@@ -430,6 +440,79 @@ impl<const NUM_ACCOUNTS: usize> AccountManager<NUM_ACCOUNTS> {
         self.account_role(index)
             .map(|role| role.is_mutable())
             .unwrap_or(false)
+    }
+
+    /// Check if any accounts are currently borrowed.
+    ///
+    /// Returns `true` if any account in the transaction has an active borrow.
+    pub fn has_active_borrows(&self) -> bool {
+        let map = self.borrow_states.borrow();
+        for (_, cell) in map.iter() {
+            /* Check if the cell is currently borrowed */
+            if cell.try_borrow_mut().is_err() {
+                return true;
+            }
+        }
+        false
+    }
+
+    /// Invoke a program with the given instruction data.
+    ///
+    /// This function checks that there are no active account borrows before invoking
+    /// the program to ensure memory safety across the program invocation boundary.
+    ///
+    /// # Parameters
+    /// - `program_account_idx`: Index of the program account to invoke
+    /// - `instr_data`: Instruction data to pass to the program
+    ///
+    /// # Returns
+    /// A tuple of (SyscallCode, SyscallCode) representing the invoke result and exit code.
+    ///
+    /// # Safety
+    /// This function performs syscalls which are inherently unsafe. Additionally, it
+    /// verifies that no accounts are currently borrowed to prevent aliasing issues.
+    ///
+    /// # Panics
+    /// Panics if there are active account borrows when attempting to invoke.
+    pub fn invoke(
+        &self,
+        program_account_idx: u16,
+        instr_data: &[u8],
+    ) -> (crate::syscall::SyscallCode, crate::syscall::SyscallCode) {
+        /* Ensure no accounts are currently borrowed */
+        if self.has_active_borrows() {
+            panic!("Cannot invoke program while accounts are borrowed");
+        }
+
+        /* Perform the syscall */
+        unsafe {
+            crate::syscall::sys_invoke(
+                instr_data.as_ptr(),
+                instr_data.len() as u64,
+                program_account_idx,
+            )
+        }
+    }
+
+    /// Resize an account's data.
+    ///
+    /// This function checks that the account is not currently borrowed before
+    /// resizing it.
+    ///
+    /// # Parameters
+    /// - `account_idx`: Index of the account to resize
+    /// - `new_size`: New size in bytes
+    ///
+    /// # Returns
+    /// The syscall result code.
+    ///
+    /// # Panics
+    /// Panics if the account is currently borrowed.
+    pub fn account_resize(&self, account_idx: u16, new_size: u64) -> crate::syscall::SyscallCode {
+        if self.is_borrowed(account_idx) {
+            panic!("Cannot resize account {} while it is borrowed", account_idx);
+        }
+        unsafe { crate::syscall::sys_account_resize(account_idx as u64, new_size) }
     }
 }
 

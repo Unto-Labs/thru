@@ -34,7 +34,7 @@ describe("Account domain model", () => {
         const account = Account.fromProto(proto);
 
         expect(account).toBeInstanceOf(Account);
-        expect(account.address).toEqual(address);
+        expect(account.address.toBytes()).toEqual(address);
         expect(account.meta).toBeInstanceOf(AccountMeta);
         expect(account.meta?.flags).toBeInstanceOf(AccountFlags);
         expect(account.meta?.flags.isProgram).toBe(true);

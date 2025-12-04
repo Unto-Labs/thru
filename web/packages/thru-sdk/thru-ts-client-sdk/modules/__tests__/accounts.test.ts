@@ -6,8 +6,8 @@ import { AccountView } from "../../proto/thru/core/v1/account_pb";
 import { GenerateStateProofResponseSchema, ListAccountsResponseSchema } from "../../proto/thru/services/v1/query_service_pb";
 import { Account } from "../../domain/accounts";
 import { Filter, FilterParamValue } from "../../domain/filters";
+import { Pubkey } from "../../domain/primitives";
 import { createAccount, getAccount, getRawAccount, listAccounts } from "../accounts";
-import { toPubkey } from "../helpers";
 
 describe("accounts", () => {
   describe("getAccount", () => {
@@ -20,7 +20,7 @@ describe("accounts", () => {
       const result = await getAccount(ctx, address);
       
       expect(result).toBeInstanceOf(Account);
-      expect(result.address).toEqual(mockAccount.address?.value);
+      expect(result.address.toBytes()).toEqual(mockAccount.address?.value);
       expect(ctx.query.getAccount).toHaveBeenCalledTimes(1);
     });
 
@@ -189,11 +189,11 @@ describe("accounts", () => {
       vi.spyOn(ctx.query, "listAccounts").mockResolvedValue(mockResponse);
       
       const owner = generateTestPubkey(0x01);
-      const ownerPubkey = toPubkey(owner, "owner");
+      const ownerBytes = Pubkey.from(owner).toBytes();
       const ownerFilter = new Filter({
         expression: "meta.owner.value == params.owner_bytes",
         params: {
-          owner_bytes: FilterParamValue.bytes(ownerPubkey.value),
+          owner_bytes: FilterParamValue.bytes(ownerBytes),
         },
       });
       
@@ -211,11 +211,11 @@ describe("accounts", () => {
       vi.spyOn(ctx.query, "listAccounts").mockResolvedValue(mockResponse);
       
       const owner = generateTestPubkey(0x01);
-      const ownerPubkey = toPubkey(owner, "owner");
+      const ownerBytes = Pubkey.from(owner).toBytes();
       const ownerFilter = new Filter({
         expression: "meta.owner.value == params.owner_bytes",
         params: {
-          owner_bytes: FilterParamValue.bytes(ownerPubkey.value),
+          owner_bytes: FilterParamValue.bytes(ownerBytes),
         },
       });
       
@@ -225,7 +225,7 @@ describe("accounts", () => {
       expect(callArgs.filter).toBeDefined();
       expect(callArgs.filter.expression).toBe("meta.owner.value == params.owner_bytes");
       expect(callArgs.filter.params.owner_bytes.kind.case).toBe("bytesValue");
-      expect(callArgs.filter.params.owner_bytes.kind.value).toEqual(ownerPubkey.value);
+      expect(callArgs.filter.params.owner_bytes.kind.value).toEqual(ownerBytes);
     });
 
     it("should use custom filter when provided", async () => {
@@ -248,11 +248,11 @@ describe("accounts", () => {
       vi.spyOn(ctx.query, "listAccounts").mockResolvedValue(mockResponse);
       
       const owner = generateTestPubkey(0x01);
-      const ownerPubkey = toPubkey(owner, "owner");
+      const ownerBytes = Pubkey.from(owner).toBytes();
       const ownerFilter = new Filter({
         expression: "meta.owner.value == params.owner_bytes",
         params: {
-          owner_bytes: FilterParamValue.bytes(ownerPubkey.value),
+          owner_bytes: FilterParamValue.bytes(ownerBytes),
         },
       });
       
@@ -292,7 +292,7 @@ describe("accounts", () => {
       const transaction = await createAccount(ctx, { publicKey });
       
       expect(transaction).toBeDefined();
-      expect(transaction.feePayer).toEqual(publicKey);
+      expect(transaction.feePayer.toBytes()).toEqual(publicKey);
       expect(transaction.feePayerStateProof).toBeDefined();
       expect(ctx.query.getHeight).toHaveBeenCalledTimes(1);
       expect(ctx.query.generateStateProof).toHaveBeenCalledTimes(1);

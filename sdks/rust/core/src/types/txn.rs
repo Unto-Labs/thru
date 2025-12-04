@@ -1,7 +1,7 @@
+use crate::types::state_proof::{ProofParseError, StateProof};
 use crate::types::{account::AccountMeta, ed25519::Ed25519Sig};
 use crate::types::{pubkey::Pubkey, signature::Signature};
 use core::{mem::MaybeUninit, slice};
-use crate::types::state_proof::{ProofParseError, StateProof};
 
 // Constants from tn_txn.h
 pub const TN_TXN_V1: u8 = 0x01;
@@ -320,18 +320,22 @@ impl Txn {
     pub fn instr_data(&self) -> Option<&[u8]> {
         let v1 = self.hdr.as_v1_safe()?;
 
-        let instr_data_offset = size_of::<TxnHdr>() + size_of::<Pubkey>() * (self.accounts_cnt() as usize - 2);
-        return Some(unsafe { core::slice::from_raw_parts(
-            (self as *const Txn as *const u8).offset(instr_data_offset as isize),
-            v1.instr_data_sz as usize)
+        let instr_data_offset =
+            size_of::<TxnHdr>() + size_of::<Pubkey>() * (self.accounts_cnt() as usize - 2);
+        return Some(unsafe {
+            core::slice::from_raw_parts(
+                (self as *const Txn as *const u8).offset(instr_data_offset as isize),
+                v1.instr_data_sz as usize,
+            )
         });
     }
 
-    pub fn fee_payer_proof(&self) -> Result<&StateProof, ProofParseError> {
-        let proof_start = self.instr_data()
-                                         .ok_or(ProofParseError::NotSupported)?
-                                         .as_ptr_range()
-                                         .end;
+    pub fn fee_payer_proof(&self) -> Result<StateProof<'_>, ProofParseError> {
+        let proof_start = self
+            .instr_data()
+            .ok_or(ProofParseError::NotSupported)?
+            .as_ptr_range()
+            .end;
         if (unsafe { self.hdr.as_v1() }.flags & TN_TXN_FLAG_HAS_FEE_PAYER_PROOF) == 0 {
             return Err(ProofParseError::NotAvailable);
         }
@@ -342,10 +346,11 @@ impl Txn {
 
     pub fn fee_payer_meta(&self) -> Option<&AccountMeta> {
         let proof = self.fee_payer_proof().ok()?;
-        let meta = unsafe {
-            let ptr = (proof as *const StateProof as *const u8).add(proof.footprint_unchecked());
-            &*(ptr as *const AccountMeta)
-        };
+        let proof_start = self
+            .instr_data()?
+            .as_ptr_range()
+            .end;
+        let meta = unsafe { &*(proof_start.add(proof.footprint()) as *const AccountMeta) };
         Some(meta)
     }
 

@@ -25,11 +25,11 @@ pub mod program_utils {
     use crate::types::shadow_stack::get_shadow_stack;
 
     pub fn revert(error_code: u64) -> ! {
-        syscall::sys_exit(error_code, 1);
+        syscall::sys_exit(error_code, 1)
     }
 
     pub fn succeed(return_code: u64) -> ! {
-        syscall::sys_exit(return_code, 0);
+        syscall::sys_exit(return_code, 0)
     }
 
     #[inline(always)]
@@ -38,7 +38,7 @@ pub mod program_utils {
         unsafe {
             core::arch::asm!("mv {}, sp", out(reg) sp);
         }
-        let (_, addr) = syscall::sys_increment_anonymous_segment_sz(sp as *mut (), delta);
+        let (_, addr) = unsafe { syscall::sys_increment_anonymous_segment_sz(sp as *mut (), delta) };
         addr
     }
 
@@ -175,13 +175,15 @@ pub mod program_utils {
         false
     }
 
-    pub fn account_create(account_idx: u64, seed: &[u8; syscall::SEED_SIZE], proof: &StateProof) -> syscall::SyscallCode {
-        syscall::sys_account_create(
-            account_idx,
-            seed,
-            proof as *const StateProof as *const u8,
-            unsafe { proof.footprint_unchecked() } as u64
-        )
+    pub fn account_create(account_idx: u64, seed: &[u8; syscall::SEED_SIZE], proof: StateProof<'_>) -> syscall::SyscallCode {
+        unsafe {
+            syscall::sys_account_create(
+                account_idx,
+                seed,
+                proof.as_ptr(),
+                proof.footprint() as u64
+            )
+        }
     }
 }
 
@@ -192,7 +194,7 @@ macro_rules! tvm_println {
         use core::fmt::Write;
         let mut buf: $crate::heapless::String<{ $size }> = $crate::heapless::String::new();
         writeln!(&mut buf, $($arg)*).expect("tvm_println! failed to write");
-        $crate::syscall::sys_log(buf.as_ptr(), buf.len() as u64);
+        unsafe { $crate::syscall::sys_log(buf.as_ptr(), buf.len() as u64) };
     }};
 
     // Default buffer size
@@ -200,7 +202,7 @@ macro_rules! tvm_println {
         use core::fmt::Write;
         let mut buf: $crate::heapless::String<1024> = $crate::heapless::String::new();
         writeln!(&mut buf, $($arg)*).expect("tvm_println! failed to write");
-        $crate::syscall::sys_log(buf.as_ptr(), buf.len() as u64);
+        unsafe { $crate::syscall::sys_log(buf.as_ptr(), buf.len() as u64) };
     }};
 }
 

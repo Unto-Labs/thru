@@ -203,11 +203,11 @@ emit_slot_advancement_transfers() {
   local transfers=256
   local half=$((transfers / 2))
   for ((i = 0; i < half; i++)); do
-    if ! with_cli_env "$THRU_CLI_BIN" --json transfer red_queen joe "$ADVANCE_TRANSFERS_VALUE" >/dev/null 2>&1; then
-      die "Slot advancement transfer red_queen->joe failed on iteration $((i + 1))/$half"
-    fi
     if ! with_cli_env "$THRU_CLI_BIN" --json transfer joe red_queen "$ADVANCE_TRANSFERS_VALUE" >/dev/null 2>&1; then
       die "Slot advancement transfer joe->red_queen failed on iteration $((i + 1))/$half"
+    fi
+    if ! with_cli_env "$THRU_CLI_BIN" --json transfer red_queen joe "$ADVANCE_TRANSFERS_VALUE" >/dev/null 2>&1; then
+      die "Slot advancement transfer red_queen->joe failed on iteration $((i + 1))/$half"
     fi
   done
   log "Completed ${transfers} slot advancement transfers"
@@ -318,7 +318,9 @@ run_cleanup() {
 check_prerequisites() {
   log_section "Prerequisite validation"
   require_command jq
-  require_command cargo
+  if [[ "$SKIP_BUILD" != "1" ]]; then
+    require_command cargo
+  fi
   require_command git
 
   if [[ "$SKIP_BUILD" != "1" ]]; then
@@ -348,6 +350,9 @@ keys:
 uploader_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIC"
 manager_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQE"
 token_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKqq"
+wthru_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcH"
+name_service_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUF"
+thru_registrar_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYG"
 timeout_seconds: 120
 max_retries: 5
 auth_token:

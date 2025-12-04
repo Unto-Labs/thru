@@ -62,6 +62,7 @@ mod imp {
     #[inline(always)]
     pub fn sys_set_account_data_writable(account_idx: u64) -> SyscallCode {
         let mut a0 = account_idx;
+        // SAFETY: If the account index is invalid, this will fail gracefully.
         unsafe {
             asm!(
                 "ecall",
@@ -74,56 +75,50 @@ mod imp {
     }
 
     #[inline(always)]
-    pub fn sys_account_transfer(from_idx: u64, to_idx: u64, amount: u64) -> SyscallCode {
+    pub unsafe fn sys_account_transfer(from_idx: u64, to_idx: u64, amount: u64) -> SyscallCode {
         let mut a0 = from_idx;
-        unsafe {
-            asm!(
-                "ecall",
-                inout("a0") a0,
-                in("a1") to_idx,
-                in("a2") amount,
-                in("a7") ACCOUNT_TRANSFER,
-                options(nostack, preserves_flags),
-            );
-        }
+        asm!(
+            "ecall",
+            inout("a0") a0,
+            in("a1") to_idx,
+            in("a2") amount,
+            in("a7") ACCOUNT_TRANSFER,
+            options(nostack, preserves_flags),
+        );
         SyscallCode::from_i64(a0 as i64)
     }
 
     #[inline(always)]
-    pub fn sys_set_anonymous_segment_sz(addr: *mut u8) -> SyscallCode {
+    pub unsafe fn sys_set_anonymous_segment_sz(addr: *mut u8) -> SyscallCode {
         let mut a0 = addr as u64;
-        unsafe {
-            asm!(
-                "ecall",
-                inout("a0") a0,
-                in("a7") SET_ANONYMOUS_SEGMENT_SZ,
-                options(nostack, preserves_flags),
-            );
-        }
+        asm!(
+            "ecall",
+            inout("a0") a0,
+            in("a7") SET_ANONYMOUS_SEGMENT_SZ,
+            options(nostack, preserves_flags),
+        );
         SyscallCode::from_i64(a0 as i64)
     }
 
     #[inline(always)]
-    pub fn sys_increment_anonymous_segment_sz(
+    pub unsafe fn sys_increment_anonymous_segment_sz(
         ptr: *mut (),
         delta: u64,
     ) -> (SyscallCode, *mut u8) {
         let mut a0 = ptr as u64;
         let mut a1 = delta;
-        unsafe {
-            asm!(
-                "ecall",
-                inout("a0") a0,
-                inout("a1") a1,
-                in("a7") INCREMENT_ANONYMOUS_SEGMENT_SZ,
-                options(nostack, preserves_flags),
-            );
-        }
+        asm!(
+            "ecall",
+            inout("a0") a0,
+            inout("a1") a1,
+            in("a7") INCREMENT_ANONYMOUS_SEGMENT_SZ,
+            options(nostack, preserves_flags),
+        );
         (SyscallCode::from_i64(a0 as i64), a1 as *mut u8)
     }
 
     #[inline(always)]
-    pub fn sys_account_create(
+    pub unsafe fn sys_account_create(
         account_idx: u64,
         seed: &[u8; SEED_SIZE],
         proof: *const u8,
@@ -135,25 +130,23 @@ mod imp {
         let seed2 = u64::from_le_bytes(seed[8..16].try_into().unwrap());
         let seed3 = u64::from_le_bytes(seed[16..24].try_into().unwrap());
         let seed4 = u64::from_le_bytes(seed[24..32].try_into().unwrap());
-        unsafe {
-            asm!(
-                "ecall",
-                inout("a0") a0,
-                in("a1") seed1,
-                in("a2") seed2,
-                in("a3") seed3,
-                in("a4") seed4,
-                in("a5") proof as u64,
-                in("a6") proof_sz,
-                in("a7") ACCOUNT_CREATE,
-                options(nostack, preserves_flags),
-            );
-        }
+        asm!(
+            "ecall",
+            inout("a0") a0,
+            in("a1") seed1,
+            in("a2") seed2,
+            in("a3") seed3,
+            in("a4") seed4,
+            in("a5") proof as u64,
+            in("a6") proof_sz,
+            in("a7") ACCOUNT_CREATE,
+            options(nostack, preserves_flags),
+        );
         SyscallCode::from_i64(a0 as i64)
     }
 
     #[inline(always)]
-    pub fn sys_account_create_ephemeral(
+    pub unsafe fn sys_account_create_ephemeral(
         account_idx: u64,
         seed: &[u8; SEED_SIZE],
     ) -> SyscallCode {
@@ -163,68 +156,60 @@ mod imp {
         let seed2 = u64::from_le_bytes(seed[8..16].try_into().unwrap());
         let seed3 = u64::from_le_bytes(seed[16..24].try_into().unwrap());
         let seed4 = u64::from_le_bytes(seed[24..32].try_into().unwrap());
-        unsafe {
-            asm!(
-                "ecall",
-                inout("a0") a0,
-                in("a1") seed1,
-                in("a2") seed2,
-                in("a3") seed3,
-                in("a4") seed4,
-                in("a7") ACCOUNT_CREATE_EPHEMERAL,
-                options(nostack, preserves_flags),
-            );
-        }
+        asm!(
+            "ecall",
+            inout("a0") a0,
+            in("a1") seed1,
+            in("a2") seed2,
+            in("a3") seed3,
+            in("a4") seed4,
+            in("a7") ACCOUNT_CREATE_EPHEMERAL,
+            options(nostack, preserves_flags),
+        );
         SyscallCode::from_i64(a0 as i64)
     }
 
     #[inline(always)]
-    pub fn sys_account_delete(account_idx: u64) -> SyscallCode {
+    pub unsafe fn sys_account_delete(account_idx: u64) -> SyscallCode {
         let mut a0 = account_idx;
-        unsafe {
-            asm!(
-                "ecall",
-                inout("a0") a0,
-                in("a7") ACCOUNT_DELETE,
-                options(nostack, preserves_flags),
-            );
-        }
+        asm!(
+            "ecall",
+            inout("a0") a0,
+            in("a7") ACCOUNT_DELETE,
+            options(nostack, preserves_flags),
+        );
         SyscallCode::from_i64(a0 as i64)
     }
 
     #[inline(always)]
-    pub fn sys_account_resize(account_idx: u64, new_size: u64) -> SyscallCode {
+    pub unsafe fn sys_account_resize(account_idx: u64, new_size: u64) -> SyscallCode {
         let mut a0 = account_idx;
-        unsafe {
-            asm!(
-                "ecall",
-                inout("a0") a0,
-                in("a1") new_size,
-                in("a7") ACCOUNT_RESIZE,
-                options(nostack, preserves_flags),
-            );
-        }
+        asm!(
+            "ecall",
+            inout("a0") a0,
+            in("a1") new_size,
+            in("a7") ACCOUNT_RESIZE,
+            options(nostack, preserves_flags),
+        );
         SyscallCode::from_i64(a0 as i64)
     }
 
     #[inline(always)]
-    pub fn sys_account_compress(account_idx: u64, proof: *const u8, proof_sz: u64) -> SyscallCode {
+    pub unsafe fn sys_account_compress(account_idx: u64, proof: *const u8, proof_sz: u64) -> SyscallCode {
         let mut a0 = account_idx;
-        unsafe {
-            asm!(
-                "ecall",
-                inout("a0") a0,
-                in("a1") proof as u64,
-                in("a2") proof_sz,
-                in("a7") ACCOUNT_COMPRESS,
-                options(nostack, preserves_flags),
-            );
-        }
+        asm!(
+            "ecall",
+            inout("a0") a0,
+            in("a1") proof as u64,
+            in("a2") proof_sz,
+            in("a7") ACCOUNT_COMPRESS,
+            options(nostack, preserves_flags),
+        );
         SyscallCode::from_i64(a0 as i64)
     }
 
     #[inline(always)]
-    pub fn sys_account_decompress(
+    pub unsafe fn sys_account_decompress(
         account_idx: u64,
         meta: *const u8,
         data: *const u8,
@@ -232,44 +217,41 @@ mod imp {
         proof_sz: u64,
     ) -> SyscallCode {
         let mut a0 = account_idx;
-        unsafe {
-            asm!(
-                "ecall",
-                inout("a0") a0,
-                in("a1") meta as u64,
-                in("a2") data as u64,
-                in("a3") proof as u64,
-                in("a4") proof_sz,
-                in("a7") ACCOUNT_DECOMPRESS,
-                options(nostack, preserves_flags),
-            );
-        }
+        asm!(
+            "ecall",
+            inout("a0") a0,
+            in("a1") meta as u64,
+            in("a2") data as u64,
+            in("a3") proof as u64,
+            in("a4") proof_sz,
+            in("a7") ACCOUNT_DECOMPRESS,
+            options(nostack, preserves_flags),
+        );
         SyscallCode::from_i64(a0 as i64)
     }
 
     #[inline(always)]
-    pub fn sys_invoke(
+    pub unsafe fn sys_invoke(
         instr_data: *const u8,
         instr_data_sz: u64,
         program_account_idx: u16,
     ) -> (SyscallCode, SyscallCode) {
         let mut a0 = instr_data as u64;
         let mut a1 = instr_data_sz as u64;
-        unsafe {
-            asm!(
-                "ecall",
-                inout("a0") a0,
-                inout("a1") a1,
-                in("a2") program_account_idx as u64,
-                in("a7") INVOKE,
-                options(nostack, preserves_flags),
-            );
-        }
+        asm!(
+            "ecall",
+            inout("a0") a0,
+            inout("a1") a1,
+            in("a2") program_account_idx as u64,
+            in("a7") INVOKE,
+            options(nostack, preserves_flags),
+        );
         (SyscallCode::from_i64(a0 as i64), SyscallCode::from_i64(a1 as i64))
     }
 
     #[inline(always)]
     pub fn sys_exit(exit_code: u64, revert: u64) -> ! {
+        // SAFETY: Any values are valid for exit_code and revert.
         unsafe {
             asm!(
                 "ecall",
@@ -282,69 +264,61 @@ mod imp {
     }
 
     #[inline(always)]
-    pub fn sys_log(data: *const u8, data_sz: u64) -> u64 {
+    pub unsafe fn sys_log(data: *const u8, data_sz: u64) -> u64 {
         let mut a0 = data as u64;
-        unsafe {
-            asm!(
-                "ecall",
-                inout("a0") a0,
-                in("a1") data_sz,
-                in("a7") LOG,
-                options(nostack, preserves_flags),
-            );
-        }
+        asm!(
+            "ecall",
+            inout("a0") a0,
+            in("a1") data_sz,
+            in("a7") LOG,
+            options(nostack, preserves_flags),
+        );
         a0
     }
 
     #[inline(always)]
-    pub fn sys_emit_event(data: *const u8, data_sz: u64) -> u64 {
+    pub unsafe fn sys_emit_event(data: *const u8, data_sz: u64) -> u64 {
         let mut a0 = data as u64;
-        unsafe {
-            asm!(
-                "ecall",
-                inout("a0") a0,
-                in("a1") data_sz,
-                in("a7") EMIT_EVENT,
-                options(nostack, preserves_flags),
-            );
-        }
+        asm!(
+            "ecall",
+            inout("a0") a0,
+            in("a1") data_sz,
+            in("a7") EMIT_EVENT,
+            options(nostack, preserves_flags),
+        );
         a0
     }
 
     #[inline(always)]
-    pub fn sys_account_set_flags(account_idx: u16, flags: u8) -> u64 {
+    pub unsafe fn sys_account_set_flags(account_idx: u16, flags: u8) -> u64 {
         let mut a0 = account_idx as u64;
-        unsafe {
-            asm!(
-                "ecall",
-                inout("a0") a0,
-                in("a1") flags as u64,
-                in("a7") ACCOUNT_SET_FLAGS,
-                options(nostack, preserves_flags),
-            );
-        }
+        asm!(
+            "ecall",
+            inout("a0") a0,
+            in("a1") flags as u64,
+            in("a7") ACCOUNT_SET_FLAGS,
+            options(nostack, preserves_flags),
+        );
         a0
     }
 
     #[inline(always)]
-    pub fn sys_account_create_eoa(
+    pub unsafe fn sys_account_create_eoa(
         account_idx: u64,
         signature: &Signature,
         proof: *const u8,
         proof_sz: u64,
     ) -> SyscallCode {
         let mut a0 = account_idx;
-        unsafe {
-            asm!(
-                "ecall",
-                inout("a0") a0,
-                in("a1") signature.0.as_ptr() as u64,
-                in("a2") proof as u64,
-                in("a3") proof_sz,
-                in("a7") ACCOUNT_CREATE_EOA,
-                options(nostack, preserves_flags),
-            );
-        }
+        asm!(
+            "ecall",
+            inout("a0") a0,
+            in("a1") signature.0.as_ptr() as u64,
+            in("a2") proof as u64,
+            in("a3") proof_sz,
+            in("a7") ACCOUNT_CREATE_EOA,
+            options(nostack, preserves_flags),
+        );
         SyscallCode::from_i64(a0 as i64)
     }
 }

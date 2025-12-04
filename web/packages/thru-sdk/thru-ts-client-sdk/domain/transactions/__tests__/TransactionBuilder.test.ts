@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { generateTestAddress, generateTestPubkey } from "../../../__tests__/helpers/test-utils";
 import { Transaction } from "../Transaction";
 import { TransactionBuilder } from "../TransactionBuilder";
+import { Signature } from "../../primitives";
 import type { BuildTransactionParams } from "../types";
 
 describe("TransactionBuilder", () => {
@@ -37,8 +38,8 @@ describe("TransactionBuilder", () => {
       const transaction = builder.build(params);
       
       expect(transaction).toBeInstanceOf(Transaction);
-      expect(transaction.feePayer).toEqual(params.feePayer.publicKey);
-      expect(transaction.program).toEqual(params.program);
+      expect(transaction.feePayer.toBytes()).toEqual(params.feePayer.publicKey as Uint8Array);
+      expect(transaction.program.toBytes()).toEqual(params.program as Uint8Array);
       expect(transaction.fee).toBe(params.header.fee);
       expect(transaction.nonce).toBe(params.header.nonce);
       expect(transaction.startSlot).toBe(params.header.startSlot);
@@ -82,7 +83,7 @@ describe("TransactionBuilder", () => {
       
       const transaction = builder.build(params);
       
-      expect(transaction.program).toEqual(program);
+      expect(transaction.program.toBytes()).toEqual(program);
     });
 
     it("should accept program as ta- address string", () => {
@@ -95,7 +96,7 @@ describe("TransactionBuilder", () => {
       
       const transaction = builder.build(params);
       
-      expect(transaction.program.length).toBe(32);
+      expect(transaction.program.toBytes().length).toBe(32);
     });
 
     it("should accept program as hex string", () => {
@@ -111,7 +112,7 @@ describe("TransactionBuilder", () => {
       
       const transaction = builder.build(params);
       
-      expect(transaction.program).toEqual(programBytes);
+      expect(transaction.program.toBytes()).toEqual(programBytes);
     });
 
     it("should normalize and sort accounts", () => {
@@ -131,9 +132,9 @@ describe("TransactionBuilder", () => {
       
       expect(transaction.readWriteAccounts).toHaveLength(3);
       // Should be sorted
-      expect(transaction.readWriteAccounts[0]).toEqual(account3); // 0x02
-      expect(transaction.readWriteAccounts[1]).toEqual(account1); // 0x03
-      expect(transaction.readWriteAccounts[2]).toEqual(account2); // 0x04
+      expect(transaction.readWriteAccounts[0].toBytes()).toEqual(account3); // 0x02
+      expect(transaction.readWriteAccounts[1].toBytes()).toEqual(account1); // 0x03
+      expect(transaction.readWriteAccounts[2].toBytes()).toEqual(account2); // 0x04
     });
 
     it("should deduplicate accounts", () => {
@@ -151,7 +152,7 @@ describe("TransactionBuilder", () => {
       const transaction = builder.build(params);
       
       expect(transaction.readWriteAccounts).toHaveLength(1);
-      expect(transaction.readWriteAccounts[0]).toEqual(account1);
+      expect(transaction.readWriteAccounts[0].toBytes()).toEqual(account1);
     });
 
     it("should handle read-only accounts", () => {
@@ -168,7 +169,7 @@ describe("TransactionBuilder", () => {
       const transaction = builder.build(params);
       
       expect(transaction.readOnlyAccounts).toHaveLength(1);
-      expect(transaction.readOnlyAccounts[0]).toEqual(readOnlyAccount);
+      expect(transaction.readOnlyAccounts[0].toBytes()).toEqual(readOnlyAccount);
     });
 
     it("should handle both read-write and read-only accounts", () => {
@@ -342,8 +343,8 @@ describe("TransactionBuilder", () => {
       const result = await builder.buildAndSign(params);
       
       expect(result.transaction).toBeInstanceOf(Transaction);
-      expect(result.signature).toBeInstanceOf(Uint8Array);
-      expect(result.signature.length).toBe(64);
+      expect(result.signature).toBeInstanceOf(Signature);
+      expect(result.signature.toBytes().length).toBe(64);
       expect(result.rawTransaction).toBeInstanceOf(Uint8Array);
       expect(result.rawTransaction.length).toBeGreaterThan(0);
     });
@@ -381,7 +382,7 @@ describe("TransactionBuilder", () => {
       
       // Signature should be in first 64 bytes of raw transaction
       const signatureInRaw = result.rawTransaction.slice(0, 64);
-      expect(signatureInRaw).toEqual(result.signature);
+      expect(signatureInRaw).toEqual(result.signature.toBytes());
     });
 
     it("should create valid wire format", async () => {

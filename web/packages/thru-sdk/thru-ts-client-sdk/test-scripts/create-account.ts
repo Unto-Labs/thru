@@ -1,6 +1,7 @@
 import { bytesToHex } from "@noble/hashes/utils";
 import { createThruClient } from "../client";
 import { ConsensusStatus } from "../proto/thru/common/v1/consensus_pb";
+import { Pubkey } from "../sdk";
 
 
 const sdk = createThruClient({
@@ -41,7 +42,7 @@ async function run(): Promise<void> {
 
     await fetchAccountSnapshot("Pre-create", targetAccountAddress);
 
-    const feePayerPublicKey = sdk.helpers.decodeAddress(targetAccountAddress);
+    const feePayerPublicKey = Pubkey.from(targetAccountAddress).toThruFmt();
     const feePayerPrivateKey = targetAccountPrivateKey
 
     const transaction = await sdk.accounts.create({

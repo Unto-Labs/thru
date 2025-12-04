@@ -1,9 +1,6 @@
 import { decodeBase64 } from "./encoding";
 
-export type BytesLike = Uint8Array | string;
-export type Pubkey = BytesLike;
-
-export function ensureBytes(value: BytesLike | undefined, field: string): Uint8Array {
+export function ensureBytes(value: Uint8Array | string | undefined, field: string): Uint8Array {
     if (value instanceof Uint8Array) {
         if (value.length === 0) {
             throw new Error(`${field} cannot be empty`);

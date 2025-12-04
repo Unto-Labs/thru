@@ -1,12 +1,8 @@
-import { create } from "@bufbuild/protobuf";
-import { signAsync } from "@noble/ed25519";
-import { PubkeySchema } from "../../proto/thru/common/v1/primitives_pb";
+import { signWithDomain, SignatureDomain } from "./domain-signing";
 import {
-    TransactionEventSchema,
-    TransactionExecutionResultSchema,
     TransactionVmError,
     type Transaction as CoreTransaction,
-    type TransactionExecutionResult as CoreTransactionExecutionResult,
+    type TransactionExecutionResult as CoreTransactionExecutionResult
 } from "../../proto/thru/core/v1/transaction_pb";
 import {
     ACCOUNT_META_FOOTPRINT,
@@ -23,8 +19,8 @@ import {
     TXN_MAX_ACCOUNTS,
     TXN_VERSION_V1,
 } from "../../wire-format";
-import type { AccountAddress, Bytes64, OptionalProofs, TransactionAccountsInput, TransactionHeaderInput } from "./types";
-import { protoPubkeyToAccountAddress } from "./utils";
+import { Pubkey, PubkeyInput, Signature } from "../primitives";
+import type { OptionalProofs, TransactionAccountsInput, TransactionHeaderInput } from "./types";
 
 const DEFAULT_FLAGS = 0;
 const SIGNATURE_PREFIX_SIZE = SIGNATURE_SIZE;
@@ -43,7 +39,7 @@ export interface TransactionExecutionEvent {
     eventId: string;
     callIdx: number;
     programIdx: number;
-    program?: AccountAddress;
+    program?: Pubkey;
     payload: Uint8Array;
 }
 
@@ -57,15 +53,15 @@ export interface TransactionExecutionResultData {
     pagesUsed: number;
     eventsCount: number;
     eventsSize: number;
-    readwriteAccounts: AccountAddress[];
-    readonlyAccounts: AccountAddress[];
+    readwriteAccounts: Pubkey[];
+    readonlyAccounts: Pubkey[];
     events?: TransactionExecutionEvent[];
 }
 
 export class Transaction {
     readonly version: number;
-    readonly feePayer: AccountAddress;
-    readonly program: AccountAddress;
+    readonly feePayer: Pubkey;
+    readonly program: Pubkey;
 
     readonly fee: bigint;
     readonly nonce: bigint;
@@ -77,8 +73,8 @@ export class Transaction {
     readonly requestedMemoryUnits: number;
     readonly flags: number;
 
-    readonly readWriteAccounts: AccountAddress[];
-    readonly readOnlyAccounts: AccountAddress[];
+    readonly readWriteAccounts: Pubkey[];
+    readonly readOnlyAccounts: Pubkey[];
 
     readonly instructionData?: Uint8Array;
     readonly instructionDataSize?: number;
@@ -89,12 +85,12 @@ export class Transaction {
     slot?: bigint;
     blockOffset?: number;
 
-    private signature?: Bytes64;
+    private signature?: Signature;
 
     constructor(params: {
         version?: number;
-        feePayer: AccountAddress;
-        program: AccountAddress;
+        feePayer: PubkeyInput;
+        program: PubkeyInput;
         header: TransactionHeaderInput;
         accounts?: TransactionAccountsInput;
         instructionData?: Uint8Array;
@@ -102,8 +98,8 @@ export class Transaction {
         proofs?: OptionalProofs;
     }) {
         this.version = params.version ?? TXN_VERSION_V1;
-        this.feePayer = copyKey(params.feePayer);
-        this.program = copyKey(params.program);
+        this.feePayer = Pubkey.from(params.feePayer);
+        this.program = Pubkey.from(params.program);
 
         this.fee = params.header.fee;
         this.nonce = params.header.nonce;
@@ -116,10 +112,10 @@ export class Transaction {
         this.flags = params.header.flags ?? DEFAULT_FLAGS;
 
         this.readWriteAccounts = params.accounts?.readWriteAccounts
-            ? params.accounts.readWriteAccounts.map(copyKey)
+            ? params.accounts.readWriteAccounts.map(Pubkey.from)
             : [];
         this.readOnlyAccounts = params.accounts?.readOnlyAccounts
-            ? params.accounts.readOnlyAccounts.map(copyKey)
+            ? params.accounts.readOnlyAccounts.map(Pubkey.from)
             : [];
 
         this.instructionData = params.instructionData ? new Uint8Array(params.instructionData) : undefined;
@@ -216,14 +212,14 @@ export class Transaction {
             );
         }
 
-        const readWriteAccounts: AccountAddress[] = [];
+        const readWriteAccounts: Uint8Array[] = [];
         for (let i = 0; i < readwriteAccountsCount; i++) {
             Transaction.ensureAvailable(data.length, offset, PUBKEY_SIZE, "read-write accounts");
             readWriteAccounts.push(data.slice(offset, offset + PUBKEY_SIZE));
             offset += PUBKEY_SIZE;
         }
 
-        const readOnlyAccounts: AccountAddress[] = [];
+        const readOnlyAccounts: Uint8Array[] = [];
         for (let i = 0; i < readonlyAccountsCount; i++) {
             Transaction.ensureAvailable(data.length, offset, PUBKEY_SIZE, "read-only accounts");
             readOnlyAccounts.push(data.slice(offset, offset + PUBKEY_SIZE));
@@ -254,8 +250,8 @@ export class Transaction {
 
         const transaction = new Transaction({
             version,
-            feePayer,
-            program,
+            feePayer: Pubkey.from(feePayer),
+            program: Pubkey.from(program),
             header: {
                 fee,
                 nonce,
@@ -282,7 +278,7 @@ export class Transaction {
         });
 
         if (hasSignature) {
-            transaction.setSignature(signatureBytes);
+            transaction.setSignature(Signature.from(signatureBytes));
         }
 
         return { transaction, size: offset };
@@ -310,8 +306,8 @@ export class Transaction {
         if (!transaction) {
             let parsed:
                 | {
-                      readWriteAccounts: AccountAddress[];
-                      readOnlyAccounts: AccountAddress[];
+                      readWriteAccounts: Uint8Array[];
+                      readOnlyAccounts: Uint8Array[];
                       instructionData?: Uint8Array;
                       feePayerStateProof?: Uint8Array;
                       feePayerAccountMetaRaw?: Uint8Array;
@@ -344,8 +340,8 @@ export class Transaction {
 
             if (!parsed) {
                 parsed = {
-                    readWriteAccounts: [] as AccountAddress[],
-                    readOnlyAccounts: [] as AccountAddress[],
+                    readWriteAccounts: [] as Uint8Array[],
+                    readOnlyAccounts: [] as Uint8Array[],
                     instructionData: undefined,
                     feePayerStateProof: undefined,
                     feePayerAccountMetaRaw: undefined,
@@ -354,8 +350,8 @@ export class Transaction {
 
             transaction = new Transaction({
                 version: header.version ?? TXN_VERSION_V1,
-                feePayer: protoPubkeyToAccountAddress(header.feePayerPubkey),
-                program: protoPubkeyToAccountAddress(header.programPubkey),
+                feePayer: Pubkey.fromProtoPubkey(header.feePayerPubkey),
+                program: Pubkey.fromProtoPubkey(header.programPubkey),
                 header: {
                     fee: header.fee ?? 0n,
                     nonce: header.nonce ?? 0n,
@@ -384,7 +380,7 @@ export class Transaction {
 
         const signatureBytes = proto.signature?.value ?? header.feePayerSignature?.value ?? undefined;
         if (signatureBytes && signatureBytes.length === SIGNATURE_SIZE && hasNonZeroBytes(signatureBytes)) {
-            transaction.setSignature(signatureBytes);
+            transaction.setSignature(Signature.from(signatureBytes));
         }
 
         if (proto.executionResult) {
@@ -401,28 +397,35 @@ export class Transaction {
         return transaction;
     }
 
-    getSignature(): Uint8Array | undefined {
-        return this.signature ? new Uint8Array(this.signature) : undefined;
+    getSignature(): Signature | undefined {
+        return this.signature;
     }
 
-    setSignature(signature: Bytes64): void {
-        if (signature.length !== SIGNATURE_SIZE) {
-            throw new Error(`Signature must contain ${SIGNATURE_SIZE} bytes`);
-        }
-        this.signature = new Uint8Array(signature);
+    setSignature(signature: Signature): void {
+        this.signature = signature;
     }
 
-    async sign(privateKey: Uint8Array): Promise<Bytes64> {
+    async sign(privateKey: Uint8Array): Promise<Signature> {
         if (privateKey.length !== 32) {
             throw new Error("Fee payer private key must contain 32 bytes");
         }
         const payload = this.toWireForSigning();
-        const signature = await signAsync(payload, privateKey);
+        
+        // Use domain-separated signing with transaction domain
+        // Public key parameter is not needed for the simple approach, but kept for API compatibility
+        const publicKey = new Uint8Array(32); // Dummy, not used in simple approach
+        const signature = await signWithDomain(
+            payload,
+            privateKey,
+            publicKey,
+            SignatureDomain.TXN,
+        );
+        
         if (signature.length !== SIGNATURE_SIZE) {
             throw new Error("ed25519 signing produced an invalid signature");
         }
-        this.signature = signature;
-        return new Uint8Array(signature);
+        this.signature = Signature.from(signature);
+        return this.signature;
     }
 
     toWireForSigning(): Uint8Array {
@@ -432,7 +435,7 @@ export class Transaction {
     }
 
     toWire(): Uint8Array {
-        const header = this.createHeader(this.signature);
+        const header = this.createHeader(this.signature?.toBytes());
         return this.buildWirePayload(new Uint8Array(header));
     }
 
@@ -493,10 +496,10 @@ export class Transaction {
 
         offset += 4; // padding
 
-        headerBytes.set(this.feePayer, offset);
+        headerBytes.set(this.feePayer.toBytes(), offset);
         offset += PUBKEY_SIZE;
 
-        headerBytes.set(this.program, offset);
+        headerBytes.set(this.program.toBytes(), offset);
 
         return buffer;
     }
@@ -513,8 +516,8 @@ export class Transaction {
         result.set(headerPrefix, 0);
 
         let offset = headerPrefix.length;
-        offset = appendAccountList(result, offset, this.readWriteAccounts);
-        offset = appendAccountList(result, offset, this.readOnlyAccounts);
+        offset = appendAccountList(result, offset, this.readWriteAccounts.map(account => account.toBytes()));
+        offset = appendAccountList(result, offset, this.readOnlyAccounts.map(account => account.toBytes()));
         if (this.instructionData) {
             result.set(this.instructionData, offset);
             offset += this.instructionData.length;
@@ -538,22 +541,22 @@ export class Transaction {
         instructionDataSize: number,
         flags: number,
     ): {
-        readWriteAccounts: AccountAddress[];
-        readOnlyAccounts: AccountAddress[];
+        readWriteAccounts: Uint8Array[];
+        readOnlyAccounts: Uint8Array[];
         instructionData?: Uint8Array;
         feePayerStateProof?: Uint8Array;
         feePayerAccountMetaRaw?: Uint8Array;
     } {
         let offset = 0;
 
-        const readWriteAccounts: AccountAddress[] = [];
+        const readWriteAccounts: Uint8Array[] = [];
         for (let i = 0; i < readwriteCount; i++) {
             this.ensureAvailable(body.length, offset, PUBKEY_SIZE, "read-write accounts");
             readWriteAccounts.push(body.slice(offset, offset + PUBKEY_SIZE));
             offset += PUBKEY_SIZE;
         }
 
-        const readOnlyAccounts: AccountAddress[] = [];
+        const readOnlyAccounts: Uint8Array[] = [];
         for (let i = 0; i < readonlyCount; i++) {
             this.ensureAvailable(body.length, offset, PUBKEY_SIZE, "read-only accounts");
             readOnlyAccounts.push(body.slice(offset, offset + PUBKEY_SIZE));
@@ -655,56 +658,22 @@ export class Transaction {
             pagesUsed: proto.pagesUsed ?? 0,
             eventsCount: proto.eventsCount ?? 0,
             eventsSize: proto.eventsSize ?? 0,
-            readwriteAccounts: proto.readwriteAccounts.map((account) => protoPubkeyToAccountAddress(account)),
-            readonlyAccounts: proto.readonlyAccounts.map((account) => protoPubkeyToAccountAddress(account)),
+            readwriteAccounts: proto.readwriteAccounts.map((account) => Pubkey.fromProtoPubkey(account)),
+            readonlyAccounts: proto.readonlyAccounts.map((account) => Pubkey.fromProtoPubkey(account)),
             events: proto.events.length
                 ? proto.events.map((event) => ({
                       eventId: event.eventId,
                       callIdx: event.callIdx,
                       programIdx: event.programIdx,
-                      program: event.program ? protoPubkeyToAccountAddress(event.program) : undefined,
+                      program: event.program ? Pubkey.fromProtoPubkey(event.program) : undefined,
                       payload: new Uint8Array(event.payload ?? new Uint8Array(0)),
                   }))
                 : undefined,
         };
     }
-
-    private static convertExecutionResultToProto(
-        result: TransactionExecutionResultData,
-    ): CoreTransactionExecutionResult {
-        return create(TransactionExecutionResultSchema, {
-            consumedComputeUnits: result.consumedComputeUnits,
-            consumedMemoryUnits: result.consumedMemoryUnits,
-            consumedStateUnits: result.consumedStateUnits,
-            userErrorCode: result.userErrorCode,
-            vmError: result.vmError,
-            executionResult: result.executionResult,
-            pagesUsed: result.pagesUsed,
-            eventsCount: result.eventsCount,
-            eventsSize: result.eventsSize,
-            readwriteAccounts: result.readwriteAccounts.map((account) =>
-                create(PubkeySchema, { value: new Uint8Array(account) }),
-            ),
-            readonlyAccounts: result.readonlyAccounts.map((account) =>
-                create(PubkeySchema, { value: new Uint8Array(account) }),
-            ),
-            events:
-                result.events?.map((event) =>
-                    create(TransactionEventSchema, {
-                        eventId: event.eventId,
-                        callIdx: event.callIdx,
-                        programIdx: event.programIdx,
-                        program: event.program
-                            ? create(PubkeySchema, { value: new Uint8Array(event.program) })
-                            : undefined,
-                        payload: new Uint8Array(event.payload),
-                    }),
-                ) ?? [],
-        });
-    }
 }
 
-function appendAccountList(target: Uint8Array, start: number, accounts: AccountAddress[]): number {
+function appendAccountList(target: Uint8Array, start: number, accounts: Uint8Array[]): number {
     let offset = start;
     for (const account of accounts) {
         target.set(account, offset);
@@ -732,13 +701,6 @@ function ensureBigUint64(value: bigint): bigint {
         throw new Error("Value must fit within uint64 range");
     }
     return value;
-}
-
-function copyKey(source: AccountAddress): AccountAddress {
-    if (source.length !== PUBKEY_SIZE) {
-        throw new Error("Public keys must contain 32 bytes");
-    }
-    return new Uint8Array(source);
 }
 
 function countSetBits(bytes: Uint8Array): number {

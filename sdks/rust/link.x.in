@@ -72,5 +72,9 @@ SECTIONS
     *(.note.GNU-stack)
     *(.comment)
     *(.riscv.attributes)
+    *(.bss)
+    *(.bss.*)
+    *(.sbss)
+    *(.sbss.*)
   }
 }

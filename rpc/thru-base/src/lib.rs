@@ -9,6 +9,7 @@ pub mod tn_account;
 pub mod tn_block_packet;
 pub mod tn_public_address;
 pub mod tn_runtime_utils;
+pub mod tn_signature;
 pub mod tn_signature_encoding;
 pub mod tn_state_proof;
 pub mod tn_tools;

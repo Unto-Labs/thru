@@ -38,7 +38,7 @@ option swift_prefix = "THUS";
 // - params.u64 (int64): Generic 64-bit value for numeric comparisons
 //   Examples:
 //     block.block.header.max_compute_units > params.u64
-//     block.block.header.price >= params.u64
+//     block.block.header.bond_amount_lock_up >= params.u64
 //
 // - params.producer (bytes|Pubkey): Producer pubkey for filtering
 //   Examples:
@@ -49,12 +49,12 @@ option swift_prefix = "THUS";
 //   block.block.header.slot, block.block.header.version,
 //   block.block.header.start_slot, block.block.header.expiry_after,
 //   block.block.header.max_block_size, block.block.header.max_compute_units,
-//   block.block.header.max_state_units, block.block.header.price,
+//   block.block.header.max_state_units, block.block.header.bond_amount_lock_up,
 //   block.block.header.producer, block.block.header.producer.value
 //
 // Available block footer fields:
 //   block.block.footer.status, block.block.footer.consumed_compute_units,
-//   block.block.footer.consumed_state_units
+//   block.block.footer.consumed_state_units, block.block.footer.attestor_payment
 //
 // Available consensus status field:
 //   block.block.consensus_status
@@ -82,8 +82,8 @@ option swift_prefix = "THUS";
 // 6. Filter by max state units:
 //    Expression: "block.block.header.max_state_units > uint(0)"
 //
-// 7. Filter by block price:
-//    Expression: "block.block.header.price >= uint(0)"
+// 7. Filter by bond amount lock-up:
+//    Expression: "block.block.header.bond_amount_lock_up >= uint(0)"
 //
 // 8. Filter by footer status:
 //    Expression: "has(block.block.footer) && block.block.footer.status == int(1)"
@@ -140,6 +140,15 @@ message StreamBlocksResponse {
 //
 // - params.address (bytes|Pubkey): Account address for filtering
 //   Example: snapshot.address.value == params.address
+//
+// - params.min_nonce (uint64): Minimum nonce for filtering
+//   Example: snapshot.meta.nonce >= params.min_nonce
+//
+// - params.min_seq (uint64): Minimum sequence number for filtering
+//   Example: snapshot.meta.seq >= params.min_seq
+//
+// - params.min_data_size (uint32): Minimum data size for filtering
+//   Example: snapshot.meta.data_size >= params.min_data_size
 //
 // Available snapshot fields (thru.core.v1.Account):
 //   snapshot.address, snapshot.address.value (bytes),
@@ -356,10 +365,10 @@ message StreamTransactionsResponse {
 // - params.prefix (bytes): Byte prefix for payload filtering
 //   Example: bytesPrefix(event.payload, params.prefix)
 //
-// - params.slot (uint64): Slot number for comparison
+// - params.slot (int64): Slot number for comparison
 //   Example: event.slot >= params.slot
 //
-// - params.u64 (uint64): Generic 64-bit value for payload extraction
+// - params.u64 (int64): Generic 64-bit value for payload extraction
 //   Examples:
 //     first8Bytes(event.payload) == params.u64
 //     first4Bytes(event.payload) == params.u64
@@ -367,20 +376,127 @@ message StreamTransactionsResponse {
 //
 // - params.signature (bytes|Signature|TsSignature): Signature for comparison
 //   Examples:
-//     event.signature == params.signature              // TsSignature type
 //     event.signature.value == params.signature        // bytes type
 //     bytesPrefix(event.signature.value, params.signature)
+//   Note: Signature and TsSignature types are auto-converted to bytes
 //
 // - params.address (bytes|Pubkey|TaPubkey): Address/pubkey for comparison
 //   Examples:
-//     event.program == params.address                  // TaPubkey type
 //     event.program.value == params.address            // bytes type
 //     bytesPrefix(event.program.value, params.address)
+//   Note: Pubkey and TaPubkey types are auto-converted to bytes
+//
+// - params.timestamp (int64): Timestamp in seconds for comparison
+//   Example: int(event.timestamp) > params.timestamp
 //
 // Available event fields:
-//   event.event_id, event.slot, event.payload, event.call_idx,
-//   event.signature (Signature), event.signature.value (bytes),
-//   event.program (Pubkey), event.program.value (bytes)
+//   event.event_id (string), event.slot (uint64), event.payload (bytes),
+//   event.call_idx (uint32), event.signature (Signature),
+//   event.signature.value (bytes), event.program (Pubkey),
+//   event.program.value (bytes), event.timestamp (Timestamp)
+//
+// Note: Unlike ListEventsRequest in QueryService, StreamEventsRequest does NOT support:
+//   event.block_offset, event.program_idx, event.payload_size, event.transaction_signature
+//
+// Available filter functions:
+//   - has(field): Check if optional field exists
+//     Example: has(event.program) && has(event.signature)
+//
+//   - startsWith(string, prefix): Check if string starts with prefix
+//     Example: event.event_id.startsWith("ts")
+//
+//   - bytesPrefix(bytes, prefix): Check if bytes start with prefix
+//     Examples:
+//       bytesPrefix(event.payload, b"\x01\x00\x00\x00\x00\x00\x00\x00")
+//       bytesPrefix(event.payload, params.prefix)
+//       bytesPrefix(event.program.value, params.address)
+//       bytesPrefix(event.signature.value, params.signature)
+//
+//   - first1Byte(bytes): Extract first byte as uint
+//     Example: first1Byte(event.payload) == uint(1)
+//
+//   - first4Bytes(bytes): Extract first 4 bytes as little-endian uint32
+//     Example: first4Bytes(event.payload) == uint(2)
+//
+//   - first8Bytes(bytes): Extract first 8 bytes as little-endian uint64
+//     Example: first8Bytes(event.payload) == uint(6)
+//
+//   - uint(value): Convert value to uint for comparison
+//   - int(value): Convert value to int (used for timestamps)
+//
+// Filter expression examples:
+//
+// 1. Filter by payload type using first1Byte (MESSAGE event type = 1):
+//    Expression: "first1Byte(event.payload) == uint(1)"
+//
+// 2. Filter by payload type using first4Bytes (COUNTER event type = 2):
+//    Expression: "first4Bytes(event.payload) == uint(2)"
+//
+// 3. Filter by payload type using first8Bytes (PATTERN event type = 6):
+//    Expression: "first8Bytes(event.payload) == uint(6)"
+//
+// 4. Filter by payload prefix with params:
+//    Expression: "bytesPrefix(event.payload, params.prefix)"
+//    Params: {"prefix": <bytes, e.g., 0x01000000...>}
+//
+// 5. Filter by slot using params:
+//    Expression: "event.slot >= params.slot"
+//    Params: {"slot": 1000}
+//
+// 6. Filter by program address (exact match):
+//    Expression: "event.program.value == params.address"
+//    Params: {"address": <32-byte pubkey as bytes, Pubkey, or TaPubkey>}
+//
+// 7. Filter by program address (prefix match):
+//    Expression: "bytesPrefix(event.program.value, params.address)"
+//    Params: {"address": <pubkey prefix bytes>}
+//
+// 8. Filter by transaction signature (exact match):
+//    Expression: "event.signature.value == params.signature"
+//    Params: {"signature": <64-byte signature as bytes, Signature, or TsSignature>}
+//
+// 9. Filter by transaction signature (prefix match):
+//    Expression: "bytesPrefix(event.signature.value, params.signature)"
+//    Params: {"signature": <signature prefix bytes>}
+//
+// 10. Filter by call_idx (0 = main program, 1+ = CPI calls):
+//     Expression: "event.call_idx == uint(0)"
+//     Expression: "event.call_idx == uint(1)"
+//
+// 11. Filter by event_id prefix:
+//     Expression: "event.event_id.startsWith(\"ts\")"
+//
+// 12. Filter by timestamp (events in last hour):
+//     Expression: "has(event.timestamp) && int(event.timestamp) > int(1700000000)"
+//
+// 13. Filter by timestamp using params:
+//     Expression: "has(event.timestamp) && int(event.timestamp) > params.timestamp"
+//     Params: {"timestamp": 1700000000}
+//
+// 14. Check field existence:
+//     Expression: "has(event.program) && has(event.signature)"
+//
+// 15. Filter using params.u64 with first8Bytes:
+//     Expression: "first8Bytes(event.payload) == params.u64"
+//     Params: {"u64": 6}
+//
+// 16. Filter using params.u64 with first4Bytes:
+//     Expression: "first4Bytes(event.payload) == params.u64"
+//     Params: {"u64": 2}
+//
+// 17. Filter using params.u64 with first1Byte:
+//     Expression: "first1Byte(event.payload) == params.u64"
+//     Params: {"u64": 1}
+//
+// 18. Combined filter (slot + payload type + call_idx):
+//     Expression: "event.slot > uint(1000) && first1Byte(event.payload) == uint(1) && event.call_idx == uint(0)"
+//
+// 19. Combined filter (call_idx + program address):
+//     Expression: "event.call_idx == uint(1) && event.program.value == params.address"
+//     Params: {"address": <32-byte CPI target program pubkey>}
+//
+// 20. Timestamp range filter:
+//     Expression: "has(event.timestamp) && int(event.timestamp) > int(1700000000) && int(event.timestamp) < int(1700100000)"
 message StreamEventsRequest {
   optional thru.common.v1.Filter filter = 1 [(google.api.field_behavior) = OPTIONAL];
 }

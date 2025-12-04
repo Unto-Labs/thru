@@ -167,6 +167,15 @@ pub struct Config {
     /// Token program public key
     pub token_program_public_key: String,
 
+    /// WTHRU program public key
+    pub wthru_program_public_key: String,
+
+    /// Base name service program public key
+    pub name_service_program_public_key: String,
+
+    /// Thru registrar program public key
+    pub thru_registrar_program_public_key: String,
+
     /// Request timeout in seconds
     pub timeout_seconds: u64,
 
@@ -202,6 +211,9 @@ impl Default for Config {
             manager_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQE"
                 .to_string(),
             token_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKqq".to_string(),
+            wthru_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcH".to_string(),
+            name_service_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUF".to_string(),
+            thru_registrar_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYG".to_string(),
             timeout_seconds: 30,
             max_retries: 3,
             auth_token: None,
@@ -257,6 +269,18 @@ impl Config {
             .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()))?;
 
         Ok(())
+    }
+
+    /// Resolve the configured WTHRU program public key or return a helpful error
+    pub fn get_wthru_program_pubkey(&self) -> Result<Pubkey, CliError> {
+        if self.wthru_program_public_key.trim().is_empty() {
+            return Err(CliError::Validation(
+                "wthru_program_public_key is not configured; set it in config.yaml or pass --program".to_string(),
+            ));
+        }
+
+        Pubkey::new(self.wthru_program_public_key.clone())
+            .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()).into())
     }
 
     /// Get the configuration file path

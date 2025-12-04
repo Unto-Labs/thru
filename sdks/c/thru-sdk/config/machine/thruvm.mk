@@ -4,6 +4,7 @@ BUILDDIR?=thruvm
 # This configuration is for building ThruNet C SDK programs for the ThruNet VM
 
 include $(THRU_C_SDK_DIR)/config/extra/with-gcc.mk
+include $(THRU_C_SDK_DIR)/config/extra/with-blst.mk
 
 # Standard flags
 CFLAGS+=-std=c17 \

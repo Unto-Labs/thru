@@ -110,6 +110,33 @@ All classes are exported from the root package for easy access:
 import { Block, Account, ChainEvent } from "@thru/thru-sdk";
 ```
 
+### Primitives
+
+`Pubkey` and `Signature` wrap the 32-byte Ed25519 public key and 64-byte signature primitives, respectively. They centralize validation, conversion, and proto interop so you can work with either Thru-formatted strings (`ta...` / `ts...`), hex, or raw bytes without sprinkling helpers throughout your app.
+
+```ts
+import { Pubkey, Signature } from "@thru/thru-sdk";
+
+const payer = Pubkey.from("taDs2...");          // accepts ta string, hex, or Uint8Array
+const sig = Signature.from("ts8Lk...");         // accepts ts string, hex, or Uint8Array
+
+payer.toBytes();           // defensive copy
+payer.toThruFmt();         // "ta..." string
+payer.toProtoPubkey();     // thru.common.v1.Pubkey
+payer.toProtoTaPubkey();   // thru.common.v1.TaPubkey
+
+sig.toBytes();
+sig.toThruFmt();          // "ts..." string
+sig.toProtoSignature();   // thru.common.v1.Signature
+sig.toProtoTsSignature(); // thru.common.v1.TsSignature
+
+// Helper namespace now returns these domain objects:
+const parsed = sdk.helpers.createPubkey("taFeePayerAddress...");
+const signature = sdk.helpers.createSignature(sigBytes);
+```
+
+The bound client accepts either raw bytes or the new primitives; call `.toBytes()` on `Pubkey`/`Signature` when you need to interop with legacy code.
+
 ## View Options
 
 When fetching resources, you can control which parts of the resource are returned using view options. This allows you to optimize network usage by only fetching the data you need.

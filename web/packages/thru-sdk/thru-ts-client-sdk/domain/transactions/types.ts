@@ -1,11 +1,4 @@
-import { BytesLike } from "@thru/helpers";
-
-export type Bytes32 = Uint8Array;
-export type Bytes64 = Uint8Array;
-
-export type AccountAddress = Bytes32;
-
-export type ProgramIdentifier = BytesLike;
+import { Pubkey, PubkeyInput, Signature } from "../primitives";
 
 export interface ResourceLimits {
     computeUnits?: number;
@@ -27,8 +20,8 @@ export interface TransactionHeaderInput extends ResourceLimits {
 }
 
 export interface TransactionAccountsInput {
-    readWriteAccounts?: AccountAddress[];
-    readOnlyAccounts?: AccountAddress[];
+    readWriteAccounts?: PubkeyInput[];
+    readOnlyAccounts?: PubkeyInput[];
 }
 
 /**
@@ -38,24 +31,23 @@ export interface TransactionAccountsInput {
  */
 export interface InstructionContext {
     /** All accounts in final transaction order: [feePayer, program, ...readWrite, ...readOnly] */
-    accounts: AccountAddress[];
+    accounts: Pubkey[];
     /** Get the index of an account by its public key. Throws if account is not found in transaction. */
-    getAccountIndex: (pubkey: AccountAddress) => number;
+    getAccountIndex: (pubkey: PubkeyInput) => number;
 }
 
 
-
 export interface FeePayerInput {
-    publicKey: AccountAddress;
-    privateKey?: Bytes32;
+    publicKey: PubkeyInput;
+    privateKey?: Uint8Array;
 }
 
 export interface BuildTransactionParams {
     feePayer: FeePayerInput;
-    program: ProgramIdentifier;
+    program: PubkeyInput;
     header: TransactionHeaderInput;
     accounts?: TransactionAccountsInput;
-    instructionData?: BytesLike;
+    instructionData?: Uint8Array | string;
     proofs?: OptionalProofs;
 }
 
@@ -64,7 +56,7 @@ export interface BuiltTransactionResult {
 }
 
 export interface SignedTransactionResult extends BuiltTransactionResult {
-    signature: Bytes64;
+    signature: Signature;
     rawTransaction: Uint8Array;
 }
 

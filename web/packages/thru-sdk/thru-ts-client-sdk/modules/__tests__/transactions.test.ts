@@ -11,6 +11,7 @@ import {
 } from "../../__tests__/helpers/test-utils";
 import { Filter } from "../../domain/filters";
 import { PageRequest } from "../../domain/pagination";
+import { Signature } from "../../domain/primitives";
 import { TransactionStatusSnapshot } from "../../domain/transactions";
 import { Transaction } from "../../domain/transactions/Transaction";
 import type { InstructionContext } from "../../domain/transactions/types";
@@ -67,7 +68,8 @@ describe("transactions", () => {
       const result = await getTransaction(ctx, signature);
       
       expect(result).toBeInstanceOf(Transaction);
-      expect(result.getSignature()).toEqual(signature);
+      expect(result.getSignature()).toBeInstanceOf(Signature);
+      expect(result.getSignature()?.toBytes()).toEqual(signature);
       expect(ctx.query.getTransaction).toHaveBeenCalledTimes(1);
     });
 
@@ -194,7 +196,7 @@ describe("transactions", () => {
       });
       
       expect(transaction).toBeInstanceOf(Transaction);
-      expect(transaction.feePayer).toEqual(publicKey);
+      expect(transaction.feePayer.toBytes()).toEqual(publicKey);
       expect(transaction.nonce).toBe(5n);
       expect(transaction.startSlot).toBe(1000n);
     });
@@ -277,7 +279,7 @@ describe("transactions", () => {
         program: programAddress,
       });
       
-      expect(transaction.program.length).toBe(32);
+      expect(transaction.program.toBytes().length).toBe(32);
     });
 
     it("should throw error when account nonce is unavailable", async () => {
@@ -381,11 +383,11 @@ describe("transactions", () => {
       const instructionDataFn = async (context: InstructionContext) => {
         // Verify context has all accounts in correct order
         expect(context.accounts.length).toBe(5); // feePayer, program, 2 readWrite, 1 readOnly
-        expect(context.accounts[0]).toEqual(feePayer);
-        expect(context.accounts[1]).toEqual(program);
-        expect(context.accounts[2]).toEqual(readWriteAccount1);
-        expect(context.accounts[3]).toEqual(readWriteAccount2);
-        expect(context.accounts[4]).toEqual(readOnlyAccount);
+        expect(context.accounts[0].equals(feePayer)).toBe(true);
+        expect(context.accounts[1].equals(program)).toBe(true);
+        expect(context.accounts[2].equals(readWriteAccount1)).toBe(true);
+        expect(context.accounts[3].equals(readWriteAccount2)).toBe(true);
+        expect(context.accounts[4].equals(readOnlyAccount)).toBe(true);
         
         // Use getAccountIndex to find account positions
         const feePayerIndex = context.getAccountIndex(feePayer);
@@ -449,10 +451,7 @@ describe("transactions", () => {
       const program = generateTestPubkey(0x02);
       const unknownAccount = generateTestPubkey(0x99); // Not in transaction accounts
       
-      const instructionDataFn = async (context: {
-        accounts: Uint8Array[];
-        getAccountIndex: (pubkey: Uint8Array) => number;
-      }) => {
+      const instructionDataFn = async (context: InstructionContext) => {
         // Try to get index of an account not in the transaction
         expect(() => context.getAccountIndex(unknownAccount)).toThrow(
           "Account not found in transaction accounts"
@@ -494,7 +493,8 @@ describe("transactions", () => {
       });
       
       expect(result.transaction).toBeInstanceOf(Transaction);
-      expect(result.signature.length).toBe(64);
+      expect(result.signature).toBeInstanceOf(Signature);
+      expect(result.signature.toBytes().length).toBe(64);
       expect(result.rawTransaction.length).toBeGreaterThan(0);
     });
 
@@ -592,9 +592,9 @@ describe("transactions", () => {
     it("should list transactions for account", async () => {
       const ctx = createMockContext();
       const mockResponse = {
-        signatures: [
-          { value: generateTestSignature(0x01) },
-          { value: generateTestSignature(0x02) },
+        transactions: [
+          { signature: { value: generateTestSignature(0x01) } },
+          { signature: { value: generateTestSignature(0x02) } },
         ],
       };
       vi.spyOn(ctx.query, "listTransactionsForAccount").mockResolvedValue(mockResponse as any);
@@ -615,7 +615,7 @@ describe("transactions", () => {
 
     it("should accept account as Uint8Array", async () => {
       const ctx = createMockContext();
-      const mockResponse = { signatures: [] };
+      const mockResponse = { transactions: [] };
       vi.spyOn(ctx.query, "listTransactionsForAccount").mockResolvedValue(mockResponse as any);
       vi.spyOn(ctx.query, "getTransaction").mockResolvedValue(createMockTransactionProto());
       
@@ -628,7 +628,7 @@ describe("transactions", () => {
 
     it("should accept account as string", async () => {
       const ctx = createMockContext();
-      const mockResponse = { signatures: [] };
+      const mockResponse = { transactions: [] };
       vi.spyOn(ctx.query, "listTransactionsForAccount").mockResolvedValue(mockResponse as any);
       vi.spyOn(ctx.query, "getTransaction").mockResolvedValue(createMockTransactionProto());
       
@@ -641,7 +641,7 @@ describe("transactions", () => {
 
     it("should pass page options", async () => {
       const ctx = createMockContext();
-      const mockResponse = { signatures: [] };
+      const mockResponse = { transactions: [] };
       vi.spyOn(ctx.query, "listTransactionsForAccount").mockResolvedValue(mockResponse as any);
       vi.spyOn(ctx.query, "getTransaction").mockResolvedValue(createMockTransactionProto());
       
@@ -656,7 +656,7 @@ describe("transactions", () => {
 
     it("should pass filter options", async () => {
       const ctx = createMockContext();
-      const mockResponse = { signatures: [] };
+      const mockResponse = { transactions: [] };
       vi.spyOn(ctx.query, "listTransactionsForAccount").mockResolvedValue(mockResponse as any);
       vi.spyOn(ctx.query, "getTransaction").mockResolvedValue(createMockTransactionProto());
       
@@ -671,7 +671,7 @@ describe("transactions", () => {
     it("should pass transaction options to getTransaction", async () => {
       const ctx = createMockContext();
       const signatureValue = generateTestSignature();
-      const mockResponse = { signatures: [{ value: signatureValue }] };
+      const mockResponse = { transactions: [{ signature: { value: signatureValue } }] };
       vi.spyOn(ctx.query, "listTransactionsForAccount").mockResolvedValue(mockResponse as any);
       vi.spyOn(ctx.query, "getTransaction").mockResolvedValue(createMockTransactionProto());
 

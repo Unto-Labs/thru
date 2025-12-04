@@ -56,6 +56,18 @@ async fn main() -> Result<()> {
         Commands::Token { subcommand } => {
             commands::token::handle_token_command(&config, subcommand, cli.json).await
         }
+        Commands::Faucet { subcommand } => {
+            commands::faucet::handle_faucet_command(&config, subcommand, cli.json).await
+        }
+        Commands::Registrar { subcommand } => {
+            commands::name_service::handle_registrar_command(&config, subcommand, cli.json).await
+        }
+        Commands::NameService { subcommand } => {
+            commands::name_service::handle_name_service_command(&config, subcommand, cli.json).await
+        }
+        Commands::Wthru { subcommand } => {
+            commands::wthru::handle_wthru_command(&config, subcommand, cli.json).await
+        }
         Commands::Uploader { subcommand } => {
             commands::uploader::handle_uploader_command(&config, subcommand, cli.json).await
         }

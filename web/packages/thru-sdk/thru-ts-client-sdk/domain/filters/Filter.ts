@@ -1,5 +1,4 @@
 import { create } from "@bufbuild/protobuf";
-import { BytesLike, Pubkey as PubkeyInput } from "@thru/helpers";
 
 import {
     FilterParamValueSchema,
@@ -7,18 +6,8 @@ import {
     Filter as ProtoFilter,
     FilterParamValue as ProtoFilterParamValue,
 } from "../../proto/thru/common/v1/filters_pb";
-import {
-    protoPubkeyToBytes,
-    protoSignatureToBytes,
-    protoTaPubkeyToString,
-    protoTsSignatureToString,
-    pubkeyBytesFromInput,
-    signatureBytesFromInput,
-    toPubkeyProto,
-    toSignatureProto,
-    toTaPubkeyProto,
-    toTsSignatureProto,
-} from "../../utils/primitives";
+
+import { Pubkey, Signature, type PubkeyInput, type SignatureInput } from "../primitives";
 
 export type FilterParamValueCase =
     | "stringValue"
@@ -163,31 +152,31 @@ export class FilterParamValue {
         return new FilterParamValue({ case: "uintValue", value: toUint(value) });
     }
 
-    static pubkey(value: PubkeyInput, field = "filter.pubkey"): FilterParamValue {
+    static pubkey(value: PubkeyInput): FilterParamValue {
         return new FilterParamValue({
             case: "pubkeyValue",
-            value: pubkeyBytesFromInput(value, field),
+            value: Pubkey.from(value).toBytes(),
         });
     }
 
-    static signature(value: BytesLike, field = "filter.signature"): FilterParamValue {
+    static signature(value: SignatureInput): FilterParamValue {
         return new FilterParamValue({
             case: "signatureValue",
-            value: signatureBytesFromInput(value, field),
+            value: Signature.from(value).toBytes(),
         });
     }
 
-    static taPubkey(value: PubkeyInput | string, field = "filter.taPubkey"): FilterParamValue {
+    static taPubkey(value: PubkeyInput | string): FilterParamValue {
         return new FilterParamValue({
             case: "taPubkeyValue",
-            value: toTaPubkeyProto(value as any, field).value,
+            value: Pubkey.from(value).toThruFmt(),
         });
     }
 
-    static tsSignature(value: BytesLike | string, field = "filter.tsSignature"): FilterParamValue {
+    static tsSignature(value: SignatureInput): FilterParamValue {
         return new FilterParamValue({
             case: "tsSignatureValue",
-            value: toTsSignatureProto(value as any, field).value,
+            value: Signature.from(value).toThruFmt(),
         });
     }
 
@@ -211,13 +200,13 @@ export class FilterParamValue {
             case "uintValue":
                 return FilterParamValue.uint(kind.value);
             case "pubkeyValue":
-                return FilterParamValue.pubkey(protoPubkeyToBytes(kind.value));
+                return FilterParamValue.pubkey(Pubkey.fromProtoPubkey(kind.value).toBytes());
             case "signatureValue":
-                return FilterParamValue.signature(protoSignatureToBytes(kind.value) ?? new Uint8Array());
+                return FilterParamValue.signature(Signature.fromProtoSignature(kind.value).toBytes());
             case "taPubkeyValue":
-                return FilterParamValue.taPubkey(protoTaPubkeyToString(kind.value) ?? "");
+                return FilterParamValue.taPubkey(Pubkey.fromProtoTaPubkey(kind.value).toThruFmt());
             case "tsSignatureValue":
-                return FilterParamValue.tsSignature(protoTsSignatureToString(kind.value) ?? "");
+                return FilterParamValue.tsSignature(Signature.fromProtoTsSignature(kind.value).toThruFmt());
             default:
                 return FilterParamValue.none();
         }
@@ -275,28 +264,28 @@ export class FilterParamValue {
                 return create(FilterParamValueSchema, {
                     kind: {
                         case: "pubkeyValue",
-                        value: toPubkeyProto(this.value as Uint8Array),
+                        value: Pubkey.from(this.value as Uint8Array).toProtoPubkey(),
                     },
                 });
             case "signatureValue":
                 return create(FilterParamValueSchema, {
                     kind: {
                         case: "signatureValue",
-                        value: toSignatureProto(this.value as Uint8Array),
+                        value: Signature.from(this.value as Uint8Array).toProtoSignature(),
                     },
                 });
             case "taPubkeyValue":
                 return create(FilterParamValueSchema, {
                     kind: {
                         case: "taPubkeyValue",
-                        value: toTaPubkeyProto(this.value as string),
+                        value: Pubkey.from(this.value as string).toProtoTaPubkey(),
                     },
                 });
             case "tsSignatureValue":
                 return create(FilterParamValueSchema, {
                     kind: {
                         case: "tsSignatureValue",
-                        value: toTsSignatureProto(this.value as string),
+                        value: Signature.from(this.value as string).toProtoTsSignature(),
                     },
                 });
             default:

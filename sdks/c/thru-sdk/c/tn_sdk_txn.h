@@ -91,10 +91,11 @@ typedef struct tsdk_shadow_stack tsdk_shadow_stack_t;
 struct tsdk_block_ctx {
   ulong slot;                 /* Current block slot number */
   ulong block_time;           /* Block timestamp (Unix epoch in nanoseconds) */
-  ulong global_state_counter; /* Global state counter */
+  ulong block_price;          /* Block price */
   tn_hash_t parent_blockhash; /* Hash of the parent block */
-  tn_pubkey_t block_producer; /* Public key of the block producer */
   tn_hash_t state_root;       /* Merkle root of the state tree */
+  tn_hash_t cur_block_hash;   /* Current block hash (truncated) */
+  tn_pubkey_t block_producer; /* Public key of the block producer */
 };
 typedef struct tsdk_block_ctx tsdk_block_ctx_t;
 

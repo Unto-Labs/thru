@@ -300,6 +300,7 @@ fetch () {
 
   checkout_repo riscv-gnu-toolchain https://github.com/riscv/riscv-gnu-toolchain "2025.01.20"
   checkout_repo picolibc https://github.com/picolibc/picolibc "1.8.9"
+  checkout_repo blst https://github.com/supranational/blst.git "v0.3.15"
 }
 
 install_riscv () {
@@ -362,8 +363,7 @@ ZLIB_PATCH_EOF
     --with-arch=rv64imc_zicsr_zba_zbb_zbc_zbs_zknh \
     --with-abi=lp64 \
     --with-languages=c,c++ \
-    --with-cmodel=medany \
-    --disable-gdb
+    --with-cmodel=medany
 
   echo "[+] Configured riscv-gnu-toolchain"
 
@@ -447,12 +447,24 @@ EOF
   echo "[+] Successfully installed picolibc"
 }
 
+install_blst () {
+  cd "$PREFIX/git/blst"
+
+  echo "[+] Installing blst to $PREFIX"
+  ./build.sh
+  cp libblst.a "$PREFIX/lib"
+  cp bindings/blst.h "$PREFIX/include"
+  cp bindings/blst_aux.h "$PREFIX/include"
+  echo "[+] Successfully installed libblst"
+}
+
 install_c () {
   echo "[+] Installing C/C++ SDK dependencies"
   mkdir -p "$PREFIX/include" "$PREFIX/lib" "$PREFIX/bin"
 
   ( install_riscv     )
   ( install_picolibc  )
+  ( install_blst      )
 
   # Merge lib64 with lib
   if [[ -d "$PREFIX/lib64" ]]; then

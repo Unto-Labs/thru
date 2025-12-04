@@ -39,15 +39,18 @@ ulong tsys_increment_anonymous_segment_sz(void* segment_addr, ulong delta,
 ulong tsys_account_create(ulong account_idx, uchar const seed[TN_SEED_SIZE],
                           void const* proof, ulong proof_sz);
 
-ulong tsys_account_create_ephemeral(ulong account_idx, uchar const seed[TN_SEED_SIZE]);
+ulong tsys_account_create_ephemeral(ulong account_idx,
+                                    uchar const seed[TN_SEED_SIZE]);
 
 ulong tsys_account_delete(ulong account_idx);
 
 ulong tsys_account_resize(ulong account_idx, ulong new_size);
 
-ulong tsys_account_compress(ulong account_idx, void const* proof, ulong proof_sz);
-ulong tsys_account_decompress(ulong account_idx, void const* meta, void const* data,
-                              void const* proof, ulong proof_sz);
+ulong tsys_account_compress(ulong account_idx, void const* proof,
+                            ulong proof_sz);
+ulong tsys_account_decompress(ulong account_idx, void const* meta,
+                              void const* data, void const* proof,
+                              ulong proof_sz);
 
 ulong tsys_invoke(void const* instr_data, ulong instr_data_sz,
                   ushort program_account_idx, ulong* invoke_err_code);
@@ -61,9 +64,8 @@ ulong tsys_emit_event(void const* data, ulong data_sz);
 ulong tsys_account_set_flags(ushort account_idx, uchar flags);
 
 ulong tsys_account_create_eoa(ulong account_idx,
-                              tn_signature_t const * signature,
-                              void const* proof,
-                              ulong proof_sz);
+                              tn_signature_t const* signature,
+                              void const* proof, ulong proof_sz);
 
 TSDK_PROTOTYPES_END
 

@@ -19,7 +19,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
       with:
         submodules: true
 
@@ -59,23 +59,21 @@ jobs:
           thru-program-sdk-${{ matrix.sdk }}-${{ github.event.release.tag_name }}.zip
         retention-days: 90
 
-  # Build toolchain for Linux and macOS
+  # Build toolchain for Linux
   build-toolchain:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-large, macos-latest]
+        os: [ubuntu-large]
         include:
           - os: ubuntu-large
             arch: x86_64
-          - os: macos-latest
-            arch: arm64
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
       with:
         submodules: true
 
@@ -174,7 +172,7 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v5
+      uses: actions/checkout@v6
 
     - name: Download all artifacts
       uses: actions/download-artifact@v6

@@ -1,14 +1,13 @@
 import type { ConsensusStatus } from "../../proto/thru/common/v1/consensus_pb";
 import type {
-    Account as CoreAccount,
-    AccountData as CoreAccountData,
-    AccountFlags as CoreAccountFlags,
-    AccountMeta as CoreAccountMeta,
-    VersionContextMetadata as CoreVersionContextMetadata,
+    Account as ProtoAccount,
+    AccountData as ProtoAccountData,
+    AccountFlags as ProtoAccountFlags,
+    AccountMeta as ProtoAccountMeta,
+    VersionContextMetadata as ProtoVersionContextMetadata,
 } from "../../proto/thru/core/v1/account_pb";
 import { timestampToNanoseconds } from "../../utils/utils";
-import type { AccountAddress } from "../transactions/types";
-import { protoPubkeyToAccountAddress } from "../transactions/utils";
+import { Pubkey } from "../primitives";
 
 export interface AccountFlagsData {
     isProgram: boolean;
@@ -39,7 +38,7 @@ export class AccountFlags implements AccountFlagsData {
         this.isCompressed = flags?.isCompressed ?? false;
     }
 
-    static fromProto(flags?: CoreAccountFlags): AccountFlags {
+    static fromProto(flags?: ProtoAccountFlags): AccountFlags {
         if (!flags) {
             return new AccountFlags();
         }
@@ -60,7 +59,7 @@ export class AccountMeta {
     readonly flags: AccountFlags;
     readonly dataSize: number;
     readonly seq: bigint;
-    readonly owner?: AccountAddress;
+    readonly owner?: Pubkey;
     readonly balance: bigint;
     readonly nonce?: bigint;
 
@@ -69,7 +68,7 @@ export class AccountMeta {
         flags?: AccountFlags;
         dataSize: number;
         seq: bigint;
-        owner?: AccountAddress;
+        owner?: Pubkey;
         balance: bigint;
         nonce?: bigint;
     }) {
@@ -77,12 +76,12 @@ export class AccountMeta {
         this.flags = params.flags ?? new AccountFlags();
         this.dataSize = params.dataSize;
         this.seq = params.seq;
-        this.owner = params.owner ? copyKey(params.owner) : undefined;
+        this.owner = params.owner;
         this.balance = params.balance;
         this.nonce = params.nonce;
     }
 
-    static fromProto(meta?: CoreAccountMeta): AccountMeta | undefined {
+    static fromProto(meta?: ProtoAccountMeta): AccountMeta | undefined {
         if (!meta) {
             return undefined;
         }
@@ -91,7 +90,7 @@ export class AccountMeta {
             flags: AccountFlags.fromProto(meta.flags),
             dataSize: meta.dataSize,
             seq: meta.seq ?? 0n,
-            owner: protoPubkeyToAccountAddress(meta.owner),
+            owner: meta.owner ? Pubkey.fromProtoPubkey(meta.owner) : undefined,
             balance: meta.balance ?? 0n,
             nonce: meta.nonce,
         });
@@ -109,7 +108,7 @@ export class AccountData {
         this.compressionAlgorithm = params.compressionAlgorithm;
     }
 
-    static fromProto(data?: CoreAccountData): AccountData | undefined {
+    static fromProto(data?: ProtoAccountData): AccountData | undefined {
         if (!data) {
             return undefined;
         }
@@ -127,33 +126,33 @@ export interface AccountVersionContext {
 }
 
 export class Account {
-    readonly address: AccountAddress;
+    readonly address: Pubkey;
     readonly meta?: AccountMeta;
     readonly data?: AccountData;
     readonly versionContext?: AccountVersionContext;
     readonly consensusStatus?: ConsensusStatus;
 
     constructor(params: {
-        address: AccountAddress;
+        address: Pubkey;
         meta?: AccountMeta;
         data?: AccountData;
         versionContext?: AccountVersionContext;
         consensusStatus?: ConsensusStatus;
     }) {
-        this.address = copyKey(params.address);
+        this.address = params.address;
         this.meta = params.meta;
         this.data = params.data;
         this.versionContext = params.versionContext;
         this.consensusStatus = params.consensusStatus;
     }
 
-    static fromProto(proto: CoreAccount): Account {
+    static fromProto(proto: ProtoAccount): Account {
         if (!proto.address) {
             throw new Error("Account proto missing address");
         }
 
         return new Account({
-            address: protoPubkeyToAccountAddress(proto.address),
+            address: Pubkey.fromProtoPubkey(proto.address),
             meta: AccountMeta.fromProto(proto.meta),
             data: AccountData.fromProto(proto.data ?? undefined),
             versionContext: convertVersionContext(proto.versionContext),
@@ -162,7 +161,7 @@ export class Account {
     }
 }
 
-function convertVersionContext(meta?: CoreVersionContextMetadata): AccountVersionContext | undefined {
+function convertVersionContext(meta?: ProtoVersionContextMetadata): AccountVersionContext | undefined {
     if (!meta) {
         return undefined;
     }
@@ -172,10 +171,3 @@ function convertVersionContext(meta?: CoreVersionContextMetadata): AccountVersio
         blockTimestampNs: timestampToNanoseconds(meta.blockTimestamp),
     };
 }
-
-function copyKey(source: AccountAddress): AccountAddress {
-    const bytes = new Uint8Array(source.length);
-    bytes.set(source);
-    return bytes;
-}
-

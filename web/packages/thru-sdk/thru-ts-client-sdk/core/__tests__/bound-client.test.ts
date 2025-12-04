@@ -119,7 +119,7 @@ describe("createBoundThruClient", () => {
       signature: { value: generateTestSignature() },
       consensusStatus: ConsensusStatus.UNSPECIFIED,
     } as any);
-    vi.spyOn(ctx.query, "listTransactionsForAccount").mockResolvedValue({ signatures: [] } as any);
+    vi.spyOn(ctx.query, "listTransactionsForAccount").mockResolvedValue({ transactions: [] } as any);
     vi.spyOn(ctx.command, "sendTransaction").mockResolvedValue({ signature: { value: new Uint8Array(64) } } as any);
     vi.spyOn(ctx.command, "batchSendTransactions").mockResolvedValue({ signatures: [] } as any);
     vi.spyOn(ctx.streaming, "streamTransactions").mockReturnValue(
@@ -192,17 +192,8 @@ describe("createBoundThruClient", () => {
     const ctx = createMockContext();
     const client = createBoundThruClient(ctx);
     
-    expect(typeof client.helpers.toSignature).toBe("function");
-    expect(typeof client.helpers.toSignatureBytes).toBe("function");
-    expect(typeof client.helpers.toTsSignature).toBe("function");
-    expect(typeof client.helpers.toPubkey).toBe("function");
-    expect(typeof client.helpers.toPubkeyBytes).toBe("function");
-    expect(typeof client.helpers.toTaPubkey).toBe("function");
-    expect(typeof client.helpers.toBlockHash).toBe("function");
-    expect(typeof client.helpers.encodeSignature).toBe("function");
-    expect(typeof client.helpers.decodeSignature).toBe("function");
-    expect(typeof client.helpers.encodeAddress).toBe("function");
-    expect(typeof client.helpers.decodeAddress).toBe("function");
+    expect(typeof client.helpers.createSignature).toBe("function");
+    expect(typeof client.helpers.createPubkey).toBe("function");
     expect(typeof client.helpers.deriveProgramAddress).toBe("function");
   });
 
@@ -227,7 +218,7 @@ describe("createBoundThruClient", () => {
     const result = await client.accounts.get(address);
     
     expect(result).toBeInstanceOf(Account);
-    expect(result.address).toEqual(mockAccount.address?.value);
+    expect(result.address.toBytes()).toEqual(mockAccount.address?.value);
     expect(ctx.query.getAccount).toHaveBeenCalledTimes(1);
     // Verify the request was created with correct address
     const callArgs = (ctx.query.getAccount as any).mock.calls[0][0];
@@ -292,7 +283,7 @@ describe("createBoundThruClient", () => {
     const ctx = createMockContext();
     const signatureBytes = generateTestSignature();
     vi.spyOn(ctx.query, "listTransactionsForAccount").mockResolvedValue({
-      signatures: [{ value: signatureBytes }],
+      transactions: [{ signature: { value: signatureBytes } }],
       page: undefined,
     } as any);
     const transactionProto = createMockTransactionProto();
@@ -314,7 +305,7 @@ describe("createBoundThruClient", () => {
 
   it("should bind batchSend and pass parameters correctly", async () => {
     const ctx = createMockContext();
-    const mockResponse = { signatures: [] };
+    const mockResponse = { transactions: [] };
     vi.spyOn(ctx.command, "batchSendTransactions").mockResolvedValue(mockResponse as any);
     
     const client = createBoundThruClient(ctx);
@@ -393,14 +384,16 @@ describe("createBoundThruClient", () => {
     const client = createBoundThruClient(ctx);
     
     const iterable = client.transactions.stream();
-    const results = [];
+    const transactions: Transaction[] = [];
     for await (const response of iterable) {
-      results.push(response);
+      if (response.kind === "full") {
+        transactions.push(response.transaction);
+      }
     }
     
-    expect(results).toHaveLength(1);
-    expect(results[0].transaction).toBeInstanceOf(Transaction);
-    expect(results[0].transaction.fee).toBe(1n);
+    expect(transactions).toHaveLength(1);
+    expect(transactions[0]).toBeInstanceOf(Transaction);
+    expect(transactions[0].fee).toBe(1n);
     expect(ctx.streaming.streamTransactions).toHaveBeenCalledTimes(1);
   });
 

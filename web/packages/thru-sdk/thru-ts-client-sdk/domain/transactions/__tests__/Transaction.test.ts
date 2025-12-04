@@ -43,8 +43,12 @@ describe("Transaction wire format", () => {
         expect(parsed.requestedComputeUnits).toBe(original.requestedComputeUnits);
         expect(parsed.requestedStateUnits).toBe(original.requestedStateUnits);
         expect(parsed.requestedMemoryUnits).toBe(original.requestedMemoryUnits);
-        expect(parsed.readWriteAccounts).toEqual(original.readWriteAccounts);
-        expect(parsed.readOnlyAccounts).toEqual(original.readOnlyAccounts);
+        expect(parsed.readWriteAccounts.map((account) => account.toBytes())).toEqual(
+            original.readWriteAccounts.map((account) => account.toBytes()),
+        );
+        expect(parsed.readOnlyAccounts.map((account) => account.toBytes())).toEqual(
+            original.readOnlyAccounts.map((account) => account.toBytes()),
+        );
         expect(parsed.instructionData).toEqual(original.instructionData);
     });
 

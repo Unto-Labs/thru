@@ -1,12 +1,12 @@
 import { create } from "@bufbuild/protobuf";
 
-import { Pubkey } from "@thru/helpers";
 import type { ThruClientContext } from "../core/client";
 import { withCallOptions } from "../core/client";
 import { DEFAULT_ACCOUNT_VIEW, DEFAULT_MIN_CONSENSUS, DEFAULT_VERSION_CONTEXT } from "../defaults";
 import { Account } from "../domain/accounts";
 import { Filter } from "../domain/filters";
 import { PageRequest, PageResponse } from "../domain/pagination";
+import { Pubkey, type PubkeyInput } from "../domain/primitives";
 import type { Transaction } from "../domain/transactions/Transaction";
 import { TransactionBuilder } from "../domain/transactions/TransactionBuilder";
 import type { TransactionHeaderInput } from "../domain/transactions/types";
@@ -21,12 +21,11 @@ import {
 } from "../proto/thru/services/v1/query_service_pb";
 import { mergeTransactionHeader } from "../utils/utils";
 import { getBlockHeight } from "./height";
-import { toPubkey } from "./helpers";
 import { generateStateProof } from "./proofs";
 
 export interface CreateAccountOptions {
     /** The new account's public key (fee payer). */
-    publicKey: Pubkey;
+    publicKey: PubkeyInput;
     /** Optional overrides for the transaction header. */
     header?: Partial<TransactionHeaderInput>;
 }
@@ -60,11 +59,11 @@ export interface AccountList {
 
 export function getAccount(
     ctx: ThruClientContext,
-    address: Pubkey,
+    address: PubkeyInput,
     options: AccountQueryOptions = {},
 ): Promise<Account> {
     const request = create(GetAccountRequestSchema, {
-        address: toPubkey(address, "address"),
+        address: Pubkey.from(address).toProtoPubkey(),
         view: options.view ?? DEFAULT_ACCOUNT_VIEW,
         versionContext: options.versionContext ?? DEFAULT_VERSION_CONTEXT,
         minConsensus: options.minConsensus ?? DEFAULT_MIN_CONSENSUS,
@@ -75,11 +74,11 @@ export function getAccount(
 
 export function getRawAccount(
     ctx: ThruClientContext,
-    address: Pubkey,
+    address: PubkeyInput,
     options: RawAccountQueryOptions = {},
 ): Promise<RawAccount> {
     const request = create(GetRawAccountRequestSchema, {
-        address: toPubkey(address, "address"),
+        address: Pubkey.from(address).toProtoPubkey(),
         view: options.view ?? DEFAULT_ACCOUNT_VIEW,
         versionContext: options.versionContext ?? DEFAULT_VERSION_CONTEXT,
         minConsensus: options.minConsensus ?? DEFAULT_MIN_CONSENSUS,
@@ -108,7 +107,7 @@ export async function createAccount(
     ctx: ThruClientContext,
     options: CreateAccountOptions,
 ): Promise<Transaction> {
-    const feePayer = toPubkey(options.publicKey, "publicKey").value;
+    const feePayer = Pubkey.from(options.publicKey).toBytes();
 
     const height = await getBlockHeight(ctx);
     const startSlot = height.finalized;
