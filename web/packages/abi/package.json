@@ -11,23 +11,22 @@
     }
   },
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && node ./scripts/copy-wasm.mjs",
     "dev": "tsup --watch",
-    "decode-examples": "tsx --tsconfig tsconfig.json test/decode-examples.ts",
-    "decode-counter": "tsx --tsconfig tsconfig.json test/decode-counter.ts",
     "test": "vitest run",
     "test:watch": "vitest watch",
     "test:coverage": "vitest run --coverage",
-    "clean": "rm -rf dist"
-  },
-  "dependencies": {
-    "yaml": "^2.5.0",
-    "zod": "^3.23.8"
+    "clean": "rm -rf dist",
+    "wasm:bundler": "cd ../../../abi/abi_reflect_wasm && wasm-pack build --release --target bundler --out-dir pkg/bundler",
+    "wasm:node": "cd ../../../abi/abi_reflect_wasm && wasm-pack build --release --target nodejs --out-dir pkg/node",
+    "wasm:web": "cd ../../../abi/abi_reflect_wasm && wasm-pack build --release --target web --out-dir pkg/web",
+    "wasm:sync": "node ./scripts/sync-wasm.mjs",
+    "build:wasm": "pnpm run wasm:bundler && pnpm run wasm:node && pnpm run wasm:web && pnpm run wasm:sync"
   },
   "devDependencies": {
+    "@types/node": "^24.10.1",
     "tsup": "^8.5.0",
     "typescript": "^5.9.3",
     "vitest": "^3.2.4"
   }
 }
-

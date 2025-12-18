@@ -1,0 +1,82 @@
+syntax = "proto3";
+
+package thru.core.v1;
+
+import "buf/validate/validate.proto";
+import "google/api/field_behavior.proto";
+import "google/protobuf/timestamp.proto";
+import "thru/common/v1/primitives.proto";
+import "thru/common/v1/consensus.proto";
+import "thru/core/v1/types.proto";
+
+option go_package = "github.com/Unto-Labs/thru-net/grpc/pkg/proto/thru/core/v1;corev1";
+option java_multiple_files = true;
+option java_package = "network.thru.core.v1";
+option csharp_namespace = "Thru.Core.V1";
+option ruby_package = "Thru::Core::V1";
+option objc_class_prefix = "THUC";
+option swift_prefix = "THUC";
+
+// BlockView controls how much of a block resource is returned.
+enum BlockView {
+  BLOCK_VIEW_UNSPECIFIED = 0;
+  BLOCK_VIEW_HEADER_ONLY = 1;
+  BLOCK_VIEW_HEADER_AND_FOOTER = 2;
+  BLOCK_VIEW_BODY_ONLY = 3;
+  BLOCK_VIEW_FULL = 4;
+}
+
+// BlockHeader describes metadata about a block.
+message BlockHeader {
+  uint64 slot = 1 [(google.api.field_behavior) = REQUIRED];
+  BlockHash block_hash = 2 [(google.api.field_behavior) = REQUIRED];
+  thru.common.v1.Signature header_signature = 3 [(google.api.field_behavior) = REQUIRED];
+  uint32 version = 4 [(google.api.field_behavior) = REQUIRED];
+  thru.common.v1.Pubkey producer = 5 [(google.api.field_behavior) = REQUIRED];
+  google.protobuf.Timestamp expiry_timestamp = 6
+      [(google.api.field_behavior) = REQUIRED];
+  uint64 start_slot = 7 [(google.api.field_behavior) = REQUIRED];
+  uint32 expiry_after = 8 [(google.api.field_behavior) = REQUIRED];
+  uint32 max_block_size = 9 [(google.api.field_behavior) = REQUIRED];
+  uint64 max_compute_units = 10 [(google.api.field_behavior) = REQUIRED];
+  uint32 max_state_units = 11 [(google.api.field_behavior) = REQUIRED];
+  uint64 price = 12 [(google.api.field_behavior) = REQUIRED];
+  google.protobuf.Timestamp block_time = 13 [(google.api.field_behavior) = REQUIRED];
+}
+
+// ExecutionStatus enumerates block execution results.
+enum ExecutionStatus {
+  EXECUTION_STATUS_UNSPECIFIED = 0;
+  EXECUTION_STATUS_PENDING = 1;
+  EXECUTION_STATUS_EXECUTED = 2;
+  EXECUTION_STATUS_FAILED = 3;
+}
+
+// BlockFooter captures execution result metadata for a block.
+message BlockFooter {
+  thru.common.v1.Signature signature = 1 [(google.api.field_behavior) = REQUIRED];
+  ExecutionStatus status = 2 [(google.api.field_behavior) = REQUIRED];
+  uint64 consumed_compute_units = 3 [(google.api.field_behavior) = REQUIRED];
+  uint32 consumed_state_units = 4 [(google.api.field_behavior) = REQUIRED];
+}
+
+// Block represents a fully decoded block resource.
+message Block {
+  BlockHeader header = 1 [(google.api.field_behavior) = REQUIRED];
+  optional BlockFooter footer = 2 [(google.api.field_behavior) = OPTIONAL];
+  optional bytes body = 3 [
+    (google.api.field_behavior) = OPTIONAL,
+    (buf.validate.field).bytes.max_len = 33554432
+  ];
+  optional thru.common.v1.ConsensusStatus consensus_status = 4
+      [(google.api.field_behavior) = OPTIONAL];
+}
+
+// RawBlock captures raw block bytes for direct access.
+message RawBlock {
+  uint64 slot = 1 [(google.api.field_behavior) = REQUIRED];
+  bytes raw_block = 2 [
+    (google.api.field_behavior) = REQUIRED,
+    (buf.validate.field).bytes.max_len = 33554432
+  ];
+}

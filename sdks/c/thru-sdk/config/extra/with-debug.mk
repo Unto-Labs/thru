@@ -18,6 +18,9 @@ CFLAGS := $(patsubst -flto,,$(CFLAGS))
 CFLAGS := $(patsubst -fdata-sections,,$(CFLAGS))
 CFLAGS := $(patsubst -ffunction-sections,,$(CFLAGS))
 
+# Force frame pointers for proper GDB backtrace support
+CFLAGS += -fno-omit-frame-pointer
+
 # Remove linker optimization flags
 LDFLAGS := $(patsubst -Wl$(comma)--gc-sections,,$(LDFLAGS))
 

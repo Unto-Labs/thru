@@ -197,16 +197,41 @@ assert_contains() {
   fi
 }
 
+transfer_with_retry() {
+  local from="$1"
+  local to="$2"
+  local amount="$3"
+  local attempts="${RETRY_ATTEMPTS:-5}"
+  local delay="${RETRY_DELAY_SECS:-2}"
+  local output
+
+  for (( attempt = 1; attempt <= attempts; attempt++ )); do
+    if output=$(with_cli_env "$THRU_CLI_BIN" --json transfer "$from" "$to" "$amount" 2>&1); then
+      printf '%s\n' "$output"
+      return 0
+    fi
+    if (( attempt < attempts )); then
+      log "Transfer $from->$to failed (attempt $attempt/$attempts): $output"
+      log "Retrying in ${delay}s..."
+      sleep "$delay"
+    fi
+  done
+
+  log "Transfer error after ${attempts} attempts: $output"
+  return 1
+}
+
 emit_slot_advancement_transfers() {
   local label="$1"
   log_section "Advancing slots: $label"
   local transfers=256
   local half=$((transfers / 2))
+  local output
   for ((i = 0; i < half; i++)); do
-    if ! with_cli_env "$THRU_CLI_BIN" --json transfer joe red_queen "$ADVANCE_TRANSFERS_VALUE" >/dev/null 2>&1; then
+    if ! output=$(transfer_with_retry joe red_queen "$ADVANCE_TRANSFERS_VALUE"); then
       die "Slot advancement transfer joe->red_queen failed on iteration $((i + 1))/$half"
     fi
-    if ! with_cli_env "$THRU_CLI_BIN" --json transfer red_queen joe "$ADVANCE_TRANSFERS_VALUE" >/dev/null 2>&1; then
+    if ! output=$(transfer_with_retry red_queen joe "$ADVANCE_TRANSFERS_VALUE"); then
       die "Slot advancement transfer red_queen->joe failed on iteration $((i + 1))/$half"
     fi
   done
@@ -349,11 +374,12 @@ keys:
   bob: "4444444444444444444444444444444444444444444444444444444444444444"
 uploader_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIC"
 manager_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQE"
+abi_manager_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACrG7"
 token_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKqq"
 wthru_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcH"
 name_service_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUF"
 thru_registrar_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYG"
-timeout_seconds: 120
+timeout_seconds: 300
 max_retries: 5
 auth_token:
 EOF
@@ -682,13 +708,8 @@ scenario_program_upgrade() {
   local upgraded_mint_account
   upgraded_mint_account=$(printf '%s' "$derive_mint_json" | jq -er '.derive_mint_account.mint_account_address')
 
-  local mint_proof_json
-  mint_proof_json=$(run_cli_json "state proof for upgraded mint account" txn make-state-proof creating "$upgraded_mint_account")
-  local mint_proof_hex
-  mint_proof_hex=$(printf '%s' "$mint_proof_json" | jq -er '.makeStateProof.proof_data_hex')
-
   local mint_init_json
-  mint_init_json=$(run_cli_json "token initialize mint (post-upgrade)" token initialize-mint "$ALICE_ADDRESS" --freeze-authority "$ALICE_ADDRESS" --decimals 9 TST "$mint_seed" "$mint_proof_hex" --fee-payer alice --token-program "$upgrade_program_account")
+  mint_init_json=$(run_cli_json "token initialize mint (post-upgrade)" token initialize-mint "$ALICE_ADDRESS" --freeze-authority "$ALICE_ADDRESS" --decimals 9 TST "$mint_seed" --fee-payer alice --token-program "$upgrade_program_account")
   assert_jq_eq "$mint_init_json" '.token_initialize_mint.status' 'success'
 
   local destroy_json
@@ -755,13 +776,8 @@ scenario_token() {
   derive_mint_json=$(run_cli_json "token derive mint account" token derive-mint-account "$ALICE_ADDRESS" "$mint_seed" --token-program "$token_program_id")
   TOKEN_MINT_ADDRESS=$(printf '%s' "$derive_mint_json" | jq -er '.derive_mint_account.mint_account_address')
 
-  local mint_proof_json
-  mint_proof_json=$(run_cli_json "state proof for mint account" txn make-state-proof creating "$TOKEN_MINT_ADDRESS")
-  local mint_proof_hex
-  mint_proof_hex=$(printf '%s' "$mint_proof_json" | jq -er '.makeStateProof.proof_data_hex')
-
   local init_mint_json
-  init_mint_json=$(run_cli_json "token initialize mint" token initialize-mint "$ALICE_ADDRESS" --freeze-authority "$ALICE_ADDRESS" --decimals 9 TST "$mint_seed" "$mint_proof_hex" --fee-payer alice --token-program "$token_program_id")
+  init_mint_json=$(run_cli_json "token initialize mint" token initialize-mint "$ALICE_ADDRESS" --freeze-authority "$ALICE_ADDRESS" --decimals 9 TST "$mint_seed" --fee-payer alice --token-program "$token_program_id")
   assert_jq_eq "$init_mint_json" '.token_initialize_mint.status' 'success'
   TOKEN_MINT_ADDRESS=$(printf '%s' "$init_mint_json" | jq -er '.token_initialize_mint.mint_account')
 
@@ -770,13 +786,8 @@ scenario_token() {
   local alice_token_account
   alice_token_account=$(printf '%s' "$derive_alice_json" | jq -er '.derive_token_account.token_account_address')
 
-  local alice_proof_json
-  alice_proof_json=$(run_cli_json "state proof for alice token account" txn make-state-proof creating "$alice_token_account")
-  local alice_proof_hex
-  alice_proof_hex=$(printf '%s' "$alice_proof_json" | jq -er '.makeStateProof.proof_data_hex')
-
   local init_alice_json
-  init_alice_json=$(run_cli_json "token initialize alice account" token initialize-account "$TOKEN_MINT_ADDRESS" "$ALICE_ADDRESS" "$alice_token_seed" "$alice_proof_hex" --fee-payer alice --token-program "$token_program_id")
+  init_alice_json=$(run_cli_json "token initialize alice account" token initialize-account "$TOKEN_MINT_ADDRESS" "$ALICE_ADDRESS" "$alice_token_seed" --fee-payer alice --token-program "$token_program_id")
   assert_jq_eq "$init_alice_json" '.token_initialize_account.status' 'success'
   alice_token_account=$(printf '%s' "$init_alice_json" | jq -er '.token_initialize_account.token_account')
 
@@ -785,13 +796,8 @@ scenario_token() {
   local bob_token_account
   bob_token_account=$(printf '%s' "$derive_bob_json" | jq -er '.derive_token_account.token_account_address')
 
-  local bob_proof_json
-  bob_proof_json=$(run_cli_json "state proof for bob token account" txn make-state-proof creating "$bob_token_account")
-  local bob_proof_hex
-  bob_proof_hex=$(printf '%s' "$bob_proof_json" | jq -er '.makeStateProof.proof_data_hex')
-
   local init_bob_json
-  init_bob_json=$(run_cli_json "token initialize bob account" token initialize-account "$TOKEN_MINT_ADDRESS" "$BOB_ADDRESS" "$bob_token_seed" "$bob_proof_hex" --fee-payer bob --token-program "$token_program_id")
+  init_bob_json=$(run_cli_json "token initialize bob account" token initialize-account "$TOKEN_MINT_ADDRESS" "$BOB_ADDRESS" "$bob_token_seed" --fee-payer bob --token-program "$token_program_id")
   assert_jq_eq "$init_bob_json" '.token_initialize_account.status' 'success'
   bob_token_account=$(printf '%s' "$init_bob_json" | jq -er '.token_initialize_account.token_account')
 

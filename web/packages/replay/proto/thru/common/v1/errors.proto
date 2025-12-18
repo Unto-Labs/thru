@@ -1,0 +1,65 @@
+syntax = "proto3";
+
+package thru.common.v1;
+
+import "buf/validate/validate.proto";
+import "google/api/field_behavior.proto";
+import "google/protobuf/timestamp.proto";
+
+option go_package = "github.com/Unto-Labs/thru-net/grpc/pkg/proto/thru/common/v1;commonv1";
+option java_multiple_files = true;
+option java_package = "network.thru.common.v1";
+option csharp_namespace = "Thru.Common.V1";
+option ruby_package = "Thru::Common::V1";
+option objc_class_prefix = "THU";
+option swift_prefix = "THU";
+
+// ErrorType captures structured error categories returned by the services.
+enum ErrorType {
+  // ERROR_TYPE_UNSPECIFIED is an unknown error condition.
+  ERROR_TYPE_UNSPECIFIED = 0;
+
+  // ERROR_TYPE_NOT_FOUND indicates requested data does not exist.
+  ERROR_TYPE_NOT_FOUND = 1;
+
+  // ERROR_TYPE_NOT_RETAINED indicates requested data was not retained under TTL.
+  ERROR_TYPE_NOT_RETAINED = 2;
+
+  // ERROR_TYPE_NOT_FOUND_OR_NOT_RETAINED indicates an ambiguous not found vs TTL case.
+  ERROR_TYPE_NOT_FOUND_OR_NOT_RETAINED = 3;
+
+  // ERROR_TYPE_INVALID_REQUEST indicates the request failed validation.
+  ERROR_TYPE_INVALID_REQUEST = 4;
+
+  // ERROR_TYPE_CEL_VALIDATION_FAILED indicates a CEL filter failed validation.
+  ERROR_TYPE_CEL_VALIDATION_FAILED = 5;
+
+  // ERROR_TYPE_INTERNAL_ERROR indicates an internal server error occurred.
+  ERROR_TYPE_INTERNAL_ERROR = 6;
+}
+
+// ErrorDetail provides structured error metadata attached to gRPC errors.
+message ErrorDetail {
+  // High-level error category.
+  ErrorType error_type = 1 [(google.api.field_behavior) = REQUIRED];
+
+  // Human-readable error summary.
+  string message = 2 [
+    (google.api.field_behavior) = REQUIRED,
+    (buf.validate.field).string.max_len = 1024
+  ];
+
+  // Optional retention window expressed in slots when applicable.
+  optional uint64 retention_window_slots = 3
+      [(google.api.field_behavior) = OPTIONAL];
+
+  // Optional retention cutoff timestamp when applicable.
+  optional google.protobuf.Timestamp retention_cutoff = 4
+      [(google.api.field_behavior) = OPTIONAL];
+
+  // Optional name of the field associated with the error.
+  optional string field_name = 5 [
+    (google.api.field_behavior) = OPTIONAL,
+    (buf.validate.field).string.max_len = 128
+  ];
+}

@@ -617,7 +617,7 @@ async fn ensure_account_absent(
     account: &Pubkey,
     label: &str,
 ) -> Result<(), CliError> {
-    if let Some(existing) = client.get_account_info(account, None).await.map_err(|e| {
+    if let Some(existing) = client.get_account_info(account, None, None).await.map_err(|e| {
         CliError::TransactionSubmission(format!("Failed to get {} account info: {}", label, e))
     })? {
         if !existing.is_new {
@@ -636,7 +636,7 @@ async fn ensure_account_exists(
     label: &str,
 ) -> Result<(), CliError> {
     if client
-        .get_account_info(account, None)
+        .get_account_info(account, None, None)
         .await
         .map_err(|e| {
             CliError::TransactionSubmission(format!("Failed to get {} account info: {}", label, e))
@@ -656,7 +656,7 @@ async fn fetch_nonce_and_balance(
     fee_payer: &KeyPair,
 ) -> Result<(u64, u64), CliError> {
     let account_info = client
-        .get_account_info(&fee_payer.address_string, None)
+        .get_account_info(&fee_payer.address_string, None, None)
         .await
         .map_err(|e| {
             CliError::TransactionSubmission(format!("Failed to get account info: {}", e))
@@ -678,7 +678,7 @@ async fn fetch_account(
     label: &str,
 ) -> Result<ChainAccount, CliError> {
     client
-        .get_account_info(pubkey, None)
+        .get_account_info(pubkey, None, None)
         .await
         .map_err(|e| {
             CliError::TransactionSubmission(format!("Failed to get {} account info: {}", label, e))

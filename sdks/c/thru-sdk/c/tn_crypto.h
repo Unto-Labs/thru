@@ -1,9 +1,31 @@
 #ifndef HEADER_tn_src_thru_consensus_tn_crypto_h
 #define HEADER_tn_src_thru_consensus_tn_crypto_h
 
-#include "tn_sdk.h"
-#include "tn_sdk_base.h"
 #include <blst.h>
+
+#ifndef IN_SMART_CONTRACT
+  #if defined(__has_include)
+    #if __has_include("tn_sdk.h")
+      #define IN_SMART_CONTRACT 1
+    #else
+      #define IN_SMART_CONTRACT 0
+    #endif
+  #else
+    #error "IN_SMART_CONTRACT not defined and __has_include not available; define it before including state.h"
+  #endif
+#endif
+
+#if IN_SMART_CONTRACT
+#include "tn_sdk_base.h"
+#define LIKELY TSDK_LIKELY
+#define UNLIKELY TSDK_UNLIKELY
+#define FN_CONST TSDK_FN_CONST
+#else
+#include "../../../firedancer/src/util/fd_util.h"
+#define LIKELY FD_LIKELY
+#define UNLIKELY FD_UNLIKELY
+#define FN_CONST FD_FN_CONST
+#endif
 
 /* Error codes for crypto operations */
 #define TN_CRYPTO_SUCCESS 0
@@ -12,13 +34,12 @@
 #define TN_CRYPTO_ERR_SIGN_FAILED -3
 #define TN_CRYPTO_ERR_VERIFY_FAILED -4
 #define TN_CRYPTO_ERR_AGGREGATE_FAILED -5
+#define TN_CRYPTO_ERR_INVALID_PUBKEY -6
 
 /* BLS types for certificates - use actual blst types */
 typedef blst_scalar tn_bls_private_key_t;
 typedef blst_p1_affine tn_bls_pubkey_t;
 typedef blst_p2_affine tn_bls_signature_t;
-
-TSDK_PROTOTYPES_BEGIN
 
 /* tn_crypto_generate_keypair generates a BLS keypair */
 int tn_crypto_generate_keypair(tn_bls_pubkey_t* pubkey,
@@ -57,6 +78,7 @@ int tn_crypto_verify_aggregate(tn_bls_signature_t const* aggregate_sig,
                                tn_bls_pubkey_t const* aggregate_pk,
                                void const* message, ulong message_len);
 
-TSDK_PROTOTYPES_END
+/* tn_crypto_pubkey_on_curve verifies a pubkey lies on the BLS12-381 curve */
+int tn_crypto_pubkey_on_curve(tn_bls_pubkey_t const* pubkey);
 
 #endif /* HEADER_tn_src_thru_consensus_tn_crypto_h */

@@ -2,6 +2,18 @@
 
 use clap::{Parser, Subcommand};
 
+/// Parse and validate chunk size (1024-31000 bytes)
+fn parse_chunk_size(s: &str) -> Result<usize, String> {
+    let size: usize = s.parse().map_err(|_| format!("'{}' is not a valid number", s))?;
+    if size < 1024 {
+        return Err(format!("chunk size {} is too small (minimum: 1024)", size));
+    }
+    if size > 31000 {
+        return Err(format!("chunk size {} is too large (maximum: 31000)", size));
+    }
+    Ok(size)
+}
+
 /// Thru CLI - Command-line interface for the Thru blockchain
 #[derive(Parser)]
 #[command(name = "thru-cli")]
@@ -77,6 +89,13 @@ pub enum Commands {
     Uploader {
         #[command(subcommand)]
         subcommand: UploaderCommands,
+    },
+
+    /// ABI management commands
+    #[command(name = "abi")]
+    Abi {
+        #[command(subcommand)]
+        subcommand: AbiCommands,
     },
 
     /// Key management commands
@@ -179,6 +198,10 @@ pub enum ProgramCommands {
 
         /// Program file to upload and create managed program from
         program_file: String,
+
+        /// Chunk size for upload (1024-31000 bytes, default: 30720)
+        #[arg(long, value_parser = parse_chunk_size, default_value = "30720")]
+        chunk_size: usize,
     },
 
     /// Upgrade an existing managed program
@@ -196,6 +219,10 @@ pub enum ProgramCommands {
 
         /// Program file to upload and upgrade managed program with
         program_file: String,
+
+        /// Chunk size for upload (1024-31000 bytes, default: 30720)
+        #[arg(long, value_parser = parse_chunk_size, default_value = "30720")]
+        chunk_size: usize,
     },
 
     /// Pause or unpause a managed program
@@ -297,6 +324,134 @@ pub enum ProgramCommands {
         /// Ephemeral flag
         #[arg(long)]
         ephemeral: bool,
+    },
+
+    /// Derive both meta and program account addresses from a seed
+    DeriveManagerAccounts {
+        /// Manager program public key (optional, uses config default if not specified)
+        #[arg(long)]
+        manager: Option<String>,
+
+        /// Seed for account derivation (UTF-8 string, max 32 bytes)
+        seed: String,
+
+        /// Ephemeral flag
+        #[arg(long)]
+        ephemeral: bool,
+    },
+
+    /// Check status of program and related accounts
+    Status {
+        /// Manager program public key (optional, uses config default if not specified)
+        #[arg(long)]
+        manager: Option<String>,
+
+        /// Seed for account derivation (UTF-8 string, max 32 bytes)
+        seed: String,
+
+        /// Ephemeral flag
+        #[arg(long)]
+        ephemeral: bool,
+    },
+}
+
+/// ABI-related subcommands
+#[derive(Subcommand)]
+pub enum AbiCommands {
+    /// Create an ABI account for a managed program
+    Create {
+        /// Program type (ephemeral matches the managed program)
+        #[arg(long)]
+        ephemeral: bool,
+
+        /// Seed for the managed program meta account
+        seed: String,
+
+        /// Fee payer account (optional, defaults to config default)
+        #[arg(long = "fee-payer")]
+        fee_payer: Option<String>,
+
+        /// Authority account name from config (optional, defaults to 'default')
+        #[arg(long)]
+        authority: Option<String>,
+
+        /// ABI definition file to upload
+        abi_file: String,
+    },
+
+    /// Upgrade an existing ABI account
+    Upgrade {
+        /// Program type (ephemeral matches the managed program)
+        #[arg(long)]
+        ephemeral: bool,
+
+        /// Seed for the managed program meta account
+        seed: String,
+
+        /// Fee payer account (optional, defaults to config default)
+        #[arg(long = "fee-payer")]
+        fee_payer: Option<String>,
+
+        /// Authority account name from config (optional, defaults to 'default')
+        #[arg(long)]
+        authority: Option<String>,
+
+        /// ABI definition file to upload
+        abi_file: String,
+    },
+
+    /// Finalize an ABI account so it becomes immutable
+    Finalize {
+        /// Program type (ephemeral matches the managed program)
+        #[arg(long)]
+        ephemeral: bool,
+
+        /// Seed for the managed program meta account
+        seed: String,
+
+        /// Fee payer account (optional, defaults to config default)
+        #[arg(long = "fee-payer")]
+        fee_payer: Option<String>,
+
+        /// Authority account name from config (optional, defaults to 'default')
+        #[arg(long)]
+        authority: Option<String>,
+    },
+
+    /// Close an ABI account and reclaim its lamports
+    Close {
+        /// Program type (ephemeral matches the managed program)
+        #[arg(long)]
+        ephemeral: bool,
+
+        /// Seed for the managed program meta account
+        seed: String,
+
+        /// Fee payer account (optional, defaults to config default)
+        #[arg(long = "fee-payer")]
+        fee_payer: Option<String>,
+
+        /// Authority account name from config (optional, defaults to 'default')
+        #[arg(long)]
+        authority: Option<String>,
+    },
+
+    /// Inspect an ABI account's metadata and optionally dump its YAML contents
+    Get {
+        /// Program type (ephemeral matches the managed program)
+        #[arg(long)]
+        ephemeral: bool,
+
+        /// Associated program account public key (base58)
+        program_account: String,
+
+        /// Whether to include ABI YAML contents in the CLI output (Y/N, defaults to N)
+        #[arg(long = "data", default_value = "N")]
+        data: String,
+
+        /// Optional file path to write the ABI YAML contents
+        #[arg(long = "out")]
+        out: Option<String>,
     },
 }
 

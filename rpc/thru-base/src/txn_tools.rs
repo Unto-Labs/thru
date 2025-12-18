@@ -845,6 +845,12 @@ pub const MANAGER_INSTRUCTION_FINALIZE: u8 = 0x05;
 pub const MANAGER_INSTRUCTION_SET_AUTHORITY: u8 = 0x06;
 pub const MANAGER_INSTRUCTION_CLAIM_AUTHORITY: u8 = 0x07;
 
+pub const ABI_MANAGER_INSTRUCTION_CREATE_PERMANENT: u8 = 0x00;
+pub const ABI_MANAGER_INSTRUCTION_CREATE_EPHEMERAL: u8 = 0x01;
+pub const ABI_MANAGER_INSTRUCTION_UPGRADE: u8 = 0x02;
+pub const ABI_MANAGER_INSTRUCTION_CLOSE: u8 = 0x03;
+pub const ABI_MANAGER_INSTRUCTION_FINALIZE: u8 = 0x04;
+
 /// Manager program header arguments (matches C struct)
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]
@@ -879,6 +885,49 @@ pub struct ManagerUpgradeArgs {
     pub srcbuf_account_idx: u16,
     pub srcbuf_offset: u32,
     pub srcbuf_size: u32,
+}
+
+/// ABI manager program CREATE instruction arguments (matches C struct)
+#[repr(C, packed)]
+#[derive(Debug, Clone, Copy)]
+pub struct AbiManagerCreateArgs {
+    pub program_meta_account_idx: u16,
+    pub abi_account_idx: u16,
+    pub srcbuf_account_idx: u16,
+    pub srcbuf_offset: u32,
+    pub srcbuf_size: u32,
+    pub authority_account_idx: u16,
+    pub seed: [u8; 32],  // Fixed 32-byte seed
+}
+
+/// ABI manager program UPGRADE instruction arguments (matches C struct)
+#[repr(C, packed)]
+#[derive(Debug, Clone, Copy)]
+pub struct AbiManagerUpgradeArgs {
+    pub program_meta_account_idx: u16,
+    pub abi_account_idx: u16,
+    pub srcbuf_account_idx: u16,
+    pub srcbuf_offset: u32,
+    pub srcbuf_size: u32,
+    pub authority_account_idx: u16,
+}
+
+/// ABI manager program FINALIZE instruction arguments (matches C struct)
+#[repr(C, packed)]
+#[derive(Debug, Clone, Copy)]
+pub struct AbiManagerFinalizeArgs {
+    pub program_meta_account_idx: u16,
+    pub abi_account_idx: u16,
+    pub authority_account_idx: u16,
+}
+
+/// ABI manager program CLOSE instruction arguments (matches C struct)
+#[repr(C, packed)]
+#[derive(Debug, Clone, Copy)]
+pub struct AbiManagerCloseArgs {
+    pub program_meta_account_idx: u16,
+    pub abi_account_idx: u16,
+    pub authority_account_idx: u16,
 }
 
 /// Manager program SET_PAUSE instruction arguments (matches C struct)
@@ -1220,6 +1269,325 @@ impl TransactionBuilder {
             srcbuf_size,
             seed,
             combined_proof.as_deref(),
+        )?;
+
+        tx = tx.with_instructions(instruction_data);
+        Ok(tx)
+    }
+
+    /// Build ABI manager program CREATE transaction
+    #[allow(clippy::too_many_arguments)]
+    pub fn build_abi_manager_create(
+        fee_payer: TnPubkey,
+        abi_manager_program: TnPubkey,
+        program_meta_account: TnPubkey,
+        abi_account: TnPubkey,
+        srcbuf_account: TnPubkey,
+        authority_account: TnPubkey,
+        srcbuf_offset: u32,
+        srcbuf_size: u32,
+        seed: &[u8],
+        is_ephemeral: bool,
+        abi_proof: Option<&[u8]>,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let mut tx = Transaction::new(fee_payer, abi_manager_program, fee, nonce)
+            .with_start_slot(start_slot)
+            .with_expiry_after(10000)
+            .with_compute_units(500_000_000)
+            .with_memory_units(5000)
+            .with_state_units(5000);
+
+        let authority_is_fee_payer = authority_account == fee_payer;
+
+        let mut rw_accounts = vec![(program_meta_account, "meta"), (abi_account, "abi")];
+
+        let mut r_accounts = vec![(srcbuf_account, "srcbuf")];
+
+        if !authority_is_fee_payer {
+            r_accounts.push((authority_account, "authority"));
+        }
+
+        rw_accounts.sort_by(|a, b| a.0.cmp(&b.0));
+        r_accounts.sort_by(|a, b| a.0.cmp(&b.0));
+
+        let mut accounts = rw_accounts;
+        accounts.extend(r_accounts);
+
+        let mut program_meta_account_idx = 0u16;
+        let mut abi_account_idx = 0u16;
+        let mut srcbuf_account_idx = 0u16;
+        let mut authority_account_idx = 0u16;
+
+        for (i, (account, account_type)) in accounts.iter().enumerate() {
+            let idx = (i + 2) as u16;
+            match *account_type {
+                "meta" => {
+                    program_meta_account_idx = idx;
+                    tx = tx.add_rw_account(*account);
+                }
+                "abi" => {
+                    abi_account_idx = idx;
+                    tx = tx.add_rw_account(*account);
+                }
+                "srcbuf" => {
+                    srcbuf_account_idx = idx;
+                    tx = tx.add_r_account(*account);
+                }
+                "authority" => {
+                    authority_account_idx = idx;
+                    tx = tx.add_r_account(*account);
+                }
+                _ => unreachable!(),
+            }
+        }
+
+        let discriminant = if is_ephemeral {
+            ABI_MANAGER_INSTRUCTION_CREATE_EPHEMERAL
+        } else {
+            ABI_MANAGER_INSTRUCTION_CREATE_PERMANENT
+        };
+
+        let instruction_data = build_abi_manager_create_instruction(
+            discriminant,
+            program_meta_account_idx,
+            abi_account_idx,
+            srcbuf_account_idx,
+            srcbuf_offset,
+            srcbuf_size,
+            authority_account_idx,
+            seed,
+            abi_proof,
+        )?;
+
+        tx = tx.with_instructions(instruction_data);
+        Ok(tx)
+    }
+
+    /// Build ABI manager program UPGRADE transaction
+    #[allow(clippy::too_many_arguments)]
+    pub fn build_abi_manager_upgrade(
+        fee_payer: TnPubkey,
+        abi_manager_program: TnPubkey,
+        program_meta_account: TnPubkey,
+        abi_account: TnPubkey,
+        srcbuf_account: TnPubkey,
+        authority_account: TnPubkey,
+        srcbuf_offset: u32,
+        srcbuf_size: u32,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let mut tx = Transaction::new(fee_payer, abi_manager_program, fee, nonce)
+            .with_start_slot(start_slot)
+            .with_expiry_after(10000)
+            .with_compute_units(500_000_000)
+            .with_memory_units(5000)
+            .with_state_units(5000);
+
+        let authority_is_fee_payer = authority_account == fee_payer;
+
+        let mut rw_accounts = vec![(program_meta_account, "meta"), (abi_account, "abi")];
+        let mut r_accounts = vec![(srcbuf_account, "srcbuf")];
+
+        if !authority_is_fee_payer {
+            r_accounts.push((authority_account, "authority"));
+        }
+
+        rw_accounts.sort_by(|a, b| a.0.cmp(&b.0));
+        r_accounts.sort_by(|a, b| a.0.cmp(&b.0));
+
+        let mut accounts = rw_accounts;
+        accounts.extend(r_accounts);
+
+        let mut program_meta_account_idx = 0u16;
+        let mut abi_account_idx = 0u16;
+        let mut srcbuf_account_idx = 0u16;
+        let mut authority_account_idx = 0u16;
+
+        for (i, (account, account_type)) in accounts.iter().enumerate() {
+            let idx = (i + 2) as u16;
+            match *account_type {
+                "meta" => {
+                    program_meta_account_idx = idx;
+                    tx = tx.add_rw_account(*account);
+                }
+                "abi" => {
+                    abi_account_idx = idx;
+                    tx = tx.add_rw_account(*account);
+                }
+                "srcbuf" => {
+                    srcbuf_account_idx = idx;
+                    tx = tx.add_r_account(*account);
+                }
+                "authority" => {
+                    authority_account_idx = idx;
+                    tx = tx.add_r_account(*account);
+                }
+                _ => unreachable!(),
+            }
+        }
+
+        let authority_idx = if authority_is_fee_payer {
+            0u16
+        } else {
+            authority_account_idx
+        };
+
+        let instruction_data = build_abi_manager_upgrade_instruction(
+            program_meta_account_idx,
+            abi_account_idx,
+            srcbuf_account_idx,
+            srcbuf_offset,
+            srcbuf_size,
+            authority_idx,
+        )?;
+
+        tx = tx.with_instructions(instruction_data);
+        Ok(tx)
+    }
+
+    /// Build ABI manager program FINALIZE transaction
+    pub fn build_abi_manager_finalize(
+        fee_payer: TnPubkey,
+        abi_manager_program: TnPubkey,
+        program_meta_account: TnPubkey,
+        abi_account: TnPubkey,
+        authority_account: TnPubkey,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let mut tx = Transaction::new(fee_payer, abi_manager_program, fee, nonce)
+            .with_start_slot(start_slot)
+            .with_expiry_after(10000)
+            .with_compute_units(500_000_000)
+            .with_memory_units(5000)
+            .with_state_units(5000);
+
+        let authority_is_fee_payer = authority_account == fee_payer;
+
+        let mut rw_accounts = vec![(program_meta_account, "meta"), (abi_account, "abi")];
+        let mut r_accounts = Vec::new();
+
+        if !authority_is_fee_payer {
+            r_accounts.push((authority_account, "authority"));
+        }
+
+        rw_accounts.sort_by(|a, b| a.0.cmp(&b.0));
+        r_accounts.sort_by(|a, b| a.0.cmp(&b.0));
+
+        let mut accounts = rw_accounts;
+        accounts.extend(r_accounts);
+
+        let mut program_meta_account_idx = 0u16;
+        let mut abi_account_idx = 0u16;
+        let mut authority_account_idx = 0u16;
+
+        for (i, (account, account_type)) in accounts.iter().enumerate() {
+            let idx = (i + 2) as u16;
+            match *account_type {
+                "meta" => {
+                    program_meta_account_idx = idx;
+                    tx = tx.add_rw_account(*account);
+                }
+                "abi" => {
+                    abi_account_idx = idx;
+                    tx = tx.add_rw_account(*account);
+                }
+                "authority" => {
+                    authority_account_idx = idx;
+                    tx = tx.add_r_account(*account);
+                }
+                _ => unreachable!(),
+            }
+        }
+
+        let authority_idx = if authority_is_fee_payer {
+            0u16
+        } else {
+            authority_account_idx
+        };
+
+        let instruction_data = build_abi_manager_finalize_instruction(
+            program_meta_account_idx,
+            abi_account_idx,
+            authority_idx,
+        )?;
+
+        tx = tx.with_instructions(instruction_data);
+        Ok(tx)
+    }
+
+    /// Build ABI manager program CLOSE transaction
+    pub fn build_abi_manager_close(
+        fee_payer: TnPubkey,
+        abi_manager_program: TnPubkey,
+        program_meta_account: TnPubkey,
+        abi_account: TnPubkey,
+        authority_account: TnPubkey,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let mut tx = Transaction::new(fee_payer, abi_manager_program, fee, nonce)
+            .with_start_slot(start_slot)
+            .with_expiry_after(10000)
+            .with_compute_units(500_000_000)
+            .with_memory_units(5000)
+            .with_state_units(5000);
+
+        let authority_is_fee_payer = authority_account == fee_payer;
+
+        let mut rw_accounts = vec![(program_meta_account, "meta"), (abi_account, "abi")];
+        let mut r_accounts = Vec::new();
+
+        if !authority_is_fee_payer {
+            r_accounts.push((authority_account, "authority"));
+        }
+
+        rw_accounts.sort_by(|a, b| a.0.cmp(&b.0));
+        r_accounts.sort_by(|a, b| a.0.cmp(&b.0));
+
+        let mut accounts = rw_accounts;
+        accounts.extend(r_accounts);
+
+        let mut program_meta_account_idx = 0u16;
+        let mut abi_account_idx = 0u16;
+        let mut authority_account_idx = 0u16;
+
+        for (i, (account, account_type)) in accounts.iter().enumerate() {
+            let idx = (i + 2) as u16;
+            match *account_type {
+                "meta" => {
+                    program_meta_account_idx = idx;
+                    tx = tx.add_rw_account(*account);
+                }
+                "abi" => {
+                    abi_account_idx = idx;
+                    tx = tx.add_rw_account(*account);
+                }
+                "authority" => {
+                    authority_account_idx = idx;
+                    tx = tx.add_r_account(*account);
+                }
+                _ => unreachable!(),
+            }
+        }
+
+        let authority_idx = if authority_is_fee_payer {
+            0u16
+        } else {
+            authority_account_idx
+        };
+
+        let instruction_data = build_abi_manager_close_instruction(
+            program_meta_account_idx,
+            abi_account_idx,
+            authority_idx,
         )?;
 
         tx = tx.with_instructions(instruction_data);
@@ -1753,6 +2121,148 @@ fn build_manager_create_instruction(
         instruction.extend_from_slice(proof_bytes);
     }
 
+    Ok(instruction)
+}
+
+/// Build ABI manager CREATE instruction data
+fn build_abi_manager_create_instruction(
+    discriminant: u8,
+    program_meta_account_idx: u16,
+    abi_account_idx: u16,
+    srcbuf_account_idx: u16,
+    srcbuf_offset: u32,
+    srcbuf_size: u32,
+    authority_account_idx: u16,
+    seed: &[u8],
+    proof: Option<&[u8]>,
+) -> Result<Vec<u8>> {
+    let mut instruction = Vec::new();
+
+    // Prepare 32-byte seed: pad with zeros or hash if too long
+    let mut seed_bytes = [0u8; 32];
+    if seed.len() <= 32 {
+        seed_bytes[..seed.len()].copy_from_slice(seed);
+    } else {
+        // Hash the seed if it's longer than 32 bytes
+        use sha2::{Digest, Sha256};
+        let hash = Sha256::digest(seed);
+        seed_bytes.copy_from_slice(&hash);
+    }
+
+    // Write discriminant byte first
+    instruction.push(discriminant);
+
+    let args = AbiManagerCreateArgs {
+        program_meta_account_idx,
+        abi_account_idx,
+        srcbuf_account_idx,
+        srcbuf_offset,
+        srcbuf_size,
+        authority_account_idx,
+        seed: seed_bytes,
+    };
+
+    let args_bytes = unsafe {
+        std::slice::from_raw_parts(
+            &args as *const AbiManagerCreateArgs as *const u8,
+            std::mem::size_of::<AbiManagerCreateArgs>(),
+        )
+    };
+
+    instruction.extend_from_slice(args_bytes);
+    // Note: seed is now part of the struct, no need to append separately
+
+    if let Some(proof_bytes) = proof {
+        instruction.extend_from_slice(proof_bytes);
+    }
+
+    Ok(instruction)
+}
+
+fn build_abi_manager_upgrade_instruction(
+    program_meta_account_idx: u16,
+    abi_account_idx: u16,
+    srcbuf_account_idx: u16,
+    srcbuf_offset: u32,
+    srcbuf_size: u32,
+    authority_account_idx: u16,
+) -> Result<Vec<u8>> {
+    let mut instruction = Vec::new();
+
+    // Write discriminant byte first
+    instruction.push(ABI_MANAGER_INSTRUCTION_UPGRADE);
+
+    let args = AbiManagerUpgradeArgs {
+        program_meta_account_idx,
+        abi_account_idx,
+        srcbuf_account_idx,
+        srcbuf_offset,
+        srcbuf_size,
+        authority_account_idx,
+    };
+
+    let args_bytes = unsafe {
+        std::slice::from_raw_parts(
+            &args as *const AbiManagerUpgradeArgs as *const u8,
+            std::mem::size_of::<AbiManagerUpgradeArgs>(),
+        )
+    };
+
+    instruction.extend_from_slice(args_bytes);
+    Ok(instruction)
+}
+
+fn build_abi_manager_finalize_instruction(
+    program_meta_account_idx: u16,
+    abi_account_idx: u16,
+    authority_account_idx: u16,
+) -> Result<Vec<u8>> {
+    let mut instruction = Vec::new();
+
+    // Write discriminant byte first
+    instruction.push(ABI_MANAGER_INSTRUCTION_FINALIZE);
+
+    let args = AbiManagerFinalizeArgs {
+        program_meta_account_idx,
+        abi_account_idx,
+        authority_account_idx,
+    };
+
+    let args_bytes = unsafe {
+        std::slice::from_raw_parts(
+            &args as *const AbiManagerFinalizeArgs as *const u8,
+            std::mem::size_of::<AbiManagerFinalizeArgs>(),
+        )
+    };
+
+    instruction.extend_from_slice(args_bytes);
+    Ok(instruction)
+}
+
+fn build_abi_manager_close_instruction(
+    program_meta_account_idx: u16,
+    abi_account_idx: u16,
+    authority_account_idx: u16,
+) -> Result<Vec<u8>> {
+    let mut instruction = Vec::new();
+
+    // Write discriminant byte first
+    instruction.push(ABI_MANAGER_INSTRUCTION_CLOSE);
+
+    let args = AbiManagerCloseArgs {
+        program_meta_account_idx,
+        abi_account_idx,
+        authority_account_idx,
+    };
+
+    let args_bytes = unsafe {
+        std::slice::from_raw_parts(
+            &args as *const AbiManagerCloseArgs as *const u8,
+            std::mem::size_of::<AbiManagerCloseArgs>(),
+        )
+    };
+
+    instruction.extend_from_slice(args_bytes);
     Ok(instruction)
 }
 

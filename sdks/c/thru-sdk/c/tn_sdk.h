@@ -112,15 +112,11 @@ tsdk_block_ctx_t const* tsdk_get_past_block_ctx(ulong blocks_in_past);
 
 tsdk_shadow_stack_t const* tsdk_get_shadow_stack(void);
 
-ulong tsdk_set_stack_sz(ulong sz);
-
 void __attribute__((noreturn)) tsdk_revert(ulong error_code);
 
 void __attribute__((noreturn)) tsdk_return(ulong return_code);
 
 void __attribute__((format(printf, 1, 2))) tsdk_printf(char const* fmt, ...);
-
-void* tsdk_aligned_alloc(ulong align, ulong sz);
 
 int tsdk_is_account_authorized_by_idx(ushort account_idx);
 

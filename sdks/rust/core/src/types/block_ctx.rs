@@ -16,11 +16,9 @@ pub struct BlockCtx {
     pub block_time: u64,
     /// Block price
     pub block_price: u64,
-    /// Hash of the parent block
-    pub parent_blockhash: Hash,
     /// Merkle root of the state tree
     pub state_root: Hash,
-    /// Hash of the current block (truncated to 32 bytes)
+    /// Hash of the current block
     pub cur_block_hash: Hash,
     /// Public key of the block producer
     pub block_producer: Pubkey,

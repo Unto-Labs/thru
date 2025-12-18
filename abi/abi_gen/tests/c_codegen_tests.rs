@@ -5,35 +5,39 @@
  */
 
 use abi_gen::abi::file::AbiFile;
-use abi_gen::abi::resolved::{TypeResolver, ResolvedType};
+use abi_gen::abi::resolved::{ResolvedType, TypeResolver};
 use abi_gen::codegen::c::{CCodeGenerator, CCodeGeneratorOptions};
-use std::process::Command;
 use std::fs;
 use std::path::Path;
+use std::process::Command;
 
 /* Helper to resolve types from ABI file */
-fn resolve_types_from_abi(abi_path: &str) -> Result<Vec<ResolvedType>, String> {
+fn resolve_types_from_abi(abi_path: &str) -> Result<TypeResolver, String> {
     /* Load and parse the ABI file */
-    let yaml_content = fs::read_to_string(abi_path)
-        .map_err(|e| format!("Failed to read file: {}", e))?;
+    let yaml_content =
+        fs::read_to_string(abi_path).map_err(|e| format!("Failed to read file: {}", e))?;
 
-    let abi: AbiFile = serde_yml::from_str(&yaml_content)
-        .map_err(|e| format!("Failed to parse YAML: {}", e))?;
+    let abi: AbiFile =
+        serde_yml::from_str(&yaml_content).map_err(|e| format!("Failed to parse YAML: {}", e))?;
 
     let mut resolver = TypeResolver::new();
     for typedef in &abi.types {
         resolver.add_typedef(typedef.clone());
     }
 
-    resolver.resolve_all().map_err(|e| format!("Failed to resolve types: {:?}", e))?;
+    resolver
+        .resolve_all()
+        .map_err(|e| format!("Failed to resolve types: {:?}", e))?;
 
-    let resolved_types: Vec<ResolvedType> = resolver
+    Ok(resolver)
+}
+
+fn collect_resolved_refs<'a>(resolver: &'a TypeResolver) -> Vec<&'a ResolvedType> {
+    resolver
         .resolution_order
         .iter()
-        .filter_map(|name| resolver.get_type_info(name).cloned())
-        .collect();
-
-    Ok(resolved_types)
+        .filter_map(|name| resolver.get_type_info(name))
+        .collect()
 }
 
 /* Helper to compile C code and check for errors */
@@ -127,15 +131,18 @@ types:
     let temp_file = std::env::temp_dir().join("primitives_test.abi.yaml");
     fs::write(&temp_file, abi_content).expect("Failed to write temp ABI file");
 
-    let resolved_types = resolve_types_from_abi(temp_file.to_str().unwrap())
-        .expect("Failed to resolve types");
+    let resolver =
+        resolve_types_from_abi(temp_file.to_str().unwrap()).expect("Failed to resolve types");
 
-    let resolved_refs: Vec<&ResolvedType> = resolved_types.iter().collect();
+    let resolved_refs = collect_resolved_refs(&resolver);
 
-    let c_gen = CCodeGenerator::new(CCodeGeneratorOptions {
-        output_dir: std::env::temp_dir().to_str().unwrap().to_string(),
-        ..Default::default()
-    });
+    let c_gen = CCodeGenerator::new(
+        &resolver,
+        CCodeGeneratorOptions {
+            output_dir: std::env::temp_dir().to_str().unwrap().to_string(),
+            ..Default::default()
+        },
+    );
 
     let c_code = c_gen.emit_code(&resolved_refs);
 
@@ -185,14 +192,17 @@ types:
     let temp_file = std::env::temp_dir().join("arrays_test.abi.yaml");
     fs::write(&temp_file, abi_content).expect("Failed to write temp ABI file");
 
-    let resolved_types = resolve_types_from_abi(temp_file.to_str().unwrap())
-        .expect("Failed to resolve types");
-    let resolved_refs: Vec<&ResolvedType> = resolved_types.iter().collect();
+    let resolver =
+        resolve_types_from_abi(temp_file.to_str().unwrap()).expect("Failed to resolve types");
+    let resolved_refs = collect_resolved_refs(&resolver);
 
-    let c_gen = CCodeGenerator::new(CCodeGeneratorOptions {
-        output_dir: std::env::temp_dir().to_str().unwrap().to_string(),
-        ..Default::default()
-    });
+    let c_gen = CCodeGenerator::new(
+        &resolver,
+        CCodeGeneratorOptions {
+            output_dir: std::env::temp_dir().to_str().unwrap().to_string(),
+            ..Default::default()
+        },
+    );
 
     let c_code = c_gen.emit_code(&resolved_refs);
 
@@ -232,14 +242,17 @@ types:
     let temp_file = std::env::temp_dir().join("fam_test.abi.yaml");
     fs::write(&temp_file, abi_content).expect("Failed to write temp ABI file");
 
-    let resolved_types = resolve_types_from_abi(temp_file.to_str().unwrap())
-        .expect("Failed to resolve types");
-    let resolved_refs: Vec<&ResolvedType> = resolved_types.iter().collect();
+    let resolver =
+        resolve_types_from_abi(temp_file.to_str().unwrap()).expect("Failed to resolve types");
+    let resolved_refs = collect_resolved_refs(&resolver);
 
-    let c_gen = CCodeGenerator::new(CCodeGeneratorOptions {
-        output_dir: std::env::temp_dir().to_str().unwrap().to_string(),
-        ..Default::default()
-    });
+    let c_gen = CCodeGenerator::new(
+        &resolver,
+        CCodeGeneratorOptions {
+            output_dir: std::env::temp_dir().to_str().unwrap().to_string(),
+            ..Default::default()
+        },
+    );
 
     let c_code = c_gen.emit_code(&resolved_refs);
 
@@ -268,14 +281,17 @@ fn test_c_advanced_types() {
         return;
     }
 
-    let resolved_types = resolve_types_from_abi(abi_path.to_str().unwrap())
-        .expect("Failed to resolve types");
-    let resolved_refs: Vec<&ResolvedType> = resolved_types.iter().collect();
+    let resolver =
+        resolve_types_from_abi(abi_path.to_str().unwrap()).expect("Failed to resolve types");
+    let resolved_refs = collect_resolved_refs(&resolver);
 
-    let c_gen = CCodeGenerator::new(CCodeGeneratorOptions {
-        output_dir: std::env::temp_dir().to_str().unwrap().to_string(),
-        ..Default::default()
-    });
+    let c_gen = CCodeGenerator::new(
+        &resolver,
+        CCodeGeneratorOptions {
+            output_dir: std::env::temp_dir().to_str().unwrap().to_string(),
+            ..Default::default()
+        },
+    );
 
     let c_code = c_gen.emit_code(&resolved_refs);
 
@@ -321,14 +337,17 @@ types:
     let temp_file = std::env::temp_dir().join("enums_test.abi.yaml");
     fs::write(&temp_file, abi_content).expect("Failed to write temp ABI file");
 
-    let resolved_types = resolve_types_from_abi(temp_file.to_str().unwrap())
-        .expect("Failed to resolve types");
-    let resolved_refs: Vec<&ResolvedType> = resolved_types.iter().collect();
+    let resolver =
+        resolve_types_from_abi(temp_file.to_str().unwrap()).expect("Failed to resolve types");
+    let resolved_refs = collect_resolved_refs(&resolver);
 
-    let c_gen = CCodeGenerator::new(CCodeGeneratorOptions {
-        output_dir: std::env::temp_dir().to_str().unwrap().to_string(),
-        ..Default::default()
-    });
+    let c_gen = CCodeGenerator::new(
+        &resolver,
+        CCodeGeneratorOptions {
+            output_dir: std::env::temp_dir().to_str().unwrap().to_string(),
+            ..Default::default()
+        },
+    );
 
     let c_code = c_gen.emit_code(&resolved_refs);
 
@@ -366,14 +385,17 @@ types:
     let temp_file = std::env::temp_dir().join("unions_test.abi.yaml");
     fs::write(&temp_file, abi_content).expect("Failed to write temp ABI file");
 
-    let resolved_types = resolve_types_from_abi(temp_file.to_str().unwrap())
-        .expect("Failed to resolve types");
-    let resolved_refs: Vec<&ResolvedType> = resolved_types.iter().collect();
+    let resolver =
+        resolve_types_from_abi(temp_file.to_str().unwrap()).expect("Failed to resolve types");
+    let resolved_refs = collect_resolved_refs(&resolver);
 
-    let c_gen = CCodeGenerator::new(CCodeGeneratorOptions {
-        output_dir: std::env::temp_dir().to_str().unwrap().to_string(),
-        ..Default::default()
-    });
+    let c_gen = CCodeGenerator::new(
+        &resolver,
+        CCodeGeneratorOptions {
+            output_dir: std::env::temp_dir().to_str().unwrap().to_string(),
+            ..Default::default()
+        },
+    );
 
     let c_code = c_gen.emit_code(&resolved_refs);
 
@@ -416,14 +438,17 @@ types:
     let temp_file = std::env::temp_dir().join("nested_test.abi.yaml");
     fs::write(&temp_file, abi_content).expect("Failed to write temp ABI file");
 
-    let resolved_types = resolve_types_from_abi(temp_file.to_str().unwrap())
-        .expect("Failed to resolve types");
-    let resolved_refs: Vec<&ResolvedType> = resolved_types.iter().collect();
+    let resolver =
+        resolve_types_from_abi(temp_file.to_str().unwrap()).expect("Failed to resolve types");
+    let resolved_refs = collect_resolved_refs(&resolver);
 
-    let c_gen = CCodeGenerator::new(CCodeGeneratorOptions {
-        output_dir: std::env::temp_dir().to_str().unwrap().to_string(),
-        ..Default::default()
-    });
+    let c_gen = CCodeGenerator::new(
+        &resolver,
+        CCodeGeneratorOptions {
+            output_dir: std::env::temp_dir().to_str().unwrap().to_string(),
+            ..Default::default()
+        },
+    );
 
     let c_code = c_gen.emit_code(&resolved_refs);
 

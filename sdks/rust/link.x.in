@@ -66,6 +66,7 @@ SECTIONS
 
   /* -------------------------------------------------------------------- */
   /* Sections we simply do not need in the final image                     */
+  /* Note: .debug_frame is preserved as orphan section for GDB unwinding  */
   /DISCARD/ :
   {
     *(.eh_frame)

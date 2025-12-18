@@ -6,9 +6,10 @@ pub mod mem;
 pub mod syscall;
 pub mod types;
 
-pub use account_safe::{next_pow2, AccountManager};
+pub use account_safe::{next_pow2, AccountManager, AccountError};
 pub use account_safe::AccountRef::*;
 pub use mem::get_txn;
+pub use mem::MemoryError;
 pub use types::pubkey::Pubkey;
 pub use types::shadow_stack::get_shadow_stack;
 
@@ -63,13 +64,14 @@ pub mod program_utils {
 
         // If there are no called program invocations by this point, the account is
         // not authorized. This is an optimization to avoid the loop below.
-        if shadow_stack.call_depth() == 0 {
+        if shadow_stack.call_depth() == 1 {
             return false;
         }
 
         // If account is in the chain of program invocations, that program has authorized
-        for i in (0..shadow_stack.call_depth()).rev() {
-            if let Some(frame) = shadow_stack.get_frame(i) {
+        let depth = shadow_stack.call_depth() as usize;
+        for i in (1..depth).rev() {
+            if let Some(frame) = shadow_stack.get_frame(i as u16) {
                 if frame.program_acc_idx() == account_idx {
                     return true;
                 }
@@ -90,8 +92,8 @@ pub mod program_utils {
 
         // Get all account pubkeys from transaction
         let account_pubkeys = match txn.account_pubkeys() {
-            Some(pubkeys) => pubkeys,
-            None => return false,
+            Ok(pubkeys) => pubkeys,
+            Err(_) => return false,
         };
 
         // If account is the fee payer, it has authorized
@@ -109,13 +111,14 @@ pub mod program_utils {
 
         // If there are no called program invocations by this point, the account is
         // not authorized. This is an optimization to avoid the loop below.
-        if shadow_stack.call_depth() == 0 {
+        if shadow_stack.call_depth() == 1 {
             return false;
         }
 
         // If account is in the chain of program invocations, that program has authorized
-        for i in (0..shadow_stack.call_depth()).rev() {
-            if let Some(frame) = shadow_stack.get_frame(i) {
+        let depth = shadow_stack.call_depth() as usize;
+        for i in (1..depth).rev() {
+            if let Some(frame) = shadow_stack.get_frame(i as u16) {
                 let program_idx = frame.program_acc_idx();
                 if account_pubkeys.get(program_idx as usize) == Some(pubkey) {
                     return true;
@@ -137,17 +140,17 @@ pub mod program_utils {
             get_account_meta_at_idx(account_idx)
         };
         let account_meta = match account_meta {
-            Some(meta) => meta,
-            None => return false,
+            Ok(meta) => meta,
+            Err(_) => return false,
         };
 
         let account_pubkeys = match txn.account_pubkeys() {
-            Some(pubkeys) => pubkeys,
-            None => return false,
+            Ok(pubkeys) => pubkeys,
+            Err(_) => return false,
         };
         let shadow_stack = get_shadow_stack();
         let current_program_idx = shadow_stack.current_program_acc_idx() as usize;
-        
+
         account_pubkeys.get(current_program_idx) == Some(&account_meta.owner)
     }
 
@@ -159,13 +162,13 @@ pub mod program_utils {
         let current_program_idx = shadow_stack.current_program_acc_idx();
 
         // If there are no previous invocations, the program is not reentrant
-        if shadow_stack.call_depth() == 0 {
+        if shadow_stack.call_depth() == 1 {
             return false;
         }
 
         // Check if the current program appears in any previous stack frame
-        for i in 0..shadow_stack.call_depth() {
-            if let Some(frame) = shadow_stack.get_frame(i) {
+        for i in 1..shadow_stack.call_depth() {
+            if let Some(frame) = shadow_stack.get_frame(i as u16) {
                 if frame.program_acc_idx() == current_program_idx {
                     return true;
                 }

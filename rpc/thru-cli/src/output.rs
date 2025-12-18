@@ -192,6 +192,30 @@ fn print_account_info(data: &Value) {
                 if is_new { "Yes".green() } else { "No".red() }
             );
         }
+        if let Some(is_ephemeral) = account_data.get("isEphemeral") {
+            let is_ephemeral = is_ephemeral.as_bool().unwrap_or(false);
+            println!(
+                "  {}: {}",
+                "Is Ephemeral".cyan(),
+                if is_ephemeral { "Yes".green() } else { "No".red() }
+            );
+        }
+        if let Some(is_deleted) = account_data.get("isDeleted") {
+            let is_deleted = is_deleted.as_bool().unwrap_or(false);
+            println!(
+                "  {}: {}",
+                "Is Deleted".cyan(),
+                if is_deleted { "Yes".yellow() } else { "No".green() }
+            );
+        }
+        if let Some(is_privileged) = account_data.get("isPrivileged") {
+            let is_privileged = is_privileged.as_bool().unwrap_or(false);
+            println!(
+                "  {}: {}",
+                "Is Privileged".cyan(),
+                if is_privileged { "Yes".green() } else { "No".red() }
+            );
+        }
 
         if let Some(slot) = account_data.get("slot") {
             println!("  {}: {}", "Slot".cyan(), format_value(slot));

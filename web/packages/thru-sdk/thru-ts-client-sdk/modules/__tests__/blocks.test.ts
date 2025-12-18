@@ -20,7 +20,7 @@ function createRawBlockBytes(options: { slot?: bigint; blockTimeNs?: bigint; att
     maxBlockSize: 1024,
     maxComputeUnits: 1_000_000n,
     maxStateUnits: 100,
-    price: 1n,
+    bondAmountLockUp: 1n,
     producer: new Uint8Array(32),
     expiryTimestamp: nanosecondsToTimestamp(500n),
     headerSignature: new Uint8Array(64),
@@ -30,6 +30,7 @@ function createRawBlockBytes(options: { slot?: bigint; blockTimeNs?: bigint; att
     status: ExecutionStatus.UNSPECIFIED,
     consumedComputeUnits: options.attestorPayment ?? 0n,
     consumedStateUnits: 0,
+    attestorPayment: options.attestorPayment ?? 0n,
   });
   const block = new Block({ header, footer, body: new Uint8Array() });
   block.blockTimeNs = options.blockTimeNs ?? 0n;
@@ -276,4 +277,3 @@ describe("blocks", () => {
     });
   });
 });
-

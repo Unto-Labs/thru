@@ -7,4 +7,7 @@ BUILDDIR?=thruvm
 RUST_TARGET:=riscv64imac-unknown-none-elf
 
 # Cargo build flags for ThruVM
-CARGO_BUILD_FLAGS:=--release --target $(RUST_TARGET) 
+CARGO_BUILD_FLAGS:=--release --target $(RUST_TARGET)
+
+# Cargo profile directory (release or debug)
+CARGO_PROFILE_DIR:=release

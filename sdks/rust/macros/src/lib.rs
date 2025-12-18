@@ -211,28 +211,89 @@ pub fn entry(args: TokenStream, input: TokenStream) -> TokenStream {
         #[doc(hidden)]
         #[unsafe(link_section = ".text._start")]
         #[unsafe(no_mangle)]
+        #[unsafe(naked)]
         pub unsafe extern "C" fn _start() -> ! {
-            const SP_ALIGN: u64 =  0xFFFF_FFFF_FFFF_F000; // -4096
             const STACK_SIZE: i64 = #stack_size;
-            core::arch::asm!(
+
+            core::arch::naked_asm!(
+                // Emit CFI to .debug_frame section (matches C SDK behavior)
+                ".cfi_sections .debug_frame",
+                ".cfi_startproc",
+
+                // Check transaction version (must be 1 for backwards compatibility)
+                // TXN_DATA segment: 0x00_0001_000000, version at offset 64 (0x40)
+                "li     t5, 0x0001000040",
+                "lbu    t5, 0(t5)",         // Load transaction version byte
+                "addi   t5, t5, -1",        // version - 1
+                "bnez   t5, 1f",            // Revert if version != 1
+
+                // Save instruction data pointer
                 "mv     t0, a0",
-                "li     t2, {ALIGN}",
-                "and    sp, sp, t2",
-                "mv     a0, sp",
-                "li     t2, {STACK_INC}",
-                "add    a0, a0, t2",
-                "li     a7, 0",  // sys_set_anonymous_segment_sz
+
+                // Load shadow stack base: 0x00_0002_000000 (SEG_TYPE_READONLY_DATA, SEG_IDX_SHADOW_STACK)
+                "li     t1, 0x0002000000",
+
+                // Read call_depth (ushort at offset 0)
+                "lhu    t2, 0(t1)",
+
+                // Calculate parent frame offset: 8 + ((call_depth - 1) * 6)
+                "addi   t2, t2, -1",
+                "li     t3, 6",
+                "mul    t2, t2, t3",
+                "addi   t2, t2, 8",
+                "add    t1, t1, t2",         // t1 = &parent_frame
+
+                // Read parent frame's stack_pages (ushort at offset 2 in frame)
+                "lhu    t2, 2(t1)",
+
+                // Convert pages to bytes: parent_stack_bytes = stack_pages * 4096
+                "slli   t2, t2, 12",
+
+                // Calculate stack address: STACK_SEG_START - parent_stack_bytes
+                // STACK_SEG_START = (0x05 << 40) | (0x0001 << 24) = 0x05_0001_000000
+                "li     t3, 0x05",
+                "slli   t3, t3, 40",
+                "li     t4, 0x0001",
+                "slli   t4, t4, 24",
+                "or     t3, t3, t4",            // t3 = STACK_SEG_START
+                "sub    t3, t3, t2",            // t3 = STACK_SEG_START - parent_stack_bytes
+
+                // Add current invocation's stack size for syscall
+                "li     t4, {STACK_SIZE}",
+                "sub    a0, t3, t4",            // a0 = sp - STACK_SIZE (address for syscall)
+
+                // Set stack pointer to STACK_SEG_START - parent_stack_bytes
+                "mv     sp, t3",
+
+                // Syscall 0: set_anonymous_segment_sz(vaddr)
+                "li     a7, 0",
                 "ecall",
-                "bnez   a0, 2f",
+
+                // If syscall failed, revert
+                "bnez   a0, 1f",
+
+                // Allocate stack frame and save state for unwinding
+                "addi   sp, sp, -32",
+                ".cfi_def_cfa_register sp",
+                ".cfi_def_cfa_offset 32",
+                "sd     ra, 24(sp)",           // Save ra at sp+24 (cfa-8)
+                "sd     s0, 16(sp)",           // Save s0 at sp+16 (cfa-16)
+                ".cfi_offset ra, -8",
+                ".cfi_offset s0, -16",
+
+                // Call program entry point
                 "mv     a0, t0",
                 "call   start",
-                "2:", // label .L_revert
-                "li     a7, 11", // syscall: exit
+
+                "1:",
+                // Syscall 11: exit(error_code, revert=1)
+                "li     a7, 11",
                 "li     a1, 1",
                 "ecall",
-                ALIGN = const SP_ALIGN,
-                STACK_INC = const -1 * STACK_SIZE,
-                options(noreturn)
+
+                ".cfi_endproc",
+
+                STACK_SIZE = const STACK_SIZE,
             );
         }
     };
@@ -253,9 +314,9 @@ pub fn entry(args: TokenStream, input: TokenStream) -> TokenStream {
         quote! {
             /* Create AccountManager from the transaction */
             let txn = ::thru_core::get_txn();
-            let mgr = match unsafe { ::thru_core::AccountManager::from_txn(txn) } {
-                Some(mgr) => mgr,
-                None => ::thru_core::syscall::sys_exit(1, 1),
+            let mgr = match ::thru_core::AccountManager::from_txn(txn) {
+                Ok(mgr) => mgr,
+                Err(_) => ::thru_core::syscall::sys_exit(1, 1),
             };
         }
     } else {

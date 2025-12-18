@@ -1,0 +1,446 @@
+syntax = "proto3";
+
+package thru.services.v1;
+
+import "buf/validate/validate.proto";
+import "google/api/field_behavior.proto";
+import "thru/common/v1/primitives.proto";
+import "google/protobuf/duration.proto";
+import "google/protobuf/timestamp.proto";
+import "thru/common/v1/consensus.proto";
+import "thru/common/v1/filters.proto";
+import "thru/core/v1/account.proto";
+import "thru/core/v1/block.proto";
+import "thru/core/v1/transaction.proto";
+import "thru/core/v1/types.proto";
+
+option go_package = "github.com/Unto-Labs/thru-net/grpc/pkg/proto/thru/services/v1;servicesv1";
+option java_multiple_files = true;
+option java_package = "network.thru.services.v1";
+option csharp_namespace = "Thru.Services.V1";
+option ruby_package = "Thru::Services::V1";
+option objc_class_prefix = "THUS";
+option swift_prefix = "THUS";
+
+// StreamBlocksRequest subscribes to real-time block updates.
+//
+// Filter expressions support the following params:
+//
+// - params.slot (int64): Slot number for comparison
+//   Example: block.block.header.slot == params.slot
+//
+// - params.min_slot (int64): Minimum slot for range filtering
+//   Example: block.block.header.slot >= params.min_slot
+//
+// - params.start_slot (int64): Starting slot for filtering
+//   Example: block.block.header.slot >= params.start_slot
+//
+// - params.u64 (int64): Generic 64-bit value for numeric comparisons
+//   Examples:
+//     block.block.header.max_compute_units > params.u64
+//     block.block.header.price >= params.u64
+//
+// - params.producer (bytes|Pubkey): Producer pubkey for filtering
+//   Examples:
+//     block.block.header.producer.value == params.producer
+//     has(block.block.header.producer) && block.block.header.producer.value == params.producer
+//
+// Available block header fields:
+//   block.block.header.slot, block.block.header.version,
+//   block.block.header.start_slot, block.block.header.expiry_after,
+//   block.block.header.max_block_size, block.block.header.max_compute_units,
+//   block.block.header.max_state_units, block.block.header.price,
+//   block.block.header.producer, block.block.header.producer.value
+//
+// Available block footer fields:
+//   block.block.footer.status, block.block.footer.consumed_compute_units,
+//   block.block.footer.consumed_state_units
+//
+// Available consensus status field:
+//   block.block.consensus_status
+//
+// Filter expression examples:
+//
+// 1. Filter by specific slot:
+//    Expression: "block.block.header.slot == params.slot"
+//    Params: {"slot": 12345}
+//
+// 2. Filter by slot range:
+//    Expression: "block.block.header.slot >= params.min_slot"
+//    Params: {"min_slot": 1000}
+//
+// 3. Filter by block version:
+//    Expression: "block.block.header.version >= uint(0)"
+//
+// 4. Filter by specific producer:
+//    Expression: "has(block.block.header.producer) && block.block.header.producer.value == params.producer"
+//    Params: {"producer": <32-byte pubkey>}
+//
+// 5. Filter by max compute units:
+//    Expression: "block.block.header.max_compute_units > uint(0)"
+//
+// 6. Filter by max state units:
+//    Expression: "block.block.header.max_state_units > uint(0)"
+//
+// 7. Filter by block price:
+//    Expression: "block.block.header.price >= uint(0)"
+//
+// 8. Filter by footer status:
+//    Expression: "has(block.block.footer) && block.block.footer.status == int(1)"
+//    Note: EXECUTION_STATUS_PENDING = 1, EXECUTION_STATUS_EXECUTED = 2
+//
+// 9. Filter by consumed compute units:
+//    Expression: "has(block.block.footer) && block.block.footer.consumed_compute_units > uint(0)"
+//
+// 10. Filter by consumed state units:
+//     Expression: "has(block.block.footer) && block.block.footer.consumed_state_units > uint(0)"
+//
+// 11. Filter by consensus status:
+//     Expression: "block.block.consensus_status == int(2)"
+//     Note: CONSENSUS_STATUS_UNSPECIFIED = 0, CONSENSUS_STATUS_OBSERVED = 1,
+//           CONSENSUS_STATUS_INCLUDED = 2
+//
+// 12. Check for optional fields presence:
+//     Expression: "has(block.block.header) && has(block.block.footer)"
+//
+// 13. Combined filters (multiple conditions):
+//     Expression: "block.block.header.slot >= params.min_slot && has(block.block.footer) && block.block.footer.consumed_compute_units > uint(0)"
+//     Params: {"min_slot": 1000}
+//
+// 14. Numeric comparison with params:
+//     Expression: "block.block.header.max_compute_units > params.u64"
+//     Params: {"u64": 1000000}
+message StreamBlocksRequest {
+  optional uint64 start_slot = 1 [(google.api.field_behavior) = OPTIONAL];
+  optional thru.common.v1.Filter filter = 2 [(google.api.field_behavior) = OPTIONAL];
+  optional thru.core.v1.BlockView view = 3 [(google.api.field_behavior) = OPTIONAL];
+  optional thru.common.v1.ConsensusStatus min_consensus = 4
+      [(google.api.field_behavior) = OPTIONAL];
+}
+
+// StreamBlocksResponse delivers block updates.
+message StreamBlocksResponse {
+  thru.core.v1.Block block = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+// StreamAccountUpdatesRequest subscribes to account delta events.
+//
+// Filter expressions support the following params:
+//
+// - params.min_slot (uint64): Minimum slot for filtering updates
+//   Example: account_update.slot >= params.min_slot
+//
+// - params.min_balance (uint64): Minimum balance for filtering
+//   Example: snapshot.meta.balance >= params.min_balance
+//
+// - params.owner (bytes|Pubkey): Owner pubkey for filtering
+//   Examples:
+//     snapshot.meta.owner.value == params.owner
+//     account_update.meta.owner.value == params.owner
+//
+// - params.address (bytes|Pubkey): Account address for filtering
+//   Example: snapshot.address.value == params.address
+//
+// Available snapshot fields (thru.core.v1.Account):
+//   snapshot.address, snapshot.address.value (bytes),
+//   snapshot.meta.balance (uint64), snapshot.meta.seq (uint64),
+//   snapshot.meta.nonce (uint64), snapshot.meta.data_size (uint32),
+//   snapshot.meta.version (uint32), snapshot.meta.flags (AccountFlags),
+//   snapshot.meta.flags.is_program (bool), snapshot.meta.flags.is_privileged (bool),
+//   snapshot.meta.flags.is_uncompressable (bool), snapshot.meta.flags.is_ephemeral (bool),
+//   snapshot.meta.flags.is_deleted (bool), snapshot.meta.flags.is_new (bool),
+//   snapshot.meta.flags.is_compressed (bool),
+//   snapshot.meta.owner, snapshot.meta.owner.value (bytes)
+//
+// Available account_update fields (AccountUpdate):
+//   account_update.slot (uint64), account_update.delete (bool),
+//   account_update.meta.balance (uint64), account_update.meta.seq (uint64),
+//   account_update.meta.nonce (uint64), account_update.meta.data_size (uint32),
+//   account_update.meta.version (uint32), account_update.meta.flags (AccountFlags),
+//   account_update.meta.flags.is_program (bool), account_update.meta.flags.is_privileged (bool),
+//   account_update.meta.flags.is_uncompressable (bool), account_update.meta.flags.is_ephemeral (bool),
+//   account_update.meta.flags.is_deleted (bool), account_update.meta.flags.is_new (bool),
+//   account_update.meta.flags.is_compressed (bool),
+//   account_update.meta.owner, account_update.meta.owner.value (bytes)
+//
+// Filter expression examples:
+//
+// 1. Filter by minimum balance (snapshot or update):
+//    Expression: "(has(snapshot.meta) && snapshot.meta.balance >= uint(1000000)) || (has(account_update.meta) && account_update.meta.balance >= uint(1000000))"
+//
+// 2. Filter by account owner using params:
+//    Expression: "(has(snapshot.meta) && has(snapshot.meta.owner) && snapshot.meta.owner.value == params.owner) || (has(account_update.meta) && has(account_update.meta.owner) && account_update.meta.owner.value == params.owner)"
+//    Params: {"owner": <32-byte pubkey>}
+//
+// 3. Filter by specific account address:
+//    Expression: "has(snapshot.address) && snapshot.address.value == params.address"
+//    Params: {"address": <32-byte pubkey>}
+//
+// 4. Filter by minimum slot for updates:
+//    Expression: "has(account_update.meta) && account_update.slot >= params.min_slot"
+//    Params: {"min_slot": 1000}
+//
+// 5. Filter by nonce greater than value:
+//    Expression: "(has(snapshot.meta) && snapshot.meta.nonce >= uint(5)) || (has(account_update.meta) && account_update.meta.nonce >= uint(5))"
+//
+// 6. Filter by sequence number:
+//    Expression: "(has(snapshot.meta) && snapshot.meta.seq >= uint(100)) || (has(account_update.meta) && account_update.meta.seq >= uint(100))"
+//
+// 7. Filter by data size:
+//    Expression: "(has(snapshot.meta) && snapshot.meta.data_size >= uint(1024)) || (has(account_update.meta) && account_update.meta.data_size >= uint(1024))"
+//
+// 8. Filter by account version:
+//    Expression: "(has(snapshot.meta) && snapshot.meta.version >= uint(1)) || (has(account_update.meta) && account_update.meta.version >= uint(1))"
+//
+// 9. Filter by account flags (check if account is a program):
+//    Expression: "(has(snapshot.meta) && has(snapshot.meta.flags) && snapshot.meta.flags.is_program) || (has(account_update.meta) && has(account_update.meta.flags) && account_update.meta.flags.is_program)"
+//
+// 10. Filter by privileged flag:
+//     Expression: "(has(snapshot.meta) && has(snapshot.meta.flags) && snapshot.meta.flags.is_privileged) || (has(account_update.meta) && has(account_update.meta.flags) && account_update.meta.flags.is_privileged)"
+//
+// 11. Filter non-delete updates:
+//     Expression: "has(snapshot.meta) || (has(account_update.meta) && (!has(account_update.delete) || !account_update.delete))"
+//
+// 12. Check for snapshot or update presence:
+//     Expression: "has(snapshot.meta) || has(account_update.meta)"
+//
+// 13. Combined filters (multiple conditions):
+//     Expression: "has(snapshot.meta) || (has(account_update.meta) && account_update.slot >= params.min_slot && account_update.meta.balance >= params.min_balance)"
+//     Params: {"min_slot": 1000, "min_balance": 1000000}
+//
+// 14. Filter by minimum balance using params:
+//     Expression: "(has(snapshot.meta) && snapshot.meta.balance >= params.min_balance) || (has(account_update.meta) && account_update.meta.balance >= params.min_balance)"
+//     Params: {"min_balance": 5000000000}
+//
+// Note: The response contains either a snapshot (initial state), an update (delta),
+// or a BlockFinished message. Filters should handle both snapshot and update cases
+// using OR logic to match either message type.
+message StreamAccountUpdatesRequest {
+  thru.common.v1.Pubkey address = 1 [(google.api.field_behavior) = REQUIRED];
+  optional thru.core.v1.AccountView view = 2 [(google.api.field_behavior) = OPTIONAL];
+  optional thru.common.v1.Filter filter = 4 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// AccountUpdate describes a delta for an account.
+message AccountUpdate {
+  uint64 slot = 1 [(google.api.field_behavior) = REQUIRED];
+  optional thru.core.v1.AccountPage page = 2
+      [(google.api.field_behavior) = OPTIONAL];
+  optional thru.core.v1.AccountMeta meta = 3
+      [(google.api.field_behavior) = OPTIONAL];
+  optional bool delete = 4 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// BlockFinished is sent when block's execution is complete.
+message BlockFinished {
+  uint64 slot = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+// StreamAccountUpdatesResponse contains either an initial snapshot or a delta.
+message StreamAccountUpdatesResponse {
+  oneof message {
+    thru.core.v1.Account snapshot = 1;
+    AccountUpdate update = 2;
+    BlockFinished finished = 3;
+  }
+}
+
+// StreamTransactionsRequest subscribes to transaction confirmations.
+//
+// Filter expressions support the following params:
+//
+// - params.min_slot (uint64): Minimum slot for filtering transactions
+//   Example: transaction.slot >= params.min_slot
+//
+// - params.max_slot (uint64): Maximum slot for filtering transactions
+//   Example: transaction.slot <= params.max_slot
+//
+// - params.slot (uint64): Specific slot for exact match filtering
+//   Example: transaction.slot == params.slot
+//
+// - params.min_fee (uint64): Minimum fee for filtering transactions
+//   Example: transaction.header.fee >= params.min_fee
+//
+// - params.fee_payer (bytes|Pubkey): Fee payer pubkey for filtering
+//   Example: transaction.header.fee_payer_pubkey.value == params.fee_payer
+//
+// - params.signature (bytes|Signature): Transaction signature for filtering
+//   Example: transaction.signature.value == params.signature
+//
+// Available transaction fields (thru.core.v1.Transaction):
+//   transaction.signature, transaction.signature.value (bytes),
+//   transaction.slot (uint64), transaction.block_offset (uint32),
+//   transaction.header, transaction.header.version (uint32),
+//   transaction.header.fee (uint64),
+//   transaction.header.fee_payer_pubkey, transaction.header.fee_payer_pubkey.value (bytes),
+//   transaction.execution_result, transaction.execution_result.user_error_code (uint32),
+//   transaction.execution_result.vm_error (int32)
+//
+// Available consensus_status field:
+//   consensus_status (int32) - Current consensus status of the transaction
+//   Values: CONSENSUS_STATUS_UNSPECIFIED = 0, CONSENSUS_STATUS_OBSERVED = 1,
+//           CONSENSUS_STATUS_INCLUDED = 2
+//
+// Filter expression examples:
+//
+// 1. Filter by minimum slot:
+//    Expression: "has(transaction.slot) && transaction.slot >= params.min_slot"
+//    Params: {"min_slot": 1000}
+//
+// 2. Filter by slot range:
+//    Expression: "has(transaction.slot) && transaction.slot >= params.min_slot && transaction.slot <= params.max_slot"
+//    Params: {"min_slot": 1000, "max_slot": 2000}
+//
+// 3. Filter by specific slot:
+//    Expression: "has(transaction.slot) && transaction.slot == params.slot"
+//    Params: {"slot": 12345}
+//
+// 4. Filter by minimum fee:
+//    Expression: "has(transaction.header) && transaction.header.fee >= params.min_fee"
+//    Params: {"min_fee": 5000}
+//
+// 5. Filter by fee payer:
+//    Expression: "has(transaction.header.fee_payer_pubkey) && transaction.header.fee_payer_pubkey.value == params.fee_payer"
+//    Params: {"fee_payer": <32-byte pubkey>}
+//
+// 6. Filter by transaction signature:
+//    Expression: "has(transaction.signature) && transaction.signature.value == params.signature"
+//    Params: {"signature": <64-byte signature>}
+//
+// 7. Filter by header version:
+//    Expression: "has(transaction.header) && transaction.header.version >= uint(0)"
+//
+// 8. Filter by successful execution:
+//    Expression: "has(transaction.execution_result) && transaction.execution_result.vm_error == int(0)"
+//
+// 9. Filter by user error code:
+//    Expression: "has(transaction.execution_result) && transaction.execution_result.user_error_code == uint(0)"
+//
+// 10. Filter by consensus status:
+//     Expression: "consensus_status >= int(2)"
+//     Note: Use >= int(2) for CONSENSUS_STATUS_INCLUDED and above
+//
+// 11. Check for execution result presence:
+//     Expression: "has(transaction.execution_result)"
+//
+// 12. Filter by transaction with header and slot:
+//     Expression: "has(transaction.slot) && transaction.slot >= uint(0) && has(transaction.header)"
+//
+// 13. Combined filters (slot, fee, and status):
+//     Expression: "has(transaction.slot) && transaction.slot >= params.min_slot && has(transaction.header) && transaction.header.fee >= params.min_fee && consensus_status >= int(2)"
+//     Params: {"min_slot": 1000, "min_fee": 5000}
+//
+// 14. Filter successful transactions with minimum fee:
+//     Expression: "has(transaction.execution_result) && transaction.execution_result.vm_error == int(0) && has(transaction.header) && transaction.header.fee >= params.min_fee"
+//     Params: {"min_fee": 10000}
+//
+// Note: The min_consensus field in the request provides built-in consensus filtering
+// without requiring a CEL expression. Use it in combination with filter expressions
+// for more complex filtering logic.
+message StreamTransactionsRequest {
+  optional thru.common.v1.Filter filter = 1 [(google.api.field_behavior) = OPTIONAL];
+  optional thru.common.v1.ConsensusStatus min_consensus = 2
+      [(google.api.field_behavior) = OPTIONAL];
+}
+
+// StreamTransactionsResponse delivers transaction events.
+message StreamTransactionsResponse {
+  thru.core.v1.Transaction transaction = 1
+      [(google.api.field_behavior) = REQUIRED];
+}
+
+// StreamEventsRequest subscribes to chain events.
+//
+// Filter expressions support the following params:
+//
+// - params.prefix (bytes): Byte prefix for payload filtering
+//   Example: bytesPrefix(event.payload, params.prefix)
+//
+// - params.slot (uint64): Slot number for comparison
+//   Example: event.slot >= params.slot
+//
+// - params.u64 (uint64): Generic 64-bit value for payload extraction
+//   Examples:
+//     first8Bytes(event.payload) == params.u64
+//     first4Bytes(event.payload) == params.u64
+//     first1Byte(event.payload) == params.u64
+//
+// - params.signature (bytes|Signature|TsSignature): Signature for comparison
+//   Examples:
+//     event.signature == params.signature              // TsSignature type
+//     event.signature.value == params.signature        // bytes type
+//     bytesPrefix(event.signature.value, params.signature)
+//
+// - params.address (bytes|Pubkey|TaPubkey): Address/pubkey for comparison
+//   Examples:
+//     event.program == params.address                  // TaPubkey type
+//     event.program.value == params.address            // bytes type
+//     bytesPrefix(event.program.value, params.address)
+//
+// Available event fields:
+//   event.event_id, event.slot, event.payload, event.call_idx,
+//   event.signature (Signature), event.signature.value (bytes),
+//   event.program (Pubkey), event.program.value (bytes)
+message StreamEventsRequest {
+  optional thru.common.v1.Filter filter = 1 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// StreamEventsResponse delivers event payloads.
+message StreamEventsResponse {
+  string event_id = 1 [(google.api.field_behavior) = REQUIRED];
+  optional bytes payload = 2 [(google.api.field_behavior) = OPTIONAL];
+  optional google.protobuf.Timestamp timestamp = 3
+      [(google.api.field_behavior) = OPTIONAL];
+  thru.common.v1.Pubkey program = 4 [(google.api.field_behavior) = REQUIRED];
+  uint32 call_idx = 5 [(google.api.field_behavior) = REQUIRED];
+  thru.common.v1.Signature signature = 6
+      [(google.api.field_behavior) = REQUIRED];
+  uint64 slot = 7 [(google.api.field_behavior) = REQUIRED];
+}
+
+// TrackTransactionRequest subscribes to status updates for a transaction.
+message TrackTransactionRequest {
+  thru.common.v1.Signature signature = 1 [(google.api.field_behavior) = REQUIRED];
+  optional google.protobuf.Duration timeout = 2
+      [(google.api.field_behavior) = OPTIONAL];
+}
+
+// TrackTransactionResponse reports status transitions for a transaction.
+message TrackTransactionResponse {
+  thru.common.v1.Signature signature = 1 [(google.api.field_behavior) = REQUIRED];
+  thru.common.v1.ConsensusStatus consensus_status = 2
+      [(google.api.field_behavior) = OPTIONAL];
+  thru.core.v1.TransactionExecutionResult execution_result = 3
+      [(google.api.field_behavior) = OPTIONAL];
+}
+
+// StreamHeightRequest subscribes to real-time height updates.
+message StreamHeightRequest {}
+
+// StreamHeightResponse delivers height update events.
+message StreamHeightResponse {
+  uint64 finalized = 1 [(google.api.field_behavior) = REQUIRED];
+  uint64 locally_executed = 2 [(google.api.field_behavior) = REQUIRED];
+  uint64 cluster_executed = 3 [(google.api.field_behavior) = REQUIRED];
+}
+
+// StreamingService serves server-streaming gRPC APIs for real-time data.
+service StreamingService {
+  rpc StreamBlocks(StreamBlocksRequest)
+      returns (stream StreamBlocksResponse);
+
+  rpc StreamAccountUpdates(StreamAccountUpdatesRequest)
+      returns (stream StreamAccountUpdatesResponse);
+
+  rpc StreamTransactions(StreamTransactionsRequest)
+      returns (stream StreamTransactionsResponse);
+
+  rpc StreamEvents(StreamEventsRequest)
+      returns (stream StreamEventsResponse);
+
+  rpc TrackTransaction(TrackTransactionRequest)
+      returns (stream TrackTransactionResponse);
+
+  rpc StreamHeight(StreamHeightRequest)
+      returns (stream StreamHeightResponse);
+}

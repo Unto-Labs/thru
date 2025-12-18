@@ -40,8 +40,9 @@ message BlockHeader {
   uint32 max_block_size = 9 [(google.api.field_behavior) = REQUIRED];
   uint64 max_compute_units = 10 [(google.api.field_behavior) = REQUIRED];
   uint32 max_state_units = 11 [(google.api.field_behavior) = REQUIRED];
-  uint64 price = 12 [(google.api.field_behavior) = REQUIRED];
+  uint64 bond_amount_lock_up = 12 [(google.api.field_behavior) = REQUIRED];
   google.protobuf.Timestamp block_time = 13 [(google.api.field_behavior) = REQUIRED];
+  uint64 weight_slot = 14 [(google.api.field_behavior) = REQUIRED];
 }
 
 // ExecutionStatus enumerates block execution results.
@@ -58,6 +59,7 @@ message BlockFooter {
   ExecutionStatus status = 2 [(google.api.field_behavior) = REQUIRED];
   uint64 consumed_compute_units = 3 [(google.api.field_behavior) = REQUIRED];
   uint32 consumed_state_units = 4 [(google.api.field_behavior) = REQUIRED];
+  uint64 attestor_payment = 5 [(google.api.field_behavior) = REQUIRED];
 }
 
 // Block represents a fully decoded block resource.

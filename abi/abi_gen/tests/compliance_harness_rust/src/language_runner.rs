@@ -20,8 +20,8 @@ pub trait LanguageRunner {
     ) -> Result<TestResult>;
 }
 
-pub mod rust;
 pub mod c;
+pub mod rust;
 pub mod typescript;
 
 pub use self::rust::RustRunner;

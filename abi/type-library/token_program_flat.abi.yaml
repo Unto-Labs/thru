@@ -1,0 +1,953 @@
+abi:
+  package: thru.program.token
+  abi-version: 1
+  package-version: '0.1.0'
+  description: Ideal ABI for the Thru token program instruction envelopes and account state
+  imports: []
+  options:
+    program-metadata:
+      root-types:
+        instruction-root: TokenInstruction
+        account-root: TokenProgramAccount
+        errors: TokenError
+        events: TokenEvent
+types:
+- name: Hash
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: bytes
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+- name: Pubkey
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: bytes
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+- name: Signature
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: bytes
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 64
+            element-type:
+              primitive: u8
+- name: StateProofHeader
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: type_slot
+        field-type:
+          primitive: u64
+      - name: path_bitset
+        field-type:
+          type-ref:
+            name: Hash
+            comment: null
+- name: StateProof
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: hdr
+        field-type:
+          type-ref:
+            name: StateProofHeader
+            comment: null
+      - name: proof_body
+        field-type:
+          enum:
+            packed: true
+            aligned: 0
+            comment: null
+            tag-ref:
+              bit-and:
+                left:
+                  right-shift:
+                    left:
+                      field-ref:
+                        path:
+                        - hdr
+                        - type_slot
+                    right:
+                      literal:
+                        u8: 62
+                right:
+                  literal:
+                    u8: 3
+            variants:
+            - name: existing
+              tag-value: 0
+              variant-type:
+                struct:
+                  packed: true
+                  aligned: 0
+                  comment: null
+                  fields:
+                  - name: sibling_hashes
+                    field-type:
+                      array:
+                        packed: false
+                        aligned: 0
+                        comment: null
+                        size:
+                          add:
+                            left:
+                              add:
+                                left:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '0'
+                                right:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '1'
+                            right:
+                              add:
+                                left:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '2'
+                                right:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '3'
+                        element-type:
+                          type-ref:
+                            name: Hash
+                            comment: null
+            - name: updating
+              tag-value: 1
+              variant-type:
+                struct:
+                  packed: true
+                  aligned: 0
+                  comment: null
+                  fields:
+                  - name: existing_leaf_hash
+                    field-type:
+                      type-ref:
+                        name: Hash
+                        comment: null
+                  - name: sibling_hashes
+                    field-type:
+                      array:
+                        packed: false
+                        aligned: 0
+                        comment: null
+                        size:
+                          add:
+                            left:
+                              add:
+                                left:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '0'
+                                right:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '1'
+                            right:
+                              add:
+                                left:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '2'
+                                right:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '3'
+                        element-type:
+                          type-ref:
+                            name: Hash
+                            comment: null
+            - name: creation
+              tag-value: 2
+              variant-type:
+                struct:
+                  packed: true
+                  aligned: 0
+                  comment: null
+                  fields:
+                  - name: existing_leaf_pubkey
+                    field-type:
+                      type-ref:
+                        name: Pubkey
+                        comment: null
+                  - name: existing_leaf_hash
+                    field-type:
+                      type-ref:
+                        name: Hash
+                        comment: null
+                  - name: sibling_hashes
+                    field-type:
+                      array:
+                        packed: false
+                        aligned: 0
+                        comment: null
+                        size:
+                          add:
+                            left:
+                              add:
+                                left:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '0'
+                                right:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '1'
+                            right:
+                              add:
+                                left:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '2'
+                                right:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '3'
+                        element-type:
+                          type-ref:
+                            name: Hash
+                            comment: null
+- name: Seed32
+  kind:
+    array:
+      packed: true
+      aligned: 0
+      comment: null
+      size:
+        literal:
+          u64: 32
+      element-type:
+        primitive: u8
+- name: TickerField
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: length
+        field-type:
+          primitive: u8
+      - name: bytes
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 8
+            element-type:
+              primitive: u8
+- name: InitializeMintInstruction
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: mint_account_index
+        field-type:
+          primitive: u16
+      - name: decimals
+        field-type:
+          primitive: u8
+      - name: creator
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: mint_authority
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: freeze_authority
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: has_freeze_authority
+        field-type:
+          primitive: u8
+      - name: ticker
+        field-type:
+          type-ref:
+            name: TickerField
+            comment: null
+      - name: seed
+        field-type:
+          type-ref:
+            name: Seed32
+            comment: null
+      - name: state_proof
+        field-type:
+          type-ref:
+            name: StateProof
+            comment: null
+- name: InitializeAccountInstruction
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: token_account_index
+        field-type:
+          primitive: u16
+      - name: mint_account_index
+        field-type:
+          primitive: u16
+      - name: owner_account_index
+        field-type:
+          primitive: u16
+      - name: new_account_seed
+        field-type:
+          type-ref:
+            name: Seed32
+            comment: null
+      - name: state_proof
+        field-type:
+          type-ref:
+            name: StateProof
+            comment: null
+- name: TransferInstruction
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: source_account_index
+        field-type:
+          primitive: u16
+      - name: dest_account_index
+        field-type:
+          primitive: u16
+      - name: amount
+        field-type:
+          primitive: u64
+- name: MintToInstruction
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: mint_account_index
+        field-type:
+          primitive: u16
+      - name: dest_account_index
+        field-type:
+          primitive: u16
+      - name: authority_account_index
+        field-type:
+          primitive: u16
+      - name: amount
+        field-type:
+          primitive: u64
+- name: BurnInstruction
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: token_account_index
+        field-type:
+          primitive: u16
+      - name: mint_account_index
+        field-type:
+          primitive: u16
+      - name: authority_account_index
+        field-type:
+          primitive: u16
+      - name: amount
+        field-type:
+          primitive: u64
+- name: CloseAccountInstruction
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: token_account_index
+        field-type:
+          primitive: u16
+      - name: dest_account_index
+        field-type:
+          primitive: u16
+      - name: authority_account_index
+        field-type:
+          primitive: u16
+- name: FreezeAccountInstruction
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: token_account_index
+        field-type:
+          primitive: u16
+      - name: mint_account_index
+        field-type:
+          primitive: u16
+      - name: authority_account_index
+        field-type:
+          primitive: u16
+- name: ThawAccountInstruction
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: token_account_index
+        field-type:
+          primitive: u16
+      - name: mint_account_index
+        field-type:
+          primitive: u16
+      - name: authority_account_index
+        field-type:
+          primitive: u16
+- name: TokenInstruction
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: tag
+        field-type:
+          primitive: u8
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            aligned: 0
+            comment: null
+            tag-ref:
+              field-ref:
+                path:
+                - tag
+            variants:
+            - name: initialize_mint
+              tag-value: 0
+              variant-type:
+                type-ref:
+                  name: InitializeMintInstruction
+                  comment: null
+            - name: initialize_account
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: InitializeAccountInstruction
+                  comment: null
+            - name: transfer
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: TransferInstruction
+                  comment: null
+            - name: mint_to
+              tag-value: 3
+              variant-type:
+                type-ref:
+                  name: MintToInstruction
+                  comment: null
+            - name: burn
+              tag-value: 4
+              variant-type:
+                type-ref:
+                  name: BurnInstruction
+                  comment: null
+            - name: close_account
+              tag-value: 5
+              variant-type:
+                type-ref:
+                  name: CloseAccountInstruction
+                  comment: null
+            - name: freeze_account
+              tag-value: 6
+              variant-type:
+                type-ref:
+                  name: FreezeAccountInstruction
+                  comment: null
+            - name: thaw_account
+              tag-value: 7
+              variant-type:
+                type-ref:
+                  name: ThawAccountInstruction
+                  comment: null
+- name: TokenMintAccount
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: decimals
+        field-type:
+          primitive: u8
+      - name: supply
+        field-type:
+          primitive: u64
+      - name: creator
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: mint_authority
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: freeze_authority
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: has_freeze_authority
+        field-type:
+          primitive: u8
+      - name: ticker
+        field-type:
+          type-ref:
+            name: TickerField
+            comment: null
+- name: TokenAccount
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: mint
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: owner
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: amount
+        field-type:
+          primitive: u64
+      - name: is_frozen
+        field-type:
+          primitive: u8
+- name: TokenProgramAccount
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: data
+        field-type:
+          size-discriminated-union:
+            packed: true
+            aligned: 0
+            comment: null
+            variants:
+            - name: token_account
+              expected-size: 73
+              variant-type:
+                type-ref:
+                  name: TokenAccount
+                  comment: null
+            - name: mint_account
+              expected-size: 115
+              variant-type:
+                type-ref:
+                  name: TokenMintAccount
+                  comment: null
+- name: InitializeMintEventData
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: mint
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: mint_authority
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: freeze_authority
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: supply
+        field-type:
+          primitive: u64
+      - name: decimals
+        field-type:
+          primitive: u8
+      - name: has_freeze_authority
+        field-type:
+          primitive: u8
+      - name: ticker
+        field-type:
+          type-ref:
+            name: TickerField
+            comment: null
+- name: InitializeAccountEventData
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: account
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: owner
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: mint
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+- name: TransferEventData
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: source
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: dest
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: amount
+        field-type:
+          primitive: u64
+      - name: source_post_balance
+        field-type:
+          primitive: u64
+      - name: dest_post_balance
+        field-type:
+          primitive: u64
+- name: MintToEventData
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: mint
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: dest
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: authority
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: amount
+        field-type:
+          primitive: u64
+      - name: dest_post_balance
+        field-type:
+          primitive: u64
+      - name: mint_supply
+        field-type:
+          primitive: u64
+- name: BurnEventData
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: mint
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: account
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: authority
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: amount
+        field-type:
+          primitive: u64
+      - name: account_post_balance
+        field-type:
+          primitive: u64
+      - name: mint_supply
+        field-type:
+          primitive: u64
+- name: CloseAccountEventData
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: account
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: destination
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: authority
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+- name: FreezeAccountEventData
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: account
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: mint
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: authority
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+- name: ThawAccountEventData
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: account
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: mint
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: authority
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+- name: TokenEvent
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: event_type
+        field-type:
+          primitive: u8
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            aligned: 0
+            comment: null
+            tag-ref:
+              field-ref:
+                path:
+                - event_type
+            variants:
+            - name: initialize_mint
+              tag-value: 0
+              variant-type:
+                type-ref:
+                  name: InitializeMintEventData
+                  comment: null
+            - name: initialize_account
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: InitializeAccountEventData
+                  comment: null
+            - name: transfer
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: TransferEventData
+                  comment: null
+            - name: mint_to
+              tag-value: 3
+              variant-type:
+                type-ref:
+                  name: MintToEventData
+                  comment: null
+            - name: burn
+              tag-value: 4
+              variant-type:
+                type-ref:
+                  name: BurnEventData
+                  comment: null
+            - name: close_account
+              tag-value: 5
+              variant-type:
+                type-ref:
+                  name: CloseAccountEventData
+                  comment: null
+            - name: freeze_account
+              tag-value: 6
+              variant-type:
+                type-ref:
+                  name: FreezeAccountEventData
+                  comment: null
+            - name: thaw_account
+              tag-value: 7
+              variant-type:
+                type-ref:
+                  name: ThawAccountEventData
+                  comment: null

@@ -1,0 +1,11 @@
+[workspace]
+resolver = "2"
+
+members = [
+    "abi_cli",
+    "abi_gen",
+    "abi_loader",
+    "abi_reflect",
+    "abi_reflect_wasm",
+    "abi_types",
+]

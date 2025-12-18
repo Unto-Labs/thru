@@ -439,7 +439,7 @@ async fn build_and_sign_transaction(
 
     // Get current nonce from fee payer account
     let account_info = client
-        .get_account_info(&fee_payer_keypair.address_string, None)
+        .get_account_info(&fee_payer_keypair.address_string, None, None)
         .await
         .map_err(|e| CliError::NonceManagement(format!("Failed to get account info: {}", e)))?;
 
@@ -1058,6 +1058,8 @@ mod tests {
             uploader_program_public_key: "ta1111111111111111111111111111111111111111111"
                 .to_string(),
             manager_program_public_key: "ta1111111111111111111111111111111111111111111".to_string(),
+            abi_manager_program_public_key: "ta1111111111111111111111111111111111111111111"
+                .to_string(),
             token_program_public_key: "ta1111111111111111111111111111111111111111111".to_string(),
             name_service_program_public_key: "ta1111111111111111111111111111111111111111111".to_string(),
             thru_registrar_program_public_key: "ta1111111111111111111111111111111111111111111".to_string(),

@@ -1,174 +1,111 @@
-# @thru/abi – TypeScript ABI Reflection Layer
+# @thru/abi – WASM-backed ABI reflection
 
-This package provides a browser-friendly ABI reflection+decoding engine that matches the thru-net on-chain ABI semantics. The goal is to let Explorer-grade UIs take any **flattened ABI YAML** plus raw account bytes and produce fully structured, well-annotated decoded values without generating code ahead of time.
-
-The README is intentionally verbose so a future engineer (human or AI) can understand the full behavior surface without spelunking through source.
+This package is now a thin TypeScript wrapper around the Rust `abi_reflect`
+runtime. We compile the Rust crate to WebAssembly, ship both Node + bundler
+targets, and expose a small async API for reflecting ABI YAML + binary payloads.
+All layout math and validation run inside the Rust engine so TypeScript stays
+lightweight and automatically inherits IR upgrades.
 
 ---
 
-## Quick Start
+## Quick start
 
 ```ts
-import { decodeData } from "@thru/abi";
-import myAbi from "./abi/counter.abi.yaml?raw";
+import { ensureWasmLoaded, formatReflection, reflect } from "@thru/abi";
+import tokenAbi from "./abi/token_program.abi.yaml?raw";
 
-const decoded = decodeData(myAbi, "CounterAccount", accountDataUint8Array);
+async function example() {
+  await ensureWasmLoaded(); // formatter + reflector live inside WASM
 
-if (decoded.kind === "struct") {
-  console.log(decoded.fields.count);
+  const payload = new Uint8Array([0x01, 0, 0, 0, 0, 0, 0, 0]);
+  const reflection = await reflect(tokenAbi, "TokenInstruction", {
+    type: "binary",
+    value: payload,
+  });
+
+  console.log(reflection.value); // JSON emitted by abi_reflect
+
+  // Collapse the verbose JSON tree into something human-readable
+  const formatted = formatReflection(reflection);
+  console.log(formatted.value.payload.variant); // "initialize_mint"
 }
+
+example();
 ```
 
-* `decodeData(yamlText, typeName, data)` is the only public runtime API.
-* `yamlText` **must be flattened** (imports already resolved). This is enforced at parse time.
-* The returned `DecodedValue` tree contains both semantic data and raw byte slices for UI inspection.
+* The ABI text **must already be flattened** (imports resolved). The Rust
+  resolver enforces this.
+* Results are JSON blobs straight from `serde_json`. They include the full type
+  info + value trees used by the CLI tooling.
 
 ---
 
-## Package Layout
+## Public API
 
-| Path | Purpose |
-| ---- | ------- |
-| `src/abiSchema.ts` | YAML parser + TypeScript interfaces aligned with the thru-net ABI schema. |
-| `src/typeRegistry.ts` | Builds validated registry, resolves type refs, detects cycles. |
-| `src/decoder.ts` | Core reflection engine. Handles arrays, structs, unions, enums, SDUs, padding, f16, etc. |
-| `src/expression.ts` | Evaluates ABI expressions (field refs, arithmetic, bitwise, sizeof/alignof). |
-| `src/decodedValue.ts` | Canonical decoded shape consumed by Explorer UI. |
-| `test/` | Hand-authored fixtures mirroring Rust compliance tests (e.g., `structs.abi.yaml`). |
+| Function | Description |
+| --- | --- |
+| `reflect(abi: string, typeName: string, payload: { type: "binary", value: BinaryLike } \| { type: "hex", value: string })` | Reflects binary data (or hex) and returns the parsed JSON payload. |
+| `formatReflection(raw: JsonValue)` | Delegates to the WASM formatter to collapse verbose JSON trees. Requires `ensureWasmLoaded()` (or any prior call to `reflect`) before use. |
+| `buildLayoutIr(abi: string)` | Runs the shared Layout IR builder and returns the serialized IR document (schema version, per-type expressions, parameters). |
+| `ensureWasmLoaded()` | Preloads the WASM bindings for callers that want to pay the initialization cost up-front. `reflect` calls it lazily. |
 
----
-
-## Feature Matrix
-
-### ✅ Implemented
-
-* **Schema Parsing**
-  * Matches the thru-net ABI AST (primitives, structs, arrays, unions, enums, size-discriminated unions, type-refs).
-  * Validates flattened files (no `imports`), duplicate names, dangling refs, type cycles.
-
-* **Expression Engine**
-  * Literals (u/i 8–64), field references with lexical scopes (`["..","parent"]` supported).
-  * Arithmetic: `add`, `sub`, `mul`, `div`, `mod`.
-  * Bitwise: `bit-and`, `bit-or`, `bit-xor`, `bit-not`, `left-shift`, `right-shift`.
-  * Meta: `sizeof(type-name)`, `alignof(type-name)` leveraging shared footprint helpers.
-
-* **Decoding Semantics**
-  * **Structs:** assumes `packed: true` containers (our blockchain layout never inserts padding). `aligned` overrides are reserved for future use.
-  * **Arrays:** dynamic element count via expressions referencing previously decoded fields.
-  * **Enums:** tag derived from expressions; variant payload decoded inline.
-  * **Unions:** best-effort “preview all variants” strategy—each variant is decoded in isolation, results presented side-by-side (important for Explorer UX).
-  * **Size-Discriminated Unions:** tries each variant with byte budgets, supports placement mid-struct by reserving trailing fixed sizes.
-  * **Type-Refs:** recursion-safe (cycle detection done in registry); `decodeKind` transparently resolves nested refs.
-  * **Primitives:** all integer + float types from ABI spec, including `f16` (returned as `number` representing raw `u16` for now).
-
-* **DecodedValue Shape**
-  * Each node exposes `kind`, `typeName`, `byteOffset`, `byteLength`, `rawHex`.
-  * Structs provide both `fields` (object) and `fieldOrder` (array preserving declaration order).
-  * Arrays expose `length`, `elements`.
-  * Enums/Unions/SDUs capture tag or variant metadata.
-  * When something can’t be safely decoded (e.g., ambiguous union variant), an `opaque` node contains context + `rawHex`.
-
-* **Testing Harness**
-  * Uses `tsx`/`vitest`. The repo includes sample fixture script `test/verify-rectangle.ts` showing end-to-end usage.
-  * Additional tests exist under `src/index.test.ts` covering primitives, arrays, expressions, unions, etc.
-
-### ⚠️ Known Limitations (as of this snapshot)
-
-* **Runtime Performance**
-  * YAML is parsed on every `decodeData` call. No caching or schema memoization yet.
-  * Expressions evaluate with BigInt math. That’s correct but slower than precomputed constants.
-
-* **Instruction Decoding**
-  * Current focus is account data. Instruction decoding isn’t implemented yet (needs call-site context + discriminants).
-
-* **Union Heuristics**
-  * Unlike Rust (which requires external hints), we decode *every* variant. That’s user-friendly but does not pick a “canonical” variant automatically. Upstream UI must choose how to present ambiguous unions.
-
-* **Float16 Conversion**
-  * We currently return the raw `u16` bits. A helper to convert to IEEE-754 half floats can be added later if needed for display accuracy.
-
-* **Error Surfacing**
-  * Errors throw `AbiParseError`, `AbiValidationError`, or `AbiDecodeError`. Explorer code should catch and surface the message. There’s no structured warning channel yet (e.g., partial decodes).
-
-* **Security / Untrusted ABIs**
-  * The parser enforces flattened files and forbids unknown fields, but we still assume ABIs come from trusted sources. Malicious ABIs could attempt to trick UIs (e.g., wrong type names). A future enhancement could add allow-lists or signatures.
+All helpers are async, because loading + instantiating the WASM module can touch
+the filesystem (Node) or issue dynamic imports (bundlers).
 
 ---
 
-## How Decoding Works (Step-by-step)
+## WASM workflow
 
-1. **Parse & Validate**
-   * `parseAbiDocument` -> `AbiDocument`.
-   * `buildTypeRegistry` indexes types, verifies refs, catches cycles.
-
-2. **Prepare State**
-   * `decodeData` creates `DecodeState` (`Uint8Array`, `DataView`, root scope).
-
-3. **Walk Type Tree**
-   * `decodeKind` dispatches by `kind` (primitive, struct, array, etc.).
-   * Each decoder carries a byte budget so flexible members can live mid-struct while respecting trailing fixed-size fields.
-
-4. **Field Scope & Expressions**
-   * After each field decode, `addFieldToScope` records the result so later `field-ref`s can use it.
-   * Expressions are evaluated lazily during decoding (e.g., array lengths, enum tags).
-
-5. **Alignment Rules**
-   * Structs are emitted and decoded as `packed: true`, so offsets advance exactly by the previous field’s byte length.
-   * Alignment metadata is currently ignored because thru-net ABIs never request padding.
-
-6. **Result Assembly**
-   * Every decoded chunk captures offset, size, and raw hex slice so UIs can show byte-level views alongside structured data.
-
----
-
-## CLI / Development Workflow
+The generated artifacts live under `web/packages/abi/wasm/{bundler,node}` and are
+checked in so the package works without a local Rust toolchain. When
+`abi_reflect` or the shared IR changes, rebuild everything with:
 
 ```bash
-# Install deps
-pnpm install
-
-# Build ESM bundle + type declarations
-pnpm --filter @thru/abi build
-
-# Run test suite (vitest)
-pnpm --filter @thru/abi test
-
-# One-off verification script example
-npx tsx web/packages/abi/test/verify-rectangle.ts
+# From repo root
+pnpm --filter @thru/abi run build:wasm
 ```
 
-CI typically runs `build` and `test`. The package outputs ESM suitable for modern bundlers (Vite, Next.js, etc.).
+That script runs `wasm-pack build` twice (bundler + node targets) inside
+`abi/abi_reflect_wasm`, then copies the fresh outputs into
+`web/packages/abi/wasm`. The regular `pnpm --filter @thru/abi build` step runs
+`tsup` and copies those WASM folders into `dist/wasm` so published packages
+resolve the dynamic imports automatically.
+
+When developing inside the monorepo, Vitest loads the TypeScript sources
+directly. The runtime detects when it is executing from `src/` and reaches for
+`../wasm`, so make sure the synced artifacts exist before running the tests.
 
 ---
 
-## Integration Guidance
+## Testing
 
-* **Explorer**
-  * Keep ABIs as `.yaml` + `.bin` fixtures or embed them using `?raw`.
-  * Wrap `decodeData` in a try/catch; surface errors in the UI.
-  * Use `fieldOrder` to render tables with deterministic ordering.
-  * Use `rawHex` for fallback views when a field type is `opaque`.
+```bash
+pnpm --filter @thru/abi test
+```
 
-* **Other Consumers**
-  * Libraries/tools can reuse `parseAbiDocument` + `TypeRegistry` to build higher-level abstractions (e.g., caching parsed schemas, precomputing footprints).
-
----
-
-## Future Roadmap Ideas
-
-1. **Schema Caching** – hash YAML text and reuse parsed `AbiDocument`/`TypeRegistry`.
-2. **Instruction Decoding** – need discriminants + context (program ID, variant mapping).
-3. **Float16 Conversion Helper** – convert raw u16 to JS number with proper rounding.
-4. **Diagnostics API** – return warnings for ambiguous unions, unsupported expressions, etc., instead of throwing.
-5. **Web Worker Integration** – offload heavy decodes to worker threads for large accounts.
+Vitest exercises both `reflectHex` and `reflectBinary` against the
+`SimpleStruct` compliance ABI plus `buildLayoutIr` to ensure the WASM bridge is
+wired correctly. If you tweak the Rust runtime, rerun `pnpm build:wasm` so the
+tests pick up the updated binaries.
 
 ---
 
-## Support / Contact
+## Development notes
 
-* Code owner: thru-net Explorer team.
-* If something decodes differently from the Rust validator, cross-check against the reference implementation under `abi/abi_reflect` and open an issue referencing the specific ABI + binary pair.
-* When adding new ABI features, update both this README and `GAPS_AND_PLAN.md` so future iterations know the exact capability boundaries.
+* The TypeScript surface intentionally stays tiny; we no longer export the old
+  decoder/resolver classes. Future code should talk to the WASM bridge instead
+  of re-implementing reflection logic in JS.
+* Browser vs. Node detection happens in `src/wasmBridge.ts`. Node loads the
+  `wasm/node` build via `createRequire`, while bundlers dynamically import the
+  `wasm/bundler` module.
+* The JSON shape returned by `reflect*` matches `abi_reflect`'s CLI output, so
+  parity debugging can use `abi/scripts/show_reflection.py`.
+* Layout IR consumers can feed `buildLayoutIr` into caches or ship a prebuilt
+  snapshot alongside the WASM runtime to guard against future schema changes.
 
-Happy decoding! 🎯
+---
 
+Questions? Ping the thru-net ABI team (same folks maintaining
+`abi/abi_reflect`). Whenever you extend the Rust reflection engine or shared IR,
+regenerate the WASM artifacts and mention the change in `enums-fam-impl.md` so
+tooling consumers know which version to depend on.

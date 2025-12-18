@@ -294,7 +294,7 @@ async fn compress_account(
     }
 
     let account_info = client
-        .get_account_info(&target_pubkey, None)
+        .get_account_info(&target_pubkey, None, None)
         .await
         .map_err(|e| CliError::TransactionSubmission(format!("Failed to get account info: {}", e)))?
         .ok_or_else(|| {
@@ -333,7 +333,7 @@ async fn compress_account(
 
     // Get account info to determine account size for compute units calculation
     let account_info = client
-        .get_account_info(&target_pubkey, None)
+        .get_account_info(&target_pubkey, None, None)
         .await
         .map_err(|e| CliError::TransactionSubmission(format!("Failed to get account info: {}", e)))?
         .ok_or_else(|| {
@@ -351,7 +351,7 @@ async fn compress_account(
 
     // Get current nonce for fee payer account
     let fee_payer_account_info = client
-        .get_account_info(&fee_payer_keypair.address_string, None)
+        .get_account_info(&fee_payer_keypair.address_string, None, None)
         .await
         .map_err(|e| {
             CliError::TransactionSubmission(format!("Failed to get fee payer account info: {}", e))
@@ -570,7 +570,7 @@ async fn decompress_account(
 
     // Get current nonce for fee payer account
     let fee_payer_account_info = client
-        .get_account_info(&fee_payer_keypair.address_string, None)
+        .get_account_info(&fee_payer_keypair.address_string, None, None)
         .await
         .map_err(|e| {
             CliError::TransactionSubmission(format!("Failed to get fee payer account info: {}", e))
@@ -805,7 +805,7 @@ async fn decompress_with_uploader(
     let start_slot = block_height.executed_height + 1;
     // Get current nonce for fee payer account
     let fee_payer_account_info = client
-        .get_account_info(&fee_payer_keypair.address_string, None)
+        .get_account_info(&fee_payer_keypair.address_string, None, None)
         .await
         .map_err(|e| {
             CliError::TransactionSubmission(format!("Failed to get fee payer account info: {}", e))
@@ -1051,7 +1051,7 @@ async fn decompress_with_uploader_huge(
     let start_slot = block_height.executed_height + 1;
     // Get current nonce for fee payer account
     let fee_payer_account_info = client
-        .get_account_info(&fee_payer_keypair.address_string, None)
+        .get_account_info(&fee_payer_keypair.address_string, None, None)
         .await
         .map_err(|e| {
             CliError::TransactionSubmission(format!("Failed to get fee payer account info: {}", e))

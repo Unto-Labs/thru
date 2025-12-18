@@ -23,11 +23,11 @@ message Hash {
   ];
 }
 
-// BlockHash represents a 64-byte hash for block identifiers.
+// BlockHash represents a 32-byte hash for block identifiers.
 message BlockHash {
-  // 64-byte block hash buffer.
+  // 32-byte block hash buffer.
   bytes value = 1 [
     (google.api.field_behavior) = REQUIRED,
-    (buf.validate.field).bytes.len = 64
+    (buf.validate.field).bytes.len = 32
   ];
 }

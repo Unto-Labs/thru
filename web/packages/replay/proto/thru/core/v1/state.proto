@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package thru.core.v1;
+
+import "google/api/field_behavior.proto";
+import "thru/core/v1/types.proto";
+
+import "thru/common/v1/primitives.proto";
+option go_package = "github.com/Unto-Labs/thru-net/grpc/pkg/proto/thru/core/v1;corev1";
+option java_multiple_files = true;
+option java_package = "network.thru.core.v1";
+option csharp_namespace = "Thru.Core.V1";
+option ruby_package = "Thru::Core::V1";
+option objc_class_prefix = "THUC";
+option swift_prefix = "THUC";
+
+// StateProofType selects the type of state proof to generate.
+enum StateProofType {
+  STATE_PROOF_TYPE_UNSPECIFIED = 0;
+  STATE_PROOF_TYPE_CREATING = 1;
+  STATE_PROOF_TYPE_UPDATING = 2;
+  STATE_PROOF_TYPE_EXISTING = 3;
+}
+
+// StateProofRequest describes a request to generate an account state proof.
+message StateProofRequest {
+  thru.common.v1.Pubkey address = 1 [(google.api.field_behavior) = REQUIRED];
+  StateProofType proof_type = 2 [(google.api.field_behavior) = REQUIRED];
+  optional uint64 target_slot = 3 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// StateProof returns binary proof data along with context.
+message StateProof {
+  bytes proof = 1 [(google.api.field_behavior) = REQUIRED];
+  uint64 slot = 2 [(google.api.field_behavior) = REQUIRED];
+}

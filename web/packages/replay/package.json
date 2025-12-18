@@ -1,0 +1,46 @@
+{
+  "name": "@thru/replay",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "scripts": {
+    "protobufs:pull": "rm -rf proto && cp -a ../../proto ./proto",
+    "protobufs:generate": "buf generate",
+    "build": "tsup",
+    "run:block-replay": "tsx scripts/run-block-replay.ts",
+    "run:replays": "tsx scripts/run-replays.ts",
+    "typecheck": "tsc --noEmit",
+    "dev": "tsx watch src/index.ts",
+    "test": "vitest",
+    "lint": "eslint src/"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "^1.10.0",
+    "@connectrpc/connect": "^1.4.0",
+    "@connectrpc/connect-node": "^1.4.0",
+    "ts-node": "^10.9.1"
+  },
+  "devDependencies": {
+    "@bufbuild/buf": "latest",
+    "@bufbuild/protoc-gen-es": "^1.10.0",
+    "@connectrpc/protoc-gen-connect-es": "^1.4.0",
+    "@types/node": "^20.11.0",
+    "tsup": "^8.1.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3",
+    "vitest": "^1.2.0"
+  }
+}

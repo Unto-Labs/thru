@@ -69,6 +69,14 @@ pub enum CliError {
     #[error("Resume validation error: {0}")]
     ResumeValidation(String),
 
+    /// Resume validation errors with account details
+    #[error("Resume validation error: {message}")]
+    ResumeValidationAccount {
+        message: String,
+        account: String,
+        seed: String,
+    },
+
     /// Account not found errors
     #[error("Account not found: {0}")]
     AccountNotFound(String),

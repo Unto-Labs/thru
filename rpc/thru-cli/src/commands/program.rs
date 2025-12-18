@@ -15,7 +15,7 @@ use crate::crypto;
 use crate::error::CliError;
 use crate::output;
 use crate::utils::format_vm_error;
-use thru_client::Client as RpcClient;
+use thru_client::{Client as RpcClient, VersionContext};
 
 const PROGRAM_SEED_MAX_LEN: usize = 32;
 
@@ -43,6 +43,7 @@ pub async fn handle_program_command(
             seed,
             authority,
             program_file,
+            chunk_size,
         } => {
             create_program(
                 config,
@@ -51,6 +52,7 @@ pub async fn handle_program_command(
                 &seed,
                 authority.as_deref(),
                 &program_file,
+                chunk_size,
                 json_format,
             )
             .await
@@ -60,6 +62,7 @@ pub async fn handle_program_command(
             ephemeral,
             seed,
             program_file,
+            chunk_size,
         } => {
             upgrade_program(
                 config,
@@ -67,6 +70,7 @@ pub async fn handle_program_command(
                 &seed,
                 ephemeral,
                 &program_file,
+                chunk_size,
                 json_format,
             )
             .await
@@ -177,6 +181,16 @@ pub async fn handle_program_command(
             seed,
             ephemeral,
         } => derive_program_address(&program_id, &seed, ephemeral, json_format),
+        ProgramCommands::DeriveManagerAccounts {
+            manager,
+            seed,
+            ephemeral,
+        } => derive_manager_accounts(config, manager.as_deref(), &seed, ephemeral, json_format),
+        ProgramCommands::Status {
+            manager,
+            seed,
+            ephemeral,
+        } => get_program_status(config, manager.as_deref(), &seed, ephemeral, json_format).await,
     }
 }
 
@@ -347,7 +361,7 @@ impl ProgramManager {
     async fn get_current_nonce(&self) -> Result<u64, CliError> {
         match self
             .rpc_client
-            .get_account_info(&self.fee_payer_keypair.address_string, None)
+            .get_account_info(&self.fee_payer_keypair.address_string, None, Some(VersionContext::Current))
             .await
         {
             Ok(Some(account)) => Ok(account.nonce),
@@ -374,6 +388,7 @@ impl ProgramManager {
         &self,
         transaction: &Transaction,
         json_format: bool,
+        user_error_decoder: fn(u64) -> String,
     ) -> Result<(), CliError> {
         // Execute transaction and wait for completion
         let wire_bytes = transaction.to_wire();
@@ -394,7 +409,7 @@ impl ProgramManager {
             String::new()
         };
         let user_error_label = if transaction_details.user_error_code != 0 {
-            Self::decode_manager_error(transaction_details.user_error_code)
+            user_error_decoder(transaction_details.user_error_code)
         } else {
             "None".to_string()
         };
@@ -449,6 +464,7 @@ impl ProgramManager {
 
         Ok(())
     }
+
 }
 
 /// Create a new managed program from a program file
@@ -459,21 +475,30 @@ async fn create_program(
     seed: &str,
     authority: Option<&str>,
     program_file: &str,
+    chunk_size: usize,
     json_format: bool,
 ) -> Result<(), CliError> {
     // Validate program file exists
     let program_path = Path::new(program_file);
     if !program_path.exists() {
-        let error_msg = format!("Program file not found: {}", program_file);
+        let abs_path = std::env::current_dir()
+            .map(|cwd| cwd.join(program_file).display().to_string())
+            .unwrap_or_else(|_| program_file.to_string());
         if json_format {
             let error_response = serde_json::json!({
-                "error": error_msg
+                "error": {
+                    "type": "file_not_found",
+                    "message": format!("Program file not found: {}", program_file),
+                    "path": program_file,
+                    "resolved_path": abs_path
+                }
             });
             output::print_output(error_response, true);
         } else {
-            output::print_error(&error_msg);
+            output::print_error(&format!("Program file not found: {}", program_file));
+            output::print_error(&format!("Resolved path: {}", abs_path));
         }
-        return Err(CliError::Generic { message: error_msg });
+        return Err(CliError::Reported);
     }
 
     // Read program data
@@ -524,7 +549,7 @@ async fn create_program(
     // Create uploader manager and upload the program
     let uploader_manager = UploaderManager::new(config).await?;
     let upload_session = uploader_manager
-        .upload_program(&temp_seed, &program_data, 30 * 1024, json_format)
+        .upload_program(&temp_seed, &program_data, chunk_size, json_format)
         .await?;
 
     if !json_format {
@@ -638,7 +663,11 @@ async fn create_program(
 
     // Submit and verify
     program_manager
-        .submit_and_verify_transaction(&transaction, json_format)
+        .submit_and_verify_transaction(
+            &transaction,
+            json_format,
+            ProgramManager::decode_manager_error,
+        )
         .await?;
 
     if !json_format {
@@ -697,6 +726,7 @@ async fn create_program(
     Ok(())
 }
 
+
 /// Upgrade an existing managed program from a program file
 async fn upgrade_program(
     config: &Config,
@@ -704,21 +734,30 @@ async fn upgrade_program(
     seed: &str,
     ephemeral: bool,
     program_file: &str,
+    chunk_size: usize,
     json_format: bool,
 ) -> Result<(), CliError> {
     // Validate program file exists
     let program_path = Path::new(program_file);
     if !program_path.exists() {
-        let error_msg = format!("Program file not found: {}", program_file);
+        let abs_path = std::env::current_dir()
+            .map(|cwd| cwd.join(program_file).display().to_string())
+            .unwrap_or_else(|_| program_file.to_string());
         if json_format {
             let error_response = serde_json::json!({
-                "error": error_msg
+                "error": {
+                    "type": "file_not_found",
+                    "message": format!("Program file not found: {}", program_file),
+                    "path": program_file,
+                    "resolved_path": abs_path
+                }
             });
             output::print_output(error_response, true);
         } else {
-            output::print_error(&error_msg);
+            output::print_error(&format!("Program file not found: {}", program_file));
+            output::print_error(&format!("Resolved path: {}", abs_path));
         }
-        return Err(CliError::Generic { message: error_msg });
+        return Err(CliError::Reported);
     }
 
     // Read program data
@@ -757,7 +796,7 @@ async fn upgrade_program(
     // Create uploader manager and upload the program
     let uploader_manager = UploaderManager::new(config).await?;
     let upload_session = uploader_manager
-        .upload_program(&temp_seed, &program_data, 30 * 1024, json_format)
+        .upload_program(&temp_seed, &program_data, chunk_size, json_format)
         .await?;
 
     if !json_format {
@@ -829,7 +868,11 @@ async fn upgrade_program(
 
     // Submit and verify
     program_manager
-        .submit_and_verify_transaction(&transaction, json_format)
+        .submit_and_verify_transaction(
+            &transaction,
+            json_format,
+            ProgramManager::decode_manager_error,
+        )
         .await?;
 
     if !json_format {
@@ -945,7 +988,11 @@ async fn set_pause_program(
         .map_err(|e| CliError::Crypto(e.to_string()))?;
 
     program_manager
-        .submit_and_verify_transaction(&transaction, json_format)
+        .submit_and_verify_transaction(
+            &transaction,
+            json_format,
+            ProgramManager::decode_manager_error,
+        )
         .await?;
 
     let response = if json_format {
@@ -1036,7 +1083,11 @@ async fn destroy_program(
         .map_err(|e| CliError::Crypto(e.to_string()))?;
 
     if let Err(err) = program_manager
-        .submit_and_verify_transaction(&transaction, json_format)
+        .submit_and_verify_transaction(
+            &transaction,
+            json_format,
+            ProgramManager::decode_manager_error,
+        )
         .await
     {
         if json_format {
@@ -1250,7 +1301,11 @@ async fn finalize_program(
         .map_err(|e| CliError::Crypto(e.to_string()))?;
 
     program_manager
-        .submit_and_verify_transaction(&transaction, json_format)
+        .submit_and_verify_transaction(
+            &transaction,
+            json_format,
+            ProgramManager::decode_manager_error,
+        )
         .await?;
 
     let response = if json_format {
@@ -1350,7 +1405,11 @@ async fn set_authority_program(
         .map_err(|e| CliError::Crypto(e.to_string()))?;
 
     program_manager
-        .submit_and_verify_transaction(&transaction, json_format)
+        .submit_and_verify_transaction(
+            &transaction,
+            json_format,
+            ProgramManager::decode_manager_error,
+        )
         .await?;
 
     let response = if json_format {
@@ -1438,7 +1497,11 @@ async fn claim_authority_program(
         .map_err(|e| CliError::Crypto(e.to_string()))?;
 
     program_manager
-        .submit_and_verify_transaction(&transaction, json_format)
+        .submit_and_verify_transaction(
+            &transaction,
+            json_format,
+            ProgramManager::decode_manager_error,
+        )
         .await?;
 
     let response = if json_format {
@@ -1532,4 +1595,293 @@ fn derive_program_address(
     }
 
     Ok(())
+}
+
+/// Derive both meta and program account addresses from a seed
+fn derive_manager_accounts(
+    config: &Config,
+    manager: Option<&str>,
+    seed: &str,
+    ephemeral: bool,
+    json_format: bool,
+) -> Result<(), CliError> {
+    /* Get manager program pubkey */
+    let manager_pubkey = if let Some(manager_str) = manager {
+        let bytes = crate::utils::validate_address_or_hex(manager_str)?;
+        Pubkey::from_bytes(&bytes)
+    } else {
+        config.get_manager_pubkey()?
+    };
+
+    /* Get uploader program pubkey */
+    let uploader_pubkey = config.get_uploader_pubkey()?;
+
+    /* Derive manager accounts */
+    let (meta_account, program_account) =
+        crypto::derive_manager_accounts_from_seed(seed, &manager_pubkey, ephemeral)?;
+
+    /* Derive uploader accounts (used during program create) */
+    let (temp_seed, temp_seed_hashed) = seed_with_suffix(seed, "temporary");
+    let (uploader_meta_account, uploader_buffer_account) =
+        crypto::derive_uploader_accounts_from_seed(&temp_seed, &uploader_pubkey)?;
+
+    if json_format {
+        let response = serde_json::json!({
+            "derive_manager_accounts": {
+                "manager_program": manager_pubkey.to_string(),
+                "uploader_program": uploader_pubkey.to_string(),
+                "seed": seed,
+                "ephemeral": ephemeral,
+                "meta_account": meta_account.to_string(),
+                "program_account": program_account.to_string(),
+                "uploader": {
+                    "temp_seed": temp_seed,
+                    "temp_seed_hashed": temp_seed_hashed,
+                    "meta_account": uploader_meta_account.to_string(),
+                    "buffer_account": uploader_buffer_account.to_string()
+                }
+            }
+        });
+        output::print_output(response, true);
+    } else {
+        println!("Manager Program: {}", manager_pubkey.to_string());
+        println!("Seed: {}", seed);
+        println!("Ephemeral: {}", ephemeral);
+        println!();
+        println!("Program Accounts:");
+        println!("  Meta Account: {}", meta_account.to_string());
+        println!("  Program Account: {}", program_account.to_string());
+        println!();
+        println!("Uploader Accounts (temporary, used during create):");
+        println!("  Temp Seed: {}{}", temp_seed, if temp_seed_hashed { " (hashed)" } else { "" });
+        println!("  Meta Account: {}", uploader_meta_account.to_string());
+        println!("  Buffer Account: {}", uploader_buffer_account.to_string());
+    }
+
+    Ok(())
+}
+
+/// Account status information
+#[derive(Debug)]
+struct AccountStatus {
+    exists: bool,
+    is_program: bool,
+    data_size: u64,
+    owner: Option<String>,
+}
+
+/// Get status of program and related accounts
+async fn get_program_status(
+    config: &Config,
+    manager: Option<&str>,
+    seed: &str,
+    ephemeral: bool,
+    json_format: bool,
+) -> Result<(), CliError> {
+    /* Get manager program pubkey */
+    let manager_pubkey = if let Some(manager_str) = manager {
+        let bytes = crate::utils::validate_address_or_hex(manager_str)?;
+        Pubkey::from_bytes(&bytes)
+    } else {
+        config.get_manager_pubkey()?
+    };
+
+    /* Get uploader program pubkey */
+    let uploader_pubkey = config.get_uploader_pubkey()?;
+
+    /* Derive manager accounts */
+    let (meta_account, program_account) =
+        crypto::derive_manager_accounts_from_seed(seed, &manager_pubkey, ephemeral)?;
+
+    /* Derive uploader accounts (used during program create) */
+    let (temp_seed, _temp_seed_hashed) = seed_with_suffix(seed, "temporary");
+    let (uploader_meta_account, uploader_buffer_account) =
+        crypto::derive_uploader_accounts_from_seed(&temp_seed, &uploader_pubkey)?;
+
+    /* Create RPC client */
+    let rpc_url = config.get_grpc_url()?;
+    let client = RpcClient::builder()
+        .http_endpoint(rpc_url)
+        .timeout(Duration::from_secs(config.timeout_seconds))
+        .auth_token(config.auth_token.clone())
+        .build()?;
+
+    /* Query all accounts in parallel */
+    let (meta_info, program_info, uploader_meta_info, uploader_buffer_info) = tokio::join!(
+        client.get_account_info(&meta_account, None, Some(VersionContext::Current)),
+        client.get_account_info(&program_account, None, Some(VersionContext::Current)),
+        client.get_account_info(&uploader_meta_account, None, Some(VersionContext::Current)),
+        client.get_account_info(&uploader_buffer_account, None, Some(VersionContext::Current)),
+    );
+
+    /* Convert to status */
+    let meta_status = account_to_status(meta_info);
+    let program_status = account_to_status(program_info);
+    let uploader_meta_status = account_to_status(uploader_meta_info);
+    let uploader_buffer_status = account_to_status(uploader_buffer_info);
+
+    /* Detect corrupted accounts (exist but have 0 bytes) */
+    let program_meta_corrupted = meta_status.exists && meta_status.data_size == 0;
+    let program_account_corrupted = program_status.exists && program_status.data_size == 0;
+    let uploader_meta_corrupted = uploader_meta_status.exists && uploader_meta_status.data_size == 0;
+    let uploader_buffer_corrupted = uploader_buffer_status.exists && uploader_buffer_status.data_size == 0;
+    let any_corrupted = program_meta_corrupted || program_account_corrupted || uploader_meta_corrupted || uploader_buffer_corrupted;
+
+    let program_deployed = meta_status.exists && program_status.exists && program_status.is_program && program_status.data_size > 0;
+
+    if json_format {
+        let status = if program_deployed {
+            "deployed"
+        } else if any_corrupted {
+            "corrupted"
+        } else if !meta_status.exists && !program_status.exists {
+            "not_deployed"
+        } else {
+            "invalid"
+        };
+
+        let response = serde_json::json!({
+            "program_status": {
+                "seed": seed,
+                "ephemeral": ephemeral,
+                "manager_program": manager_pubkey.to_string(),
+                "uploader_program": uploader_pubkey.to_string(),
+                "summary": {
+                    "status": status,
+                    "program_deployed": program_deployed,
+                    "corrupted_accounts": {
+                        "any": any_corrupted,
+                        "program_meta": program_meta_corrupted,
+                        "program_account": program_account_corrupted,
+                        "uploader_meta": uploader_meta_corrupted,
+                        "uploader_buffer": uploader_buffer_corrupted,
+                    }
+                },
+                "program": {
+                    "meta_account": {
+                        "address": meta_account.to_string(),
+                        "exists": meta_status.exists,
+                        "is_program": meta_status.is_program,
+                        "data_size": meta_status.data_size,
+                        "owner": meta_status.owner,
+                    },
+                    "program_account": {
+                        "address": program_account.to_string(),
+                        "exists": program_status.exists,
+                        "is_program": program_status.is_program,
+                        "data_size": program_status.data_size,
+                        "owner": program_status.owner,
+                    }
+                },
+                "uploader": {
+                    "temp_seed": temp_seed,
+                    "meta_account": {
+                        "address": uploader_meta_account.to_string(),
+                        "exists": uploader_meta_status.exists,
+                        "is_program": uploader_meta_status.is_program,
+                        "data_size": uploader_meta_status.data_size,
+                        "owner": uploader_meta_status.owner,
+                    },
+                    "buffer_account": {
+                        "address": uploader_buffer_account.to_string(),
+                        "exists": uploader_buffer_status.exists,
+                        "is_program": uploader_buffer_status.is_program,
+                        "data_size": uploader_buffer_status.data_size,
+                        "owner": uploader_buffer_status.owner,
+                    }
+                }
+            }
+        });
+        output::print_output(response, true);
+    } else {
+        println!("Program Status for seed: {}", seed);
+        println!("Ephemeral: {}", ephemeral);
+        println!();
+
+        println!("Program Accounts:");
+        print_account_status("  Meta Account", &meta_account.to_string(), &meta_status);
+        print_account_status("  Program Account", &program_account.to_string(), &program_status);
+        println!();
+
+        println!("Uploader Accounts (temp_seed: {}):", temp_seed);
+        print_account_status("  Meta Account", &uploader_meta_account.to_string(), &uploader_meta_status);
+        print_account_status("  Buffer Account", &uploader_buffer_account.to_string(), &uploader_buffer_status);
+        println!();
+
+        let upload_in_progress = uploader_meta_status.exists || uploader_buffer_status.exists;
+
+        println!("Summary:");
+        if program_deployed {
+            println!("  Program is DEPLOYED ({} bytes)", program_status.data_size);
+        } else if any_corrupted {
+            println!("  CORRUPTED STATE DETECTED - accounts exist but have no data:");
+            if program_meta_corrupted {
+                println!("    - Program meta account (0 bytes)");
+            }
+            if program_account_corrupted {
+                println!("    - Program account (0 bytes)");
+            }
+            if uploader_meta_corrupted {
+                println!("    - Uploader meta account (0 bytes)");
+            }
+            if uploader_buffer_corrupted {
+                println!("    - Uploader buffer account (0 bytes)");
+            }
+            println!();
+            println!("  To fix, delete all corrupted accounts:");
+            if uploader_meta_corrupted || uploader_buffer_corrupted {
+                println!("    thru-cli uploader cleanup {}", temp_seed);
+            }
+            if program_meta_corrupted || program_account_corrupted {
+                println!("    thru-cli program destroy {} --ephemeral", seed);
+            }
+        } else if meta_status.exists && !program_status.exists {
+            println!("  Program meta exists but program account missing (INVALID STATE)");
+        } else if !meta_status.exists && !program_status.exists {
+            println!("  Program is NOT DEPLOYED");
+        }
+
+        if upload_in_progress && !any_corrupted {
+            println!("  Upload buffer exists (cleanup may be needed: thru-cli uploader cleanup {})", temp_seed);
+        }
+    }
+
+    Ok(())
+}
+
+fn account_to_status(result: Result<Option<thru_client::Account>, thru_client::ClientError>) -> AccountStatus {
+    match result {
+        Ok(Some(account)) => AccountStatus {
+            exists: true,
+            is_program: account.program,
+            data_size: account.data_size,
+            owner: Some(account.owner.to_string()),
+        },
+        Ok(None) => AccountStatus {
+            exists: false,
+            is_program: false,
+            data_size: 0,
+            owner: None,
+        },
+        Err(_) => AccountStatus {
+            exists: false,
+            is_program: false,
+            data_size: 0,
+            owner: None,
+        },
+    }
+}
+
+fn print_account_status(label: &str, address: &str, status: &AccountStatus) {
+    if status.exists {
+        let program_flag = if status.is_program { " [PROGRAM]" } else { "" };
+        println!("{}: {}", label, address);
+        println!("    Status: EXISTS{}, {} bytes", program_flag, status.data_size);
+        if let Some(owner) = &status.owner {
+            println!("    Owner: {}", owner);
+        }
+    } else {
+        println!("{}: {}", label, address);
+        println!("    Status: NOT FOUND");
+    }
 }

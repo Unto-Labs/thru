@@ -1,15 +1,12 @@
-export { decodeData } from "./decoder";
-export { parseAbiDocument } from "./abiSchema";
-export { buildTypeRegistry, TypeRegistry } from "./typeRegistry";
-export type {
-  DecodedArrayValue,
-  DecodedEnumValue,
-  DecodedField,
-  DecodedPrimitiveValue,
-  DecodedSizeDiscriminatedUnionValue,
-  DecodedStructValue,
-  DecodedUnionValue,
-  DecodedValue,
-} from "./decodedValue";
-export { AbiError, AbiDecodeError, AbiParseError, AbiValidationError } from "./errors";
-
+export {
+  buildLayoutIr,
+  configureWasm,
+  ensureWasmLoaded,
+  reflect,
+  reflectInstruction,
+  reflectAccount,
+  reflectEvent,
+  formatReflection
+} from "./wasmBridge";
+export type { FormatOptions } from "./wasmBridge";
+export type { FormattedReflection, FormattedValue, FormattedValueWithByteRange, ByteRange } from "./types";

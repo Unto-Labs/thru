@@ -31,8 +31,8 @@ async fn main() -> Result<()> {
     // Parse command line arguments
     let cli = Cli::parse();
     
-    // Check for newer version if not in quiet mode and running interactively
-    if !cli.quiet && version_check::is_interactive() {
+    // Check for newer version if not in quiet/json mode and running interactively
+    if !cli.quiet && !cli.json && version_check::is_interactive() {
         version_check::check_and_notify().await;
     }
 
@@ -70,6 +70,9 @@ async fn main() -> Result<()> {
         }
         Commands::Uploader { subcommand } => {
             commands::uploader::handle_uploader_command(&config, subcommand, cli.json).await
+        }
+        Commands::Abi { subcommand } => {
+            commands::abi::handle_abi_command(&config, subcommand, cli.json).await
         }
         Commands::Keys { subcommand } => {
             commands::keys::handle_keys_command(&config, subcommand, cli.json).await
@@ -192,6 +195,14 @@ fn format_error_json(err: &CliError) -> Value {
             "error": {
                 "type": "resume_validation",
                 "message": message,
+            }
+        }),
+        CliError::ResumeValidationAccount { message, account, seed } => json!({
+            "error": {
+                "type": "resume_validation",
+                "message": message,
+                "account": account,
+                "seed": seed,
             }
         }),
         CliError::AccountNotFound(message) => json!({

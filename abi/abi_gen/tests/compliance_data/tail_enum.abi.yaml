@@ -1,0 +1,53 @@
+abi:
+  package: "compliance.tail_enum"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Tagged enum with variable-length tail payload"
+
+types:
+  - name: "TailEnumDynamicPayload"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "length"
+            field-type:
+              primitive: u8
+          - name: "bytes"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["length"]
+                element-type:
+                  primitive: u8
+  - name: "TailEnumPayload"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "tag"
+            field-type:
+              primitive: u8
+          - name: "payload"
+            field-type:
+              enum:
+                packed: true
+                tag-ref:
+                  field-ref:
+                    path: ["tag"]
+                variants:
+                  - name: "fixed"
+                    tag-value: 0
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "value"
+                            field-type:
+                              primitive: u32
+                  - name: "dynamic"
+                    tag-value: 1
+                    variant-type:
+                      type-ref:
+                        name: "TailEnumDynamicPayload"

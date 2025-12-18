@@ -1,0 +1,36 @@
+- name: "CatEnum"
+  kind:
+    struct:
+      packed: true
+      fields:
+        - name: "tag"
+          field-type:
+            primitive: u8
+        - name: "body"
+          field-type:
+            enum:
+              packed: true
+              tag-ref:
+                field-ref:
+                  path: ["tag"]
+              variants:
+                - name: "BlackCat"
+                  tag-value: 1
+                  variant-type:
+                    primitive: u64
+                - name: "WhiteCat"
+                  tag-value: 2
+                  variant-type:
+                    primitive: u64
+                - name: "CalicoCat"
+                  tag-value: 3
+                  variant-type:
+                    primitive: u64
+- name: "box"
+  kind:
+    struct:
+      packed: true
+      fields:
+        - name: "tag"
+          field-type:
+            primitive: u16

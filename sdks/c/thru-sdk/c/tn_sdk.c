@@ -69,21 +69,6 @@ tsdk_shadow_stack_t const* tsdk_get_shadow_stack(void) {
                                                TSDK_SEG_IDX_SHADOW_STACK, 0UL);
 }
 
-ulong tsdk_set_stack_sz(ulong sz) {
-  ulong res = tsys_set_anonymous_segment_sz((uchar*)TSDK_STACK_SEGMENT + sz);
-  if (TSDK_UNLIKELY(res != TSDK_SUCCESS)) {
-    return res;
-  }
-
-  ulong stack_vaddr = TSDK_STACK_SEGMENT;
-  __asm__("move sp, %0"
-          : /* no output */
-          : "r"(stack_vaddr + sz)
-          : "memory");
-
-  return TSDK_SUCCESS;
-}
-
 void __attribute__((noreturn)) tsdk_revert(ulong error_code) {
   tsys_exit(error_code, 1UL);
   __builtin_unreachable();
@@ -119,20 +104,21 @@ int tsdk_is_account_authorized_by_idx(ushort account_idx) {
 
   /* If account is the current program, this program has authorized */
   tsdk_shadow_stack_t const* shadow_stack = tsdk_get_shadow_stack();
-  if (shadow_stack->current_program_acc_idx == account_idx) {
+  ushort current_program_acc_idx = shadow_stack->stack_frames[shadow_stack->call_depth].program_acc_idx;
+  if (current_program_acc_idx == account_idx) {
     return 1;
   }
 
   /* If there are no called program invocations by this point, the account is
      not authorized. This is an optimization to avoid the loop below. */
-  if (shadow_stack->call_depth == 0) {
+  if (shadow_stack->call_depth == 1) {
     return 0;
   }
 
   /* If account is in the chain of program invocations, that program has
      authorized. */
-  for (ushort i = shadow_stack->call_depth; i > 0; i--) {
-    tsdk_shadow_stack_frame_t const* frame = &shadow_stack->stack_frames[i - 1];
+  for (ushort i = shadow_stack->call_depth - 1; i > 0; i--) {
+    tsdk_shadow_stack_frame_t const* frame = &shadow_stack->stack_frames[i];
     if (frame->program_acc_idx == account_idx) {
       return 1;
     }
@@ -151,21 +137,22 @@ int tsdk_is_account_authorized_by_pubkey(tn_pubkey_t const* pubkey) {
 
   /* If account is the current program, this program has authorized */
   tsdk_shadow_stack_t const* shadow_stack = tsdk_get_shadow_stack();
-  if (memcmp(pubkey, &accs[shadow_stack->current_program_acc_idx],
+  ushort current_program_acc_idx = shadow_stack->stack_frames[shadow_stack->call_depth].program_acc_idx;
+  if (memcmp(pubkey, &accs[current_program_acc_idx],
              sizeof(tn_pubkey_t)) == 0) {
     return 1;
   }
 
   /* If there are no called program invocations by this point, the account is
      not authorized. This is an optimization to avoid the loop below. */
-  if (shadow_stack->call_depth == 0) {
+  if (shadow_stack->call_depth == 1) {
     return 0;
   }
 
   /* If account is in the chain of program invocations, that program has
      authorized. */
-  for (ushort i = shadow_stack->call_depth; i > 0; i--) {
-    tsdk_shadow_stack_frame_t const* frame = &shadow_stack->stack_frames[i - 1];
+  for (ushort i = shadow_stack->call_depth - 1; i > 0; i--) {
+    tsdk_shadow_stack_frame_t const* frame = &shadow_stack->stack_frames[i];
     if (memcmp(pubkey, &accs[frame->program_acc_idx], sizeof(tn_pubkey_t)) == 0) {
       return 1;
     }
@@ -176,7 +163,7 @@ int tsdk_is_account_authorized_by_pubkey(tn_pubkey_t const* pubkey) {
 
 ushort tsdk_get_current_program_acc_idx(void) {
   tsdk_shadow_stack_t const* shadow_stack = tsdk_get_shadow_stack();
-  return shadow_stack->current_program_acc_idx;
+  return shadow_stack->stack_frames[shadow_stack->call_depth].program_acc_idx;
 }
 
 tn_pubkey_t const* tsdk_get_current_program_acc_addr(void) {
@@ -190,15 +177,15 @@ int tsdk_is_account_owned_by_current_program(ushort account_idx) {
 
 int tsdk_is_program_reentrant(void) {
   tsdk_shadow_stack_t const* shadow_stack = tsdk_get_shadow_stack();
-  ushort current_program_idx = shadow_stack->current_program_acc_idx;
+  ushort current_program_idx = shadow_stack->stack_frames[shadow_stack->call_depth].program_acc_idx;
 
   /* If there are no previous invocations, the program is not reentrant */
-  if (shadow_stack->call_depth == 0) {
+  if (shadow_stack->call_depth == 1) {
     return 0;
   }
 
   /* Check if the current program appears in any previous stack frame */
-  for (ushort i = 0; i < shadow_stack->call_depth; i++) {
+  for (ushort i = shadow_stack->call_depth - 1; i > 0; i--) {
     tsdk_shadow_stack_frame_t const* frame = &shadow_stack->stack_frames[i];
     if (frame->program_acc_idx == current_program_idx) {
       return 1;
@@ -210,7 +197,7 @@ int tsdk_is_program_reentrant(void) {
 
 int tsdk_account_exists(ushort account_idx) {
   tsdk_account_meta_t const* account_meta = tsdk_get_account_meta(account_idx);
-  return account_meta->version == TN_ACCOUNT_V1;
+  return account_meta->version != 0;
 }
 
 tn_pubkey_t *

@@ -11,12 +11,12 @@ use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 /// Block format structures (from thru-uds/src/block_format.rs)
 pub type FdPubkey = [u8; 32];
 pub type FdSignature = [u8; 64];
-pub type FdBlake3Hash = [u8; 64];
+pub type FdBlake3Hash = [u8; 32];
 
 /// Result structure for block parsing with cryptographic verification
 #[derive(Debug, Clone)]
 pub struct BlockParseResult {
-    pub block_hash: [u8; 64],       // 512-bit Blake3 hash
+    pub block_hash: [u8; 32],       // 256-bit Blake3 hash (first 32 bytes)
     pub block_producer: [u8; 32],   // Block producer's public key
     pub transactions: Vec<Vec<u8>>, // Existing transaction data
 }
@@ -59,6 +59,7 @@ pub struct TnBlockHeaderBody {
     pub max_compute_units: u64,
     pub max_state_units: u32,
     pub reserved: [u8; 4],
+    pub weight_slot: u64,
     pub block_time_ns: u64,
 }
 
@@ -84,7 +85,7 @@ impl BlockParser {
     pub fn parse_block(data: &[u8]) -> Result<BlockParseResult, BlockParseError> {
         if data.is_empty() {
             return Ok(BlockParseResult {
-                block_hash: [0u8; 64],
+                block_hash: [0u8; 32],
                 block_producer: [0u8; 32],
                 transactions: Vec::new(),
             });
@@ -161,9 +162,9 @@ impl BlockParser {
         })
     }
 
-    /// Compute 512-bit Blake3 hash of block data excluding block signature and block hash
+    /// Compute 256-bit Blake3 hash of block data excluding block signature and block hash
     /// Matches C implementation: fd_blake3_append(&hasher, block_data, block_size - sizeof(fd_signature_t) - BLOCK_HASH_SIZE)
-    fn compute_block_hash(data: &[u8]) -> Result<[u8; 64], BlockParseError> {
+    fn compute_block_hash(data: &[u8]) -> Result<[u8; 32], BlockParseError> {
         let footer_size = mem::size_of::<TnBlockFooter>();
 
         if data.len() < footer_size {
@@ -172,10 +173,10 @@ impl BlockParser {
             ));
         }
 
-        // Hash all data except the final 64 bytes (block_sig) and 64 bytes (block_hash)
+        // Hash all data except the final 64 bytes (block_sig) and 32 bytes (block_hash)
         // This matches the C implementation which excludes sizeof(fd_signature_t) + BLOCK_HASH_SIZE
-        let sig_size = size_of::<FdSignature>();
-        let hash_size = size_of::<FdBlake3Hash>();
+        let sig_size = mem::size_of::<FdSignature>();
+        let hash_size = mem::size_of::<FdBlake3Hash>();
         let hash_data_end = data.len() - sig_size - hash_size;
         let hash_data = &data[..hash_data_end];
 
@@ -186,13 +187,11 @@ impl BlockParser {
             hash_size
         );
 
-        // Use Blake3 XOF (extendable output function) for 512-bit output
+        // Use Blake3 256-bit output and truncate to 32 bytes
         let mut hasher = blake3::Hasher::new();
         hasher.update(hash_data);
 
-        let mut hash_output = [0u8; 64];
-        let mut output_reader = hasher.finalize_xof();
-        output_reader.fill(&mut hash_output);
+        let hash_output = *hasher.finalize().as_bytes();
 
         debug!("Blake3 hash computation completed successfully");
         Ok(hash_output)
@@ -253,7 +252,7 @@ impl BlockParser {
 
     /// Verify block signature against computed hash using producer's public key
     fn verify_block_signature(
-        block_hash: &[u8; 64],
+        block_hash: &[u8; 32],
         footer: &TnBlockFooter,
         producer_key: &[u8; 32],
     ) -> Result<(), BlockParseError> {
@@ -673,7 +672,7 @@ mod tests {
         assert!(result.is_ok());
         let block_result = result.unwrap();
         assert_eq!(block_result.transactions.len(), 0);
-        assert_eq!(block_result.block_hash, [0u8; 64]);
+        assert_eq!(block_result.block_hash, [0u8; 32]);
         assert_eq!(block_result.block_producer, [0u8; 32]);
     }
 
@@ -705,7 +704,7 @@ mod tests {
                 // If it succeeds, verify the structure is correct
                 assert_eq!(block_result.transactions.len(), 0);
                 assert_eq!(block_result.block_producer, [0u8; 32]);
-                assert_eq!(block_result.block_hash.len(), 64);
+                assert_eq!(block_result.block_hash.len(), 32);
             }
             Err(error) => {
                 // If it fails, it should be due to cryptographic verification

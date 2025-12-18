@@ -164,6 +164,9 @@ pub struct Config {
     /// Manager program public key
     pub manager_program_public_key: String,
 
+    /// ABI manager program public key
+    pub abi_manager_program_public_key: String,
+
     /// Token program public key
     pub token_program_public_key: String,
 
@@ -210,6 +213,8 @@ impl Default for Config {
                 .to_string(),
             manager_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQE"
                 .to_string(),
+            abi_manager_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACrG7"
+                .to_string(),
             token_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKqq".to_string(),
             wthru_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcH".to_string(),
             name_service_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUF".to_string(),
@@ -237,11 +242,69 @@ impl Config {
         }
 
         let config_content = tokio::fs::read_to_string(&config_path).await?;
-        let config: Config =
-            serde_yaml::from_str(&config_content).map_err(ConfigError::InvalidFormat)?;
+
+        // Try to parse normally first
+        let config: Config = match serde_yaml::from_str(&config_content) {
+            Ok(c) => c,
+            Err(e) => {
+                // Check if it's a missing field error
+                let error_msg = e.to_string();
+                if error_msg.contains("missing field") {
+                    // Try to migrate the config
+                    Self::migrate_config(&config_path, &config_content).await?
+                } else {
+                    return Err(ConfigError::InvalidFormat(e).into());
+                }
+            }
+        };
 
         // Validate the configuration
         config.validate()?;
+
+        Ok(config)
+    }
+
+    /// Migrate an old config by adding missing fields with default values
+    async fn migrate_config(config_path: &PathBuf, config_content: &str) -> Result<Self, CliError> {
+        // Parse existing config as a generic YAML value
+        let mut existing: serde_yaml::Value = serde_yaml::from_str(config_content)
+            .map_err(|e| ConfigError::InvalidFormat(e))?;
+
+        // Get default config as YAML value
+        let default_config = Config::default();
+        let default_yaml: serde_yaml::Value = serde_yaml::to_value(&default_config)
+            .map_err(|e| ConfigError::InvalidFormat(e))?;
+
+        // Track what fields were added
+        let mut added_fields: Vec<String> = Vec::new();
+
+        // Merge missing fields from default into existing
+        if let (Some(existing_map), Some(default_map)) =
+            (existing.as_mapping_mut(), default_yaml.as_mapping())
+        {
+            for (key, default_value) in default_map {
+                if !existing_map.contains_key(key) {
+                    if let Some(key_str) = key.as_str() {
+                        added_fields.push(key_str.to_string());
+                    }
+                    existing_map.insert(key.clone(), default_value.clone());
+                }
+            }
+        }
+
+        // Try to deserialize the merged config
+        let config: Config = serde_yaml::from_value(existing.clone())
+            .map_err(|e| ConfigError::InvalidFormat(e))?;
+
+        // Save the updated config
+        let updated_content = Self::generate_config_template(&config);
+        tokio::fs::write(config_path, &updated_content).await?;
+
+        // Notify user about the migration
+        if !added_fields.is_empty() {
+            eprintln!("Config migrated: added missing field(s): {}", added_fields.join(", "));
+            eprintln!("Updated config saved to: {}", config_path.display());
+        }
 
         Ok(config)
     }
@@ -266,6 +329,18 @@ impl Config {
 
         // Validate uploader program public key
         Pubkey::new(self.uploader_program_public_key.clone())
+            .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()))?;
+
+        // Validate manager program public key
+        Pubkey::new(self.manager_program_public_key.clone())
+            .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()))?;
+
+        // Validate ABI manager program public key
+        Pubkey::new(self.abi_manager_program_public_key.clone())
+            .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()))?;
+
+        // Validate token program public key
+        Pubkey::new(self.token_program_public_key.clone())
             .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()))?;
 
         Ok(())
@@ -419,6 +494,12 @@ impl Config {
     /// Get the manager program public key
     pub fn get_manager_pubkey(&self) -> Result<Pubkey, CliError> {
         Pubkey::new(self.manager_program_public_key.clone())
+            .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()).into())
+    }
+
+    /// Get the ABI manager program public key
+    pub fn get_abi_manager_pubkey(&self) -> Result<Pubkey, CliError> {
+        Pubkey::new(self.abi_manager_program_public_key.clone())
             .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()).into())
     }
 

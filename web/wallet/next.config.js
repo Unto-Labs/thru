@@ -1,19 +1,9 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  webpack: (config, { isServer }) => {
-    // Add polyfills for Node.js globals in browser
-    if (!isServer) {
-      config.resolve.fallback = {
-        ...config.resolve.fallback,
-        fs: false,
-        net: false,
-        tls: false,
-      };
-    }
-
-    return config;
-  },
+  // Turbopack config (Next.js 16+ uses Turbopack by default)
+  // Node.js polyfills (fs, net, tls) are automatically stubbed in browser builds
+  turbopack: {},
 };
 
 module.exports = nextConfig;

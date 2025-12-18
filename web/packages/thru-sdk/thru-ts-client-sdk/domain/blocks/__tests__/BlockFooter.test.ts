@@ -17,6 +17,7 @@ describe("BlockFooter", () => {
             status: ExecutionStatus.EXECUTED,
             consumedComputeUnits: 100n,
             consumedStateUnits: 10,
+            attestorPayment: 55n,
         });
 
         const footer = BlockFooter.fromProto(proto);
@@ -25,6 +26,7 @@ describe("BlockFooter", () => {
         expect(footer.status).toBe(ExecutionStatus.EXECUTED);
         expect(footer.consumedComputeUnits).toBe(100n);
         expect(footer.consumedStateUnits).toBe(10);
+        expect(footer.attestorPayment).toBe(55n);
     });
 
     it("serializes to wire with block", () => {
@@ -33,6 +35,7 @@ describe("BlockFooter", () => {
             status: ExecutionStatus.FAILED,
             consumedComputeUnits: 0n,
             consumedStateUnits: 0,
+            attestorPayment: 111n,
         });
         const block = new Block({ header: makeHeader(), footer });
         const wire = block.toWire();

@@ -1,0 +1,37 @@
+abi:
+  package: "compliance.fam"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Fixture exercising flexible array member builders"
+
+types:
+  - name: "CounterCreateInstruction"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "instruction_type"
+            field-type:
+              primitive: u32
+          - name: "account_index"
+            field-type:
+              primitive: u16
+          - name: "seed"
+            field-type:
+              array:
+                size:
+                  literal:
+                    u64: 32
+                element-type:
+                  primitive: u8
+          - name: "proof_size"
+            field-type:
+              primitive: u32
+          - name: "proof"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["proof_size"]
+                element-type:
+                  primitive: u8

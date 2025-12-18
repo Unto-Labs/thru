@@ -1,0 +1,8 @@
+- name: "box"
+  kind:
+    struct:
+      packed: true
+      fields:
+        - name: "tag"
+          field-type:
+            primitive: u16

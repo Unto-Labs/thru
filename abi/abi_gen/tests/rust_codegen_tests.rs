@@ -5,35 +5,31 @@
  */
 
 use abi_gen::abi::file::AbiFile;
-use abi_gen::abi::resolved::{TypeResolver, ResolvedType};
+use abi_gen::abi::resolved::{ResolvedType, TypeResolver};
 use abi_gen::codegen::rust::{RustCodeGenerator, RustCodeGeneratorOptions};
-use std::process::Command;
 use std::fs;
 use std::path::Path;
+use std::process::Command;
 
 /* Helper to resolve types from ABI file */
-fn resolve_types_from_abi(abi_path: &str) -> Result<Vec<ResolvedType>, String> {
+fn resolve_types_from_abi(abi_path: &str) -> Result<TypeResolver, String> {
     /* Load and parse the ABI file */
-    let yaml_content = fs::read_to_string(abi_path)
-        .map_err(|e| format!("Failed to read file: {}", e))?;
+    let yaml_content =
+        fs::read_to_string(abi_path).map_err(|e| format!("Failed to read file: {}", e))?;
 
-    let abi: AbiFile = serde_yml::from_str(&yaml_content)
-        .map_err(|e| format!("Failed to parse YAML: {}", e))?;
+    let abi: AbiFile =
+        serde_yml::from_str(&yaml_content).map_err(|e| format!("Failed to parse YAML: {}", e))?;
 
     let mut resolver = TypeResolver::new();
     for typedef in &abi.types {
         resolver.add_typedef(typedef.clone());
     }
 
-    resolver.resolve_all().map_err(|e| format!("Failed to resolve types: {:?}", e))?;
+    resolver
+        .resolve_all()
+        .map_err(|e| format!("Failed to resolve types: {:?}", e))?;
 
-    let resolved_types: Vec<ResolvedType> = resolver
-        .resolution_order
-        .iter()
-        .filter_map(|name| resolver.get_type_info(name).cloned())
-        .collect();
-
-    Ok(resolved_types)
+    Ok(resolver)
 }
 
 /* Helper to compile Rust code and check for errors */
@@ -150,14 +146,21 @@ types:
     let temp_file = std::env::temp_dir().join("rust_primitives_test.abi.yaml");
     fs::write(&temp_file, abi_content).expect("Failed to write temp ABI file");
 
-    let resolved_types = resolve_types_from_abi(temp_file.to_str().unwrap())
-        .expect("Failed to resolve types");
-    let resolved_refs: Vec<&ResolvedType> = resolved_types.iter().collect();
+    let resolver =
+        resolve_types_from_abi(temp_file.to_str().unwrap()).expect("Failed to resolve types");
+    let resolved_refs: Vec<&ResolvedType> = resolver
+        .resolution_order
+        .iter()
+        .filter_map(|name| resolver.get_type_info(name))
+        .collect();
 
-    let rust_gen = RustCodeGenerator::new(RustCodeGeneratorOptions {
-        output_dir: std::env::temp_dir().to_str().unwrap().to_string(),
-        ..Default::default()
-    });
+    let rust_gen = RustCodeGenerator::new(
+        &resolver,
+        RustCodeGeneratorOptions {
+            output_dir: std::env::temp_dir().to_str().unwrap().to_string(),
+            ..Default::default()
+        },
+    );
 
     let rust_code = rust_gen.emit_code(&resolved_refs);
 
@@ -207,18 +210,26 @@ types:
     let temp_file = std::env::temp_dir().join("rust_arrays_test.abi.yaml");
     fs::write(&temp_file, abi_content).expect("Failed to write temp ABI file");
 
-    let resolved_types = resolve_types_from_abi(temp_file.to_str().unwrap())
-        .expect("Failed to resolve types");
-    let resolved_refs: Vec<&ResolvedType> = resolved_types.iter().collect();
+    let resolver =
+        resolve_types_from_abi(temp_file.to_str().unwrap()).expect("Failed to resolve types");
+    let resolved_refs: Vec<&ResolvedType> = resolver
+        .resolution_order
+        .iter()
+        .filter_map(|name| resolver.get_type_info(name))
+        .collect();
 
-    let rust_gen = RustCodeGenerator::new(RustCodeGeneratorOptions {
-        output_dir: std::env::temp_dir().to_str().unwrap().to_string(),
-        ..Default::default()
-    });
+    let rust_gen = RustCodeGenerator::new(
+        &resolver,
+        RustCodeGeneratorOptions {
+            output_dir: std::env::temp_dir().to_str().unwrap().to_string(),
+            ..Default::default()
+        },
+    );
 
     let rust_code = rust_gen.emit_code(&resolved_refs);
 
-    compile_rust_code(&rust_code, "rust_fixed_arrays").expect("Rust fixed arrays code should compile");
+    compile_rust_code(&rust_code, "rust_fixed_arrays")
+        .expect("Rust fixed arrays code should compile");
 
     let _ = fs::remove_file(&temp_file);
 }
@@ -254,14 +265,21 @@ types:
     let temp_file = std::env::temp_dir().join("rust_fam_test.abi.yaml");
     fs::write(&temp_file, abi_content).expect("Failed to write temp ABI file");
 
-    let resolved_types = resolve_types_from_abi(temp_file.to_str().unwrap())
-        .expect("Failed to resolve types");
-    let resolved_refs: Vec<&ResolvedType> = resolved_types.iter().collect();
+    let resolver =
+        resolve_types_from_abi(temp_file.to_str().unwrap()).expect("Failed to resolve types");
+    let resolved_refs: Vec<&ResolvedType> = resolver
+        .resolution_order
+        .iter()
+        .filter_map(|name| resolver.get_type_info(name))
+        .collect();
 
-    let rust_gen = RustCodeGenerator::new(RustCodeGeneratorOptions {
-        output_dir: std::env::temp_dir().to_str().unwrap().to_string(),
-        ..Default::default()
-    });
+    let rust_gen = RustCodeGenerator::new(
+        &resolver,
+        RustCodeGeneratorOptions {
+            output_dir: std::env::temp_dir().to_str().unwrap().to_string(),
+            ..Default::default()
+        },
+    );
 
     let rust_code = rust_gen.emit_code(&resolved_refs);
 
@@ -280,18 +298,26 @@ fn test_rust_advanced_types() {
         return;
     }
 
-    let resolved_types = resolve_types_from_abi(abi_path.to_str().unwrap())
-        .expect("Failed to resolve types");
-    let resolved_refs: Vec<&ResolvedType> = resolved_types.iter().collect();
+    let resolver =
+        resolve_types_from_abi(abi_path.to_str().unwrap()).expect("Failed to resolve types");
+    let resolved_refs: Vec<&ResolvedType> = resolver
+        .resolution_order
+        .iter()
+        .filter_map(|name| resolver.get_type_info(name))
+        .collect();
 
-    let rust_gen = RustCodeGenerator::new(RustCodeGeneratorOptions {
-        output_dir: std::env::temp_dir().to_str().unwrap().to_string(),
-        ..Default::default()
-    });
+    let rust_gen = RustCodeGenerator::new(
+        &resolver,
+        RustCodeGeneratorOptions {
+            output_dir: std::env::temp_dir().to_str().unwrap().to_string(),
+            ..Default::default()
+        },
+    );
 
     let rust_code = rust_gen.emit_code(&resolved_refs);
 
-    compile_rust_code(&rust_code, "rust_advanced_types").expect("Rust advanced types code should compile");
+    compile_rust_code(&rust_code, "rust_advanced_types")
+        .expect("Rust advanced types code should compile");
 }
 
 #[test]
@@ -333,14 +359,21 @@ types:
     let temp_file = std::env::temp_dir().join("rust_enums_test.abi.yaml");
     fs::write(&temp_file, abi_content).expect("Failed to write temp ABI file");
 
-    let resolved_types = resolve_types_from_abi(temp_file.to_str().unwrap())
-        .expect("Failed to resolve types");
-    let resolved_refs: Vec<&ResolvedType> = resolved_types.iter().collect();
+    let resolver =
+        resolve_types_from_abi(temp_file.to_str().unwrap()).expect("Failed to resolve types");
+    let resolved_refs: Vec<&ResolvedType> = resolver
+        .resolution_order
+        .iter()
+        .filter_map(|name| resolver.get_type_info(name))
+        .collect();
 
-    let rust_gen = RustCodeGenerator::new(RustCodeGeneratorOptions {
-        output_dir: std::env::temp_dir().to_str().unwrap().to_string(),
-        ..Default::default()
-    });
+    let rust_gen = RustCodeGenerator::new(
+        &resolver,
+        RustCodeGeneratorOptions {
+            output_dir: std::env::temp_dir().to_str().unwrap().to_string(),
+            ..Default::default()
+        },
+    );
 
     let rust_code = rust_gen.emit_code(&resolved_refs);
 
@@ -378,14 +411,21 @@ types:
     let temp_file = std::env::temp_dir().join("rust_unions_test.abi.yaml");
     fs::write(&temp_file, abi_content).expect("Failed to write temp ABI file");
 
-    let resolved_types = resolve_types_from_abi(temp_file.to_str().unwrap())
-        .expect("Failed to resolve types");
-    let resolved_refs: Vec<&ResolvedType> = resolved_types.iter().collect();
+    let resolver =
+        resolve_types_from_abi(temp_file.to_str().unwrap()).expect("Failed to resolve types");
+    let resolved_refs: Vec<&ResolvedType> = resolver
+        .resolution_order
+        .iter()
+        .filter_map(|name| resolver.get_type_info(name))
+        .collect();
 
-    let rust_gen = RustCodeGenerator::new(RustCodeGeneratorOptions {
-        output_dir: std::env::temp_dir().to_str().unwrap().to_string(),
-        ..Default::default()
-    });
+    let rust_gen = RustCodeGenerator::new(
+        &resolver,
+        RustCodeGeneratorOptions {
+            output_dir: std::env::temp_dir().to_str().unwrap().to_string(),
+            ..Default::default()
+        },
+    );
 
     let rust_code = rust_gen.emit_code(&resolved_refs);
 
@@ -428,18 +468,26 @@ types:
     let temp_file = std::env::temp_dir().join("rust_nested_test.abi.yaml");
     fs::write(&temp_file, abi_content).expect("Failed to write temp ABI file");
 
-    let resolved_types = resolve_types_from_abi(temp_file.to_str().unwrap())
-        .expect("Failed to resolve types");
-    let resolved_refs: Vec<&ResolvedType> = resolved_types.iter().collect();
+    let resolver =
+        resolve_types_from_abi(temp_file.to_str().unwrap()).expect("Failed to resolve types");
+    let resolved_refs: Vec<&ResolvedType> = resolver
+        .resolution_order
+        .iter()
+        .filter_map(|name| resolver.get_type_info(name))
+        .collect();
 
-    let rust_gen = RustCodeGenerator::new(RustCodeGeneratorOptions {
-        output_dir: std::env::temp_dir().to_str().unwrap().to_string(),
-        ..Default::default()
-    });
+    let rust_gen = RustCodeGenerator::new(
+        &resolver,
+        RustCodeGeneratorOptions {
+            output_dir: std::env::temp_dir().to_str().unwrap().to_string(),
+            ..Default::default()
+        },
+    );
 
     let rust_code = rust_gen.emit_code(&resolved_refs);
 
-    compile_rust_code(&rust_code, "rust_nested").expect("Rust nested structures code should compile");
+    compile_rust_code(&rust_code, "rust_nested")
+        .expect("Rust nested structures code should compile");
 
     let _ = fs::remove_file(&temp_file);
 }
@@ -483,20 +531,33 @@ types:
     let temp_file = std::env::temp_dir().join("rust_repr_test.abi.yaml");
     fs::write(&temp_file, abi_content).expect("Failed to write temp ABI file");
 
-    let resolved_types = resolve_types_from_abi(temp_file.to_str().unwrap())
-        .expect("Failed to resolve types");
-    let resolved_refs: Vec<&ResolvedType> = resolved_types.iter().collect();
+    let resolver =
+        resolve_types_from_abi(temp_file.to_str().unwrap()).expect("Failed to resolve types");
+    let resolved_refs: Vec<&ResolvedType> = resolver
+        .resolution_order
+        .iter()
+        .filter_map(|name| resolver.get_type_info(name))
+        .collect();
 
-    let rust_gen = RustCodeGenerator::new(RustCodeGeneratorOptions {
-        output_dir: std::env::temp_dir().to_str().unwrap().to_string(),
-        ..Default::default()
-    });
+    let rust_gen = RustCodeGenerator::new(
+        &resolver,
+        RustCodeGeneratorOptions {
+            output_dir: std::env::temp_dir().to_str().unwrap().to_string(),
+            ..Default::default()
+        },
+    );
 
     let rust_code = rust_gen.emit_code(&resolved_refs);
 
     /* Verify repr attributes are present */
-    assert!(rust_code.contains("#[repr(C, packed)]"), "Packed struct should have #[repr(C, packed)]");
-    assert!(rust_code.contains("#[repr(C)]"), "Aligned struct should have #[repr(C)]");
+    assert!(
+        rust_code.contains("#[repr(C, packed)]"),
+        "Packed struct should have #[repr(C, packed)]"
+    );
+    assert!(
+        rust_code.contains("#[repr(C)]"),
+        "Aligned struct should have #[repr(C)]"
+    );
 
     compile_rust_code(&rust_code, "rust_repr").expect("Rust repr attributes code should compile");
 

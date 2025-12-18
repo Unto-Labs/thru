@@ -1,12 +1,12 @@
 #include "tn_crypto.h"
-#include "tn_sdk_base.h"
 
 /* Domain separation tag for consensus signatures */
 static uchar const TN_CONSENSUS_DST[] = "TN_CONSENSUS_V1";
 
+// WARNING: THIS IS NOT SECURE PLEASE DO NOT USE THIS OUTSIDE OF TESTING CODE
 int tn_crypto_generate_keypair(tn_bls_pubkey_t* pubkey,
                                tn_bls_private_key_t* private_key, ulong seed) {
-  if (TSDK_UNLIKELY(!pubkey || !private_key)) {
+  if (UNLIKELY(!pubkey || !private_key)) {
     return TN_CRYPTO_ERR_INVALID_PARAM;
   }
 
@@ -32,7 +32,7 @@ int tn_crypto_generate_keypair(tn_bls_pubkey_t* pubkey,
 int tn_crypto_sign_message(tn_bls_signature_t* signature, void const* message,
                            ulong message_len,
                            tn_bls_private_key_t const* private_key) {
-  if (TSDK_UNLIKELY(!signature || !message || !private_key)) {
+  if (UNLIKELY(!signature || !message || !private_key)) {
     return TN_CRYPTO_ERR_INVALID_PARAM;
   }
 
@@ -54,7 +54,7 @@ int tn_crypto_sign_message(tn_bls_signature_t* signature, void const* message,
 int tn_crypto_verify_signature(tn_bls_signature_t const* signature,
                                tn_bls_pubkey_t const* pubkey,
                                void const* message, ulong message_len) {
-  if (TSDK_UNLIKELY(!signature || !pubkey || !message)) {
+  if (UNLIKELY(!signature || !pubkey || !message)) {
     return TN_CRYPTO_ERR_INVALID_PARAM;
   }
 
@@ -63,7 +63,7 @@ int tn_crypto_verify_signature(tn_bls_signature_t const* signature,
       pubkey, signature, 1, (uchar const*)message, message_len,
       TN_CONSENSUS_DST, sizeof(TN_CONSENSUS_DST) - 1, NULL, 0);
 
-  if (TSDK_UNLIKELY(err != BLST_SUCCESS)) {
+  if (UNLIKELY(err != BLST_SUCCESS)) {
     return TN_CRYPTO_ERR_VERIFY_FAILED;
   }
 
@@ -73,7 +73,7 @@ int tn_crypto_verify_signature(tn_bls_signature_t const* signature,
 int tn_crypto_aggregate_signatures(tn_bls_signature_t* aggregate,
                                    tn_bls_signature_t const* sig1,
                                    tn_bls_signature_t const* sig2) {
-  if (TSDK_UNLIKELY(!aggregate || !sig1 || !sig2)) {
+  if (UNLIKELY(!aggregate || !sig1 || !sig2)) {
     return TN_CRYPTO_ERR_INVALID_PARAM;
   }
 
@@ -94,7 +94,7 @@ int tn_crypto_aggregate_signatures(tn_bls_signature_t* aggregate,
 int tn_crypto_aggregate_pubkeys(tn_bls_pubkey_t* aggregate,
                                 tn_bls_pubkey_t const* pk1,
                                 tn_bls_pubkey_t const* pk2) {
-  if (TSDK_UNLIKELY(!aggregate || !pk1 || !pk2)) {
+  if (UNLIKELY(!aggregate || !pk1 || !pk2)) {
     return TN_CRYPTO_ERR_INVALID_PARAM;
   }
 
@@ -114,7 +114,7 @@ int tn_crypto_aggregate_pubkeys(tn_bls_pubkey_t* aggregate,
 
 int tn_crypto_subtract_signature(tn_bls_signature_t* aggregate,
                                  tn_bls_signature_t const* to_subtract) {
-  if (TSDK_UNLIKELY(!aggregate || !to_subtract)) {
+  if (UNLIKELY(!aggregate || !to_subtract)) {
     return TN_CRYPTO_ERR_INVALID_PARAM;
   }
 
@@ -137,7 +137,7 @@ int tn_crypto_subtract_signature(tn_bls_signature_t* aggregate,
 
 int tn_crypto_subtract_pubkey(tn_bls_pubkey_t* aggregate,
                               tn_bls_pubkey_t const* to_subtract) {
-  if (TSDK_UNLIKELY(!aggregate || !to_subtract)) {
+  if (UNLIKELY(!aggregate || !to_subtract)) {
     return TN_CRYPTO_ERR_INVALID_PARAM;
   }
 
@@ -161,7 +161,7 @@ int tn_crypto_subtract_pubkey(tn_bls_pubkey_t* aggregate,
 int tn_crypto_verify_aggregate(tn_bls_signature_t const* aggregate_sig,
                                tn_bls_pubkey_t const* aggregate_pk,
                                void const* message, ulong message_len) {
-  if (TSDK_UNLIKELY(!aggregate_sig || !aggregate_pk || !message)) {
+  if (UNLIKELY(!aggregate_sig || !aggregate_pk || !message)) {
     return TN_CRYPTO_ERR_INVALID_PARAM;
   }
 
@@ -170,8 +170,21 @@ int tn_crypto_verify_aggregate(tn_bls_signature_t const* aggregate_sig,
       aggregate_pk, aggregate_sig, 1, (uchar const*)message, message_len,
       TN_CONSENSUS_DST, sizeof(TN_CONSENSUS_DST) - 1, NULL, 0);
 
-  if (TSDK_UNLIKELY(err != BLST_SUCCESS)) {
+  if (UNLIKELY(err != BLST_SUCCESS)) {
     return TN_CRYPTO_ERR_VERIFY_FAILED;
+  }
+
+  return TN_CRYPTO_SUCCESS;
+}
+
+int tn_crypto_pubkey_on_curve(tn_bls_pubkey_t const* pubkey) {
+  if (UNLIKELY(!pubkey)) {
+    return TN_CRYPTO_ERR_INVALID_PARAM;
+  }
+
+  if (UNLIKELY(!blst_p1_affine_on_curve(pubkey)) ||
+      UNLIKELY(blst_p1_affine_is_inf(pubkey))) {
+    return TN_CRYPTO_ERR_INVALID_PUBKEY;
   }
 
   return TN_CRYPTO_SUCCESS;

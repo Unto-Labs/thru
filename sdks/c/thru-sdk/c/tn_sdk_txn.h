@@ -56,7 +56,7 @@ struct tsdk_txn {
 };
 typedef struct tsdk_txn tsdk_txn_t;
 
-#define TSDK_SHADOW_STACK_FRAME_MAX (16U)
+#define TSDK_SHADOW_STACK_FRAME_MAX (17U) /* 16 call depths (1..16) + 1 for frame -1 */
 
 /* Account metadata structure containing account state information */
 struct __attribute__((packed)) tsdk_account_meta {
@@ -74,14 +74,18 @@ typedef struct tsdk_account_meta tsdk_account_meta_t;
 /* Shadow stack frame for tracking program invocation context */
 struct tsdk_shadow_stack_frame {
   ushort program_acc_idx; /* Index of the program account */
+  ushort stack_pages;     /* Total size of stack region in pages */
+  ushort heap_pages;      /* Total size of heap region in pages */
 };
 typedef struct tsdk_shadow_stack_frame tsdk_shadow_stack_frame_t;
 
 /* Shadow stack for managing cross-program invocation state */
 struct tsdk_shadow_stack {
-  ushort call_depth; /* Current call depth */
-  ushort
-      current_program_acc_idx; /* Currently executing program account index */
+  ushort call_depth;                 /* Current call depth */
+  ushort current_total_stack_pages;  /* Total stack pages across all call depths */
+  ushort current_total_heap_pages;   /* Total heap pages across all call depths */
+  ushort max_call_depth;             /* Maximum call depth reached */
+  /* Frame array: stack_frames[0] is frame -1 (all zeros), stack_frames[1] is call depth 1 (root), etc. */
   tsdk_shadow_stack_frame_t
       stack_frames[TSDK_SHADOW_STACK_FRAME_MAX]; /* Stack frames */
 };
@@ -92,9 +96,8 @@ struct tsdk_block_ctx {
   ulong slot;                 /* Current block slot number */
   ulong block_time;           /* Block timestamp (Unix epoch in nanoseconds) */
   ulong block_price;          /* Block price */
-  tn_hash_t parent_blockhash; /* Hash of the parent block */
   tn_hash_t state_root;       /* Merkle root of the state tree */
-  tn_hash_t cur_block_hash;   /* Current block hash (truncated) */
+  tn_hash_t cur_block_hash;   /* Current block hash */
   tn_pubkey_t block_producer; /* Public key of the block producer */
 };
 typedef struct tsdk_block_ctx tsdk_block_ctx_t;

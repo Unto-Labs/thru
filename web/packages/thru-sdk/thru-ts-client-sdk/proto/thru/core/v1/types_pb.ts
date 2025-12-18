@@ -13,7 +13,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file thru/core/v1/types.proto.
  */
 export const file_thru_core_v1_types: GenFile = /*@__PURE__*/
-  fileDesc("Chh0aHJ1L2NvcmUvdjEvdHlwZXMucHJvdG8SDHRocnUuY29yZS52MSIhCgRIYXNoEhkKBXZhbHVlGAEgASgMQgrgQQK6SAR6AmggIiYKCUJsb2NrSGFzaBIZCgV2YWx1ZRgBIAEoDEIK4EECukgEegJoQEK5AQoQY29tLnRocnUuY29yZS52MUIKVHlwZXNQcm90b1ABWkBnaXRodWIuY29tL1VudG8tTGFicy90aHJ1LW5ldC9ncnBjL3BrZy9wcm90by90aHJ1L2NvcmUvdjE7Y29yZXYxogIDVENYqgIMVGhydS5Db3JlLlYxugIEVEhVQ8oCDFRocnVcQ29yZVxWMeICGFRocnVcQ29yZVxWMVxHUEJNZXRhZGF0YeoCDlRocnU6OkNvcmU6OlYxYgZwcm90bzM", [file_buf_validate_validate, file_google_api_field_behavior, file_thru_common_v1_primitives]);
+  fileDesc("Chh0aHJ1L2NvcmUvdjEvdHlwZXMucHJvdG8SDHRocnUuY29yZS52MSIhCgRIYXNoEhkKBXZhbHVlGAEgASgMQgrgQQK6SAR6AmggIiYKCUJsb2NrSGFzaBIZCgV2YWx1ZRgBIAEoDEIK4EECukgEegJoIEK5AQoQY29tLnRocnUuY29yZS52MUIKVHlwZXNQcm90b1ABWkBnaXRodWIuY29tL1VudG8tTGFicy90aHJ1LW5ldC9ncnBjL3BrZy9wcm90by90aHJ1L2NvcmUvdjE7Y29yZXYxogIDVENYqgIMVGhydS5Db3JlLlYxugIEVEhVQ8oCDFRocnVcQ29yZVxWMeICGFRocnVcQ29yZVxWMVxHUEJNZXRhZGF0YeoCDlRocnU6OkNvcmU6OlYxYgZwcm90bzM", [file_buf_validate_validate, file_google_api_field_behavior, file_thru_common_v1_primitives]);
 
 /**
  * Hash represents a 32-byte hash value.
@@ -37,13 +37,13 @@ export const HashSchema: GenMessage<Hash> = /*@__PURE__*/
   messageDesc(file_thru_core_v1_types, 0);
 
 /**
- * BlockHash represents a 64-byte hash for block identifiers.
+ * BlockHash represents a 32-byte hash for block identifiers.
  *
  * @generated from message thru.core.v1.BlockHash
  */
 export type BlockHash = Message<"thru.core.v1.BlockHash"> & {
   /**
-   * 64-byte block hash buffer.
+   * 32-byte block hash buffer.
    *
    * @generated from field: bytes value = 1;
    */

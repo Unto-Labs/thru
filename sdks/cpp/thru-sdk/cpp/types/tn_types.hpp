@@ -151,14 +151,18 @@ constexpr uchar TN_TXN_V1 = 0x01;
 
 struct tsdk_shadow_stack_frame {
   ushort program_acc_idx;
+  ushort stack_pages;
+  ushort heap_pages;
 };
 
-constexpr int TSDK_SHADOW_STACK_FRAME_MAX = 16;
+constexpr int TSDK_SHADOW_STACK_FRAME_MAX = 17;
 
 struct tsdk_shadow_stack {
   ushort call_depth;
-  ushort current_program_acc_idx;
-  tsdk_shadow_stack_frame stack_frames[16];
+  ushort current_total_stack_pages;
+  ushort current_total_heap_pages;
+  ushort max_call_depth;
+  tsdk_shadow_stack_frame stack_frames[TSDK_SHADOW_STACK_FRAME_MAX];
 };
 
 // Account metadata structure for SDK compatibility (using same packing)
@@ -169,10 +173,9 @@ struct __attribute__((packed)) tn_block_ctx {
   ulong slot;                 // Current block slot number
   ulong block_time;           // Block timestamp (Unix epoch in nanoseconds)
   ulong block_price;          // Block price
-  pubkey_t parent_blockhash;  // Hash of the parent block
   pubkey_t block_producer;    // Public key of the block producer
   pubkey_t state_root;        // Merkle root of the state tree
-  pubkey_t cur_block_hash;    // Current block hash (truncated)
+  pubkey_t cur_block_hash;    // Current block hash
 };
 
 // Block context constants

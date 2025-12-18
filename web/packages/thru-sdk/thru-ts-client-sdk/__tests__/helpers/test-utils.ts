@@ -184,7 +184,7 @@ export function createMockBlock(overrides: Omit<Partial<Block>, "header"> & { he
     maxBlockSize: 1024,
     maxComputeUnits: 1000000n,
     maxStateUnits: 10000,
-    price: 1n,
+    bondAmountLockUp: 1n,
   };
   
   // Merge header overrides if provided and create protobuf message
@@ -226,4 +226,3 @@ export function generateTestKeyPair(): {
     address: encodeAddress(publicKey),
   };
 }
-

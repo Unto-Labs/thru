@@ -173,7 +173,7 @@ async fn setup_transaction_context(
 
     // Get current nonce and block height
     let account_info = client
-        .get_account_info(&fee_payer_keypair.address_string, None)
+        .get_account_info(&fee_payer_keypair.address_string, None, None)
         .await
         .map_err(|e| {
             CliError::TransactionSubmission(format!("Failed to get account info: {}", e))
@@ -506,7 +506,7 @@ async fn initialize_mint(
 
     // Get current nonce and block height
     let account_info = client
-        .get_account_info(&fee_payer_keypair.address_string, None)
+        .get_account_info(&fee_payer_keypair.address_string, None, None)
         .await
         .map_err(|e| {
             CliError::TransactionSubmission(format!("Failed to get account info: {}", e))
@@ -664,7 +664,7 @@ async fn initialize_account(
 
     // Get current nonce and block height
     let account_info = client
-        .get_account_info(&fee_payer_keypair.address_string, None)
+        .get_account_info(&fee_payer_keypair.address_string, None, None)
         .await
         .map_err(|e| {
             CliError::TransactionSubmission(format!("Failed to get account info: {}", e))
@@ -996,7 +996,7 @@ async fn burn(
 
     // Get current nonce and block height
     let account_info = client
-        .get_account_info(&fee_payer_keypair.address_string, None)
+        .get_account_info(&fee_payer_keypair.address_string, None, None)
         .await
         .map_err(|e| {
             CliError::TransactionSubmission(format!("Failed to get account info: {}", e))
@@ -1103,7 +1103,7 @@ async fn close_account(
 
     // Get current nonce and block height
     let account_info = client
-        .get_account_info(&fee_payer_keypair.address_string, None)
+        .get_account_info(&fee_payer_keypair.address_string, None, None)
         .await
         .map_err(|e| {
             CliError::TransactionSubmission(format!("Failed to get account info: {}", e))
@@ -1207,7 +1207,7 @@ async fn freeze_account(
 
     // Get current nonce and block height
     let account_info = client
-        .get_account_info(&fee_payer_keypair.address_string, None)
+        .get_account_info(&fee_payer_keypair.address_string, None, None)
         .await
         .map_err(|e| {
             CliError::TransactionSubmission(format!("Failed to get account info: {}", e))
@@ -1311,7 +1311,7 @@ async fn thaw_account(
 
     // Get current nonce and block height
     let account_info = client
-        .get_account_info(&fee_payer_keypair.address_string, None)
+        .get_account_info(&fee_payer_keypair.address_string, None, None)
         .await
         .map_err(|e| {
             CliError::TransactionSubmission(format!("Failed to get account info: {}", e))

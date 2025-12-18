@@ -13,7 +13,8 @@ export interface BlockHeaderParams {
     maxBlockSize?: number;
     maxComputeUnits?: bigint;
     maxStateUnits?: number;
-    price?: bigint;
+    bondAmountLockUp?: bigint;
+    weightSlot?: bigint;
     blockHash?: Uint8Array;
 }
 
@@ -28,7 +29,8 @@ export class BlockHeader {
     readonly maxBlockSize?: number;
     readonly maxComputeUnits?: bigint;
     readonly maxStateUnits?: number;
-    readonly price?: bigint;
+    readonly bondAmountLockUp?: bigint;
+    readonly weightSlot?: bigint;
     readonly blockHash?: Uint8Array;
 
     constructor(params: BlockHeaderParams) {
@@ -42,7 +44,8 @@ export class BlockHeader {
         this.maxBlockSize = params.maxBlockSize;
         this.maxComputeUnits = params.maxComputeUnits;
         this.maxStateUnits = params.maxStateUnits;
-        this.price = params.price;
+        this.bondAmountLockUp = params.bondAmountLockUp;
+        this.weightSlot = params.weightSlot;
         this.blockHash = copyBytes(params.blockHash);
     }
 
@@ -58,7 +61,8 @@ export class BlockHeader {
             maxBlockSize: proto.maxBlockSize,
             maxComputeUnits: proto.maxComputeUnits,
             maxStateUnits: proto.maxStateUnits,
-            price: proto.price,
+            bondAmountLockUp: proto.bondAmountLockUp,
+            weightSlot: proto.weightSlot,
             blockHash: proto.blockHash?.value,
         });
     }
@@ -75,7 +79,8 @@ export class BlockHeader {
             maxBlockSize: this.maxBlockSize,
             maxComputeUnits: this.maxComputeUnits,
             maxStateUnits: this.maxStateUnits,
-            price: this.price,
+            bondAmountLockUp: this.bondAmountLockUp,
+            weightSlot: this.weightSlot,
             blockHash,
         });
     }
@@ -87,4 +92,3 @@ function copyBytes(bytes?: Uint8Array): Uint8Array | undefined {
     out.set(bytes);
     return out;
 }
-

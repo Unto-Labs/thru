@@ -1,0 +1,24 @@
+abi:
+  package: "compliance.dynamic"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Dynamic struct with FAM"
+
+types:
+  - name: "DynamicStruct"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "count"
+            field-type:
+              primitive: u16
+          - name: "payload"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path:
+                      - count
+                element-type:
+                  primitive: u8

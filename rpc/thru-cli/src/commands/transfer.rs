@@ -43,7 +43,7 @@ pub async fn handle_transfer_command(
 
     // Get current nonce and balance for the source account
     let src_account_info = client
-        .get_account_info(&src_keypair.address_string, None)
+        .get_account_info(&src_keypair.address_string, None, None)
         .await
         .map_err(|e| {
             CliError::TransactionSubmission(format!("Failed to get source account info: {}", e))

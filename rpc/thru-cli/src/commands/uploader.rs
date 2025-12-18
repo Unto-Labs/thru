@@ -13,7 +13,7 @@ use crate::crypto;
 use crate::error::CliError;
 use crate::output;
 use crate::utils::format_vm_error;
-use thru_client::Client as RpcClient;
+use thru_client::{Client as RpcClient, VersionContext};
 
 // Transaction verification constants
 const TRANSACTION_VERIFICATION_TIMEOUT: Duration = Duration::from_secs(30);
@@ -163,7 +163,7 @@ impl UploaderManager {
         // Query the actual account nonce from the blockchain
         match self
             .rpc_client
-            .get_account_info(&self.fee_payer_keypair.address_string, None)
+            .get_account_info(&self.fee_payer_keypair.address_string, None, Some(VersionContext::Current))
             .await
         {
             Ok(Some(account)) => Ok(account.nonce),
@@ -199,6 +199,7 @@ impl UploaderManager {
     /// for the given meta and buffer accounts.
     ///
     /// # Arguments
+    /// * `seed` - The seed used for account derivation (for error messages)
     /// * `meta_account` - The meta account public key
     /// * `buffer_account` - The buffer account public key
     ///
@@ -208,11 +209,12 @@ impl UploaderManager {
     /// - `Err(CliError)` - If there's an error querying the accounts
     async fn check_existing_upload_state(
         &self,
+        seed: &str,
         meta_account: &Pubkey,
         buffer_account: &Pubkey,
     ) -> Result<Option<UploadState>, CliError> {
         // Check if meta account exists
-        let meta_account_info = match self.rpc_client.get_account_info(meta_account, None).await {
+        let meta_account_info = match self.rpc_client.get_account_info(meta_account, None, Some(VersionContext::Current)).await {
             Ok(Some(account)) => account,
             Ok(None) => return Ok(None), // No existing upload
             Err(e) => {
@@ -224,7 +226,7 @@ impl UploaderManager {
         };
 
         // Check if buffer account exists
-        let buffer_account_info = match self.rpc_client.get_account_info(buffer_account, None).await
+        let buffer_account_info = match self.rpc_client.get_account_info(buffer_account, None, Some(VersionContext::Current)).await
         {
             Ok(Some(account)) => account,
             Ok(None) => return Ok(None), // No existing upload
@@ -239,6 +241,34 @@ impl UploaderManager {
         // Decode account data from base64
         let meta_data = self.decode_account_data(&meta_account_info.data)?;
         let buffer_data = self.decode_account_data(&buffer_account_info.data)?;
+
+        // Validate meta account has data
+        const EXPECTED_META_SIZE: usize = 32 + 32 + 1; // authority + hash + state = 65 bytes
+        if meta_data.len() < EXPECTED_META_SIZE {
+            if meta_data.is_empty() {
+                return Err(CliError::ResumeValidationAccount {
+                    message: format!(
+                        "Uploader meta account exists but has no data. This indicates a corrupted or orphan account. \
+                        Try cleaning up with: thru-cli uploader cleanup {}",
+                        seed
+                    ),
+                    account: meta_account.to_string(),
+                    seed: seed.to_string(),
+                });
+            } else {
+                return Err(CliError::ResumeValidationAccount {
+                    message: format!(
+                        "Uploader meta account has invalid data size: {} bytes (expected at least {} bytes). \
+                        Try cleaning up with: thru-cli uploader cleanup {}",
+                        meta_data.len(),
+                        EXPECTED_META_SIZE,
+                        seed
+                    ),
+                    account: meta_account.to_string(),
+                    seed: seed.to_string(),
+                });
+            }
+        }
 
         // Parse meta account data to extract stored hash and finalization status
         let (stored_hash, is_finalized) = self.parse_meta_account_data(&meta_data)?;
@@ -759,7 +789,7 @@ impl UploaderManager {
         }
 
         let (resume_action, all_done) = match self
-            .check_existing_upload_state(&meta_account, &buffer_account)
+            .check_existing_upload_state(seed, &meta_account, &buffer_account)
             .await?
         {
             Some(upload_state) => {

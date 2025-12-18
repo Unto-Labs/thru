@@ -124,6 +124,13 @@ message GetRawBlockRequest {
 //   - account.meta.data_size (uint32): Size of account data in bytes
 //   - account.meta.version (uint32): Account version number
 //   - account.meta.flags (AccountFlags): Account capability flags (message type)
+//   - account.meta.flags.is_program (bool): Flag indicating if account is a program
+//   - account.meta.flags.is_privileged (bool): Flag indicating if account is privileged
+//   - account.meta.flags.is_uncompressable (bool): Flag indicating if account data cannot be compressed
+//   - account.meta.flags.is_ephemeral (bool): Flag indicating if account is ephemeral
+//   - account.meta.flags.is_deleted (bool): Flag indicating if account is deleted
+//   - account.meta.flags.is_new (bool): Flag indicating if account is new
+//   - account.meta.flags.is_compressed (bool): Flag indicating if account data is compressed
 //
 // Available CEL functions:
 //   - has(field): Check if optional field exists
@@ -194,10 +201,21 @@ message GetRawBlockRequest {
 //      filter.expression = "account.meta.balance == uint(100)"
 //      filter.expression = "uint(account.meta.data_size) > uint(0)"
 //
+// 16. Filter by account flags (individual flag fields):
+//      filter.expression = "account.meta.flags.is_program == true"
+//      filter.expression = "account.meta.flags.is_privileged == true"
+//      filter.expression = "account.meta.flags.is_uncompressable == true"
+//      filter.expression = "account.meta.flags.is_ephemeral == true"
+//      filter.expression = "account.meta.flags.is_deleted == true"
+//      filter.expression = "account.meta.flags.is_new == true"
+//      filter.expression = "account.meta.flags.is_compressed == true"
+//
+// 17. Combine flag filters with other conditions:
+//      filter.expression = "account.meta.flags.is_program == true && account.meta.balance > uint(0)"
+//
 // Limitations:
 //   - The startsWith() function only works with strings, not bytes
 //   - The bytesPrefix() function is NOT available for ListAccounts (use range comparison instead)
-//   - Individual flag fields (e.g., account.meta.flags.is_program) are NOT exposed
 //   - Parameter names other than owner_bytes, prefix, tag, min_slot are NOT permitted
 //   - All filters are pushed down to SQL for optimal performance where possible
 message ListAccountsRequest {
@@ -237,6 +255,7 @@ message ListAccountsResponse {
 //   - block.header.max_block_size (uint32): Maximum block size in bytes
 //   - block.header.max_compute_units (uint64): Maximum compute units allowed
 //   - block.header.max_state_units (uint32): Maximum state units allowed
+//   - block.header.bond_amount_lock_up (uint64): Bond amount lock-up for block production
 //   - block.header.price (uint64): Block production price
 //   - block.header.block_hash.value (bytes): Block hash
 //   - block.header.header_signature.value (bytes): Header signature
@@ -247,6 +266,7 @@ message ListAccountsResponse {
 //   - block.footer.status (int32): Block execution status (2 = EXECUTION_STATUS_EXECUTED)
 //   - block.footer.consumed_compute_units (uint64): Total compute units consumed by all transactions
 //   - block.footer.consumed_state_units (uint32): Total state units consumed by all transactions
+//   - block.footer.attestor_payment (uint64): Payment to attestors for block validation
 //
 // Consensus status:
 //   - block.consensus_status (int32): Consensus status (always CONSENSUS_STATUS_INCLUDED for persisted blocks)
@@ -396,11 +416,28 @@ message ListBlocksResponse {
 //
 // - `transaction.slot` (uint64): Block slot number
 // - `transaction.block_offset` (uint32): Position within block
+// - `transaction.signature.value` (bytes): Transaction signature
+//
+// Header fields (in-memory evaluation only, not SQL pushdown):
+// - `transaction.header.version` (uint32): Transaction format version
+// - `transaction.header.fee` (uint64): Transaction fee
+// - `transaction.header.nonce` (uint64): Sender account nonce
+// - `transaction.header.start_slot` (uint64): Earliest slot for execution
+// - `transaction.header.expiry_after` (uint32): Expiry duration in slots
+// - `transaction.header.requested_compute_units` (uint64): Requested compute units
+// - `transaction.header.requested_memory_units` (uint32): Requested memory units
+// - `transaction.header.requested_state_units` (uint32): Requested state units
+// - `transaction.header.fee_payer_pubkey.value` (bytes): Fee payer public key
+// - `transaction.header.program_pubkey.value` (bytes): Program public key
+// - `transaction.header.fee_payer_signature.value` (bytes): Fee payer signature
+//
+// Execution result fields:
+// - `transaction.execution_result.vm_error` (TransactionVmError enum): VM execution status (0 = success)
+// - `transaction.execution_result.user_error_code` (uint64): User-defined error code
+// - `transaction.execution_result.execution_result` (uint64): Alias for user_error_code
 // - `transaction.execution_result.consumed_compute_units` (uint64): Compute units used
-// - `transaction.execution_result.consumed_memory_units` (uint64): Memory units used
-// - `transaction.execution_result.consumed_state_units` (uint64): State units used
-// - `transaction.execution_result.user_error_code` (uint32): User-defined error code (0 = success)
-// - `transaction.execution_result.vm_error` (TransactionVmError enum): VM execution status
+// - `transaction.execution_result.consumed_memory_units` (uint32): Memory units used
+// - `transaction.execution_result.consumed_state_units` (uint32): State units used
 // - `transaction.execution_result.events_count` (uint32): Number of events emitted
 // - `transaction.execution_result.events_size` (uint32): Total size of event data in bytes
 //
@@ -503,6 +540,14 @@ message ListBlocksResponse {
 // - `has(field)`: Check if optional field is present
 // - `uint(value)`: Convert to unsigned integer
 // - `int(value)`: Convert to signed integer
+// - `string(value)`: Convert to string type
+// - `bytes(value)`: Convert to bytes type
+//
+// ## Available Filter Parameters
+//
+// - `params.slot` (uint64): Slot number for filtering
+// - `params.u64` (uint64): Generic uint64 parameter
+// - `params.pubkey` (Pubkey): Public key parameter for filtering
 //
 // ## Performance Notes
 //
@@ -518,14 +563,10 @@ message ListTransactionsForAccountRequest {
 
 // ListTransactionsForAccountResponse contains transaction data.
 //
-// The `signatures` field is provided for backward compatibility. New clients
-// should use the `transactions` field which contains full transaction details.
 message ListTransactionsForAccountResponse {
-  repeated thru.common.v1.Signature signatures = 1
+  optional thru.common.v1.PageResponse page = 1
       [(google.api.field_behavior) = OPTIONAL];
-  optional thru.common.v1.PageResponse page = 2
-      [(google.api.field_behavior) = OPTIONAL];
-  repeated thru.core.v1.Transaction transactions = 3
+  repeated thru.core.v1.Transaction transactions = 2
       [(google.api.field_behavior) = OPTIONAL];
 }
 
@@ -576,7 +617,9 @@ message Event {
 //   - event.block_offset (uint32): Transaction's position within the block
 //   - event.timestamp (google.protobuf.Timestamp): Event emission timestamp
 //   - event.program.value (bytes): Program public key that emitted the event
+//   - event.program_idx (uint32): Program index within transaction
 //   - event.payload (bytes): Event payload data
+//   - event.payload_size (uint32): Size of event payload in bytes
 //
 // Available CEL functions:
 //   - has(field): Check if optional field exists
@@ -596,9 +639,12 @@ message Event {
 // Available filter parameters (accessible via params.* in expressions):
 //   - params.slot (uint64): Slot number for filtering
 //   - params.u64 (uint64): Generic uint64 parameter for payload matching
-//   - params.signature.value (bytes): Transaction signature for filtering
-//   - params.address.value (bytes): Program address for filtering
+//   - params.signature (Signature): Transaction signature for filtering
+//   - params.signature.value (bytes): Transaction signature bytes for filtering
+//   - params.address (Pubkey): Program address for filtering
+//   - params.address.value (bytes): Program address bytes for filtering
 //   - params.prefix (bytes): Byte prefix for payload filtering
+//   - params.timestamp (Timestamp): Timestamp parameter for filtering
 //
 // Filter examples:
 //
@@ -743,11 +789,27 @@ message ListEventsResponse {
 //   - transaction.slot (uint64): Block slot number where transaction was executed
 //   - transaction.block_offset (uint32): Transaction's position within the block
 //   - transaction.signature.value (bytes): Transaction signature
-//   - transaction.execution_result.vm_error (int32): VM error code (0 = success)
+//
+// Header fields (in-memory evaluation only, not SQL pushdown):
+//   - transaction.header.version (uint32): Transaction format version
+//   - transaction.header.fee (uint64): Transaction fee
+//   - transaction.header.nonce (uint64): Sender account nonce
+//   - transaction.header.start_slot (uint64): Earliest slot for execution
+//   - transaction.header.expiry_after (uint32): Expiry duration in slots
+//   - transaction.header.requested_compute_units (uint64): Requested compute units
+//   - transaction.header.requested_memory_units (uint32): Requested memory units
+//   - transaction.header.requested_state_units (uint32): Requested state units
+//   - transaction.header.fee_payer_pubkey.value (bytes): Fee payer public key
+//   - transaction.header.program_pubkey.value (bytes): Program public key
+//   - transaction.header.fee_payer_signature.value (bytes): Fee payer signature
+//
+// Execution result fields:
+//   - transaction.execution_result.vm_error (TransactionVmError enum): VM error code (0 = success)
 //   - transaction.execution_result.user_error_code (uint64): User-defined error code
+//   - transaction.execution_result.execution_result (uint64): Alias for user_error_code
 //   - transaction.execution_result.consumed_compute_units (uint64): Compute units consumed
-//   - transaction.execution_result.consumed_memory_units (uint64): Memory units consumed
-//   - transaction.execution_result.consumed_state_units (uint64): State units consumed
+//   - transaction.execution_result.consumed_memory_units (uint32): Memory units consumed
+//   - transaction.execution_result.consumed_state_units (uint32): State units consumed
 //   - transaction.execution_result.events_count (uint32): Number of events emitted
 //   - transaction.execution_result.events_size (uint32): Total size of events in bytes
 //
@@ -755,10 +817,13 @@ message ListEventsResponse {
 //   - has(field): Check if optional field exists
 //   - uint(value): Convert to uint type
 //   - int(value): Convert to int type
+//   - string(value): Convert to string type
+//   - bytes(value): Convert to bytes type
 //
 // Available filter parameters (accessible via params.* in expressions):
 //   - params.slot (uint64): Slot number for filtering
 //   - params.u64 (uint64): Generic uint64 parameter
+//   - params.pubkey (Pubkey): Public key parameter for filtering
 //
 // Filter examples:
 //
@@ -861,7 +926,7 @@ message TransactionStatus {
       [(google.api.field_behavior) = OPTIONAL];
 }
 
-// 
+//
 message GetHeightRequest {}
 
 // GetHeightResponse
@@ -869,6 +934,27 @@ message GetHeightResponse {
   uint64 finalized = 1 [(google.api.field_behavior) = REQUIRED];
   uint64 locally_executed = 2 [(google.api.field_behavior) = REQUIRED];
   uint64 cluster_executed = 3 [(google.api.field_behavior) = REQUIRED];
+}
+
+// GetStateRootsRequest retrieves up to 257 state roots ending at a specified slot.
+// Used for transaction replay to verify state proofs against historical roots.
+// Returns state roots in ascending slot order, from (slot - 256) to slot (inclusive).
+message GetStateRootsRequest {
+  // The slot to retrieve state roots up to (inclusive).
+  // Returns up to 257 state roots ending at this slot.
+  // If not specified, returns state roots ending at the latest available slot.
+  optional uint64 slot = 1 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// StateRootEntry represents a state root for a specific slot.
+message StateRootEntry {
+  uint64 slot = 1 [(google.api.field_behavior) = REQUIRED];
+  bytes state_root = 2 [(google.api.field_behavior) = REQUIRED];
+}
+
+// GetStateRootsResponse contains up to 257 state roots ending at the requested slot.
+message GetStateRootsResponse {
+  repeated StateRootEntry state_roots = 1 [(google.api.field_behavior) = REQUIRED];
 }
 
 
@@ -1003,6 +1089,14 @@ service QueryService {
   rpc GetVersion(GetVersionRequest) returns (GetVersionResponse) {
     option (google.api.http) = {
       get: "/v1/version"
+    };
+  }
+
+  // Get state roots for a range of slots.
+  // Used for transaction replay to verify state proofs against historical roots.
+  rpc GetStateRoots(GetStateRootsRequest) returns (GetStateRootsResponse) {
+    option (google.api.http) = {
+      get: "/v1/stateroots"
     };
   }
 }

@@ -410,10 +410,8 @@ export class Transaction {
             throw new Error("Fee payer private key must contain 32 bytes");
         }
         const payload = this.toWireForSigning();
-        
-        // Use domain-separated signing with transaction domain
-        // Public key parameter is not needed for the simple approach, but kept for API compatibility
-        const publicKey = new Uint8Array(32); // Dummy, not used in simple approach
+
+        const publicKey = this.feePayer.toBytes();
         const signature = await signWithDomain(
             payload,
             privateKey,

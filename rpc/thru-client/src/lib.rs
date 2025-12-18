@@ -152,23 +152,31 @@ impl Client {
     }
 
     /// Get full account information for a given public key.
+    ///
+    /// # Arguments
+    /// * `pubkey` - The public key of the account
+    /// * `view` - Account view type (defaults to Full if None)
+    /// * `version_context` - Version context for the query (defaults to CurrentOrHistorical if None)
     pub async fn get_account_info(
         &self,
         pubkey: &Pubkey,
-        _config: Option<AccountInfoConfig>,
+        view: Option<AccountView>,
+        version_context: Option<VersionContext>,
     ) -> Result<Option<Account>> {
         let mut client = QueryServiceClient::new(self.channel.clone())
             .max_decoding_message_size(128 * 1024 * 1024) /* 128 MB */
             .max_encoding_message_size(128 * 1024 * 1024); /* 128 MB */
         let pubkey_bytes = pubkey_bytes(pubkey)?;
 
+        let view_value = view.unwrap_or(AccountView::Full);
+        let version_ctx = version_context.unwrap_or(VersionContext::CurrentOrHistorical);
+
         let request = servicesv1::GetAccountRequest {
             address: Some(commonv1::Pubkey {
                 value: pubkey_bytes.to_vec(),
             }),
-            view: Some(corev1::AccountView::Full as i32),
-            version_context: Some(current_or_historical_version_context()),
-            // min_consensus: commonv1::ConsensusStatus::Included as i32,
+            view: Some(view_value.to_proto() as i32),
+            version_context: Some(version_ctx.to_proto()),
             data_slice: None,
             ..Default::default()
         };
@@ -189,9 +197,47 @@ impl Client {
 
     /// Get the balance for a given public key.
     pub async fn get_balance(&self, pubkey: &Pubkey) -> Result<u64> {
-        match self.get_account_info(pubkey, None).await? {
+        match self.get_account_info(pubkey, None, None).await? {
             Some(account) => Ok(account.balance),
             None => Err(ClientError::AccountNotFound(pubkey.to_string())),
+        }
+    }
+
+    /// Get account information at a specific slot.
+    ///
+    /// This queries historical account state from the ClickHouse database.
+    /// Returns the account state as it was at the beginning of the specified slot.
+    pub async fn get_account_at_slot(
+        &self,
+        pubkey: &Pubkey,
+        slot: u64,
+    ) -> Result<Option<Account>> {
+        let mut client = QueryServiceClient::new(self.channel.clone())
+            .max_decoding_message_size(128 * 1024 * 1024)
+            .max_encoding_message_size(128 * 1024 * 1024);
+        let pubkey_bytes = pubkey_bytes(pubkey)?;
+
+        let request = servicesv1::GetAccountRequest {
+            address: Some(commonv1::Pubkey {
+                value: pubkey_bytes.to_vec(),
+            }),
+            view: Some(corev1::AccountView::Full as i32),
+            version_context: Some(slot_version_context(slot)),
+            data_slice: None,
+            ..Default::default()
+        };
+
+        let mut grpc_request = Request::new(request);
+        self.apply_metadata(&mut grpc_request);
+        grpc_request.set_timeout(self.timeout);
+
+        match client.get_account(grpc_request).await {
+            Ok(response) => {
+                let account = response.into_inner();
+                Ok(Some(Account::from_proto(account)?))
+            }
+            Err(status) if status.code() == tonic::Code::NotFound => Ok(None),
+            Err(status) => Err(ClientError::Rpc(status.to_string())),
         }
     }
 
@@ -590,6 +636,36 @@ impl Client {
         })
     }
 
+    /// Get up to 257 state roots ending at the specified slot.
+    ///
+    /// Returns state roots for transaction replay and state proof verification.
+    /// If slot is not specified, returns state roots ending at the latest available slot.
+    /// Returns state roots in ascending slot order, from (slot - 256) to slot (inclusive).
+    pub async fn get_state_roots(&self, slot: Option<u64>) -> Result<Vec<StateRootEntry>> {
+        let mut client = QueryServiceClient::new(self.channel.clone())
+            .max_decoding_message_size(128 * 1024 * 1024)
+            .max_encoding_message_size(128 * 1024 * 1024);
+
+        let request = servicesv1::GetStateRootsRequest { slot };
+
+        let mut grpc_request = Request::new(request);
+        self.apply_metadata(&mut grpc_request);
+        grpc_request.set_timeout(self.timeout);
+
+        let response = client.get_state_roots(grpc_request).await?;
+        let state_roots = response
+            .into_inner()
+            .state_roots
+            .into_iter()
+            .map(|entry| StateRootEntry {
+                slot: entry.slot,
+                state_root: entry.state_root,
+            })
+            .collect();
+
+        Ok(state_roots)
+    }
+
     fn apply_metadata<T>(&self, request: &mut Request<T>) {
         if let Some(header) = &self.auth_header {
             request
@@ -883,6 +959,49 @@ impl Client {
     }
 }
 
+/// Account view options for get_account_info
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum AccountView {
+    /// Full account data
+    #[default]
+    Full,
+}
+
+impl AccountView {
+    fn to_proto(self) -> corev1::AccountView {
+        match self {
+            AccountView::Full => corev1::AccountView::Full,
+        }
+    }
+}
+
+/// Version context for queries
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum VersionContext {
+    /// Current version only
+    Current,
+    /// Current or historical version (default)
+    #[default]
+    CurrentOrHistorical,
+}
+
+impl VersionContext {
+    fn to_proto(self) -> commonv1::VersionContext {
+        match self {
+            VersionContext::Current => commonv1::VersionContext {
+                version: Some(commonv1::version_context::Version::Current(
+                    commonv1::CurrentVersion {},
+                )),
+            },
+            VersionContext::CurrentOrHistorical => commonv1::VersionContext {
+                version: Some(commonv1::version_context::Version::CurrentOrHistorical(
+                    commonv1::CurrentOrHistoricalVersion {},
+                )),
+            },
+        }
+    }
+}
+
 fn current_version_context() -> commonv1::VersionContext {
     commonv1::VersionContext {
         version: Some(commonv1::version_context::Version::Current(
@@ -896,6 +1015,12 @@ fn current_or_historical_version_context() -> commonv1::VersionContext {
         version: Some(commonv1::version_context::Version::CurrentOrHistorical(
             commonv1::CurrentOrHistoricalVersion {},
         )),
+    }
+}
+
+fn slot_version_context(slot: u64) -> commonv1::VersionContext {
+    commonv1::VersionContext {
+        version: Some(commonv1::version_context::Version::Slot(slot)),
     }
 }
 
@@ -946,6 +1071,9 @@ pub struct Account {
     pub nonce: u64,
     pub seq: u64,
     pub is_new: bool,
+    pub is_ephemeral: bool,
+    pub is_deleted: bool,
+    pub is_privileged: bool,
     pub slot: Option<u64>,
     pub block_timestamp: Option<std::time::SystemTime>,
 }
@@ -965,6 +1093,9 @@ impl Account {
 
         let program = meta.flags.as_ref().map_or(false, |flags| flags.is_program);
         let is_new = meta.flags.as_ref().map_or(false, |flags| flags.is_new);
+        let is_ephemeral = meta.flags.as_ref().map_or(false, |flags| flags.is_ephemeral);
+        let is_deleted = meta.flags.as_ref().map_or(false, |flags| flags.is_deleted);
+        let is_privileged = meta.flags.as_ref().map_or(false, |flags| flags.is_privileged);
 
         let data = account.data.and_then(|data| {
             data.data.and_then(|d| {
@@ -994,6 +1125,9 @@ impl Account {
             nonce: meta.nonce,
             seq: meta.seq,
             is_new,
+            is_ephemeral,
+            is_deleted,
+            is_privileged,
             slot,
             block_timestamp,
         })
@@ -1011,6 +1145,13 @@ pub struct BlockHeight {
     pub executed_height: u64,
     pub locally_executed_height: u64,
     pub cluster_executed_height: u64,
+}
+
+/// State root entry for a specific slot.
+#[derive(Debug, Clone)]
+pub struct StateRootEntry {
+    pub slot: u64,
+    pub state_root: Vec<u8>,
 }
 
 /// Paginated transaction signatures for an account.

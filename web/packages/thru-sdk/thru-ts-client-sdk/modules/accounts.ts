@@ -124,7 +124,7 @@ export async function createAccount(
     }
 
     const program = new Uint8Array(32);
-    program[31] = 0x02;
+    program[31] = 0x03; /* NOOP program id used by thru-cli account creation */
 
     const builder = new TransactionBuilder();
     const headerDefaults: TransactionHeaderInput = {

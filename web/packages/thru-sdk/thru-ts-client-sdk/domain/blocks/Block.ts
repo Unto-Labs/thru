@@ -12,7 +12,7 @@ import { Transaction } from "../transactions";
 import { BlockFooter } from "./BlockFooter";
 import { BlockHeader } from "./BlockHeader";
 
-const BLOCK_HASH_SIZE = 64;
+const BLOCK_HASH_SIZE = 32;
 const RESERVED_FOOTER_PADDING = 0n;
 const SIGNATURE_PREFIX_SIZE = SIGNATURE_SIZE;
 
@@ -54,7 +54,7 @@ export class Block {
 
         // blockTimeNs is not part of the proto Block message, so it remains undefined
         // It will only be set when parsing from wire format
-        block.attestorPayment = block.footer?.consumedComputeUnits ?? 0n;
+        block.attestorPayment = block.footer?.attestorPayment ?? 0n;
 
         return block;
     }
@@ -159,7 +159,7 @@ export class Block {
         bytes.set(producer, offset);
         offset += PUBKEY_SIZE;
 
-        const bondAmountLockUp = this.header.price ?? 0n;
+        const bondAmountLockUp = this.header.bondAmountLockUp ?? 0n;
         view.setBigUint64(offset, bondAmountLockUp, true);
         offset += 8;
 
@@ -200,7 +200,7 @@ export class Block {
         const view = new DataView(buffer);
 
         const attestorPayment =
-            this.footer?.consumedComputeUnits ??
+            this.footer?.attestorPayment ??
             this.attestorPayment ??
             RESERVED_FOOTER_PADDING;
         view.setBigUint64(0, attestorPayment, true);
@@ -269,7 +269,7 @@ export class Block {
             maxBlockSize,
             maxComputeUnits,
             maxStateUnits,
-            price: bondAmountLockUp,
+            bondAmountLockUp,
         });
 
         return { header, blockTimeNs };
@@ -300,6 +300,7 @@ export class Block {
             status: ExecutionStatus.UNSPECIFIED,
             consumedComputeUnits: 0n,
             consumedStateUnits: 0,
+            attestorPayment,
         });
 
         return { footer, blockHash, attestorPayment };
@@ -326,4 +327,3 @@ function normalizeBytes(bytes: Uint8Array | undefined, size: number): Uint8Array
     }
     return bytes;
 }
-

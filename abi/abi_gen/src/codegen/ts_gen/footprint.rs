@@ -1,457 +1,483 @@
+use super::ir_helpers::{
+    DerivedParamSpec, DynamicBinding, collect_dynamic_param_bindings, derived_param_specs,
+    sanitize_param_name, ts_parameter_bindings,
+};
+use super::ir_serialization::ir_constant_name;
 use crate::abi::resolved::{ResolvedType, ResolvedTypeKind, Size};
 use crate::abi::types::PrimitiveType;
-use crate::abi::expr::ExprKind;
-use std::collections::{BTreeMap, HashSet};
+use crate::codegen::shared::ir::TypeIr;
+use std::collections::BTreeMap;
 use std::fmt::Write;
-use super::helpers::format_expr_to_ts;
 
-/* Helper to extract field references from an expression (for from_array parameter matching) */
-fn extract_field_refs_from_expr(expr: &ExprKind, refs: &mut HashSet<String>) {
-  match expr {
-    ExprKind::FieldRef(field_ref) => {
-      /* Join the full path with underscores for parameter names */
-      refs.insert(field_ref.path.join("_"));
-    }
-    ExprKind::Add(e) => {
-      extract_field_refs_from_expr(&e.left, refs);
-      extract_field_refs_from_expr(&e.right, refs);
-    }
-    ExprKind::Sub(e) => {
-      extract_field_refs_from_expr(&e.left, refs);
-      extract_field_refs_from_expr(&e.right, refs);
-    }
-    ExprKind::Mul(e) => {
-      extract_field_refs_from_expr(&e.left, refs);
-      extract_field_refs_from_expr(&e.right, refs);
-    }
-    ExprKind::Div(e) => {
-      extract_field_refs_from_expr(&e.left, refs);
-      extract_field_refs_from_expr(&e.right, refs);
-    }
-    ExprKind::Mod(e) => {
-      extract_field_refs_from_expr(&e.left, refs);
-      extract_field_refs_from_expr(&e.right, refs);
-    }
-    ExprKind::Pow(e) => {
-      extract_field_refs_from_expr(&e.left, refs);
-      extract_field_refs_from_expr(&e.right, refs);
-    }
-    ExprKind::BitAnd(e) => {
-      extract_field_refs_from_expr(&e.left, refs);
-      extract_field_refs_from_expr(&e.right, refs);
-    }
-    ExprKind::BitOr(e) => {
-      extract_field_refs_from_expr(&e.left, refs);
-      extract_field_refs_from_expr(&e.right, refs);
-    }
-    ExprKind::BitXor(e) => {
-      extract_field_refs_from_expr(&e.left, refs);
-      extract_field_refs_from_expr(&e.right, refs);
-    }
-    ExprKind::LeftShift(e) => {
-      extract_field_refs_from_expr(&e.left, refs);
-      extract_field_refs_from_expr(&e.right, refs);
-    }
-    ExprKind::RightShift(e) => {
-      extract_field_refs_from_expr(&e.left, refs);
-      extract_field_refs_from_expr(&e.right, refs);
-    }
-    ExprKind::BitNot(e) => {
-      extract_field_refs_from_expr(&e.operand, refs);
-    }
-    ExprKind::Neg(e) => {
-      extract_field_refs_from_expr(&e.operand, refs);
-    }
-    ExprKind::Not(e) => {
-      extract_field_refs_from_expr(&e.operand, refs);
-    }
-    ExprKind::Popcount(e) => {
-      extract_field_refs_from_expr(&e.operand, refs);
-    }
-    _ => {}
-  }
+/* Emit the static footprint() method for a type.
+   Requires IR metadata - legacy fallback has been removed. */
+pub fn emit_footprint_method(resolved_type: &ResolvedType, type_ir: Option<&TypeIr>) -> String {
+    let ir = type_ir.unwrap_or_else(|| {
+        panic!(
+            "TypeScript codegen requires IR metadata for type '{}'. IR generation must have failed.",
+            resolved_type.name
+        )
+    });
+    let mut out = emit_ir_backed_footprint(resolved_type, ir);
+    out.push_str(&emit_validate_method(resolved_type, Some(ir)));
+    out
 }
 
-/* Helper to extract field refs with dots (for format_expr_to_ts) */
-fn extract_refs_with_dots(expr: &ExprKind, refs: &mut HashSet<String>) {
-  match expr {
-    ExprKind::FieldRef(field_ref) => {
-      refs.insert(field_ref.path.join("."));
+fn emit_ir_backed_footprint(resolved_type: &ResolvedType, type_ir: &TypeIr) -> String {
+    let mut output = String::new();
+    let param_names = ir_parameter_names(type_ir);
+    let derived_specs = derived_param_specs(resolved_type, type_ir);
+    output.push_str(&emit_ir_footprint(resolved_type, type_ir, &derived_specs));
+    if param_names.is_empty() {
+        output.push_str(&emit_ir_wrapper_footprint(resolved_type, &param_names));
+    } else {
+        output.push_str(&emit_ir_wrapper_from_params(
+            resolved_type,
+            type_ir,
+            &param_names,
+            &derived_specs,
+        ));
     }
-    ExprKind::Add(e) => {
-      extract_refs_with_dots(&e.left, refs);
-      extract_refs_with_dots(&e.right, refs);
-    }
-    ExprKind::Sub(e) => {
-      extract_refs_with_dots(&e.left, refs);
-      extract_refs_with_dots(&e.right, refs);
-    }
-    ExprKind::Mul(e) => {
-      extract_refs_with_dots(&e.left, refs);
-      extract_refs_with_dots(&e.right, refs);
-    }
-    ExprKind::Div(e) => {
-      extract_refs_with_dots(&e.left, refs);
-      extract_refs_with_dots(&e.right, refs);
-    }
-    ExprKind::Mod(e) => {
-      extract_refs_with_dots(&e.left, refs);
-      extract_refs_with_dots(&e.right, refs);
-    }
-    ExprKind::Pow(e) => {
-      extract_refs_with_dots(&e.left, refs);
-      extract_refs_with_dots(&e.right, refs);
-    }
-    ExprKind::BitAnd(e) => {
-      extract_refs_with_dots(&e.left, refs);
-      extract_refs_with_dots(&e.right, refs);
-    }
-    ExprKind::BitOr(e) => {
-      extract_refs_with_dots(&e.left, refs);
-      extract_refs_with_dots(&e.right, refs);
-    }
-    ExprKind::BitXor(e) => {
-      extract_refs_with_dots(&e.left, refs);
-      extract_refs_with_dots(&e.right, refs);
-    }
-    ExprKind::LeftShift(e) => {
-      extract_refs_with_dots(&e.left, refs);
-      extract_refs_with_dots(&e.right, refs);
-    }
-    ExprKind::RightShift(e) => {
-      extract_refs_with_dots(&e.left, refs);
-      extract_refs_with_dots(&e.right, refs);
-    }
-    ExprKind::BitNot(e) => {
-      extract_refs_with_dots(&e.operand, refs);
-    }
-    ExprKind::Neg(e) => {
-      extract_refs_with_dots(&e.operand, refs);
-    }
-    ExprKind::Not(e) => {
-      extract_refs_with_dots(&e.operand, refs);
-    }
-    ExprKind::Popcount(e) => {
-      extract_refs_with_dots(&e.operand, refs);
-    }
-    _ => {}
-  }
+    output
 }
 
-/* Emit the static footprint() method for a type */
-pub fn emit_footprint_method(resolved_type: &ResolvedType) -> String {
-  match &resolved_type.kind {
-    ResolvedTypeKind::Struct { .. } => emit_struct_footprint(resolved_type),
-    ResolvedTypeKind::Enum { .. } => emit_enum_footprint(resolved_type),
-    ResolvedTypeKind::Union { .. } => emit_union_footprint(resolved_type),
-    _ => String::new(),
-  }
+fn emit_ir_footprint(
+    resolved_type: &ResolvedType,
+    type_ir: &TypeIr,
+    derived_specs: &[DerivedParamSpec],
+) -> String {
+    let mut output = String::new();
+    let bindings: Vec<_> = ts_parameter_bindings(type_ir).into_iter().collect();
+    let const_name = ir_constant_name(resolved_type);
+
+    writeln!(
+        &mut output,
+        "  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {{"
+    )
+    .unwrap();
+    writeln!(
+        &mut output,
+        "    return __tnEvalFootprint({}.root, {{ params: __tnParams }});",
+        const_name
+    )
+    .unwrap();
+    writeln!(&mut output, "  }}\n").unwrap();
+
+    writeln!(
+        &mut output,
+        "  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): {{ ok: boolean; code?: string; consumed?: bigint }} {{"
+    )
+    .unwrap();
+    writeln!(
+        &mut output,
+        "    return __tnValidateIrTree({}, buffer, __tnParams);",
+        const_name
+    )
+    .unwrap();
+    writeln!(&mut output, "  }}\n").unwrap();
+
+    writeln!(
+        &mut output,
+        "  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {{"
+    )
+    .unwrap();
+    writeln!(
+        &mut output,
+        "    return this.__tnFootprintInternal(__tnParams);"
+    )
+    .unwrap();
+    writeln!(&mut output, "  }}\n").unwrap();
+
+    writeln!(
+        &mut output,
+        "  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {{"
+    )
+    .unwrap();
+    writeln!(
+        &mut output,
+        "    return this.__tnValidateInternal(buffer, __tnParams);"
+    )
+    .unwrap();
+    writeln!(&mut output, "  }}\n").unwrap();
+
+    if bindings.is_empty() {
+        writeln!(&mut output, "  static footprintIr(): bigint {{").unwrap();
+        writeln!(
+            &mut output,
+            "    return this.__tnFootprintInternal(Object.create(null));"
+        )
+        .unwrap();
+        writeln!(&mut output, "  }}\n").unwrap();
+        return output;
+    }
+
+    let public_bindings: Vec<_> = bindings.iter().filter(|b| !b.derived).collect();
+
+    let params_sig = public_bindings
+        .iter()
+        .map(|binding| format!("{}: number | bigint", binding.ts_name))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let params_ns = format!("{}.Params", resolved_type.name);
+    writeln!(
+        &mut output,
+        "  static footprintIr({}): bigint {{",
+        params_sig
+    )
+    .unwrap();
+    writeln!(
+        &mut output,
+        "    const params = {}.Params.fromValues({{",
+        resolved_type.name
+    )
+    .unwrap();
+    for binding in &public_bindings {
+        writeln!(
+            &mut output,
+            "      {}: {},",
+            binding.ts_name, binding.ts_name
+        )
+        .unwrap();
+    }
+    writeln!(&mut output, "    }});").unwrap();
+    writeln!(
+        &mut output,
+        "    return this.footprintIrFromParams(params);"
+    )
+    .unwrap();
+    writeln!(&mut output, "  }}\n").unwrap();
+
+    writeln!(
+        &mut output,
+        "  private static __tnPackParams(params: {}): Record<string, bigint> {{",
+        params_ns
+    )
+    .unwrap();
+    writeln!(
+        &mut output,
+        "    const record: Record<string, bigint> = Object.create(null);"
+    )
+    .unwrap();
+    for binding in bindings.iter().filter(|binding| !binding.derived) {
+        writeln!(
+            &mut output,
+            "    record[\"{}\"] = params.{};",
+            binding.canonical.replace('\"', "\\\""),
+            binding.ts_name
+        )
+        .unwrap();
+    }
+    for spec in derived_specs {
+        writeln!(
+            &mut output,
+            "    record[\"{}\"] = (() => {{ return {}; }})();",
+            spec.canonical.replace('\"', "\\\""),
+            spec.expr
+        )
+        .unwrap();
+    }
+    writeln!(&mut output, "    return record;").unwrap();
+    writeln!(&mut output, "  }}\n").unwrap();
+
+    output
 }
 
-/* Emit footprint method for structs */
-fn emit_struct_footprint(resolved_type: &ResolvedType) -> String {
-  let mut output = String::new();
-  let _class_name = &resolved_type.name;
-
-  match &resolved_type.size {
-    Size::Const(size) => {
-      /* Constant size - simple static method */
-      write!(output, "  static footprint(): number {{\n").unwrap();
-      write!(output, "    return {};\n", size).unwrap();
-      write!(output, "  }}\n\n").unwrap();
-    }
-    Size::Variable(_variable_refs) => {
-      /* Variable size - method with parameters */
-      /* Extract field refs the same way from_array does to ensure consistent parameter names */
-      let mut field_refs_set = HashSet::new();
-
-      if let ResolvedTypeKind::Struct { fields, .. } = &resolved_type.kind {
-        for field in fields {
-          /* For arrays with variable size, extract all field refs from size expression */
-          if let ResolvedTypeKind::Array { size_expression, .. } = &field.field_type.kind {
-            if !matches!(field.field_type.size, Size::Const(..)) {
-              extract_field_refs_from_expr(size_expression, &mut field_refs_set);
-            }
-          }
-          /* For enums with variable size, extract field refs from tag expression */
-          if let ResolvedTypeKind::Enum { tag_expression, .. } = &field.field_type.kind {
-            if !matches!(field.field_type.size, Size::Const(..)) {
-              extract_field_refs_from_expr(tag_expression, &mut field_refs_set);
-            }
-          }
-          /* For size-discriminated unions, tag parameter is passed directly (not extracted from expression) */
-          if let ResolvedTypeKind::SizeDiscriminatedUnion { .. } = &field.field_type.kind {
-            // Tag parameter will be added separately below
-          }
-          /* For nested inline structs, extract field refs from their fields */
-          if let ResolvedTypeKind::Struct { fields: nested_fields, .. } = &field.field_type.kind {
-            for nested_field in nested_fields {
-              /* Extract refs from nested struct's arrays */
-              if let ResolvedTypeKind::Array { size_expression, .. } = &nested_field.field_type.kind {
-                if !matches!(nested_field.field_type.size, Size::Const(..)) {
-                  extract_field_refs_from_expr(size_expression, &mut field_refs_set);
-                }
-              }
-              /* Extract refs from nested struct's enums */
-              if let ResolvedTypeKind::Enum { tag_expression, .. } = &nested_field.field_type.kind {
-                if !matches!(nested_field.field_type.size, Size::Const(..)) {
-                  extract_field_refs_from_expr(tag_expression, &mut field_refs_set);
-                }
-              }
-            }
-          }
-        }
-      }
-
-      /* Convert to sorted Vec for consistent parameter ordering */
-      let mut param_names: Vec<String> = field_refs_set.into_iter().collect();
-      param_names.sort();
-
-      /* Build parameter list - include tag values for enums */
-      let mut params: Vec<String> = Vec::new();
-
-      /* First add array size parameters */
-      for ref_name in &param_names {
-        if !ref_name.starts_with("_enum_tag_") {
-          params.push(format!("{}: number", ref_name));
-        }
-      }
-
-      /* Then add enum tag parameters */
-      if let ResolvedTypeKind::Struct { fields, .. } = &resolved_type.kind {
-        for field in fields {
-          if let ResolvedTypeKind::Enum { tag_expression, .. } = &field.field_type.kind {
-            if !matches!(field.field_type.size, Size::Const(..)) {
-              if let crate::abi::expr::ExprKind::FieldRef(field_ref) = tag_expression {
-                let tag_param = field_ref.path.join("_");
-                if !params.iter().any(|p| p.contains(&tag_param)) {
-                  params.push(format!("{}: number", tag_param));
-                }
-              }
-            }
-          }
-          /* Add tag parameters for size-discriminated unions */
-          if let ResolvedTypeKind::SizeDiscriminatedUnion { .. } = &field.field_type.kind {
-            let tag_param = format!("{}_tag", field.name);
-            if !params.iter().any(|p| p.contains(&tag_param)) {
-              params.push(format!("{}: number", tag_param));
-            }
-          }
-        }
-      }
-
-      if params.is_empty() {
-        write!(output, "  static footprint(): number {{\n").unwrap();
-      } else {
-        write!(output, "  static footprint({}): number {{\n", params.join(", ")).unwrap();
-      }
-
-      /* Calculate size based on fields */
-      if let ResolvedTypeKind::Struct { fields, .. } = &resolved_type.kind {
-        let mut offset_expr = String::new();
-        let mut first = true;
-        let mut after_fam = false;
-
-        for field in fields {
-          let is_fam = matches!(&field.field_type.size, Size::Variable(..));
-
-          if !after_fam {
-            /* Before FAM - static offset */
-            if let Size::Const(field_size) = field.field_type.size {
-              if !first {
-                offset_expr.push_str(" + ");
-              }
-              write!(offset_expr, "{}", field_size).unwrap();
-              first = false;
-            }
-          }
-
-          if is_fam {
-            after_fam = true;
-
-            /* Add FAM size calculation */
-            if let ResolvedTypeKind::Array { element_type, size_expression, .. } = &field.field_type.kind {
-              if let Size::Variable(field_map) = &field.field_type.size {
-                if let Some(field_refs) = field_map.get(&field.name) {
-                  let non_constant_refs: Vec<String> = field_refs.keys().cloned().collect();
-                  let size_expr = format_expr_to_ts(&size_expression, &non_constant_refs);
-
-                  if !first {
-                    offset_expr.push_str(" + ");
-                  }
-
-                  if let Size::Const(elem_size) = element_type.size {
-                    write!(offset_expr, "({} * {})", size_expr, elem_size).unwrap();
-                  } else {
-                    write!(offset_expr, "({})", size_expr).unwrap();
-                  }
-                  first = false;
-                }
-              }
-            }
-
-            /* Add enum size calculation */
-            if let ResolvedTypeKind::Enum { tag_expression, variants, .. } = &field.field_type.kind {
-              if !matches!(field.field_type.size, Size::Const(..)) {
-                if let crate::abi::expr::ExprKind::FieldRef(field_ref) = tag_expression {
-                  let tag_var = field_ref.path.join("_");
-
-                  if !first {
-                    offset_expr.push_str(" + ");
-                  }
-
-                  /* Generate inline switch expression for enum size based on tag */
-                  write!(offset_expr, "((() => {{\n").unwrap();
-                  write!(offset_expr, "      switch ({}) {{\n", tag_var).unwrap();
-                  for variant in variants {
-                    if let Size::Const(variant_size) = variant.variant_type.size {
-                      write!(offset_expr, "        case {}: return {};\n", variant.tag_value, variant_size).unwrap();
-                    }
-                  }
-                  write!(offset_expr, "        default: throw new Error('Invalid enum tag');\n").unwrap();
-                  write!(offset_expr, "      }}\n").unwrap();
-                  write!(offset_expr, "    }})())").unwrap();
-                  first = false;
-                }
-              }
-            }
-
-            /* Add size-discriminated union size calculation */
-            if let ResolvedTypeKind::SizeDiscriminatedUnion { variants } = &field.field_type.kind {
-              let tag_param = format!("{}_tag", field.name);
-
-              if !first {
-                offset_expr.push_str(" + ");
-              }
-
-              /* Generate inline switch expression for size-discriminated union size based on tag */
-              write!(offset_expr, "((() => {{\n").unwrap();
-              write!(offset_expr, "      switch ({}) {{\n", tag_param).unwrap();
-              for (idx, variant) in variants.iter().enumerate() {
-                write!(offset_expr, "        case {}: return {};\n", idx, variant.expected_size).unwrap();
-              }
-              write!(offset_expr, "        default: throw new Error('Invalid tag for size-discriminated union');\n").unwrap();
-              write!(offset_expr, "      }}\n").unwrap();
-              write!(offset_expr, "    }})())").unwrap();
-              first = false;
-            }
-
-            /* Add nested inline struct size calculation */
-            if let ResolvedTypeKind::Struct { fields: nested_fields, .. } = &field.field_type.kind {
-              /* Nested inline struct - calculate size of its fields */
-              for nested_field in nested_fields {
-                /* Handle variable-size arrays in nested struct */
-                if let ResolvedTypeKind::Array { element_type, size_expression, .. } = &nested_field.field_type.kind {
-                  if !matches!(nested_field.field_type.size, Size::Const(..)) {
-                    /* Variable-size array in nested struct */
-                    /* Use param_names for consistent variable naming */
-                    let size_expr = format_expr_to_ts(&size_expression, &param_names);
-
-                    if !first {
-                      offset_expr.push_str(" + ");
-                    }
-
-                    if let Size::Const(elem_size) = element_type.size {
-                      write!(offset_expr, "({} * {})", size_expr, elem_size).unwrap();
-                    } else {
-                      write!(offset_expr, "({})", size_expr).unwrap();
-                    }
-                    first = false;
-                  } else {
-                    /* Constant-size array in nested struct */
-                    if let Size::Const(array_size) = nested_field.field_type.size {
-                      if !first {
-                        offset_expr.push_str(" + ");
-                      }
-                      write!(offset_expr, "{}", array_size).unwrap();
-                      first = false;
-                    }
-                  }
-                } else if let Size::Const(nested_field_size) = nested_field.field_type.size {
-                  /* Other constant-size fields in nested struct */
-                  if !first {
-                    offset_expr.push_str(" + ");
-                  }
-                  write!(offset_expr, "{}", nested_field_size).unwrap();
-                  first = false;
-                }
-              }
-            }
-          } else if after_fam {
-            /* After FAM - add constant size */
-            if let Size::Const(field_size) = field.field_type.size {
-              if !first {
-                offset_expr.push_str(" + ");
-              }
-              write!(offset_expr, "{}", field_size).unwrap();
-              first = false;
-            }
-          }
-        }
-
-        if offset_expr.is_empty() {
-          offset_expr = "0".to_string();
-        }
-
-        write!(output, "    return {};\n", offset_expr).unwrap();
-      } else {
-        write!(output, "    return 0; /* TODO: Calculate variable size */\n").unwrap();
-      }
-
-      write!(output, "  }}\n\n").unwrap();
-    }
-  }
-
-  output
+fn ir_parameter_names(type_ir: &TypeIr) -> Vec<String> {
+    type_ir
+        .parameters
+        .iter()
+        .filter(|param| !param.derived)
+        .map(|param| sanitize_param_name(&param.name))
+        .collect()
 }
 
-/* Emit footprint method for enums */
-fn emit_enum_footprint(resolved_type: &ResolvedType) -> String {
-  let mut output = String::new();
+fn emit_ir_wrapper_footprint(resolved_type: &ResolvedType, params: &[String]) -> String {
+    let mut output = String::new();
+    let signature_params: Vec<String> = params
+        .iter()
+        .map(|name| format!("{name}: number | bigint"))
+        .collect();
+    let ir_args: Vec<String> = params
+        .iter()
+        .map(|name| format!("__tnToBigInt({name})"))
+        .collect();
 
-  match &resolved_type.size {
-    Size::Const(size) => {
-      write!(output, "  static footprint(): number {{\n").unwrap();
-      write!(output, "    return {};\n", size).unwrap();
-      write!(output, "  }}\n\n").unwrap();
+    if signature_params.is_empty() {
+        writeln!(&mut output, "  static footprint(): number {{").unwrap();
+    } else {
+        writeln!(
+            &mut output,
+            "  static footprint({}): number {{",
+            signature_params.join(", ")
+        )
+        .unwrap();
     }
-    Size::Variable(_) => {
-      /* For variable-size enums, we need tag parameter to determine size */
-      if let ResolvedTypeKind::Enum { variants, .. } = &resolved_type.kind {
-        write!(output, "  static footprint(tag: number): number {{\n").unwrap();
-        write!(output, "    switch (tag) {{\n").unwrap();
 
-        for variant in variants {
-          if let Size::Const(variant_size) = variant.variant_type.size {
-            write!(output, "      case {}: return {};\n", variant.tag_value, variant_size).unwrap();
-          } else {
-            write!(output, "      case {}: throw new Error('Variable-size enum variant not yet supported');\n", variant.tag_value).unwrap();
-          }
-        }
-
-        write!(output, "      default: throw new Error('Invalid enum tag value');\n").unwrap();
-        write!(output, "    }}\n").unwrap();
-        write!(output, "  }}\n\n").unwrap();
-      } else {
-        write!(output, "  static footprint(tag: number): number {{\n").unwrap();
-        write!(output, "    throw new Error('Invalid enum type');\n").unwrap();
-        write!(output, "  }}\n\n").unwrap();
-      }
-    }
-  }
-
-  output
+    let ir_call = if ir_args.is_empty() {
+        "this.footprintIr()".to_string()
+    } else {
+        format!("this.footprintIr({})", ir_args.join(", "))
+    };
+    writeln!(&mut output, "    const irResult = {ir_call};").unwrap();
+    writeln!(
+        &mut output,
+        "      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);"
+    )
+    .unwrap();
+    writeln!(
+        &mut output,
+        "    if (__tnBigIntGreaterThan(irResult, maxSafe)) {{"
+    )
+    .unwrap();
+    writeln!(
+        &mut output,
+        "      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for {}');",
+        resolved_type.name
+    )
+    .unwrap();
+    writeln!(&mut output, "    }}").unwrap();
+    writeln!(
+        &mut output,
+        "    return __tnBigIntToNumber(irResult, '{}::footprint');",
+        resolved_type.name
+    )
+    .unwrap();
+    writeln!(
+        &mut output,
+        "  }}
+"
+    )
+    .unwrap();
+    output
 }
 
-/* Emit footprint method for unions */
-fn emit_union_footprint(resolved_type: &ResolvedType) -> String {
-  let mut output = String::new();
+fn emit_validate_method(resolved_type: &ResolvedType, type_ir: Option<&TypeIr>) -> String {
+    match type_ir {
+        Some(ir) if ir.parameters.iter().any(|param| !param.derived) => {
+            let extractor_available = !collect_dynamic_param_bindings(resolved_type).is_empty();
+            emit_validate_with_params(resolved_type, ir, extractor_available)
+        }
+        _ => emit_validate_const(resolved_type),
+    }
+}
 
-  if let Size::Const(size) = resolved_type.size {
-    write!(output, "  static footprint(): number {{\n").unwrap();
-    write!(output, "    return {};\n", size).unwrap();
-    write!(output, "  }}\n\n").unwrap();
-  }
+fn emit_validate_with_params(
+    resolved_type: &ResolvedType,
+    _type_ir: &TypeIr,
+    extractor_available: bool,
+) -> String {
+    let class_name = &resolved_type.name;
+    let params_ns = format!("{}.Params", class_name);
+    let mut output = String::new();
 
-  output
+    writeln!(
+        &mut output,
+        "  static validate(buffer: Uint8Array, opts?: {{ params?: {} }}): {{ ok: boolean; code?: string; consumed?: number; params?: {} }} {{",
+        params_ns, params_ns
+    )
+    .unwrap();
+    writeln!(
+        &mut output,
+        "    if (!buffer || buffer.length === undefined) {{"
+    )
+    .unwrap();
+    writeln!(
+        &mut output,
+        "      return {{ ok: false, code: \"tn.invalid_buffer\" }};"
+    )
+    .unwrap();
+    writeln!(&mut output, "    }}").unwrap();
+    writeln!(
+        &mut output,
+        "    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);"
+    )
+    .unwrap();
+    writeln!(&mut output, "    let params = opts?.params ?? null;").unwrap();
+    if extractor_available {
+        writeln!(&mut output, "    if (!params) {{").unwrap();
+        writeln!(
+            &mut output,
+            "      const extracted = this.__tnExtractParams(view, buffer);"
+        )
+        .unwrap();
+        writeln!(
+            &mut output,
+            "      if (!extracted) return {{ ok: false, code: \"tn.param_extraction_failed\" }};"
+        )
+        .unwrap();
+        writeln!(&mut output, "      params = extracted.params;").unwrap();
+        writeln!(&mut output, "    }}").unwrap();
+    } else {
+        writeln!(&mut output, "    if (!params) {{").unwrap();
+        writeln!(
+            &mut output,
+            "      return {{ ok: false, code: \"tn.param_extraction_failed\" }};"
+        )
+        .unwrap();
+        writeln!(&mut output, "    }}").unwrap();
+    }
+    writeln!(
+        &mut output,
+        "    const __tnParamsRec = this.__tnPackParams(params);"
+    )
+    .unwrap();
+    writeln!(
+        &mut output,
+        "    const irResult = this.__tnValidateInternal(buffer, __tnParamsRec);"
+    )
+    .unwrap();
+    writeln!(&mut output, "    if (!irResult.ok) {{").unwrap();
+    writeln!(
+        &mut output,
+        "      return {{ ok: false, code: irResult.code, consumed: irResult.consumed ? __tnBigIntToNumber(irResult.consumed, '{}::validate') : undefined, params }};",
+        resolved_type.name
+    )
+    .unwrap();
+    writeln!(&mut output, "    }}").unwrap();
+    writeln!(
+        &mut output,
+        "    const consumed = irResult.consumed ? __tnBigIntToNumber(irResult.consumed, '{}::validate') : undefined;",
+        resolved_type.name
+    )
+    .unwrap();
+    writeln!(&mut output, "    return {{ ok: true, consumed, params }};").unwrap();
+    writeln!(&mut output, "  }}\n").unwrap();
+
+    output
+}
+
+fn emit_validate_const(resolved_type: &ResolvedType) -> String {
+    let mut output = String::new();
+    match &resolved_type.size {
+        Size::Const(sz) => {
+            writeln!(
+                &mut output,
+                "  static validate(buffer: Uint8Array, _opts?: {{ params?: never }}): {{ ok: boolean; code?: string; consumed?: number }} {{"
+            )
+            .unwrap();
+            writeln!(
+                &mut output,
+                "    if (buffer.length < {}) return {{ ok: false, code: \"tn.buffer_too_small\", consumed: {} }};",
+                sz, sz
+            )
+            .unwrap();
+            writeln!(&mut output, "    return {{ ok: true, consumed: {} }};", sz).unwrap();
+            writeln!(&mut output, "  }}\n").unwrap();
+        }
+        _ => {
+            writeln!(
+                &mut output,
+                "  static validate(_buffer: Uint8Array, _opts?: {{ params?: never }}): {{ ok: boolean; code?: string; consumed?: number }} {{"
+            )
+            .unwrap();
+            writeln!(
+                &mut output,
+                "    __tnLogWarn(\"{}::validate falling back to basic length check\");",
+                resolved_type.name
+            )
+            .unwrap();
+            writeln!(
+                &mut output,
+                "    return {{ ok: true, consumed: _buffer.length }};"
+            )
+            .unwrap();
+            writeln!(&mut output, "  }}\n").unwrap();
+        }
+    }
+    output
+}
+fn emit_ir_wrapper_from_params(
+    resolved_type: &ResolvedType,
+    type_ir: &TypeIr,
+    _legacy_params: &[String],
+    _derived_specs: &[DerivedParamSpec],
+) -> String {
+    let public_bindings: Vec<_> = ts_parameter_bindings(type_ir)
+        .into_iter()
+        .filter(|binding| !binding.derived)
+        .collect();
+    if public_bindings.is_empty() {
+        return String::new();
+    }
+
+    let mut output = String::new();
+    let params_ns = format!("{}.Params", resolved_type.name);
+
+    writeln!(
+        &mut output,
+        "  static footprintIrFromParams(params: {}): bigint {{",
+        params_ns
+    )
+    .unwrap();
+    writeln!(
+        &mut output,
+        "    const __tnParams = this.__tnPackParams(params);"
+    )
+    .unwrap();
+    writeln!(
+        &mut output,
+        "    return this.__tnFootprintInternal(__tnParams);"
+    )
+    .unwrap();
+    writeln!(&mut output, "  }}\n").unwrap();
+
+    writeln!(
+        &mut output,
+        "  static footprintFromParams(params: {}): number {{",
+        params_ns
+    )
+    .unwrap();
+    writeln!(
+        &mut output,
+        "    const irResult = this.footprintIrFromParams(params);"
+    )
+    .unwrap();
+    writeln!(
+        &mut output,
+        "    const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);"
+    )
+    .unwrap();
+    writeln!(
+        &mut output,
+        "    if (__tnBigIntGreaterThan(irResult, maxSafe)) throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for {}');",
+        resolved_type.name
+    )
+    .unwrap();
+    writeln!(
+        &mut output,
+        "    return __tnBigIntToNumber(irResult, '{}::footprintFromParams');",
+        resolved_type.name
+    )
+    .unwrap();
+    writeln!(&mut output, "  }}\n").unwrap();
+
+    writeln!(
+        &mut output,
+        "  static footprintFromValues(input: {{ {} }}): number {{",
+        public_bindings
+            .iter()
+            .map(|b| format!("{}: number | bigint", b.ts_name))
+            .collect::<Vec<_>>()
+            .join(", ")
+    )
+    .unwrap();
+    writeln!(
+        &mut output,
+        "    const params = {}.params(input);",
+        resolved_type.name
+    )
+    .unwrap();
+    writeln!(&mut output, "    return this.footprintFromParams(params);").unwrap();
+    writeln!(&mut output, "  }}\n").unwrap();
+
+    writeln!(
+        &mut output,
+        "  static footprint(params: {}): number {{",
+        params_ns
+    )
+    .unwrap();
+    writeln!(&mut output, "    return this.footprintFromParams(params);").unwrap();
+    writeln!(&mut output, "  }}\n").unwrap();
+
+    output
 }

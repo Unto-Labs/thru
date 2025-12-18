@@ -22,7 +22,7 @@ describe("BlockHeader", () => {
             maxBlockSize: 4096,
             maxComputeUnits: 1_000_000n,
             maxStateUnits: 100,
-            price: 8n,
+            bondAmountLockUp: 8n,
             producer: { value: createBytes(32, 0x44) },
             headerSignature: { value: createBytes(64, 0x55) },
             expiryTimestamp: { seconds: 123n, nanos: 4 },
@@ -33,7 +33,7 @@ describe("BlockHeader", () => {
         expect(header.slot).toBe(5n);
         expect(header.version).toBe(2);
         expect(header.startSlot).toBe(4n);
-        expect(header.price).toBe(8n);
+        expect(header.bondAmountLockUp).toBe(8n);
         expect(header.producer?.length).toBe(32);
         expect(timestampToNanoseconds(header.expiryTimestamp)).toBe(123n * 1_000_000_000n + 4n);
     });
@@ -47,7 +47,7 @@ describe("BlockHeader", () => {
             maxBlockSize: 2048,
             maxComputeUnits: 2_000_000n,
             maxStateUnits: 200,
-            price: 3n,
+            bondAmountLockUp: 3n,
             producer: createBytes(32, 0x11),
             headerSignature: createBytes(64, 0x22),
             expiryTimestamp: nanosecondsToTimestamp(200n * 1_000_000_000n),

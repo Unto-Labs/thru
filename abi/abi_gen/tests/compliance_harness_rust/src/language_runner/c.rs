@@ -4,8 +4,8 @@ use std::path::Path;
 use std::process::Command;
 use std::time::Instant;
 
-use crate::{TestCaseData, TestError, TestResult, TestStages};
 use super::LanguageRunner;
+use crate::{TestCaseData, TestError, TestResult, TestStages};
 
 use abi_gen::abi::file::AbiFile;
 use abi_gen::abi::types::TypeKind;
@@ -35,7 +35,9 @@ impl LanguageRunner for CRunner {
         let start_time = Instant::now();
 
         /* Create temporary directory for generated code */
-        let temp_base = base_temp_dir.map(|p| p.to_path_buf()).unwrap_or_else(|| std::env::temp_dir());
+        let temp_base = base_temp_dir
+            .map(|p| p.to_path_buf())
+            .unwrap_or_else(|| std::env::temp_dir());
         let temp_dir = temp_base.join(format!("abi_compliance_c_{}", test_name));
         if temp_dir.exists() {
             fs::remove_dir_all(&temp_dir)?;
@@ -71,7 +73,7 @@ impl LanguageRunner for CRunner {
             .arg(self.codegen_language_param())
             .arg("--output")
             .arg(&generated_code_dir)
-            .current_dir("../../")  /* Run from abi_gen root */
+            .current_dir("../../") /* Run from abi_gen root */
             .output();
 
         match codegen_result {
@@ -100,7 +102,10 @@ impl LanguageRunner for CRunner {
                 stages.code_generation = "ok".to_string();
 
                 if verbose && !stderr_text.is_empty() {
-                    println!("  Code generation had {} bytes of stderr output (warnings)", stderr_text.len());
+                    println!(
+                        "  Code generation had {} bytes of stderr output (warnings)",
+                        stderr_text.len()
+                    );
                 }
             }
             Err(e) => {
@@ -125,7 +130,15 @@ impl LanguageRunner for CRunner {
         }
 
         /* Extract field information for opaque wrapper API */
-        let (referenced_primitive_fields, non_referenced_primitive_fields, enum_fields, array_fields, nested_fields, size_discriminated_union_fields, package) = match extract_field_info_opaque(abi_file_path, &test_case.type_name) {
+        let (
+            referenced_primitive_fields,
+            non_referenced_primitive_fields,
+            enum_fields,
+            array_fields,
+            nested_fields,
+            size_discriminated_union_fields,
+            package,
+        ) = match extract_field_info_opaque(abi_file_path, &test_case.type_name) {
             Ok(info) => info,
             Err(e) => {
                 return Ok(TestResult {
@@ -150,15 +163,21 @@ impl LanguageRunner for CRunner {
         /* Extract SDU variant info from ABI */
         let abi_content = fs::read_to_string(abi_file_path)?;
         let abi: AbiFile = serde_yaml::from_str(&abi_content)?;
-        let sdu_fields_with_variants: Vec<SDUFieldInfo> = abi.get_types().iter()
+        let sdu_fields_with_variants: Vec<SDUFieldInfo> = abi
+            .get_types()
+            .iter()
             .find(|t| t.name == test_case.type_name)
             .and_then(|t| {
                 if let TypeKind::Struct(struct_type) = &t.kind {
-                    Some(struct_type.fields.iter()
-                        .filter_map(|f| {
-                            match &f.field_type {
+                    Some(
+                        struct_type
+                            .fields
+                            .iter()
+                            .filter_map(|f| match &f.field_type {
                                 TypeKind::SizeDiscriminatedUnion(sdu_type) => {
-                                    let variants: Vec<SDUVariantInfo> = sdu_type.variants.iter()
+                                    let variants: Vec<SDUVariantInfo> = sdu_type
+                                        .variants
+                                        .iter()
                                         .map(|v| SDUVariantInfo {
                                             name: v.name.clone(),
                                             expected_size: v.expected_size,
@@ -168,11 +187,11 @@ impl LanguageRunner for CRunner {
                                         field_name: f.name.clone(),
                                         variants,
                                     })
-                                },
+                                }
                                 _ => None,
-                            }
-                        })
-                        .collect())
+                            })
+                            .collect(),
+                    )
                 } else {
                     None
                 }
@@ -341,7 +360,7 @@ struct FieldInfo {
 
 /* Map ABI primitive type to C type name */
 fn primitive_to_c_type(prim: &abi_gen::abi::types::PrimitiveType) -> String {
-    use abi_gen::abi::types::{PrimitiveType, IntegralType, FloatingPointType};
+    use abi_gen::abi::types::{FloatingPointType, IntegralType, PrimitiveType};
     match prim {
         PrimitiveType::Integral(IntegralType::U8) => "uint8_t",
         PrimitiveType::Integral(IntegralType::U16) => "uint16_t",
@@ -354,7 +373,8 @@ fn primitive_to_c_type(prim: &abi_gen::abi::types::PrimitiveType) -> String {
         PrimitiveType::FloatingPoint(FloatingPointType::F16) => "uint16_t", /* No native f16 in C */
         PrimitiveType::FloatingPoint(FloatingPointType::F32) => "float",
         PrimitiveType::FloatingPoint(FloatingPointType::F64) => "double",
-    }.to_string()
+    }
+    .to_string()
 }
 
 /* Enum variant information */
@@ -367,8 +387,8 @@ struct EnumVariantInfo {
 /* Enum field information (one per enum field in the struct) */
 #[derive(Debug)]
 struct EnumFieldInfo {
-    field_name: String,          /* Name of the enum field */
-    tag_field_name: String,      /* Name of the tag field (e.g., "first_tag") */
+    field_name: String,             /* Name of the enum field */
+    tag_field_name: String,         /* Name of the tag field (e.g., "first_tag") */
     variants: Vec<EnumVariantInfo>, /* All variants for this enum */
 }
 
@@ -382,20 +402,31 @@ struct SDUVariantInfo {
 /* SDU field information (one per SDU field in the struct) */
 #[derive(Debug)]
 struct SDUFieldInfo {
-    field_name: String,          /* Name of the SDU field */
+    field_name: String,            /* Name of the SDU field */
     variants: Vec<SDUVariantInfo>, /* All variants for this SDU */
 }
 
 /* Field classification for test generation */
 #[derive(Debug)]
 struct FieldClassification {
-    settable_fields: Vec<FieldInfo>,   /* Fields with setters */
-    init_fields: Vec<FieldInfo>,       /* Fields only settable via init */
-    enum_fields: Vec<EnumFieldInfo>,   /* Enum fields (one entry per enum field) */
+    settable_fields: Vec<FieldInfo>, /* Fields with setters */
+    init_fields: Vec<FieldInfo>,     /* Fields only settable via init */
+    enum_fields: Vec<EnumFieldInfo>, /* Enum fields (one entry per enum field) */
 }
 
 /* Extract field information for opaque wrapper API */
-fn extract_field_info_opaque(abi_file_path: &Path, type_name: &str) -> Result<(Vec<String>, Vec<String>, Vec<String>, Vec<(String, bool, bool, Option<String>)>, Vec<(String, String, Vec<String>, u64)>, Vec<String>, String)> {
+fn extract_field_info_opaque(
+    abi_file_path: &Path,
+    type_name: &str,
+) -> Result<(
+    Vec<String>,
+    Vec<String>,
+    Vec<String>,
+    Vec<(String, bool, bool, Option<String>)>,
+    Vec<(String, String, Vec<String>, u64)>,
+    Vec<String>,
+    String,
+)> {
     use std::collections::HashSet;
 
     let abi_content = fs::read_to_string(abi_file_path)?;
@@ -420,21 +451,27 @@ fn extract_field_info_opaque(abi_file_path: &Path, type_name: &str) -> Result<(V
                     if let TypeKind::Struct(nested_struct) = &field.field_type {
                         for nested_field in &nested_struct.fields {
                             if let TypeKind::Enum(enum_type) = &nested_field.field_type {
-                                extract_field_refs_from_expr(&enum_type.tag_ref, &mut referenced_fields);
+                                extract_field_refs_from_expr(
+                                    &enum_type.tag_ref,
+                                    &mut referenced_fields,
+                                );
                             }
                             if let TypeKind::Array(array_type) = &nested_field.field_type {
-                                extract_field_refs_from_expr(&array_type.size, &mut referenced_fields);
+                                extract_field_refs_from_expr(
+                                    &array_type.size,
+                                    &mut referenced_fields,
+                                );
                             }
                         }
                     }
                 }
 
                 /* For opaque wrappers, collect fields by category:
-                   - Referenced primitives (passed to new() - like enum tags)
-                   - Non-referenced primitives (set via setters after new())
-                   - Enums (set via setters after new())
-                   - Arrays (set via setters after new())
-                   - Nested structs (set via setters after new()) */
+                - Referenced primitives (passed to new() - like enum tags)
+                - Non-referenced primitives (set via setters after new())
+                - Enums (set via setters after new())
+                - Arrays (set via setters after new())
+                - Nested structs (set via setters after new()) */
 
                 // Collect referenced primitive fields (both top-level and nested)
                 let mut referenced_primitive_fields = Vec::new();
@@ -480,38 +517,40 @@ fn extract_field_info_opaque(abi_file_path: &Path, type_name: &str) -> Result<(V
                     }
                 }
 
-                let enum_fields: Vec<String> = struct_type.fields.iter()
-                    .filter_map(|f| {
-                        match &f.field_type {
-                            TypeKind::Enum(_) => Some(f.name.clone()),
-                            _ => None,
-                        }
+                let enum_fields: Vec<String> = struct_type
+                    .fields
+                    .iter()
+                    .filter_map(|f| match &f.field_type {
+                        TypeKind::Enum(_) => Some(f.name.clone()),
+                        _ => None,
                     })
                     .collect();
 
                 /* Extract SDU fields with variant information */
-                let size_discriminated_union_fields: Vec<SDUFieldInfo> = struct_type.fields.iter()
-                    .filter_map(|f| {
-                        match &f.field_type {
-                            TypeKind::SizeDiscriminatedUnion(sdu_type) => {
-                                let variants: Vec<SDUVariantInfo> = sdu_type.variants.iter()
-                                    .map(|v| SDUVariantInfo {
-                                        name: v.name.clone(),
-                                        expected_size: v.expected_size,
-                                    })
-                                    .collect();
-                                Some(SDUFieldInfo {
-                                    field_name: f.name.clone(),
-                                    variants,
+                let size_discriminated_union_fields: Vec<SDUFieldInfo> = struct_type
+                    .fields
+                    .iter()
+                    .filter_map(|f| match &f.field_type {
+                        TypeKind::SizeDiscriminatedUnion(sdu_type) => {
+                            let variants: Vec<SDUVariantInfo> = sdu_type
+                                .variants
+                                .iter()
+                                .map(|v| SDUVariantInfo {
+                                    name: v.name.clone(),
+                                    expected_size: v.expected_size,
                                 })
-                            },
-                            _ => None,
+                                .collect();
+                            Some(SDUFieldInfo {
+                                field_name: f.name.clone(),
+                                variants,
+                            })
                         }
+                        _ => None,
                     })
                     .collect();
 
                 /* Also collect array fields with element type info
-                   Format: (field_name, is_byte_array, is_struct_array, element_type_name) */
+                Format: (field_name, is_byte_array, is_struct_array, element_type_name) */
                 let mut array_fields: Vec<(String, bool, bool, Option<String>)> = struct_type.fields.iter()
                     .filter_map(|f| {
                         match &f.field_type {
@@ -543,21 +582,31 @@ fn extract_field_info_opaque(abi_file_path: &Path, type_name: &str) -> Result<(V
                                     if matches!(prim, abi_gen::abi::types::PrimitiveType::Integral(
                                         abi_gen::abi::types::IntegralType::U8)));
                                 /* Check if element type is a struct (TypeRef) and get its name */
-                                let (is_struct_array, elem_type_name) = if let TypeKind::TypeRef(type_ref) = &*array_type.element_type {
+                                let (is_struct_array, elem_type_name) = if let TypeKind::TypeRef(
+                                    type_ref,
+                                ) =
+                                    &*array_type.element_type
+                                {
                                     (true, Some(type_ref.name.clone()))
                                 } else {
                                     (false, None)
                                 };
                                 /* Use nested field name format: "parent_child" */
-                                let nested_field_name = format!("{}_{}", field.name, nested_field.name);
-                                array_fields.push((nested_field_name, is_byte_array, is_struct_array, elem_type_name));
+                                let nested_field_name =
+                                    format!("{}_{}", field.name, nested_field.name);
+                                array_fields.push((
+                                    nested_field_name,
+                                    is_byte_array,
+                                    is_struct_array,
+                                    elem_type_name,
+                                ));
                             }
                         }
                     }
                 }
 
                 /* Extract nested struct fields (TypeRef) with their field names and sizes
-                   Format: (field_name, nested_type_name, vec_of_nested_field_names, size_in_bytes) */
+                Format: (field_name, nested_type_name, vec_of_nested_field_names, size_in_bytes) */
                 let nested_fields: Vec<(String, String, Vec<String>, u64)> = struct_type.fields.iter()
                     .filter_map(|f| {
                         match &f.field_type {
@@ -612,11 +661,21 @@ fn extract_field_info_opaque(abi_file_path: &Path, type_name: &str) -> Result<(V
                     .collect();
 
                 /* Convert SDUFieldInfo to Vec<String> for backward compatibility in function signature */
-                let size_discriminated_union_field_names: Vec<String> = size_discriminated_union_fields.iter()
-                    .map(|sdu| sdu.field_name.clone())
-                    .collect();
-                
-                return Ok((referenced_primitive_fields, non_referenced_primitive_fields, enum_fields, array_fields, nested_fields, size_discriminated_union_field_names, package));
+                let size_discriminated_union_field_names: Vec<String> =
+                    size_discriminated_union_fields
+                        .iter()
+                        .map(|sdu| sdu.field_name.clone())
+                        .collect();
+
+                return Ok((
+                    referenced_primitive_fields,
+                    non_referenced_primitive_fields,
+                    enum_fields,
+                    array_fields,
+                    nested_fields,
+                    size_discriminated_union_field_names,
+                    package,
+                ));
             }
         }
     }
@@ -625,7 +684,10 @@ fn extract_field_info_opaque(abi_file_path: &Path, type_name: &str) -> Result<(V
 }
 
 /* Helper to extract field references from expressions */
-fn extract_field_refs_from_expr(expr: &abi_gen::abi::expr::ExprKind, refs: &mut std::collections::HashSet<String>) {
+fn extract_field_refs_from_expr(
+    expr: &abi_gen::abi::expr::ExprKind,
+    refs: &mut std::collections::HashSet<String>,
+) {
     use abi_gen::abi::expr::ExprKind;
     match expr {
         ExprKind::FieldRef(field_ref) => {
@@ -697,7 +759,10 @@ fn extract_field_refs_from_expr(expr: &abi_gen::abi::expr::ExprKind, refs: &mut 
 }
 
 /* OLD: Extract field classification and package from ABI file for a specific type */
-fn extract_field_info(abi_file_path: &Path, type_name: &str) -> Result<(FieldClassification, String)> {
+fn extract_field_info(
+    abi_file_path: &Path,
+    type_name: &str,
+) -> Result<(FieldClassification, String)> {
     use abi_gen::abi::expr::ExprKind;
 
     let abi_content = fs::read_to_string(abi_file_path)?;
@@ -726,16 +791,17 @@ fn extract_field_info(abi_file_path: &Path, type_name: &str) -> Result<(FieldCla
                         }
 
                         /* Get tag field name */
-                        let tag_field_name = if let ExprKind::FieldRef(field_ref) = &enum_type.tag_ref {
-                            if let Some(tag_name) = field_ref.path.first() {
-                                tag_fields.insert(tag_name.clone());
-                                tag_name.clone()
+                        let tag_field_name =
+                            if let ExprKind::FieldRef(field_ref) = &enum_type.tag_ref {
+                                if let Some(tag_name) = field_ref.path.first() {
+                                    tag_fields.insert(tag_name.clone());
+                                    tag_name.clone()
+                                } else {
+                                    "tag".to_string()
+                                }
                             } else {
                                 "tag".to_string()
-                            }
-                        } else {
-                            "tag".to_string()
-                        };
+                            };
 
                         enum_fields.push(EnumFieldInfo {
                             field_name: field.name.clone(),
@@ -768,7 +834,7 @@ fn extract_field_info(abi_file_path: &Path, type_name: &str) -> Result<(FieldCla
                             name: f.name.clone(),
                             is_array: false,
                             element_type: None,
-                        }
+                        },
                     };
 
                     /* Classify: fields referenced as tags go to init_fields, others to settable_fields */
@@ -876,9 +942,15 @@ int main( void ) {{
     /* Initialize using init() if there are init fields, otherwise just cast */
     if !classification.init_fields.is_empty() {
         /* Call init with values from original */
-        code.push_str(&format!("  int init_result = {}_init( new_buffer, struct_size", type_name));
+        code.push_str(&format!(
+            "  int init_result = {}_init( new_buffer, struct_size",
+            type_name
+        ));
         for field_info in &classification.init_fields {
-            code.push_str(&format!(", {}_get_{}( original )", type_name, field_info.name));
+            code.push_str(&format!(
+                ", {}_get_{}( original )",
+                type_name, field_info.name
+            ));
         }
         code.push_str(" );\n");
         code.push_str("  if ( init_result != 0 ) {\n");
@@ -890,7 +962,10 @@ int main( void ) {{
         code.push_str("  }\n");
     }
 
-    code.push_str(&format!("  {}_t *copy = ({}_t *)new_buffer;\n\n", type_name, type_name));
+    code.push_str(&format!(
+        "  {}_t *copy = ({}_t *)new_buffer;\n\n",
+        type_name, type_name
+    ));
 
     /* Generate field copying code for settable fields */
     if !classification.settable_fields.is_empty() {
@@ -922,23 +997,38 @@ int main( void ) {{
         code.push_str("\n  /* Copy enum variant data using variant setters */\n");
 
         for enum_field in &classification.enum_fields {
-            code.push_str(&format!("  /* Enum field: {} (tag: {}) */\n", enum_field.field_name, enum_field.tag_field_name));
-            code.push_str(&format!("  uint8_t {} = {}_get_{}( original );\n",
-                enum_field.tag_field_name, type_name, enum_field.tag_field_name));
+            code.push_str(&format!(
+                "  /* Enum field: {} (tag: {}) */\n",
+                enum_field.field_name, enum_field.tag_field_name
+            ));
+            code.push_str(&format!(
+                "  uint8_t {} = {}_get_{}( original );\n",
+                enum_field.tag_field_name, type_name, enum_field.tag_field_name
+            ));
             code.push_str(&format!("  switch ( {} ) {{\n", enum_field.tag_field_name));
 
             for variant in &enum_field.variants {
-                code.push_str(&format!("    case {}: /* {} */\n", variant.tag_value, variant.name));
+                code.push_str(&format!(
+                    "    case {}: /* {} */\n",
+                    variant.tag_value, variant.name
+                ));
                 code.push_str(&format!(
                     "      {}_{}_set_{}( copy, {}_{}_get_{}_const( original ) );\n",
-                    type_name, enum_field.field_name, variant.name, type_name, enum_field.field_name, variant.name
+                    type_name,
+                    enum_field.field_name,
+                    variant.name,
+                    type_name,
+                    enum_field.field_name,
+                    variant.name
                 ));
                 code.push_str("      break;\n");
             }
 
             code.push_str("    default:\n");
-            code.push_str(&format!("      fprintf( stderr, \"Invalid enum tag value for {}: %d\\n\", {} );\n",
-                enum_field.field_name, enum_field.tag_field_name));
+            code.push_str(&format!(
+                "      fprintf( stderr, \"Invalid enum tag value for {}: %d\\n\", {} );\n",
+                enum_field.field_name, enum_field.tag_field_name
+            ));
             code.push_str("      break;\n");
             code.push_str("  }\n");
         }
@@ -978,8 +1068,8 @@ fn generate_c_test_runner_code_opaque(
     referenced_primitive_fields: &[String],
     non_referenced_primitive_fields: &[String],
     enum_fields: &[String],
-    array_fields: &[(String, bool, bool, Option<String>)],  /* (field_name, is_byte_array, is_struct_array, element_type_name) */
-    nested_fields: &[(String, String, Vec<String>, u64)],  /* (field_name, nested_type_name, nested_struct_field_names, size) */
+    array_fields: &[(String, bool, bool, Option<String>)], /* (field_name, is_byte_array, is_struct_array, element_type_name) */
+    nested_fields: &[(String, String, Vec<String>, u64)], /* (field_name, nested_type_name, nested_struct_field_names, size) */
     size_discriminated_union_fields: &[String],
     sdu_fields_with_variants: &[SDUFieldInfo],
     package: &str,
@@ -1060,7 +1150,10 @@ int main( void ) {{
         ));
     } else {
         /* Has referenced fields or SDU fields - pass them to new() constructor */
-        code.push_str(&format!("  int new_result = {}_new( reencoded_data, file_size,\n", type_name));
+        code.push_str(&format!(
+            "  int new_result = {}_new( reencoded_data, file_size,\n",
+            type_name
+        ));
 
         let mut param_count = 0;
         /* Generate getter calls for referenced primitive fields */
@@ -1076,7 +1169,11 @@ int main( void ) {{
             if param_count > 0 {
                 code.push_str(",\n");
             }
-            code.push_str(&format!("    {}_{}_tag_from_size( {}_{}_size( original, file_size ) )", type_name, field_name.replace("-", "_"), type_name, field_name.replace("-", "_")));
+            code.push_str(&format!(
+                "    {}_{}_size( original, file_size )",
+                type_name,
+                field_name.replace("-", "_")
+            ));
             param_count += 1;
         }
         code.push_str(",\n    &reencoded_size );\n");
@@ -1098,8 +1195,10 @@ int main( void ) {{
     if !non_referenced_primitive_fields.is_empty() {
         code.push_str("\n  /* Set non-referenced primitive fields via setters */\n");
         for field_name in non_referenced_primitive_fields {
-            code.push_str(&format!("  {}_set_{}( reencoded_data, {}_get_{}( original ) );\n",
-                type_name, field_name, type_name, field_name));
+            code.push_str(&format!(
+                "  {}_set_{}( reencoded_data, {}_get_{}( original ) );\n",
+                type_name, field_name, type_name, field_name
+            ));
         }
     }
 
@@ -1108,12 +1207,18 @@ int main( void ) {{
         code.push_str("\n  /* Set enum fields via body setters (Layer 1 API) */\n");
         for field_name in enum_fields {
             code.push_str(&format!("  {{\n"));
-            code.push_str(&format!("    uint8_t const * body = {}_get_{}_body( original );\n",
-                                 type_name, field_name));
-            code.push_str(&format!("    uint64_t body_len = {}_get_{}_size( original );\n",
-                                 type_name, field_name));
-            code.push_str(&format!("    if ( {}_set_{}_body( reencoded_data, body, body_len ) != 0 ) {{\n",
-                                 type_name, field_name));
+            code.push_str(&format!(
+                "    uint8_t const * body = {}_get_{}_body( original );\n",
+                type_name, field_name
+            ));
+            code.push_str(&format!(
+                "    uint64_t body_len = {}_get_{}_size( original );\n",
+                type_name, field_name
+            ));
+            code.push_str(&format!(
+                "    if ( {}_set_{}_body( reencoded_data, body, body_len ) != 0 ) {{\n",
+                type_name, field_name
+            ));
             code.push_str("      fprintf( stderr, \"Failed to set enum body\\n\" );\n");
             code.push_str("      printf( \"REENCODE:error\\n\" );\n");
             code.push_str("      free( original_data );\n");
@@ -1126,30 +1231,44 @@ int main( void ) {{
 
     /* Set size-discriminated union fields via variant-specific setters (like enums) */
     if !sdu_fields_with_variants.is_empty() {
-        code.push_str("\n  /* Set size-discriminated union fields via variant-specific setters */\n");
+        code.push_str(
+            "\n  /* Set size-discriminated union fields via variant-specific setters */\n",
+        );
         for sdu_field in sdu_fields_with_variants {
             let field_name_escaped = sdu_field.field_name.replace("-", "_");
             code.push_str(&format!("  {{\n"));
             code.push_str(&format!("    /* Determine variant from size */\n"));
-            code.push_str(&format!("    uint64_t {}_size = {}_{}_size( original, file_size );\n",
-                                 field_name_escaped, type_name, field_name_escaped));
-            code.push_str(&format!("    uint8_t {}_tag = {}_{}_tag_from_size( {}_size );\n",
-                                 field_name_escaped, type_name, field_name_escaped, field_name_escaped));
+            code.push_str(&format!(
+                "    uint64_t {}_size = {}_{}_size( original, file_size );\n",
+                field_name_escaped, type_name, field_name_escaped
+            ));
+            code.push_str(&format!(
+                "    uint8_t {}_tag = {}_{}_tag_from_size( {}_size );\n",
+                field_name_escaped, type_name, field_name_escaped, field_name_escaped
+            ));
             code.push_str(&format!("    switch( {}_tag ) {{\n", field_name_escaped));
-            
+
             for (idx, variant) in sdu_field.variants.iter().enumerate() {
                 let variant_name_escaped = variant.name.replace("-", "_");
                 code.push_str(&format!("      case {}: {{\n", idx));
-                code.push_str(&format!("        {}_{}_set_{}( reencoded_data, {}_{}_get_{}_const( original ) );\n",
-                                     type_name, field_name_escaped, variant_name_escaped,
-                                     type_name, field_name_escaped, variant_name_escaped));
+                code.push_str(&format!(
+                    "        {}_{}_set_{}( reencoded_data, {}_{}_get_{}_const( original ) );\n",
+                    type_name,
+                    field_name_escaped,
+                    variant_name_escaped,
+                    type_name,
+                    field_name_escaped,
+                    variant_name_escaped
+                ));
                 code.push_str("        break;\n");
                 code.push_str("      }\n");
             }
-            
+
             code.push_str("      default:\n");
-            code.push_str(&format!("        fprintf( stderr, \"Invalid SDU tag for {}: %d\\n\", {}_tag );\n",
-                                 sdu_field.field_name, field_name_escaped));
+            code.push_str(&format!(
+                "        fprintf( stderr, \"Invalid SDU tag for {}: %d\\n\", {}_tag );\n",
+                sdu_field.field_name, field_name_escaped
+            ));
             code.push_str("        printf( \"REENCODE:error\\n\" );\n");
             code.push_str("        free( original_data );\n");
             code.push_str("        free( reencoded_data );\n");
@@ -1164,12 +1283,18 @@ int main( void ) {{
         code.push_str("\n  /* Copy nested struct fields */\n");
         for (field_name, nested_type_name, _nested_field_names, _size) in nested_fields {
             code.push_str(&format!("  {{\n"));
-            code.push_str(&format!("    /* Get nested struct wrapper from original */\n"));
-            code.push_str(&format!("    {}_t const * nested = {}_get_{}_const( original );\n",
-                                 nested_type_name, type_name, field_name));
+            code.push_str(&format!(
+                "    /* Get nested struct wrapper from original */\n"
+            ));
+            code.push_str(&format!(
+                "    {}_t const * nested = {}_get_{}_const( original );\n",
+                nested_type_name, type_name, field_name
+            ));
             code.push_str(&format!("    /* Copy nested struct to reencoded data */\n"));
-            code.push_str(&format!("    if ( {}_set_{}( reencoded_data, nested ) != 0 ) {{\n",
-                                 type_name, field_name));
+            code.push_str(&format!(
+                "    if ( {}_set_{}( reencoded_data, nested ) != 0 ) {{\n",
+                type_name, field_name
+            ));
             code.push_str("      fprintf( stderr, \"Failed to set nested struct\\n\" );\n");
             code.push_str("      printf( \"REENCODE:error\\n\" );\n");
             code.push_str("      free( original_data );\n");
@@ -1187,19 +1312,30 @@ int main( void ) {{
         for (array_field, _is_byte_array, is_struct_array, elem_type_name) in array_fields {
             /* Get array length and copy element by element */
             code.push_str(&format!("  {{\n"));
-            code.push_str(&format!("    uint64_t array_len = {}_get_{}_length( original );\n", type_name, array_field));
-            code.push_str(&format!("    for ( uint64_t i = 0; i < array_len; i++ ) {{\n"));
+            code.push_str(&format!(
+                "    uint64_t array_len = {}_get_{}_length( original );\n",
+                type_name, array_field
+            ));
+            code.push_str(&format!(
+                "    for ( uint64_t i = 0; i < array_len; i++ ) {{\n"
+            ));
             if *is_struct_array {
                 /* For struct arrays, getter returns const pointer, setter expects const pointer */
                 let elem_type = elem_type_name.as_ref().unwrap();
-                code.push_str(&format!("      {}_t const * elem = {}_get_{}_at( original, i );\n",
-                                     elem_type, type_name, array_field));
-                code.push_str(&format!("      {}_set_{}_at( reencoded_data, i, elem );\n",
-                                     type_name, array_field));
+                code.push_str(&format!(
+                    "      {}_t const * elem = {}_get_{}_at( original, i );\n",
+                    elem_type, type_name, array_field
+                ));
+                code.push_str(&format!(
+                    "      {}_set_{}_at( reencoded_data, i, elem );\n",
+                    type_name, array_field
+                ));
             } else {
                 /* For primitive arrays, pass value directly */
-                code.push_str(&format!("      {}_set_{}_at( reencoded_data, i, {}_get_{}_at( original, i ) );\n",
-                                     type_name, array_field, type_name, array_field));
+                code.push_str(&format!(
+                    "      {}_set_{}_at( reencoded_data, i, {}_get_{}_at( original, i ) );\n",
+                    type_name, array_field, type_name, array_field
+                ));
             }
             code.push_str("    }\n");
             code.push_str("  }\n");

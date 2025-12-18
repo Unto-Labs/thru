@@ -80,7 +80,7 @@ async fn setup_transaction_context(
 
     // Get current nonce and block height
     let account_info = client
-        .get_account_info(&fee_payer_keypair.address_string, None)
+        .get_account_info(&fee_payer_keypair.address_string, None, None)
         .await
         .map_err(|e| {
             CliError::TransactionSubmission(format!("Failed to get account info: {}", e))

@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 
 set -euo pipefail
+set +x
 
 # Change into script directory
 SCRIPT_DIR="$(dirname "$(realpath "${BASH_SOURCE[0]}")")"
@@ -313,11 +314,13 @@ install_riscv () {
   run_quiet git submodule set-url gcc https://github.com/gcc-mirror/gcc.git
 
   # Apply zlib fix patch for RISC-V toolchain
-  echo "[+] Applying zlib fix patch"
   run_quiet git submodule update --depth 1 --init --recursive binutils
+  local zlib_patch_stamp="$PREFIX/git/riscv-gnu-toolchain/.zlib_fix_patch_applied"
+  if [[ ! -f "$zlib_patch_stamp" ]]; then
+    echo "[+] Applying zlib fix patch"
 
-  # Create and apply zlib fix patch
-  cat > /tmp/zlib-fix.patch << 'ZLIB_PATCH_EOF'
+    # Create and apply zlib fix patch
+    cat > /tmp/zlib-fix.patch << 'ZLIB_PATCH_EOF'
 Submodule binutils contains modified content
 diff --git a/binutils/zlib/zutil.h b/binutils/zlib/zutil.h
 index d9a20ae1..8d221f2a 100644
@@ -356,8 +359,12 @@ index d9a20ae1..8d221f2a 100644
  #  define OS_CODE 13
 ZLIB_PATCH_EOF
 
-  run_quiet patch -p1 -i /tmp/zlib-fix.patch
-  rm -f /tmp/zlib-fix.patch
+    run_quiet patch -p1 -i /tmp/zlib-fix.patch
+    rm -f /tmp/zlib-fix.patch
+    touch "$zlib_patch_stamp"
+  else
+    echo "[+] zlib fix patch already applied (stamp found)"
+  fi
 
   run_quiet ./configure --prefix="$PREFIX" \
     --with-arch=rv64imc_zicsr_zba_zbb_zbc_zbs_zknh \
@@ -451,7 +458,14 @@ install_blst () {
   cd "$PREFIX/git/blst"
 
   echo "[+] Installing blst to $PREFIX"
-  ./build.sh
+  export CFLAGS="-D__BLST_NO_ASM__ \
+	-march=rv64imc_zba_zbb_zbc_zbs_zknh -mabi=lp64 -mcmodel=medlow -mstrict-align \
+	-specs=picolibc.specs --picolibc-prefix=$PREFIX -O2 -fno-stack-protector -ffreestanding \
+	-ffunction-sections -fdata-sections -nostartfiles -static-pie -fPIE \
+	-Werror -Wall -Wextra"
+
+  ./build.sh CROSS_COMPILE=riscv64-unknown-elf- CC=$PREFIX/bin/riscv64-unknown-elf-gcc AR=$PREFIX/bin/riscv64-unknown-elf-ar RANLIB=$PREFIX/bin/riscv64-unknown-elf-ranlib 
+  unset CFLAGS
   cp libblst.a "$PREFIX/lib"
   cp bindings/blst.h "$PREFIX/include"
   cp bindings/blst_aux.h "$PREFIX/include"

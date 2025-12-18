@@ -132,7 +132,11 @@ fn main() -> Result<()> {
 
     /* Determine which languages to test */
     let languages = if args.language.to_lowercase() == "all" {
-        vec!["rust".to_string(), "c".to_string(), "typescript".to_string()]
+        vec![
+            "rust".to_string(),
+            "c".to_string(),
+            "typescript".to_string(),
+        ]
     } else {
         vec![args.language.clone()]
     };
@@ -166,12 +170,23 @@ fn main() -> Result<()> {
                 println!("Running test: {}", test_case_path.display());
             }
 
-            match run_test_case(test_case_path, args.verbose, args.no_cleanup, args.temp_dir.as_deref(), &*runner) {
+            match run_test_case(
+                test_case_path,
+                args.verbose,
+                args.no_cleanup,
+                args.temp_dir.as_deref(),
+                &*runner,
+            ) {
                 Ok(result) => all_results.push(result),
                 Err(e) => {
                     eprintln!("Error running test {}: {}", test_case_path.display(), e);
                     all_results.push(TestResult {
-                        test_name: test_case_path.file_stem().unwrap().to_str().unwrap().to_string(),
+                        test_name: test_case_path
+                            .file_stem()
+                            .unwrap()
+                            .to_str()
+                            .unwrap()
+                            .to_string(),
                         test_file: test_case_path.display().to_string(),
                         status: "error".to_string(),
                         duration_ms: 0,
@@ -258,10 +273,10 @@ fn run_test_case(
     runner: &dyn language_runner::LanguageRunner,
 ) -> Result<TestResult> {
     /* Load test case */
-    let test_case_content = fs::read_to_string(test_case_path)
-        .context("Failed to read test case file")?;
-    let test_case: TestCase = serde_yaml::from_str(&test_case_content)
-        .context("Failed to parse test case YAML")?;
+    let test_case_content =
+        fs::read_to_string(test_case_path).context("Failed to read test case file")?;
+    let test_case: TestCase =
+        serde_yaml::from_str(&test_case_content).context("Failed to parse test case YAML")?;
 
     let test_name = test_case.test_case.name.clone();
     let test_file = test_case_path.display().to_string();

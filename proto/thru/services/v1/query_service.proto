@@ -926,7 +926,7 @@ message TransactionStatus {
       [(google.api.field_behavior) = OPTIONAL];
 }
 
-// 
+//
 message GetHeightRequest {}
 
 // GetHeightResponse
@@ -934,6 +934,27 @@ message GetHeightResponse {
   uint64 finalized = 1 [(google.api.field_behavior) = REQUIRED];
   uint64 locally_executed = 2 [(google.api.field_behavior) = REQUIRED];
   uint64 cluster_executed = 3 [(google.api.field_behavior) = REQUIRED];
+}
+
+// GetStateRootsRequest retrieves up to 257 state roots ending at a specified slot.
+// Used for transaction replay to verify state proofs against historical roots.
+// Returns state roots in ascending slot order, from (slot - 256) to slot (inclusive).
+message GetStateRootsRequest {
+  // The slot to retrieve state roots up to (inclusive).
+  // Returns up to 257 state roots ending at this slot.
+  // If not specified, returns state roots ending at the latest available slot.
+  optional uint64 slot = 1 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// StateRootEntry represents a state root for a specific slot.
+message StateRootEntry {
+  uint64 slot = 1 [(google.api.field_behavior) = REQUIRED];
+  bytes state_root = 2 [(google.api.field_behavior) = REQUIRED];
+}
+
+// GetStateRootsResponse contains up to 257 state roots ending at the requested slot.
+message GetStateRootsResponse {
+  repeated StateRootEntry state_roots = 1 [(google.api.field_behavior) = REQUIRED];
 }
 
 
@@ -1068,6 +1089,14 @@ service QueryService {
   rpc GetVersion(GetVersionRequest) returns (GetVersionResponse) {
     option (google.api.http) = {
       get: "/v1/version"
+    };
+  }
+
+  // Get state roots for a range of slots.
+  // Used for transaction replay to verify state proofs against historical roots.
+  rpc GetStateRoots(GetStateRootsRequest) returns (GetStateRootsResponse) {
+    option (google.api.http) = {
+      get: "/v1/stateroots"
     };
   }
 }

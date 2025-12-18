@@ -7,6 +7,9 @@ CPPFLAGS += -g -DDEBUG=1
 CXXFLAGS := $(patsubst -O%,-O0,$(CXXFLAGS))
 CXXFLAGS += -g
 
+# Force frame pointers for proper GDB backtrace support
+CXXFLAGS += -fno-omit-frame-pointer
+
 # Remove optimization-related flags that might interfere with debugging
 CPPFLAGS := $(patsubst -flto,,$(CPPFLAGS))
 CPPFLAGS := $(patsubst -fdata-sections,,$(CPPFLAGS))

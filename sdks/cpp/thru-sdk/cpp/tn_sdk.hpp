@@ -160,10 +160,6 @@ inline ulong get_slot() { return get_context()->slot; }
 
 inline ulong get_block_price() { return get_context()->block_price; }
 
-inline const pubkey_t& get_parent_blockhash() {
-  return get_context()->parent_blockhash;
-}
-
 inline const pubkey_t& get_block_producer() {
   return get_context()->block_producer;
 }

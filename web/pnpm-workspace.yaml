@@ -4,3 +4,4 @@ packages:
   - 'test-dapp'
   - 'explorer'
   - 'mint'
+  - 'etl-bridge'

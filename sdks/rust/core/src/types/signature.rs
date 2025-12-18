@@ -1,9 +1,9 @@
 use core::fmt;
 use data_encoding::BASE64URL_NOPAD;
-use zerocopy_derive::{FromBytes, Immutable, KnownLayout};
+use zerocopy_derive::{FromBytes, Immutable, IntoBytes, KnownLayout};
 
 #[repr(C)]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, FromBytes, KnownLayout, Immutable)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, FromBytes, KnownLayout, Immutable, IntoBytes)]
 pub struct Signature(pub [u8; 64]);
 
 impl fmt::Display for Signature {

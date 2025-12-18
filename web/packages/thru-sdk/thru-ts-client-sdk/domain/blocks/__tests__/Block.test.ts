@@ -42,7 +42,7 @@ describe("Block", () => {
             maxBlockSize: 1024,
             maxComputeUnits: 1_000_000n,
             maxStateUnits: 100,
-            price: 1n,
+            bondAmountLockUp: 1n,
             producer: createUint8Array(32, 0x11),
             expiryTimestamp: nanosecondsToTimestamp(100n * 1_000_000_000n),
             headerSignature: createUint8Array(64, 0x22),
@@ -52,6 +52,7 @@ describe("Block", () => {
             status: ExecutionStatus.UNSPECIFIED,
             consumedComputeUnits: 123n,
             consumedStateUnits: 0,
+            attestorPayment: 123n,
         });
 
         const block = new Block({
@@ -66,7 +67,7 @@ describe("Block", () => {
 
         expect(parsed.header.version).toBe(1);
         expect(parsed.header.startSlot).toBe(42n);
-        expect(parsed.header.blockHash?.length).toBe(64);
+        expect(parsed.header.blockHash?.length).toBe(32);
         expect(parsed.blockTimeNs).toBe(777n);
         expect(parsed.attestorPayment).toBe(123n);
         expect(parsed.getTransactions()).toHaveLength(1);
@@ -84,7 +85,7 @@ describe("Block", () => {
             maxBlockSize: 2048,
             maxComputeUnits: 2_000_000n,
             maxStateUnits: 200,
-            price: 2n,
+            bondAmountLockUp: 2n,
             producer: createUint8Array(32, 0x44),
             expiryTimestamp: nanosecondsToTimestamp(200n * 1_000_000_000n),
             headerSignature: createUint8Array(64, 0x55),
@@ -94,6 +95,7 @@ describe("Block", () => {
             status: ExecutionStatus.UNSPECIFIED,
             consumedComputeUnits: 0n,
             consumedStateUnits: 0,
+            attestorPayment: 0n,
         });
 
         const body = new Uint8Array(tx1.toWire().length + tx2.toWire().length);
@@ -118,7 +120,7 @@ describe("Block", () => {
             maxBlockSize: 1024,
             maxComputeUnits: 1_000_000n,
             maxStateUnits: 100,
-            price: 1n,
+            bondAmountLockUp: 1n,
             producer: createUint8Array(32, 0x77),
             expiryTimestamp: nanosecondsToTimestamp(50n * 1_000_000_000n),
             headerSignature: createUint8Array(64, 0x88),
@@ -128,6 +130,7 @@ describe("Block", () => {
             status: ExecutionStatus.UNSPECIFIED,
             consumedComputeUnits: 0n,
             consumedStateUnits: 0,
+            attestorPayment: 0n,
         });
 
         const block = new Block({
@@ -160,7 +163,7 @@ describe("Block", () => {
             maxBlockSize: 1024,
             maxComputeUnits: 1_000_000n,
             maxStateUnits: 100,
-            price: 1n,
+            bondAmountLockUp: 1n,
             producer: createUint8Array(32, 0xaa),
             expiryTimestamp: nanosecondsToTimestamp(75n * 1_000_000_000n),
             headerSignature: createUint8Array(64, 0xbb),
@@ -170,6 +173,7 @@ describe("Block", () => {
             status: ExecutionStatus.UNSPECIFIED,
             consumedComputeUnits: 0n,
             consumedStateUnits: 0,
+            attestorPayment: 0n,
         });
 
         const block = new Block({
@@ -202,7 +206,7 @@ describe("Block", () => {
             maxBlockSize: 1024,
             maxComputeUnits: 1_000_000n,
             maxStateUnits: 100,
-            price: 1n,
+            bondAmountLockUp: 1n,
             producer: { value: createUint8Array(32, 0x55) },
             expiryTimestamp: nanosecondsToTimestamp(500n * 1_000_000_000n),
             headerSignature: { value: createUint8Array(64, 0xaa) },
@@ -212,6 +216,7 @@ describe("Block", () => {
             status: 0,
             consumedComputeUnits: 0n,
             consumedStateUnits: 0,
+            attestorPayment: 0n,
         });
 
         const original = new Block({
@@ -235,4 +240,3 @@ describe("Block", () => {
         expect(parsedTransactions[0].fee).toBe(transaction.fee);
     });
 });
-

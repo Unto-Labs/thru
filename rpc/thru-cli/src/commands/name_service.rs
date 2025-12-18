@@ -102,7 +102,7 @@ async fn validate_token_account(
     account_label: &str,
 ) -> Result<(), CliError> {
     let account_info = client
-        .get_account_info(account_pubkey, None)
+        .get_account_info(account_pubkey, None, None)
         .await
         .map_err(|e| {
             CliError::TransactionSubmission(format!(
@@ -179,7 +179,7 @@ async fn setup_fee_payer_context(
     let client = create_rpc_client(config)?;
 
     let account_info = client
-        .get_account_info(&fee_payer_keypair.address_string, None)
+        .get_account_info(&fee_payer_keypair.address_string, None, None)
         .await
         .map_err(|e| {
             CliError::TransactionSubmission(format!("Failed to get account info: {}", e))
@@ -734,7 +734,7 @@ async fn initialize_registry(
     // Registrar must be new/inactive; wrapper will create it
     let root_registrar_pubkey = Pubkey::from_bytes(&root_registrar_account_pubkey);
     if let Some(existing) = client
-        .get_account_info(&root_registrar_pubkey, None)
+        .get_account_info(&root_registrar_pubkey, None, None)
         .await
         .map_err(|e| CliError::TransactionSubmission(format!("Failed to get registrar account info: {}", e)))?
     {
@@ -748,7 +748,7 @@ async fn initialize_registry(
 
     // Basic sanity checks for mint/treasurer owners against token program
     if let Some(mint_info) = client
-        .get_account_info(&Pubkey::from_bytes(&token_mint_account_pubkey), None)
+        .get_account_info(&Pubkey::from_bytes(&token_mint_account_pubkey), None, None)
         .await
         .map_err(|e| CliError::TransactionSubmission(format!("Failed to get token mint account info: {}", e)))?
     {
@@ -763,7 +763,7 @@ async fn initialize_registry(
     }
 
     if let Some(treasurer_info) = client
-        .get_account_info(&Pubkey::from_bytes(&treasurer_account_pubkey), None)
+        .get_account_info(&Pubkey::from_bytes(&treasurer_account_pubkey), None, None)
         .await
         .map_err(|e| CliError::TransactionSubmission(format!("Failed to get treasurer account info: {}", e)))?
     {
@@ -801,7 +801,7 @@ async fn initialize_registry(
 
     // Get current nonce and block height
     let account_info = client
-        .get_account_info(&fee_payer_keypair.address_string, None)
+        .get_account_info(&fee_payer_keypair.address_string, None, None)
         .await
         .map_err(|e| {
             CliError::TransactionSubmission(format!("Failed to get account info: {}", e))
@@ -826,7 +826,7 @@ async fn initialize_registry(
         .to_bytes()
         .map_err(|e| CliError::Crypto(format!("Failed to convert config pubkey to bytes: {}", e)))?;
     if let Some(existing_config) = client
-        .get_account_info(&config_account_pubkey, None)
+        .get_account_info(&config_account_pubkey, None, None)
         .await
         .map_err(|e| CliError::TransactionSubmission(format!("Failed to get config account info: {}", e)))?
     {
@@ -994,7 +994,7 @@ async fn purchase_domain(
     // Fetch and parse config account
     let client = create_rpc_client(config)?;
     let config_info = client
-        .get_account_info(&config_pubkey, None)
+        .get_account_info(&config_pubkey, None, None)
         .await
         .map_err(|e| CliError::TransactionSubmission(format!("Failed to fetch config account: {}", e)))?
         .ok_or_else(|| CliError::Validation("Config account not found".to_string()))?;
@@ -1202,7 +1202,7 @@ async fn renew_lease(
 
     // Fetch and parse config account
     let config_info = client
-        .get_account_info(&config_pubkey, None)
+        .get_account_info(&config_pubkey, None, None)
         .await
         .map_err(|e| CliError::TransactionSubmission(format!("Failed to fetch config account: {}", e)))?
         .ok_or_else(|| CliError::Validation("Config account not found".to_string()))?;
@@ -1230,7 +1230,7 @@ async fn renew_lease(
 
     // Validate lease account exists and owned by thru program
     let lease_info = client
-        .get_account_info(&lease_pubkey, None)
+        .get_account_info(&lease_pubkey, None, None)
         .await
         .map_err(|e| CliError::TransactionSubmission(format!("Failed to fetch lease account: {}", e)))?
         .ok_or_else(|| CliError::Validation("Lease account not found".to_string()))?;
@@ -1350,7 +1350,7 @@ async fn claim_expired_domain(
 
     // Fetch and parse config account
     let config_info = client
-        .get_account_info(&config_pubkey, None)
+        .get_account_info(&config_pubkey, None, None)
         .await
         .map_err(|e| CliError::TransactionSubmission(format!("Failed to fetch config account: {}", e)))?
         .ok_or_else(|| CliError::Validation("Config account not found".to_string()))?;
@@ -1378,7 +1378,7 @@ async fn claim_expired_domain(
 
     // Validate lease account exists and owned by thru program
     let lease_info = client
-        .get_account_info(&lease_pubkey, None)
+        .get_account_info(&lease_pubkey, None, None)
         .await
         .map_err(|e| CliError::TransactionSubmission(format!("Failed to fetch lease account: {}", e)))?
         .ok_or_else(|| CliError::Validation("Lease account not found".to_string()))?;
@@ -2169,7 +2169,7 @@ async fn resolve_domain(
 
     let client = create_rpc_client(config)?;
     let account_info = client
-        .get_account_info(&domain_pubkey, None)
+        .get_account_info(&domain_pubkey, None, None)
         .await
         .map_err(|e| CliError::TransactionSubmission(format!("Failed to fetch account info: {}", e)))?
         .ok_or_else(|| CliError::Validation(format!("Account {} not found", domain_address)))?;

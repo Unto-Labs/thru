@@ -7,7 +7,11 @@ The `abi_reflect` library provides runtime reflection capabilities for ABI types
 - **Type Reflection**: Convert resolved ABI types into serializable reflection structures
 - **Binary Parsing**: Parse binary data according to ABI type definitions
 - **Recursive Structure**: Get back a complete recursive structure with both type metadata and parsed values
-- **Support for All Types**: Handles primitives, structs, unions, enums, arrays, and size-discriminated unions
+- **Broad Type Coverage**: Handles primitives, structs, unions, enums, arrays, and size-discriminated unions (see _Current Limitations_ for known gaps)
+
+## Current Limitations
+
+- **Computed-tag enums** (where the tag expression is a non-trivial arithmetic/bitwise expression) are not yet represented in the shared Layout IR. When the CLI encounters one of these types (`ComputedTagEnum` in the compliance suite), IR construction fails with an “unsupported tag expression” error and reflection stops. Every other compliance type—including structs with flexible arrays, nested structs, SDUs, and classic tagged enums—is fully supported today. Support for computed-tag enums will land once the shared IR grows an expression node for those tag formulas.
 
 ## Usage
 
@@ -27,10 +31,16 @@ for typedef in import_resolver.get_all_types() {
 resolver.resolve_all()?;
 
 // Create reflector
-let reflector = Reflector::new(resolver);
+let reflector = Reflector::new(resolver)?;
 
 // Parse binary data
 let binary_data: &[u8] = /* your binary data */;
+
+// Optional: inspect dynamic parameters and validate before parsing
+let params = reflector.dynamic_params("YourTypeName", binary_data)?;
+println!("Dynamic params: {:?}", params);
+reflector.validate_buffer("YourTypeName", binary_data)?;
+
 let reflected = reflector.reflect(binary_data, "YourTypeName")?;
 
 // Access type information
@@ -71,6 +81,24 @@ let json = serde_json::to_string_pretty(&reflected)?;
 println!("{}", json);
 ```
 
+### Quick Demo Script
+
+For a fast sanity check, the repo includes `abi/scripts/show_reflection.py`, which
+invokes `abi-reflect` against the `SimpleStruct` compliance fixture and prints the
+decoded JSON (plus dynamic parameters if requested):
+
+```bash
+./abi/scripts/show_reflection.py --show-params
+```
+
+Pass `--abi-file`, `--type-name`, `--binary-hex`, or `--test-case` to try other
+inputs without touching the CLI directly.
+
+> **Python deps**
+>
+> The helper scripts expect PyYAML. Run `python3 -m venv abi/.venv && source abi/.venv/bin/activate`
+> followed by `pip install -r abi/scripts/requirements.txt` once, then invoke the script as shown above.
+
 ## Command-Line Tool
 
 The library includes a command-line binary `abi-reflect` for parsing binary data and printing JSON results:
@@ -103,6 +131,8 @@ cargo build --release --bin abi-reflect
 - `--data-file` / `-d`: Binary data file to parse
 - `--pretty` / `-p`: Pretty print JSON output (default: compact)
 - `--values-only` / `-v`: Show only values without type information (cleaner output)
+- `--validate-only`: Run IR validation and exit without decoding
+- `--show-params`: Print dynamic parameters derived from the buffer before parsing
 
 ### Examples
 
@@ -124,4 +154,3 @@ cargo build --release --bin abi-reflect
   --pretty \
   --values-only
 ```
-

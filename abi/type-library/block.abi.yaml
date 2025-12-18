@@ -70,6 +70,10 @@ types:
                     u64: 4
                 element-type:
                   primitive: u8
+          # Weight slot for consensus weighting
+          - name: "weight_slot"
+            field-type:
+              primitive: u64
           # Block time in nanoseconds
           - name: "block_time_ns"
             field-type:

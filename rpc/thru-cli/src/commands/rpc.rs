@@ -10,7 +10,7 @@ use crate::config::Config;
 use crate::crypto::keypair_from_hex;
 use crate::error::CliError;
 use crate::output;
-use thru_client::{Client, ClientBuilder};
+use thru_client::{Client, ClientBuilder, VersionContext};
 
 /// Resolve account input to a public key
 ///
@@ -147,7 +147,7 @@ pub async fn get_account_info(
     // Resolve account input to public key
     let pubkey = resolve_account_input(account_input, config)?;
 
-    match client.get_account_info(&pubkey, None).await {
+    match client.get_account_info(&pubkey, None, Some(VersionContext::Current)).await {
         Ok(Some(account)) => {
             let mut account_data = HashMap::new();
             account_data.insert(
@@ -179,6 +179,18 @@ pub async fn get_account_info(
                 serde_json::Value::Bool(account.program),
             );
             account_data.insert("isNew".to_string(), serde_json::Value::Bool(account.is_new));
+            account_data.insert(
+                "isEphemeral".to_string(),
+                serde_json::Value::Bool(account.is_ephemeral),
+            );
+            account_data.insert(
+                "isDeleted".to_string(),
+                serde_json::Value::Bool(account.is_deleted),
+            );
+            account_data.insert(
+                "isPrivileged".to_string(),
+                serde_json::Value::Bool(account.is_privileged),
+            );
 
             // Handle data display based on data_start/data_len parameters
             if data_start.is_some() || data_len.is_some() {
@@ -258,8 +270,11 @@ pub async fn get_account_info(
             let error_msg = "Account not found";
             if json_format {
                 let error_response = serde_json::json!({
-                    "error": error_msg,
-                    "pubkey": pubkey.to_string()
+                    "error": {
+                        "type": "account_not_found",
+                        "message": error_msg,
+                        "pubkey": pubkey.to_string()
+                    }
                 });
                 output::print_output(error_response, true);
             } else {
@@ -269,21 +284,22 @@ pub async fn get_account_info(
                     pubkey.to_string()
                 ));
             }
-            Err(CliError::Generic {
-                message: error_msg.to_string(),
-            })
+            Err(CliError::Reported)
         }
         Err(e) => {
             let error_msg = format!("Failed to get account info: {}", e);
             if json_format {
                 let error_response = serde_json::json!({
-                    "error": error_msg
+                    "error": {
+                        "type": "rpc",
+                        "message": error_msg
+                    }
                 });
                 output::print_output(error_response, true);
             } else {
                 output::print_error(&error_msg);
             }
-            Err(e.into())
+            Err(CliError::Reported)
         }
     }
 }

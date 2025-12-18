@@ -79,7 +79,7 @@ jobs:
 
     - name: Cache .thru toolchain
       id: cache-toolchain
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: .thru/sdk/toolchain/
         key: thru-toolchain-c-${{ runner.os }}-${{ hashFiles('sdks/deps.sh') }}

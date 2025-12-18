@@ -30,7 +30,7 @@ types:
                 packed: true
                 variants:
                   - name: "FAMVariant"
-                    expected-size: 8
+                    expected-size: 7
                     variant-type:
                       struct:
                         packed: true
@@ -42,15 +42,10 @@ types:
                             field-type:
                               array:
                                 size:
-                                  field-ref:
-                                    path: ["data1"]
+                                  literal:
+                                    u64: 6
                                 element-type:
-                                  array:
-                                    size:
-                                      field-ref:
-                                        path: ["data1"]
-                                    element-type:
-                                      primitive: u8
+                                  primitive: u8
                   - name: "TaggedUnionWithFAM::data"
                     expected-size: 8
                     variant-type:
