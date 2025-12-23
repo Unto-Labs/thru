@@ -1,0 +1,12 @@
+[package]
+name = "thru-keygen"
+version = "0.1.0"
+edition = "2024"
+description = "Lightweight key generator for Thru (prints private key, pubkey, address)"
+
+[dependencies]
+thru-base = { version = "0.1.0", path = "../../rpc/thru-base" }
+hex = "0.4"
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+sha2 = "0.10"

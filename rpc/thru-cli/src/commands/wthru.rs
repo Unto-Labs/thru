@@ -51,6 +51,9 @@ pub async fn handle_wthru_command(
             )
             .await
         }
+        WthruCommands::Derive { program, token_program } => {
+            derive_wthru_addresses(config, program.as_deref(), token_program.as_deref(), json_format)
+        }
         WthruCommands::Deposit {
             dest_token_account,
             amount,
@@ -92,6 +95,39 @@ pub async fn handle_wthru_command(
             .await
         }
     }
+}
+
+fn derive_wthru_addresses(
+    config: &Config,
+    program_override: Option<&str>,
+    token_program_override: Option<&str>,
+    json_format: bool,
+) -> Result<(), CliError> {
+    let (wthru_program_pubkey, wthru_program_bytes) =
+        resolve_wthru_program_pubkey(config, program_override)?;
+    let (token_program_pubkey, token_program_bytes) =
+        resolve_token_program_pubkey(config, token_program_override)?;
+
+    // mint = PDA(token_program, false, sha256(wthru_program || pad("wthru")))
+    let mint_seed = wthru_mint_seed();
+    let mint_account_bytes = derive_mint_account_bytes(&token_program_bytes, &wthru_program_bytes, &mint_seed);
+    let mint_account_pubkey = Pubkey::from_bytes(&mint_account_bytes);
+
+    // vault = PDA(wthru_program, false, pad("vault"))
+    let vault_account_bytes = derive_vault_account_bytes(&wthru_program_bytes);
+    let vault_account_pubkey = Pubkey::from_bytes(&vault_account_bytes);
+
+    let response = json!({
+        "wthru_derive": {
+            "wthru_program": wthru_program_pubkey.to_string(),
+            "token_program": token_program_pubkey.to_string(),
+            "mint": mint_account_pubkey.to_string(),
+            "vault": vault_account_pubkey.to_string(),
+        }
+    });
+
+    output::print_output(response, json_format);
+    Ok(())
 }
 
 async fn initialize_wthru(
