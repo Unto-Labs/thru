@@ -66,6 +66,9 @@ flate2 = "1.0"
 # Progress indicators
 indicatif = "0.17"
 
+[build-dependencies]
+vergen-gitcl = { version = "1", features = ["build", "cargo"] }
+
 [dev-dependencies]
 tokio-test = "0.4"
 tempfile = "3.8"

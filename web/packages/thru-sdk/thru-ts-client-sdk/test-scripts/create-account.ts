@@ -60,6 +60,7 @@ async function run(): Promise<void> {
 
     const account = await sdk.accounts.get(targetAccountAddress);
     console.log("Account:", account);
+    console.log("Account public key:", account.address.toThruFmt());
 }
 
 run().catch(error => {

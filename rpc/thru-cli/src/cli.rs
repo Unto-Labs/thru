@@ -4,7 +4,9 @@ use clap::{Parser, Subcommand};
 
 /// Parse and validate chunk size (1024-31000 bytes)
 fn parse_chunk_size(s: &str) -> Result<usize, String> {
-    let size: usize = s.parse().map_err(|_| format!("'{}' is not a valid number", s))?;
+    let size: usize = s
+        .parse()
+        .map_err(|_| format!("'{}' is not a valid number", s))?;
     if size < 1024 {
         return Err(format!("chunk size {} is too small (minimum: 1024)", size));
     }
@@ -18,7 +20,7 @@ fn parse_chunk_size(s: &str) -> Result<usize, String> {
 #[derive(Parser)]
 #[command(name = "thru-cli")]
 #[command(about = "Command-line interface for the Thru blockchain")]
-#[command(version = env!("CARGO_PKG_VERSION"))]
+#[command(version = thru_base::get_version!())]
 pub struct Cli {
     /// Output results in JSON format
     #[arg(long, global = true)]
@@ -464,6 +466,10 @@ pub enum UploaderCommands {
         #[arg(long)]
         uploader: Option<String>,
 
+        /// Chunk size for upload transactions (1024-31000 bytes)
+        #[arg(long, value_parser = parse_chunk_size, default_value = "30720")]
+        chunk_size: usize,
+
         /// Seed for account derivation
         seed: String,
 
@@ -473,6 +479,16 @@ pub enum UploaderCommands {
 
     /// Clean up program accounts
     Cleanup {
+        /// Custom uploader program public key (optional)
+        #[arg(long)]
+        uploader: Option<String>,
+
+        /// Seed for account derivation
+        seed: String,
+    },
+
+    /// Check status of uploader accounts
+    Status {
         /// Custom uploader program public key (optional)
         #[arg(long)]
         uploader: Option<String>,
@@ -632,6 +648,12 @@ pub enum TxnCommands {
         /// Number of retry attempts (1-60, default: 1)
         #[arg(long = "retry-count", value_name = "COUNT", default_value = "1", value_parser = clap::value_parser!(u32).range(1..=60))]
         retry_count: u32,
+    },
+
+    /// Sort public keys for inclusion in transaction account lists
+    Sort {
+        /// Public keys to sort (hex or ta... format)
+        pubkeys: Vec<String>,
     },
 }
 

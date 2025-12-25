@@ -20,7 +20,6 @@ import {
     type ListAccountsResponse as ProtoListAccountsResponse,
 } from "../proto/thru/services/v1/query_service_pb";
 import { mergeTransactionHeader } from "../utils/utils";
-import { getBlockHeight } from "./height";
 import { generateStateProof } from "./proofs";
 
 export interface CreateAccountOptions {
@@ -109,19 +108,22 @@ export async function createAccount(
 ): Promise<Transaction> {
     const feePayer = Pubkey.from(options.publicKey).toBytes();
 
-    const height = await getBlockHeight(ctx);
-    const startSlot = height.finalized;
-
+    // Let the server auto-select the latest available state root slot.
+    // This avoids race conditions where we request a slot that hasn't
+    // been ingested into ClickHouse yet.
     const proofResponse = await generateStateProof(ctx, {
         address: options.publicKey,
         proofType: StateProofType.CREATING,
-        targetSlot: startSlot,
+        // targetSlot omitted - server will auto-select
     });
 
     const proofBytes = proofResponse.proof;
     if (!proofBytes || proofBytes.length === 0) {
         throw new Error("State proof generation returned empty proof");
     }
+
+    // Use the slot from the proof response for the transaction startSlot
+    const startSlot = proofResponse.slot;
 
     const program = new Uint8Array(32);
     program[31] = 0x03; /* NOOP program id used by thru-cli account creation */

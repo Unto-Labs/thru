@@ -352,8 +352,17 @@ export function WalletProvider({ children }: WalletProviderProps) {
               break;
             }
           }
-        } catch (error) {
-          console.warn('[WalletProvider] Account creation track error:', error);
+        } catch {
+          // Fallback: wait and check if account exists
+          await new Promise(resolve => setTimeout(resolve, 5000));
+          try {
+            const account = await sdk.accounts.get(derivedAccount.publicKey);
+            if (account) {
+              finalized = true;
+            }
+          } catch {
+            // Account not found
+          }
         }
 
         if (!finalized) {

@@ -1700,11 +1700,33 @@ async fn get_program_status(
 
     /* Create RPC client */
     let rpc_url = config.get_grpc_url()?;
+    if !json_format {
+        println!("RPC endpoint: {}", rpc_url);
+    }
     let client = RpcClient::builder()
-        .http_endpoint(rpc_url)
+        .http_endpoint(rpc_url.clone())
         .timeout(Duration::from_secs(config.timeout_seconds))
         .auth_token(config.auth_token.clone())
         .build()?;
+
+    /* Verify connectivity with a simple call first */
+    if let Err(e) = client.get_block_height().await {
+        let msg = format!("Failed to connect to RPC endpoint {}: {}", rpc_url, e);
+        if json_format {
+            let response = serde_json::json!({
+                "error": {
+                    "type": "connection_failed",
+                    "message": msg,
+                    "endpoint": rpc_url.to_string()
+                }
+            });
+            output::print_output(response, true);
+            return Err(CliError::Reported);
+        } else {
+            output::print_error(&msg);
+            return Err(CliError::Reported);
+        }
+    }
 
     /* Query all accounts in parallel */
     let (meta_info, program_info, uploader_meta_info, uploader_buffer_info) = tokio::join!(

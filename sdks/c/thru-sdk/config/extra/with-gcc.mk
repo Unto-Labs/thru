@@ -24,12 +24,21 @@ define _find-thru-sysroot-rec
 $(if $(wildcard $(1)/.thru/sdk/toolchain/picolibc/thruvm/include),$(1)/.thru/sdk/toolchain/picolibc/thruvm,$(if $(filter $(1),/),$(error RISC-V sysroot not found - reached root directory),$(call _find-thru-sysroot-rec,$(dir $(1:/=)))))
 endef
 
-# Detect toolchain path
-RISCV_TOOLCHAIN_ROOT := $(call find-thru-toolchain)
+# Detect toolchain path (env var first, then search)
+ifndef RISCV_TOOLCHAIN_ROOT
+  RISCV_TOOLCHAIN_ROOT := $(call find-thru-toolchain)
+endif
 RISCV_TOOLCHAIN_PATH := $(RISCV_TOOLCHAIN_ROOT)/bin
 
+# Auto-detect prefix (nix uses riscv64-none-elf-, manual uses riscv64-unknown-elf-)
+ifneq ($(wildcard $(RISCV_TOOLCHAIN_PATH)/riscv64-none-elf-gcc),)
+  RISCV_PREFIX := riscv64-none-elf-
+endif
+
 # Detect sysroot path
-RISCV_SYSROOT := $(call find-thru-sysroot)
+ifndef RISCV_SYSROOT
+  RISCV_SYSROOT := $(RISCV_TOOLCHAIN_ROOT)/picolibc/thruvm
+endif
 
 # Check if toolchain was found
 ifeq ($(RISCV_TOOLCHAIN_PATH),)

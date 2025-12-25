@@ -48,6 +48,12 @@ int tn_crypto_sign_message(tn_bls_signature_t* signature, void const* message,
   /* Convert to affine coordinates */
   blst_p2_to_affine(signature, &sig_proj);
 
+  /* Group check signature (as recommended by blst README) */
+  if( UNLIKELY( !blst_p2_affine_in_g2( signature ) ) ) {
+    FD_LOG_WARNING(( "signature group check failed after signing" ));
+    return TN_CRYPTO_ERR_SIGN_FAILED;
+  }
+
   return TN_CRYPTO_SUCCESS;
 }
 
@@ -58,12 +64,25 @@ int tn_crypto_verify_signature(tn_bls_signature_t const* signature,
     return TN_CRYPTO_ERR_INVALID_PARAM;
   }
 
+  /* Group check public key (as recommended by blst README) */
+  if( UNLIKELY( !blst_p1_affine_in_g1( pubkey ) ) ) {
+    FD_LOG_WARNING(( "public key group check failed" ));
+    return TN_CRYPTO_ERR_VERIFY_FAILED;
+  }
+
+  /* Group check signature (as recommended by blst README) */
+  if( UNLIKELY( !blst_p2_affine_in_g2( signature ) ) ) {
+    FD_LOG_WARNING(( "signature group check failed" ));
+    return TN_CRYPTO_ERR_VERIFY_FAILED;
+  }
+
   /* Use blst core verify function */
   BLST_ERROR err = blst_core_verify_pk_in_g1(
       pubkey, signature, 1, (uchar const*)message, message_len,
       TN_CONSENSUS_DST, sizeof(TN_CONSENSUS_DST) - 1, NULL, 0);
 
   if (UNLIKELY(err != BLST_SUCCESS)) {
+    FD_LOG_WARNING(( "blst_core_verify_pk_in_g1 failed: %d", (int)err ));
     return TN_CRYPTO_ERR_VERIFY_FAILED;
   }
 
@@ -165,12 +184,19 @@ int tn_crypto_verify_aggregate(tn_bls_signature_t const* aggregate_sig,
     return TN_CRYPTO_ERR_INVALID_PARAM;
   }
 
+  /* Group check public key (as recommended by blst README) */
+  if( UNLIKELY( !blst_p1_affine_in_g1( aggregate_pk ) ) ) {
+    FD_LOG_WARNING(( "aggregate public key group check failed" ));
+    return TN_CRYPTO_ERR_VERIFY_FAILED;
+  }
+
   /* Use blst core verify function for aggregate */
   BLST_ERROR err = blst_core_verify_pk_in_g1(
       aggregate_pk, aggregate_sig, 1, (uchar const*)message, message_len,
       TN_CONSENSUS_DST, sizeof(TN_CONSENSUS_DST) - 1, NULL, 0);
 
   if (UNLIKELY(err != BLST_SUCCESS)) {
+    FD_LOG_WARNING(( "blst_core_verify_pk_in_g1 (aggregate) failed: %d", (int)err ));
     return TN_CRYPTO_ERR_VERIFY_FAILED;
   }
 
@@ -185,6 +211,114 @@ int tn_crypto_pubkey_on_curve(tn_bls_pubkey_t const* pubkey) {
   if (UNLIKELY(!blst_p1_affine_on_curve(pubkey)) ||
       UNLIKELY(blst_p1_affine_is_inf(pubkey))) {
     return TN_CRYPTO_ERR_INVALID_PUBKEY;
+  }
+
+  return TN_CRYPTO_SUCCESS;
+}
+
+int
+tn_crypto_derive_pubkey( tn_bls_pubkey_t *             pubkey,
+                         tn_bls_private_key_t const * private_key ) {
+  if( UNLIKELY( !pubkey || !private_key ) ) {
+    return TN_CRYPTO_ERR_INVALID_PARAM;
+  }
+
+  /* Generate corresponding public key from private key */
+  blst_p1 pubkey_proj;
+  blst_sk_to_pk_in_g1( &pubkey_proj, private_key );
+
+  /* Convert to affine coordinates */
+  blst_p1_to_affine( pubkey, &pubkey_proj );
+
+  /* Group check public key */
+  if( UNLIKELY( !blst_p1_affine_in_g1( pubkey ) ) ) {
+    FD_LOG_WARNING(( "derived public key group check failed" ));
+    return TN_CRYPTO_ERR_KEYGEN_FAILED;
+  }
+
+  return TN_CRYPTO_SUCCESS;
+}
+
+int
+tn_crypto_serialize_pubkey( tn_bls_serialized_pubkey_t      serialized,
+                            tn_bls_pubkey_t const *         pubkey ) {
+  if( UNLIKELY( !serialized || !pubkey ) ) {
+    return TN_CRYPTO_ERR_INVALID_PARAM;
+  }
+
+  /* Serialize affine point to uncompressed format (x + y coordinates) */
+  blst_p1_affine_serialize( serialized, pubkey );
+
+  return TN_CRYPTO_SUCCESS;
+}
+
+int
+tn_crypto_deserialize_pubkey( tn_bls_pubkey_t *             pubkey,
+                              tn_bls_serialized_pubkey_t const serialized ) {
+  if( UNLIKELY( !pubkey || !serialized ) ) {
+    return TN_CRYPTO_ERR_INVALID_PARAM;
+  }
+
+  /* Deserialize from uncompressed format directly to affine */
+  BLST_ERROR err = blst_p1_deserialize( pubkey, serialized );
+  if( UNLIKELY( err != BLST_SUCCESS ) ) {
+    FD_LOG_WARNING(( "blst_p1_deserialize failed: %d (invalid uncompressed format)", (int)err ));
+    return TN_CRYPTO_ERR_DESERIALIZE_FAILED;
+  }
+
+  /* Group check the deserialized public key */
+  if( UNLIKELY( !blst_p1_affine_in_g1( pubkey ) ) ) {
+    FD_LOG_WARNING(( "deserialized public key group check failed" ));
+    return TN_CRYPTO_ERR_DESERIALIZE_FAILED;
+  }
+
+  return TN_CRYPTO_SUCCESS;
+}
+
+int
+tn_crypto_serialize_signature( tn_bls_serialized_signature_t      serialized,
+                               tn_bls_signature_t const *          signature ) {
+  if( UNLIKELY( !serialized || !signature ) ) {
+    return TN_CRYPTO_ERR_INVALID_PARAM;
+  }
+
+  /* Verify point is on curve before serializing */
+  if( UNLIKELY( !blst_p2_affine_on_curve( signature ) ) ) {
+    FD_LOG_WARNING(( "signature point not on curve before serialization" ));
+    return TN_CRYPTO_ERR_INVALID_PARAM;
+  }
+
+  /* Serialize affine point to uncompressed format (x + y coordinates) */
+  blst_p2_affine_serialize( serialized, signature );
+
+  return TN_CRYPTO_SUCCESS;
+}
+
+int
+tn_crypto_deserialize_signature( tn_bls_signature_t *              signature,
+                                 tn_bls_serialized_signature_t const serialized ) {
+  if( UNLIKELY( !signature || !serialized ) ) {
+    return TN_CRYPTO_ERR_INVALID_PARAM;
+  }
+
+  /* Deserialize from uncompressed format directly to affine */
+  BLST_ERROR err = blst_p2_deserialize( signature, serialized );
+  if( UNLIKELY( err != BLST_SUCCESS ) ) {
+    if( err == BLST_POINT_NOT_ON_CURVE ) {
+      FD_LOG_WARNING(( "blst_p2_deserialize failed: %d (point not on curve)", (int)err ));
+    } else if( err == BLST_BAD_ENCODING ) {
+      FD_LOG_WARNING(( "blst_p2_deserialize failed: %d (bad encoding)", (int)err ));
+    } else {
+      FD_LOG_WARNING(( "blst_p2_deserialize failed: %d", (int)err ));
+    }
+    return TN_CRYPTO_ERR_DESERIALIZE_FAILED;
+  }
+
+  /* Signatures are group-checked internally by blst during verification,
+     but we can also check here for early validation */
+  if( UNLIKELY( !blst_p2_affine_in_g2( signature ) ) ) {
+    FD_LOG_WARNING(( "deserialized signature group check failed" ));
+    return TN_CRYPTO_ERR_DESERIALIZE_FAILED;
   }
 
   return TN_CRYPTO_SUCCESS;

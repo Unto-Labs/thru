@@ -51,7 +51,7 @@ jobs:
         mv sdk-artifact/thru-program-sdk-${{ matrix.sdk }}-${{ github.event.release.tag_name }}.zip .
 
     - name: Upload SDK artifacts
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: sdk-${{ matrix.sdk }}
         path: |
@@ -156,7 +156,7 @@ jobs:
       id: detect-platform
 
     - name: Upload toolchain artifacts to workflow
-      uses: actions/upload-artifact@v5
+      uses: actions/upload-artifact@v6
       with:
         name: toolchain-${{ steps.detect-platform.outputs.os_name }}-${{ steps.detect-platform.outputs.arch_name }}
         path: |
@@ -175,7 +175,7 @@ jobs:
       uses: actions/checkout@v6
 
     - name: Download all artifacts
-      uses: actions/download-artifact@v6
+      uses: actions/download-artifact@v7
       with:
         path: release-artifacts
 

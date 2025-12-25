@@ -92,11 +92,16 @@
 
 TSDK_PROTOTYPES_BEGIN
 
+/* These prototypes are only needed in freestanding (VM) builds.
+   When building for host testing, string.h provides these and
+   declaring them again conflicts with builtin declarations on macOS. */
+#if defined(__riscv) || !defined(__STDC_HOSTED__) || __STDC_HOSTED__ == 0
 void* memset(void* dest, int c, ulong n);
 
 void* memcpy(void* dest, void const* src, ulong n);
 
 int memcmp(void const* s1, void const* s2, ulong n);
+#endif
 
 tsdk_account_meta_t const* tsdk_get_account_meta(ushort account_idx);
 

@@ -1,9 +1,9 @@
-import { getPublicKeyAsync } from '@noble/ed25519';
-import { derivePath } from 'ed25519-hd-key';
+import HDKey from 'micro-key-producer/slip10.js';
 import { encodeAddress } from '@thru/helpers';
 
 /**
  * HD Wallet helpers for Thru (BIP44 coin type 9999).
+ * Uses SLIP-0010 for Ed25519 key derivation via micro-key-producer.
  * Returns raw key material along with encoded addresses.
  */
 export class ThruHDWallet {
@@ -16,11 +16,17 @@ export class ThruHDWallet {
     }
   }
 
-  private static async deriveKeyPair(seed: Uint8Array, path: string) {
+  private static deriveKeyPair(seed: Uint8Array, path: string) {
     ThruHDWallet.ensureSeed(seed);
-    const derived = derivePath(path, Buffer.from(seed).toString('hex'));
-    const privateKey = new Uint8Array(derived.key);
-    const publicKey = new Uint8Array(await getPublicKeyAsync(privateKey));
+    const hdkey = HDKey.fromMasterSeed(seed);
+    const derived = hdkey.derive(path);
+
+    if (!derived.privateKey || !derived.publicKey) {
+      throw new Error('Failed to derive key pair');
+    }
+
+    const privateKey = derived.privateKey;
+    const publicKey = derived.publicKeyRaw;
     const secretKey = new Uint8Array(privateKey.length + publicKey.length);
     secretKey.set(privateKey, 0);
     secretKey.set(publicKey, privateKey.length);
@@ -48,7 +54,7 @@ export class ThruHDWallet {
     }
 
     const path = `${ThruHDWallet.THRU_DERIVATION_PATH}/${accountIndex}'/${change}'`;
-    const { publicKey, privateKey, secretKey } = await ThruHDWallet.deriveKeyPair(seed, path);
+    const { publicKey, privateKey, secretKey } = ThruHDWallet.deriveKeyPair(seed, path);
 
     return {
       address: encodeAddress(publicKey),

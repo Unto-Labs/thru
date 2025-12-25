@@ -124,8 +124,7 @@ export class KeyManager {
     const account = await ThruHDWallet.getAccount(this.seed, accountIndex);
 
     // Use domain-separated signing with transaction domain
-    const publicKey = new Uint8Array(32); // Dummy, not used in simple approach
-    return signWithDomain(message, account.privateKey, publicKey, SignatureDomain.TXN);
+    return signWithDomain(message, account.privateKey, account.publicKey, SignatureDomain.TXN);
   }
 
   /**
@@ -150,14 +149,13 @@ export class KeyManager {
 
     const account = await ThruHDWallet.getAccount(this.seed, accountIndex);
     const payloadBytes = decodeBase64String(serializedTransaction);
-    
+
     // Use domain-separated signing with transaction domain
-    // Public key parameter is not needed for the simple approach, but kept for API compatibility
-    const publicKey = new Uint8Array(32); // Dummy, not used in simple approach
+    // Public key is required for correct signature computation
     const signature = await signWithDomain(
       payloadBytes,
       account.privateKey,
-      publicKey,
+      account.publicKey,
       SignatureDomain.TXN,
     );
 

@@ -88,15 +88,8 @@ pub async fn handle_txn_command(
         TxnCommands::Get {
             signature,
             retry_count,
-        } => {
-            get_transaction(
-                config,
-                &signature,
-                json_format,
-                retry_count,
-            )
-            .await
-        }
+        } => get_transaction(config, &signature, json_format, retry_count).await,
+        TxnCommands::Sort { pubkeys } => sort_pubkeys(&pubkeys, json_format),
     }
 }
 
@@ -660,7 +653,8 @@ async fn make_state_proof(
     let client = create_rpc_client(config)?;
 
     // Call makeStateProof using the common utility
-    let proof_data = make_state_proof_util(&client, &account_pubkey, parsed_proof_type, slot).await?;
+    let proof_data =
+        make_state_proof_util(&client, &account_pubkey, parsed_proof_type, slot).await?;
 
     // Encode proof as base64
     let base64_proof = general_purpose::STANDARD.encode(&proof_data);
@@ -735,9 +729,8 @@ async fn get_transaction(
             .map_err(|e| CliError::Validation(format!("Invalid signature: {}", e)))?
     } else if signature_str.len() == 128 {
         // Try as hex signature (64 bytes = 128 hex characters)
-        let sig_bytes = hex::decode(signature_str).map_err(|e| {
-            CliError::Validation(format!("Invalid hex signature: {}", e))
-        })?;
+        let sig_bytes = hex::decode(signature_str)
+            .map_err(|e| CliError::Validation(format!("Invalid hex signature: {}", e)))?;
         if sig_bytes.len() != 64 {
             return Err(CliError::Validation(format!(
                 "Hex signature must be exactly 64 bytes (128 hex characters), got {} bytes",
@@ -800,7 +793,9 @@ async fn get_transaction(
                     );
                     event_json.insert(
                         "program_idx".to_string(),
-                        serde_json::Value::Number(serde_json::Number::from(event.program_idx as u64)),
+                        serde_json::Value::Number(serde_json::Number::from(
+                            event.program_idx as u64,
+                        )),
                     );
 
                     if let Some(event_id) = &event.event_id {
@@ -853,8 +848,12 @@ async fn get_transaction(
 
                 // Extract instruction data from body if available
                 let instruction_data_hex = if let Some(body) = &details.body {
-                    if details.instruction_data_size > 0 && body.len() >= details.instruction_data_size as usize {
-                        Some(hex::encode(&body[0..details.instruction_data_size as usize]))
+                    if details.instruction_data_size > 0
+                        && body.len() >= details.instruction_data_size as usize
+                    {
+                        Some(hex::encode(
+                            &body[0..details.instruction_data_size as usize],
+                        ))
                     } else {
                         None
                     }
@@ -927,14 +926,19 @@ async fn get_transaction(
 
                     // The body contains the serialized transaction data
                     // We can display the instruction data portion separately
-                    if details.instruction_data_size > 0 && body.len() >= details.instruction_data_size as usize {
+                    if details.instruction_data_size > 0
+                        && body.len() >= details.instruction_data_size as usize
+                    {
                         let instruction_data = &body[0..details.instruction_data_size as usize];
                         println!("\nInstruction Data Size: {} bytes", instruction_data.len());
                         println!("Instruction Data (hex): {}", hex::encode(instruction_data));
 
                         // Try to display as ASCII if printable
                         if let Ok(ascii_str) = std::str::from_utf8(instruction_data) {
-                            if ascii_str.chars().all(|c| c.is_ascii_graphic() || c.is_ascii_whitespace()) {
+                            if ascii_str
+                                .chars()
+                                .all(|c| c.is_ascii_graphic() || c.is_ascii_whitespace())
+                            {
                                 println!("Instruction Data (ASCII): {}", ascii_str);
                             }
                         }
@@ -943,13 +947,25 @@ async fn get_transaction(
 
                 /* Transaction header */
                 println!("\n=== Transaction Header ===");
-                println!("Fee Payer Signature: {}", details.fee_payer_signature.as_str());
+                println!(
+                    "Fee Payer Signature: {}",
+                    details.fee_payer_signature.as_str()
+                );
                 println!("Version: {}", details.version);
                 println!("Flags: {}", details.flags);
-                println!("Read-write Accounts Count: {}", details.readwrite_accounts_count);
-                println!("Read-only Accounts Count: {}", details.readonly_accounts_count);
+                println!(
+                    "Read-write Accounts Count: {}",
+                    details.readwrite_accounts_count
+                );
+                println!(
+                    "Read-only Accounts Count: {}",
+                    details.readonly_accounts_count
+                );
                 println!("Instruction Data Size: {}", details.instruction_data_size);
-                println!("Requested Compute Units: {}", details.requested_compute_units);
+                println!(
+                    "Requested Compute Units: {}",
+                    details.requested_compute_units
+                );
                 println!("Requested State Units: {}", details.requested_state_units);
                 println!("Requested Memory Units: {}", details.requested_memory_units);
                 println!("Expiry After: {}", details.expiry_after);
@@ -1037,6 +1053,36 @@ async fn get_transaction(
     }
 }
 
+/// Sort public keys for transaction inclusion and output with indices
+fn sort_pubkeys(pubkeys: &[String], json_format: bool) -> Result<(), CliError> {
+    // Parse all pubkeys and validate them
+    let mut parsed_pubkeys: Vec<([u8; 32], String)> = Vec::with_capacity(pubkeys.len());
+
+    for pubkey_str in pubkeys {
+        let bytes = crate::utils::validate_address_or_hex(pubkey_str)?;
+        // Convert to thrufmt for output
+        let thrufmt = Pubkey::from_bytes(&bytes).to_string();
+        parsed_pubkeys.push((bytes, thrufmt));
+    }
+
+    // Sort by bytes
+    parsed_pubkeys.sort_by(|a, b| a.0.cmp(&b.0));
+
+    if json_format {
+        let mut result_map = serde_json::Map::new();
+        for (index, (_, thrufmt)) in parsed_pubkeys.iter().enumerate() {
+            result_map.insert(thrufmt.clone(), serde_json::json!(index));
+        }
+        output::print_output(serde_json::Value::Object(result_map), true);
+    } else {
+        for (index, (_, thrufmt)) in parsed_pubkeys.iter().enumerate() {
+            println!("{}: {}", thrufmt, index);
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1061,8 +1107,10 @@ mod tests {
             abi_manager_program_public_key: "ta1111111111111111111111111111111111111111111"
                 .to_string(),
             token_program_public_key: "ta1111111111111111111111111111111111111111111".to_string(),
-            name_service_program_public_key: "ta1111111111111111111111111111111111111111111".to_string(),
-            thru_registrar_program_public_key: "ta1111111111111111111111111111111111111111111".to_string(),
+            name_service_program_public_key: "ta1111111111111111111111111111111111111111111"
+                .to_string(),
+            thru_registrar_program_public_key: "ta1111111111111111111111111111111111111111111"
+                .to_string(),
             wthru_program_public_key: "ta1111111111111111111111111111111111111111111".to_string(),
             timeout_seconds: 30,
             max_retries: 3,

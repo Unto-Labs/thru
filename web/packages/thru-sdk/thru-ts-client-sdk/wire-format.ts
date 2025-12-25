@@ -24,10 +24,10 @@ export const HASH_SIZE = 32;
 // ============================================================================
 
 /** Size of a block header in bytes */
-export const BLOCK_HEADER_SIZE = 160;
+export const BLOCK_HEADER_SIZE = 168;
 
 /** Size of a block footer in bytes */
-export const BLOCK_FOOTER_SIZE = 136;
+export const BLOCK_FOOTER_SIZE = 104;
 
 /** Block version 1 */
 export const BLOCK_VERSION_V1 = 0x01;

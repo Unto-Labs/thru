@@ -7,17 +7,15 @@ import { StateProof } from "../domain/proofs";
 import { StateProofRequestSchema } from "../proto/thru/core/v1/state_pb";
 import { GenerateStateProofRequestSchema, GenerateStateProofResponse } from "../proto/thru/services/v1/query_service_pb";
 import { GenerateStateProofOptions } from "../types/types";
-import { getBlockHeight } from "./height";
 
 export async function generateStateProof(
     ctx: ThruClientContext,
     options: GenerateStateProofOptions,
 ): Promise<StateProof> {
-    let targetSlot = options.targetSlot;
-    if (targetSlot === undefined) {
-        const height = await getBlockHeight(ctx);
-        targetSlot = height.finalized;
-    }
+    // If targetSlot is undefined or 0, let the server auto-select the latest
+    // available state root slot. This avoids race conditions where the client
+    // requests a slot that hasn't been ingested into ClickHouse yet.
+    const targetSlot = options.targetSlot ?? 0n;
 
     const request = create(StateProofRequestSchema, {
         address: options.address ? Pubkey.from(options.address).toProtoPubkey() : undefined,

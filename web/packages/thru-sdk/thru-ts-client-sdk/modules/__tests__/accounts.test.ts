@@ -1,6 +1,6 @@
 import { create } from "@bufbuild/protobuf";
 import { describe, expect, it, vi } from "vitest";
-import { createMockAccount, createMockContext, createMockHeightResponse, generateTestAddress, generateTestPubkey } from "../../__tests__/helpers/test-utils";
+import { createMockAccount, createMockContext, generateTestAddress, generateTestPubkey } from "../../__tests__/helpers/test-utils";
 import { ConsensusStatus, CurrentVersionSchema, VersionContextSchema } from "../../proto/thru/common/v1/consensus_pb";
 import { AccountView } from "../../proto/thru/core/v1/account_pb";
 import { GenerateStateProofResponseSchema, ListAccountsResponseSchema } from "../../proto/thru/services/v1/query_service_pb";
@@ -278,61 +278,56 @@ describe("accounts", () => {
   describe("createAccount", () => {
     it("should create account transaction", async () => {
       const ctx = createMockContext();
-      const mockHeight = createMockHeightResponse({ finalized: 1000n });
       const mockProof = create(GenerateStateProofResponseSchema, {
         proof: {
           proof: new Uint8Array(64).fill(0x42),
+          slot: 1000n,
         },
       });
-      
-      vi.spyOn(ctx.query, "getHeight").mockResolvedValue(mockHeight);
+
       vi.spyOn(ctx.query, "generateStateProof").mockResolvedValue(mockProof);
-      
+
       const publicKey = generateTestPubkey(0x01);
       const transaction = await createAccount(ctx, { publicKey });
-      
+
       expect(transaction).toBeDefined();
       expect(transaction.feePayer.toBytes()).toEqual(publicKey);
       expect(transaction.feePayerStateProof).toBeDefined();
-      expect(ctx.query.getHeight).toHaveBeenCalledTimes(1);
       expect(ctx.query.generateStateProof).toHaveBeenCalledTimes(1);
     });
 
-    it("should use finalized slot from height", async () => {
+    it("should use slot from proof response as startSlot", async () => {
       const ctx = createMockContext();
-      const mockHeight = createMockHeightResponse({ finalized: 2000n });
       const mockProof = create(GenerateStateProofResponseSchema, {
         proof: {
           proof: new Uint8Array(64).fill(0x42),
+          slot: 2000n,
         },
       });
-      
-      vi.spyOn(ctx.query, "getHeight").mockResolvedValue(mockHeight);
+
       vi.spyOn(ctx.query, "generateStateProof").mockResolvedValue(mockProof);
-      
+
       const publicKey = generateTestPubkey(0x01);
       const transaction = await createAccount(ctx, { publicKey });
-      
+
       expect(transaction.startSlot).toBe(2000n);
-      // Verify generateStateProof was called (we can't easily check nested properties)
       expect(ctx.query.generateStateProof).toHaveBeenCalledTimes(1);
     });
 
     it("should generate CREATING proof type", async () => {
       const ctx = createMockContext();
-      const mockHeight = createMockHeightResponse();
       const mockProof = create(GenerateStateProofResponseSchema, {
         proof: {
           proof: new Uint8Array(64).fill(0x42),
+          slot: 1000n,
         },
       });
-      
-      vi.spyOn(ctx.query, "getHeight").mockResolvedValue(mockHeight);
+
       vi.spyOn(ctx.query, "generateStateProof").mockResolvedValue(mockProof);
-      
+
       const publicKey = generateTestPubkey(0x01);
       await createAccount(ctx, { publicKey });
-      
+
       // Verify generateStateProof was called with correct address
       expect(ctx.query.generateStateProof).toHaveBeenCalledTimes(1);
       const proofCallArgs = (ctx.query.generateStateProof as any).mock.calls[0][0];
@@ -341,18 +336,17 @@ describe("accounts", () => {
 
     it("should throw error when proof is empty", async () => {
       const ctx = createMockContext();
-      const mockHeight = createMockHeightResponse();
       const mockProof = create(GenerateStateProofResponseSchema, {
         proof: {
           proof: new Uint8Array(0), // Empty proof
+          slot: 1000n,
         },
       });
-      
-      vi.spyOn(ctx.query, "getHeight").mockResolvedValue(mockHeight);
+
       vi.spyOn(ctx.query, "generateStateProof").mockResolvedValue(mockProof);
-      
+
       const publicKey = generateTestPubkey(0x01);
-      
+
       await expect(createAccount(ctx, { publicKey })).rejects.toThrow(
         "State proof generation returned empty proof"
       );
@@ -360,16 +354,14 @@ describe("accounts", () => {
 
     it("should throw error when proof is missing", async () => {
       const ctx = createMockContext();
-      const mockHeight = createMockHeightResponse();
       const mockProof = create(GenerateStateProofResponseSchema, {
         // No proof field
       });
-      
-      vi.spyOn(ctx.query, "getHeight").mockResolvedValue(mockHeight);
+
       vi.spyOn(ctx.query, "generateStateProof").mockResolvedValue(mockProof);
-      
+
       const publicKey = generateTestPubkey(0x01);
-      
+
       await expect(createAccount(ctx, { publicKey })).rejects.toThrow(
         "State proof response missing proof"
       );
@@ -377,16 +369,15 @@ describe("accounts", () => {
 
     it("should apply header overrides", async () => {
       const ctx = createMockContext();
-      const mockHeight = createMockHeightResponse({ finalized: 1000n });
       const mockProof = create(GenerateStateProofResponseSchema, {
         proof: {
           proof: new Uint8Array(64).fill(0x42),
+          slot: 1000n,
         },
       });
-      
-      vi.spyOn(ctx.query, "getHeight").mockResolvedValue(mockHeight);
+
       vi.spyOn(ctx.query, "generateStateProof").mockResolvedValue(mockProof);
-      
+
       const publicKey = generateTestPubkey(0x01);
       const transaction = await createAccount(ctx, {
         publicKey,
@@ -395,26 +386,25 @@ describe("accounts", () => {
           computeUnits: 20_000,
         },
       });
-      
+
       expect(transaction.fee).toBe(100n);
       expect(transaction.requestedComputeUnits).toBe(20_000);
     });
 
     it("should use default header values", async () => {
       const ctx = createMockContext();
-      const mockHeight = createMockHeightResponse({ finalized: 1000n });
       const mockProof = create(GenerateStateProofResponseSchema, {
         proof: {
           proof: new Uint8Array(64).fill(0x42),
+          slot: 1000n,
         },
       });
-      
-      vi.spyOn(ctx.query, "getHeight").mockResolvedValue(mockHeight);
+
       vi.spyOn(ctx.query, "generateStateProof").mockResolvedValue(mockProof);
-      
+
       const publicKey = generateTestPubkey(0x01);
       const transaction = await createAccount(ctx, { publicKey });
-      
+
       expect(transaction.fee).toBe(0n);
       expect(transaction.nonce).toBe(0n);
       expect(transaction.expiryAfter).toBe(100);

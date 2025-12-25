@@ -313,70 +313,59 @@ install_riscv () {
   run_quiet git submodule set-url gdb https://gnu.googlesource.com/binutils-gdb.git
   run_quiet git submodule set-url gcc https://github.com/gcc-mirror/gcc.git
 
-  # Apply zlib fix patch for RISC-V toolchain
+  # Apply zlib fix patch for RISC-V toolchain (both binutils and gdb have their own zlib copies)
+  echo "[+] Applying zlib fix patches"
   run_quiet git submodule update --depth 1 --init --recursive binutils
-  local zlib_patch_stamp="$PREFIX/git/riscv-gnu-toolchain/.zlib_fix_patch_applied"
-  if [[ ! -f "$zlib_patch_stamp" ]]; then
-    echo "[+] Applying zlib fix patch"
+  run_quiet git submodule update --depth 1 --init --recursive gdb
 
-    # Create and apply zlib fix patch
-    cat > /tmp/zlib-fix.patch << 'ZLIB_PATCH_EOF'
-Submodule binutils contains modified content
-diff --git a/binutils/zlib/zutil.h b/binutils/zlib/zutil.h
-index d9a20ae1..8d221f2a 100644
---- a/binutils/zlib/zutil.h
-+++ b/binutils/zlib/zutil.h
-@@ -137,18 +137,18 @@ extern z_const char * const z_errmsg[10]; /* indexed by 2-zlib_error */
- #  endif
- #endif
+  # Fix zlib in binutils and gdb - the fdopen macro conflicts with macOS SDK headers
+  # Simply comment out the problematic #define fdopen line
+  for zutil_file in binutils/zlib/zutil.h gdb/zlib/zutil.h; do
+    if [[ -f "$zutil_file" ]]; then
+      sed -i.bak 's/#        define fdopen(fd,mode) NULL/\/* #        define fdopen(fd,mode) NULL *\//' "$zutil_file"
+      rm -f "${zutil_file}.bak"
+    fi
+  done
 
--#if defined(MACOS) || defined(TARGET_OS_MAC)
--#  define OS_CODE  7
--#  ifndef Z_SOLO
--#    if defined(__MWERKS__) && __dest_os != __be_os && __dest_os != __win32_os
--#      include <unix.h> /* for fdopen */
--#    else
--#      ifndef fdopen
--#        define fdopen(fd,mode) NULL /* No fdopen() */
--#      endif
--#    endif
--#  endif
--#endif
-+// #if defined(MACOS) || defined(TARGET_OS_MAC)
-+// #  define OS_CODE  7
-+// #  ifndef Z_SOLO
-+// #    if defined(__MWERKS__) && __dest_os != __be_os && __dest_os != __win32_os
-+// #      include <unix.h> /* for fdopen */
-+// #    else
-+// #      ifndef fdopen
-+// #        define fdopen(fd,mode) NULL /* No fdopen() */
-+// #      endif
-+// #    endif
-+// #  endif
-+// #endif
-
- #ifdef __acorn
- #  define OS_CODE 13
-ZLIB_PATCH_EOF
-
-    run_quiet patch -p1 -i /tmp/zlib-fix.patch
-    rm -f /tmp/zlib-fix.patch
-    touch "$zlib_patch_stamp"
-  else
-    echo "[+] zlib fix patch already applied (stamp found)"
+  # Determine Homebrew prefix for library paths
+  local BREW_PREFIX=""
+  if [[ -d "/opt/homebrew" ]]; then
+    BREW_PREFIX="/opt/homebrew"
+  elif [[ -d "/usr/local/Cellar" ]]; then
+    BREW_PREFIX="/usr/local"
   fi
 
-  run_quiet ./configure --prefix="$PREFIX" \
-    --with-arch=rv64imc_zicsr_zba_zbb_zbc_zbs_zknh \
-    --with-abi=lp64 \
-    --with-languages=c,c++ \
+  local CONFIGURE_OPTS=(
+    --prefix="$PREFIX"
+    --with-arch=rv64imc_zicsr_zba_zbb_zbc_zbs_zknh
+    --with-abi=lp64
+    --with-languages=c,c++
     --with-cmodel=medany
+  )
+
+  # Add Homebrew library paths on macOS
+  if [[ -n "$BREW_PREFIX" ]]; then
+    CONFIGURE_OPTS+=(
+      --with-gmp="$BREW_PREFIX"
+      --with-mpfr="$BREW_PREFIX"
+      --with-mpc="$BREW_PREFIX"
+      --with-isl="$BREW_PREFIX"
+    )
+  fi
+
+  run_quiet ./configure "${CONFIGURE_OPTS[@]}"
 
   echo "[+] Configured riscv-gnu-toolchain"
 
   echo "[+] Building riscv-gnu-toolchain (bare metal, no C library)"
   export BINUTILS_TARGET_FLAGS_EXTRA="--without-zstd"
   export GCC_EXTRA_CONFIGURE_FLAGS="--without-zstd"
+
+  # Pass Homebrew library paths to GDB build on macOS
+  if [[ -n "$BREW_PREFIX" ]]; then
+    export GDB_TARGET_FLAGS_EXTRA="--with-gmp=$BREW_PREFIX --with-mpfr=$BREW_PREFIX --with-mpc=$BREW_PREFIX"
+  fi
+
   run_quiet "${MAKE[@]}" -s
   echo "[+] Successfully built riscv-gnu-toolchain"
 

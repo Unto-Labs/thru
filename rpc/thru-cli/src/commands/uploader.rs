@@ -27,6 +27,7 @@ pub async fn handle_uploader_command(
     match subcommand {
         UploaderCommands::Upload {
             uploader,
+            chunk_size,
             seed,
             program_file,
         } => {
@@ -35,12 +36,16 @@ pub async fn handle_uploader_command(
                 uploader.as_deref(),
                 &seed,
                 &program_file,
+                chunk_size,
                 json_format,
             )
             .await
         }
         UploaderCommands::Cleanup { uploader, seed } => {
             cleanup_program(config, uploader.as_deref(), &seed, json_format).await
+        }
+        UploaderCommands::Status { uploader, seed } => {
+            get_uploader_status(config, uploader.as_deref(), &seed, json_format).await
         }
     }
 }
@@ -1097,6 +1102,7 @@ async fn upload_program(
     uploader_pubkey: Option<&str>,
     seed: &str,
     program_file: &str,
+    chunk_size: usize,
     json_format: bool,
 ) -> Result<(), CliError> {
     // Validate program file exists
@@ -1155,14 +1161,13 @@ async fn upload_program(
     }
 
     // Calculate transaction requirements
-    const CHUNK_SIZE: usize = 1024; // 1KB chunks
-    let total_chunks = (program_data.len() + CHUNK_SIZE - 1) / CHUNK_SIZE;
+    let total_chunks = (program_data.len() + chunk_size - 1) / chunk_size;
     let total_transactions = 1 + total_chunks + 1; // create + write chunks + finalize
 
     if !json_format {
         output::print_info(&format!(
             "Upload will require {} transactions ({} chunks of {} bytes each)",
-            total_transactions, total_chunks, CHUNK_SIZE
+            total_transactions, total_chunks, chunk_size
         ));
     }
 
@@ -1170,7 +1175,7 @@ async fn upload_program(
     let uploader = UploaderManager::new(&cfg).await?;
 
     match uploader
-        .upload_program(seed, &program_data, CHUNK_SIZE, json_format)
+        .upload_program(seed, &program_data, chunk_size, json_format)
         .await
     {
         Ok(session) => {
@@ -1276,6 +1281,199 @@ async fn cleanup_program(
     }
 }
 
+/// Account status information
+#[derive(Debug)]
+struct AccountStatus {
+    exists: bool,
+    is_program: bool,
+    data_size: u64,
+    owner: Option<String>,
+}
+
+fn account_to_status(result: Result<Option<thru_client::Account>, thru_client::ClientError>) -> AccountStatus {
+    match result {
+        Ok(Some(account)) => AccountStatus {
+            exists: true,
+            is_program: account.program,
+            data_size: account.data_size,
+            owner: Some(account.owner.to_string()),
+        },
+        Ok(None) => AccountStatus {
+            exists: false,
+            is_program: false,
+            data_size: 0,
+            owner: None,
+        },
+        Err(_) => AccountStatus {
+            exists: false,
+            is_program: false,
+            data_size: 0,
+            owner: None,
+        },
+    }
+}
+
+fn print_account_status(label: &str, address: &str, status: &AccountStatus) {
+    if status.exists {
+        let program_flag = if status.is_program { " [PROGRAM]" } else { "" };
+        println!("{}: {}", label, address);
+        println!("    Status: EXISTS{}, {} bytes", program_flag, status.data_size);
+        if let Some(owner) = &status.owner {
+            println!("    Owner: {}", owner);
+        }
+    } else {
+        println!("{}: {}", label, address);
+        println!("    Status: NOT FOUND");
+    }
+}
+
+/// Get status of uploader accounts
+async fn get_uploader_status(
+    config: &Config,
+    uploader_pubkey: Option<&str>,
+    seed: &str,
+    json_format: bool,
+) -> Result<(), CliError> {
+    // Get uploader program public key
+    let uploader_program_pubkey = if let Some(custom_uploader) = uploader_pubkey {
+        Pubkey::new(custom_uploader.to_string())
+            .map_err(|e| CliError::Validation(format!("Invalid uploader public key: {}", e)))?
+    } else {
+        config.get_uploader_pubkey()?
+    };
+
+    // Derive account addresses
+    let (meta_account, buffer_account) =
+        crypto::derive_uploader_accounts_from_seed(seed, &uploader_program_pubkey)?;
+
+    // Create RPC client
+    let rpc_url = config.get_grpc_url()?;
+    if !json_format {
+        println!("RPC endpoint: {}", rpc_url);
+    }
+    let client = RpcClient::builder()
+        .http_endpoint(rpc_url.clone())
+        .timeout(Duration::from_secs(config.timeout_seconds))
+        .auth_token(config.auth_token.clone())
+        .build()?;
+
+    // Verify connectivity with a simple call first
+    if let Err(e) = client.get_block_height().await {
+        let msg = format!("Failed to connect to RPC endpoint {}: {}", rpc_url, e);
+        if json_format {
+            let response = serde_json::json!({
+                "error": {
+                    "type": "connection_failed",
+                    "message": msg,
+                    "endpoint": rpc_url.to_string()
+                }
+            });
+            output::print_output(response, true);
+            return Err(CliError::Reported);
+        } else {
+            output::print_error(&msg);
+            return Err(CliError::Reported);
+        }
+    }
+
+    // Query all accounts in parallel
+    let (meta_info, buffer_info) = tokio::join!(
+        client.get_account_info(&meta_account, None, Some(VersionContext::Current)),
+        client.get_account_info(&buffer_account, None, Some(VersionContext::Current)),
+    );
+
+    // Convert to status
+    let meta_status = account_to_status(meta_info);
+    let buffer_status = account_to_status(buffer_info);
+
+    // Detect corrupted accounts (exist but have 0 bytes)
+    let meta_corrupted = meta_status.exists && meta_status.data_size == 0;
+    let buffer_corrupted = buffer_status.exists && buffer_status.data_size == 0;
+    let any_corrupted = meta_corrupted || buffer_corrupted;
+
+    // Determine upload state
+    let upload_complete = meta_status.exists && buffer_status.exists && buffer_status.data_size > 0;
+
+    if json_format {
+        let status = if upload_complete {
+            "uploaded"
+        } else if any_corrupted {
+            "corrupted"
+        } else if !meta_status.exists && !buffer_status.exists {
+            "not_uploaded"
+        } else if meta_status.exists && !buffer_status.exists {
+            "partial"
+        } else {
+            "unknown"
+        };
+
+        let response = serde_json::json!({
+            "uploader_status": {
+                "seed": seed,
+                "uploader_program": uploader_program_pubkey.to_string(),
+                "summary": {
+                    "status": status,
+                    "upload_exists": upload_complete,
+                    "corrupted_accounts": {
+                        "any": any_corrupted,
+                        "meta": meta_corrupted,
+                        "buffer": buffer_corrupted,
+                    }
+                },
+                "accounts": {
+                    "meta_account": {
+                        "address": meta_account.to_string(),
+                        "exists": meta_status.exists,
+                        "is_program": meta_status.is_program,
+                        "data_size": meta_status.data_size,
+                        "owner": meta_status.owner,
+                    },
+                    "buffer_account": {
+                        "address": buffer_account.to_string(),
+                        "exists": buffer_status.exists,
+                        "is_program": buffer_status.is_program,
+                        "data_size": buffer_status.data_size,
+                        "owner": buffer_status.owner,
+                    }
+                }
+            }
+        });
+        output::print_output(response, true);
+    } else {
+        println!("Uploader Status for seed: {}", seed);
+        println!("Uploader program: {}", uploader_program_pubkey);
+        println!();
+
+        println!("Accounts:");
+        print_account_status("  Meta Account", &meta_account.to_string(), &meta_status);
+        print_account_status("  Buffer Account", &buffer_account.to_string(), &buffer_status);
+        println!();
+
+        println!("Summary:");
+        if upload_complete {
+            println!("  Upload exists with {} bytes in buffer", buffer_status.data_size);
+        } else if any_corrupted {
+            println!("  CORRUPTED STATE DETECTED - accounts exist but have no data:");
+            if meta_corrupted {
+                println!("    - Meta account (0 bytes)");
+            }
+            if buffer_corrupted {
+                println!("    - Buffer account (0 bytes)");
+            }
+            println!();
+            println!("  To fix, clean up corrupted accounts:");
+            println!("    thru-cli uploader cleanup {}", seed);
+        } else if meta_status.exists && !buffer_status.exists {
+            println!("  Meta account exists but buffer account missing (PARTIAL STATE)");
+            println!("  Consider cleaning up: thru-cli uploader cleanup {}", seed);
+        } else if !meta_status.exists && !buffer_status.exists {
+            println!("  No upload found for this seed");
+        }
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1286,7 +1484,7 @@ mod tests {
     async fn test_upload_program_file_not_found() {
         let config = Config::default();
         let result =
-            upload_program(&config, None, "test_seed", "nonexistent_file.bin", false).await;
+            upload_program(&config, None, "test_seed", "nonexistent_file.bin", 30720, false).await;
         assert!(result.is_err());
     }
 }

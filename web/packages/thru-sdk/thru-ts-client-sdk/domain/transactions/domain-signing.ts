@@ -106,7 +106,7 @@ export async function signWithDomain(
 
     const rInput = concatBytes(domainBlock, extended.prefix, messageBytes);
     const r = modOrder(bytesToNumberLE(await etc.sha512Async(rInput)));
-    const R = Point.BASE.multiply(r).toRawBytes();
+    const R = Point.BASE.multiply(r).toBytes();
 
     const kInput = concatBytes(domainBlock, R, publicKeyBytes, messageBytes);
     const k = modOrder(bytesToNumberLE(await etc.sha512Async(kInput)));

@@ -1,16 +1,10 @@
 import { create } from "@bufbuild/protobuf";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { createMockContext, generateTestAddress, generateTestPubkey } from "../../__tests__/helpers/test-utils";
-import { HeightSnapshot } from "../../domain/height";
 import { StateProof } from "../../domain/proofs";
 import { StateProofType } from "../../proto/thru/core/v1/state_pb";
 import { GenerateStateProofResponseSchema } from "../../proto/thru/services/v1/query_service_pb";
-import * as heightModule from "../height";
 import { generateStateProof } from "../proofs";
-
-afterEach(() => {
-  vi.restoreAllMocks();
-});
 
 describe("proofs", () => {
   describe("generateStateProof", () => {
@@ -124,30 +118,21 @@ describe("proofs", () => {
       expect(callArgs.request?.address).toBeUndefined();
     });
 
-    it("should resolve target slot from finalized height when omitted", async () => {
+    it("should default targetSlot to 0 when omitted for server auto-selection", async () => {
       const ctx = createMockContext();
       const mockResponse = create(GenerateStateProofResponseSchema, {
         proof: { proof: new Uint8Array([9, 8, 7]), slot: 4321n },
       });
       vi.spyOn(ctx.query, "generateStateProof").mockResolvedValue(mockResponse);
 
-      const heightSnapshot = new HeightSnapshot({
-        finalized: 4321n,
-        locallyExecuted: 4500n,
-        clusterExecuted: 4600n,
-      });
-      const getBlockHeightSpy = vi.spyOn(heightModule, "getBlockHeight").mockResolvedValue(heightSnapshot);
-
       await generateStateProof(ctx, {
         address: generateTestPubkey(0x02),
         proofType: StateProofType.CREATING,
       });
 
-      expect(getBlockHeightSpy).toHaveBeenCalledTimes(1);
-      expect(getBlockHeightSpy).toHaveBeenCalledWith(ctx);
-
+      // When targetSlot is omitted, it defaults to 0n and the server auto-selects the slot
       const callArgs = (ctx.query.generateStateProof as any).mock.calls[0][0];
-      expect(callArgs.request?.targetSlot).toBe(4321n);
+      expect(callArgs.request?.targetSlot).toBe(0n);
     });
   });
 });
