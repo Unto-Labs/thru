@@ -6,6 +6,8 @@ version = 4
 name = "abi_gen"
 version = "0.1.0"
 dependencies = [
+ "abi_loader",
+ "abi_types",
  "anyhow",
  "clap",
  "indexmap",
@@ -17,6 +19,27 @@ dependencies = [
  "serde_json",
  "serde_yml",
  "thiserror",
+]
+
+[[package]]
+name = "abi_loader"
+version = "0.1.0"
+dependencies = [
+ "abi_types",
+ "anyhow",
+ "clap",
+ "serde",
+ "serde_derive",
+ "serde_yml",
+]
+
+[[package]]
+name = "abi_types"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_derive",
+ "serde_yml",
 ]
 
 [[package]]

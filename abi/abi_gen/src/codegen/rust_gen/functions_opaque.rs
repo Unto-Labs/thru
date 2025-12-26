@@ -1338,6 +1338,7 @@ pub fn emit_opaque_functions(
                     ResolvedTypeKind::Array {
                         element_type,
                         size_constant_status,
+                        size_expression,
                         ..
                     } => {
                         // For arrays, return a slice
@@ -1611,7 +1612,7 @@ pub fn emit_opaque_functions(
                             // We need the size expression to calculate array length
                             if let ResolvedTypeKind::Array {
                                 element_type,
-                                size_expression,
+                                size_expression: _,
                                 ..
                             } = &field.field_type.kind
                             {
@@ -3436,7 +3437,7 @@ pub fn emit_opaque_functions(
                             // Variable-size array (FAM) - generate setters
                             if let ResolvedTypeKind::Array {
                                 element_type,
-                                size_expression,
+                                size_expression: _,
                                 ..
                             } = &field.field_type.kind
                             {

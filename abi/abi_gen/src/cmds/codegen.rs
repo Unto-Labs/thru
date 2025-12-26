@@ -375,8 +375,18 @@ fn generate_rust_mod_files(
         let package_dir = output_dir.join(package.replace('.', "/"));
         let mod_path = package_dir.join("mod.rs");
 
-        let mod_content =
-            "pub mod types;\npub mod functions;\npub use types::*;\npub use functions::*;\n";
+        /* Check if runtime.rs was generated (it exists when IR types are used) */
+        let runtime_exists = package_dir.join("runtime.rs").exists();
+
+        let mut mod_content = String::new();
+        mod_content.push_str("pub mod types;\n");
+        mod_content.push_str("pub mod functions;\n");
+        if runtime_exists {
+            mod_content.push_str("pub mod runtime;\n");
+        }
+        mod_content.push_str("pub use types::*;\n");
+        mod_content.push_str("pub use functions::*;\n");
+
         std::fs::write(&mod_path, mod_content)?;
     }
 

@@ -1,8 +1,21 @@
 use crate::abi::resolved::{ResolvedType, ResolvedTypeKind, TypeResolver};
-use crate::codegen::rust_gen::{emit_ir_footprint_fn, emit_ir_validate_fn, emit_opaque_functions};
+use crate::codegen::rust_gen::{
+    emit_builder, emit_ir_footprint_fn, emit_ir_validate_fn, emit_opaque_functions,
+    types::emit_type_params,
+};
 use crate::codegen::shared::builder::IrBuilder;
 use crate::codegen::shared::ir::TypeIr;
 use std::fs;
+
+/* Generate the runtime module content (emitted as runtime.rs) */
+fn generate_runtime_module() -> &'static str {
+    RUNTIME_MODULE_CONTENT
+}
+
+/* Public function to get the runtime module content for testing */
+pub fn get_runtime_module_content() -> &'static str {
+    RUNTIME_MODULE_CONTENT
+}
 
 pub struct RustCodeGenerator<'a> {
     options: RustCodeGeneratorOptions<'a>,
@@ -72,20 +85,23 @@ impl<'a> RustCodeGenerator<'a> {
         }
 
         for resolved_type in resolved_types {
-            types_output.push_str(&emit_resolved_type(resolved_type));
+            let mut type_ir: Option<TypeIr> = None;
+            let mut ir_error: Option<String> = None;
+            match self.ir_builder.build_type(resolved_type) {
+                Ok(ir) => {
+                    type_ir = Some(ir);
+                }
+                Err(err) => {
+                    ir_error = Some(err.to_string());
+                }
+            }
+
+            types_output.push_str(&emit_resolved_type(resolved_type, type_ir.as_ref()));
             types_output.push_str("\n");
 
             if self.options.emit_accessors {
-                let mut type_ir: Option<TypeIr> = None;
-                let mut ir_error: Option<String> = None;
-                match self.ir_builder.build_type(resolved_type) {
-                    Ok(ir) => {
-                        include_ir_runtime = true;
-                        type_ir = Some(ir);
-                    }
-                    Err(err) => {
-                        ir_error = Some(err.to_string());
-                    }
+                if type_ir.is_some() {
+                    include_ir_runtime = true;
                 }
 
                 functions_output.push_str(&emit_opaque_functions(
@@ -116,6 +132,12 @@ impl<'a> RustCodeGenerator<'a> {
                         resolved_type.name, msg
                     ));
                 }
+
+                /* Emit builder if supported */
+                if let Some(builder_code) = emit_builder(resolved_type, type_ir.as_ref()) {
+                    functions_output.push_str(&builder_code);
+                    functions_output.push('\n');
+                }
             }
         }
 
@@ -126,13 +148,25 @@ impl<'a> RustCodeGenerator<'a> {
             }
         }
 
+        /* Emit runtime module if any type uses IR */
+        if include_ir_runtime {
+            let runtime_path = format!("{}/runtime.rs", self.options.output_dir);
+            if let Err(e) = fs::write(&runtime_path, generate_runtime_module()) {
+                eprintln!(
+                    "Warning: Failed to write runtime to {}: {}",
+                    runtime_path, e
+                );
+            }
+        }
+
         if !functions_output.is_empty() {
             let mut complete_functions = String::new();
-            complete_functions.push_str("use super::types::*;\n\n");
+            complete_functions.push_str("use super::types::*;\n");
             if include_ir_runtime {
-                complete_functions.push_str(IR_VALIDATE_RUNTIME_HELPERS);
-                complete_functions.push('\n');
+                complete_functions.push_str("#[allow(unused_imports)]\n");
+                complete_functions.push_str("use super::runtime::*;\n");
             }
+            complete_functions.push('\n');
             complete_functions.push_str(&functions_output);
 
             let functions_path = format!("{}/functions.rs", self.options.output_dir);
@@ -268,12 +302,24 @@ impl<'a> RustCodeGenerator<'a> {
     }
 }
 
-const IR_VALIDATE_RUNTIME_HELPERS: &str = r#"
+/* Content emitted to runtime.rs - provides FAT pointer types and validation helpers */
+const RUNTIME_MODULE_CONTENT: &str = r#"/* Generated ABI runtime module - DO NOT EDIT */
+#![allow(dead_code)]
+
+/* ============================================================================
+ * ABI Runtime - Error Types
+ * ============================================================================ */
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AbiIrValidateError {
     BufferTooSmall,
     InvalidVariant,
+    MissingParam,
+    MissingSwitchCase,
+    UnknownNestedType,
     ArithmeticOverflow,
+    OutOfBounds,
+    Misaligned,
 }
 
 impl AbiIrValidateError {
@@ -281,24 +327,248 @@ impl AbiIrValidateError {
         match self {
             AbiIrValidateError::BufferTooSmall => "buffer too small",
             AbiIrValidateError::InvalidVariant => "invalid variant tag",
+            AbiIrValidateError::MissingParam => "missing parameter",
+            AbiIrValidateError::MissingSwitchCase => "missing switch case",
+            AbiIrValidateError::UnknownNestedType => "unknown nested type",
             AbiIrValidateError::ArithmeticOverflow => "size arithmetic overflow",
+            AbiIrValidateError::OutOfBounds => "out of bounds access",
+            AbiIrValidateError::Misaligned => "misaligned access",
         }
     }
 }
 
-fn abi_ir_error_str(err: AbiIrValidateError) -> &'static str {
+impl std::fmt::Display for AbiIrValidateError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.as_str())
+    }
+}
+
+impl std::error::Error for AbiIrValidateError {}
+
+pub type TnIrParamResolver<'a> = &'a dyn Fn(&str) -> Option<u64>;
+pub type TnIrNestedCaller<'a> = &'a dyn Fn(&str, &[u64]) -> Result<u64, AbiIrValidateError>;
+
+#[allow(dead_code)]
+pub fn abi_ir_error_str(err: AbiIrValidateError) -> &'static str {
     err.as_str()
 }
 
-fn tn_checked_add_u64(a: u64, b: u64) -> Result<u64, AbiIrValidateError> {
+pub fn tn_checked_add_u64(a: u64, b: u64) -> Result<u64, AbiIrValidateError> {
     a.checked_add(b)
         .ok_or(AbiIrValidateError::ArithmeticOverflow)
 }
 
-fn tn_checked_mul_u64(a: u64, b: u64) -> Result<u64, AbiIrValidateError> {
+pub fn tn_checked_mul_u64(a: u64, b: u64) -> Result<u64, AbiIrValidateError> {
     a.checked_mul(b)
         .ok_or(AbiIrValidateError::ArithmeticOverflow)
 }
+
+/* ============================================================================
+ * ABI Runtime - FAT Pointer Types (Zero-copy views)
+ * ============================================================================ */
+
+/// Immutable view into a byte buffer with bounds checking and endian-aware reads.
+#[derive(Debug, Clone, Copy)]
+pub struct TnView<'a> {
+    buf: &'a [u8],
+    offset: usize,
+    len: usize,
+}
+
+impl<'a> TnView<'a> {
+    /// Create a view over the entire buffer.
+    pub fn new(buf: &'a [u8]) -> Self {
+        Self {
+            buf,
+            offset: 0,
+            len: buf.len(),
+        }
+    }
+
+    /// Create a view over a range within the buffer.
+    pub fn with_range(buf: &'a [u8], offset: usize, len: usize) -> Result<Self, AbiIrValidateError> {
+        if offset.checked_add(len).map_or(true, |end| end > buf.len()) {
+            return Err(AbiIrValidateError::OutOfBounds);
+        }
+        Ok(Self { buf, offset, len })
+    }
+
+    /// Get the length of this view.
+    #[inline]
+    pub fn len(&self) -> usize {
+        self.len
+    }
+
+    /// Check if this view is empty.
+    #[inline]
+    pub fn is_empty(&self) -> bool {
+        self.len == 0
+    }
+
+    /// Get the underlying buffer slice for this view.
+    #[inline]
+    pub fn as_slice(&self) -> &'a [u8] {
+        &self.buf[self.offset..self.offset + self.len]
+    }
+
+    /// Create a sub-view at a relative offset with the given length.
+    pub fn slice(&self, rel_offset: usize, len: usize) -> Result<Self, AbiIrValidateError> {
+        let start = self.offset.checked_add(rel_offset).ok_or(AbiIrValidateError::OutOfBounds)?;
+        let end = start.checked_add(len).ok_or(AbiIrValidateError::OutOfBounds)?;
+        if end > self.offset + self.len {
+            return Err(AbiIrValidateError::OutOfBounds);
+        }
+        Ok(Self { buf: self.buf, offset: start, len })
+    }
+
+    /// Read a u8 at the given relative offset.
+    #[inline]
+    pub fn read_u8(&self, rel_offset: usize) -> Result<u8, AbiIrValidateError> {
+        let idx = self.offset.checked_add(rel_offset).ok_or(AbiIrValidateError::OutOfBounds)?;
+        if idx >= self.offset + self.len {
+            return Err(AbiIrValidateError::OutOfBounds);
+        }
+        Ok(self.buf[idx])
+    }
+
+    /// Read a u16 (little-endian) at the given relative offset.
+    pub fn read_u16_le(&self, rel_offset: usize) -> Result<u16, AbiIrValidateError> {
+        let view = self.slice(rel_offset, 2)?;
+        Ok(u16::from_le_bytes([view.buf[view.offset], view.buf[view.offset + 1]]))
+    }
+
+    /// Read a u32 (little-endian) at the given relative offset.
+    pub fn read_u32_le(&self, rel_offset: usize) -> Result<u32, AbiIrValidateError> {
+        let view = self.slice(rel_offset, 4)?;
+        Ok(u32::from_le_bytes([
+            view.buf[view.offset],
+            view.buf[view.offset + 1],
+            view.buf[view.offset + 2],
+            view.buf[view.offset + 3],
+        ]))
+    }
+
+    /// Read a u64 (little-endian) at the given relative offset.
+    pub fn read_u64_le(&self, rel_offset: usize) -> Result<u64, AbiIrValidateError> {
+        let view = self.slice(rel_offset, 8)?;
+        Ok(u64::from_le_bytes([
+            view.buf[view.offset],
+            view.buf[view.offset + 1],
+            view.buf[view.offset + 2],
+            view.buf[view.offset + 3],
+            view.buf[view.offset + 4],
+            view.buf[view.offset + 5],
+            view.buf[view.offset + 6],
+            view.buf[view.offset + 7],
+        ]))
+    }
+
+    /// Read an i8 at the given relative offset.
+    #[inline]
+    pub fn read_i8(&self, rel_offset: usize) -> Result<i8, AbiIrValidateError> {
+        Ok(self.read_u8(rel_offset)? as i8)
+    }
+
+    /// Read an i16 (little-endian) at the given relative offset.
+    pub fn read_i16_le(&self, rel_offset: usize) -> Result<i16, AbiIrValidateError> {
+        Ok(self.read_u16_le(rel_offset)? as i16)
+    }
+
+    /// Read an i32 (little-endian) at the given relative offset.
+    pub fn read_i32_le(&self, rel_offset: usize) -> Result<i32, AbiIrValidateError> {
+        Ok(self.read_u32_le(rel_offset)? as i32)
+    }
+
+    /// Read an i64 (little-endian) at the given relative offset.
+    pub fn read_i64_le(&self, rel_offset: usize) -> Result<i64, AbiIrValidateError> {
+        Ok(self.read_u64_le(rel_offset)? as i64)
+    }
+
+    /// Read an f32 (little-endian) at the given relative offset.
+    pub fn read_f32_le(&self, rel_offset: usize) -> Result<f32, AbiIrValidateError> {
+        Ok(f32::from_bits(self.read_u32_le(rel_offset)?))
+    }
+
+    /// Read an f64 (little-endian) at the given relative offset.
+    pub fn read_f64_le(&self, rel_offset: usize) -> Result<f64, AbiIrValidateError> {
+        Ok(f64::from_bits(self.read_u64_le(rel_offset)?))
+    }
+}
+
+/// Mutable view into a byte buffer with bounds checking and endian-aware writes.
+#[derive(Debug)]
+pub struct TnViewMut<'a> {
+    buf: &'a mut [u8],
+    offset: usize,
+    len: usize,
+}
+
+impl<'a> TnViewMut<'a> {
+    /// Create a mutable view over the entire buffer.
+    pub fn new(buf: &'a mut [u8]) -> Self {
+        let len = buf.len();
+        Self { buf, offset: 0, len }
+    }
+
+    /// Create a mutable view over a range within the buffer.
+    pub fn with_range(buf: &'a mut [u8], offset: usize, len: usize) -> Result<Self, AbiIrValidateError> {
+        if offset.checked_add(len).map_or(true, |end| end > buf.len()) {
+            return Err(AbiIrValidateError::OutOfBounds);
+        }
+        Ok(Self { buf, offset, len })
+    }
+
+    /// Write a u8 at the given relative offset.
+    pub fn write_u8(&mut self, rel_offset: usize, value: u8) -> Result<(), AbiIrValidateError> {
+        let idx = self.checked_idx(rel_offset, 1)?;
+        self.buf[idx] = value;
+        Ok(())
+    }
+
+    /// Write a u16 (little-endian) at the given relative offset.
+    pub fn write_u16_le(&mut self, rel_offset: usize, value: u16) -> Result<(), AbiIrValidateError> {
+        let bytes = value.to_le_bytes();
+        let start = self.checked_idx(rel_offset, 2)?;
+        self.buf[start] = bytes[0];
+        self.buf[start + 1] = bytes[1];
+        Ok(())
+    }
+
+    /// Write a u32 (little-endian) at the given relative offset.
+    pub fn write_u32_le(&mut self, rel_offset: usize, value: u32) -> Result<(), AbiIrValidateError> {
+        let bytes = value.to_le_bytes();
+        let start = self.checked_idx(rel_offset, 4)?;
+        self.buf[start..start + 4].copy_from_slice(&bytes);
+        Ok(())
+    }
+
+    /// Write a u64 (little-endian) at the given relative offset.
+    pub fn write_u64_le(&mut self, rel_offset: usize, value: u64) -> Result<(), AbiIrValidateError> {
+        let bytes = value.to_le_bytes();
+        let start = self.checked_idx(rel_offset, 8)?;
+        self.buf[start..start + 8].copy_from_slice(&bytes);
+        Ok(())
+    }
+
+    fn checked_idx(&self, rel_offset: usize, len: usize) -> Result<usize, AbiIrValidateError> {
+        let start = self.offset.checked_add(rel_offset).ok_or(AbiIrValidateError::OutOfBounds)?;
+        let end = start.checked_add(len).ok_or(AbiIrValidateError::OutOfBounds)?;
+        if end > self.offset + self.len {
+            return Err(AbiIrValidateError::OutOfBounds);
+        }
+        Ok(start)
+    }
+}
+
+/* ============================================================================
+ * ABI Runtime - Type Registry (for typeref dispatch)
+ * ============================================================================ */
+
+/// Registry entry for a type's footprint function.
+pub type TnFootprintFn = fn(&[u64]) -> u64;
+
+/// Registry entry for a type's validate function.
+pub type TnValidateFn = fn(u64, &[u64]) -> Result<u64, AbiIrValidateError>;
 "#;
 
 /* Recursively emit nested anonymous types before the parent type */
@@ -444,9 +714,14 @@ fn emit_single_type(resolved_type: &ResolvedType) -> String {
 }
 
 /* Generate Rust code for a resolved type (public API) */
-fn emit_resolved_type(resolved_type: &ResolvedType) -> String {
+fn emit_resolved_type(resolved_type: &ResolvedType, type_ir: Option<&TypeIr>) -> String {
     let mut output = String::new();
     emit_recursive_types(resolved_type, &mut output);
+    if let Some(ir) = type_ir {
+        if let Some(params) = emit_type_params(resolved_type, ir) {
+            output.push_str(&params);
+        }
+    }
     output
 }
 

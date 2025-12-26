@@ -11,7 +11,29 @@ pub struct DynamicBinding {
 }
 
 pub fn sanitize_param_name(name: &str) -> String {
-    name.replace(['.', ':', '-'], "_")
+    // Replace separators with underscores
+    let with_underscores = name.replace(['.', ':', '-'], "_");
+    // Convert to snake_case (lowercase with underscores)
+    let mut result = String::new();
+    for (i, ch) in with_underscores.chars().enumerate() {
+        if ch.is_uppercase() {
+            // Add underscore before uppercase letter if not at start and previous char isn't underscore
+            if i > 0 {
+                let prev_char = with_underscores.chars().nth(i - 1);
+                if prev_char != Some('_') && prev_char.map(|c| c.is_lowercase()).unwrap_or(false) {
+                    result.push('_');
+                }
+            }
+            result.push(ch.to_lowercase().next().unwrap());
+        } else {
+            result.push(ch);
+        }
+    }
+    // Clean up double underscores
+    while result.contains("__") {
+        result = result.replace("__", "_");
+    }
+    result
 }
 
 pub fn collect_dynamic_param_bindings(

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { mnemonicToSeed } from 'bip39';
+import { mnemonicToSeed } from '@scure/bip39';
 import { ThruHDWallet } from './hdwallet';
 
 /**

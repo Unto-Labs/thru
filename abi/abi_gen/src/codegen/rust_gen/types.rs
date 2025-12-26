@@ -1,5 +1,8 @@
 use crate::abi::expr::{ExprKind, LiteralExpr};
+use crate::abi::resolved::ResolvedType;
 use crate::abi::types::{FloatingPointType, IntegralType, PrimitiveType, TypeDef, TypeKind};
+use crate::codegen::rust_gen::ir_helpers::sanitize_param_name;
+use crate::codegen::shared::ir::TypeIr;
 use std::fmt::Write;
 
 /* Indentation constants */
@@ -425,6 +428,72 @@ fn emit_container_definition(
     write!(output, "}}\n\n").unwrap();
 
     output
+}
+
+pub fn emit_type_params(resolved_type: &ResolvedType, type_ir: &TypeIr) -> Option<String> {
+    let bindings: Vec<_> = type_ir
+        .parameters
+        .iter()
+        .filter(|param| !param.derived)
+        .map(|param| {
+            (
+                param.name.clone(),
+                escape_rust_keyword(&sanitize_param_name(&param.name)),
+                param.description.clone(),
+            )
+        })
+        .collect();
+    if bindings.is_empty() {
+        return None;
+    }
+
+    let mut output = String::new();
+    writeln!(output, "#[allow(non_camel_case_types, non_snake_case)]").unwrap();
+    writeln!(output, "#[derive(Clone, Debug, Default, PartialEq, Eq)]").unwrap();
+    writeln!(output, "pub struct {}Params {{", resolved_type.name).unwrap();
+    for (canonical, rust_name, doc) in &bindings {
+        if let Some(desc) = doc {
+            writeln!(output, "    /// {} (ABI path: {})", desc, canonical).unwrap();
+        } else {
+            writeln!(output, "    /// ABI path: {}", canonical).unwrap();
+        }
+        writeln!(output, "    pub {}: u64,", rust_name).unwrap();
+    }
+    writeln!(output, "}}\n").unwrap();
+
+    let params_signature = bindings
+        .iter()
+        .map(|(_, rust_name, _)| format!("{}: u64", rust_name))
+        .collect::<Vec<_>>()
+        .join(", ");
+
+    writeln!(output, "impl {}Params {{", resolved_type.name).unwrap();
+    writeln!(output, "    pub fn from_values({}) -> Self {{", params_signature).unwrap();
+    writeln!(output, "        Self {{").unwrap();
+    for (_, rust_name, _) in &bindings {
+        writeln!(output, "            {},", rust_name).unwrap();
+    }
+    writeln!(output, "        }}").unwrap();
+    writeln!(output, "    }}\n").unwrap();
+
+    // Generate from_map method that takes a generic parameter map
+    writeln!(output, "    /// Create params from a map of parameter names to values.").unwrap();
+    writeln!(output, "    /// Returns None if any required parameter is missing.").unwrap();
+    writeln!(output, "    pub fn from_map<S: ::std::borrow::Borrow<str>>(map: &::std::collections::BTreeMap<S, u64>) -> Option<Self> {{").unwrap();
+    writeln!(output, "        Some(Self {{").unwrap();
+    for (canonical, rust_name, _) in &bindings {
+        writeln!(
+            output,
+            "            {}: *map.iter().find(|(k, _)| k.borrow() == \"{}\").map(|(_, v)| v)?,",
+            rust_name, canonical
+        )
+        .unwrap();
+    }
+    writeln!(output, "        }})").unwrap();
+    writeln!(output, "    }}").unwrap();
+    writeln!(output, "}}\n").unwrap();
+
+    Some(output)
 }
 
 pub fn emit_type(type_def: &TypeDef) -> String {

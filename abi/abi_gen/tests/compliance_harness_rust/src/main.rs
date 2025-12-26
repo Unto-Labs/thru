@@ -34,6 +34,10 @@ struct Args {
     /// Temporary directory for test artifacts (default: system temp dir)
     #[arg(long, value_name = "DIR")]
     temp_dir: Option<PathBuf>,
+
+    /// Run in parity mode: compare TypeScript and Rust outputs
+    #[arg(long)]
+    parity: bool,
 }
 
 #[derive(Debug, Deserialize)]
@@ -103,7 +107,7 @@ struct TestResult {
     error: Option<TestError>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 struct TestStages {
     code_generation: String,
     compilation: String,
@@ -129,6 +133,11 @@ struct TestOutput {
 
 fn main() -> Result<()> {
     let args = Args::parse();
+
+    /* In parity mode, always run TypeScript and Rust */
+    if args.parity {
+        return run_parity_mode(&args);
+    }
 
     /* Determine which languages to test */
     let languages = if args.language.to_lowercase() == "all" {
@@ -309,4 +318,199 @@ fn run_test_case(
         no_cleanup,
         temp_dir,
     )
+}
+
+/* Parity mode: run both TypeScript and Rust, compare results */
+fn run_parity_mode(args: &Args) -> Result<()> {
+    let test_cases = if args.test_case.is_dir() {
+        discover_test_cases(&args.test_case)?
+    } else {
+        vec![args.test_case.clone()]
+    };
+
+    let ts_runner = language_runner::get_runner("typescript")
+        .expect("TypeScript runner should be available");
+    let rust_runner =
+        language_runner::get_runner("rust").expect("Rust runner should be available");
+
+    let start_time = Instant::now();
+    let mut parity_passed = 0;
+    let mut parity_failed = 0;
+    let mut parity_results: Vec<ParityResult> = Vec::new();
+
+    println!("\n=== Running TypeScript vs Rust Parity Tests ===\n");
+
+    for test_case_path in &test_cases {
+        let test_name = test_case_path
+            .file_stem()
+            .unwrap_or_default()
+            .to_str()
+            .unwrap_or("unknown")
+            .to_string();
+
+        if args.verbose {
+            println!("Parity test: {}", test_case_path.display());
+        }
+
+        /* Run TypeScript */
+        let ts_result = run_test_case(
+            test_case_path,
+            args.verbose,
+            args.no_cleanup,
+            args.temp_dir.as_deref(),
+            &*ts_runner,
+        );
+
+        /* Run Rust */
+        let rust_result = run_test_case(
+            test_case_path,
+            args.verbose,
+            args.no_cleanup,
+            args.temp_dir.as_deref(),
+            &*rust_runner,
+        );
+
+        /* Compare results */
+        let (ts_ok, ts_status, ts_stages) = match &ts_result {
+            Ok(r) => (r.status == "pass", r.status.clone(), r.stages.clone()),
+            Err(e) => (false, format!("error: {}", e), None),
+        };
+
+        let (rust_ok, rust_status, rust_stages) = match &rust_result {
+            Ok(r) => (r.status == "pass", r.status.clone(), r.stages.clone()),
+            Err(e) => (false, format!("error: {}", e), None),
+        };
+
+        let parity_ok = ts_ok && rust_ok;
+        let mut divergence = None;
+
+        if !parity_ok {
+            /* Determine what diverged */
+            if ts_ok != rust_ok {
+                divergence = Some(format!(
+                    "TypeScript: {}, Rust: {}",
+                    if ts_ok { "PASS" } else { "FAIL" },
+                    if rust_ok { "PASS" } else { "FAIL" }
+                ));
+            } else if let (Some(ts_s), Some(rust_s)) = (&ts_stages, &rust_stages) {
+                /* Both failed - check which stages diverged */
+                let mut diffs = Vec::new();
+                if ts_s.code_generation != rust_s.code_generation {
+                    diffs.push(format!(
+                        "code_generation: TS={}, Rust={}",
+                        ts_s.code_generation, rust_s.code_generation
+                    ));
+                }
+                if ts_s.compilation != rust_s.compilation {
+                    diffs.push(format!(
+                        "compilation: TS={}, Rust={}",
+                        ts_s.compilation, rust_s.compilation
+                    ));
+                }
+                if ts_s.decode != rust_s.decode {
+                    diffs.push(format!(
+                        "decode: TS={}, Rust={}",
+                        ts_s.decode, rust_s.decode
+                    ));
+                }
+                if ts_s.validation != rust_s.validation {
+                    diffs.push(format!(
+                        "validation: TS={}, Rust={}",
+                        ts_s.validation, rust_s.validation
+                    ));
+                }
+                if ts_s.reencode != rust_s.reencode {
+                    diffs.push(format!(
+                        "reencode: TS={}, Rust={}",
+                        ts_s.reencode, rust_s.reencode
+                    ));
+                }
+                if ts_s.binary_match != rust_s.binary_match {
+                    diffs.push(format!(
+                        "binary_match: TS={}, Rust={}",
+                        ts_s.binary_match, rust_s.binary_match
+                    ));
+                }
+                if !diffs.is_empty() {
+                    divergence = Some(diffs.join("; "));
+                }
+            }
+        }
+
+        let result = ParityResult {
+            test_name: test_name.clone(),
+            test_file: test_case_path.display().to_string(),
+            parity_ok,
+            typescript_status: ts_status,
+            rust_status: rust_status,
+            divergence,
+        };
+
+        if parity_ok {
+            parity_passed += 1;
+            if args.verbose {
+                println!("  [PARITY OK] {}", test_name);
+            }
+        } else {
+            parity_failed += 1;
+            println!("  [PARITY FAIL] {}", test_name);
+            if let Some(ref div) = result.divergence {
+                println!("    Divergence: {}", div);
+            }
+        }
+
+        parity_results.push(result);
+    }
+
+    let duration_ms = start_time.elapsed().as_millis() as u64;
+
+    println!("\n=== Parity Summary ===");
+    println!("Total: {}", parity_results.len());
+    println!("Parity OK: {}", parity_passed);
+    println!("Parity Failed: {}", parity_failed);
+    println!("Duration: {}ms", duration_ms);
+
+    /* Output JSON if requested */
+    if let Some(ref output_file) = args.output {
+        let output = ParityOutput {
+            timestamp: chrono::Utc::now().to_rfc3339(),
+            harness_version: "2.0.0".to_string(),
+            total_tests: parity_results.len(),
+            parity_passed,
+            parity_failed,
+            duration_ms,
+            results: parity_results,
+        };
+        let json_output = serde_json::to_string_pretty(&output)?;
+        fs::write(output_file, &json_output)?;
+        println!("Results written to: {}", output_file.display());
+    }
+
+    if parity_failed > 0 {
+        std::process::exit(1);
+    }
+
+    Ok(())
+}
+
+#[derive(Debug, Serialize)]
+struct ParityResult {
+    test_name: String,
+    test_file: String,
+    parity_ok: bool,
+    typescript_status: String,
+    rust_status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    divergence: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+struct ParityOutput {
+    timestamp: String,
+    harness_version: String,
+    total_tests: usize,
+    parity_passed: usize,
+    parity_failed: usize,
+    duration_ms: u64,
+    results: Vec<ParityResult>,
 }

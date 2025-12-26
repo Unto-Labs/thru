@@ -1,7 +1,9 @@
-import * as bip39 from 'bip39';
+import { generateMnemonic, validateMnemonic, mnemonicToSeedSync } from '@scure/bip39';
+import { wordlist } from '@scure/bip39/wordlists/english';
 
 /**
- * Handles BIP39 mnemonic phrase generation and validation
+ * Handles BIP39 mnemonic phrase generation and validation.
+ * Uses @scure/bip39 for React Native compatibility (no Buffer dependency).
  */
 export class MnemonicGenerator {
   /**
@@ -10,7 +12,7 @@ export class MnemonicGenerator {
    */
   static generate(): string {
     // 128 bits of entropy = 12 words
-    return bip39.generateMnemonic(128);
+    return generateMnemonic(wordlist, 128);
   }
 
   /**
@@ -19,7 +21,7 @@ export class MnemonicGenerator {
    * @returns true if valid, false otherwise
    */
   static validate(phrase: string): boolean {
-    return bip39.validateMnemonic(phrase);
+    return validateMnemonic(phrase, wordlist);
   }
 
   /**
@@ -32,8 +34,8 @@ export class MnemonicGenerator {
     if (!this.validate(phrase)) {
       throw new Error('Invalid mnemonic phrase');
     }
-    const seed = bip39.mnemonicToSeedSync(phrase, passphrase);
-    return new Uint8Array(seed);
+    // @scure/bip39 returns Uint8Array directly (no Buffer)
+    return mnemonicToSeedSync(phrase, passphrase);
   }
 
   /**
