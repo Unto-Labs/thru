@@ -602,6 +602,7 @@ message Event {
   optional uint32 payload_size = 8 [(google.api.field_behavior) = OPTIONAL];
   optional uint32 block_offset = 9 [(google.api.field_behavior) = OPTIONAL];
   optional google.protobuf.Timestamp timestamp = 10 [(google.api.field_behavior) = OPTIONAL];
+  optional thru.common.v1.Pubkey fee_payer = 11 [(google.api.field_behavior) = OPTIONAL];
 }
 
 // ListEventsRequest lists events with CEL filtering and pagination.
@@ -620,6 +621,7 @@ message Event {
 //   - event.program_idx (uint32): Program index within transaction
 //   - event.payload (bytes): Event payload data
 //   - event.payload_size (uint32): Size of event payload in bytes
+//   - event.fee_payer.value (bytes): Fee payer's public key for the transaction
 //
 // Available CEL functions:
 //   - has(field): Check if optional field exists
