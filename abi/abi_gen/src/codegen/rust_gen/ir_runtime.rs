@@ -13,6 +13,7 @@ pub enum IrErrorCode {
     UnknownNestedType,
     ArithmeticOverflow,
     UnsupportedEndianness,
+    UnsupportedOperation,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -56,6 +57,13 @@ impl IrError {
             context: None,
         }
     }
+
+    pub fn unsupported_operation(description: impl Into<String>) -> Self {
+        Self {
+            code: IrErrorCode::UnsupportedOperation,
+            context: Some(description.into()),
+        }
+    }
 }
 
 pub type ParamLookup<'a> = &'a dyn Fn(&str) -> Option<u64>;
@@ -96,6 +104,13 @@ fn eval_node(
         IrNode::AlignUp(node) => align_expr(node, params, nested),
         IrNode::CallNested(node) => call_nested(node, params, nested),
         IrNode::Switch(node) => switch_expr(node, params, nested),
+        IrNode::SumOverArray(_node) => {
+            /* Jagged arrays are not supported in runtime IR evaluation.
+               Size calculation requires iteration over actual data. */
+            Err(IrError::unsupported_operation(
+                "SumOverArray requires iteration over actual data",
+            ))
+        }
     }
 }
 

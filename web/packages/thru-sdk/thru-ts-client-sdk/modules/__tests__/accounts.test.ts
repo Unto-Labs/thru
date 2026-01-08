@@ -1,9 +1,9 @@
 import { create } from "@bufbuild/protobuf";
 import { describe, expect, it, vi } from "vitest";
 import { createMockAccount, createMockContext, generateTestAddress, generateTestPubkey } from "../../__tests__/helpers/test-utils";
-import { ConsensusStatus, CurrentVersionSchema, VersionContextSchema } from "../../proto/thru/common/v1/consensus_pb";
-import { AccountView } from "../../proto/thru/core/v1/account_pb";
-import { GenerateStateProofResponseSchema, ListAccountsResponseSchema } from "../../proto/thru/services/v1/query_service_pb";
+import { ConsensusStatus, CurrentVersionSchema, VersionContextSchema } from "@thru/proto";
+import { AccountView } from "@thru/proto";
+import { GenerateStateProofResponseSchema, ListAccountsResponseSchema } from "@thru/proto";
 import { Account } from "../../domain/accounts";
 import { Filter, FilterParamValue } from "../../domain/filters";
 import { Pubkey } from "../../domain/primitives";

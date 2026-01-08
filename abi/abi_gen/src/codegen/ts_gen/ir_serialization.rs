@@ -97,5 +97,11 @@ fn emit_ir_node(node: &IrNode, indent: usize) -> String {
                 args
             )
         }
+        IrNode::SumOverArray(node) => format!(
+            "{{ op: \"sumOverArray\", count: {}, elementTypeName: \"{}\", fieldName: \"{}\" }}",
+            emit_ir_node(&node.count, indent),
+            node.element_type_name.replace('\"', "\\\""),
+            node.field_name.replace('\"', "\\\"")
+        ),
     }
 }

@@ -1,4 +1,4 @@
-import type { StateProof as CoreStateProof } from "../../proto/thru/core/v1/state_pb";
+import type { StateProof as CoreStateProof } from "@thru/proto";
 
 export class StateProof {
     readonly proof: Uint8Array;

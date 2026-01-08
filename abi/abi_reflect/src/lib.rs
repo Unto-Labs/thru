@@ -13,6 +13,7 @@ pub mod parser;
 pub mod reflect;
 pub mod types;
 pub mod value;
+pub mod well_known;
 
 pub use abi_gen::abi::file::RootTypes;
 pub use errors::{ReflectError, ReflectResult};
@@ -22,3 +23,4 @@ pub use parser::Parser;
 pub use reflect::{Reflector, ReflectorConfig};
 pub use types::*;
 pub use value::{ReflectedValue, Value, ValueOnly};
+pub use well_known::{WellKnownContext, WellKnownRegistry, WellKnownResult, WellKnownType};

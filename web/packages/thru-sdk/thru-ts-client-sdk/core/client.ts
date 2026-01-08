@@ -2,9 +2,7 @@ import { CallOptions, Interceptor, Transport, createClient } from "@connectrpc/c
 import { GrpcWebTransportOptions, createGrpcWebTransport } from "@connectrpc/connect-web";
 
 import { DEFAULT_HOST } from "../defaults";
-import { CommandService } from "../proto/thru/services/v1/command_service_pb";
-import { QueryService } from "../proto/thru/services/v1/query_service_pb";
-import { StreamingService } from "../proto/thru/services/v1/streaming_service_pb";
+import { CommandService, QueryService, StreamingService } from "@thru/proto";
 
 type PartialTransportOptions = Partial<GrpcWebTransportOptions>;
 

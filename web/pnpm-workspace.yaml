@@ -5,3 +5,4 @@ packages:
   - 'explorer'
   - 'mint'
   - 'etl-bridge'
+  - 'superapp-be'

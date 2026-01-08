@@ -2,12 +2,12 @@ import { create } from "@bufbuild/protobuf";
 import { encodeAddress, encodeSignature } from "@thru/helpers";
 import { vi } from "vitest";
 import type { ThruClientContext } from "../../core/client";
-import type { Account, AccountFlags, AccountMeta } from "../../proto/thru/core/v1/account_pb";
-import { AccountFlagsSchema, AccountMetaSchema, AccountSchema } from "../../proto/thru/core/v1/account_pb";
-import type { Block, BlockHeader } from "../../proto/thru/core/v1/block_pb";
-import { BlockHeaderSchema, BlockSchema } from "../../proto/thru/core/v1/block_pb";
-import type { GetHeightResponse, ListBlocksResponse } from "../../proto/thru/services/v1/query_service_pb";
-import { GetHeightResponseSchema, ListBlocksResponseSchema } from "../../proto/thru/services/v1/query_service_pb";
+import type { Account, AccountFlags, AccountMeta } from "@thru/proto";
+import { AccountFlagsSchema, AccountMetaSchema, AccountSchema } from "@thru/proto";
+import type { Block, BlockHeader } from "@thru/proto";
+import { BlockHeaderSchema, BlockSchema } from "@thru/proto";
+import type { GetHeightResponse, ListBlocksResponse } from "@thru/proto";
+import { GetHeightResponseSchema, ListBlocksResponseSchema } from "@thru/proto";
 
 /**
  * Creates a mock ThruClientContext with mock gRPC clients.

@@ -1,9 +1,13 @@
 import { create } from "@bufbuild/protobuf";
 
-import { ConsensusStatus, CurrentVersionSchema, VersionContextSchema } from "./proto/thru/common/v1/consensus_pb";
-import { AccountView } from "./proto/thru/core/v1/account_pb";
-import { BlockView } from "./proto/thru/core/v1/block_pb";
-import { TransactionView } from "./proto/thru/core/v1/transaction_pb";
+import {
+    ConsensusStatus,
+    CurrentVersionSchema,
+    VersionContextSchema,
+    AccountView,
+    BlockView,
+    TransactionView
+} from "@thru/proto";
 
 export const DEFAULT_HOST = "https://grpc-web.alphanet.thruput.org";
 

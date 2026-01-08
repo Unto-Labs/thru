@@ -74,6 +74,7 @@ pub fn fam_field_infos<'a>(resolved_type: &'a ResolvedType) -> Vec<FamFieldInfo<
             element_type,
             size_expression,
             size_constant_status,
+            ..
         } = &field.field_type.kind
         else {
             continue;

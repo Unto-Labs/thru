@@ -79,10 +79,9 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
       }
     };
 
-    this.logger.info("replay entering BACKFILLING state", {
-      startSlot: startSlot.toString(),
-      safetyMargin: safetyMargin.toString(),
-    });
+    this.logger.info(
+      `replay entering BACKFILLING state (startSlot=${startSlot}, safetyMargin=${safetyMargin})`
+    );
 
     while (!backfillDone) {
       const page = await fetchBackfill({ startSlot, cursor });
@@ -120,11 +119,9 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
         const catchUpSlot =
           maxStreamSlot > safetyMargin ? (maxStreamSlot - safetyMargin) : 0n;
         if (currentSlot >= catchUpSlot) {
-          this.logger.info("replay reached SWITCHING threshold", {
-            currentSlot: currentSlot.toString(),
-            maxStreamSlot: maxStreamSlot.toString(),
-            catchUpSlot: catchUpSlot.toString(),
-          });
+          this.logger.info(
+            `replay reached SWITCHING threshold (currentSlot=${currentSlot}, maxStreamSlot=${maxStreamSlot}, catchUpSlot=${catchUpSlot})`
+          );
           backfillDone = true;
         }
       }
@@ -132,9 +129,7 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
       if (page.done || cursor === undefined) backfillDone = true;
     }
 
-    this.logger.info("replay entering SWITCHING state", {
-      currentSlot: currentSlot.toString(),
-    });
+    this.logger.info(`replay entering SWITCHING state (currentSlot=${currentSlot})`);
 
     const { drained, discarded } = livePump.enableStreaming(currentSlot);
     this.metrics.bufferedItems = drained.length;
@@ -175,11 +170,10 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
         yield next.value;
         livePump.updateEmitFloor(currentSlot);
       } catch (err) {
-        this.logger.warn("live stream error; retrying", {
-          err,
-          retryDelayMs: RETRY_DELAY_MS,
-          slot: currentSlot.toString(),
-        });
+        const errMsg = err instanceof Error ? err.message : String(err);
+        this.logger.warn(
+          `live stream disconnected (${errMsg}); reconnecting in ${RETRY_DELAY_MS}ms from slot ${currentSlot}`
+        );
         await delay(RETRY_DELAY_MS);
         await safeClose(livePump);
         const resumeSlot = currentSlot > 0n ? currentSlot : 0n;

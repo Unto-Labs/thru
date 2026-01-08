@@ -1,0 +1,12 @@
+test-case:
+  name: "jagged_arrays_three_records"
+  abi-file: "../../abi_definitions/jagged_arrays.abi.yaml"
+  type: "JaggedRecords"
+  description: "Test jagged array with three variable-size records of different lengths"
+  tags: ["jagged", "arrays", "variable-size", "structs"]
+  # Binary layout:
+  # count: u32 = 3 (0x03 00 00 00)
+  # records[0]: VarRecord { len: 2, data: [0xAA, 0xBB] } = 02 AA BB
+  # records[1]: VarRecord { len: 1, data: [0xCC] } = 01 CC
+  # records[2]: VarRecord { len: 3, data: [0xDD, 0xEE, 0xFF] } = 03 DD EE FF
+  binary-hex: "0300000002AABB01CC03DDEEFF"

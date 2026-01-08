@@ -2,8 +2,8 @@ import { create } from "@bufbuild/protobuf";
 import { describe, expect, it, vi } from "vitest";
 import { createMockContext } from "../../__tests__/helpers/test-utils";
 import { ChainEvent } from "../../domain/events";
-import { CurrentVersionSchema, VersionContextSchema } from "../../proto/thru/common/v1/consensus_pb";
-import { EventSchema } from "../../proto/thru/services/v1/query_service_pb";
+import { CurrentVersionSchema, VersionContextSchema } from "@thru/proto";
+import { EventSchema } from "@thru/proto";
 import { getEvent } from "../events";
 
 describe("events", () => {

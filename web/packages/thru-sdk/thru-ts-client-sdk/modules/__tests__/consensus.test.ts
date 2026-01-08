@@ -10,7 +10,7 @@ import {
     timestampVersionContext,
     versionContext,
 } from "../consensus";
-import { ConsensusStatus, VersionContextSchema } from "../../proto/thru/common/v1/consensus_pb";
+import { ConsensusStatus, VersionContextSchema } from "@thru/proto";
 
 describe("consensus module", () => {
     it("creates current version context", () => {

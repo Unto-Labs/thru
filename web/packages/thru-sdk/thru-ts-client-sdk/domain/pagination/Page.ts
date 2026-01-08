@@ -5,7 +5,7 @@ import {
     PageRequestSchema,
     PageResponse as ProtoPageResponse,
     PageResponseSchema,
-} from "../../proto/thru/common/v1/pagination_pb";
+} from "@thru/proto";
 
 export interface PageRequestParams {
     pageSize?: number;

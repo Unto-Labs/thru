@@ -76,6 +76,10 @@ pub struct ArrayType {
     pub container_attributes: ContainerAttributes,
     pub size: ExprKind,
     pub element_type: Box<TypeKind>,
+    /// When true, allows variable-size elements (jagged array). Each element must be
+    /// self-describing (have a footprint function). Element access becomes O(n).
+    #[serde(default)]
+    pub jagged: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]

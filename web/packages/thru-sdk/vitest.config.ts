@@ -2,7 +2,7 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    environment: "jsdom",
+    environment: "node",
     globals: true, // Enable describe, it, expect globally
     include: ["thru-ts-client-sdk/**/*.{test,spec}.{ts,tsx}"],
     exclude: [

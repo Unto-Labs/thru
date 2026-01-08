@@ -78,6 +78,7 @@ pub fn fam_field_infos(resolved_type: &ResolvedType) -> Vec<FamFieldInfo<'_>> {
             element_type,
             size_expression,
             size_constant_status,
+            ..
         } = &field.field_type.kind
         else {
             continue;
@@ -1230,6 +1231,7 @@ mod tests {
                         path: vec!["count".to_string()],
                     }),
                     size_constant_status: ConstantStatus::NonConstant(HashMap::new()),
+                    jagged: false,
                 },
             },
             offset: Some(2),

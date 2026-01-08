@@ -6,14 +6,15 @@ import { DEFAULT_BLOCK_VIEW, DEFAULT_MIN_CONSENSUS } from "../defaults";
 import { Block } from "../domain/blocks";
 import { Filter } from "../domain/filters";
 import { PageRequest, PageResponse } from "../domain/pagination";
-import { ConsensusStatus } from "../proto/thru/common/v1/consensus_pb";
-import { BlockView, RawBlock } from "../proto/thru/core/v1/block_pb";
 import {
+    ConsensusStatus,
+    BlockView,
+    RawBlock,
     GetBlockRequestSchema,
     GetRawBlockRequestSchema,
     ListBlocksRequestSchema,
     ListBlocksResponse as ProtoListBlocksResponse,
-} from "../proto/thru/services/v1/query_service_pb";
+} from "@thru/proto";
 import { isSlotSelector } from "../utils/utils";
 import { BLOCK_HEADER_SIZE } from "../wire-format";
 import type { BlockSelector } from "./helpers";

@@ -471,6 +471,7 @@ fn scan_struct(
                 element_type,
                 size_expression,
                 size_constant_status,
+                ..
             } => {
                 scan_array(
                     state,
@@ -561,6 +562,7 @@ fn scan_type(
             element_type,
             size_expression,
             size_constant_status,
+            ..
         } => {
             scan_array(
                 state,
@@ -638,6 +640,7 @@ fn static_size_of_resolved_type(kind: &ResolvedTypeKind) -> Option<u64> {
             element_type,
             size_expression,
             size_constant_status,
+            ..
         } => match (
             static_size_of_resolved_type(&element_type.kind),
             size_constant_status,
@@ -719,6 +722,7 @@ mod tests {
                         path: vec!["len".into()],
                     }),
                     size_constant_status: ConstantStatus::NonConstant(HashMap::new()),
+                    jagged: false,
                 },
             },
             requires_payload_size: true,
@@ -788,6 +792,7 @@ mod tests {
                         })),
                     }),
                     size_constant_status: ConstantStatus::NonConstant(HashMap::new()),
+                    jagged: false,
                 },
             },
             offset: None,
@@ -841,6 +846,7 @@ mod tests {
                                     path: vec!["count".into()],
                                 }),
                                 size_constant_status: ConstantStatus::NonConstant(HashMap::new()),
+                                jagged: false,
                             },
                         },
                         offset: None,
@@ -911,6 +917,7 @@ mod tests {
                                 path: vec!["len".into()],
                             }),
                             size_constant_status: ConstantStatus::NonConstant(HashMap::new()),
+                            jagged: false,
                         },
                     },
                     offset: None,

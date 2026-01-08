@@ -51,3 +51,79 @@ types:
                 element-type:
                   primitive: u8
 
+  # Timestamp: Unix epoch timestamp with seconds and nanoseconds
+  - name: "Timestamp"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "seconds"
+            field-type:
+              primitive: i64
+          - name: "nanos"
+            field-type:
+              primitive: i32
+
+  # Duration: Time duration with seconds and nanoseconds
+  - name: "Duration"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "seconds"
+            field-type:
+              primitive: i64
+          - name: "nanos"
+            field-type:
+              primitive: i32
+
+  # Date: Calendar date (year, month, day)
+  - name: "Date"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "year"
+            field-type:
+              primitive: i32
+          - name: "month"
+            field-type:
+              primitive: u8
+          - name: "day"
+            field-type:
+              primitive: u8
+
+  # FixedPoint: Fixed-point decimal (mantissa with scale)
+  - name: "FixedPoint"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "mantissa"
+            field-type:
+              primitive: i64
+          - name: "scale"
+            field-type:
+              primitive: u8
+
+  # InstructionData: Opaque instruction data for recursive reflection
+  - name: "InstructionData"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "program_idx"
+            field-type:
+              primitive: u16
+          - name: "data_size"
+            field-type:
+              primitive: u64
+          - name: "data"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["data_size"]
+                element-type:
+                  primitive: u8
+

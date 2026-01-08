@@ -6,20 +6,22 @@ import { DEFAULT_ACCOUNT_VIEW, DEFAULT_BLOCK_VIEW, DEFAULT_MIN_CONSENSUS } from 
 import { toStreamAccountUpdate, type StreamAccountUpdate } from "../domain/accounts";
 import { Block } from "../domain/blocks";
 import { ChainEvent } from "../domain/events";
-import { Filter } from "../domain/filters";
+import { Filter, FilterParamValue } from "../domain/filters";
+import { HeightSnapshot } from "../domain/height";
 import { Pubkey, Signature, type PubkeyInput, type SignatureInput } from "../domain/primitives";
 import type { StreamTransactionUpdate, TrackTransactionUpdate } from "../domain/transactions";
 import { toStreamTransactionUpdate, toTrackTransactionUpdate } from "../domain/transactions";
-import { ConsensusStatus } from "../proto/thru/common/v1/consensus_pb";
-import type { AccountView } from "../proto/thru/core/v1/account_pb";
-import type { BlockView } from "../proto/thru/core/v1/block_pb";
 import {
+    ConsensusStatus,
+    type AccountView,
+    type BlockView,
     StreamAccountUpdatesRequestSchema,
     StreamBlocksRequestSchema,
     StreamEventsRequestSchema,
+    StreamHeightRequestSchema,
     StreamTransactionsRequestSchema,
     TrackTransactionRequestSchema,
-} from "../proto/thru/services/v1/streaming_service_pb";
+} from "@thru/proto";
 
 export type { StreamTransactionUpdate, TrackTransactionUpdate } from "../domain/transactions";
 
@@ -80,10 +82,35 @@ export function streamAccountUpdates(
     address: PubkeyInput,
     options: StreamAccountUpdatesOptions = {},
 ): AsyncIterable<StreamAccountUpdatesResult> {
+    // Build address filter - StreamAccountUpdatesRequest now uses filter-based approach
+    const addressBytes = Pubkey.from(address).toBytes();
+    const addressFilter = new Filter({
+        expression: "snapshot.address.value == params.address || account_update.address.value == params.address",
+        params: {
+            address: FilterParamValue.bytes(addressBytes),
+        },
+    });
+
+    // Merge with user-provided filter if any
+    let mergedFilter = addressFilter;
+    if (options.filter) {
+        // Combine expressions and params
+        const combinedParams: { [key: string]: FilterParamValue } = {};
+        for (const [key, value] of addressFilter.entries()) {
+            combinedParams[key] = value;
+        }
+        for (const [key, value] of options.filter.entries()) {
+            combinedParams[key] = value;
+        }
+        mergedFilter = new Filter({
+            expression: `(${addressFilter.expression}) && (${options.filter.expression})`,
+            params: combinedParams,
+        });
+    }
+
     const request = create(StreamAccountUpdatesRequestSchema, {
-        address: Pubkey.from(address).toProtoPubkey(),
         view: options.view ?? DEFAULT_ACCOUNT_VIEW,
-        filter: options.filter?.toProto(),
+        filter: mergedFilter.toProto(),
     });
 
     const iterable = ctx.streaming.streamAccountUpdates(request, withCallOptions(ctx, { signal: options.signal }));
@@ -186,6 +213,31 @@ export function trackTransaction(
     async function* mapper() {
         for await (const response of iterable) {
             yield toTrackTransactionUpdate(response);
+        }
+    }
+
+    return mapper();
+}
+
+export interface StreamHeightOptions {
+    signal?: AbortSignal;
+}
+
+export interface StreamHeightResult {
+    height: HeightSnapshot;
+}
+
+export function streamHeight(
+    ctx: ThruClientContext,
+    options: StreamHeightOptions = {},
+): AsyncIterable<StreamHeightResult> {
+    const request = create(StreamHeightRequestSchema, {});
+
+    const iterable = ctx.streaming.streamHeight(request, withCallOptions(ctx, { signal: options.signal }));
+
+    async function* mapper() {
+        for await (const response of iterable) {
+            yield { height: HeightSnapshot.fromProto(response) };
         }
     }
 

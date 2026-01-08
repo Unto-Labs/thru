@@ -1,5 +1,5 @@
-import { ConsensusStatus } from "../../proto/thru/common/v1/consensus_pb";
-import type { TransactionStatus } from "../../proto/thru/services/v1/query_service_pb";
+import { ConsensusStatus } from "@thru/proto";
+import type { TransactionStatus } from "@thru/proto";
 import { consensusStatusToString } from "../../utils/utils";
 import { Transaction } from "./Transaction";
 

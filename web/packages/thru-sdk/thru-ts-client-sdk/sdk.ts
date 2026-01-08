@@ -27,17 +27,20 @@ export { StateProof } from "./domain/proofs";
 export { Transaction, TransactionStatusSnapshot } from "./domain/transactions";
 export { VersionInfo } from "./domain/version";
 export {
+  deriveAddress,
   deriveProgramAddress
 } from "./modules/helpers";
 export { collectStream, firstStreamValue, forEachStreamValue } from "./modules/streaming";
-export { ConsensusStatus } from "./proto/thru/common/v1/consensus_pb";
 export {
+  ConsensusStatus,
   FilterParamValueSchema,
-  FilterSchema
-} from "./proto/thru/common/v1/filters_pb";
-export { AccountView } from "./proto/thru/core/v1/account_pb";
-export { BlockView, ExecutionStatus } from "./proto/thru/core/v1/block_pb";
-export { TransactionView, TransactionVmError } from "./proto/thru/core/v1/transaction_pb";
+  FilterSchema,
+  AccountView,
+  BlockView,
+  ExecutionStatus,
+  TransactionView,
+  TransactionVmError
+} from "@thru/proto";
 export { TransactionBuilder };
 export { signWithDomain, verifyWithDomain, SignatureDomain } from "./domain/transactions/domain-signing";
 
@@ -80,6 +83,8 @@ export type { GetEventOptions } from "./modules/events";
 // ============================================================================
 export type {
   BlockSelector,
+  DeriveAddressInput,
+  DeriveAddressResult,
   DeriveProgramAddressOptions,
   DeriveProgramAddressResult
 } from "./modules/helpers";

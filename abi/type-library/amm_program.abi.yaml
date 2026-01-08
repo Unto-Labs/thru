@@ -1,0 +1,192 @@
+abi:
+  package: thru.program.amm
+  abi-version: 1
+  package-version: 0.1.0
+  description: ABI for the Thru AMM program events
+  imports:
+    - "thru_primitives.abi.yaml"
+types:
+- name: PoolInitEventData
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: pool
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: mint_one
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: mint_two
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: lp_mint
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: vault_one
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: vault_two
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: swap_fee_bps
+        field-type:
+          primitive: u16
+- name: MintEventData
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: pool
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: sender
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: amount_one
+        field-type:
+          primitive: u64
+      - name: amount_two
+        field-type:
+          primitive: u64
+      - name: lp_minted
+        field-type:
+          primitive: u64
+      - name: lp_total_supply
+        field-type:
+          primitive: u64
+- name: BurnEventData
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: pool
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: sender
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: to
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: amount_one
+        field-type:
+          primitive: u64
+      - name: amount_two
+        field-type:
+          primitive: u64
+      - name: lp_burned
+        field-type:
+          primitive: u64
+      - name: lp_total_supply
+        field-type:
+          primitive: u64
+- name: SwapEventData
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: pool
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: sender
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: to
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: amount_in
+        field-type:
+          primitive: u64
+      - name: amount_out
+        field-type:
+          primitive: u64
+      - name: swap_direction
+        field-type:
+          primitive: u8
+- name: SyncEventData
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: pool
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: reserve_one
+        field-type:
+          primitive: u64
+      - name: reserve_two
+        field-type:
+          primitive: u64
+- name: AmmEvent
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: event_type
+        field-type:
+          primitive: u8
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - event_type
+            variants:
+            - name: pool_init
+              tag-value: 0
+              variant-type:
+                type-ref:
+                  name: PoolInitEventData
+            - name: mint
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: MintEventData
+            - name: burn
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: BurnEventData
+            - name: swap
+              tag-value: 3
+              variant-type:
+                type-ref:
+                  name: SwapEventData
+            - name: sync
+              tag-value: 4
+              variant-type:
+                type-ref:
+                  name: SyncEventData

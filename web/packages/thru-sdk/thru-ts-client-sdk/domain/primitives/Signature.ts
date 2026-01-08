@@ -11,7 +11,7 @@ import {
     SignatureSchema,
     TsSignature,
     TsSignatureSchema,
-} from "../../proto/thru/common/v1/primitives_pb";
+} from "@thru/proto";
 import {
     bytesEqual,
     bytesToHex,

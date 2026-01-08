@@ -54,7 +54,18 @@ impl<'a> IrFootprintEmitter<'a> {
             IrNode::AlignUp(node) => self.align_expr(node),
             IrNode::CallNested(node) => self.call_nested_expr(node),
             IrNode::Switch(node) => self.switch_expr(node),
+            IrNode::SumOverArray(node) => self.sum_over_array_expr(node),
         }
+    }
+
+    fn sum_over_array_expr(
+        &self,
+        _node: &crate::codegen::shared::ir::SumOverArrayNode,
+    ) -> Result<String, IrFootprintError> {
+        /* Jagged arrays require iteration over actual data for size calculation.
+           IR helper functions are free functions without access to instance data,
+           so we can't generate footprint IR for types containing jagged arrays. */
+        Err(IrFootprintError::UnsupportedNode)
     }
 
     fn combine_binary(&self, node: &BinaryOpNode, op: &str) -> Result<String, IrFootprintError> {

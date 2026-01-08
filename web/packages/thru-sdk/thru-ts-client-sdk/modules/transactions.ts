@@ -27,21 +27,23 @@ import {
     TransactionStatusSnapshot
 } from "../domain/transactions";
 import { normalizeAccountList, parseInstructionData } from "../domain/transactions/utils";
-import type { ConsensusStatus, VersionContext } from "../proto/thru/common/v1/consensus_pb";
-import { AccountView } from "../proto/thru/core/v1/account_pb";
-import { RawTransaction, TransactionView } from "../proto/thru/core/v1/transaction_pb";
 import {
+    type ConsensusStatus,
+    type VersionContext,
+    AccountView,
+    RawTransaction,
+    TransactionView,
     BatchSendTransactionsRequestSchema,
     type BatchSendTransactionsResponse,
     SendTransactionRequestSchema,
-} from "../proto/thru/services/v1/command_service_pb";
-import {
     GetRawTransactionRequestSchema,
     GetTransactionRequestSchema,
     GetTransactionStatusRequestSchema,
     ListTransactionsForAccountRequestSchema,
     type ListTransactionsForAccountResponse as ProtoListTransactionsForAccountResponse,
-} from "../proto/thru/services/v1/query_service_pb";
+    ListTransactionsRequestSchema,
+    type ListTransactionsResponse as ProtoListTransactionsResponse,
+} from "@thru/proto";
 
 import { encodeSignature } from "@thru/helpers";
 import { Pubkey, type PubkeyInput, Signature, type SignatureInput } from "../domain/primitives";
@@ -111,6 +113,14 @@ export interface TransactionList {
     page?: PageResponse;
 }
 
+export interface ListTransactionsOptions {
+    filter?: Filter;
+    page?: PageRequest;
+    returnEvents?: boolean;
+    versionContext?: VersionContext;
+    minConsensus?: ConsensusStatus;
+}
+
 export async function getTransaction(
     ctx: ThruClientContext,
     signature: SignatureInput,
@@ -172,6 +182,27 @@ export async function listTransactionsForAccount(
     );
     return {
         transactions,
+        page: PageResponse.fromProto(response.page),
+    };
+}
+
+export async function listTransactions(
+    ctx: ThruClientContext,
+    options: ListTransactionsOptions = {},
+): Promise<TransactionList> {
+    const request = create(ListTransactionsRequestSchema, {
+        filter: options.filter?.toProto(),
+        page: options.page?.toProto(),
+        returnEvents: options.returnEvents,
+        versionContext: options.versionContext ?? DEFAULT_VERSION_CONTEXT,
+        minConsensus: options.minConsensus ?? DEFAULT_MIN_CONSENSUS,
+    });
+    const response: ProtoListTransactionsResponse = await ctx.query.listTransactions(
+        request,
+        withCallOptions(ctx),
+    );
+    return {
+        transactions: response.transactions.map((proto) => Transaction.fromProto(proto)),
         page: PageResponse.fromProto(response.page),
     };
 }

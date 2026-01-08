@@ -1,0 +1,36 @@
+{
+  "name": "@thru/proto",
+  "version": "0.1.0",
+  "private": false,
+  "type": "module",
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.cjs"
+    }
+  },
+  "scripts": {
+    "generate": "buf dep update && buf generate --include-imports",
+    "prebuild": "pnpm run generate",
+    "build": "tsup",
+    "clean": "rm -rf dist src/gen",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "^2.9.0",
+    "@connectrpc/connect": "^2.1.0"
+  },
+  "devDependencies": {
+    "@bufbuild/buf": "latest",
+    "@bufbuild/protoc-gen-es": "^2.9.0",
+    "tsup": "^8.1.0",
+    "typescript": "^5.3.3"
+  }
+}

@@ -3,7 +3,7 @@ import {
     TransactionVmError,
     type Transaction as CoreTransaction,
     type TransactionExecutionResult as CoreTransactionExecutionResult
-} from "../../proto/thru/core/v1/transaction_pb";
+} from "@thru/proto";
 import {
     ACCOUNT_META_FOOTPRINT,
     HASH_SIZE,

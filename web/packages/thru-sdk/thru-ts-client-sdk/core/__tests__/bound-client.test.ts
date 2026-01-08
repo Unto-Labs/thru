@@ -7,10 +7,10 @@ import { ChainEvent } from "../../domain/events";
 import { TransactionStatusSnapshot } from "../../domain/transactions";
 import { Transaction } from "../../domain/transactions/Transaction";
 import * as keysModule from "../../modules/keys";
-import { ConsensusStatus } from "../../proto/thru/common/v1/consensus_pb";
-import { TransactionSchema } from "../../proto/thru/core/v1/transaction_pb";
-import { EventSchema } from "../../proto/thru/services/v1/query_service_pb";
-import { StreamAccountUpdatesResponseSchema, StreamBlocksResponseSchema, StreamEventsResponseSchema, StreamTransactionsResponseSchema } from "../../proto/thru/services/v1/streaming_service_pb";
+import { ConsensusStatus } from "@thru/proto";
+import { TransactionSchema } from "@thru/proto";
+import { EventSchema } from "@thru/proto";
+import { StreamAccountUpdatesResponseSchema, StreamBlocksResponseSchema, StreamEventsResponseSchema, StreamTransactionsResponseSchema } from "@thru/proto";
 import { createBoundThruClient } from "../bound-client";
 
 afterEach(() => {
@@ -368,7 +368,8 @@ describe("createBoundThruClient", () => {
     expect(results).toHaveLength(1);
     expect(results[0]).toBeInstanceOf(Account);
     const callArgs = (ctx.streaming.streamAccountUpdates as any).mock.calls[0][0];
-    expect(callArgs.address?.value).toEqual(address);
+    // Address is now passed via filter params (filter-based streaming API)
+    expect(callArgs.filter?.params?.address?.kind?.value).toEqual(address);
   });
 
   it("should return async iterable from transactions.stream", async () => {

@@ -319,6 +319,7 @@ mod tests {
                             element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
                                 IntegralType::U8,
                             ))),
+                            jagged: false,
                         }),
                     },
                 ],

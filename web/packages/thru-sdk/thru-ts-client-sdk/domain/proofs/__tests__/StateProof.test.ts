@@ -2,7 +2,7 @@ import { create } from "@bufbuild/protobuf";
 import { describe, expect, it } from "vitest";
 
 import { StateProof } from "../StateProof";
-import { StateProofSchema } from "../../../proto/thru/core/v1/state_pb";
+import { StateProofSchema } from "@thru/proto";
 
 describe("StateProof", () => {
     it("copies proof bytes from proto", () => {

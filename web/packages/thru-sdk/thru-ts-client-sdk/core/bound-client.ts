@@ -7,6 +7,9 @@ import * as consensusModule from "../modules/consensus";
 import * as eventsModule from "../modules/events";
 import * as heightModule from "../modules/height";
 import {
+    deriveAddress,
+    DeriveAddressInput,
+    DeriveAddressResult,
     deriveProgramAddress,
     type DeriveProgramAddressOptions,
     type DeriveProgramAddressResult
@@ -34,6 +37,7 @@ interface BoundBlocks {
     list: BoundFunction<typeof blocksModule.listBlocks>;
     stream: BoundFunction<typeof streamingModule.streamBlocks>;
     getBlockHeight: BoundFunction<typeof heightModule.getBlockHeight>;
+    streamHeight: BoundFunction<typeof streamingModule.streamHeight>;
 }
 
 interface BoundAccounts {
@@ -48,6 +52,7 @@ interface BoundTransactions {
     get: BoundFunction<typeof transactionsModule.getTransaction>;
     getRaw: BoundFunction<typeof transactionsModule.getRawTransaction>;
     getStatus: BoundFunction<typeof transactionsModule.getTransactionStatus>;
+    list: BoundFunction<typeof transactionsModule.listTransactions>;
     listForAccount: BoundFunction<typeof transactionsModule.listTransactionsForAccount>;
     stream: BoundFunction<typeof streamingModule.streamTransactions>;
     build: BoundFunction<typeof transactionsModule.buildTransaction>;
@@ -59,6 +64,7 @@ interface BoundTransactions {
 
 interface BoundEvents {
     get: BoundFunction<typeof eventsModule.getEvent>;
+    list: BoundFunction<typeof eventsModule.listEvents>;
     stream: BoundFunction<typeof streamingModule.streamEvents>;
 }
 
@@ -89,6 +95,7 @@ interface Helpers {
     createSignature(value: SignatureInput): Signature;
     createPubkey(value: PubkeyInput): Pubkey;
     deriveProgramAddress(options: DeriveProgramAddressOptions): DeriveProgramAddressResult;
+    deriveAddress(inputs: DeriveAddressInput[]): DeriveAddressResult;
 }
 
 export interface Thru {
@@ -113,6 +120,7 @@ export function createBoundThruClient(ctx: ThruClientContext): Thru {
             list: bind(ctx, blocksModule.listBlocks),
             stream: bind(ctx, streamingModule.streamBlocks),
             getBlockHeight: bind(ctx, heightModule.getBlockHeight),
+            streamHeight: bind(ctx, streamingModule.streamHeight),
         },
         accounts: {
             get: bind(ctx, accountsModule.getAccount),
@@ -125,6 +133,7 @@ export function createBoundThruClient(ctx: ThruClientContext): Thru {
             get: bind(ctx, transactionsModule.getTransaction),
             getRaw: bind(ctx, transactionsModule.getRawTransaction),
             getStatus: bind(ctx, transactionsModule.getTransactionStatus),
+            list: bind(ctx, transactionsModule.listTransactions),
             listForAccount: bind(ctx, transactionsModule.listTransactionsForAccount),
             stream: bind(ctx, streamingModule.streamTransactions),
             build: bind(ctx, transactionsModule.buildTransaction),
@@ -137,6 +146,7 @@ export function createBoundThruClient(ctx: ThruClientContext): Thru {
             createSignature: Signature.from,
             createPubkey: Pubkey.from,
             deriveProgramAddress,
+            deriveAddress
         },
         keys: {
             generateKeyPair: keysModule.generateKeyPair,
@@ -144,6 +154,7 @@ export function createBoundThruClient(ctx: ThruClientContext): Thru {
         },
         events: {
             get: bind(ctx, eventsModule.getEvent),
+            list: bind(ctx, eventsModule.listEvents),
             stream: bind(ctx, streamingModule.streamEvents),
         },
         proofs: {

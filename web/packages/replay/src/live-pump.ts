@@ -53,10 +53,9 @@ export class LivePump<T> {
     if (this.mode === "streaming") return 0;
     const discarded = this.buffer.discardUpTo(cutoffSlot);
     if (discarded) {
-      this.logger.debug("discarded buffered items up to cutoff", {
-        discarded,
-        cutoff: cutoffSlot.toString(),
-      });
+      this.logger.debug(
+        `discarded ${discarded} buffered items up to cutoff slot ${cutoffSlot}`
+      );
     }
     return discarded;
   }
@@ -97,7 +96,8 @@ export class LivePump<T> {
       }
       this.queue.close();
     } catch (err) {
-      this.logger.error("live stream failed", { err });
+      // Don't log here - let the consumer (ReplayStream) handle logging
+      // since it knows whether a retry will happen
       this.queue.fail(err);
     }
   }

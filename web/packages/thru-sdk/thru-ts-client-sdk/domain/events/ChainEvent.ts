@@ -1,5 +1,5 @@
-import type { Event as QueryEvent } from "../../proto/thru/services/v1/query_service_pb";
-import type { StreamEventsResponse } from "../../proto/thru/services/v1/streaming_service_pb";
+import type { Event as QueryEvent } from "@thru/proto";
+import type { StreamEventsResponse } from "@thru/proto";
 import { timestampToNanoseconds } from "../../utils/utils";
 
 export interface ChainEventParams {

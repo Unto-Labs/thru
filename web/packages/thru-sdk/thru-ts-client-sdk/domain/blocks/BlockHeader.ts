@@ -1,6 +1,6 @@
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 
-import type { BlockHeader as ProtoBlockHeader } from "../../proto/thru/core/v1/block_pb";
+import type { BlockHeader as ProtoBlockHeader } from "@thru/proto";
 
 export interface BlockHeaderParams {
     slot: bigint;

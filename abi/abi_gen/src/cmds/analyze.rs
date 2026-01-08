@@ -431,6 +431,7 @@ fn print_detailed_type_analysis(typedefs: &[TypeDef], resolver: &TypeResolver) {
                     element_type,
                     size_expression,
                     size_constant_status,
+                    ..
                 } => {
                     println!("   Kind: Array");
                     println!(

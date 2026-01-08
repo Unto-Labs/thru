@@ -2,8 +2,8 @@ import { create } from "@bufbuild/protobuf";
 import { describe, expect, it } from "vitest";
 
 import { createMockAccount, createMockAccountFlags, createMockAccountMeta, generateTestPubkey } from "../../../__tests__/helpers/test-utils";
-import { ConsensusStatus } from "../../../proto/thru/common/v1/consensus_pb";
-import { AccountDataSchema, AccountSchema, VersionContextMetadataSchema } from "../../../proto/thru/core/v1/account_pb";
+import { ConsensusStatus } from "@thru/proto";
+import { AccountDataSchema, AccountSchema, VersionContextMetadataSchema } from "@thru/proto";
 import { Account, AccountData, AccountFlags, AccountMeta } from "../";
 
 describe("Account domain model", () => {

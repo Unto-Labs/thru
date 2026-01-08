@@ -1,6 +1,6 @@
 import { create } from "@bufbuild/protobuf";
 import { describe, expect, it } from "vitest";
-import { BlockFooterSchema, BlockHeaderSchema, BlockSchema, ExecutionStatus } from "../../../proto/thru/core/v1/block_pb";
+import { BlockFooterSchema, BlockHeaderSchema, BlockSchema, ExecutionStatus } from "@thru/proto";
 import { nanosecondsToTimestamp } from "../../../utils/utils";
 import { BLOCK_HEADER_SIZE, SIGNATURE_SIZE } from "../../../wire-format";
 import { Transaction } from "../../transactions/Transaction";

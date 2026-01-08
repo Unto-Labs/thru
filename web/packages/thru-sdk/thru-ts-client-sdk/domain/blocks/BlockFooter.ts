@@ -1,5 +1,5 @@
-import type { BlockFooter as ProtoBlockFooter } from "../../proto/thru/core/v1/block_pb";
-import { ExecutionStatus } from "../../proto/thru/core/v1/block_pb";
+import type { BlockFooter as ProtoBlockFooter } from "@thru/proto";
+import { ExecutionStatus } from "@thru/proto";
 
 export interface BlockFooterParams {
     signature?: Uint8Array;

@@ -1,5 +1,5 @@
-import type { ConsensusStatus } from "../../proto/thru/common/v1/consensus_pb";
-import { ExecutionStatus, type Block as CoreBlock } from "../../proto/thru/core/v1/block_pb";
+import type { ConsensusStatus } from "@thru/proto";
+import { ExecutionStatus, type Block as CoreBlock } from "@thru/proto";
 import { nanosecondsToTimestamp, timestampToNanoseconds } from "../../utils/utils";
 import {
     BLOCK_FOOTER_SIZE,

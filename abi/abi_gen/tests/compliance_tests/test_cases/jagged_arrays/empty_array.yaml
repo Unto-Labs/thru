@@ -1,0 +1,10 @@
+test-case:
+  name: "jagged_arrays_empty"
+  abi-file: "../../abi_definitions/jagged_arrays.abi.yaml"
+  type: "EmptyJaggedArray"
+  description: "Test empty jagged array with zero elements (edge case)"
+  tags: ["jagged", "arrays", "variable-size", "empty", "edge-case"]
+  # Binary layout:
+  # count: u32 = 0 (0x00 00 00 00)
+  # records: empty (no bytes)
+  binary-hex: "00000000"

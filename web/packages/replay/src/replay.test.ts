@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
-import { Signature } from "./proto/thru/common/v1/primitives_pb";
-import { Transaction } from "./proto/thru/core/v1/transaction_pb";
+import { Signature } from "@thru/proto";
+import { Transaction } from "@thru/proto";
 import { createBlockReplay } from "./replay/block-replay";
 import { createTransactionReplay } from "./replay/transaction-replay";
 import { SimulatedChain } from "./testing/simulated-chain";

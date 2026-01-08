@@ -1,0 +1,7 @@
+# Generated files
+src/gen/
+dist/
+node_modules/
+
+# Buf lock file (regenerated during build)
+buf.lock

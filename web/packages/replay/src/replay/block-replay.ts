@@ -1,12 +1,17 @@
-import { Filter } from "../proto/thru/common/v1/filters_pb";
-import { PageRequest } from "../proto/thru/common/v1/pagination_pb";
-import type { ConsensusStatus } from "../proto/thru/common/v1/consensus_pb";
-import type { Block, BlockView } from "../proto/thru/core/v1/block_pb";
-import { ListBlocksRequest } from "../proto/thru/services/v1/query_service_pb";
+import { create } from "@bufbuild/protobuf";
 import {
-  StreamBlocksRequest,
+  type Filter,
+  type PageRequest,
+  PageRequestSchema,
+  type ConsensusStatus,
+  type Block,
+  type BlockView,
+  type ListBlocksRequest,
+  ListBlocksRequestSchema,
+  type StreamBlocksRequest,
+  StreamBlocksRequestSchema,
   type StreamBlocksResponse,
-} from "../proto/thru/services/v1/streaming_service_pb";
+} from "@thru/proto";
 import type { BlockSource } from "../chain-client";
 import { ReplayStream } from "../replay-stream";
 import { NOOP_LOGGER } from "../logger";
@@ -40,7 +45,7 @@ export function createBlockReplay(options: BlockReplayOptions): ReplayStream<Blo
     startSlot: Slot;
     cursor?: string;
   }) => {
-    const page = new PageRequest({
+    const page = create(PageRequestSchema, {
       pageSize: options.pageSize ?? DEFAULT_PAGE_SIZE,
       orderBy: PAGE_ORDER_ASC,
       pageToken: cursor,
@@ -56,7 +61,7 @@ export function createBlockReplay(options: BlockReplayOptions): ReplayStream<Blo
     let response;
     try {
       response = await options.client.listBlocks(
-        new ListBlocksRequest({
+        create(ListBlocksRequestSchema, {
           filter: mergedFilter,
           page,
           view: options.view,
@@ -76,7 +81,7 @@ export function createBlockReplay(options: BlockReplayOptions): ReplayStream<Blo
   };
 
   const subscribeLive = (startSlot: Slot): AsyncIterable<Block> => {
-    const request = new StreamBlocksRequest({
+    const request = create(StreamBlocksRequestSchema, {
       startSlot,
       filter: options.filter,
       view: options.view,

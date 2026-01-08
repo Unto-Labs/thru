@@ -379,12 +379,13 @@ impl<'a> IrBuilder<'a> {
         path_prefix: &str,
         type_name: &str,
     ) -> Result<IrNode, IrBuildError> {
-        let (element_type, size_expr) = match &ty.kind {
+        let (element_type, size_expr, jagged) = match &ty.kind {
             ResolvedTypeKind::Array {
                 element_type,
                 size_expression,
+                jagged,
                 ..
-            } => (element_type.as_ref(), size_expression),
+            } => (element_type.as_ref(), size_expression, *jagged),
             _ => {
                 return Err(IrBuildError::UnsupportedSize {
                     type_name: ty.name.clone(),
@@ -394,6 +395,27 @@ impl<'a> IrBuilder<'a> {
 
         let count = self.build_expr_ir(size_expr, owner, params, type_name, path_prefix)?;
         params.extend_with(&element_type.dynamic_params);
+
+        /* For jagged arrays with variable-size elements, use SumOverArray node */
+        if jagged && matches!(element_type.size, Size::Variable(_)) {
+            let element_type_name = match &element_type.kind {
+                ResolvedTypeKind::TypeRef { target_name, .. } => target_name.clone(),
+                _ => {
+                    return Err(IrBuildError::UnsupportedArrayElement {
+                        type_name: ty.name.clone(),
+                    });
+                }
+            };
+
+            let node = IrNode::SumOverArray(SumOverArrayNode {
+                count: Box::new(count),
+                element_type_name,
+                field_name: owner.to_string(),
+                meta: NodeMetadata::aligned(ty.alignment),
+            });
+
+            return Ok(Self::align_node(node, ty.alignment));
+        }
 
         let elem = match element_type.size {
             Size::Const(value) => IrNode::Const(ConstNode {
@@ -1005,6 +1027,7 @@ mod tests {
                             element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
                                 IntegralType::U8,
                             ))),
+                            jagged: false,
                         }),
                     },
                 ],
@@ -1205,6 +1228,7 @@ mod tests {
                                         element_type: Box::new(TypeKind::Primitive(
                                             PrimitiveType::Integral(IntegralType::U8),
                                         )),
+                                        jagged: false,
                                     }),
                                 },
                             ],
@@ -1273,6 +1297,7 @@ mod tests {
                                         element_type: Box::new(TypeKind::Primitive(
                                             PrimitiveType::Integral(IntegralType::U8),
                                         )),
+                                        jagged: false,
                                     }),
                                 },
                             ],
@@ -1317,6 +1342,7 @@ mod tests {
                 element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
                     IntegralType::U16,
                 ))),
+                jagged: false,
             }),
         });
         resolver.resolve_all().unwrap();
@@ -1351,7 +1377,9 @@ mod tests {
                     element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
                         IntegralType::U16,
                     ))),
+                    jagged: false,
                 })),
+                jagged: false,
             }),
         });
         resolver.resolve_all().unwrap();
@@ -1520,6 +1548,7 @@ mod tests {
                                             comment: None,
                                         },
                                     )),
+                                    jagged: false,
                                 }),
                             },
                         ],

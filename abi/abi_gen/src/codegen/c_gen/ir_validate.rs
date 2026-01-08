@@ -88,7 +88,30 @@ impl<'a> IrValidateEmitter<'a> {
             IrNode::AlignUp(node) => self.emit_align(node, indent_lv),
             IrNode::CallNested(node) => self.emit_call_nested(node, indent_lv),
             IrNode::Switch(node) => self.emit_switch(node, indent_lv),
+            IrNode::SumOverArray(node) => self.emit_sum_over_array(node, indent_lv),
         }
+    }
+
+    fn emit_sum_over_array(
+        &mut self,
+        node: &crate::codegen::shared::ir::SumOverArrayNode,
+        indent_lv: usize,
+    ) -> Result<String, IrValidateError> {
+        /* Jagged array validation requires iteration over elements.
+           Emit a call to the dedicated size function. */
+        let count_var = self.emit_node(&node.count, indent_lv)?;
+        let var = self.new_var();
+        writeln!(
+            &mut self.output,
+            "{}uint64_t {} = {}_{}_size( self, {} );",
+            Self::indent(indent_lv),
+            var,
+            self.type_ir.type_name,
+            node.field_name,
+            count_var
+        )
+        .unwrap();
+        Ok(var)
     }
 
     fn emit_binary(

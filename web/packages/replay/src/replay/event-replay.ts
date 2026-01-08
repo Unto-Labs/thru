@@ -1,10 +1,16 @@
-import { Filter } from "../proto/thru/common/v1/filters_pb";
-import { PageRequest } from "../proto/thru/common/v1/pagination_pb";
-import { Event, ListEventsRequest } from "../proto/thru/services/v1/query_service_pb";
+import { create } from "@bufbuild/protobuf";
 import {
-  StreamEventsRequest,
+  type Filter,
+  type PageRequest,
+  PageRequestSchema,
+  type Event,
+  EventSchema,
+  type ListEventsRequest,
+  ListEventsRequestSchema,
+  type StreamEventsRequest,
+  StreamEventsRequestSchema,
   type StreamEventsResponse,
-} from "../proto/thru/services/v1/streaming_service_pb";
+} from "@thru/proto";
 import type { EventSource } from "../chain-client";
 import { ReplayStream } from "../replay-stream";
 import type { ReplayLogger, Slot } from "../types";
@@ -34,7 +40,7 @@ export function createEventReplay(options: EventReplayOptions): ReplayStream<Eve
     startSlot: Slot;
     cursor?: string;
   }) => {
-    const page = new PageRequest({
+    const page = create(PageRequestSchema, {
       pageSize: options.pageSize ?? DEFAULT_PAGE_SIZE,
       orderBy: PAGE_ORDER_ASC,
       pageToken: cursor,
@@ -43,7 +49,7 @@ export function createEventReplay(options: EventReplayOptions): ReplayStream<Eve
     const baseFilter = slotLiteralFilter("event.slot", startSlot);
     const mergedFilter = combineFilters(baseFilter, options.filter);
     const response = await options.client.listEvents(
-      new ListEventsRequest({
+      create(ListEventsRequestSchema, {
         filter: mergedFilter,
         page,
       }),
@@ -54,7 +60,7 @@ export function createEventReplay(options: EventReplayOptions): ReplayStream<Eve
 
   const subscribeLive = (startSlot: Slot): AsyncIterable<Event> => {
     const mergedFilter = combineFilters(slotLiteralFilter("event.slot", startSlot), options.filter);
-    const request = new StreamEventsRequest({
+    const request = create(StreamEventsRequestSchema, {
       filter: mergedFilter,
     });
     return mapAsyncIterable(
@@ -76,7 +82,7 @@ export function createEventReplay(options: EventReplayOptions): ReplayStream<Eve
 }
 
 function streamResponseToEvent(resp: StreamEventsResponse): Event {
-  return new Event({
+  return create(EventSchema, {
     eventId: resp.eventId,
     transactionSignature: resp.signature,
     program: resp.program,

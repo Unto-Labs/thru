@@ -1,16 +1,40 @@
 use crate::types::ReflectedTypeKind;
 use crate::value::{PrimitiveValue, ReflectedValue, Value};
+use crate::well_known::{WellKnownContext, WellKnownRegistry, WellKnownResult};
 use abi_gen::abi::types::{IntegralType, PrimitiveType};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value as JsonValue};
 
+/* Base64-URL alphabet for address/signature encoding (used by tests) */
+#[allow(dead_code)]
 const BASE64_URL_ALPHABET: &[u8; 64] =
     b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FormatOptions {
     #[serde(default, rename = "includeByteOffsets")]
     pub include_byte_offsets: bool,
+    #[serde(skip)]
+    pub well_known_registry: Option<WellKnownRegistry>,
+}
+
+impl Default for FormatOptions {
+    fn default() -> Self {
+        Self {
+            include_byte_offsets: false,
+            well_known_registry: Some(WellKnownRegistry::with_defaults()),
+        }
+    }
+}
+
+impl FormatOptions {
+    /* Create format options without any well-known type handling */
+    pub fn without_well_known_types() -> Self {
+        Self {
+            include_byte_offsets: false,
+            well_known_registry: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -147,16 +171,25 @@ fn format_struct_with_options(
         );
     }
 
-    if type_name == Some("Pubkey") {
-        if let Some(pubkey_bytes) = try_extract_bytes_field(fields, 32) {
-            if let Some(address) = encode_thru_address(&pubkey_bytes) {
-                map.insert("address".to_string(), JsonValue::String(address));
-            }
-        }
-    } else if type_name == Some("Signature") {
-        if let Some(sig_bytes) = try_extract_bytes_field(fields, 64) {
-            if let Some(signature) = encode_thru_signature(&sig_bytes) {
-                map.insert("signature".to_string(), JsonValue::String(signature));
+    /* Apply well-known type enrichment via registry */
+    if let Some(registry) = &options.well_known_registry {
+        if let Some(name) = type_name {
+            let ctx = WellKnownContext {
+                value: node,
+                type_name: name,
+                fields: Some(fields),
+            };
+
+            match registry.process(&ctx) {
+                WellKnownResult::EnrichFields(enrichment) => {
+                    for (key, value) in enrichment {
+                        map.insert(key, value);
+                    }
+                }
+                WellKnownResult::Replace(replacement) => {
+                    return replacement;
+                }
+                WellKnownResult::None => {}
             }
         }
     }
@@ -357,6 +390,8 @@ fn extract_u8(value: &ReflectedValue) -> Option<u8> {
     }
 }
 
+/* Legacy encoding function, retained for tests - use well_known::handlers::PubkeyHandler instead */
+#[allow(dead_code)]
 fn encode_thru_address(bytes: &[u8]) -> Option<String> {
     if bytes.len() != 32 {
         return None;
@@ -406,6 +441,7 @@ fn encode_thru_address(bytes: &[u8]) -> Option<String> {
     Some(output)
 }
 
+#[allow(dead_code)]
 fn mask_for_bits(bits: u32) -> u32 {
     if bits == 0 {
         0
@@ -414,6 +450,7 @@ fn mask_for_bits(bits: u32) -> u32 {
     }
 }
 
+#[allow(dead_code)]
 fn try_extract_bytes_field(fields: &[(String, ReflectedValue)], expected_len: usize) -> Option<Vec<u8>> {
     if fields.len() != 1 {
         return None;
@@ -430,6 +467,8 @@ fn try_extract_bytes_field(fields: &[(String, ReflectedValue)], expected_len: us
     None
 }
 
+/* Legacy encoding function, retained for tests - use well_known::handlers::SignatureHandler instead */
+#[allow(dead_code)]
 fn encode_thru_signature(bytes: &[u8]) -> Option<String> {
     if bytes.len() != 64 {
         return None;

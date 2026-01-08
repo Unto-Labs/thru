@@ -1285,6 +1285,18 @@ fn emit_struct_field_getter(
                         write!(output, "    }}\n").unwrap();
                         write!(output, "    return result;\n").unwrap();
                         write!(output, "  }}\n\n").unwrap();
+                    } else {
+                        /* Check if this is a jagged array */
+                        if let ResolvedTypeKind::Array { jagged: true, .. } = &field_type.kind {
+                            emit_jagged_array_ts_accessors(
+                                output,
+                                struct_name,
+                                &escaped_name,
+                                target_name,
+                                &size_expr,
+                                &offset_expr,
+                            );
+                        }
                     }
                 }
             }
@@ -2189,4 +2201,170 @@ fn render_tag_expression(expr: &ExprKind) -> Option<String> {
         )),
         _ => None,
     }
+}
+
+/// Emit TypeScript jagged array accessor methods for a field.
+/// Jagged arrays have variable-size elements that must be traversed sequentially.
+/// Generates:
+/// - `get_{field}_length()` - returns the count of elements
+/// - `get_{field}_at(index)` - returns ElementType | null for indexed access (O(n))
+/// - `{field}Iter()` - generator for efficient sequential access
+/// - `get_{field}_size()` - returns the total byte size of all elements
+fn emit_jagged_array_ts_accessors(
+    output: &mut String,
+    struct_name: &str,
+    field_name: &str,
+    element_type_name: &str,
+    count_expr: &str,
+    offset_expr: &str,
+) {
+    // Length getter
+    writeln!(
+        output,
+        "  /** Returns the number of elements in the jagged array. */"
+    )
+    .unwrap();
+    writeln!(output, "  get_{}_length(): number {{", field_name).unwrap();
+    writeln!(output, "    return {};", count_expr).unwrap();
+    writeln!(output, "  }}\n").unwrap();
+
+    // Index getter - O(n) indexed access
+    writeln!(
+        output,
+        "  /** Returns the element at the given index, or null if out of bounds."
+    )
+    .unwrap();
+    writeln!(
+        output,
+        "   * Note: This is O(n) as jagged arrays require sequential traversal. */"
+    )
+    .unwrap();
+    writeln!(
+        output,
+        "  get_{}_at(index: number): {} | null {{",
+        field_name, element_type_name
+    )
+    .unwrap();
+    writeln!(output, "    const count = this.get_{}_length();", field_name).unwrap();
+    writeln!(output, "    if (index < 0 || index >= count) {{").unwrap();
+    writeln!(output, "      return null;").unwrap();
+    writeln!(output, "    }}").unwrap();
+    write_ts_offset_binding(output, offset_expr);
+    writeln!(output, "    let cursor = offset;").unwrap();
+    writeln!(output, "    for (let i = 0; i < index; i++) {{").unwrap();
+    writeln!(
+        output,
+        "      const elem = {}.from_array(this.buffer.subarray(cursor));",
+        element_type_name
+    )
+    .unwrap();
+    writeln!(output, "      if (!elem) {{").unwrap();
+    writeln!(
+        output,
+        "        throw new Error(\"{}: invalid element at index \" + i + \" in jagged array '{}'\");",
+        struct_name, field_name
+    )
+    .unwrap();
+    writeln!(output, "      }}").unwrap();
+    writeln!(output, "      const fp = elem.footprint();").unwrap();
+    writeln!(output, "      if (!fp.ok || fp.consumed === undefined) {{").unwrap();
+    writeln!(
+        output,
+        "        throw new Error(\"{}: failed to get footprint for element at index \" + i);",
+        struct_name
+    )
+    .unwrap();
+    writeln!(output, "      }}").unwrap();
+    writeln!(output, "      cursor += fp.consumed;").unwrap();
+    writeln!(output, "    }}").unwrap();
+    writeln!(
+        output,
+        "    return {}.from_array(this.buffer.subarray(cursor));",
+        element_type_name
+    )
+    .unwrap();
+    writeln!(output, "  }}\n").unwrap();
+
+    // Generator for efficient sequential access
+    writeln!(
+        output,
+        "  /** Returns a generator over the jagged array elements."
+    )
+    .unwrap();
+    writeln!(
+        output,
+        "   * This is more efficient than repeated calls to `get_{}_at()` for sequential access. */",
+        field_name
+    )
+    .unwrap();
+    writeln!(
+        output,
+        "  *{}Iter(): Generator<{}, void, unknown> {{",
+        field_name, element_type_name
+    )
+    .unwrap();
+    writeln!(output, "    const count = this.get_{}_length();", field_name).unwrap();
+    write_ts_offset_binding(output, offset_expr);
+    writeln!(output, "    let cursor = offset;").unwrap();
+    writeln!(output, "    for (let i = 0; i < count; i++) {{").unwrap();
+    writeln!(
+        output,
+        "      const elem = {}.from_array(this.buffer.subarray(cursor));",
+        element_type_name
+    )
+    .unwrap();
+    writeln!(output, "      if (!elem) {{").unwrap();
+    writeln!(
+        output,
+        "        throw new Error(\"{}: invalid element at index \" + i + \" in jagged array '{}'\");",
+        struct_name, field_name
+    )
+    .unwrap();
+    writeln!(output, "      }}").unwrap();
+    writeln!(output, "      yield elem;").unwrap();
+    writeln!(output, "      const fp = elem.footprint();").unwrap();
+    writeln!(output, "      if (fp.ok && fp.consumed !== undefined) {{").unwrap();
+    writeln!(output, "        cursor += fp.consumed;").unwrap();
+    writeln!(output, "      }}").unwrap();
+    writeln!(output, "    }}").unwrap();
+    writeln!(output, "  }}\n").unwrap();
+
+    // Size getter - total byte size
+    writeln!(
+        output,
+        "  /** Returns the total byte size of all elements in the jagged array. */"
+    )
+    .unwrap();
+    writeln!(output, "  get_{}_size(): number {{", field_name).unwrap();
+    writeln!(output, "    const count = this.get_{}_length();", field_name).unwrap();
+    write_ts_offset_binding(output, offset_expr);
+    writeln!(output, "    let cursor = offset;").unwrap();
+    writeln!(output, "    for (let i = 0; i < count; i++) {{").unwrap();
+    writeln!(
+        output,
+        "      const elem = {}.from_array(this.buffer.subarray(cursor));",
+        element_type_name
+    )
+    .unwrap();
+    writeln!(output, "      if (!elem) {{").unwrap();
+    writeln!(
+        output,
+        "        throw new Error(\"{}: invalid element at index \" + i + \" in jagged array '{}'\");",
+        struct_name, field_name
+    )
+    .unwrap();
+    writeln!(output, "      }}").unwrap();
+    writeln!(output, "      const fp = elem.footprint();").unwrap();
+    writeln!(output, "      if (!fp.ok || fp.consumed === undefined) {{").unwrap();
+    writeln!(
+        output,
+        "        throw new Error(\"{}: failed to get footprint for element at index \" + i);",
+        struct_name
+    )
+    .unwrap();
+    writeln!(output, "      }}").unwrap();
+    writeln!(output, "      cursor += fp.consumed;").unwrap();
+    writeln!(output, "    }}").unwrap();
+    writeln!(output, "    return cursor - offset;").unwrap();
+    writeln!(output, "  }}\n").unwrap();
 }

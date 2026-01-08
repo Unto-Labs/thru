@@ -13,10 +13,10 @@ types:
         fields:
           - name: "seconds"
             field-type:
-              primitive: u64
+              primitive: i64
           - name: "nanos"
             field-type:
-              primitive: u32
+              primitive: i32
 
   - name: "Hash"
     kind:

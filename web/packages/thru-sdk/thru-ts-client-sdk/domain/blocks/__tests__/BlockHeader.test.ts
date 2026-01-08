@@ -2,7 +2,7 @@ import { create } from "@bufbuild/protobuf";
 import { describe, expect, it } from "vitest";
 
 import { BlockHeader } from "../BlockHeader";
-import { BlockHeaderSchema } from "../../../proto/thru/core/v1/block_pb";
+import { BlockHeaderSchema } from "@thru/proto";
 import { nanosecondsToTimestamp, timestampToNanoseconds } from "../../../utils/utils";
 import { Block } from "../Block";
 

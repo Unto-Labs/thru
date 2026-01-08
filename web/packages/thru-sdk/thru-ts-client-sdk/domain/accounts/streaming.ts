@@ -1,5 +1,5 @@
-import type { AccountPage as ProtoAccountPage } from "../../proto/thru/core/v1/account_pb";
-import type { AccountUpdate as ProtoAccountUpdate, StreamAccountUpdatesResponse } from "../../proto/thru/services/v1/streaming_service_pb";
+import type { AccountPage as ProtoAccountPage } from "@thru/proto";
+import type { AccountUpdate as ProtoAccountUpdate, StreamAccountUpdatesResponse } from "@thru/proto";
 import { Account, AccountMeta } from "./Account";
 
 export interface AccountPageChunk {

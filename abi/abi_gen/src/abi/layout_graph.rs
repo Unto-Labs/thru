@@ -234,6 +234,7 @@ mod tests {
                                 name: "Leaf".to_string(),
                                 comment: None,
                             })),
+                        jagged: false,
                         }),
                     }],
                 }),

@@ -59,6 +59,8 @@ message AccountMeta {
   thru.common.v1.Pubkey owner = 5 [(google.api.field_behavior) = REQUIRED];
   uint64 balance = 6 [(google.api.field_behavior) = REQUIRED];
   uint64 nonce = 7 [(google.api.field_behavior) = REQUIRED];
+  // The slot in which this account was last updated.
+  optional uint64 last_updated_slot = 8 [(google.api.field_behavior) = OPTIONAL];
 }
 
 // AccountData contains account data payloads.

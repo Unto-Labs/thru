@@ -2,8 +2,8 @@ import { create } from "@bufbuild/protobuf";
 import { describe, expect, it, vi } from "vitest";
 import { createMockContext, generateTestAddress, generateTestPubkey } from "../../__tests__/helpers/test-utils";
 import { StateProof } from "../../domain/proofs";
-import { StateProofType } from "../../proto/thru/core/v1/state_pb";
-import { GenerateStateProofResponseSchema } from "../../proto/thru/services/v1/query_service_pb";
+import { StateProofType } from "@thru/proto";
+import { GenerateStateProofResponseSchema } from "@thru/proto";
 import { generateStateProof } from "../proofs";
 
 describe("proofs", () => {

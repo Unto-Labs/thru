@@ -1,4 +1,4 @@
-import type { GetVersionResponse } from "../../proto/thru/services/v1/query_service_pb";
+import type { GetVersionResponse } from "@thru/proto";
 
 export class VersionInfo {
     readonly components: Record<string, string>;

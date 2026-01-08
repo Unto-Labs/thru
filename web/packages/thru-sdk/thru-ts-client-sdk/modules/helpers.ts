@@ -8,7 +8,7 @@ import {
 } from "@thru/helpers";
 
 import { Pubkey, type PubkeyInput } from "../domain/primitives";
-import { BlockHash, BlockHashSchema } from "../proto/thru/core/v1/types_pb";
+import { BlockHash, BlockHashSchema } from "@thru/proto";
 
 export type BlockSelector =
   | { slot: number | bigint }
@@ -50,6 +50,60 @@ export function deriveProgramAddress(
     bytes: derivedBytes,
     address: encodeAddress(derivedBytes),
   };
+}
+
+export type DeriveAddressInput = PubkeyInput | Uint8Array;
+
+export interface DeriveAddressResult {
+  bytes: Uint8Array;
+  address: string;
+}
+
+/**
+ * Derive an address by hashing an array of inputs.
+ * Inputs can be pubkeys (as string, Uint8Array, or Pubkey) or raw Uint8Array data.
+ *
+ * @example
+ * // Token account: SHA256(owner || mint || seed)
+ * deriveAddress([ownerPubkey, mintPubkey, seed])
+ *
+ * // Mint account: SHA256(creator || seed)
+ * deriveAddress([creatorPubkey, seed])
+ */
+export function deriveAddress(
+  inputs: DeriveAddressInput[]
+): DeriveAddressResult {
+  if (inputs.length === 0) {
+    throw new Error("At least one input is required");
+  }
+
+  const normalizedInputs = inputs.map((input) => normalizeToBytes(input));
+  const totalLength = normalizedInputs.reduce(
+    (sum, arr) => sum + arr.length,
+    0
+  );
+
+  const derivationInput = new Uint8Array(totalLength);
+  let offset = 0;
+  for (const input of normalizedInputs) {
+    derivationInput.set(input, offset);
+    offset += input.length;
+  }
+
+  const hash = sha256(derivationInput);
+  const derivedBytes = new Uint8Array(hash.slice(0, 32));
+
+  return {
+    bytes: derivedBytes,
+    address: encodeAddress(derivedBytes),
+  };
+}
+
+function normalizeToBytes(input: DeriveAddressInput): Uint8Array {
+  if (input instanceof Uint8Array) {
+    return input;
+  }
+  return Pubkey.from(input).toBytes();
 }
 
 function normalizeSeed(value: Uint8Array | string): Uint8Array {

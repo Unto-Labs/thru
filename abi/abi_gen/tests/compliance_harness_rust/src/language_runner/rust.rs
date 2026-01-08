@@ -479,7 +479,7 @@ fn extract_field_info(
     Vec<String>,
     Vec<String>,
     Vec<String>,
-    Vec<(String, bool, bool)>,
+    Vec<(String, bool, bool, bool)>,
     Vec<(String, Vec<String>)>,
     Vec<String>,
     String,
@@ -593,8 +593,8 @@ fn extract_field_info(
                     .collect();
 
                 /* Also collect array fields for post-new() initialization
-                Format: (field_name, is_byte_array, is_struct_array) */
-                let array_fields: Vec<(String, bool, bool)> = struct_type.fields.iter()
+                Format: (field_name, is_byte_array, is_struct_array, is_jagged) */
+                let array_fields: Vec<(String, bool, bool, bool)> = struct_type.fields.iter()
                     .filter_map(|f| {
                         match &f.field_type {
                             TypeKind::Array(array_type) => {
@@ -604,7 +604,9 @@ fn extract_field_info(
                                         abi_gen::abi::types::IntegralType::U8)));
                                 /* Check if element type is a struct (TypeRef) */
                                 let is_struct_array = matches!(&*array_type.element_type, TypeKind::TypeRef(_));
-                                Some((f.name.clone(), is_byte_array, is_struct_array))
+                                /* Check if this is a jagged array */
+                                let is_jagged = array_type.jagged;
+                                Some((f.name.clone(), is_byte_array, is_struct_array, is_jagged))
                             },
                             _ => None,
                         }
@@ -684,7 +686,7 @@ fn generate_rust_test_runner_code(
     referenced_primitive_fields: &[String],
     non_referenced_primitive_fields: &[String],
     enum_fields: &[String],
-    array_fields: &[(String, bool, bool)], /* (field_name, is_byte_array, is_struct_array) */
+    array_fields: &[(String, bool, bool, bool)], /* (field_name, is_byte_array, is_struct_array, is_jagged) */
     nested_fields: &[(String, Vec<String>)], /* (field_name, nested_struct_field_names) */
     size_discriminated_union_fields: &[String],
     sdu_fields_with_variants: &[(String, Vec<(String, u64)>)],
@@ -694,6 +696,9 @@ fn generate_rust_test_runner_code(
 
     /* Convert package to module path: compliance.arrays -> generated::compliance::arrays */
     let module_path = format!("generated::{}", package.replace('.', "::"));
+
+    /* Check if any array is jagged - affects buffer sizing */
+    let has_jagged_array = array_fields.iter().any(|(_, _, _, is_jagged)| *is_jagged);
 
     code.push_str(&format!(
         r#"use std::fs;
@@ -780,7 +785,15 @@ fn main() {{
     {
         code.push_str("\n    /* Set non-referenced fields using mutable wrapper */\n");
         code.push_str(&format!("    {{\n"));
-        code.push_str(&format!("        let mut reencoded_mut = {}::{}Mut::from_slice_mut(&mut reencoded_buffer[..reencoded_size]).expect(\"from_slice_mut failed\");\n", module_path, type_name));
+
+        /* Use original buffer size for jagged arrays, otherwise use new() return value */
+        let buffer_slice = if has_jagged_array {
+            "original_data.len()"
+        } else {
+            "reencoded_size"
+        };
+
+        code.push_str(&format!("        let mut reencoded_mut = {}::{}Mut::from_slice_mut(&mut reencoded_buffer[..{}]).expect(\"from_slice_mut failed\");\n", module_path, type_name, buffer_slice));
 
         /* Set non-referenced primitive fields */
         for field_name in non_referenced_primitive_fields {
@@ -836,7 +849,7 @@ fn main() {{
         }
 
         /* Copy arrays */
-        for (array_field, is_byte_array, is_struct_array) in array_fields {
+        for (array_field, is_byte_array, is_struct_array, _is_jagged) in array_fields {
             if *is_byte_array {
                 /* Byte arrays have a slice getter and slice setter */
                 code.push_str(&format!(
@@ -906,7 +919,13 @@ fn main() {{
         code.push_str("    }\n");
     }
 
-    code.push_str("    let reencoded_data = &reencoded_buffer[..reencoded_size];\n");
+    /* Use original data size for final slice if jagged arrays present */
+    let final_slice = if has_jagged_array {
+        "original_data.len()"
+    } else {
+        "reencoded_size"
+    };
+    code.push_str(&format!("    let reencoded_data = &reencoded_buffer[..{}];\n", final_slice));
 
     code.push_str(
         r#"

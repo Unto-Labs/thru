@@ -5,7 +5,7 @@ import {
     FilterSchema,
     Filter as ProtoFilter,
     FilterParamValue as ProtoFilterParamValue,
-} from "../../proto/thru/common/v1/filters_pb";
+} from "@thru/proto";
 
 import { Pubkey, Signature, type PubkeyInput, type SignatureInput } from "../primitives";
 

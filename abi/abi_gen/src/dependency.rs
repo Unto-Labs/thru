@@ -1510,6 +1510,11 @@ impl DependencyAnalyzer {
         array_type: &ArrayType,
         all_typedefs: &[TypeDef],
     ) -> Option<LayoutConstraintViolation> {
+        // If jagged flag is set, variable-size elements are allowed with additional constraints
+        if array_type.jagged {
+            return self.check_jagged_array_constraints(array_name, array_type, all_typedefs);
+        }
+
         // Check if the element type has a non-constant size due to field references
         if self.type_size_depends_on_field_refs_recursive(&array_type.element_type, all_typedefs) {
             return Some(LayoutConstraintViolation {
@@ -1518,12 +1523,110 @@ impl DependencyAnalyzer {
                 dependency_chain: vec![array_name.to_string()],
                 reason: format!(
                     "Array '{}' has an element type with non-constant size that depends on field references, \
-                     making the array's total size impossible to determine",
+                     making the array's total size impossible to determine. \
+                     Use 'jagged: true' to explicitly allow variable-size elements (O(n) access)",
                     array_name
                 ),
             });
         }
         None
+    }
+
+    fn check_jagged_array_constraints(
+        &self,
+        array_name: &str,
+        array_type: &ArrayType,
+        all_typedefs: &[TypeDef],
+    ) -> Option<LayoutConstraintViolation> {
+        // Jagged array elements must be structs or type-refs to structs (not primitives)
+        // because they need to be self-describing (have a footprint function)
+        match &*array_type.element_type {
+            TypeKind::Struct(_) => {}
+            TypeKind::TypeRef(type_ref) => {
+                // Verify the referenced type is a struct
+                if let Some(typedef) = all_typedefs.iter().find(|td| td.name == type_ref.name) {
+                    if !matches!(typedef.kind, TypeKind::Struct(_)) {
+                        return Some(LayoutConstraintViolation {
+                            violating_type: array_name.to_string(),
+                            violating_expression: "jagged array element type".to_string(),
+                            dependency_chain: vec![array_name.to_string(), type_ref.name.clone()],
+                            reason: format!(
+                                "Jagged array '{}' element type '{}' must be a struct (not {:?}). \
+                                 Elements must be self-describing with a computable footprint.",
+                                array_name,
+                                type_ref.name,
+                                typedef.kind
+                            ),
+                        });
+                    }
+                }
+            }
+            other => {
+                return Some(LayoutConstraintViolation {
+                    violating_type: array_name.to_string(),
+                    violating_expression: "jagged array element type".to_string(),
+                    dependency_chain: vec![array_name.to_string()],
+                    reason: format!(
+                        "Jagged array '{}' element type must be a struct or type-ref, not {:?}. \
+                         Elements must be self-describing with a computable footprint.",
+                        array_name, other
+                    ),
+                });
+            }
+        }
+
+        // Check for nested jagged arrays (not allowed)
+        if self.type_contains_jagged_array(&array_type.element_type, all_typedefs) {
+            return Some(LayoutConstraintViolation {
+                violating_type: array_name.to_string(),
+                violating_expression: "nested jagged array".to_string(),
+                dependency_chain: vec![array_name.to_string()],
+                reason: format!(
+                    "Jagged array '{}' cannot contain nested jagged arrays. \
+                     Only one level of jagged nesting is supported.",
+                    array_name
+                ),
+            });
+        }
+
+        None
+    }
+
+    fn type_contains_jagged_array(&self, type_kind: &TypeKind, all_typedefs: &[TypeDef]) -> bool {
+        match type_kind {
+            TypeKind::Primitive(_) => false,
+            TypeKind::TypeRef(type_ref) => {
+                if let Some(typedef) = all_typedefs.iter().find(|td| td.name == type_ref.name) {
+                    self.type_contains_jagged_array(&typedef.kind, all_typedefs)
+                } else {
+                    false
+                }
+            }
+            TypeKind::Struct(struct_type) => struct_type
+                .fields
+                .iter()
+                .any(|f| self.type_contains_jagged_array(&f.field_type, all_typedefs)),
+            TypeKind::Union(union_type) => union_type
+                .variants
+                .iter()
+                .any(|v| self.type_contains_jagged_array(&v.variant_type, all_typedefs)),
+            TypeKind::Enum(enum_type) => enum_type
+                .variants
+                .iter()
+                .any(|v| self.type_contains_jagged_array(&v.variant_type, all_typedefs)),
+            TypeKind::Array(array_type) => {
+                // Found a jagged array
+                if array_type.jagged {
+                    return true;
+                }
+                // Also check element type recursively
+                self.type_contains_jagged_array(&array_type.element_type, all_typedefs)
+            }
+            TypeKind::SizeDiscriminatedUnion(sdu) => sdu
+                .variants
+                .iter()
+                .any(|v| self.type_contains_jagged_array(&v.variant_type, all_typedefs)),
+        }
     }
 
     fn type_size_depends_on_field_refs_recursive(

@@ -1,6 +1,6 @@
-import { ConsensusStatus } from "../../proto/thru/common/v1/consensus_pb";
-import type { Transaction as ProtoTransaction } from "../../proto/thru/core/v1/transaction_pb";
-import type { TrackTransactionResponse } from "../../proto/thru/services/v1/streaming_service_pb";
+import { ConsensusStatus } from "@thru/proto";
+import type { Transaction as ProtoTransaction } from "@thru/proto";
+import type { TrackTransactionResponse } from "@thru/proto";
 import { consensusStatusToString } from "../../utils/utils";
 import { Transaction } from "./Transaction";
 

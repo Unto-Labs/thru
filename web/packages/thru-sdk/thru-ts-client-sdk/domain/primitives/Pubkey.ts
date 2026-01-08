@@ -11,7 +11,7 @@ import {
     PubkeySchema,
     TaPubkey,
     TaPubkeySchema,
-} from "../../proto/thru/common/v1/primitives_pb";
+} from "@thru/proto";
 import {
     bytesEqual,
     bytesToHex,

@@ -88,7 +88,19 @@ impl<'a> IrValidateEmitter<'a> {
             IrNode::AlignUp(node) => self.emit_align(node, indent),
             IrNode::CallNested(node) => self.emit_call_nested(node, indent),
             IrNode::Switch(node) => self.emit_switch(node, indent),
+            IrNode::SumOverArray(node) => self.emit_sum_over_array(node, indent),
         }
+    }
+
+    fn emit_sum_over_array(
+        &mut self,
+        _node: &crate::codegen::shared::ir::SumOverArrayNode,
+        _indent: usize,
+    ) -> Result<String, IrValidateError> {
+        /* Jagged arrays require iteration over actual data for validation.
+           IR helper functions are free functions without access to instance data,
+           so we can't generate validation IR for types containing jagged arrays. */
+        Err(IrValidateError::UnsupportedNode)
     }
 
     fn emit_binary(

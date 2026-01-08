@@ -1,11 +1,11 @@
-import type { ConsensusStatus } from "../../proto/thru/common/v1/consensus_pb";
+import type { ConsensusStatus } from "@thru/proto";
 import type {
     Account as ProtoAccount,
     AccountData as ProtoAccountData,
     AccountFlags as ProtoAccountFlags,
     AccountMeta as ProtoAccountMeta,
     VersionContextMetadata as ProtoVersionContextMetadata,
-} from "../../proto/thru/core/v1/account_pb";
+} from "@thru/proto";
 import { timestampToNanoseconds } from "../../utils/utils";
 import { Pubkey } from "../primitives";
 

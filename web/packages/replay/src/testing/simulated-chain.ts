@@ -1,12 +1,12 @@
 import type { PartialMessage } from "@bufbuild/protobuf";
-import { ListBlocksResponse } from "../proto/thru/services/v1/query_service_pb";
-import { StreamBlocksResponse } from "../proto/thru/services/v1/streaming_service_pb";
-import { PageResponse } from "../proto/thru/common/v1/pagination_pb";
-import type { Filter } from "../proto/thru/common/v1/filters_pb";
+import { ListBlocksResponse } from "@thru/proto";
+import { StreamBlocksResponse } from "@thru/proto";
+import { PageResponse } from "@thru/proto";
+import type { Filter } from "@thru/proto";
 import type { BlockSource } from "../chain-client";
-import { Block, BlockHeader } from "../proto/thru/core/v1/block_pb";
-import type { ListBlocksRequest } from "../proto/thru/services/v1/query_service_pb";
-import type { StreamBlocksRequest } from "../proto/thru/services/v1/streaming_service_pb";
+import { Block, BlockHeader } from "@thru/proto";
+import type { ListBlocksRequest } from "@thru/proto";
+import type { StreamBlocksRequest } from "@thru/proto";
 import type { Slot } from "../types";
 
 export interface SimulatedChainOptions {

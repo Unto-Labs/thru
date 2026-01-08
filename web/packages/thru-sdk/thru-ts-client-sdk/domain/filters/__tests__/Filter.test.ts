@@ -8,7 +8,7 @@ import {
     generateTestSignature,
     generateTestSignatureString,
 } from "../../../__tests__/helpers/test-utils";
-import { FilterParamValueSchema, FilterSchema } from "../../../proto/thru/common/v1/filters_pb";
+import { FilterParamValueSchema, FilterSchema } from "@thru/proto";
 
 describe("Filter domain model", () => {
     it("creates a domain filter from proto", () => {

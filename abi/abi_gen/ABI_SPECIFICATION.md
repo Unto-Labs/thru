@@ -279,6 +279,123 @@ Total size: outer_size × (inner_size × element_size)
 
 If both dimensions reference different fields, the size fields must appear **before** the array in memory order.
 
+#### 3.2.4 Jagged Arrays
+
+Jagged arrays are arrays where each element has a variable size determined by the element itself. Unlike multi-dimensional FAMs where all inner arrays have the same size, jagged arrays allow each element to have a different footprint.
+
+**Important**: Jagged arrays require **opt-in** via the `jagged: true` flag because they have O(n) access complexity.
+
+**YAML Syntax**:
+```yaml
+Outer:
+  struct:
+    fields:
+      - name: count
+        field-type: u32
+      - name: elements
+        field-type:
+          array:
+            jagged: true          # Opt-in flag for variable-size elements
+            size:
+              field-ref: ["count"]
+            element-type:
+              type-ref: Inner     # Must be self-describing (has footprint)
+
+Inner:
+  struct:
+    fields:
+      - name: len
+        field-type: u32
+      - name: data
+        field-type:
+          array:
+            size:
+              field-ref: ["len"]
+            element-type: u8
+```
+
+**Memory Layout**:
+```
+┌──────────────────────┐
+│ count = 3            │  ← Number of elements
+├──────────────────────┤
+│ Element 0 (variable) │  ← Size determined by element's footprint
+├──────────────────────┤
+│ Element 1 (variable) │  ← Different size than element 0
+├──────────────────────┤
+│ Element 2 (variable) │  ← Different size than elements 0 and 1
+└──────────────────────┘
+```
+
+**Constraints**:
+1. **Element type must be self-describing**: The element type must have a computable footprint (typically a struct with a FAM or other variable-size field)
+2. **No nested jagged arrays**: An element type cannot itself contain a jagged array
+3. **O(n) access complexity**: Accessing element N requires iterating through elements 0 to N-1 to compute their sizes
+
+**Generated API**:
+
+Jagged arrays generate different accessors than regular arrays:
+
+| Language | Method | Description |
+|----------|--------|-------------|
+| Rust | `{field}_len() -> usize` | Returns the count of elements |
+| Rust | `{field}_at(idx: usize) -> Option<ElementType>` | O(n) indexed access |
+| Rust | `{field}_iter() -> impl Iterator` | Efficient sequential access |
+| Rust | `{field}_size() -> usize` | Total byte size of all elements |
+| TypeScript | `get_{field}_length(): number` | Returns the count of elements |
+| TypeScript | `get_{field}_at(index: number): ElementType \| null` | O(n) indexed access |
+| TypeScript | `*{field}Iter(): Generator<ElementType>` | Generator for sequential access |
+| TypeScript | `get_{field}_size(): number` | Total byte size of all elements |
+
+**Size Calculation**:
+
+Unlike regular FAMs where size = count × element_size, jagged array size is computed by summing each element's footprint:
+
+```
+total_size = Σ footprint(element[i]) for i in 0..count
+```
+
+This is represented in the IR as a `SumOverArray` node, which indicates that size calculation requires iteration over actual data.
+
+**Example: Message with variable-length records**
+```
+struct LogContainer {
+  entry_count: u32          @ offset 0  (4 bytes)
+  entries: [LogEntry; entry_count]  @ offset 4  (jagged)
+}
+
+struct LogEntry {
+  timestamp: u64            @ offset 0  (8 bytes)
+  msg_len: u32              @ offset 8  (4 bytes)
+  message: [u8; msg_len]    @ offset 12 (msg_len bytes)
+}
+
+With entry_count = 2:
+  Entry 0: timestamp=100, msg_len=5, message="hello"  (17 bytes)
+  Entry 1: timestamp=200, msg_len=3, message="bye"    (15 bytes)
+
+Memory layout:
+┌──────────────────────┐
+│ entry_count = 2      │  4 bytes
+├──────────────────────┤
+│ Entry 0 timestamp    │  8 bytes
+│ Entry 0 msg_len = 5  │  4 bytes
+│ Entry 0 "hello"      │  5 bytes
+├──────────────────────┤
+│ Entry 1 timestamp    │  8 bytes
+│ Entry 1 msg_len = 3  │  4 bytes
+│ Entry 1 "bye"        │  3 bytes
+└──────────────────────┘
+
+Total: 4 + 17 + 15 = 36 bytes
+```
+
+**Performance Considerations**:
+- **Sequential access**: Use iterators (`{field}_iter()` / `*{field}Iter()`) for O(1) per-element access
+- **Random access**: `{field}_at(idx)` is O(n) - avoid repeated calls in loops
+- **Size calculation**: `{field}_size()` requires full iteration - cache the result if needed
+- **Trade-off**: Jagged arrays save space compared to worst-case fixed allocations, but incur access overhead
+
 ### 3.3 Enums
 
 Tagged unions where the active variant is determined by a tag field.

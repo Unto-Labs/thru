@@ -4,8 +4,11 @@ import type { ThruClientContext } from "../core/client";
 import { withCallOptions } from "../core/client";
 import { Pubkey } from "../domain/primitives";
 import { StateProof } from "../domain/proofs";
-import { StateProofRequestSchema } from "../proto/thru/core/v1/state_pb";
-import { GenerateStateProofRequestSchema, GenerateStateProofResponse } from "../proto/thru/services/v1/query_service_pb";
+import {
+    StateProofRequestSchema,
+    GenerateStateProofRequestSchema,
+    GenerateStateProofResponse,
+} from "@thru/proto";
 import { GenerateStateProofOptions } from "../types/types";
 
 export async function generateStateProof(

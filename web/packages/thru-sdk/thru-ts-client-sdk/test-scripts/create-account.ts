@@ -1,6 +1,6 @@
 import { bytesToHex } from "@noble/hashes/utils";
 import { createThruClient } from "../client";
-import { ConsensusStatus } from "../proto/thru/common/v1/consensus_pb";
+import { ConsensusStatus } from "@thru/proto";
 import { Pubkey } from "../sdk";
 
 

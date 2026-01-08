@@ -1,0 +1,11 @@
+test-case:
+  name: "jagged_arrays_single_record"
+  abi-file: "../../abi_definitions/jagged_arrays.abi.yaml"
+  type: "SingleJaggedRecord"
+  description: "Test jagged array with single variable-size record (edge case)"
+  tags: ["jagged", "arrays", "variable-size", "structs", "edge-case"]
+  # Binary layout:
+  # has_record: u8 = 1 (0x01)
+  # record[0]: VarRecord { len: 4, data: [0xDE, 0xAD, 0xBE, 0xEF] }
+  #   = 04 DE AD BE EF
+  binary-hex: "0104DEADBEEF"

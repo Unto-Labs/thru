@@ -81,6 +81,14 @@ impl<'a> IrInterpreter<'a> {
             }
             IrNode::Switch(node) => self.eval_switch(node, ctx),
             IrNode::CallNested(node) => self.eval_call(node, ctx),
+            IrNode::SumOverArray(_node) => {
+                /* Jagged arrays cannot be evaluated without actual data.
+                   The size must be computed by iterating over elements. */
+                Err(ReflectError::UnsupportedOperation {
+                    operation: "SumOverArray IR evaluation".to_string(),
+                    reason: "Jagged arrays require iteration over actual data".to_string(),
+                })
+            }
         }
     }
 

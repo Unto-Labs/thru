@@ -1,0 +1,203 @@
+abi:
+  package: "google.type"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Google well-known types compatible with google/type protobuf definitions"
+  imports: []
+
+types:
+  # Color: RGBA color representation (values 0.0-1.0)
+  - name: "Color"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "red"
+            field-type:
+              primitive: f32
+          - name: "green"
+            field-type:
+              primitive: f32
+          - name: "blue"
+            field-type:
+              primitive: f32
+          - name: "alpha"
+            field-type:
+              primitive: f32
+
+  # LatLng: Geographic coordinates
+  - name: "LatLng"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "latitude"
+            field-type:
+              primitive: f64
+          - name: "longitude"
+            field-type:
+              primitive: f64
+
+  # Money: Currency amount with ISO 4217 code
+  - name: "Money"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "currency_code"
+            field-type:
+              array:
+                size:
+                  literal:
+                    u64: 3
+                element-type:
+                  primitive: u8
+          - name: "units"
+            field-type:
+              primitive: i64
+          - name: "nanos"
+            field-type:
+              primitive: i32
+
+  # Fraction: Rational number (numerator/denominator)
+  - name: "Fraction"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "numerator"
+            field-type:
+              primitive: i64
+          - name: "denominator"
+            field-type:
+              primitive: i64
+
+  # Quaternion: 3D rotation representation
+  - name: "Quaternion"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "x"
+            field-type:
+              primitive: f64
+          - name: "y"
+            field-type:
+              primitive: f64
+          - name: "z"
+            field-type:
+              primitive: f64
+          - name: "w"
+            field-type:
+              primitive: f64
+
+  # TimeOfDay: Time within a day (no date or timezone)
+  - name: "TimeOfDay"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "hours"
+            field-type:
+              primitive: u8
+          - name: "minutes"
+            field-type:
+              primitive: u8
+          - name: "seconds"
+            field-type:
+              primitive: u8
+          - name: "nanos"
+            field-type:
+              primitive: i32
+
+  # DayOfWeek: Day of week (0=Sunday through 6=Saturday)
+  - name: "DayOfWeek"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "value"
+            field-type:
+              primitive: u8
+
+  # Month: Month of year (1-12)
+  - name: "Month"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "value"
+            field-type:
+              primitive: u8
+
+  # CalendarPeriod: Calendar period granularity
+  - name: "CalendarPeriod"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "value"
+            field-type:
+              primitive: u8
+
+  # DateTime: Civil datetime with timezone offset
+  - name: "DateTime"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "year"
+            field-type:
+              primitive: i32
+          - name: "month"
+            field-type:
+              primitive: u8
+          - name: "day"
+            field-type:
+              primitive: u8
+          - name: "hours"
+            field-type:
+              primitive: u8
+          - name: "minutes"
+            field-type:
+              primitive: u8
+          - name: "seconds"
+            field-type:
+              primitive: u8
+          - name: "nanos"
+            field-type:
+              primitive: i32
+          - name: "utc_offset_seconds"
+            field-type:
+              primitive: i32
+
+  # Interval: Time interval with start and end timestamps
+  - name: "Interval"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "start_time"
+            field-type:
+              primitive: i64
+          - name: "end_time"
+            field-type:
+              primitive: i64
+
+  # Decimal: Arbitrary-precision decimal as string
+  - name: "Decimal"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "value_len"
+            field-type:
+              primitive: u16
+          - name: "value"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["value_len"]
+                element-type:
+                  primitive: u8

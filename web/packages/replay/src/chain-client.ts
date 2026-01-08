@@ -1,4 +1,4 @@
-import type { PartialMessage } from "@bufbuild/protobuf";
+import { create } from "@bufbuild/protobuf";
 import {
   type CallOptions,
   createClient,
@@ -6,32 +6,39 @@ import {
   type Transport,
 } from "@connectrpc/connect";
 import { createGrpcTransport } from "@connectrpc/connect-node";
-import { QueryService } from "./proto/thru/services/v1/query_service_connect";
 import {
-  GetHeightRequest,
+  QueryService,
+  StreamingService,
+  type GetHeightRequest,
+  GetHeightRequestSchema,
   type GetHeightResponse,
-  ListBlocksRequest,
+  type ListBlocksRequest,
+  ListBlocksRequestSchema,
   type ListBlocksResponse,
-  ListEventsRequest,
+  type ListEventsRequest,
+  ListEventsRequestSchema,
   type ListEventsResponse,
-  ListTransactionsRequest,
+  type ListTransactionsRequest,
+  ListTransactionsRequestSchema,
   type ListTransactionsResponse,
-} from "./proto/thru/services/v1/query_service_pb";
-import { StreamingService } from "./proto/thru/services/v1/streaming_service_connect";
-import {
-  StreamBlocksRequest,
+  type StreamBlocksRequest,
+  StreamBlocksRequestSchema,
   type StreamBlocksResponse,
-  StreamEventsRequest,
+  type StreamEventsRequest,
+  StreamEventsRequestSchema,
   type StreamEventsResponse,
-  StreamTransactionsRequest,
+  type StreamTransactionsRequest,
+  StreamTransactionsRequestSchema,
   type StreamTransactionsResponse,
-} from "./proto/thru/services/v1/streaming_service_pb";
+  type StreamAccountUpdatesRequest,
+  StreamAccountUpdatesRequestSchema,
+  type StreamAccountUpdatesResponse,
+} from "@thru/proto";
 
 export interface ChainClientOptions {
   baseUrl?: string;
   apiKey?: string;
   userAgent?: string;
-  httpVersion?: "1.1" | "2";
   transport?: Transport;
   interceptors?: Interceptor[];
   callOptions?: CallOptions;
@@ -39,27 +46,33 @@ export interface ChainClientOptions {
 }
 
 export interface BlockSource {
-  listBlocks(request: PartialMessage<ListBlocksRequest>): Promise<ListBlocksResponse>;
-  streamBlocks(request: PartialMessage<StreamBlocksRequest>): AsyncIterable<StreamBlocksResponse>;
+  listBlocks(request: Partial<ListBlocksRequest>): Promise<ListBlocksResponse>;
+  streamBlocks(request: Partial<StreamBlocksRequest>): AsyncIterable<StreamBlocksResponse>;
 }
 
 export interface TransactionSource {
   listTransactions(
-    request: PartialMessage<ListTransactionsRequest>,
+    request: Partial<ListTransactionsRequest>,
   ): Promise<ListTransactionsResponse>;
   streamTransactions(
-    request: PartialMessage<StreamTransactionsRequest>,
+    request: Partial<StreamTransactionsRequest>,
   ): AsyncIterable<StreamTransactionsResponse>;
 }
 
 export interface EventSource {
-  listEvents(request: PartialMessage<ListEventsRequest>): Promise<ListEventsResponse>;
+  listEvents(request: Partial<ListEventsRequest>): Promise<ListEventsResponse>;
   streamEvents(
-    request: PartialMessage<StreamEventsRequest>,
+    request: Partial<StreamEventsRequest>,
   ): AsyncIterable<StreamEventsResponse>;
 }
 
-export type ReplayDataSource = BlockSource & TransactionSource & EventSource;
+export interface AccountSource {
+  streamAccountUpdates(
+    request: Partial<StreamAccountUpdatesRequest>,
+  ): AsyncIterable<StreamAccountUpdatesResponse>;
+}
+
+export type ReplayDataSource = BlockSource & TransactionSource & EventSource & AccountSource;
 
 export class ChainClient implements ReplayDataSource {
   private readonly query: ReturnType<typeof createClient<typeof QueryService>>;
@@ -73,36 +86,36 @@ export class ChainClient implements ReplayDataSource {
     this.callOptions = options.callOptions;
   }
 
-  listBlocks(request: PartialMessage<ListBlocksRequest>): Promise<ListBlocksResponse> {
-    return this.query.listBlocks(new ListBlocksRequest(request), this.callOptions);
+  listBlocks(request: Partial<ListBlocksRequest>): Promise<ListBlocksResponse> {
+    return this.query.listBlocks(create(ListBlocksRequestSchema, request), this.callOptions);
   }
 
   streamBlocks(
-    request: PartialMessage<StreamBlocksRequest>,
+    request: Partial<StreamBlocksRequest>,
   ): AsyncIterable<StreamBlocksResponse> {
-    return this.streaming.streamBlocks(new StreamBlocksRequest(request), this.callOptions);
+    return this.streaming.streamBlocks(create(StreamBlocksRequestSchema, request), this.callOptions);
   }
 
   listTransactions(
-    request: PartialMessage<ListTransactionsRequest>,
+    request: Partial<ListTransactionsRequest>,
   ): Promise<ListTransactionsResponse> {
-    return this.query.listTransactions(new ListTransactionsRequest(request), this.callOptions);
+    return this.query.listTransactions(create(ListTransactionsRequestSchema, request), this.callOptions);
   }
 
   streamTransactions(
-    request: PartialMessage<StreamTransactionsRequest>,
+    request: Partial<StreamTransactionsRequest>,
   ): AsyncIterable<StreamTransactionsResponse> {
-    return this.streaming.streamTransactions(new StreamTransactionsRequest(request), this.callOptions);
+    return this.streaming.streamTransactions(create(StreamTransactionsRequestSchema, request), this.callOptions);
   }
 
-  listEvents(request: PartialMessage<ListEventsRequest>): Promise<ListEventsResponse> {
-    return this.query.listEvents(new ListEventsRequest(request), this.callOptions);
+  listEvents(request: Partial<ListEventsRequest>): Promise<ListEventsResponse> {
+    return this.query.listEvents(create(ListEventsRequestSchema, request), this.callOptions);
   }
 
   streamEvents(
-    request: PartialMessage<StreamEventsRequest>,
+    request: Partial<StreamEventsRequest>,
   ): AsyncIterable<StreamEventsResponse> {
-    return this.streaming.streamEvents(new StreamEventsRequest(request), this.callOptions);
+    return this.streaming.streamEvents(create(StreamEventsRequestSchema, request), this.callOptions);
   }
 
   private createTransport(): Transport {
@@ -119,7 +132,6 @@ export class ChainClient implements ReplayDataSource {
 
     return createGrpcTransport({
       baseUrl: this.options.baseUrl,
-      httpVersion: this.options.httpVersion ?? "2",
       useBinaryFormat: this.options.useBinaryFormat ?? true,
       interceptors: mergedInterceptors.length ? mergedInterceptors : undefined,
     });
@@ -136,7 +148,13 @@ export class ChainClient implements ReplayDataSource {
     };
   }
 
+  streamAccountUpdates(
+    request: Partial<StreamAccountUpdatesRequest>,
+  ): AsyncIterable<StreamAccountUpdatesResponse> {
+    return this.streaming.streamAccountUpdates(create(StreamAccountUpdatesRequestSchema, request), this.callOptions);
+  }
+
   getHeight(): Promise<GetHeightResponse> {
-    return this.query.getHeight(new GetHeightRequest(), this.callOptions);
+    return this.query.getHeight(create(GetHeightRequestSchema, {}), this.callOptions);
   }
 }

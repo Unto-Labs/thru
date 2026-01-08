@@ -139,7 +139,12 @@ message StreamBlocksResponse {
 //     account_update.meta.owner.value == params.owner
 //
 // - params.address (bytes|Pubkey): Account address for filtering
-//   Example: snapshot.address.value == params.address
+//   Example: account_address.value == params.address
+//   Note: Use account_address for unified filtering across both snapshot and update messages
+//
+// - params.addresses (BytesList): List of addresses for multi-account filtering
+//   Example: account_address.value in params.addresses
+//   Note: Use the 'in' operator to filter by multiple addresses in a single subscription
 //
 // - params.min_nonce (uint64): Minimum nonce for filtering
 //   Example: snapshot.meta.nonce >= params.min_nonce
@@ -172,6 +177,9 @@ message StreamBlocksResponse {
 //   account_update.meta.flags.is_compressed (bool),
 //   account_update.meta.owner, account_update.meta.owner.value (bytes)
 //
+// Available unified fields (work for both snapshot and update messages):
+//   account_address, account_address.value (bytes) - extracted from whichever message type is present
+//
 // Filter expression examples:
 //
 // 1. Filter by minimum balance (snapshot or update):
@@ -181,8 +189,8 @@ message StreamBlocksResponse {
 //    Expression: "(has(snapshot.meta) && has(snapshot.meta.owner) && snapshot.meta.owner.value == params.owner) || (has(account_update.meta) && has(account_update.meta.owner) && account_update.meta.owner.value == params.owner)"
 //    Params: {"owner": <32-byte pubkey>}
 //
-// 3. Filter by specific account address:
-//    Expression: "has(snapshot.address) && snapshot.address.value == params.address"
+// 3. Filter by specific account address (works for both snapshot and update messages):
+//    Expression: "account_address.value == params.address"
 //    Params: {"address": <32-byte pubkey>}
 //
 // 4. Filter by minimum slot for updates:
@@ -224,8 +232,21 @@ message StreamBlocksResponse {
 // Note: The response contains either a snapshot (initial state), an update (delta),
 // or a BlockFinished message. Filters should handle both snapshot and update cases
 // using OR logic to match either message type.
+//
+// To filter by specific account address (recommended - works for both message types):
+//   Expression: "account_address.value == params.address"
+//   Params: {"address": <32-byte pubkey>}
+//
+// To filter by owner (program):
+//   Expression: "(has(snapshot.meta.owner) && snapshot.meta.owner.value == params.owner) || (has(account_update.meta.owner) && account_update.meta.owner.value == params.owner)"
+//   Params: {"owner": <32-byte program pubkey>}
+//
+// To filter by multiple account addresses (recommended for multi-account subscriptions):
+//   Expression: "account_address.value in params.addresses"
+//   Params: {"addresses": BytesList{values: [<pubkey1>, <pubkey2>, ...]}}
+//   Note: Use BytesList parameter type with the 'in' operator for efficient multi-address filtering
 message StreamAccountUpdatesRequest {
-  thru.common.v1.Pubkey address = 1 [(google.api.field_behavior) = REQUIRED];
+  reserved 1;  // Previously: address (now use filter with params.address)
   optional thru.core.v1.AccountView view = 2 [(google.api.field_behavior) = OPTIONAL];
   optional thru.common.v1.Filter filter = 4 [(google.api.field_behavior) = OPTIONAL];
 }
@@ -238,6 +259,8 @@ message AccountUpdate {
   optional thru.core.v1.AccountMeta meta = 3
       [(google.api.field_behavior) = OPTIONAL];
   optional bool delete = 4 [(google.api.field_behavior) = OPTIONAL];
+  // Account address for identifying the account in multi-account streams.
+  thru.common.v1.Pubkey address = 5 [(google.api.field_behavior) = REQUIRED];
 }
 
 // BlockFinished is sent when block's execution is complete.

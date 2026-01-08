@@ -61,7 +61,12 @@ fn flatten_primitives_no_imports() {
     assert!(type_names.contains(&"Hash"));
     assert!(type_names.contains(&"Pubkey"));
     assert!(type_names.contains(&"Signature"));
-    assert_eq!(type_names.len(), 3);
+    assert!(type_names.contains(&"Timestamp"));
+    assert!(type_names.contains(&"Duration"));
+    assert!(type_names.contains(&"Date"));
+    assert!(type_names.contains(&"FixedPoint"));
+    assert!(type_names.contains(&"InstructionData"));
+    assert_eq!(type_names.len(), 8);
 }
 
 #[test]

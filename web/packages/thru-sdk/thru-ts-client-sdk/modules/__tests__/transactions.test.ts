@@ -15,9 +15,9 @@ import { Signature } from "../../domain/primitives";
 import { TransactionStatusSnapshot } from "../../domain/transactions";
 import { Transaction } from "../../domain/transactions/Transaction";
 import type { InstructionContext } from "../../domain/transactions/types";
-import { ConsensusStatus } from "../../proto/thru/common/v1/consensus_pb";
-import { TransactionSchema, TransactionView } from "../../proto/thru/core/v1/transaction_pb";
-import { TransactionStatusSchema } from "../../proto/thru/services/v1/query_service_pb";
+import { ConsensusStatus } from "@thru/proto";
+import { TransactionSchema, TransactionView } from "@thru/proto";
+import { TransactionStatusSchema } from "@thru/proto";
 import {
     batchSendTransactions,
     buildAndSignTransaction,

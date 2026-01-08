@@ -1,12 +1,16 @@
-import { Filter } from "../proto/thru/common/v1/filters_pb";
-import { PageRequest } from "../proto/thru/common/v1/pagination_pb";
-import type { ConsensusStatus } from "../proto/thru/common/v1/consensus_pb";
-import type { Transaction } from "../proto/thru/core/v1/transaction_pb";
-import { ListTransactionsRequest } from "../proto/thru/services/v1/query_service_pb";
+import { create } from "@bufbuild/protobuf";
 import {
-  StreamTransactionsRequest,
+  type Filter,
+  type PageRequest,
+  PageRequestSchema,
+  type ConsensusStatus,
+  type Transaction,
+  type ListTransactionsRequest,
+  ListTransactionsRequestSchema,
+  type StreamTransactionsRequest,
+  StreamTransactionsRequestSchema,
   type StreamTransactionsResponse,
-} from "../proto/thru/services/v1/streaming_service_pb";
+} from "@thru/proto";
 import type { TransactionSource } from "../chain-client";
 import { ReplayStream } from "../replay-stream";
 import type { ReplayLogger, Slot } from "../types";
@@ -40,7 +44,7 @@ export function createTransactionReplay(
     startSlot: Slot;
     cursor?: string;
   }) => {
-    const page = new PageRequest({
+    const page = create(PageRequestSchema, {
       pageSize: options.pageSize ?? DEFAULT_PAGE_SIZE,
       orderBy: PAGE_ORDER_ASC,
       pageToken: cursor,
@@ -48,7 +52,7 @@ export function createTransactionReplay(
 
     const mergedFilter = combineFilters(slotLiteralFilter("transaction.slot", startSlot), options.filter);
     const response = await options.client.listTransactions(
-      new ListTransactionsRequest({
+      create(ListTransactionsRequestSchema, {
         filter: mergedFilter,
         page,
         minConsensus: options.minConsensus,
@@ -61,7 +65,7 @@ export function createTransactionReplay(
 
   const subscribeLive = (startSlot: Slot): AsyncIterable<Transaction> => {
     const mergedFilter = combineFilters(slotLiteralFilter("transaction.slot", startSlot), options.filter);
-    const request = new StreamTransactionsRequest({
+    const request = create(StreamTransactionsRequestSchema, {
       filter: mergedFilter,
       minConsensus: options.minConsensus,
     });

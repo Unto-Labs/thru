@@ -230,6 +230,33 @@ pub fn collect_dynamic_param_bindings(
     resolved_type: &ResolvedType,
 ) -> BTreeMap<String, DynamicBinding> {
     let mut map = BTreeMap::new();
+
+    /* Helper to check if a field path is within a jagged array */
+    let is_jagged_array_element_path = |path: &str| -> bool {
+        if !path.contains(".element.") {
+            return false;
+        }
+
+        /* Extract the array field name (the part before .element.) */
+        let segments: Vec<&str> = path.split('.').collect();
+        if let Some(element_idx) = segments.iter().position(|&s| s == "element") {
+            if element_idx == 0 {
+                return false;
+            }
+            let array_field_name = segments[element_idx - 1];
+
+            /* Check if this field is a jagged array */
+            if let ResolvedTypeKind::Struct { fields, .. } = &resolved_type.kind {
+                if let Some(field) = fields.iter().find(|f| f.name == array_field_name) {
+                    if let ResolvedTypeKind::Array { jagged, .. } = &field.field_type.kind {
+                        return *jagged;
+                    }
+                }
+            }
+        }
+        false
+    };
+
     for refs in resolved_type.dynamic_params.values() {
         for (path, prim_type) in refs {
             let normalized_path = if let Some(stripped) = path.strip_prefix("_typeref_") {
@@ -237,6 +264,12 @@ pub fn collect_dynamic_param_bindings(
             } else {
                 path.clone()
             };
+
+            /* Skip bindings for fields within jagged array elements - they require sequential access */
+            if is_jagged_array_element_path(&normalized_path) {
+                continue;
+            }
+
             let key = sanitize_param_name(&normalized_path);
             let binding = DynamicBinding {
                 path: normalized_path.clone(),

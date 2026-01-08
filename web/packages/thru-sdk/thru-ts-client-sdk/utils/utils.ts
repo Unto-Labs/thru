@@ -2,7 +2,7 @@
 import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import { TransactionHeaderInput } from "../domain/transactions";
 import { BlockSelector } from "../modules/helpers";
-import { ConsensusStatus } from "../proto/thru/common/v1/consensus_pb";
+import { ConsensusStatus } from "@thru/proto";
 
 
 export function isSlotSelector(selector: BlockSelector): selector is { slot: number | bigint } {

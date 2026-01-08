@@ -20,6 +20,7 @@ fn test_state_proof_encoding() {
                 element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
                     IntegralType::U8,
                 ))),
+                jagged: false,
             }),
         },
         // Public key type (32 bytes, same as hash but semantically different)
@@ -31,6 +32,7 @@ fn test_state_proof_encoding() {
                 element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
                     IntegralType::U8,
                 ))),
+                jagged: false,
             }),
         },
         // State proof header
@@ -96,6 +98,7 @@ fn test_state_proof_encoding() {
                                 name: "Hash".to_string(),
                                 comment: None,
                             })),
+                            jagged: false,
                         }),
                     },
                 ],
@@ -123,6 +126,7 @@ fn test_state_proof_encoding() {
                             name: "Hash".to_string(),
                             comment: None,
                         })),
+                        jagged: false,
                     }),
                 }],
             }),
@@ -157,6 +161,7 @@ fn test_state_proof_encoding() {
                                 name: "Hash".to_string(),
                                 comment: None,
                             })),
+                            jagged: false,
                         }),
                     },
                 ],
@@ -364,6 +369,7 @@ fn test_popcount_expression_in_state_proof_context() {
                             element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
                                 IntegralType::U8,
                             ))),
+                            jagged: false,
                         }),
                     },
                 ],

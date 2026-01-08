@@ -131,6 +131,7 @@ message GetRawBlockRequest {
 //   - account.meta.flags.is_deleted (bool): Flag indicating if account is deleted
 //   - account.meta.flags.is_new (bool): Flag indicating if account is new
 //   - account.meta.flags.is_compressed (bool): Flag indicating if account data is compressed
+//   - account.meta.last_updated_slot (uint64): Slot when account was last modified
 //
 // Available CEL functions:
 //   - has(field): Check if optional field exists
@@ -144,6 +145,7 @@ message GetRawBlockRequest {
 //   - params.prefix (bytes): Byte prefix for range-based filtering
 //   - params.tag (any): Custom tag parameter
 //   - params.min_slot (uint64): Minimum slot parameter
+//   - params.min_updated_slot (uint64): Minimum last_updated_slot for filtering
 //
 // Filter examples:
 //
@@ -213,10 +215,17 @@ message GetRawBlockRequest {
 // 17. Combine flag filters with other conditions:
 //      filter.expression = "account.meta.flags.is_program == true && account.meta.balance > uint(0)"
 //
+// 18. Filter by last_updated_slot:
+//      filter.expression = "account.meta.last_updated_slot >= uint(1000)"
+//
+// 19. Filter by last_updated_slot with params:
+//      filter.expression = "account.meta.last_updated_slot >= params.min_updated_slot"
+//      filter.params["min_updated_slot"].uint_value = 1000
+//
 // Limitations:
 //   - The startsWith() function only works with strings, not bytes
 //   - The bytesPrefix() function is NOT available for ListAccounts (use range comparison instead)
-//   - Parameter names other than owner_bytes, prefix, tag, min_slot are NOT permitted
+//   - Parameter names other than owner_bytes, prefix, tag, min_slot, min_updated_slot are NOT permitted
 //   - All filters are pushed down to SQL for optimal performance where possible
 message ListAccountsRequest {
   optional thru.core.v1.AccountView view = 1 [(google.api.field_behavior) = OPTIONAL];

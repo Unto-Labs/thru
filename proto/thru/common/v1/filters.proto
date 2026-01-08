@@ -40,7 +40,19 @@ message FilterParamValue {
     Signature signature_value = 8 [(google.api.field_behavior) = OPTIONAL];
     TaPubkey ta_pubkey_value = 9 [(google.api.field_behavior) = OPTIONAL];
     TsSignature ts_signature_value = 10 [(google.api.field_behavior) = OPTIONAL];
+    BytesList bytes_list_value = 11 [(google.api.field_behavior) = OPTIONAL];
+    PubkeyList pubkey_list_value = 12 [(google.api.field_behavior) = OPTIONAL];
   }
+}
+
+// BytesList holds a list of byte arrays for multi-value CEL filtering.
+message BytesList {
+  repeated bytes values = 1 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// PubkeyList holds a list of pubkeys for multi-value CEL filtering.
+message PubkeyList {
+  repeated Pubkey values = 1 [(google.api.field_behavior) = OPTIONAL];
 }
 
 // CelFilterValidation describes the validation configuration returned to

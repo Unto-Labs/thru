@@ -1,8 +1,8 @@
 import { create } from "@bufbuild/protobuf";
 import { describe, expect, it } from "vitest";
 
-import { EventSchema } from "../../../proto/thru/services/v1/query_service_pb";
-import { StreamEventsResponseSchema } from "../../../proto/thru/services/v1/streaming_service_pb";
+import { EventSchema } from "@thru/proto";
+import { StreamEventsResponseSchema } from "@thru/proto";
 import { ChainEvent } from "../ChainEvent";
 
 describe("ChainEvent", () => {

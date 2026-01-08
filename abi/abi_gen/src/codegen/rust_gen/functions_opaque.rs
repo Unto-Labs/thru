@@ -85,6 +85,20 @@ fn size_expression_to_rust_getter_code(expr: &ExprKind, self_name: &str) -> Stri
     }
 }
 
+/* Check if size expression is a simple field-ref matching {field_name}_len pattern.
+   This is used to avoid generating duplicate _len() methods when the array's size
+   expression field-ref has the same name as the generated array length method. */
+fn size_expr_matches_len_field(expr: &ExprKind, field_name: &str) -> bool {
+    if let ExprKind::FieldRef(field_ref) = expr {
+        // Check if path is a single element matching "{field_name}_len"
+        if field_ref.path.len() == 1 {
+            let expected_name = format!("{}_len", field_name);
+            return field_ref.path[0] == expected_name;
+        }
+    }
+    false
+}
+
 /* Convert expression to Rust code that reads from data array using field_offsets map */
 fn expression_to_rust_data_read(
     expr: &ExprKind,
@@ -1613,9 +1627,73 @@ pub fn emit_opaque_functions(
                             if let ResolvedTypeKind::Array {
                                 element_type,
                                 size_expression: _,
+                                jagged,
                                 ..
                             } = &field.field_type.kind
                             {
+                                // Handle jagged arrays with variable-size elements
+                                if *jagged {
+                                    if let ResolvedTypeKind::TypeRef { target_name, .. } = &element_type.kind {
+                                        // Generate count expression
+                                        let count_expr =
+                                            size_expression_to_rust_getter_code(size_expression, "self");
+
+                                        // Generate offset setup code
+                                        let mut offset_setup = String::new();
+                                        if field_idx == 0 {
+                                            writeln!(offset_setup, "        let mut offset = 0;")
+                                                .unwrap();
+                                        } else {
+                                            writeln!(offset_setup, "        let mut offset = 0;")
+                                                .unwrap();
+                                            for prev_field in &fields[0..field_idx] {
+                                                match &prev_field.field_type.kind {
+                                                    ResolvedTypeKind::Primitive {
+                                                        prim_type: prev_prim,
+                                                    } => {
+                                                        let size = primitive_size(prev_prim);
+                                                        writeln!(
+                                                            offset_setup,
+                                                            "        offset += {}; // {}",
+                                                            size, prev_field.name
+                                                        )
+                                                        .unwrap();
+                                                    }
+                                                    ResolvedTypeKind::Enum { .. } => {
+                                                        writeln!(offset_setup, "        offset += self.{}_size(); // {} (variable size)", prev_field.name, prev_field.name).unwrap();
+                                                    }
+                                                    ResolvedTypeKind::Array { jagged: prev_jagged, .. } => {
+                                                        if let crate::abi::resolved::Size::Const(size) =
+                                                            prev_field.field_type.size
+                                                        {
+                                                            writeln!(offset_setup, "        offset += {}; // {} (array)", size, prev_field.name).unwrap();
+                                                        } else if *prev_jagged {
+                                                            writeln!(offset_setup, "        offset += self.{}_size(); // {} (jagged array)", prev_field.name, prev_field.name).unwrap();
+                                                        }
+                                                    }
+                                                    ResolvedTypeKind::TypeRef { .. } => {
+                                                        if let crate::abi::resolved::Size::Const(size) =
+                                                            prev_field.field_type.size
+                                                        {
+                                                            writeln!(offset_setup, "        offset += {}; // {} (nested struct)", size, prev_field.name).unwrap();
+                                                        }
+                                                    }
+                                                    _ => {}
+                                                }
+                                            }
+                                        }
+
+                                        // Use the actual target type name, not the synthetic element name
+                                        emit_jagged_array_accessors(
+                                            &mut output,
+                                            &field.name,
+                                            target_name,
+                                            &count_expr,
+                                            &offset_setup,
+                                        );
+                                        continue;
+                                    }
+                                }
                                 // Helper function to emit offset calculation for this field
                                 let emit_base_offset = |output: &mut String| {
                                     if field_idx == 0 {
@@ -1639,15 +1717,23 @@ pub fn emit_opaque_functions(
                                                 ResolvedTypeKind::Enum { .. } => {
                                                     write!(output, "        base_offset += self.{}_size(); // {} (variable size)\n", prev_field.name, prev_field.name).unwrap();
                                                 }
-                                                ResolvedTypeKind::Array { .. } => {
+                                                ResolvedTypeKind::Array { size_expression: prev_size_expr, .. } => {
                                                     if let crate::abi::resolved::Size::Const(size) =
                                                         prev_field.field_type.size
                                                     {
                                                         write!(output, "        base_offset += {}; // {} (array)\n", size, prev_field.name).unwrap();
                                                     } else {
                                                         // Variable-size array
-                                                        write!(output, "        base_offset += self.{}_len() * {}; // {} (variable-size array)\n",
-                                                               prev_field.name,
+                                                        // Check if _len method was skipped for this array
+                                                        let prev_skip_len = size_expr_matches_len_field(prev_size_expr, &prev_field.name);
+                                                        let len_expr = if prev_skip_len {
+                                                            // Use size expression directly with cast
+                                                            format!("({}) as usize", size_expression_to_rust_getter_code(prev_size_expr, "self"))
+                                                        } else {
+                                                            format!("self.{}_len()", prev_field.name)
+                                                        };
+                                                        write!(output, "        base_offset += {} * {}; // {} (variable-size array)\n",
+                                                               len_expr,
                                                                if let ResolvedTypeKind::Array { element_type, .. } = &prev_field.field_type.kind {
                                                                    if let crate::abi::resolved::Size::Const(elem_size) = element_type.size {
                                                                        elem_size.to_string()
@@ -1705,22 +1791,27 @@ pub fn emit_opaque_functions(
 
                                     let elem_size = primitive_size(prim_type);
 
-                                    // Generate length method
-                                    write!(
-                                        output,
-                                        "    pub fn {}_len(&self) -> usize {{\n",
-                                        field.name
-                                    )
-                                    .unwrap();
-                                    /* For nested structs, use data.len() instead of calling parent field getters */
-                                    if is_nested {
-                                        write!(output, "        self.data.len() / {}\n", elem_size)
-                                            .unwrap();
-                                    } else {
-                                        write!(output, "        ({}) as usize\n", size_expr_str)
-                                            .unwrap();
+                                    // Check if size expression would collide with array _len() method name
+                                    let skip_len_method = size_expr_matches_len_field(size_expression, &field.name);
+
+                                    // Generate length method only if it wouldn't collide
+                                    if !skip_len_method {
+                                        write!(
+                                            output,
+                                            "    pub fn {}_len(&self) -> usize {{\n",
+                                            field.name
+                                        )
+                                        .unwrap();
+                                        /* For nested structs, use data.len() instead of calling parent field getters */
+                                        if is_nested {
+                                            write!(output, "        self.data.len() / {}\n", elem_size)
+                                                .unwrap();
+                                        } else {
+                                            write!(output, "        ({}) as usize\n", size_expr_str)
+                                                .unwrap();
+                                        }
+                                        write!(output, "    }}\n\n").unwrap();
                                     }
-                                    write!(output, "    }}\n\n").unwrap();
 
                                     // Generate element getter
                                     write!(
@@ -1729,12 +1820,22 @@ pub fn emit_opaque_functions(
                                         field.name, rust_type
                                     )
                                     .unwrap();
-                                    write!(
-                                        output,
-                                        "        let len = self.{}_len();\n",
-                                        field.name
-                                    )
-                                    .unwrap();
+                                    // Use size expression directly with cast when _len method was skipped
+                                    if skip_len_method {
+                                        write!(
+                                            output,
+                                            "        let len = ({}) as usize;\n",
+                                            size_expr_str
+                                        )
+                                        .unwrap();
+                                    } else {
+                                        write!(
+                                            output,
+                                            "        let len = self.{}_len();\n",
+                                            field.name
+                                        )
+                                        .unwrap();
+                                    }
                                     write!(output, "        if index >= len {{\n").unwrap();
                                     write!(output, "            panic!(\"Index {{}} out of bounds for array '{}' of length {{}}\", index, len);\n", field.name).unwrap();
                                     write!(output, "        }}\n").unwrap();
@@ -1762,12 +1863,22 @@ pub fn emit_opaque_functions(
                                             field.name
                                         )
                                         .unwrap();
-                                        write!(
-                                            output,
-                                            "        let len = self.{}_len();\n",
-                                            field.name
-                                        )
-                                        .unwrap();
+                                        // Use size expression directly with cast when _len method was skipped
+                                        if skip_len_method {
+                                            write!(
+                                                output,
+                                                "        let len = ({}) as usize;\n",
+                                                size_expr_str
+                                            )
+                                            .unwrap();
+                                        } else {
+                                            write!(
+                                                output,
+                                                "        let len = self.{}_len();\n",
+                                                field.name
+                                            )
+                                            .unwrap();
+                                        }
                                         emit_base_offset(&mut output);
                                         write!(
                                             output,
@@ -1783,30 +1894,35 @@ pub fn emit_opaque_functions(
                                     if let crate::abi::resolved::Size::Const(elem_size) =
                                         element_type.size
                                     {
-                                        // Generate length method
-                                        write!(
-                                            output,
-                                            "    pub fn {}_len(&self) -> usize {{\n",
-                                            field.name
-                                        )
-                                        .unwrap();
-                                        /* For nested structs, use data.len() instead of calling parent field getters */
-                                        if is_nested {
+                                        // Check if size expression would collide with array _len() method name
+                                        let skip_len_method = size_expr_matches_len_field(size_expression, &field.name);
+
+                                        // Generate length method only if it wouldn't collide
+                                        if !skip_len_method {
                                             write!(
                                                 output,
-                                                "        self.data.len() / {}\n",
-                                                elem_size
+                                                "    pub fn {}_len(&self) -> usize {{\n",
+                                                field.name
                                             )
                                             .unwrap();
-                                        } else {
-                                            write!(
-                                                output,
-                                                "        ({}) as usize\n",
-                                                size_expr_str
-                                            )
-                                            .unwrap();
+                                            /* For nested structs, use data.len() instead of calling parent field getters */
+                                            if is_nested {
+                                                write!(
+                                                    output,
+                                                    "        self.data.len() / {}\n",
+                                                    elem_size
+                                                )
+                                                .unwrap();
+                                            } else {
+                                                write!(
+                                                    output,
+                                                    "        ({}) as usize\n",
+                                                    size_expr_str
+                                                )
+                                                .unwrap();
+                                            }
+                                            write!(output, "    }}\n\n").unwrap();
                                         }
-                                        write!(output, "    }}\n\n").unwrap();
 
                                         // Generate element getter
                                         write!(
@@ -1815,12 +1931,22 @@ pub fn emit_opaque_functions(
                                             field.name, target_name
                                         )
                                         .unwrap();
-                                        write!(
-                                            output,
-                                            "        let len = self.{}_len();\n",
-                                            field.name
-                                        )
-                                        .unwrap();
+                                        // Use size expression directly with cast when _len method was skipped
+                                        if skip_len_method {
+                                            write!(
+                                                output,
+                                                "        let len = ({}) as usize;\n",
+                                                size_expr_str
+                                            )
+                                            .unwrap();
+                                        } else {
+                                            write!(
+                                                output,
+                                                "        let len = self.{}_len();\n",
+                                                field.name
+                                            )
+                                            .unwrap();
+                                        }
                                         write!(output, "        if index >= len {{\n").unwrap();
                                         write!(output, "            panic!(\"Index {{}} out of bounds for array '{}' of length {{}}\", index, len);\n", field.name).unwrap();
                                         write!(output, "        }}\n").unwrap();
@@ -2697,6 +2823,55 @@ pub fn emit_opaque_functions(
                 }
             }
 
+            // Generate size() method for types that can be jagged array elements
+            // Only for types with params like "array_field.size_field" (exactly one dot)
+            // where size_field is an actual primitive field on this struct
+            if let Some(ir) = type_ir {
+                // Collect primitive field names from this struct
+                let primitive_field_names: std::collections::HashSet<&str> = fields
+                    .iter()
+                    .filter_map(|f| {
+                        if matches!(f.field_type.kind, ResolvedTypeKind::Primitive { .. }) {
+                            Some(f.name.as_str())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect();
+
+                let is_jagged_element_candidate = !ir.parameters.is_empty()
+                    && ir.parameters.iter().all(|p| {
+                        let parts: Vec<&str> = p.name.split('.').collect();
+                        // Must have exactly "field.getter" pattern
+                        // AND the getter must be an actual primitive field on this struct
+                        parts.len() == 2 && primitive_field_names.contains(parts[1])
+                    });
+
+                if is_jagged_element_candidate {
+                    use super::ir_helpers::sanitize_param_name;
+
+                    writeln!(output, "    /// Returns the byte size of this instance.").unwrap();
+                    writeln!(output, "    pub fn size(&self) -> usize {{").unwrap();
+
+                    // Build parameter extraction - map IR params to getter calls
+                    // Param "array_field.size_field" -> getter "self.size_field()"
+                    let mut param_args = Vec::new();
+                    for param in &ir.parameters {
+                        let getter_name = param.name.split('.').last().unwrap_or(&param.name);
+                        param_args.push(format!("self.{}() as u64", getter_name));
+                    }
+
+                    let fn_name = sanitize_param_name(&type_name);
+                    writeln!(
+                        output,
+                        "        {}_footprint_ir({}) as usize",
+                        fn_name,
+                        param_args.join(", ")
+                    ).unwrap();
+                    writeln!(output, "    }}\n").unwrap();
+                }
+            }
+
             write!(output, "}}\n\n").unwrap();
 
             // Generate impl for mutable version
@@ -2830,43 +3005,89 @@ pub fn emit_opaque_functions(
             }
 
             // Generate array length helpers for variable-size arrays (needed for offset calculation)
-            for field in fields.iter() {
+            // Also generate jagged array Mut accessors
+            for (field_idx, field) in fields.iter().enumerate() {
                 if let ResolvedTypeKind::Array {
                     element_type,
                     size_expression,
                     size_constant_status,
+                    jagged,
                     ..
                 } = &field.field_type.kind
                 {
                     use crate::abi::resolved::ConstantStatus;
-                    if !matches!(size_constant_status, ConstantStatus::Constant) {
-                        // Variable-size array - generate length method
-                        let size_expr_str =
-                            size_expression_to_rust_getter_code(size_expression, "self");
-                        write!(output, "    pub fn {}_len(&self) -> usize {{\n", field.name)
-                            .unwrap();
-                        /* For nested structs, use data.len() instead of calling parent field getters */
-                        if is_nested {
-                            /* Get element size */
-                            let elem_size: usize = match &element_type.kind {
-                                ResolvedTypeKind::Primitive { prim_type } => {
-                                    primitive_size(prim_type)
-                                }
-                                _ => {
-                                    if let crate::abi::resolved::Size::Const(size) =
-                                        element_type.size
-                                    {
-                                        size as usize
-                                    } else {
-                                        1_usize /* fallback */
+
+                    // Handle jagged arrays specially
+                    if *jagged {
+                        if let ResolvedTypeKind::TypeRef { target_name, .. } = &element_type.kind {
+                            // Build count expression and offset setup for jagged array
+                            let count_expr = size_expression_to_rust_getter_code(size_expression, "self");
+
+                            let mut offset_setup = String::new();
+                            writeln!(offset_setup, "        let mut offset = 0;").unwrap();
+                            for prev_field in &fields[0..field_idx] {
+                                match &prev_field.field_type.kind {
+                                    ResolvedTypeKind::Primitive { prim_type: prev_prim } => {
+                                        let size = primitive_size(prev_prim);
+                                        writeln!(offset_setup, "        offset += {}; // {}", size, prev_field.name).unwrap();
                                     }
+                                    ResolvedTypeKind::Array { jagged: prev_jagged, .. } => {
+                                        if let crate::abi::resolved::Size::Const(size) = prev_field.field_type.size {
+                                            writeln!(offset_setup, "        offset += {}; // {} (array)", size, prev_field.name).unwrap();
+                                        } else if *prev_jagged {
+                                            writeln!(offset_setup, "        offset += {{ let temp = {} {{ data: &self.data }}; temp.{}_size() }}; // {} (jagged array)", type_name, prev_field.name, prev_field.name).unwrap();
+                                        }
+                                    }
+                                    _ => {}
                                 }
-                            };
-                            write!(output, "        self.data.len() / {}\n", elem_size).unwrap();
-                        } else {
-                            write!(output, "        ({}) as usize\n", size_expr_str).unwrap();
+                            }
+
+                            emit_jagged_array_mut_accessors(
+                                &mut output,
+                                &type_name,
+                                &field.name,
+                                target_name,
+                                &count_expr,
+                                &offset_setup,
+                            );
                         }
-                        write!(output, "    }}\n\n").unwrap();
+                        continue;
+                    }
+
+                    if !matches!(size_constant_status, ConstantStatus::Constant) {
+                        // Check if size expression would collide with array _len() method name
+                        let skip_len_method = size_expr_matches_len_field(size_expression, &field.name);
+
+                        // Generate length method only if it wouldn't collide
+                        if !skip_len_method {
+                            // Variable-size array - generate length method
+                            let size_expr_str =
+                                size_expression_to_rust_getter_code(size_expression, "self");
+                            write!(output, "    pub fn {}_len(&self) -> usize {{\n", field.name)
+                                .unwrap();
+                            /* For nested structs, use data.len() instead of calling parent field getters */
+                            if is_nested {
+                                /* Get element size */
+                                let elem_size: usize = match &element_type.kind {
+                                    ResolvedTypeKind::Primitive { prim_type } => {
+                                        primitive_size(prim_type)
+                                    }
+                                    _ => {
+                                        if let crate::abi::resolved::Size::Const(size) =
+                                            element_type.size
+                                        {
+                                            size as usize
+                                        } else {
+                                            1_usize /* fallback */
+                                        }
+                                    }
+                                };
+                                write!(output, "        self.data.len() / {}\n", elem_size).unwrap();
+                            } else {
+                                write!(output, "        ({}) as usize\n", size_expr_str).unwrap();
+                            }
+                            write!(output, "    }}\n\n").unwrap();
+                        }
                     }
                 }
             }
@@ -3437,10 +3658,12 @@ pub fn emit_opaque_functions(
                             // Variable-size array (FAM) - generate setters
                             if let ResolvedTypeKind::Array {
                                 element_type,
-                                size_expression: _,
+                                size_expression,
                                 ..
                             } = &field.field_type.kind
                             {
+                                // Check if _len method was skipped due to name collision
+                                let skip_len_method = size_expr_matches_len_field(size_expression, &field.name);
                                 // Helper to emit offset calculation
                                 let emit_base_offset = |output: &mut String| {
                                     if field_idx == 0 {
@@ -3526,9 +3749,28 @@ pub fn emit_opaque_functions(
 
                                     let elem_size = primitive_size(prim_type);
 
+                                    // Convert expression to Rust code that calls getters
+                                    let size_expr_str =
+                                        size_expression_to_rust_getter_code(size_expression, "self");
+
                                     // Generate element setter
                                     write!(output, "    pub fn {}_set(&mut self, index: usize, value: {}) {{\n", field.name, rust_type).unwrap();
-                                    write!(output, "        let len = ({{ let temp = {} {{ data: &self.data }}; temp.{}_len() }});\n", type_name, field.name).unwrap();
+                                    // Use size expression directly with cast when _len method was skipped
+                                    if skip_len_method {
+                                        write!(
+                                            output,
+                                            "        let len = ({}) as usize;\n",
+                                            size_expr_str
+                                        )
+                                        .unwrap();
+                                    } else {
+                                        write!(
+                                            output,
+                                            "        let len = self.{}_len();\n",
+                                            field.name
+                                        )
+                                        .unwrap();
+                                    }
                                     write!(output, "        if index >= len {{\n").unwrap();
                                     write!(output, "            panic!(\"Index {{}} out of bounds for array '{}' of length {{}}\", index, len);\n", field.name).unwrap();
                                     write!(output, "        }}\n").unwrap();
@@ -3557,7 +3799,22 @@ pub fn emit_opaque_functions(
                                             field.name
                                         )
                                         .unwrap();
-                                        write!(output, "        let len = ({{ let temp = {} {{ data: &self.data }}; temp.{}_len() }}).min(value.len());\n", type_name, field.name).unwrap();
+                                        // Use size expression directly with cast when _len method was skipped
+                                        if skip_len_method {
+                                            write!(
+                                                output,
+                                                "        let len = (({}) as usize).min(value.len());\n",
+                                                size_expr_str
+                                            )
+                                            .unwrap();
+                                        } else {
+                                            write!(
+                                                output,
+                                                "        let len = self.{}_len().min(value.len());\n",
+                                                field.name
+                                            )
+                                            .unwrap();
+                                        }
                                         emit_base_offset(&mut output);
                                         write!(output, "        self.data[base_offset..base_offset + len].copy_from_slice(&value[0..len]);\n").unwrap();
                                         write!(output, "    }}\n\n").unwrap();
@@ -3569,7 +3826,22 @@ pub fn emit_opaque_functions(
                                             field.name
                                         )
                                         .unwrap();
-                                        write!(output, "        let len = {{ let temp = {} {{ data: &self.data }}; temp.{}_len() }};\n", type_name, field.name).unwrap();
+                                        // Use size expression directly with cast when _len method was skipped
+                                        if skip_len_method {
+                                            write!(
+                                                output,
+                                                "        let len = ({}) as usize;\n",
+                                                size_expr_str
+                                            )
+                                            .unwrap();
+                                        } else {
+                                            write!(
+                                                output,
+                                                "        let len = self.{}_len();\n",
+                                                field.name
+                                            )
+                                            .unwrap();
+                                        }
                                         emit_base_offset(&mut output);
                                         write!(output, "        &mut self.data[base_offset..base_offset + len]\n").unwrap();
                                         write!(output, "    }}\n\n").unwrap();
@@ -3581,9 +3853,28 @@ pub fn emit_opaque_functions(
                                     if let crate::abi::resolved::Size::Const(elem_size) =
                                         element_type.size
                                     {
+                                        // Convert expression to Rust code that calls getters
+                                        let size_expr_str =
+                                            size_expression_to_rust_getter_code(size_expression, "self");
+
                                         // Generate element setter
                                         write!(output, "    pub fn {}_set(&mut self, index: usize, value: &{}<'_>) {{\n", field.name, target_name).unwrap();
-                                        write!(output, "        let len = ({{ let temp = {} {{ data: &self.data }}; temp.{}_len() }});\n", type_name, field.name).unwrap();
+                                        // Use size expression directly with cast when _len method was skipped
+                                        if skip_len_method {
+                                            write!(
+                                                output,
+                                                "        let len = ({}) as usize;\n",
+                                                size_expr_str
+                                            )
+                                            .unwrap();
+                                        } else {
+                                            write!(
+                                                output,
+                                                "        let len = self.{}_len();\n",
+                                                field.name
+                                            )
+                                            .unwrap();
+                                        }
                                         write!(output, "        if index >= len {{\n").unwrap();
                                         write!(output, "            panic!(\"Index {{}} out of bounds for array '{}' of length {{}}\", index, len);\n", field.name).unwrap();
                                         write!(output, "        }}\n").unwrap();
@@ -4205,4 +4496,163 @@ fn format_accessor_chain(path: &str, base: &str) -> String {
         expr = format!("{}.{}()", expr, ident);
     }
     expr
+}
+
+/// Emit jagged array accessor methods for a field.
+/// Jagged arrays have variable-size elements that must be traversed sequentially.
+/// Generates:
+/// - `{field}_len()` - returns the count of elements
+/// - `{field}_get(idx)` - returns ElementType for indexed access (O(n)), panics if out of bounds
+/// - `{field}_iter()` - returns an iterator for efficient sequential access
+/// - `{field}_size()` - returns the total byte size of all elements
+fn emit_jagged_array_accessors(
+    output: &mut String,
+    field_name: &str,
+    element_type_name: &str,
+    count_expr: &str,
+    offset_setup: &str,
+) {
+    let elem_type_name = element_type_name.replace("::", "_");
+
+    // Generate _len() method
+    writeln!(output, "    /// Returns the number of elements in the jagged array.").unwrap();
+    writeln!(output, "    pub fn {}_len(&self) -> usize {{", field_name).unwrap();
+    writeln!(output, "        {} as usize", count_expr).unwrap();
+    writeln!(output, "    }}\n").unwrap();
+
+    // Generate _get(idx) method - O(n) indexed access
+    writeln!(output, "    /// Returns the element at the given index.").unwrap();
+    writeln!(output, "    /// Note: This is O(n) as jagged arrays require sequential traversal.").unwrap();
+    writeln!(output, "    /// Panics if index is out of bounds.").unwrap();
+    writeln!(
+        output,
+        "    pub fn {}_get(&self, idx: usize) -> {}<'_> {{",
+        field_name, elem_type_name
+    )
+    .unwrap();
+    writeln!(output, "        let count = {} as usize;", count_expr).unwrap();
+    writeln!(output, "        if idx >= count {{").unwrap();
+    writeln!(output, "            panic!(\"Index {{}} out of bounds for jagged array '{}' of length {{}}\", idx, count);", field_name).unwrap();
+    writeln!(output, "        }}").unwrap();
+    writeln!(output, "{}", offset_setup).unwrap();
+    writeln!(output, "        for _ in 0..idx {{").unwrap();
+    writeln!(
+        output,
+        "            let elem = {} {{ data: &self.data[offset..] }};",
+        elem_type_name
+    )
+    .unwrap();
+    writeln!(output, "            offset += elem.size();").unwrap();
+    writeln!(output, "        }}").unwrap();
+    writeln!(
+        output,
+        "        {} {{ data: &self.data[offset..] }}",
+        elem_type_name
+    )
+    .unwrap();
+    writeln!(output, "    }}\n").unwrap();
+
+    // Generate _iter() method - efficient sequential access
+    writeln!(output, "    /// Returns an iterator over the jagged array elements.").unwrap();
+    writeln!(output, "    /// This is more efficient than repeated calls to `{}_get()` for sequential access.", field_name).unwrap();
+    writeln!(
+        output,
+        "    pub fn {}_iter(&self) -> impl Iterator<Item = {}<'_>> {{",
+        field_name, elem_type_name
+    )
+    .unwrap();
+    writeln!(output, "        let count = {} as usize;", count_expr).unwrap();
+    writeln!(output, "{}", offset_setup).unwrap();
+    writeln!(output, "        let data = self.data;").unwrap();
+    writeln!(output, "        (0..count).scan(offset, move |off, _| {{").unwrap();
+    writeln!(
+        output,
+        "            let elem = {} {{ data: &data[*off..] }};",
+        elem_type_name
+    )
+    .unwrap();
+    writeln!(output, "            *off += elem.size();").unwrap();
+    writeln!(output, "            Some(elem)").unwrap();
+    writeln!(output, "        }})").unwrap();
+    writeln!(output, "    }}\n").unwrap();
+
+    // Generate _size() method - total byte size
+    writeln!(output, "    /// Returns the total byte size of all elements in the jagged array.").unwrap();
+    writeln!(output, "    pub fn {}_size(&self) -> usize {{", field_name).unwrap();
+    writeln!(output, "        let count = {} as usize;", count_expr).unwrap();
+    writeln!(output, "{}", offset_setup).unwrap();
+    writeln!(output, "        let mut total_size = 0usize;").unwrap();
+    writeln!(output, "        for _ in 0..count {{").unwrap();
+    writeln!(
+        output,
+        "            let elem = {} {{ data: &self.data[offset..] }};",
+        elem_type_name
+    )
+    .unwrap();
+    writeln!(output, "            let elem_size = elem.size();").unwrap();
+    writeln!(output, "            total_size += elem_size;").unwrap();
+    writeln!(output, "            offset += elem_size;").unwrap();
+    writeln!(output, "        }}").unwrap();
+    writeln!(output, "        total_size").unwrap();
+    writeln!(output, "    }}\n").unwrap();
+}
+
+/// Emit jagged array mutable accessor methods for the Mut impl.
+/// Generates:
+/// - `{field}_len()` - returns the count of elements (same as immutable)
+/// - `{field}_set(idx, value)` - copies element data at the given index
+fn emit_jagged_array_mut_accessors(
+    output: &mut String,
+    _type_name: &str,
+    field_name: &str,
+    element_type_name: &str,
+    count_expr: &str,
+    offset_setup: &str,
+) {
+    let elem_type_name = element_type_name.replace("::", "_");
+
+    // Generate _len() method for Mut (delegates to immutable)
+    writeln!(output, "    pub fn {}_len(&self) -> usize {{", field_name).unwrap();
+    writeln!(output, "        ({}) as usize", count_expr).unwrap();
+    writeln!(output, "    }}\n").unwrap();
+
+    // Generate _set(idx, value) method - copies element data
+    // Note: This method assumes elements are set in order (0, 1, 2, ...) because
+    // it uses the VALUE's size to calculate offsets, not the target buffer's sizes.
+    // This is necessary because the target buffer may not have valid element data yet.
+    writeln!(output, "    /// Sets the element at the given index by copying from the provided value.").unwrap();
+    writeln!(output, "    /// IMPORTANT: Elements must be set in order (0, 1, 2, ...) because offset").unwrap();
+    writeln!(output, "    /// calculation uses the provided value's size.").unwrap();
+    writeln!(output, "    /// Panics if index is out of bounds.").unwrap();
+    writeln!(
+        output,
+        "    pub fn {}_set(&mut self, idx: usize, value: &{}<'_>) {{",
+        field_name, elem_type_name
+    )
+    .unwrap();
+    writeln!(output, "        let count = ({}) as usize;", count_expr).unwrap();
+    writeln!(output, "        if idx >= count {{").unwrap();
+    writeln!(output, "            panic!(\"Index {{}} out of bounds for jagged array '{}' of length {{}}\", idx, count);", field_name).unwrap();
+    writeln!(output, "        }}").unwrap();
+
+    // Calculate offset by iterating through previously set elements
+    // This works because elements must be set in order (0, 1, 2, ...)
+    // and we read the actual sizes of elements already written to the buffer
+    writeln!(output, "        // Calculate base offset from header fields").unwrap();
+    for line in offset_setup.lines() {
+        if !line.trim().is_empty() {
+            writeln!(output, "    {}", line.trim()).unwrap();
+        }
+    }
+    writeln!(output, "        // Calculate offset by walking through previously set elements").unwrap();
+    writeln!(output, "        // Elements MUST be set in sequential order (0, 1, 2, ...)").unwrap();
+    writeln!(output, "        let mut off = offset;").unwrap();
+    writeln!(output, "        for _ in 0..idx {{").unwrap();
+    writeln!(output, "            // Read element size from what was already written").unwrap();
+    writeln!(output, "            let elem = {} {{ data: &self.data[off..] }};", elem_type_name).unwrap();
+    writeln!(output, "            off += elem.size();").unwrap();
+    writeln!(output, "        }}").unwrap();
+    writeln!(output, "        let value_size = value.size();").unwrap();
+    writeln!(output, "        self.data[off..off + value_size].copy_from_slice(&value.data[..value_size]);").unwrap();
+    writeln!(output, "    }}\n").unwrap();
 }

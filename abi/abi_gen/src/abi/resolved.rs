@@ -70,6 +70,8 @@ pub enum ResolvedTypeKind {
         element_type: Box<ResolvedType>,
         size_expression: ExprKind,
         size_constant_status: ConstantStatus,
+        /// When true, elements have variable size (jagged array). Requires O(n) iteration for access.
+        jagged: bool,
     },
     SizeDiscriminatedUnion {
         variants: Vec<ResolvedSizeDiscriminatedVariant>,
@@ -786,14 +788,44 @@ impl TypeResolver {
 
             TypeKind::Array(array_type) => {
                 // Check if element type is a TypeRef pointing to a non-constant sized type
-                if let TypeKind::TypeRef(type_ref) = &*array_type.element_type {
-                    if let Some(target_type) = self.types.get(&type_ref.name) {
-                        if let Size::Variable(_) = target_type.size {
-                            return Err(ResolutionError::NonConstantTypeReference(format!(
-                                "Array '{}' element type references '{}' which has non-constant size",
-                                type_name, type_ref.name
-                            )));
+                // Skip this check for jagged arrays, which allow variable-size elements
+                if !array_type.jagged {
+                    if let TypeKind::TypeRef(type_ref) = &*array_type.element_type {
+                        if let Some(target_type) = self.types.get(&type_ref.name) {
+                            if let Size::Variable(_) = target_type.size {
+                                return Err(ResolutionError::NonConstantTypeReference(format!(
+                                    "Array '{}' element type references '{}' which has non-constant size",
+                                    type_name, type_ref.name
+                                )));
+                            }
                         }
+                    }
+                } else {
+                    // Jagged arrays cannot contain SDUs - validate element type
+                    if let TypeKind::TypeRef(type_ref) = &*array_type.element_type {
+                        if let Some(target_type) = self.types.get(&type_ref.name) {
+                            // Check if target type is a struct containing SDU fields
+                            if let ResolvedTypeKind::Struct { fields, .. } = &target_type.kind {
+                                for field in fields {
+                                    if matches!(field.field_type.kind, ResolvedTypeKind::SizeDiscriminatedUnion { .. }) {
+                                        return Err(ResolutionError::NonConstantTypeReference(format!(
+                                            "Jagged array '{}' element type '{}' contains size-discriminated union field '{}'. SDUs are not allowed in jagged array elements.",
+                                            type_name, type_ref.name, field.name
+                                        )));
+                                    }
+                                }
+                            } else if matches!(target_type.kind, ResolvedTypeKind::SizeDiscriminatedUnion { .. }) {
+                                return Err(ResolutionError::NonConstantTypeReference(format!(
+                                    "Jagged array '{}' element type '{}' is a size-discriminated union. SDUs are not allowed as jagged array elements.",
+                                    type_name, type_ref.name
+                                )));
+                            }
+                        }
+                    } else if matches!(*array_type.element_type, TypeKind::SizeDiscriminatedUnion(_)) {
+                        return Err(ResolutionError::NonConstantTypeReference(format!(
+                            "Jagged array '{}' has inline size-discriminated union element. SDUs are not allowed as jagged array elements.",
+                            type_name
+                        )));
                     }
                 }
 
@@ -912,6 +944,7 @@ impl TypeResolver {
                         element_type,
                         size_expression: array_type.size.clone(),
                         size_constant_status,
+                        jagged: array_type.jagged,
                     },
                 })
             }
@@ -1456,6 +1489,7 @@ impl TypeResolver {
                     element_type,
                     size_expression,
                     size_constant_status,
+                    ..
                 } => {
                     let index = match segment.parse::<usize>() {
                         Ok(idx) => idx,
@@ -2000,6 +2034,7 @@ mod tests {
                             element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
                                 IntegralType::U8,
                             ))),
+                            jagged: false,
                         }),
                     },
                     StructField {
@@ -2060,6 +2095,7 @@ mod tests {
                                         element_type: Box::new(TypeKind::Primitive(
                                             PrimitiveType::Integral(IntegralType::U8),
                                         )),
+                                        jagged: false,
                                     }),
                                 },
                             ],
@@ -2196,6 +2232,7 @@ mod tests {
                             element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
                                 IntegralType::U8,
                             ))),
+                            jagged: false,
                         }),
                     },
                 ],
@@ -2244,6 +2281,7 @@ mod tests {
                             element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
                                 IntegralType::U8,
                             ))),
+                            jagged: false,
                         }),
                     },
                 ],

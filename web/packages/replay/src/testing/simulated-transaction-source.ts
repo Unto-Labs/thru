@@ -1,12 +1,12 @@
 import type { PartialMessage } from "@bufbuild/protobuf";
-import { Filter } from "../proto/thru/common/v1/filters_pb";
-import { PageResponse } from "../proto/thru/common/v1/pagination_pb";
-import { Transaction } from "../proto/thru/core/v1/transaction_pb";
-import { ListTransactionsResponse } from "../proto/thru/services/v1/query_service_pb";
-import { StreamTransactionsResponse } from "../proto/thru/services/v1/streaming_service_pb";
+import { Filter } from "@thru/proto";
+import { PageResponse } from "@thru/proto";
+import { Transaction } from "@thru/proto";
+import { ListTransactionsResponse } from "@thru/proto";
+import { StreamTransactionsResponse } from "@thru/proto";
 import type { TransactionSource } from "../chain-client";
-import type { ListTransactionsRequest } from "../proto/thru/services/v1/query_service_pb";
-import type { StreamTransactionsRequest } from "../proto/thru/services/v1/streaming_service_pb";
+import type { ListTransactionsRequest } from "@thru/proto";
+import type { StreamTransactionsRequest } from "@thru/proto";
 import type { Slot } from "../types";
 
 export interface SimulatedTransactionSourceOptions {

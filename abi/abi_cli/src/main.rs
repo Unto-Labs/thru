@@ -297,6 +297,7 @@ fn run_reflect(
     } else if include_byte_offsets {
         let options = FormatOptions {
             include_byte_offsets: true,
+            ..Default::default()
         };
         let formatted = format_reflection_with_options(&reflected, &options);
         if pretty {

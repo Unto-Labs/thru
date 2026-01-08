@@ -1,0 +1,125 @@
+abi:
+  package: "compliance.jagged_arrays"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Jagged array types for compliance testing - arrays with variable-size elements"
+
+types:
+  # Inner struct with variable size - used as jagged array element
+  - name: "VarRecord"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "len"
+            field-type:
+              primitive: u8
+          - name: "data"
+            field-type:
+              array:
+                element-type:
+                  primitive: u8
+                size:
+                  field-ref:
+                    path: ["len"]
+
+  # Test case 1: Simple jagged array with variable-size struct elements
+  - name: "JaggedRecords"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "count"
+            field-type:
+              primitive: u32
+          - name: "records"
+            field-type:
+              array:
+                jagged: true
+                element-type:
+                  type-ref:
+                    name: "VarRecord"
+                size:
+                  field-ref:
+                    path: ["count"]
+
+  # Inner struct with u16 length for larger records
+  - name: "LargeVarRecord"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "id"
+            field-type:
+              primitive: u32
+          - name: "payload_len"
+            field-type:
+              primitive: u16
+          - name: "payload"
+            field-type:
+              array:
+                element-type:
+                  primitive: u8
+                size:
+                  field-ref:
+                    path: ["payload_len"]
+
+  # Test case 2: Jagged array with larger struct elements
+  - name: "JaggedLargeRecords"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "num_records"
+            field-type:
+              primitive: u16
+          - name: "records"
+            field-type:
+              array:
+                jagged: true
+                element-type:
+                  type-ref:
+                    name: "LargeVarRecord"
+                size:
+                  field-ref:
+                    path: ["num_records"]
+
+  # Test case 3: Single element jagged array (edge case)
+  - name: "SingleJaggedRecord"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "has_record"
+            field-type:
+              primitive: u8
+          - name: "record"
+            field-type:
+              array:
+                jagged: true
+                element-type:
+                  type-ref:
+                    name: "VarRecord"
+                size:
+                  field-ref:
+                    path: ["has_record"]
+
+  # Test case 4: Empty jagged array (count = 0)
+  - name: "EmptyJaggedArray"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "count"
+            field-type:
+              primitive: u32
+          - name: "records"
+            field-type:
+              array:
+                jagged: true
+                element-type:
+                  type-ref:
+                    name: "VarRecord"
+                size:
+                  field-ref:
+                    path: ["count"]

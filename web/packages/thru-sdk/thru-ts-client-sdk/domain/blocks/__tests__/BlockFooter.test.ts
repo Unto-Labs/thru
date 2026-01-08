@@ -1,7 +1,7 @@
 import { create } from "@bufbuild/protobuf";
 import { describe, expect, it } from "vitest";
 
-import { BlockFooterSchema, ExecutionStatus } from "../../../proto/thru/core/v1/block_pb";
+import { BlockFooterSchema, ExecutionStatus } from "@thru/proto";
 import { Block } from "../Block";
 import { BlockFooter } from "../BlockFooter";
 import { BlockHeader } from "../BlockHeader";

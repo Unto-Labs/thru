@@ -1,7 +1,7 @@
 import { create } from "@bufbuild/protobuf";
 import { describe, expect, it } from "vitest";
 
-import { PageRequestSchema, PageResponseSchema } from "../../../proto/thru/common/v1/pagination_pb";
+import { PageRequestSchema, PageResponseSchema } from "@thru/proto";
 import { PageRequest, PageResponse } from "../";
 
 describe("Pagination domain models", () => {

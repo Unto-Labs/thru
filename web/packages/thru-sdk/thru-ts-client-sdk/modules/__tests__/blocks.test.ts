@@ -5,8 +5,8 @@ import { BlockFooter } from "../../domain/blocks/BlockFooter";
 import { BlockHeader } from "../../domain/blocks/BlockHeader";
 import { Filter } from "../../domain/filters";
 import { PageRequest } from "../../domain/pagination";
-import { ConsensusStatus } from "../../proto/thru/common/v1/consensus_pb";
-import { BlockView, ExecutionStatus } from "../../proto/thru/core/v1/block_pb";
+import { ConsensusStatus } from "@thru/proto";
+import { BlockView, ExecutionStatus } from "@thru/proto";
 import { nanosecondsToTimestamp } from "../../utils/utils";
 import { getBlock, getRawBlock, listBlocks } from "../blocks";
 

@@ -2,9 +2,9 @@ import { create } from "@bufbuild/protobuf";
 import { describe, expect, it } from "vitest";
 
 import { TransactionStatusSnapshot } from "../TransactionStatusSnapshot";
-import { TransactionExecutionResultSchema } from "../../../proto/thru/core/v1/transaction_pb";
-import { TransactionStatusSchema } from "../../../proto/thru/services/v1/query_service_pb";
-import { ConsensusStatus } from "../../../proto/thru/common/v1/consensus_pb";
+import { TransactionExecutionResultSchema } from "@thru/proto";
+import { TransactionStatusSchema } from "@thru/proto";
+import { ConsensusStatus } from "@thru/proto";
 
 describe("TransactionStatusSnapshot", () => {
     it("constructs from proto with execution result", () => {

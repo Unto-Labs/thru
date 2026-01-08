@@ -1,7 +1,6 @@
 import { createThruClient } from "../client";
 import type { InstructionContext } from "../domain/transactions";
-import { ConsensusStatus } from "../proto/thru/common/v1/consensus_pb";
-import { StateProofType } from "../proto/thru/core/v1/state_pb";
+import { ConsensusStatus, StateProofType } from "@thru/proto";
 import { Pubkey } from "../sdk";
 
 const sdk = createThruClient({

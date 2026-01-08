@@ -189,6 +189,7 @@ mod dependency_tests {
                 container_attributes: Default::default(),
                 size: create_literal_expr(10), // Constant size - valid
                 element_type: Box::new(create_u8_primitive()),
+                jagged: false,
             }),
         }];
 
@@ -226,6 +227,7 @@ mod dependency_tests {
                     // Invalid: size references a field whose offset depends on this array's size
                     size: create_field_ref_expr(vec!["Container", "size_field"]),
                     element_type: Box::new(create_u8_primitive()),
+                    jagged: false,
                 }),
             },
         ];
@@ -276,6 +278,7 @@ mod dependency_tests {
                     // Invalid: references a field that comes later in the same struct
                     size: create_field_ref_expr(vec!["BadStruct", "late_field"]),
                     element_type: Box::new(create_u8_primitive()),
+                    jagged: false,
                 }),
             },
         ];
@@ -358,6 +361,7 @@ mod dependency_tests {
                         type_name: "SomeType".to_string(),
                     }),
                     element_type: Box::new(create_u8_primitive()),
+                    jagged: false,
                 }),
             },
             TypeDef {
@@ -586,6 +590,7 @@ mod dependency_tests {
                     // This creates a transitive dependency: Container -> TypeA -> DynamicArray -> Container
                     size: create_field_ref_expr(vec!["Container", "reference_field"]),
                     element_type: Box::new(create_u8_primitive()),
+                    jagged: false,
                 }),
             },
             // TypeB is independent
@@ -628,6 +633,7 @@ mod dependency_tests {
                         })),
                     }),
                     element_type: Box::new(create_u8_primitive()),
+                    jagged: false,
                 }),
             },
             TypeDef {
@@ -677,6 +683,7 @@ mod dependency_tests {
                     container_attributes: Default::default(),
                     size: create_literal_expr(10), // Constant size
                     element_type: Box::new(create_type_ref("DynamicStruct")), // Non-constant element type
+                    jagged: false,
                 }),
             },
             TypeDef {
@@ -689,6 +696,7 @@ mod dependency_tests {
                             container_attributes: Default::default(),
                             size: create_field_ref_expr(vec!["some_field"]), // Non-constant size
                             element_type: Box::new(create_u8_primitive()),
+                            jagged: false,
                         }),
                     }],
                 }),
@@ -728,6 +736,7 @@ mod dependency_tests {
                     container_attributes: Default::default(),
                     size: create_literal_expr(5), // Constant size
                     element_type: Box::new(create_type_ref("WrapperStruct")), // Element type that contains non-constant nested type
+                    jagged: false,
                 }),
             },
             TypeDef {
@@ -809,6 +818,7 @@ mod dependency_tests {
                         right: Box::new(create_literal_expr(1)),
                     }),
                     element_type: Box::new(create_u8_primitive()),
+                    jagged: false,
                 }),
             },
             TypeDef {
@@ -1288,6 +1298,7 @@ mod dependency_tests {
                     // This creates a transitive dependency back to RootStruct
                     size: create_field_ref_expr(vec!["RootStruct", "target_field"]),
                     element_type: Box::new(create_u8_primitive()),
+                    jagged: false,
                 }),
             },
         ];
@@ -1544,6 +1555,7 @@ mod dependency_tests {
                                 container_attributes: Default::default(),
                                 size: create_field_ref_expr(vec!["some_field"]), // Non-constant size!
                                 element_type: Box::new(create_u8_primitive()),
+                                jagged: false,
                             }),
                         },
                     ],
@@ -1584,6 +1596,7 @@ mod dependency_tests {
                     container_attributes: Default::default(),
                     size: create_literal_expr(10),
                     element_type: Box::new(create_type_ref("TokenAccountUnion")), // Invalid!
+                    jagged: false,
                 }),
             },
         ];
@@ -1687,6 +1700,7 @@ mod dependency_tests {
                                 container_attributes: Default::default(),
                                 size: create_field_ref_expr(vec!["field"]), // Other variable component
                                 element_type: Box::new(create_u8_primitive()),
+                                jagged: false,
                             }),
                         },
                     ],
@@ -1887,6 +1901,7 @@ mod resolved_tests {
                 element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
                     IntegralType::U8,
                 ))),
+                jagged: false,
             }),
         };
 
@@ -1923,6 +1938,7 @@ mod resolved_tests {
                 element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
                     IntegralType::U8,
                 ))),
+                jagged: false,
             }),
         };
 
@@ -2140,6 +2156,7 @@ mod resolved_tests {
                 element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
                     IntegralType::U8,
                 ))),
+                jagged: false,
             }),
         };
 
@@ -2187,6 +2204,7 @@ mod resolved_tests {
                 element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
                     IntegralType::U8,
                 ))),
+                jagged: false,
             }),
         };
 
@@ -2224,6 +2242,7 @@ mod resolved_tests {
                 element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
                     IntegralType::U8,
                 ))),
+                jagged: false,
             }),
         };
 

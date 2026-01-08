@@ -6,7 +6,7 @@ import {
     CurrentVersionSchema,
     VersionContext,
     VersionContextSchema,
-} from "../proto/thru/common/v1/consensus_pb";
+} from "@thru/proto";
 import { consensusStatusToString } from "../utils/utils";
 
 export type VersionContextInput =

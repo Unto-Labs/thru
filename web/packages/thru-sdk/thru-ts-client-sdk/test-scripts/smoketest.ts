@@ -8,8 +8,7 @@ import { PageRequest } from "../domain/pagination";
 import { Pubkey, Signature } from "../domain/primitives";
 import type { Transaction as TransactionModel } from "../domain/transactions";
 import type { TrackTransactionUpdate } from "../modules/streaming";
-import { ConsensusStatus } from "../proto/thru/common/v1/consensus_pb";
-import { StateProofType } from "../proto/thru/core/v1/state_pb";
+import { ConsensusStatus, StateProofType } from "@thru/proto";
 
 interface MaybeNodeProcess {
     env?: Record<string, string | undefined>;

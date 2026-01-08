@@ -49,7 +49,7 @@ pub enum Endianness {
 
 #[derive(Clone, PartialEq, Message)]
 pub struct IrNode {
-    #[prost(oneof = "ir_node::Kind", tags = "1, 2, 3, 4, 5, 6, 7")]
+    #[prost(oneof = "ir_node::Kind", tags = "1, 2, 3, 4, 5, 6, 7, 8")]
     pub kind: Option<ir_node::Kind>,
 }
 
@@ -72,6 +72,8 @@ pub mod ir_node {
         CallNested(super::CallNestedNode),
         #[prost(message, boxed, tag = "7")]
         BinaryOp(super::BinaryOpNode),
+        #[prost(message, boxed, tag = "8")]
+        SumOverArray(super::SumOverArrayNode),
     }
 }
 
@@ -166,4 +168,16 @@ pub struct BinaryOpNode {
 pub enum BinaryOpKind {
     AddChecked = 0,
     MulChecked = 1,
+}
+
+#[derive(Clone, PartialEq, Message)]
+pub struct SumOverArrayNode {
+    #[prost(message, optional, tag = "1")]
+    pub count: Option<Box<IrNode>>,
+    #[prost(string, tag = "2")]
+    pub element_type_name: String,
+    #[prost(string, tag = "3")]
+    pub field_name: String,
+    #[prost(message, optional, tag = "4")]
+    pub meta: Option<NodeMetadata>,
 }

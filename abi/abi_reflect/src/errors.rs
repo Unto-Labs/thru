@@ -60,6 +60,10 @@ pub enum ReflectError {
         parameter: String,
     },
 
+    /// Operation is not supported in this context.
+    #[error("unsupported operation '{operation}': {reason}")]
+    UnsupportedOperation { operation: String, reason: String },
+
     /// Parsing failed after IR validation.
     #[error("failed to parse type '{type_name}': {source}")]
     Parse {

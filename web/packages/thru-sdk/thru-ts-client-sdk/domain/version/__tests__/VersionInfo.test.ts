@@ -2,7 +2,7 @@ import { create } from "@bufbuild/protobuf";
 import { describe, expect, it } from "vitest";
 
 import { VersionInfo } from "../VersionInfo";
-import { GetVersionResponseSchema } from "../../../proto/thru/services/v1/query_service_pb";
+import { GetVersionResponseSchema } from "@thru/proto";
 
 describe("VersionInfo", () => {
     it("hydrates from proto versions map", () => {

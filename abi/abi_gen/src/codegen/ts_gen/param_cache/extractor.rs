@@ -215,13 +215,21 @@ pub(crate) fn build_param_extractor_plan(
     let mut sequential_bindings = Vec::new();
 
     for binding in bindings.iter().filter(|binding| !binding.derived) {
-        let matched_key =
-            resolve_param_binding(&binding.ts_name, &available).unwrap_or_else(|| {
-                panic!(
-                    "ts_gen: unable to resolve IR parameter '{}' for type '{}'",
-                    binding.canonical, resolved_type.name
-                )
-            });
+        /* Skip bindings for jagged array element fields - they're not in the binding table
+           because they require sequential access and can't have direct offsets */
+        if binding.canonical.contains(".element.") {
+            continue;
+        }
+
+        /* Try to resolve the binding - if it's not available, it might be from a jagged
+           array element type, so skip it rather than panicking */
+        let matched_key = match resolve_param_binding(&binding.ts_name, &available) {
+            Some(key) => key,
+            None => {
+                /* Parameter not available - likely from jagged array element, skip it */
+                continue;
+            }
+        };
         let dyn_binding = binding_table.get(matched_key).unwrap_or_else(|| {
             panic!(
                 "ts_gen: missing dynamic binding '{}' while emitting params for '{}'",

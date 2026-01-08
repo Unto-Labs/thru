@@ -147,6 +147,8 @@ pub enum IrNode {
     CallNested(CallNestedNode),
     AddChecked(BinaryOpNode),
     MulChecked(BinaryOpNode),
+    /// Sum of footprints over variable-size array elements (jagged arrays).
+    SumOverArray(SumOverArrayNode),
 }
 
 /// Represents a compile-time constant footprint contribution.
@@ -226,6 +228,21 @@ pub struct IrArgument {
 pub struct BinaryOpNode {
     pub left: Box<IrNode>,
     pub right: Box<IrNode>,
+    #[serde(flatten)]
+    pub meta: NodeMetadata,
+}
+
+/// Iteration-based sum for jagged array footprint calculation.
+/// Total size = sum of element_footprint(element_i) for i in 0..count.
+/// This is used when array elements have variable size (jagged arrays).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SumOverArrayNode {
+    /// Expression for the count of elements in the array.
+    pub count: Box<IrNode>,
+    /// Fully-qualified type name of the element (for calling its footprint function).
+    pub element_type_name: String,
+    /// Field name within the parent struct (for generating accessor).
+    pub field_name: String,
     #[serde(flatten)]
     pub meta: NodeMetadata,
 }

@@ -149,6 +149,7 @@ impl ReflectedType {
                 element_type,
                 size_expression,
                 size_constant_status,
+                ..
             } => ReflectedTypeKind::Array {
                 element_type: Box::new(ReflectedType::from_resolved(element_type)),
                 size_expression: size_expression.to_c_string(),

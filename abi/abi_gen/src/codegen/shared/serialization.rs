@@ -105,6 +105,12 @@ impl From<&IrNode> for ir_proto::IrNode {
             IrNode::MulChecked(node) => {
                 Kind::BinaryOp(convert_binary_op(node, ir_proto::BinaryOpKind::MulChecked))
             }
+            IrNode::SumOverArray(node) => Kind::SumOverArray(ir_proto::SumOverArrayNode {
+                count: Some(Box::new(ir_proto::IrNode::from(node.count.as_ref()))),
+                element_type_name: node.element_type_name.clone(),
+                field_name: node.field_name.clone(),
+                meta: Some((&node.meta).into()),
+            }),
         };
 
         ir_proto::IrNode { kind: Some(kind) }

@@ -10,15 +10,18 @@ import { Pubkey, type PubkeyInput } from "../domain/primitives";
 import type { Transaction } from "../domain/transactions/Transaction";
 import { TransactionBuilder } from "../domain/transactions/TransactionBuilder";
 import type { TransactionHeaderInput } from "../domain/transactions/types";
-import { ConsensusStatus, VersionContext } from "../proto/thru/common/v1/consensus_pb";
-import { AccountView, DataSlice, RawAccount } from "../proto/thru/core/v1/account_pb";
-import { StateProofType } from "../proto/thru/core/v1/state_pb";
 import {
+    ConsensusStatus,
+    VersionContext,
+    AccountView,
+    DataSlice,
+    RawAccount,
+    StateProofType,
     GetAccountRequestSchema,
     GetRawAccountRequestSchema,
     ListAccountsRequestSchema,
     type ListAccountsResponse as ProtoListAccountsResponse,
-} from "../proto/thru/services/v1/query_service_pb";
+} from "@thru/proto";
 import { mergeTransactionHeader } from "../utils/utils";
 import { generateStateProof } from "./proofs";
 

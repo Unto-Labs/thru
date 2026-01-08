@@ -36,6 +36,7 @@ fn test_complete_abi_analysis_pipeline() {
                             element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
                                 IntegralType::U8,
                             ))),
+                            jagged: false,
                         }),
                     },
                 ],
@@ -225,6 +226,7 @@ fn test_forward_field_reference_detection() {
                 element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
                     IntegralType::U8,
                 ))),
+                jagged: false,
             }),
         },
     ];
@@ -263,6 +265,7 @@ fn test_struct_field_forward_reference_rejected() {
                         element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
                             IntegralType::U8,
                         ))),
+                        jagged: false,
                     }),
                 },
                 StructField {
@@ -352,6 +355,7 @@ fn test_complex_transitive_dependency_chain() {
                 element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
                     IntegralType::U8,
                 ))),
+                jagged: false,
             }),
         },
     ];
@@ -478,6 +482,7 @@ fn test_constant_expression_analysis_integration() {
                 element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
                     IntegralType::U8,
                 ))),
+                jagged: false,
             }),
         },
         // Array with non-constant size
@@ -494,6 +499,7 @@ fn test_constant_expression_analysis_integration() {
                 element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
                     IntegralType::U8,
                 ))),
+                jagged: false,
             }),
         },
     ];
@@ -599,6 +605,7 @@ fn test_comprehensive_error_reporting() {
                 element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
                     IntegralType::U8,
                 ))),
+                jagged: false,
             }),
         },
     ];
@@ -666,6 +673,7 @@ fn test_real_world_scenario_token_account() {
                         element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
                             IntegralType::U8,
                         ))),
+                        jagged: false,
                     }),
                 },
                 StructField {
@@ -676,6 +684,7 @@ fn test_real_world_scenario_token_account() {
                         element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
                             IntegralType::U8,
                         ))),
+                        jagged: false,
                     }),
                 },
                 StructField {
@@ -770,6 +779,7 @@ fn test_comprehensive_validation_integration() {
                 element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
                     IntegralType::U8,
                 ))),
+                jagged: false,
             }),
         },
         // Enum with duplicate variants and layout cycle
@@ -820,6 +830,7 @@ fn test_comprehensive_validation_integration() {
                             element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
                                 IntegralType::U8,
                             ))),
+                            jagged: false,
                         }),
                     },
                 ],

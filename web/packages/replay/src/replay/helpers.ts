@@ -1,5 +1,5 @@
-import { Filter } from "../proto/thru/common/v1/filters_pb";
-import { PageResponse } from "../proto/thru/common/v1/pagination_pb";
+import { create } from "@bufbuild/protobuf";
+import { type Filter, FilterSchema, type PageResponse } from "@thru/proto";
 import type { Slot } from "../types";
 
 export function combineFilters(base?: Filter, user?: Filter): Filter | undefined {
@@ -9,14 +9,14 @@ export function combineFilters(base?: Filter, user?: Filter): Filter | undefined
   const expressionParts: string[] = [];
   if (base.expression) expressionParts.push(`(${base.expression})`);
   if (user.expression) expressionParts.push(`(${user.expression})`);
-  return new Filter({
+  return create(FilterSchema, {
     expression: expressionParts.join(" && ") || undefined,
     params: { ...base.params, ...user.params },
   });
 }
 
 export function slotLiteralFilter(fieldExpr: string, slot: Slot): Filter {
-  return new Filter({
+  return create(FilterSchema, {
     expression: `${fieldExpr} >= uint(${slot.toString()})`,
   });
 }

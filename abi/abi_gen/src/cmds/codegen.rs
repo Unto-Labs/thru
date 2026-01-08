@@ -282,7 +282,11 @@ fn generate_code(
                     package_path_map: Some(package_path_map.clone()),
                 };
                 let generator = ts::TypeScriptCodeGenerator::new(options);
-                generator.emit_code(&package_types_with_ir, Some(&resolved_types));
+                let generated_code = generator.emit_code(&package_types_with_ir, Some(&resolved_types));
+
+                /* Write the generated TypeScript code to types.ts */
+                let types_file = full_output_dir.join("types.ts");
+                std::fs::write(&types_file, generated_code)?;
             }
 
             if verbose {

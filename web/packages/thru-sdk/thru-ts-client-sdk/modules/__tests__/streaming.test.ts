@@ -5,9 +5,9 @@ import { Account } from "../../domain/accounts";
 import { Block } from "../../domain/blocks";
 import { ChainEvent } from "../../domain/events";
 import { Transaction } from "../../domain/transactions/Transaction";
-import { ConsensusStatus } from "../../proto/thru/common/v1/consensus_pb";
-import { TransactionExecutionResultSchema, TransactionSchema } from "../../proto/thru/core/v1/transaction_pb";
-import { AccountUpdateSchema, StreamAccountUpdatesResponseSchema, StreamEventsResponseSchema, TrackTransactionResponseSchema } from "../../proto/thru/services/v1/streaming_service_pb";
+import { ConsensusStatus } from "@thru/proto";
+import { TransactionExecutionResultSchema, TransactionSchema } from "@thru/proto";
+import { AccountUpdateSchema, StreamAccountUpdatesResponseSchema, StreamEventsResponseSchema, TrackTransactionResponseSchema } from "@thru/proto";
 import {
   collectStream,
   firstStreamValue,
