@@ -1,6 +1,6 @@
+import { create } from "@bufbuild/protobuf";
 import { describe, expect, test } from "vitest";
-import { Signature } from "@thru/proto";
-import { Transaction } from "@thru/proto";
+import { type Transaction, TransactionSchema, SignatureSchema } from "@thru/proto";
 import { createBlockReplay } from "./replay/block-replay";
 import { createTransactionReplay } from "./replay/transaction-replay";
 import { SimulatedChain } from "./testing/simulated-chain";
@@ -151,9 +151,9 @@ describe("transaction replay", () => {
 });
 
 function makeTransaction(slot: Slot, label: string): Transaction {
-  return new Transaction({
+  return create(TransactionSchema, {
     slot,
-    signature: new Signature({ value: new Uint8Array(asciiBytes(label)) }),
+    signature: create(SignatureSchema, { value: new Uint8Array(asciiBytes(label)) }),
   });
 }
 

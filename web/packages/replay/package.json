@@ -24,7 +24,7 @@
     "run:replays": "tsx scripts/run-replays.ts",
     "typecheck": "tsc --noEmit",
     "dev": "tsx watch src/index.ts",
-    "test": "vitest",
+    "test": "vitest run",
     "lint": "eslint src/"
   },
   "dependencies": {

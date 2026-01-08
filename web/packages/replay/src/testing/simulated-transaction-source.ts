@@ -1,12 +1,16 @@
-import type { PartialMessage } from "@bufbuild/protobuf";
-import { Filter } from "@thru/proto";
-import { PageResponse } from "@thru/proto";
-import { Transaction } from "@thru/proto";
-import { ListTransactionsResponse } from "@thru/proto";
-import { StreamTransactionsResponse } from "@thru/proto";
+import { create, type PartialMessage } from "@bufbuild/protobuf";
+import {
+  type Filter,
+  type ListTransactionsRequest,
+  type ListTransactionsResponse,
+  ListTransactionsResponseSchema,
+  PageResponseSchema,
+  type StreamTransactionsRequest,
+  type StreamTransactionsResponse,
+  StreamTransactionsResponseSchema,
+  type Transaction,
+} from "@thru/proto";
 import type { TransactionSource } from "../chain-client";
-import type { ListTransactionsRequest } from "@thru/proto";
-import type { StreamTransactionsRequest } from "@thru/proto";
 import type { Slot } from "../types";
 
 export interface SimulatedTransactionSourceOptions {
@@ -64,9 +68,9 @@ export class SimulatedTransactionSource implements TransactionSource {
     const slice = ordered.slice(startIdx, startIdx + pageSize);
     const nextIndex = startIdx + slice.length;
     const nextPageToken = nextIndex < ordered.length ? String(nextIndex) : undefined;
-    return new ListTransactionsResponse({
+    return create(ListTransactionsResponseSchema, {
       transactions: slice.map((entry) => entry.tx),
-      page: new PageResponse({
+      page: create(PageResponseSchema, {
         nextPageToken,
         totalSize: BigInt(ordered.length),
       }),
@@ -100,7 +104,7 @@ export class SimulatedTransactionSource implements TransactionSource {
         this.streamErrorsEmitted += 1;
         throw new Error("simulated transaction stream failure");
       }
-      yield new StreamTransactionsResponse({ transaction: entry.tx });
+      yield create(StreamTransactionsResponseSchema, { transaction: entry.tx });
       delivered += 1;
     }
   }

@@ -1,12 +1,18 @@
-import type { PartialMessage } from "@bufbuild/protobuf";
-import { ListBlocksResponse } from "@thru/proto";
-import { StreamBlocksResponse } from "@thru/proto";
-import { PageResponse } from "@thru/proto";
-import type { Filter } from "@thru/proto";
+import { create, type PartialMessage } from "@bufbuild/protobuf";
+import {
+  type Block,
+  BlockSchema,
+  BlockHeaderSchema,
+  type Filter,
+  type ListBlocksRequest,
+  type ListBlocksResponse,
+  ListBlocksResponseSchema,
+  PageResponseSchema,
+  type StreamBlocksRequest,
+  type StreamBlocksResponse,
+  StreamBlocksResponseSchema,
+} from "@thru/proto";
 import type { BlockSource } from "../chain-client";
-import { Block, BlockHeader } from "@thru/proto";
-import type { ListBlocksRequest } from "@thru/proto";
-import type { StreamBlocksRequest } from "@thru/proto";
 import type { Slot } from "../types";
 
 export interface SimulatedChainOptions {
@@ -64,9 +70,9 @@ export class SimulatedChain implements BlockSource {
     const slice = ordered.slice(startIdx, startIdx + pageSize);
     const nextIndex = startIdx + slice.length;
     const nextPageToken = nextIndex < ordered.length ? String(nextIndex) : undefined;
-    return new ListBlocksResponse({
+    return create(ListBlocksResponseSchema, {
       blocks: slice.map((entry) => entry.block),
-      page: new PageResponse({
+      page: create(PageResponseSchema, {
         nextPageToken,
         totalSize: BigInt(ordered.length),
       }),
@@ -99,15 +105,15 @@ export class SimulatedChain implements BlockSource {
         this.streamErrorsEmitted += 1;
         throw new Error("simulated stream failure");
       }
-      yield new StreamBlocksResponse({ block: entry.block });
+      yield create(StreamBlocksResponseSchema, { block: entry.block });
       delivered += 1;
     }
   }
 }
 
 function makeBlock(slot: Slot): Block {
-  return new Block({
-    header: new BlockHeader({ slot }),
+  return create(BlockSchema, {
+    header: create(BlockHeaderSchema, { slot }),
   });
 }
 
