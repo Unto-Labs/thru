@@ -370,6 +370,7 @@ fn primitive_to_c_type(prim: &abi_gen::abi::types::PrimitiveType) -> String {
         PrimitiveType::Integral(IntegralType::I16) => "int16_t",
         PrimitiveType::Integral(IntegralType::I32) => "int32_t",
         PrimitiveType::Integral(IntegralType::I64) => "int64_t",
+        PrimitiveType::Integral(IntegralType::Char) => "char",
         PrimitiveType::FloatingPoint(FloatingPointType::F16) => "uint16_t", /* No native f16 in C */
         PrimitiveType::FloatingPoint(FloatingPointType::F32) => "float",
         PrimitiveType::FloatingPoint(FloatingPointType::F64) => "double",
@@ -626,7 +627,7 @@ fn extract_field_info_opaque(
                                                             use abi_gen::abi::types::{IntegralType, FloatingPointType};
                                                             let field_size = match prim_type {
                                                                 abi_gen::abi::types::PrimitiveType::Integral(int_type) => match int_type {
-                                                                    IntegralType::U8 | IntegralType::I8 => 1,
+                                                                    IntegralType::U8 | IntegralType::I8 | IntegralType::Char => 1,
                                                                     IntegralType::U16 | IntegralType::I16 => 2,
                                                                     IntegralType::U32 | IntegralType::I32 => 4,
                                                                     IntegralType::U64 | IntegralType::I64 => 8,

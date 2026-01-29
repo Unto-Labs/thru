@@ -592,7 +592,8 @@ if (!view) {
   throw new Error("MessageWithSDU.from_array returned null");
 }
 const params = view.dynamicParams();
-if (!params || params.MessageWithSDU__data_payload_size !== 4n) {
+/* Parameter name is deduplicated: data_payload_size instead of MessageWithSDU__data_payload_size */
+if (!params || params.data_payload_size !== 4n) {
   throw new Error("Unexpected payload size parameter");
 }
 console.log("sdu ok");
@@ -1104,4 +1105,62 @@ fn test_ts_enums_fixture_compiles() {
 
     check_typescript_compilation(&ts_file)
         .expect("TypeScript compilation failed for enums fixture");
+}
+
+#[test]
+fn test_ts_parent_tag_ref_enum_no_duplicate_params() {
+    /* Regression test for bug: when a tagged union's tag-ref points to a field in the
+       parent struct, the codegen was generating duplicate parameters with different names
+       (e.g., "payload_event_type" and "EventEnvelope__payload_event_type") that both
+       resolve to the same byte offset. This caused TypeScript compilation errors because
+       the Params type required both parameters but __tnComputeParams only provided one.
+
+       The fix deduplicates parameters by their resolved byte offset, keeping the shorter
+       parameter name. */
+    let test_dir = setup_test_dir("parent_tag_ref_enum");
+    let abi_file = "tests/compliance_data/parent_tag_ref_enum.abi.yaml";
+
+    generate_ts_code(abi_file, &test_dir).expect("Code generation failed");
+
+    let ts_file = test_dir.join("compliance/parent_tag_ref_enum/types.ts");
+    assert!(ts_file.exists(), "Generated TypeScript file missing");
+
+    let content = fs::read_to_string(&ts_file).expect("Failed to read types.ts");
+
+    /* Verify no duplicate parameters exist.
+       Before the fix, we would see both:
+       - payload_event_type (shorter, canonical)
+       - EventEnvelope__payload_event_type (longer, qualified)
+       After the fix, only the shorter one should exist. */
+    let param_count = content.matches("payload_event_type").count();
+    let qualified_count = content.matches("EventEnvelope__payload_event_type").count();
+
+    assert_eq!(
+        qualified_count, 0,
+        "Found duplicate qualified parameter name 'EventEnvelope__payload_event_type'. \
+         The fix should deduplicate parameters by byte offset, keeping only the shorter name."
+    );
+
+    assert!(
+        param_count > 0,
+        "Expected 'payload_event_type' parameter to exist in generated code"
+    );
+
+    /* Verify the Params namespace exists and has the expected structure */
+    assert!(
+        content.contains("export namespace EventEnvelope"),
+        "EventEnvelope namespace should be generated"
+    );
+    assert!(
+        content.contains("export type Params ="),
+        "Params type should be generated inside namespace"
+    );
+
+    /* Most importantly: verify TypeScript compilation succeeds.
+       Before the fix, this would fail with:
+       "Property 'EventEnvelope__payload_event_type' is missing" */
+    check_typescript_compilation(&ts_file)
+        .expect("TypeScript compilation failed - likely duplicate parameter mismatch between Params type and __tnComputeParams");
+
+    println!("✓ Parent tag-ref enum deduplication test passed");
 }

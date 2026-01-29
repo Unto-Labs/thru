@@ -241,6 +241,42 @@ fn format_array_with_options(
         return JsonValue::String(format!("0x{hex}"));
     }
 
+    /* Char arrays: extract bytes up to null terminator, then validate UTF-8.
+     * If valid UTF-8, display as string. If invalid, display as hex. */
+    if !elements.is_empty() && elements.iter().all(is_char_element) {
+        let bytes: Vec<u8> = elements
+            .iter()
+            .filter_map(extract_char_byte)
+            .take_while(|&b| b != 0)
+            .collect();
+
+        /* Try to parse as UTF-8; show as string if valid, hex if invalid */
+        let display_value = match String::from_utf8(bytes.clone()) {
+            Ok(s) => JsonValue::String(s),
+            Err(_) => {
+                let hex = bytes.iter().map(|b| format!("{b:02x}")).collect::<String>();
+                JsonValue::String(format!("0x{hex}"))
+            }
+        };
+
+        if options.include_byte_offsets {
+            let mut map = Map::new();
+            /* Use "string" key for valid UTF-8, "hex" key for invalid */
+            let key = match &display_value {
+                JsonValue::String(s) if s.starts_with("0x") => "hex",
+                _ => "string",
+            };
+            map.insert(key.to_string(), display_value);
+            map.insert("_byteRange".to_string(), json!({
+                "offset": base_offset,
+                "size": elements.len() as u64
+            }));
+            return JsonValue::Object(map);
+        }
+
+        return display_value;
+    }
+
     let mut cumulative_offset = base_offset;
     let formatted: Vec<JsonValue> = elements
         .iter()
@@ -307,6 +343,14 @@ fn format_primitive(value: &PrimitiveValue) -> JsonValue {
         PrimitiveValue::F16(v) => json!(v.value),
         PrimitiveValue::F32(v) => json!(v.value),
         PrimitiveValue::F64(v) => json!(v.value),
+        PrimitiveValue::Char(v) => {
+            /* For printable ASCII, display as string; otherwise as hex */
+            if v.value.is_ascii_graphic() || v.value == b' ' {
+                json!(String::from(v.value as char))
+            } else {
+                json!(format!("0x{:02x}", v.value))
+            }
+        }
     }
 }
 
@@ -389,6 +433,23 @@ fn extract_u8(value: &ReflectedValue) -> Option<u8> {
         _ => None,
     }
 }
+
+fn is_char_element(value: &ReflectedValue) -> bool {
+    matches!(
+        value.type_info.kind,
+        ReflectedTypeKind::Primitive {
+            prim_type: PrimitiveType::Integral(IntegralType::Char)
+        }
+    ) && matches!(value.get_value(), Value::Primitive(_))
+}
+
+fn extract_char_byte(value: &ReflectedValue) -> Option<u8> {
+    match value.get_value() {
+        Value::Primitive(PrimitiveValue::Char(v)) => Some(v.value),
+        _ => None,
+    }
+}
+
 
 /* Legacy encoding function, retained for tests - use well_known::handlers::PubkeyHandler instead */
 #[allow(dead_code)]
@@ -516,6 +577,7 @@ fn encode_thru_signature(bytes: &[u8]) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::value::PrimitiveValueChar;
 
     fn hex_to_bytes(hex: &str) -> Vec<u8> {
         let cleaned: String = hex.chars().filter(|c| !c.is_whitespace()).collect();
@@ -601,5 +663,44 @@ mod tests {
 
         let long = [0u8; 65];
         assert!(encode_thru_signature(&long).is_none());
+    }
+
+    #[test]
+    fn format_primitive_char_printable_ascii() {
+        let char_value = PrimitiveValueChar {
+            type_name: "char".to_string(),
+            value: b'A',
+        };
+        let result = format_primitive(&PrimitiveValue::Char(char_value));
+        assert_eq!(result, serde_json::json!("A"));
+    }
+
+    #[test]
+    fn format_primitive_char_space() {
+        let char_value = PrimitiveValueChar {
+            type_name: "char".to_string(),
+            value: b' ',
+        };
+        let result = format_primitive(&PrimitiveValue::Char(char_value));
+        assert_eq!(result, serde_json::json!(" "));
+    }
+
+    #[test]
+    fn format_primitive_char_non_printable_shows_hex() {
+        /* Null byte should show as hex */
+        let char_value = PrimitiveValueChar {
+            type_name: "char".to_string(),
+            value: 0x00,
+        };
+        let result = format_primitive(&PrimitiveValue::Char(char_value));
+        assert_eq!(result, serde_json::json!("0x00"));
+
+        /* High byte (invalid UTF-8) should show as hex */
+        let char_value = PrimitiveValueChar {
+            type_name: "char".to_string(),
+            value: 0x80,
+        };
+        let result = format_primitive(&PrimitiveValue::Char(char_value));
+        assert_eq!(result, serde_json::json!("0x80"));
     }
 }

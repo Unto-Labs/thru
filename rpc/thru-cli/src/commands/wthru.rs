@@ -125,6 +125,10 @@ async fn initialize_wthru(
         CliError::TransactionSubmission(format!("Failed to get block height: {}", e))
     })?;
 
+    let chain_info = client.get_chain_info().await.map_err(|e| {
+        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
+    })?;
+
     let mint_proof =
         make_state_proof(&client, &mint_account_pubkey, ProofType::Creating, None).await?;
     let vault_proof =
@@ -146,6 +150,7 @@ async fn initialize_wthru(
     )
     .map_err(|e| CliError::TransactionSubmission(format!("Failed to build transaction: {}", e)))?;
 
+    let mut transaction = transaction.with_chain_id(chain_info.chain_id);
     transaction
         .sign(&fee_payer_keypair.private_key)
         .map_err(|e| {
@@ -260,6 +265,10 @@ async fn deposit_wthru(
             CliError::TransactionSubmission(format!("Failed to get block height: {}", e))
         })?;
 
+        let chain_info = client.get_chain_info().await.map_err(|e| {
+            CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
+        })?;
+
         let mut transfer_tx = TransactionBuilder::build_transfer(
             fee_payer_keypair.public_key,
             EOA_PROGRAM,
@@ -271,6 +280,7 @@ async fn deposit_wthru(
         )
         .map_err(|e| CliError::TransactionSubmission(format!("Failed to build transfer: {}", e)))?;
 
+        let mut transfer_tx = transfer_tx.with_chain_id(chain_info.chain_id);
         transfer_tx
             .sign(&fee_payer_keypair.private_key)
             .map_err(|e| {
@@ -311,6 +321,10 @@ async fn deposit_wthru(
         CliError::TransactionSubmission(format!("Failed to get block height: {}", e))
     })?;
 
+    let chain_info = client.get_chain_info().await.map_err(|e| {
+        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
+    })?;
+
     let mut deposit_tx = TransactionBuilder::build_wthru_deposit(
         fee_payer_keypair.public_key,
         wthru_program_bytes,
@@ -324,6 +338,7 @@ async fn deposit_wthru(
     )
     .map_err(|e| CliError::TransactionSubmission(format!("Failed to build deposit: {}", e)))?;
 
+    let mut deposit_tx = deposit_tx.with_chain_id(chain_info.chain_id);
     deposit_tx
         .sign(&fee_payer_keypair.private_key)
         .map_err(|e| {
@@ -442,6 +457,10 @@ async fn withdraw_wthru(
         CliError::TransactionSubmission(format!("Failed to get block height: {}", e))
     })?;
 
+    let chain_info = client.get_chain_info().await.map_err(|e| {
+        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
+    })?;
+
     let mut withdraw_tx = TransactionBuilder::build_wthru_withdraw(
         fee_payer_keypair.public_key,
         wthru_program_bytes,
@@ -457,6 +476,7 @@ async fn withdraw_wthru(
     )
     .map_err(|e| CliError::TransactionSubmission(format!("Failed to build withdraw: {}", e)))?;
 
+    let mut withdraw_tx = withdraw_tx.with_chain_id(chain_info.chain_id);
     withdraw_tx
         .sign(&fee_payer_keypair.private_key)
         .map_err(|e| {

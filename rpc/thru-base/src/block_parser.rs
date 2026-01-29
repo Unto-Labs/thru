@@ -472,13 +472,15 @@ impl BlockParser {
     }
 
     /// Extract transaction signature from transaction data and convert to ts... format
+    /// The signature is at the END of the transaction (last 64 bytes).
     pub fn extract_transaction_signature(tx_data: &[u8]) -> Result<String, String> {
-        if tx_data.len() < 64 {
+        if tx_data.len() < txn_lib::TN_TXN_SIGNATURE_SZ {
             return Err("Transaction too short to contain a signature".to_string());
         }
 
-        // The first 64 bytes are the first signature
-        let signature_bytes = &tx_data[..64];
+        // The signature is at the end   of the transaction (last 64 bytes)
+        let sig_start = tx_data.len() - txn_lib::TN_TXN_SIGNATURE_SZ;
+        let signature_bytes = &tx_data[sig_start..];
 
         // Convert to fixed-size array for signature utilities
         let mut sig_array = [0u8; 64];
@@ -532,10 +534,14 @@ impl BlockParser {
     /// Extract account addresses from a single transaction
     /// Returns ta... formatted account addresses found in the transaction
     fn extract_transaction_accounts(tx_data: &[u8]) -> Result<Vec<String>, BlockParseError> {
-        if tx_data.len() < 176 {
-            // Minimum size for WireTxnHdrV1 (176 bytes)
+        // Minimum size: 112-byte header + 64-byte trailing signature = 176 bytes
+        let header_size = 112;
+        let signature_size = txn_lib::TN_TXN_SIGNATURE_SZ;
+        let min_txn_size = header_size + signature_size;
+        if tx_data.len() < min_txn_size {
             return Err(BlockParseError::AccountExtractionFailed(
-                "Transaction too small to contain header".to_string(),
+                format!("Transaction too small: {} bytes, need at least {} (header={}, signature={})",
+                    tx_data.len(), min_txn_size, header_size, signature_size),
             ));
         }
 
@@ -545,8 +551,8 @@ impl BlockParser {
         );
         let mut accounts = Vec::new();
 
-        // Extract fee_payer_pubkey (offset 112, 32 bytes)
-        let fee_payer_offset = 112;
+        // Extract fee_payer_pubkey (offset 48, 32 bytes)
+        let fee_payer_offset = 48;
         if tx_data.len() >= fee_payer_offset + 32 {
             let fee_payer_pubkey: [u8; 32] = tx_data[fee_payer_offset..fee_payer_offset + 32]
                 .try_into()
@@ -565,8 +571,8 @@ impl BlockParser {
             accounts.push(fee_payer_address);
         }
 
-        // Extract program_pubkey (offset 144, 32 bytes)
-        let program_offset = 144;
+        // Extract program_pubkey (offset 80, 32 bytes)
+        let program_offset = 80;
         if tx_data.len() >= program_offset + 32 {
             let program_pubkey: [u8; 32] = tx_data[program_offset..program_offset + 32]
                 .try_into()
@@ -586,12 +592,12 @@ impl BlockParser {
         }
 
         // Extract additional account addresses from variable section
-        // This comes after the fixed header (176 bytes total for WireTxnHdrV1)
-        let header_size = 176;
+        // This comes after the fixed header (112 bytes total for WireTxnHdrV1)
+        let header_size = 112;
         if tx_data.len() > header_size {
             // Get account counts from header
-            let readwrite_accounts_cnt = u16::from_le_bytes([tx_data[66], tx_data[67]]);
-            let readonly_accounts_cnt = u16::from_le_bytes([tx_data[68], tx_data[69]]);
+            let readwrite_accounts_cnt = u16::from_le_bytes([tx_data[2], tx_data[3]]);
+            let readonly_accounts_cnt = u16::from_le_bytes([tx_data[4], tx_data[5]]);
 
             debug!(
                 "Transaction has {} readwrite and {} readonly accounts",
@@ -630,11 +636,12 @@ mod tests {
 
     #[test]
     fn test_extract_transaction_signature() {
-        // Create a mock transaction with 64 bytes of signature data
+        // Create a mock transaction with 64 bytes of signature data at the END
         let mut transaction_data = vec![0u8; 100];
-        // Set some recognizable pattern in the signature bytes
+        // Set some recognizable pattern in the signature bytes (last 64 bytes)
+        let sig_start = transaction_data.len() - 64;
         for i in 0..64 {
-            transaction_data[i] = (i % 256) as u8;
+            transaction_data[sig_start + i] = (i % 256) as u8;
         }
 
         let result = BlockParser::extract_transaction_signature(&transaction_data);
@@ -721,23 +728,33 @@ mod tests {
     #[test]
     fn test_try_parse_transaction_at_offset() {
         // Create a minimal valid transaction structure for testing
-        // This is a simplified test that creates the minimum structure needed
-        let wire_header_size = mem::size_of::<WireTxnHdrV1>();
-        let mut tx_data = vec![0u8; wire_header_size];
+        // wire format: 112-byte header (no signature prefix) + 64-byte trailing signature
+        // Transaction layout:
+        //   [0,1)   transaction_version
+        //   [1,2)   flags
+        //   [2,4)   readwrite_accounts_cnt
+        //   [4,6)   readonly_accounts_cnt
+        //   [6,8)   instr_data_sz
+        //   ... other fields ...
+        //   [last 64 bytes] signature at END
+        let header_size = 112;
+        let signature_size = 64;
+        let min_txn_size = header_size + signature_size;
+        let mut tx_data = vec![0u8; min_txn_size];
 
-        // Set transaction version to 1 at the correct offset (after 64-byte signature)
-        tx_data[64] = 1; // transaction_version
+        // Set transaction version to 1 at offset 0 (no signature prefix in new format)
+        tx_data[0] = 1; // transaction_version
 
         // Set all account counts and instruction size to 0 (minimal transaction)
-        // readwrite_accounts_cnt at offset 66-67
-        tx_data[66] = 0;
-        tx_data[67] = 0;
-        // readonly_accounts_cnt at offset 68-69
-        tx_data[68] = 0;
-        tx_data[69] = 0;
-        // instr_data_sz at offset 70-71
-        tx_data[70] = 0;
-        tx_data[71] = 0;
+        // readwrite_accounts_cnt at offset 2-3
+        tx_data[2] = 0;
+        tx_data[3] = 0;
+        // readonly_accounts_cnt at offset 4-5
+        tx_data[4] = 0;
+        tx_data[5] = 0;
+        // instr_data_sz at offset 6-7
+        tx_data[6] = 0;
+        tx_data[7] = 0;
 
         // Test the helper function directly
         let result = BlockParser::try_parse_transaction_at_offset(&tx_data);
@@ -745,8 +762,8 @@ mod tests {
         // The important thing is that the function doesn't panic and handles the data correctly
         match result {
             Ok((size, data)) => {
-                assert_eq!(size, wire_header_size);
-                assert_eq!(data.len(), wire_header_size);
+                assert_eq!(size, min_txn_size);
+                assert_eq!(data.len(), min_txn_size);
             }
             Err(_) => {
                 // This is expected for invalid transaction data

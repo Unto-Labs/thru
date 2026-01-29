@@ -140,6 +140,10 @@ async fn create_account(
         CliError::TransactionSubmission(format!("Failed to get current slot: {}", e))
     })?;
 
+    let chain_info = client.get_chain_info().await.map_err(|e| {
+        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
+    })?;
+
     let current_slot = block_height.finalized_height;
 
     if !json_format {
@@ -186,7 +190,8 @@ async fn create_account(
         output::print_info("Signing transaction...");
     }
 
-    // Sign the transaction
+    // Set chain ID and sign the transaction
+    let mut transaction = transaction.with_chain_id(chain_info.chain_id);
     transaction.sign(&keypair.private_key).map_err(|e| {
         CliError::TransactionSubmission(format!("Failed to sign transaction: {}", e))
     })?;
@@ -287,6 +292,11 @@ async fn compress_account(
     let block_height = client.get_block_height().await.map_err(|e| {
         CliError::TransactionSubmission(format!("Failed to get current block height: {}", e))
     })?;
+
+    let chain_info = client.get_chain_info().await.map_err(|e| {
+        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
+    })?;
+
     let start_slot = block_height.executed_height + 1;
 
     if !json_format {
@@ -384,12 +394,13 @@ async fn compress_account(
         CliError::TransactionSubmission(format!("Failed to build compression transaction: {}", e))
     })?;
 
-    // Set reasonable resource limits
+    // Set reasonable resource limits and chain ID
     transaction = transaction
         .with_compute_units(100_300 + account_size * 2)
         .with_state_units(10_000)
         .with_memory_units(10_000)
-        .with_expiry_after(100);
+        .with_expiry_after(100)
+        .with_chain_id(chain_info.chain_id);
 
     if !json_format {
         output::print_info("Signing transaction...");
@@ -566,6 +577,11 @@ async fn decompress_account(
     let block_height = client.get_block_height().await.map_err(|e| {
         CliError::TransactionSubmission(format!("Failed to get current block height: {}", e))
     })?;
+
+    let chain_info = client.get_chain_info().await.map_err(|e| {
+        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
+    })?;
+
     let start_slot = block_height.executed_height + 1;
 
     // Get current nonce for fee payer account
@@ -599,6 +615,7 @@ async fn decompress_account(
             &state_proof_bytes,
             nonce,
             start_slot,
+            chain_info.chain_id,
             json_format,
         )
         .await
@@ -632,6 +649,7 @@ async fn decompress_direct(
     state_proof_bytes: &[u8],
     nonce: u64,
     start_slot: u64,
+    chain_id: u16,
     json_format: bool,
 ) -> Result<(), CliError> {
     if !json_format {
@@ -656,7 +674,8 @@ async fn decompress_direct(
         output::print_info("Signing transaction...");
     }
 
-    // Sign the transaction with fee payer's private key
+    // Set chain ID and sign the transaction with fee payer's private key
+    let mut transaction = transaction.with_chain_id(chain_id);
     transaction
         .sign(&fee_payer_keypair.private_key)
         .map_err(|e| {
@@ -803,6 +822,10 @@ async fn decompress_with_uploader(
         CliError::TransactionSubmission(format!("Failed to get current block height: {}", e))
     })?;
     let start_slot = block_height.executed_height + 1;
+
+    let chain_info = client.get_chain_info().await.map_err(|e| {
+        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
+    })?;
     // Get current nonce for fee payer account
     let fee_payer_account_info = client
         .get_account_info(&fee_payer_keypair.address_string, None, None)
@@ -839,7 +862,8 @@ async fn decompress_with_uploader(
         CliError::TransactionSubmission(format!("Failed to build DECOMPRESS2 transaction: {}", e))
     })?;
 
-    // Sign and execute
+    // Set chain ID and sign
+    transaction = transaction.with_chain_id(chain_info.chain_id);
     transaction
         .sign(&fee_payer_keypair.private_key)
         .map_err(|e| {
@@ -1049,6 +1073,10 @@ async fn decompress_with_uploader_huge(
         CliError::TransactionSubmission(format!("Failed to get current block height: {}", e))
     })?;
     let start_slot = block_height.executed_height + 1;
+
+    let chain_info = client.get_chain_info().await.map_err(|e| {
+        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
+    })?;
     // Get current nonce for fee payer account
     let fee_payer_account_info = client
         .get_account_info(&fee_payer_keypair.address_string, None, None)
@@ -1102,7 +1130,8 @@ async fn decompress_with_uploader_huge(
     //     .with_memory_units(20_000) // Increased for huge data
     //     .with_expiry_after(100);
 
-    // Sign and execute
+    // Set chain ID and sign
+    transaction = transaction.with_chain_id(chain_info.chain_id);
     transaction
         .sign(&fee_payer_keypair.private_key)
         .map_err(|e| {

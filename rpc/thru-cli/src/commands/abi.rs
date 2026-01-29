@@ -120,6 +120,7 @@ pub async fn handle_abi_command(
 struct AbiProgramManager {
     rpc_client: RpcClient,
     fee_payer_keypair: KeyPair,
+    chain_id: u16,
 }
 
 impl AbiProgramManager {
@@ -142,9 +143,14 @@ impl AbiProgramManager {
         };
         let fee_payer_keypair = crypto::keypair_from_hex(fee_payer_key_hex)?;
 
+        let chain_info = rpc_client.get_chain_info().await.map_err(|e| {
+            CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
+        })?;
+
         Ok(Self {
             rpc_client,
             fee_payer_keypair,
+            chain_id: chain_info.chain_id,
         })
     }
 
@@ -154,6 +160,10 @@ impl AbiProgramManager {
 
     fn rpc_client(&self) -> &RpcClient {
         &self.rpc_client
+    }
+
+    fn chain_id(&self) -> u16 {
+        self.chain_id
     }
 
 
@@ -455,6 +465,7 @@ async fn create_abi_account(
     )
     .map_err(|e| CliError::ProgramUpload(e.to_string()))?;
 
+    let mut transaction = transaction.with_chain_id(abi_program_manager.chain_id());
     transaction
         .sign(&abi_program_manager.fee_payer().private_key)
         .map_err(|e| CliError::Crypto(e.to_string()))?;
@@ -659,6 +670,7 @@ async fn upgrade_abi_account(
     )
     .map_err(|e| CliError::ProgramUpload(e.to_string()))?;
 
+    let mut transaction = transaction.with_chain_id(abi_program_manager.chain_id());
     transaction
         .sign(&abi_program_manager.fee_payer().private_key)
         .map_err(|e| CliError::Crypto(e.to_string()))?;
@@ -790,6 +802,7 @@ async fn finalize_abi_account(
     )
     .map_err(|e| CliError::ProgramUpload(e.to_string()))?;
 
+    let mut transaction = transaction.with_chain_id(abi_program_manager.chain_id());
     transaction
         .sign(&abi_program_manager.fee_payer().private_key)
         .map_err(|e| CliError::Crypto(e.to_string()))?;
@@ -893,6 +906,7 @@ async fn close_abi_account(
     )
     .map_err(|e| CliError::ProgramUpload(e.to_string()))?;
 
+    let mut transaction = transaction.with_chain_id(abi_program_manager.chain_id());
     transaction
         .sign(&abi_program_manager.fee_payer().private_key)
         .map_err(|e| CliError::Crypto(e.to_string()))?;

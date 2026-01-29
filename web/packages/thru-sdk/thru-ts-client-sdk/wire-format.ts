@@ -36,8 +36,8 @@ export const BLOCK_VERSION_V1 = 0x01;
 // Transaction Constants
 // ============================================================================
 
-/** Size of a transaction header in bytes */
-export const TXN_HEADER_SIZE = 176;
+/** Size of a transaction header in bytes (signature is at END, not in header) */
+export const TXN_HEADER_SIZE = 112;
 
 /** Transaction version 1 */
 export const TXN_VERSION_V1 = 0x01;

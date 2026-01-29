@@ -1,3 +1,6 @@
+// Re-export create for instantiating proto messages
+export { create } from "@bufbuild/protobuf";
+
 // Common types
 export * from "./gen/thru/common/v1/consensus_pb";
 export * from "./gen/thru/common/v1/errors_pb";

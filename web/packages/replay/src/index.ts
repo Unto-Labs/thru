@@ -2,6 +2,7 @@ export { ChainClient } from "./chain-client";
 export type {
   AccountSource,
   BlockSource,
+  ChainClientFactory,
   ChainClientOptions,
   EventSource,
   ReplayDataSource,
@@ -31,9 +32,19 @@ export type { AssembledAccount, PageAssemblerOptions } from "./page-assembler";
 
 export { ReplayStream } from "./replay-stream";
 
-export type { ReplayConfig, ReplayLogger, ReplayMetrics, Slot } from "./types";
+export { resolveClient } from "./types";
+export type { ClientOrFactory, ReconnectSources, ReplayConfig, ReplayLogger, ReplayMetrics, Slot } from "./types";
 
 export { createConsoleLogger, NOOP_LOGGER } from "./logger";
+
+export {
+  DEFAULT_RETRY_CONFIG,
+  calculateBackoff,
+  withTimeout,
+  delay,
+  TimeoutError,
+} from "./retry";
+export type { RetryConfig } from "./retry";
 
 export { ConsoleSink } from "./sinks/console";
 export type { ReplaySink, ReplaySinkContext, ReplaySinkMeta } from "./sinks/replay-sink";
@@ -48,6 +59,9 @@ export type { Pubkey as ProtoPubkey, Signature as ProtoSignature } from "@thru/p
 export { AccountView } from "@thru/proto";
 export type { Account, AccountMeta, AccountPage, AccountFlags } from "@thru/proto";
 export type {
+  GetAccountRequest,
+  ListAccountsRequest,
+  ListAccountsResponse,
   StreamAccountUpdatesRequest,
   StreamAccountUpdatesResponse,
   AccountUpdate,

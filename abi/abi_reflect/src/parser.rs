@@ -3,9 +3,9 @@
 use crate::ir::ParamMap;
 use crate::types::ReflectedType;
 use crate::value::{
-    PrimitiveValue, PrimitiveValueF16, PrimitiveValueF32, PrimitiveValueF64, PrimitiveValueI16,
-    PrimitiveValueI32, PrimitiveValueI64, PrimitiveValueI8, PrimitiveValueU16, PrimitiveValueU32,
-    PrimitiveValueU64, PrimitiveValueU8, ReflectedValue, Value,
+    PrimitiveValue, PrimitiveValueChar, PrimitiveValueF16, PrimitiveValueF32, PrimitiveValueF64,
+    PrimitiveValueI16, PrimitiveValueI32, PrimitiveValueI64, PrimitiveValueI8, PrimitiveValueU16,
+    PrimitiveValueU32, PrimitiveValueU64, PrimitiveValueU8, ReflectedValue, Value,
 };
 use abi_gen::abi::expr::ExprKind;
 use abi_gen::abi::resolved::{ResolvedType, ResolvedTypeKind, Size, TypeResolver};
@@ -230,6 +230,13 @@ impl<'a> Parser<'a> {
                         value: i64::from_le_bytes([
                             data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7],
                         ]),
+                    }))
+                }
+                IntegralType::Char => {
+                    check_size(data, 1)?;
+                    Ok(PrimitiveValue::Char(PrimitiveValueChar {
+                        type_name: "char".to_string(),
+                        value: data[0],
                     }))
                 }
             },

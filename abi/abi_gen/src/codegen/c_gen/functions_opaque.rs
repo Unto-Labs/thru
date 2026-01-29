@@ -299,7 +299,7 @@ fn extract_field_refs_from_expr(expr: &ExprKind, refs: &mut HashSet<String>) {
 fn primitive_size(prim_type: &PrimitiveType) -> usize {
     match prim_type {
         PrimitiveType::Integral(int_type) => match int_type {
-            IntegralType::U8 | IntegralType::I8 => 1,
+            IntegralType::U8 | IntegralType::I8 | IntegralType::Char => 1,
             IntegralType::U16 | IntegralType::I16 => 2,
             IntegralType::U32 | IntegralType::I32 => 4,
             IntegralType::U64 | IntegralType::I64 => 8,
@@ -324,6 +324,7 @@ fn primitive_to_c_type(prim_type: &PrimitiveType) -> &'static str {
             IntegralType::I16 => "int16_t",
             IntegralType::I32 => "int32_t",
             IntegralType::I64 => "int64_t",
+            IntegralType::Char => "char",
         },
         PrimitiveType::FloatingPoint(float_type) => match float_type {
             FloatingPointType::F16 => "_Float16",

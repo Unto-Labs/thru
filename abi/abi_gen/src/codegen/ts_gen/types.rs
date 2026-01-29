@@ -6,7 +6,7 @@ use super::helpers::{
     primitive_to_dataview_getter, primitive_to_dataview_setter, primitive_to_ts_return_type,
     sequential_size_expression, struct_field_const_offset, to_camel_case, to_lower_camel_case,
 };
-use super::ir_helpers::{collect_dynamic_param_bindings, ts_parameter_bindings};
+use super::ir_helpers::{collect_dynamic_param_bindings, deduplicated_ts_parameter_bindings};
 use super::ir_serialization::{emit_ir_constant, ir_constant_name};
 use super::param_cache::extractor::{
     ParamExtractorPlan, build_param_extractor_plan, emit_param_extractor,
@@ -138,7 +138,7 @@ pub fn emit_type(
     let mut params_namespace = None;
     if let Some(type_ir) = type_ir {
         output.push_str(&emit_ir_constant(resolved_type, type_ir));
-        if let Some(namespace) = emit_params_namespace(resolved_type, type_ir) {
+        if let Some(namespace) = emit_params_namespace(resolved_type, type_ir, type_lookup) {
             params_namespace = Some(namespace);
         }
     }
@@ -258,11 +258,19 @@ fn emit_nested_types(
     }
 }
 
-fn emit_params_namespace(resolved_type: &ResolvedType, type_ir: &TypeIr) -> Option<String> {
+fn emit_params_namespace(
+    resolved_type: &ResolvedType,
+    type_ir: &TypeIr,
+    _type_lookup: &BTreeMap<String, ResolvedType>,
+) -> Option<String> {
     if type_ir.parameters.iter().all(|param| param.derived) {
         return None;
     }
-    let bindings: Vec<_> = ts_parameter_bindings(type_ir)
+
+    /* Get deduplicated bindings. Deduplication removes duplicate parameters
+       that differ only by struct name prefix (e.g., keeps `body_tag` and
+       removes `StructName__body_tag`). */
+    let bindings: Vec<_> = deduplicated_ts_parameter_bindings(type_ir)
         .into_iter()
         .filter(|binding| !binding.derived)
         .collect();

@@ -27,30 +27,36 @@ union signature_t {
 
 using ed25519_sig_t = signature_t;
 
-// Transaction header structure (no explicit packing, but contains packed
-// members)
+/* ThruNet v1 transaction header.
+ * Transaction wire format:
+ *   [header (112 bytes)]
+ *   [input_pubkeys (variable)]
+ *   [instr_data (variable)]
+ *   [state_proof (optional)]
+ *   [account_meta (optional)]
+ *   [fee_payer_signature (64 bytes)] */
 struct tn_txn_hdr_v1 {
-  signature_t fee_payer_signature; /* bytes: [0,64) */
-  uchar transaction_version;       /* bytes: [64,65) */
-  uchar flags;                     /* bytes: [65,66) */
-  ushort readwrite_accounts_cnt;   /* bytes: [66,68) */
-  ushort readonly_accounts_cnt;    /* bytes: [68,70) */
-  ushort instr_data_sz;            /* bytes: [70,72) */
-  uint req_compute_units;          /* bytes: [72,76) */
-  ushort req_state_units;          /* bytes: [76,78) */
-  ushort req_memory_units;         /* bytes: [78,80) */
-  ulong fee;                       /* bytes: [80,88) */
-  ulong nonce;                     /* bytes: [88,96) */
-  ulong start_slot;                /* bytes: [96,104) */
-  uint expiry_after;               /* bytes: [104,108) */
-  uint padding_0;                  /* bytes: [108,112) */
-  pubkey_t fee_payer_pubkey;       /* bytes: [112,144) */
-  pubkey_t program_pubkey;         /* bytes: [144,176) */
+  uchar transaction_version;       /* bytes: [0,1) - Transaction version (always 1) */
+  uchar flags;                     /* bytes: [1,2) - Transaction flags */
+  ushort readwrite_accounts_cnt;   /* bytes: [2,4) - Number of read-write accounts */
+  ushort readonly_accounts_cnt;    /* bytes: [4,6) - Number of read-only accounts */
+  ushort instr_data_sz;            /* bytes: [6,8) - Size of instruction data */
+  uint req_compute_units;          /* bytes: [8,12) - Requested compute units */
+  ushort req_state_units;          /* bytes: [12,14) - Requested state units */
+  ushort req_memory_units;         /* bytes: [14,16) - Requested memory units */
+  ulong fee;                       /* bytes: [16,24) - Transaction fee in native tokens */
+  ulong nonce;                     /* bytes: [24,32) - Transaction nonce */
+  ulong start_slot;                /* bytes: [32,40) - Slot when transaction becomes valid */
+  uint expiry_after;               /* bytes: [40,44) - Slots after start_slot when transaction expires */
+  ushort chain_id;                 /* bytes: [44,46) - Chain identifier (must be non-zero) */
+  ushort padding_0;                /* bytes: [46,48) - Reserved padding */
+  pubkey_t fee_payer_pubkey;       /* bytes: [48,80) - Fee payer's public key */
+  pubkey_t program_pubkey;         /* bytes: [80,112) - Target program's public key */
 };
 
+/* Universal transaction header - minimal header present in all transaction versions */
 struct tn_txn_hdr_universal {
-  signature_t fee_payer_signature;
-  uchar transaction_version;
+  uchar transaction_version;       /* bytes: [0,1) - Transaction version */
 };
 
 union tn_txn_hdr {
@@ -79,9 +85,30 @@ struct __attribute__((packed)) tn_account_meta {
 // Account metadata constants
 constexpr ulong TN_ACCOUNT_META_FOOTPRINT = sizeof(tn_account_meta);
 
+// Transaction constants (defined early as they are used in inline functions)
+constexpr ulong TN_TXN_SIGNATURE_SZ = 64UL;
+constexpr ulong TN_TXN_PUBKEY_SZ = 32UL;
+constexpr ulong TN_TXN_ACCT_ADDR_SZ = 32UL;
+constexpr ulong TN_TXN_BLOCKHASH_SZ = 32UL;
+
 // Transaction inline functions (C++ compatible)
-inline const ed25519_sig_t* tn_txn_get_fee_payer_signature(const tn_txn* txn) {
-  return &txn->hdr.v1.fee_payer_signature;
+
+/* tn_txn_get_fee_payer_signature: Returns a pointer to the fee payer signature.
+   The signature is at the END of the transaction (last 64 bytes). */
+inline const ed25519_sig_t* tn_txn_get_fee_payer_signature(const tn_txn* txn, ulong txn_sz) {
+  return (const ed25519_sig_t*)((const uchar*)txn + txn_sz - TN_TXN_SIGNATURE_SZ);
+}
+
+/* tn_txn_get_msg: Returns the message portion of the transaction
+   (everything except the trailing signature). */
+inline const uchar* tn_txn_get_msg(const tn_txn* txn) {
+  return (const uchar*)txn;
+}
+
+/* tn_txn_get_msg_sz: Returns the size of the message portion
+   (total transaction size minus signature). */
+inline ulong tn_txn_get_msg_sz(ulong txn_sz) {
+  return txn_sz - TN_TXN_SIGNATURE_SZ;
 }
 
 inline const pubkey_t* tn_txn_get_acct_addrs(const tn_txn* txn) {
@@ -89,7 +116,7 @@ inline const pubkey_t* tn_txn_get_acct_addrs(const tn_txn* txn) {
 }
 
 inline const uchar* tn_txn_get_instr_data(const tn_txn* txn) {
-  return reinterpret_cast<const uchar*>(txn) + sizeof(tn_txn_hdr_v1) +
+  return (const uchar*)txn + sizeof(tn_txn_hdr_v1) +
          (txn->hdr.v1.readwrite_accounts_cnt +
           txn->hdr.v1.readonly_accounts_cnt) *
              sizeof(pubkey_t);
@@ -110,6 +137,8 @@ inline ulong tn_txn_get_expiry_slot(const tn_txn* txn) {
 }
 
 inline ulong tn_txn_get_nonce(const tn_txn* txn) { return txn->hdr.v1.nonce; }
+
+inline ushort tn_txn_get_chain_id(const tn_txn* txn) { return txn->hdr.v1.chain_id; }
 
 inline ulong tn_txn_get_requested_compute_units(const tn_txn* txn) {
   return txn->hdr.v1.req_compute_units;
@@ -138,21 +167,18 @@ inline bool tn_txn_is_account_idx_writable(const tn_txn* txn, ushort acc_idx) {
           (acc_idx < (2 + txn->hdr.v1.readwrite_accounts_cnt)));
 }
 
-// Transaction constants
-constexpr ulong TN_TXN_SIGNATURE_SZ = 64UL;
-constexpr ulong TN_TXN_PUBKEY_SZ = 32UL;
-constexpr ulong TN_TXN_ACCT_ADDR_SZ = 32UL;
-constexpr ulong TN_TXN_BLOCKHASH_SZ = 32UL;
-
 // Transaction flags
 constexpr uint TN_TXN_FLAG_HAS_FEE_PAYER_PROOF = 0U;
 
 constexpr uchar TN_TXN_V1 = 0x01;
 
+constexpr int TSDK_REG_MAX = 32;
+
 struct tsdk_shadow_stack_frame {
   ushort program_acc_idx;
   ushort stack_pages;
   ushort heap_pages;
+  ulong  saved_regs[TSDK_REG_MAX]; /* Saved registers at invoke time for cross-frame access */
 };
 
 constexpr int TSDK_SHADOW_STACK_FRAME_MAX = 17;

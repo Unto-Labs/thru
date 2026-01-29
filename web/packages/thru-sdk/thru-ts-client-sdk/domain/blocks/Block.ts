@@ -152,8 +152,11 @@ export class Block {
         view.setUint8(offset, version & 0xff);
         offset += 1;
 
-        bytes.fill(0, offset, offset + 7);
-        offset += 7;
+        bytes.fill(0, offset, offset + 5); // padding (5 bytes)
+        offset += 5;
+
+        view.setUint16(offset, this.header.chainId ?? 0, true);
+        offset += 2;
 
         const producer = normalizeBytes(this.header.producer, PUBKEY_SIZE);
         bytes.set(producer, offset);
@@ -183,8 +186,11 @@ export class Block {
         view.setUint32(offset, this.header.maxStateUnits ?? 0, true);
         offset += 4;
 
-        bytes.fill(0, offset, offset + 4);
+        bytes.fill(0, offset, offset + 4); // reserved
         offset += 4;
+
+        view.setBigUint64(offset, this.header.weightSlot ?? 0n, true);
+        offset += 8;
 
         // If blockTimeNs is not available, write 0 instead of defaulting to expiryTimestamp
         // This preserves the distinction between "not available" and "equals expiryTimestamp"
@@ -228,7 +234,10 @@ export class Block {
         const version = view.getUint8(offset);
         offset += 1;
 
-        offset += 7; // padding
+        offset += 5; // padding (5 bytes)
+
+        const chainId = view.getUint16(offset, true);
+        offset += 2;
 
         const producer = bytes.slice(offset, offset + PUBKEY_SIZE);
         offset += PUBKEY_SIZE;
@@ -256,6 +265,9 @@ export class Block {
 
         offset += 4; // reserved
 
+        const weightSlot = view.getBigUint64(offset, true);
+        offset += 8;
+
         const blockTimeNs = view.getBigUint64(offset, true);
 
         const header = new BlockHeader({
@@ -270,6 +282,8 @@ export class Block {
             maxComputeUnits,
             maxStateUnits,
             bondAmountLockUp,
+            weightSlot,
+            chainId,
         });
 
         return { header, blockTimeNs };

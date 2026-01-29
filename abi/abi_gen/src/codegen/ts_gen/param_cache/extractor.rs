@@ -9,8 +9,8 @@ use crate::codegen::ts_gen::helpers::{
     primitive_to_dataview_getter, sequential_size_expression, struct_field_const_offset,
 };
 use crate::codegen::ts_gen::ir_helpers::{
-    TsParamBinding, collect_dynamic_param_bindings, normalize_binding_path, resolve_param_binding,
-    sanitize_param_name, ts_parameter_bindings,
+    TsParamBinding, collect_dynamic_param_bindings, deduplicated_ts_parameter_bindings,
+    normalize_binding_path, resolve_param_binding, sanitize_param_name,
 };
 use std::collections::{BTreeMap, HashSet};
 use std::fmt::Write;
@@ -193,7 +193,9 @@ pub(crate) fn build_param_extractor_plan(
     type_ir: &TypeIr,
     type_lookup: &BTreeMap<String, ResolvedType>,
 ) -> Option<ParamExtractorPlan> {
-    let bindings = ts_parameter_bindings(type_ir);
+    /* Use deduplicated bindings - the extractor outputs values for Params.fromValues()
+       which expects deduplicated field names */
+    let bindings = deduplicated_ts_parameter_bindings(type_ir);
     let has_public_bindings = bindings.iter().any(|binding| !binding.derived);
     let derived_bindings = collect_derived_bindings(resolved_type, &bindings);
 
@@ -444,7 +446,7 @@ fn collect_derived_bindings(
     derived
 }
 
-fn resolve_primitive_offset(
+pub fn resolve_primitive_offset(
     resolved_type: &ResolvedType,
     path: &str,
     type_lookup: &BTreeMap<String, ResolvedType>,

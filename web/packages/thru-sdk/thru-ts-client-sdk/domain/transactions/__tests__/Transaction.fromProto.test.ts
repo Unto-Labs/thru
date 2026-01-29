@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 
 import { PubkeySchema } from "@thru/proto";
 import { TransactionSchema } from "@thru/proto";
-import { TXN_HEADER_SIZE } from "../../../wire-format";
+import { TXN_HEADER_SIZE, SIGNATURE_SIZE } from "../../../wire-format";
 import { Transaction } from "../Transaction";
 
 function buildTestTransaction(): Transaction {
@@ -74,7 +74,7 @@ describe("Transaction.fromProto", () => {
     it("parses a proto containing only dynamic sections", () => {
         const transaction = buildTestTransaction();
         const wire = transaction.toWire();
-        const bodyWithoutHeader = wire.slice(TXN_HEADER_SIZE);
+        const bodyWithoutHeader = wire.slice(TXN_HEADER_SIZE, -SIGNATURE_SIZE);
 
         const proto = create(TransactionSchema, {
             header: buildHeaderProto(transaction),

@@ -82,6 +82,7 @@ fn create_rpc_client(config: &Config) -> Result<Client, CliError> {
 struct TransactionContext {
     pub fee_payer_keypair: KeyPair,
     pub client: Client,
+    pub chain_id: u16,
 }
 
 /// Common context for base name service operations
@@ -90,6 +91,7 @@ struct FeePayerContext {
     pub client: Client,
     pub nonce: u64,
     pub start_slot: u64,
+    pub chain_id: u16,
 }
 
 /// Validate a token account matches expected mint, token program, and optionally owner
@@ -198,11 +200,16 @@ async fn setup_fee_payer_context(
         CliError::TransactionSubmission(format!("Failed to get block height: {}", e))
     })?;
 
+    let chain_info = client.get_chain_info().await.map_err(|e| {
+        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
+    })?;
+
     Ok(FeePayerContext {
         fee_payer_keypair,
         client,
         nonce,
         start_slot: block_height.finalized_height,
+        chain_id: chain_info.chain_id,
     })
 }
 
@@ -336,7 +343,8 @@ async fn execute_transaction(
     context: &TransactionContext,
     json_format: bool,
 ) -> Result<TransactionDetails, CliError> {
-    // Sign transaction
+    // Set chain ID and sign transaction
+    transaction = transaction.with_chain_id(context.chain_id);
     transaction
         .sign(&context.fee_payer_keypair.private_key)
         .map_err(|e| CliError::Crypto(format!("Failed to sign transaction: {}", e)))?;
@@ -1123,6 +1131,7 @@ async fn purchase_domain(
     let context = TransactionContext {
         fee_payer_keypair: fee_ctx.fee_payer_keypair,
         client,
+        chain_id: fee_ctx.chain_id,
     };
 
     let transaction_details = execute_transaction(transaction, &context, json_format).await?;
@@ -1281,6 +1290,7 @@ async fn renew_lease(
     let context = TransactionContext {
         fee_payer_keypair: fee_ctx.fee_payer_keypair,
         client,
+        chain_id: fee_ctx.chain_id,
     };
 
     let transaction_details = execute_transaction(transaction, &context, json_format).await?;
@@ -1429,6 +1439,7 @@ async fn claim_expired_domain(
     let context = TransactionContext {
         fee_payer_keypair: fee_ctx.fee_payer_keypair,
         client,
+        chain_id: fee_ctx.chain_id,
     };
 
     let transaction_details = execute_transaction(transaction, &context, json_format).await?;
@@ -1608,6 +1619,7 @@ async fn initialize_root_registrar(
     let context = TransactionContext {
         fee_payer_keypair: fee_ctx.fee_payer_keypair,
         client: fee_ctx.client,
+        chain_id: fee_ctx.chain_id,
     };
 
     let transaction_details = execute_transaction(transaction, &context, json_format).await?;
@@ -1720,6 +1732,7 @@ async fn register_subdomain(
     let context = TransactionContext {
         fee_payer_keypair: fee_ctx.fee_payer_keypair,
         client: fee_ctx.client,
+        chain_id: fee_ctx.chain_id,
     };
 
     let transaction_details = execute_transaction(transaction, &context, json_format).await?;
@@ -1820,6 +1833,7 @@ async fn append_record(
     let context = TransactionContext {
         fee_payer_keypair: fee_ctx.fee_payer_keypair,
         client: fee_ctx.client,
+        chain_id: fee_ctx.chain_id,
     };
 
     let transaction_details = execute_transaction(transaction, &context, json_format).await?;
@@ -1896,6 +1910,7 @@ async fn delete_record(
     let context = TransactionContext {
         fee_payer_keypair: fee_ctx.fee_payer_keypair,
         client: fee_ctx.client,
+        chain_id: fee_ctx.chain_id,
     };
 
     let transaction_details = execute_transaction(transaction, &context, json_format).await?;
@@ -1952,6 +1967,7 @@ async fn unregister_subdomain(
     let context = TransactionContext {
         fee_payer_keypair: fee_ctx.fee_payer_keypair,
         client: fee_ctx.client,
+        chain_id: fee_ctx.chain_id,
     };
 
     let transaction_details = execute_transaction(transaction, &context, json_format).await?;

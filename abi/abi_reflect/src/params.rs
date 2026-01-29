@@ -199,7 +199,7 @@ mod tests {
     fn primitive_type(name: &str, prim: PrimitiveType) -> ResolvedType {
         let size = match &prim {
             PrimitiveType::Integral(int) => match int {
-                IntegralType::U8 | IntegralType::I8 => 1,
+                IntegralType::U8 | IntegralType::I8 | IntegralType::Char => 1,
                 IntegralType::U16 | IntegralType::I16 => 2,
                 IntegralType::U32 | IntegralType::I32 => 4,
                 IntegralType::U64 | IntegralType::I64 => 8,
@@ -1106,7 +1106,7 @@ fn read_primitive_value(
 ) -> ReflectResult<u128> {
     match prim_type {
         PrimitiveType::Integral(int_type) => match int_type {
-            IntegralType::U8 => Ok(u8::from_le_bytes([data[0]]) as u128),
+            IntegralType::U8 | IntegralType::Char => Ok(u8::from_le_bytes([data[0]]) as u128),
             IntegralType::U16 => Ok(u16::from_le_bytes([data[0], data[1]]) as u128),
             IntegralType::U32 => {
                 Ok(u32::from_le_bytes([data[0], data[1], data[2], data[3]]) as u128)
@@ -1156,7 +1156,7 @@ fn positive_integral(value: i128, type_name: &str, parameter: &str) -> ReflectRe
 fn primitive_size(prim_type: &PrimitiveType) -> usize {
     match prim_type {
         PrimitiveType::Integral(int_type) => match int_type {
-            IntegralType::U8 | IntegralType::I8 => 1,
+            IntegralType::U8 | IntegralType::I8 | IntegralType::Char => 1,
             IntegralType::U16 | IntegralType::I16 => 2,
             IntegralType::U32 | IntegralType::I32 => 4,
             IntegralType::U64 | IntegralType::I64 => 8,

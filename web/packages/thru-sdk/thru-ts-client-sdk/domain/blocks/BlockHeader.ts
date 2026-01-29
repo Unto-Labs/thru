@@ -16,6 +16,7 @@ export interface BlockHeaderParams {
     bondAmountLockUp?: bigint;
     weightSlot?: bigint;
     blockHash?: Uint8Array;
+    chainId?: number;
 }
 
 export class BlockHeader {
@@ -32,6 +33,7 @@ export class BlockHeader {
     readonly bondAmountLockUp?: bigint;
     readonly weightSlot?: bigint;
     readonly blockHash?: Uint8Array;
+    readonly chainId?: number;
 
     constructor(params: BlockHeaderParams) {
         this.slot = params.slot;
@@ -47,6 +49,7 @@ export class BlockHeader {
         this.bondAmountLockUp = params.bondAmountLockUp;
         this.weightSlot = params.weightSlot;
         this.blockHash = copyBytes(params.blockHash);
+        this.chainId = params.chainId;
     }
 
     static fromProto(proto: ProtoBlockHeader): BlockHeader {
@@ -64,6 +67,7 @@ export class BlockHeader {
             bondAmountLockUp: proto.bondAmountLockUp,
             weightSlot: proto.weightSlot,
             blockHash: proto.blockHash?.value,
+            chainId: proto.chainId,
         });
     }
 
@@ -82,6 +86,7 @@ export class BlockHeader {
             bondAmountLockUp: this.bondAmountLockUp,
             weightSlot: this.weightSlot,
             blockHash,
+            chainId: this.chainId,
         });
     }
 }

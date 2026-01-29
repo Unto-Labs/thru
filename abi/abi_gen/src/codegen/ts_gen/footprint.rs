@@ -1,6 +1,7 @@
 use super::ir_helpers::{
-    DerivedParamSpec, DynamicBinding, collect_dynamic_param_bindings, derived_param_specs,
-    sanitize_param_name, ts_parameter_bindings,
+    DerivedParamSpec, DynamicBinding, collect_dynamic_param_bindings,
+    deduplicated_ts_parameter_bindings, derived_param_specs, sanitize_param_name,
+    ts_name_dedup_map, ts_parameter_bindings,
 };
 use super::ir_serialization::ir_constant_name;
 use crate::abi::resolved::{ResolvedType, ResolvedTypeKind, Size};
@@ -47,7 +48,15 @@ fn emit_ir_footprint(
     derived_specs: &[DerivedParamSpec],
 ) -> String {
     let mut output = String::new();
+    /* All bindings are needed for IR packing (all canonical names must be in the record) */
     let bindings: Vec<_> = ts_parameter_bindings(type_ir).into_iter().collect();
+    /* Deduplicated bindings are used for public API (function signatures, Params type) */
+    let dedup_bindings: Vec<_> = deduplicated_ts_parameter_bindings(type_ir)
+        .into_iter()
+        .filter(|b| !b.derived)
+        .collect();
+    /* Map from ts_name to deduplicated ts_name for __tnPackParams */
+    let dedup_map = ts_name_dedup_map(type_ir);
     let const_name = ir_constant_name(resolved_type);
 
     writeln!(
@@ -111,9 +120,8 @@ fn emit_ir_footprint(
         return output;
     }
 
-    let public_bindings: Vec<_> = bindings.iter().filter(|b| !b.derived).collect();
-
-    let params_sig = public_bindings
+    /* Use deduplicated bindings for public API */
+    let params_sig = dedup_bindings
         .iter()
         .map(|binding| format!("{}: number | bigint", binding.ts_name))
         .collect::<Vec<_>>()
@@ -131,7 +139,7 @@ fn emit_ir_footprint(
         resolved_type.name
     )
     .unwrap();
-    for binding in &public_bindings {
+    for binding in &dedup_bindings {
         writeln!(
             &mut output,
             "      {}: {},",
@@ -158,12 +166,18 @@ fn emit_ir_footprint(
         "    const record: Record<string, bigint> = Object.create(null);"
     )
     .unwrap();
+    /* Use all bindings for record keys (IR needs all canonical names),
+       but map ts_names to deduplicated equivalents for params access */
     for binding in bindings.iter().filter(|binding| !binding.derived) {
+        let params_field = dedup_map
+            .get(&binding.ts_name)
+            .map(|s| s.as_str())
+            .unwrap_or(&binding.ts_name);
         writeln!(
             &mut output,
             "    record[\"{}\"] = params.{};",
             binding.canonical.replace('\"', "\\\""),
-            binding.ts_name
+            params_field
         )
         .unwrap();
     }
@@ -392,7 +406,8 @@ fn emit_ir_wrapper_from_params(
     _legacy_params: &[String],
     _derived_specs: &[DerivedParamSpec],
 ) -> String {
-    let public_bindings: Vec<_> = ts_parameter_bindings(type_ir)
+    /* Use deduplicated bindings for public API */
+    let public_bindings: Vec<_> = deduplicated_ts_parameter_bindings(type_ir)
         .into_iter()
         .filter(|binding| !binding.derived)
         .collect();

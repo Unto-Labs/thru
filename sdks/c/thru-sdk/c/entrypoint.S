@@ -10,8 +10,8 @@
 _start:
   .cfi_startproc
   # Check transaction version (must be 1 for backwards compatibility)
-  # TXN_DATA segment: 0x00_0001_000000, version at offset 64 (0x40)
-  li t5, 0x0001000040
+  # TXN_DATA segment: 0x00_0001_000000, version at offset 0
+  li t5, 0x0001000000
   lbu t5, 0(t5)              # Load transaction version byte
   addi t5, t5, -1            # version - 1
   bnez t5, .L_revert         # Revert if version != 1
@@ -25,9 +25,10 @@ _start:
   # Read call_depth (ushort at offset 0)
   lhu t2, 0(t1)
 
-  # Calculate parent frame offset: 8 + ((call_depth - 1) * 6)
+  # Calculate parent frame offset: 8 + ((call_depth - 1) * 264)
+  # Frame size = 6 bytes (3 x ushort) + 2 padding + 256 bytes (32 x ulong saved_regs) = 264 bytes
   addi t2, t2, -1
-  li t3, 6
+  li t3, 264
   mul t2, t2, t3
   addi t2, t2, 8
   add t1, t1, t2              # t1 = &parent_frame

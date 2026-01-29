@@ -73,11 +73,15 @@ pub async fn handle_transfer_command(
         CliError::TransactionSubmission(format!("Failed to get current slot: {}", e))
     })?;
 
+    // Get chain ID
+    let chain_info = client.get_chain_info().await.map_err(|e| {
+        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
+    })?;
 
     // Build transfer transaction
     let mut transaction = TransactionBuilder::build_transfer(
         src_keypair.public_key,        // fee_payer
-        EOA_PROGRAM,                
+        EOA_PROGRAM,
         dst_pubkey,                    // to_account
         value,                         // amount
         transfer_fee,                  // fee (fixed for now)
@@ -86,7 +90,8 @@ pub async fn handle_transfer_command(
     )
     .map_err(|e| {
         CliError::TransactionSubmission(format!("Failed to build transfer transaction: {}", e))
-    })?;
+    })?
+    .with_chain_id(chain_info.chain_id);
 
     // Sign the transaction
     transaction.sign(&src_keypair.private_key).map_err(|e| {

@@ -34,6 +34,37 @@ pub const FAUCET_PROGRAM: [u8; 32] = {
     arr
 };
 
+/// Consensus validator program at 0x0C01
+pub const CONSENSUS_VALIDATOR_PROGRAM: [u8; 32] = {
+    let mut arr = [0u8; 32];
+    arr[30] = 0x0C;
+    arr[31] = 0x01;
+    arr
+};
+
+/// Token program at 0xAA
+pub const TOKEN_PROGRAM: [u8; 32] = {
+    let mut arr = [0u8; 32];
+    arr[31] = 0xAA;
+    arr
+};
+
+/// Attestor table at 0x0C02
+pub const ATTESTOR_TABLE: [u8; 32] = {
+    let mut arr = [0u8; 32];
+    arr[30] = 0x0C;
+    arr[31] = 0x02;
+    arr
+};
+
+/// Converted vault at 0x0C04
+pub const CONVERTED_VAULT: [u8; 32] = {
+    let mut arr = [0u8; 32];
+    arr[30] = 0x0C;
+    arr[31] = 0x04;
+    arr
+};
+
 #[derive(Debug, Clone)]
 pub struct TransactionBuilder {
     // fee_payer: FdPubkey,
@@ -3281,6 +3312,76 @@ impl TransactionBuilder {
         Ok(tx.with_instructions(instruction_data))
     }
 
+    /// Build consensus validator program ACTIVATE transaction.
+    ///
+    /// This creates a transaction that activates a validator in the consensus system.
+    /// The validator must have tokens in their source_token_account which will be
+    /// transferred to the converted_vault.
+    ///
+    /// # Arguments
+    /// * `fee_payer` - The validator identity (also the signer)
+    /// * `source_token_account` - The validator's token account with staking tokens
+    /// * `bls_pk` - BLS public key for the validator (96 bytes, uncompressed)
+    /// * `claim_authority` - Pubkey that can claim rewards for this validator
+    /// * `token_amount` - Amount of tokens to stake
+    /// * `fee` - Transaction fee
+    /// * `nonce` - Account nonce
+    /// * `start_slot` - Starting slot for transaction validity
+    pub fn build_activate(
+        fee_payer: TnPubkey,
+        source_token_account: TnPubkey,
+        bls_pk: [u8; 96],
+        claim_authority: TnPubkey,
+        token_amount: u64,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let program: TnPubkey = CONSENSUS_VALIDATOR_PROGRAM;
+        let attestor_table: TnPubkey = ATTESTOR_TABLE;
+        let token_program: TnPubkey = TOKEN_PROGRAM;
+        let converted_vault: TnPubkey = CONVERTED_VAULT;
+
+        let tx = Transaction::new(fee_payer, program, fee, nonce)
+            .with_start_slot(start_slot)
+            .with_expiry_after(100)
+            .with_compute_units(500_000_000) /* BLS deserialization is expensive */
+            .with_state_units(50_000)
+            .with_memory_units(50_000);
+
+        /* Add accounts - must be sorted by pubkey within RW and RO groups:
+           RW: attestor_table, source_token_account, converted_vault
+           RO: token_program
+           identity/fee_payer is already index 0 */
+        let accounts = [
+            (attestor_table, true),        /* RW */
+            (source_token_account, true),  /* RW */
+            (converted_vault, true),       /* RW */
+            (token_program, false),        /* RO */
+        ];
+        let (tx, indices) = add_sorted_accounts(tx, &accounts);
+        let attestor_table_idx = indices[0];
+        let source_token_account_idx = indices[1];
+        let converted_vault_idx = indices[2];
+        let token_program_idx = indices[3];
+
+        /* fee_payer is always index 0 */
+        let identity_idx = 0u16;
+
+        let instruction_data = build_activate_instruction(
+            attestor_table_idx as u64,
+            token_program_idx,
+            source_token_account_idx,
+            converted_vault_idx,
+            identity_idx,
+            bls_pk,
+            claim_authority,
+            token_amount,
+        )?;
+
+        Ok(tx.with_instructions(instruction_data))
+    }
+
     /// Build name service InitializeRoot transaction
     pub fn build_name_service_initialize_root(
         fee_payer: TnPubkey,
@@ -4184,6 +4285,51 @@ fn build_faucet_withdraw_instruction(
 
     // - amount (u64, 8 bytes little-endian)
     instruction_data.extend_from_slice(&amount.to_le_bytes());
+
+    Ok(instruction_data)
+}
+
+/// Build consensus validator ACTIVATE instruction data.
+/// Matches tn_consensus_validator_activate_args_t structure.
+fn build_activate_instruction(
+    attestor_table_idx: u64,
+    token_program_idx: u16,
+    source_token_account_idx: u16,
+    converted_vault_idx: u16,
+    identity_idx: u16,
+    bls_pk: [u8; 96],
+    claim_authority: [u8; 32],
+    token_amount: u64,
+) -> Result<Vec<u8>> {
+    let mut instruction_data = Vec::new();
+
+    /* Discriminant: TN_CONSENSUS_VALIDATOR_INSTRUCTION_ACTIVATE = 1 (u32, 4 bytes LE) */
+    instruction_data.extend_from_slice(&1u32.to_le_bytes());
+
+    /* tn_consensus_validator_activate_args_t structure (packed): */
+    /* - attestor_table_idx (u64, 8 bytes LE) */
+    instruction_data.extend_from_slice(&attestor_table_idx.to_le_bytes());
+
+    /* - token_program_idx (u16, 2 bytes LE) */
+    instruction_data.extend_from_slice(&token_program_idx.to_le_bytes());
+
+    /* - source_token_account_idx (u16, 2 bytes LE) */
+    instruction_data.extend_from_slice(&source_token_account_idx.to_le_bytes());
+
+    /* - converted_vault_idx (u16, 2 bytes LE) */
+    instruction_data.extend_from_slice(&converted_vault_idx.to_le_bytes());
+
+    /* - identity_idx (u16, 2 bytes LE) */
+    instruction_data.extend_from_slice(&identity_idx.to_le_bytes());
+
+    /* - bls_pk (96 bytes, blst_p1_affine uncompressed) */
+    instruction_data.extend_from_slice(&bls_pk);
+
+    /* - claim_authority (32 bytes, pubkey) */
+    instruction_data.extend_from_slice(&claim_authority);
+
+    /* - token_amount (u64, 8 bytes LE) */
+    instruction_data.extend_from_slice(&token_amount.to_le_bytes());
 
     Ok(instruction_data)
 }

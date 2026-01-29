@@ -33,6 +33,7 @@ All multi-byte values are stored in **little-endian** byte order.
 | `i16`  | 2            | -32,768 to 32,767        | Signed 16-bit        |
 | `i32`  | 4            | -2^31 to 2^31-1          | Signed 32-bit        |
 | `i64`  | 8            | -2^63 to 2^63-1          | Signed 64-bit        |
+| `char` | 1            | 0 to 255                 | Character (unsigned) |
 
 ### 2.2 Floating Point Types
 
@@ -775,7 +776,7 @@ Each type has a natural alignment:
 
 | Type        | Alignment |
 |-------------|-----------|
-| u8, i8      | 1 byte    |
+| u8, i8, char| 1 byte    |
 | u16, i16    | 2 bytes   |
 | u32, i32    | 4 bytes   |
 | u64, i64    | 8 bytes   |

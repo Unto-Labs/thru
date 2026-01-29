@@ -16,6 +16,7 @@ export interface TransactionHeaderInput extends ResourceLimits {
     nonce: bigint;
     startSlot: bigint;
     expiryAfter?: number;
+    chainId?: number;
     flags?: number;
 }
 
@@ -42,12 +43,38 @@ export interface FeePayerInput {
     privateKey?: Uint8Array;
 }
 
+/**
+ * Function that builds instruction data with access to the final account ordering.
+ * Use this when your instruction data contains account indices.
+ */
+export type InstructionDataBuilder = (context: InstructionContext) => Uint8Array | string;
+
 export interface BuildTransactionParams {
     feePayer: FeePayerInput;
     program: PubkeyInput;
     header: TransactionHeaderInput;
     accounts?: TransactionAccountsInput;
+    /**
+     * Static instruction data. Use this when your instruction data does not
+     * contain account indices, or when you've pre-computed the indices.
+     */
     instructionData?: Uint8Array | string;
+    /**
+     * Builder function that receives the final account ordering.
+     * Use this when your instruction data contains account indices to ensure
+     * they match the post-sort transaction layout.
+     *
+     * @example
+     * ```typescript
+     * buildInstructionData: ({ getAccountIndex }) => {
+     *   return buildMyInstruction(
+     *     getAccountIndex(configAddress),
+     *     getAccountIndex(trancheAddress),
+     *   );
+     * }
+     * ```
+     */
+    buildInstructionData?: InstructionDataBuilder;
     proofs?: OptionalProofs;
 }
 

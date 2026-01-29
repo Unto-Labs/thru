@@ -2,7 +2,7 @@ import { create } from "@bufbuild/protobuf";
 import { describe, expect, it } from "vitest";
 import { BlockFooterSchema, BlockHeaderSchema, BlockSchema, ExecutionStatus } from "@thru/proto";
 import { nanosecondsToTimestamp } from "../../../utils/utils";
-import { BLOCK_HEADER_SIZE, SIGNATURE_SIZE } from "../../../wire-format";
+import { BLOCK_HEADER_SIZE } from "../../../wire-format";
 import { Transaction } from "../../transactions/Transaction";
 import { Block } from "../Block";
 import { BlockFooter } from "../BlockFooter";
@@ -46,6 +46,8 @@ describe("Block", () => {
             producer: createUint8Array(32, 0x11),
             expiryTimestamp: nanosecondsToTimestamp(100n * 1_000_000_000n),
             headerSignature: createUint8Array(64, 0x22),
+            chainId: 12345,
+            weightSlot: 999n,
         });
         const footer = new BlockFooter({
             signature: createUint8Array(64, 0x33),
@@ -67,6 +69,8 @@ describe("Block", () => {
 
         expect(parsed.header.version).toBe(1);
         expect(parsed.header.startSlot).toBe(42n);
+        expect(parsed.header.chainId).toBe(12345);
+        expect(parsed.header.weightSlot).toBe(999n);
         expect(parsed.header.blockHash?.length).toBe(32);
         expect(parsed.blockTimeNs).toBe(777n);
         expect(parsed.attestorPayment).toBe(123n);
@@ -140,9 +144,9 @@ describe("Block", () => {
         });
 
         const wire = block.toWire();
-        wire[BLOCK_HEADER_SIZE + SIGNATURE_SIZE] = 0; // Force legacy version
+        wire[BLOCK_HEADER_SIZE] = 0; // Force legacy version
 
-        expect(wire[BLOCK_HEADER_SIZE + SIGNATURE_SIZE]).toBe(0);
+        expect(wire[BLOCK_HEADER_SIZE]).toBe(0);
         const parsed = Block.fromWire(wire);
         expect(parsed.getTransactions()[0].version).toBe(0);
         expect(() => Transaction.parseWire(wire.subarray(BLOCK_HEADER_SIZE), { strict: true })).toThrow(
@@ -183,9 +187,9 @@ describe("Block", () => {
         });
 
         const wire = block.toWire();
-        wire[BLOCK_HEADER_SIZE + SIGNATURE_SIZE] = 56; // Forge unknown version
+        wire[BLOCK_HEADER_SIZE] = 56; // Forge unknown version
 
-        expect(wire[BLOCK_HEADER_SIZE + SIGNATURE_SIZE]).toBe(56);
+        expect(wire[BLOCK_HEADER_SIZE]).toBe(56);
         const parsed = Block.fromWire(wire);
         expect(parsed.getTransactions()[0].version).toBe(56);
         expect(() => Transaction.parseWire(wire.subarray(BLOCK_HEADER_SIZE), { strict: true })).toThrow(

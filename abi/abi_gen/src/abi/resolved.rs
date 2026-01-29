@@ -1535,7 +1535,7 @@ impl TypeResolver {
     fn get_primitive_info(&self, prim: &PrimitiveType) -> (u64, u64) {
         match prim {
             PrimitiveType::Integral(int_type) => match int_type {
-                IntegralType::U8 | IntegralType::I8 => (1, 1),
+                IntegralType::U8 | IntegralType::I8 | IntegralType::Char => (1, 1),
                 IntegralType::U16 | IntegralType::I16 => (2, 2),
                 IntegralType::U32 | IntegralType::I32 => (4, 4),
                 IntegralType::U64 | IntegralType::I64 => (8, 8),

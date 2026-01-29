@@ -35,6 +35,78 @@ pub fn ts_parameter_bindings(type_ir: &TypeIr) -> Vec<TsParamBinding> {
         .collect()
 }
 
+/* Returns deduplicated parameter bindings for use in Params type generation.
+   When the IR has both `body.tag` and `StructName::body.tag`, they become
+   `body_tag` and `StructName__body_tag`. Both resolve to the same byte offset.
+   This function keeps only the shorter name (the canonical one without the struct prefix).
+
+   This is used for the TypeScript Params type and builders, while the full
+   list from ts_parameter_bindings is used for IR packing which needs all canonical names. */
+pub fn deduplicated_ts_parameter_bindings(type_ir: &TypeIr) -> Vec<TsParamBinding> {
+    let all_bindings = ts_parameter_bindings(type_ir);
+
+    let mut keep = vec![true; all_bindings.len()];
+
+    for (i, binding_i) in all_bindings.iter().enumerate() {
+        if binding_i.derived {
+            continue;
+        }
+        for (j, binding_j) in all_bindings.iter().enumerate() {
+            if i == j || binding_j.derived {
+                continue;
+            }
+            /* Check if binding_j's ts_name ends with binding_i's ts_name (with _ separator) */
+            let suffix = format!("_{}", binding_i.ts_name);
+            if binding_j.ts_name.ends_with(&suffix) {
+                /* binding_j is the longer one (has struct prefix), mark it for removal */
+                keep[j] = false;
+            }
+        }
+    }
+
+    all_bindings
+        .into_iter()
+        .enumerate()
+        .filter(|(idx, _)| keep[*idx])
+        .map(|(_, binding)| binding)
+        .collect()
+}
+
+/* Returns a mapping from each ts_name to its deduplicated equivalent.
+   For ts_names that were kept, this maps to itself.
+   For ts_names that were removed (the longer ones with struct prefix),
+   this maps to the shorter deduplicated ts_name.
+
+   This is used by __tnPackParams to map all canonical names to the correct
+   params field name in the deduplicated Params type. */
+pub fn ts_name_dedup_map(type_ir: &TypeIr) -> BTreeMap<String, String> {
+    let all_bindings = ts_parameter_bindings(type_ir);
+    let deduplicated = deduplicated_ts_parameter_bindings(type_ir);
+    let dedup_ts_names: BTreeSet<String> =
+        deduplicated.iter().map(|b| b.ts_name.clone()).collect();
+
+    let mut map = BTreeMap::new();
+    for binding in &all_bindings {
+        if binding.derived {
+            continue;
+        }
+        if dedup_ts_names.contains(&binding.ts_name) {
+            /* This binding was kept */
+            map.insert(binding.ts_name.clone(), binding.ts_name.clone());
+        } else {
+            /* This binding was removed, find which deduplicated ts_name it maps to */
+            for dedup in &deduplicated {
+                let suffix = format!("_{}", dedup.ts_name);
+                if binding.ts_name.ends_with(&suffix) {
+                    map.insert(binding.ts_name.clone(), dedup.ts_name.clone());
+                    break;
+                }
+            }
+        }
+    }
+    map
+}
+
 #[derive(Clone, Debug)]
 pub struct DerivedParamSpec {
     pub canonical: String,

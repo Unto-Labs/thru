@@ -397,7 +397,8 @@ pub fn emit_forward_declarations(resolved_type: &ResolvedType, type_ir: Option<&
                             let elem_size: u64 = match prim_type {
                                 PrimitiveType::Integral(int_type) => match int_type {
                                     crate::abi::types::IntegralType::U8
-                                    | crate::abi::types::IntegralType::I8 => 1,
+                                    | crate::abi::types::IntegralType::I8
+                                    | crate::abi::types::IntegralType::Char => 1,
                                     crate::abi::types::IntegralType::U16
                                     | crate::abi::types::IntegralType::I16 => 2,
                                     crate::abi::types::IntegralType::U32

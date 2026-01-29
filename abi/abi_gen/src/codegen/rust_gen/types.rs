@@ -70,6 +70,7 @@ pub fn format_type_to_rust(type_kind: &TypeKind, indent: usize) -> String {
                 IntegralType::I16 => "i16".to_string(),
                 IntegralType::I32 => "i32".to_string(),
                 IntegralType::I64 => "i64".to_string(),
+                IntegralType::Char => "i8".to_string(), /* C char is 1 byte signed */
             },
             PrimitiveType::FloatingPoint(float_type) => match float_type {
                 FloatingPointType::F16 => "f16".to_string(),

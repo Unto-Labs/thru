@@ -43,6 +43,7 @@ message BlockHeader {
   uint64 bond_amount_lock_up = 12 [(google.api.field_behavior) = REQUIRED];
   google.protobuf.Timestamp block_time = 13 [(google.api.field_behavior) = REQUIRED];
   uint64 weight_slot = 14 [(google.api.field_behavior) = REQUIRED];
+  uint32 chain_id = 15 [(google.api.field_behavior) = REQUIRED];
 }
 
 // ExecutionStatus enumerates block execution results.

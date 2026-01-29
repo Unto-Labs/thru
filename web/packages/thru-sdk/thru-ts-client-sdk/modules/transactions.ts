@@ -48,6 +48,7 @@ import {
 import { encodeSignature } from "@thru/helpers";
 import { Pubkey, type PubkeyInput, Signature, type SignatureInput } from "../domain/primitives";
 import { getAccount } from "./accounts";
+import { getChainId } from "./chain";
 import { getBlockHeight } from "./height";
 
 export interface TransactionFeePayerConfig {
@@ -65,6 +66,7 @@ export interface TransactionHeaderConfig {
     nonce?: bigint;
     startSlot?: bigint;
     expiryAfter?: number;
+    chainId?: number;
     computeUnits?: number;
     stateUnits?: number;
     memoryUnits?: number;
@@ -304,11 +306,13 @@ async function createTransactionHeader(
 ): Promise<TransactionHeaderInput> {
     const nonce = header.nonce ?? (await fetchFeePayerNonce(ctx, feePayerPublicKey));
     const startSlot = header.startSlot ?? (await fetchFinalizedSlot(ctx));
+    const chainId = header.chainId ?? (await fetchChainId(ctx));
     return {
         fee: header.fee ?? DEFAULT_FEE,
         nonce,
         startSlot,
         expiryAfter: header.expiryAfter ?? DEFAULT_EXPIRY_AFTER,
+        chainId,
         computeUnits: header.computeUnits ?? DEFAULT_COMPUTE_UNITS,
         stateUnits: header.stateUnits ?? DEFAULT_STATE_UNITS,
         memoryUnits: header.memoryUnits ?? DEFAULT_MEMORY_UNITS,
@@ -413,4 +417,8 @@ async function fetchFeePayerNonce(ctx: ThruClientContext, feePayer: Uint8Array):
 async function fetchFinalizedSlot(ctx: ThruClientContext): Promise<bigint> {
     const height = await getBlockHeight(ctx);
     return height.finalized;
+}
+
+async function fetchChainId(ctx: ThruClientContext): Promise<number> {
+    return getChainId(ctx);
 }

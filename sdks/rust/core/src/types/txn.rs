@@ -1,6 +1,6 @@
 use crate::types::state_proof::{ProofParseError, StateProof};
 use crate::types::{account::AccountMeta, ed25519::Ed25519Sig};
-use crate::types::{pubkey::Pubkey, signature::Signature};
+use crate::types::pubkey::Pubkey;
 use core::{mem::MaybeUninit, slice};
 
 // Constants from tn_txn.h
@@ -23,35 +23,41 @@ pub const MAX_TX_ACCOUNT_LOCKS: usize = 128;
 
 pub const TN_TXN_FLAG_HAS_FEE_PAYER_PROOF: u8 = 1 << 0; // 0U -> bit 0
 
-pub const TN_TXN_VERSION_OFFSET: usize = 64;
-pub const TN_TXN_FLAGS_OFFSET: usize = 65;
+pub const TN_TXN_VERSION_OFFSET: usize = 0;
+pub const TN_TXN_FLAGS_OFFSET: usize = 1;
 
+/// Transaction wire format:
+///   [header (112 bytes)]
+///   [input_pubkeys (variable)]
+///   [instr_data (variable)]
+///   [state_proof (optional)]
+///   [account_meta (optional)]
+///   [fee_payer_signature (64 bytes)]
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct TxnHdrUniversal {
-    fee_payer_signature: Signature,
-    transaction_version: u8,
+    transaction_version: u8,         /* bytes: [0,1) */
 }
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct TxnHdrV1 {
-    fee_payer_signature: Signature,  /* bytes: [0,64) */
-    transaction_version: u8,         /* bytes: [64,65) */
-    flags: u8,                       /* bytes: [65,66) */
-    readwrite_accounts_cnt: u16,     /* bytes: [66,68) */
-    readonly_accounts_cnt: u16,      /* bytes: [68,70) */
-    instr_data_sz: u16,              /* bytes: [70,72) */
-    req_compute_units: u32,          /* bytes: [72,76) */
-    req_state_units: u16,            /* bytes: [76,78) */
-    req_memory_units: u16,           /* bytes: [78,80) */
-    fee: u64,                        /* bytes: [80,88) */
-    nonce: u64,                      /* bytes: [88,96) */
-    start_slot: u64,                 /* bytes: [96,104) */
-    expiry_after: u32,               /* bytes: [104,108) */
-    padding_0: u32,                  /* bytes: [108,112) */
-    pub fee_payer_pubkey: Pubkey,    /* bytes: [112,144) */
-    pub program_pubkey: Pubkey,      /* bytes: [144,176) */
+    transaction_version: u8,         /* bytes: [0,1) */
+    flags: u8,                       /* bytes: [1,2) */
+    readwrite_accounts_cnt: u16,     /* bytes: [2,4) */
+    readonly_accounts_cnt: u16,      /* bytes: [4,6) */
+    instr_data_sz: u16,              /* bytes: [6,8) */
+    req_compute_units: u32,          /* bytes: [8,12) */
+    req_state_units: u16,            /* bytes: [12,14) */
+    req_memory_units: u16,           /* bytes: [14,16) */
+    fee: u64,                        /* bytes: [16,24) */
+    nonce: u64,                      /* bytes: [24,32) */
+    start_slot: u64,                 /* bytes: [32,40) */
+    expiry_after: u32,               /* bytes: [40,44) */
+    chain_id: u16,                   /* bytes: [44,46) */
+    padding_0: u16,                  /* bytes: [46,48) */
+    pub fee_payer_pubkey: Pubkey,    /* bytes: [48,80) */
+    pub program_pubkey: Pubkey,      /* bytes: [80,112) */
 }
 
 pub const TXN_HDR_V1_SZ: usize = size_of::<TxnHdrV1>();
@@ -186,8 +192,10 @@ impl Txn {
     ///
     /// # Errors
     /// Returns `TxnAccessError::NotV1` if the transaction is not version 1.
-    pub fn fee_payer_signature(&self) -> Result<&Ed25519Sig, TxnAccessError> {
-        Ok(&self.hdr.as_v1_safe()?.fee_payer_signature.0)
+    pub unsafe fn fee_payer_signature(&self, txn_sz: usize) -> Result<&Ed25519Sig, TxnAccessError> {
+        let _ = self.hdr.as_v1_safe()?; // Verify version
+        let sig_ptr = (self as *const Txn as *const u8).add(txn_sz - TN_TXN_SIGNATURE_SZ);
+        Ok(&*(sig_ptr as *const Ed25519Sig))
     }
 
     /// Returns all account public keys as a slice.
@@ -412,6 +420,10 @@ impl Txn {
 
     pub fn requested_mem_units(&self) -> u16 {
         unsafe { self.hdr.as_v1().req_memory_units }
+    }
+
+    pub fn chain_id(&self) -> u16 {
+        unsafe { self.hdr.as_v1().chain_id }
     }
 
     pub fn readonly_accounts_cnt(&self) -> u16 {

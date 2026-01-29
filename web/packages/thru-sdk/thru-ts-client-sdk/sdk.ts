@@ -5,6 +5,7 @@ import { TransactionBuilder } from "./domain/transactions";
 // ============================================================================
 export * as accounts from "./modules/accounts";
 export * as blocks from "./modules/blocks";
+export * as chain from "./modules/chain";
 export * as consensus from "./modules/consensus";
 export * as events from "./modules/events";
 export * as height from "./modules/height";

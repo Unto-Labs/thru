@@ -1127,7 +1127,7 @@ impl DependencyAnalyzer {
     fn get_primitive_size(&self, prim: &PrimitiveType) -> u64 {
         match prim {
             PrimitiveType::Integral(int_type) => match int_type {
-                IntegralType::U8 | IntegralType::I8 => 1,
+                IntegralType::U8 | IntegralType::I8 | IntegralType::Char => 1,
                 IntegralType::U16 | IntegralType::I16 => 2,
                 IntegralType::U32 | IntegralType::I32 => 4,
                 IntegralType::U64 | IntegralType::I64 => 8,

@@ -5,21 +5,42 @@ import type {
     SignedTransactionResult,
     TransactionAccountsInput,
 } from "./types";
-import { normalizeAccountList, parseInstructionData } from "./utils";
+import { createInstructionContext, normalizeAccountList, parseInstructionData } from "./utils";
 
 const FLAG_HAS_FEE_PAYER_PROOF = 1 << 0;
 
 export class TransactionBuilder {
     build(params: BuildTransactionParams): Transaction {
-        const accounts = this.normalizeAccounts(params.accounts);
+        const feePayer = Pubkey.from(params.feePayer.publicKey);
+        const program = Pubkey.from(params.program);
+
+        // Normalize accounts first (sort and dedupe)
+        const sortedReadWrite = normalizeAccountList(params.accounts?.readWriteAccounts ?? []);
+        const sortedReadOnly = normalizeAccountList(params.accounts?.readOnlyAccounts ?? []);
+
+        // Resolve instruction data - either from callback or static value
+        let instructionData: Uint8Array | undefined;
+
+        if (params.buildInstructionData) {
+            const context = createInstructionContext(feePayer, program, sortedReadWrite, sortedReadOnly);
+            const result = params.buildInstructionData(context);
+            instructionData = parseInstructionData(result);
+        } else {
+            instructionData = parseInstructionData(params.instructionData);
+        }
+
         const baseFlags = params.header.flags ?? 0;
         const flags = params.proofs?.feePayerStateProof ? baseFlags | FLAG_HAS_FEE_PAYER_PROOF : baseFlags;
 
-        const instructionData = parseInstructionData(params.instructionData);
+        // Build normalized accounts object
+        const accounts: TransactionAccountsInput | undefined =
+            sortedReadWrite.length > 0 || sortedReadOnly.length > 0
+                ? { readWriteAccounts: sortedReadWrite, readOnlyAccounts: sortedReadOnly }
+                : undefined;
 
         return new Transaction({
-            feePayer: Pubkey.from(params.feePayer.publicKey),
-            program: Pubkey.from(params.program),
+            feePayer,
+            program,
             header: {
                 ...params.header,
                 flags,
@@ -28,16 +49,6 @@ export class TransactionBuilder {
             instructionData,
             proofs: params.proofs,
         });
-    }
-
-    private normalizeAccounts(accounts?: TransactionAccountsInput): TransactionAccountsInput | undefined {
-        if (!accounts) {
-            return undefined;
-        }
-        return {
-            readWriteAccounts: normalizeAccountList(accounts.readWriteAccounts ?? []),
-            readOnlyAccounts: normalizeAccountList(accounts.readOnlyAccounts ?? []),
-        };
     }
 
     async buildAndSign(params: BuildTransactionParams): Promise<SignedTransactionResult> {

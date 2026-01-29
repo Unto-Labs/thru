@@ -54,14 +54,14 @@ describe("Transaction wire format", () => {
 
     it("throws when transaction version is unsupported", () => {
         const wire = createTransaction().toWire();
-        wire[64] = 0; // overwrite version byte
+        wire[0] = 0; // overwrite version byte
 
         expect(() => Transaction.fromWire(wire)).toThrow(/Unsupported transaction version/);
     });
 
     it("throws when unsupported flags are present", () => {
         const wire = createTransaction().toWire();
-        wire[65] = 0xff; // invalid flags (bits beyond defined flags)
+        wire[1] = 0xff; // invalid flags (bits beyond defined flags)
 
         expect(() => Transaction.fromWire(wire)).toThrow(/Unsupported transaction flags/);
     });
@@ -138,7 +138,8 @@ describe("Transaction wire format", () => {
         const signingBytes = tx.toWireForSigning();
         const wire = tx.toWire();
 
-        expect(signingBytes).toEqual(wire.slice(64));
+        // Signing payload is everything except the trailing 64-byte signature
+        expect(signingBytes).toEqual(wire.slice(0, -64));
     });
 
     it("signs transaction with ed25519 key", async () => {

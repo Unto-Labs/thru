@@ -14,10 +14,14 @@ import {
 import type { EventSource } from "../chain-client";
 import { ReplayStream } from "../replay-stream";
 import type { ReplayLogger, Slot } from "../types";
+import { resolveClient } from "../types";
 import { backfillPage, combineFilters, mapAsyncIterable, slotLiteralFilter } from "./helpers";
 
 export interface EventReplayOptions {
-  client: EventSource;
+  /** Client instance for initial connection. Optional if clientFactory provided. */
+  client?: EventSource;
+  /** Factory to create fresh clients on reconnection. Enables robust reconnection. */
+  clientFactory?: () => EventSource;
   startSlot: Slot;
   safetyMargin?: bigint;
   pageSize?: number;
@@ -33,7 +37,10 @@ const PAGE_ORDER_ASC = "slot asc";
 export function createEventReplay(options: EventReplayOptions): ReplayStream<Event, string> {
   const safetyMargin = options.safetyMargin ?? DEFAULT_SAFETY_MARGIN;
 
-  const fetchBackfill = async ({
+  // Resolve initial client - either from options or from factory
+  let currentClient = resolveClient(options, "EventReplayOptions");
+
+  const createFetchBackfill = (client: EventSource) => async ({
     startSlot,
     cursor,
   }: {
@@ -48,7 +55,7 @@ export function createEventReplay(options: EventReplayOptions): ReplayStream<Eve
 
     const baseFilter = slotLiteralFilter("event.slot", startSlot);
     const mergedFilter = combineFilters(baseFilter, options.filter);
-    const response = await options.client.listEvents(
+    const response = await client.listEvents(
       create(ListEventsRequestSchema, {
         filter: mergedFilter,
         page,
@@ -58,26 +65,38 @@ export function createEventReplay(options: EventReplayOptions): ReplayStream<Eve
     return backfillPage(response.events, response.page);
   };
 
-  const subscribeLive = (startSlot: Slot): AsyncIterable<Event> => {
+  const createSubscribeLive = (client: EventSource) => (startSlot: Slot): AsyncIterable<Event> => {
     const mergedFilter = combineFilters(slotLiteralFilter("event.slot", startSlot), options.filter);
     const request = create(StreamEventsRequestSchema, {
       filter: mergedFilter,
     });
     return mapAsyncIterable(
-      options.client.streamEvents(request),
+      client.streamEvents(request),
       (resp: StreamEventsResponse) => streamResponseToEvent(resp),
     );
   };
 
+  // Reconnection handler - creates fresh client and returns new data source functions
+  const onReconnect = options.clientFactory
+    ? () => {
+        currentClient = options.clientFactory!();
+        return {
+          subscribeLive: createSubscribeLive(currentClient),
+          fetchBackfill: createFetchBackfill(currentClient),
+        };
+      }
+    : undefined;
+
   return new ReplayStream<Event, string>({
     startSlot: options.startSlot,
     safetyMargin,
-    fetchBackfill,
-    subscribeLive,
+    fetchBackfill: createFetchBackfill(currentClient),
+    subscribeLive: createSubscribeLive(currentClient),
     extractSlot: (event) => event.slot ?? 0n,
     extractKey: eventKey,
     logger: options.logger,
     resubscribeOnEnd: options.resubscribeOnEnd,
+    onReconnect,
   });
 }
 

@@ -140,7 +140,7 @@ fn read_primitive_at(
 ) -> Result<u64, ParamEvalError> {
     match prim {
         PrimitiveType::Integral(i) => match i {
-            crate::abi::types::IntegralType::U8 => {
+            crate::abi::types::IntegralType::U8 | crate::abi::types::IntegralType::Char => {
                 ensure_remaining(state, 1)?;
                 let b = *state
                     .buf
@@ -620,7 +620,9 @@ pub fn extract_params(
 fn static_size_of_primitive(prim: &PrimitiveType) -> Option<u64> {
     match prim {
         PrimitiveType::Integral(i) => Some(match i {
-            crate::abi::types::IntegralType::U8 | crate::abi::types::IntegralType::I8 => 1,
+            crate::abi::types::IntegralType::U8
+            | crate::abi::types::IntegralType::I8
+            | crate::abi::types::IntegralType::Char => 1,
             crate::abi::types::IntegralType::U16 | crate::abi::types::IntegralType::I16 => 2,
             crate::abi::types::IntegralType::U32 | crate::abi::types::IntegralType::I32 => 4,
             crate::abi::types::IntegralType::U64 | crate::abi::types::IntegralType::I64 => 8,

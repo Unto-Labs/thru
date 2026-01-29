@@ -4,12 +4,14 @@ use crate::{
 };
 
 pub const TSDK_SHADOW_STACK_FRAME_MAX: usize = 17; // 16 call depths (1..16) + 1 for frame -1
+pub const TSDK_REG_MAX: usize = 32;
 
 #[repr(C)]
 pub struct ShadowStackFrame {
     program_acc_idx: u16,
     stack_pages: u16,
     heap_pages: u16,
+    saved_regs: [u64; TSDK_REG_MAX], // Saved registers at invoke time for cross-frame access
 }
 
 impl ShadowStackFrame {
@@ -23,6 +25,18 @@ impl ShadowStackFrame {
 
     pub fn heap_pages(&self) -> u16 {
         self.heap_pages
+    }
+
+    pub fn saved_regs(&self) -> &[u64; TSDK_REG_MAX] {
+        &self.saved_regs
+    }
+
+    pub fn saved_reg(&self, idx: usize) -> Option<u64> {
+        if idx < TSDK_REG_MAX {
+            Some(self.saved_regs[idx])
+        } else {
+            None
+        }
     }
 }
 

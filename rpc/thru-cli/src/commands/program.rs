@@ -198,6 +198,7 @@ pub async fn handle_program_command(
 pub struct ProgramManager {
     rpc_client: RpcClient,
     fee_payer_keypair: KeyPair,
+    chain_id: u16,
 }
 
 impl ProgramManager {
@@ -230,9 +231,14 @@ impl ProgramManager {
         };
         let fee_payer_keypair = crypto::keypair_from_hex(fee_payer_key_hex)?;
 
+        let chain_info = rpc_client.get_chain_info().await.map_err(|e| {
+            CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
+        })?;
+
         Ok(Self {
             rpc_client,
             fee_payer_keypair,
+            chain_id: chain_info.chain_id,
         })
     }
 
@@ -656,7 +662,8 @@ async fn create_program(
     )
     .map_err(|e| CliError::ProgramUpload(e.to_string()))?;
 
-    // Sign transaction
+    // Set chain ID and sign transaction
+    let mut transaction = transaction.with_chain_id(program_manager.chain_id);
     transaction
         .sign(&program_manager.fee_payer_keypair.private_key)
         .map_err(|e| CliError::Crypto(e.to_string()))?;
@@ -861,7 +868,8 @@ async fn upgrade_program(
     )
     .map_err(|e| CliError::ProgramUpload(e.to_string()))?;
 
-    // Sign transaction
+    // Set chain ID and sign transaction
+    let mut transaction = transaction.with_chain_id(program_manager.chain_id);
     transaction
         .sign(&program_manager.fee_payer_keypair.private_key)
         .map_err(|e| CliError::Crypto(e.to_string()))?;

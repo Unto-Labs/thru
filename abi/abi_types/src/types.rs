@@ -12,6 +12,7 @@ pub enum IntegralType {
     I16,
     I32,
     I64,
+    Char,
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]

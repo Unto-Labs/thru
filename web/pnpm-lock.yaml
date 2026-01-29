@@ -266,6 +266,46 @@ importers:
         specifier: ^8.0.3
         version: 8.0.3
 
+  packages/indexer:
+    dependencies:
+      '@hono/zod-openapi':
+        specifier: 0.18.4
+        version: 0.18.4(hono@4.11.3)(zod@3.25.76)
+      drizzle-orm:
+        specifier: ^0.38.0
+        version: 0.38.4(@types/react@19.2.7)(bun-types@1.3.5)(postgres@3.4.7)(react@19.2.0)
+      drizzle-zod:
+        specifier: ^0.8.3
+        version: 0.8.3(drizzle-orm@0.38.4(@types/react@19.2.7)(bun-types@1.3.5)(postgres@3.4.7)(react@19.2.0))(zod@3.25.76)
+      hono:
+        specifier: ^4.6.0
+        version: 4.11.3
+      zod:
+        specifier: ^3.23.0
+        version: 3.25.76
+    devDependencies:
+      '@thru/replay':
+        specifier: workspace:*
+        version: link:../replay
+      '@types/node':
+        specifier: ^20.11.0
+        version: 20.19.26
+      postgres:
+        specifier: ^3.4.0
+        version: 3.4.7
+      tsup:
+        specifier: ^8.1.0
+        version: 8.5.1(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
+      tsx:
+        specifier: ^4.7.0
+        version: 4.21.0
+      typescript:
+        specifier: ^5.3.3
+        version: 5.9.3
+      vitest:
+        specifier: ^1.2.0
+        version: 1.6.1(@types/node@20.19.26)(jsdom@27.3.0(postcss@8.5.6))(lightningcss@1.30.2)(terser@5.44.1)
+
   packages/proto:
     dependencies:
       '@bufbuild/protobuf':
@@ -444,6 +484,12 @@ importers:
       '@thru/helpers':
         specifier: workspace:*
         version: link:../packages/helpers
+      '@thru/indexer':
+        specifier: workspace:*
+        version: link:../packages/indexer
+      '@thru/proto':
+        specifier: workspace:*
+        version: link:../packages/proto
       '@thru/replay':
         specifier: workspace:*
         version: link:../packages/replay

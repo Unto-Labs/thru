@@ -22,6 +22,8 @@
     "run:token-events": "tsx scripts/replay-token-events.ts",
     "run:token-accounts": "tsx scripts/stream-token-accounts.ts",
     "run:replays": "tsx scripts/run-replays.ts",
+    "test:list-accounts": "tsx scripts/test-list-accounts.ts",
+    "test:backfill": "tsx scripts/test-account-backfill.ts",
     "typecheck": "tsc --noEmit",
     "dev": "tsx watch src/index.ts",
     "test": "vitest run",

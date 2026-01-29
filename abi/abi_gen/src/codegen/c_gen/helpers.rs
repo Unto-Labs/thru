@@ -315,6 +315,7 @@ pub fn primitive_to_c_type(prim_type: &PrimitiveType) -> &'static str {
             IntegralType::I16 => "int16_t",
             IntegralType::I32 => "int32_t",
             IntegralType::I64 => "int64_t",
+            IntegralType::Char => "char",
         },
         PrimitiveType::FloatingPoint(float_type) => match float_type {
             FloatingPointType::F16 => "_Float16",
@@ -359,6 +360,7 @@ pub fn format_type_to_c(resolved_type: &ResolvedType) -> String {
                 IntegralType::I16 => "int16_t".to_string(),
                 IntegralType::I32 => "int32_t".to_string(),
                 IntegralType::I64 => "int64_t".to_string(),
+                IntegralType::Char => "char".to_string(),
             },
             PrimitiveType::FloatingPoint(float_type) => match float_type {
                 FloatingPointType::F16 => "_Float16".to_string(),

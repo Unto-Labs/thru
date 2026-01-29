@@ -12,6 +12,12 @@ import {
   type GetHeightRequest,
   GetHeightRequestSchema,
   type GetHeightResponse,
+  type GetAccountRequest,
+  GetAccountRequestSchema,
+  type Account,
+  type ListAccountsRequest,
+  ListAccountsRequestSchema,
+  type ListAccountsResponse,
   type ListBlocksRequest,
   ListBlocksRequestSchema,
   type ListBlocksResponse,
@@ -45,6 +51,12 @@ export interface ChainClientOptions {
   useBinaryFormat?: boolean;
 }
 
+/**
+ * Factory function that creates fresh ChainClient instances.
+ * Called on each reconnection to ensure a new gRPC transport.
+ */
+export type ChainClientFactory = () => ChainClient;
+
 export interface BlockSource {
   listBlocks(request: Partial<ListBlocksRequest>): Promise<ListBlocksResponse>;
   streamBlocks(request: Partial<StreamBlocksRequest>): AsyncIterable<StreamBlocksResponse>;
@@ -67,6 +79,8 @@ export interface EventSource {
 }
 
 export interface AccountSource {
+  getAccount(request: Partial<GetAccountRequest>): Promise<Account>;
+  listAccounts(request: Partial<ListAccountsRequest>): Promise<ListAccountsResponse>;
   streamAccountUpdates(
     request: Partial<StreamAccountUpdatesRequest>,
   ): AsyncIterable<StreamAccountUpdatesResponse>;
@@ -84,6 +98,14 @@ export class ChainClient implements ReplayDataSource {
     this.query = createClient(QueryService, transport);
     this.streaming = createClient(StreamingService, transport);
     this.callOptions = options.callOptions;
+  }
+
+  getAccount(request: Partial<GetAccountRequest>): Promise<Account> {
+    return this.query.getAccount(create(GetAccountRequestSchema, request), this.callOptions);
+  }
+
+  listAccounts(request: Partial<ListAccountsRequest>): Promise<ListAccountsResponse> {
+    return this.query.listAccounts(create(ListAccountsRequestSchema, request), this.callOptions);
   }
 
   listBlocks(request: Partial<ListBlocksRequest>): Promise<ListBlocksResponse> {

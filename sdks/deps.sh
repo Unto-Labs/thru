@@ -299,7 +299,7 @@ check () {
 fetch () {
   mkdir -pv "$PREFIX/git"
 
-  checkout_repo riscv-gnu-toolchain https://github.com/riscv/riscv-gnu-toolchain "2026.01.01"
+  checkout_repo riscv-gnu-toolchain https://github.com/riscv/riscv-gnu-toolchain "2026.01.23"
   checkout_repo picolibc https://github.com/picolibc/picolibc "1.8.9"
   checkout_repo blst https://github.com/supranational/blst.git "v0.3.15"
 }

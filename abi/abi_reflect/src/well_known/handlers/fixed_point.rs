@@ -43,7 +43,7 @@ fn format_fixed_point(mantissa: i64, scale: u8) -> String {
 
     let divisor = match 10u64.checked_pow(scale as u32) {
         Some(d) => d,
-        None => return "0".to_string(), // Scale too large - fallback to "0"
+        None => return "0".to_string(), /* Scale too large - fallback to "0" */
     };
 
     let integer_part = abs_mantissa / divisor;

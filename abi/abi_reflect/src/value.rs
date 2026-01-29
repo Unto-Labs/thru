@@ -71,6 +71,7 @@ pub enum PrimitiveValue {
     F16(PrimitiveValueF16),
     F32(PrimitiveValueF32),
     F64(PrimitiveValueF64),
+    Char(PrimitiveValueChar),
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -159,6 +160,15 @@ pub struct PrimitiveValueF64 {
     #[serde(rename = "type")]
     pub type_name: String,
     pub value: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub struct PrimitiveValueChar {
+    #[serde(rename = "type")]
+    pub type_name: String,
+    /* Store as u8 since ABI char represents raw bytes (0-255), not Unicode code points */
+    pub value: u8,
 }
 
 impl ReflectedValue {
@@ -298,6 +308,7 @@ impl PrimitiveValue {
             PrimitiveValue::I16(v) if v.value >= 0 => Some(v.value as u64),
             PrimitiveValue::I32(v) if v.value >= 0 => Some(v.value as u64),
             PrimitiveValue::I64(v) if v.value >= 0 => Some(v.value as u64),
+            PrimitiveValue::Char(v) => Some(v.value as u64),
             _ => None,
         }
     }
@@ -313,6 +324,7 @@ impl PrimitiveValue {
             PrimitiveValue::I16(v) => Some(v.value as i64),
             PrimitiveValue::I32(v) => Some(v.value as i64),
             PrimitiveValue::I64(v) => Some(v.value),
+            PrimitiveValue::Char(v) => Some(v.value as i64),
             _ => None,
         }
     }

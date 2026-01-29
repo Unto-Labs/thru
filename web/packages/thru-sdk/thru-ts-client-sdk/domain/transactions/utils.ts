@@ -1,5 +1,6 @@
 import { hexToBytes, isHexString } from "@thru/helpers";
 import { Pubkey, PubkeyInput } from "../primitives";
+import type { InstructionContext } from "./types";
 
 const ACCOUNT_LIMIT = 1024;
 
@@ -67,4 +68,52 @@ export function parseInstructionData(value?: Uint8Array | string): Uint8Array | 
         }
     }
     throw new Error("Instruction data must be provided as hex string or Uint8Array");
+}
+
+/**
+ * Creates an InstructionContext from the transaction's account layout.
+ *
+ * Account order in context: [feePayer, program, ...readWriteAccounts, ...readOnlyAccounts]
+ *
+ * @param feePayer - The fee payer public key
+ * @param program - The program public key
+ * @param sortedReadWrite - Read-write accounts in their final sorted order
+ * @param sortedReadOnly - Read-only accounts in their final sorted order
+ */
+export function createInstructionContext(
+    feePayer: Pubkey,
+    program: Pubkey,
+    sortedReadWrite: Uint8Array[],
+    sortedReadOnly: Uint8Array[]
+): InstructionContext {
+    // Build full account list: [feePayer, program, ...readWrite, ...readOnly]
+    const accounts: Pubkey[] = [
+        feePayer,
+        program,
+        ...sortedReadWrite.map(bytes => Pubkey.from(bytes)),
+        ...sortedReadOnly.map(bytes => Pubkey.from(bytes)),
+    ];
+
+    // Build index map for fast lookups
+    const indexMap = new Map<string, number>();
+    for (let i = 0; i < accounts.length; i++) {
+        const key = toHex(accounts[i].toBytes());
+        // First occurrence wins (handles any duplicates)
+        if (!indexMap.has(key)) {
+            indexMap.set(key, i);
+        }
+    }
+
+    return {
+        accounts,
+        getAccountIndex: (pubkey: PubkeyInput): number => {
+            const bytes = Pubkey.from(pubkey).toBytes();
+            const key = toHex(bytes);
+            const index = indexMap.get(key);
+            if (index === undefined) {
+                throw new Error(`Account ${key} not found in transaction accounts`);
+            }
+            return index;
+        },
+    };
 }

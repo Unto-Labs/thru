@@ -84,6 +84,8 @@ message TransactionHeader {
   uint64 start_slot = 13 [(google.api.field_behavior) = REQUIRED];
   thru.common.v1.Pubkey fee_payer_pubkey = 14 [(google.api.field_behavior) = REQUIRED];
   thru.common.v1.Pubkey program_pubkey = 15 [(google.api.field_behavior) = REQUIRED];
+  // Chain identifier to prevent transaction replay across different chains.
+  uint32 chain_id = 16 [(google.api.field_behavior) = REQUIRED];
 }
 
 // TransactionExecutionResult captures execution outcomes.

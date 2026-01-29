@@ -322,6 +322,138 @@ describe("TransactionBuilder", () => {
     });
   });
 
+  describe("build with buildInstructionData callback", () => {
+    it("should call buildInstructionData with correct account indices", () => {
+      const builder = createBuilder();
+      const feePayer = generateTestPubkey(0x01);
+      const program = generateTestPubkey(0x02);
+      const account1 = generateTestPubkey(0x04); // Will sort second (0x04 > 0x03)
+      const account2 = generateTestPubkey(0x03); // Will sort first
+
+      let capturedIndices: { feePayerIdx: number; programIdx: number; acc1Idx: number; acc2Idx: number } | null = null;
+
+      const params: BuildTransactionParams = {
+        feePayer: { publicKey: feePayer },
+        program,
+        header: { fee: 1n, nonce: 2n, startSlot: 3n },
+        accounts: {
+          readWriteAccounts: [account1, account2], // Input order
+        },
+        buildInstructionData: ({ getAccountIndex }) => {
+          capturedIndices = {
+            feePayerIdx: getAccountIndex(feePayer),
+            programIdx: getAccountIndex(program),
+            acc1Idx: getAccountIndex(account1),
+            acc2Idx: getAccountIndex(account2),
+          };
+          return new Uint8Array([capturedIndices.acc1Idx, capturedIndices.acc2Idx]);
+        },
+      };
+
+      builder.build(params);
+
+      // Indices: 0=feePayer, 1=program, 2=account2 (0x03 sorts first), 3=account1 (0x04 sorts second)
+      expect(capturedIndices).not.toBeNull();
+      expect(capturedIndices!.feePayerIdx).toBe(0);
+      expect(capturedIndices!.programIdx).toBe(1);
+      expect(capturedIndices!.acc2Idx).toBe(2); // 0x03 sorts first
+      expect(capturedIndices!.acc1Idx).toBe(3); // 0x04 sorts second
+    });
+
+    it("should use instruction data returned from callback", () => {
+      const builder = createBuilder();
+      const expectedData = new Uint8Array([0xAA, 0xBB, 0xCC]);
+
+      const params: BuildTransactionParams = {
+        ...createMinimalParams(),
+        buildInstructionData: () => expectedData,
+      };
+
+      const transaction = builder.build(params);
+
+      expect(transaction.instructionData).toEqual(expectedData);
+    });
+
+    it("should accept hex string from callback", () => {
+      const builder = createBuilder();
+      const expectedBytes = new Uint8Array([0x01, 0x02, 0x03]);
+      const hexString = "010203";
+
+      const params: BuildTransactionParams = {
+        ...createMinimalParams(),
+        buildInstructionData: () => hexString,
+      };
+
+      const transaction = builder.build(params);
+
+      expect(transaction.instructionData).toEqual(expectedBytes);
+    });
+
+    it("should expose all accounts in context", () => {
+      const builder = createBuilder();
+      const feePayer = generateTestPubkey(0x01);
+      const program = generateTestPubkey(0x02);
+      const rwAccount = generateTestPubkey(0x03);
+      const roAccount = generateTestPubkey(0x04);
+
+      let capturedAccounts: Uint8Array[] | null = null;
+
+      const params: BuildTransactionParams = {
+        feePayer: { publicKey: feePayer },
+        program,
+        header: { fee: 1n, nonce: 2n, startSlot: 3n },
+        accounts: {
+          readWriteAccounts: [rwAccount],
+          readOnlyAccounts: [roAccount],
+        },
+        buildInstructionData: ({ accounts }) => {
+          capturedAccounts = accounts.map(a => a.toBytes());
+          return new Uint8Array();
+        },
+      };
+
+      builder.build(params);
+
+      expect(capturedAccounts).not.toBeNull();
+      expect(capturedAccounts).toHaveLength(4);
+      expect(capturedAccounts![0]).toEqual(feePayer);
+      expect(capturedAccounts![1]).toEqual(program);
+      expect(capturedAccounts![2]).toEqual(rwAccount);
+      expect(capturedAccounts![3]).toEqual(roAccount);
+    });
+
+    it("should throw if callback references unknown account", () => {
+      const builder = createBuilder();
+      const unknownAccount = generateTestPubkey(0x99);
+
+      const params: BuildTransactionParams = {
+        ...createMinimalParams(),
+        buildInstructionData: ({ getAccountIndex }) => {
+          getAccountIndex(unknownAccount); // Should throw
+          return new Uint8Array();
+        },
+      };
+
+      expect(() => builder.build(params)).toThrow("not found in transaction accounts");
+    });
+
+    it("should prefer buildInstructionData over instructionData when both provided", () => {
+      const builder = createBuilder();
+      const staticData = new Uint8Array([0x01, 0x02]);
+      const callbackData = new Uint8Array([0xAA, 0xBB]);
+
+      const params: BuildTransactionParams = {
+        ...createMinimalParams(),
+        instructionData: staticData,
+        buildInstructionData: () => callbackData,
+      };
+
+      const transaction = builder.build(params);
+
+      expect(transaction.instructionData).toEqual(callbackData);
+    });
+  });
+
   describe("buildAndSign", () => {
     it("should build and sign transaction", async () => {
       const builder = createBuilder();
@@ -380,8 +512,8 @@ describe("TransactionBuilder", () => {
       
       const result = await builder.buildAndSign(params);
       
-      // Signature should be in first 64 bytes of raw transaction
-      const signatureInRaw = result.rawTransaction.slice(0, 64);
+      // Signature should be in last 64 bytes of raw transaction
+      const signatureInRaw = result.rawTransaction.slice(-64);
       expect(signatureInRaw).toEqual(result.signature.toBytes());
     });
 

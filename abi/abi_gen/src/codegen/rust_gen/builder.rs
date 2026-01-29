@@ -18,7 +18,7 @@ use std::fmt::Write;
 fn primitive_size(prim_type: &PrimitiveType) -> usize {
     match prim_type {
         PrimitiveType::Integral(int_type) => match int_type {
-            IntegralType::U8 | IntegralType::I8 => 1,
+            IntegralType::U8 | IntegralType::I8 | IntegralType::Char => 1,
             IntegralType::U16 | IntegralType::I16 => 2,
             IntegralType::U32 | IntegralType::I32 => 4,
             IntegralType::U64 | IntegralType::I64 => 8,
@@ -284,6 +284,7 @@ fn primitive_to_rust_type(prim_type: &PrimitiveType) -> &'static str {
             IntegralType::I16 => "i16",
             IntegralType::I32 => "i32",
             IntegralType::I64 => "i64",
+            IntegralType::Char => "i8",
         },
         PrimitiveType::FloatingPoint(float_type) => match float_type {
             FloatingPointType::F16 => "f16",
@@ -1097,7 +1098,7 @@ mod tests {
 
     fn make_primitive_field(name: &str, int_type: IntegralType, offset: u64) -> ResolvedField {
         let size = match int_type {
-            IntegralType::U8 | IntegralType::I8 => 1,
+            IntegralType::U8 | IntegralType::I8 | IntegralType::Char => 1,
             IntegralType::U16 | IntegralType::I16 => 2,
             IntegralType::U32 | IntegralType::I32 => 4,
             IntegralType::U64 | IntegralType::I64 => 8,

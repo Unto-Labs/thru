@@ -12,6 +12,7 @@ pub fn primitive_to_ts_type(prim_type: &PrimitiveType) -> &'static str {
             IntegralType::I8 | IntegralType::I16 | IntegralType::I32 | IntegralType::I64 => {
                 "number"
             }
+            IntegralType::Char => "string",
         },
         PrimitiveType::FloatingPoint(_) => "number",
     }
@@ -29,6 +30,7 @@ pub fn primitive_to_dataview_getter(prim_type: &PrimitiveType) -> &'static str {
             IntegralType::I16 => "getInt16",
             IntegralType::I32 => "getInt32",
             IntegralType::I64 => "getBigInt64",
+            IntegralType::Char => "getUint8",
         },
         PrimitiveType::FloatingPoint(float_type) => match float_type {
             FloatingPointType::F16 => "getFloat16", /* Note: Not widely supported */
@@ -50,6 +52,7 @@ pub fn primitive_to_dataview_setter(prim_type: &PrimitiveType) -> &'static str {
             IntegralType::I16 => "setInt16",
             IntegralType::I32 => "setInt32",
             IntegralType::I64 => "setBigInt64",
+            IntegralType::Char => "setUint8",
         },
         PrimitiveType::FloatingPoint(float_type) => match float_type {
             FloatingPointType::F16 => "setFloat16", /* Note: Not widely supported */
@@ -64,6 +67,7 @@ pub fn primitive_to_ts_return_type(prim_type: &PrimitiveType) -> &'static str {
     match prim_type {
         PrimitiveType::Integral(int_type) => match int_type {
             IntegralType::U64 | IntegralType::I64 => "bigint",
+            IntegralType::Char => "string",
             _ => "number",
         },
         PrimitiveType::FloatingPoint(_) => "number",
@@ -74,7 +78,7 @@ pub fn primitive_to_ts_return_type(prim_type: &PrimitiveType) -> &'static str {
 pub fn primitive_size(prim_type: &PrimitiveType) -> u64 {
     match prim_type {
         PrimitiveType::Integral(int_type) => match int_type {
-            IntegralType::U8 | IntegralType::I8 => 1,
+            IntegralType::U8 | IntegralType::I8 | IntegralType::Char => 1,
             IntegralType::U16 | IntegralType::I16 => 2,
             IntegralType::U32 | IntegralType::I32 => 4,
             IntegralType::U64 | IntegralType::I64 => 8,
@@ -89,10 +93,12 @@ pub fn primitive_size(prim_type: &PrimitiveType) -> u64 {
 
 /* Check if a primitive type needs endianness argument in DataView methods */
 pub fn needs_endianness_arg(prim_type: &PrimitiveType) -> bool {
-    /* Single-byte types (U8, I8) don't need endianness argument */
+    /* Single-byte types (U8, I8, Char) don't need endianness argument */
     !matches!(
         prim_type,
-        PrimitiveType::Integral(IntegralType::U8) | PrimitiveType::Integral(IntegralType::I8)
+        PrimitiveType::Integral(IntegralType::U8)
+            | PrimitiveType::Integral(IntegralType::I8)
+            | PrimitiveType::Integral(IntegralType::Char)
     )
 }
 

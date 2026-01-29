@@ -1,0 +1,67 @@
+abi:
+  package: "compliance.parent_tag_ref_enum"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Tests tagged enum where tag-ref points to a field in the parent struct"
+
+types:
+  # Variant payload types with different sizes to make the enum variable-size
+  - name: "ConfigPayload"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "config_id"
+            field-type:
+              primitive: u32
+          - name: "config_value"
+            field-type:
+              primitive: u64
+
+  - name: "DataPayload"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "data_length"
+            field-type:
+              primitive: u16
+          - name: "data_bytes"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["data_length"]
+                element-type:
+                  primitive: u8
+
+  # Main event struct - this pattern caused duplicate parameters before the fix
+  # The enum's tag-ref points to event_type which is a field in the parent struct
+  - name: "EventEnvelope"
+    kind:
+      struct:
+        packed: true
+        comment: "Event envelope with tagged union where tag references parent field"
+        fields:
+          - name: "event_type"
+            field-type:
+              primitive: u8
+          - name: "payload"
+            field-type:
+              enum:
+                packed: true
+                tag-ref:
+                  field-ref:
+                    path:
+                      - event_type  # References parent struct field
+                variants:
+                  - name: "config"
+                    tag-value: 1
+                    variant-type:
+                      type-ref:
+                        name: "ConfigPayload"
+                  - name: "data"
+                    tag-value: 2
+                    variant-type:
+                      type-ref:
+                        name: "DataPayload"

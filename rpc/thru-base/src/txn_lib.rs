@@ -36,6 +36,7 @@ pub enum RpcError {
     InvalidVersion,
     InvalidFlags,
     InvalidFeePayerStateProofType,
+    InvalidChainId,
 }
 
 impl std::fmt::Display for RpcError {
@@ -80,6 +81,9 @@ impl std::fmt::Display for RpcError {
             RpcError::InvalidFeePayerStateProofType => {
                 write!(f, "Invalid fee payer state proof type")
             }
+            RpcError::InvalidChainId => {
+                write!(f, "Invalid chain ID: chain_id cannot be zero")
+            }
         }
     }
 }
@@ -112,13 +116,23 @@ impl RpcError {
     pub fn invalid_fee_payer_state_proof_type() -> Self {
         Self::InvalidFeePayerStateProofType
     }
+    pub fn invalid_chain_id() -> Self {
+        Self::InvalidChainId
+    }
 }
 
 /// On-wire transaction header (matches TnTxnHdrV1 layout)
+///
+/// Transaction wire format:
+///   [header (112 bytes)]
+///   [input_pubkeys (variable)]
+///   [instr_data (variable)]
+///   [state_proof (optional)]
+///   [account_meta (optional)]
+///   [fee_payer_signature (64 bytes)]
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct WireTxnHdrV1 {
-    pub fee_payer_signature: [u8; 64],
     pub transaction_version: u8,
     pub flags: u8,
     pub readwrite_accounts_cnt: u16,
@@ -131,15 +145,18 @@ pub struct WireTxnHdrV1 {
     pub nonce: u64,
     pub start_slot: u64,
     pub expiry_after: u32,
-    pub padding_0: [u8; 4],
+    pub chain_id: u16,
+    pub padding_0: [u8; 2],
     pub fee_payer_pubkey: [u8; 32],
     pub program_pubkey: [u8; 32],
 }
 
+/// Size of the signature in bytes (always at end of transaction)
+pub const TN_TXN_SIGNATURE_SZ: usize = 64;
+
 impl Default for WireTxnHdrV1 {
     fn default() -> Self {
         Self {
-            fee_payer_signature: [0u8; 64],
             transaction_version: 0,
             flags: 0,
             readwrite_accounts_cnt: 0,
@@ -152,7 +169,8 @@ impl Default for WireTxnHdrV1 {
             nonce: 0,
             start_slot: 0,
             expiry_after: 0,
-            padding_0: [0u8; 4],
+            chain_id: 0,
+            padding_0: [0u8; 2],
             fee_payer_pubkey: [0u8; 32],
             program_pubkey: [0u8; 32],
         }
@@ -186,6 +204,7 @@ pub struct Transaction {
     pub start_slot: u64,        // starting slot
     pub nonce: u64,             // transaction nonce
     pub flags: u8,              // transaction flags
+    pub chain_id: u16,          // chain identifier (must be non-zero)
 
     // Signature (optional until signed)
     pub signature: Option<TnSignature>, // [u8; 64] - Ed25519 signature
@@ -213,10 +232,39 @@ impl Transaction {
             start_slot: 0,
             nonce,
             flags: 0,
+            chain_id: 1,
             signature: None,
             fee_payer_state_proof: None,
             fee_payer_account_meta_raw: None,
         }
+    }
+
+    /// Create a minimal transaction with just a program ID and instruction data.
+    /// Used for fake event transactions that don't need accounts or fees.
+    pub fn new_raw_instruction(
+        fee_payer: &TnPubkey,
+        program: &TnPubkey,
+        instruction_data: &[u8],
+    ) -> Result<Self, Box<dyn std::error::Error>> {
+        Ok(Self {
+            fee_payer: *fee_payer,
+            program: *program,
+            rw_accs: None,
+            r_accs: None,
+            instructions: Some(instruction_data.to_vec()),
+            fee: 0,
+            req_compute_units: 0,
+            req_state_units: 0,
+            req_memory_units: 0,
+            expiry_after: 0,
+            start_slot: 0,
+            nonce: 0,
+            flags: 0,
+            chain_id: 1,
+            signature: None,
+            fee_payer_state_proof: None,
+            fee_payer_account_meta_raw: None,
+        })
     }
 
     pub fn has_fee_payer_state_proof(&self) -> bool {
@@ -332,6 +380,12 @@ impl Transaction {
         self
     }
 
+    /// Builder method: set chain ID
+    pub fn with_chain_id(mut self, chain_id: u16) -> Self {
+        self.chain_id = chain_id;
+        self
+    }
+
     /// Sign the transaction with a 32-byte Ed25519 private key
     pub fn sign(&mut self, private_key: &[u8; 32]) -> Result<(), Box<dyn std::error::Error>> {
         let wire_bytes = self.to_wire_for_signing();
@@ -350,11 +404,11 @@ impl Transaction {
         false
     }
 
-    /// Create wire format for signing (excluding signature field)
+    /// Create wire format for signing (excluding trailing signature)
+    /// The message is: header + accounts + instr_data + state_proof + account_meta
     fn to_wire_for_signing(&self) -> Vec<u8> {
         // Zero out all bytes first to ensure deterministic padding
         let mut wire: WireTxnHdrV1 = unsafe { core::mem::zeroed() };
-        // Don't set fee_payer_signature - it will be excluded from signing
         wire.transaction_version = 1;
         wire.flags = self.flags;
         wire.readwrite_accounts_cnt = self.rw_accs.as_ref().map_or(0, |v| v.len() as u16);
@@ -364,15 +418,14 @@ impl Transaction {
         wire.req_state_units = self.req_state_units;
         wire.req_memory_units = self.req_memory_units;
         wire.expiry_after = self.expiry_after;
+        wire.chain_id = self.chain_id;
         wire.fee = self.fee;
         wire.nonce = self.nonce;
         wire.start_slot = self.start_slot;
         wire.fee_payer_pubkey = self.fee_payer;
         wire.program_pubkey = self.program;
 
-        let wire_bytes = bytes_of(&wire);
-        // Skip the first 64 bytes (fee_payer_signature) and include the rest
-        let mut result = wire_bytes[64..].to_vec();
+        let mut result = bytes_of(&wire).to_vec();
 
         // Append variable-length data
         if let Some(ref rw_accs) = self.rw_accs {
@@ -405,11 +458,9 @@ impl Transaction {
     }
 
     /// Serialize to on-wire format (WireTxnHdrV1)
+    /// Wire format: header + accounts + instr_data + state_proof + account_meta + signature
     pub fn to_wire(&self) -> Vec<u8> {
         let mut wire = WireTxnHdrV1::default();
-        if let Some(sig) = &self.signature {
-            wire.fee_payer_signature = *sig;
-        }
         wire.transaction_version = 1;
         wire.flags = self.flags;
         wire.readwrite_accounts_cnt = self.rw_accs.as_ref().map_or(0, |v| v.len() as u16);
@@ -419,6 +470,7 @@ impl Transaction {
         wire.req_state_units = self.req_state_units;
         wire.req_memory_units = self.req_memory_units;
         wire.expiry_after = self.expiry_after;
+        wire.chain_id = self.chain_id;
         wire.fee = self.fee;
         wire.nonce = self.nonce;
         wire.start_slot = self.start_slot;
@@ -454,23 +506,37 @@ impl Transaction {
             result.extend_from_slice(fee_payer_account_meta_raw);
         }
 
+        // Append signature at the END (last 64 bytes)
+        if let Some(sig) = &self.signature {
+            result.extend_from_slice(sig);
+        } else {
+            // Zero signature if not set
+            result.extend_from_slice(&[0u8; TN_TXN_SIGNATURE_SZ]);
+        }
+
         result
     }
 
     /// Deserialize from on-wire format (WireTxnHdrV1)
+    /// Wire format: header + accounts + instr_data + state_proof + account_meta + signature (at end)
     pub fn from_wire(bytes: &[u8]) -> Option<Self> {
-        if bytes.len() < core::mem::size_of::<WireTxnHdrV1>() {
+        // Minimum size: header + signature at end
+        if bytes.len() < core::mem::size_of::<WireTxnHdrV1>() + TN_TXN_SIGNATURE_SZ {
             return None;
         }
 
         let wire: &WireTxnHdrV1 = from_bytes(&bytes[0..core::mem::size_of::<WireTxnHdrV1>()]);
         let mut offset = core::mem::size_of::<WireTxnHdrV1>();
 
+        let sig_start = bytes.len() - TN_TXN_SIGNATURE_SZ;
+        let mut signature = [0u8; TN_TXN_SIGNATURE_SZ];
+        signature.copy_from_slice(&bytes[sig_start..]);
+
         // Parse read-write accounts
         let rw_accs = if wire.readwrite_accounts_cnt > 0 {
             let mut accounts = Vec::new();
             for _ in 0..wire.readwrite_accounts_cnt {
-                if offset + 32 > bytes.len() {
+                if offset + 32 > sig_start {
                     return None;
                 }
                 let mut acc = [0u8; 32];
@@ -487,7 +553,7 @@ impl Transaction {
         let r_accs = if wire.readonly_accounts_cnt > 0 {
             let mut accounts = Vec::new();
             for _ in 0..wire.readonly_accounts_cnt {
-                if offset + 32 > bytes.len() {
+                if offset + 32 > sig_start {
                     return None;
                 }
                 let mut acc = [0u8; 32];
@@ -502,7 +568,7 @@ impl Transaction {
 
         // Parse instructions
         let instructions = if wire.instr_data_sz > 0 {
-            if offset + wire.instr_data_sz as usize > bytes.len() {
+            if offset + wire.instr_data_sz as usize > sig_start {
                 return None;
             }
             let instr = bytes[offset..offset + wire.instr_data_sz as usize].to_vec();
@@ -515,14 +581,14 @@ impl Transaction {
         let mut fee_payer_account_meta_raw: Option<Vec<u8>> = None;
         // Parse state proof if present
         let fee_payer_state_proof = if has_fee_payer_state_proof(wire.flags) {
-            if offset >= bytes.len() {
+            if offset >= sig_start {
                 return None;
             }
-            let state_proof_bytes = &bytes[offset..];
+            let state_proof_bytes = &bytes[offset..sig_start];
             if let Some(state_proof) = StateProof::from_wire(state_proof_bytes) {
                 offset += state_proof.footprint();
                 if state_proof.header.proof_type == StateProofType::Existing {
-                    if offset + TN_ACCOUNT_META_FOOTPRINT > bytes.len() {
+                    if offset + TN_ACCOUNT_META_FOOTPRINT > sig_start {
                         return None;
                     }
                     let account_meta_bytes = &bytes[offset..offset + TN_ACCOUNT_META_FOOTPRINT];
@@ -537,12 +603,12 @@ impl Transaction {
             None
         };
 
-        // Verify we've consumed all bytes
-        if offset != bytes.len() {
+        // Verify we've consumed all bytes before signature
+        if offset != sig_start {
             log::warn!(
-                "Transaction::from_wire: offset != bytes.len() ({} != {})",
+                "Transaction::from_wire: offset != sig_start ({} != {})",
                 offset,
-                bytes.len()
+                sig_start
             );
             return None;
         }
@@ -554,6 +620,7 @@ impl Transaction {
             r_accs,
             instructions,
             flags: wire.flags,
+            chain_id: wire.chain_id,
             fee: wire.fee,
             req_compute_units: wire.req_compute_units,
             req_state_units: wire.req_state_units,
@@ -561,7 +628,7 @@ impl Transaction {
             expiry_after: wire.expiry_after,
             start_slot: wire.start_slot,
             nonce: wire.nonce,
-            signature: Some(wire.fee_payer_signature),
+            signature: Some(signature),
             fee_payer_state_proof,
             fee_payer_account_meta_raw,
         })
@@ -569,12 +636,15 @@ impl Transaction {
 
     /// Accessor: read a field from serialized bytes by name
     pub fn get_field_from_wire(bytes: &[u8], field: &str) -> Option<Vec<u8>> {
-        if bytes.len() < core::mem::size_of::<WireTxnHdrV1>() {
+        if bytes.len() < core::mem::size_of::<WireTxnHdrV1>() + TN_TXN_SIGNATURE_SZ {
             return None;
         }
         let wire: &WireTxnHdrV1 = from_bytes(&bytes[0..core::mem::size_of::<WireTxnHdrV1>()]);
         match field {
-            "fee_payer_signature" => Some(wire.fee_payer_signature.to_vec()),
+            "fee_payer_signature" => {
+                let sig_start = bytes.len() - TN_TXN_SIGNATURE_SZ;
+                Some(bytes[sig_start..].to_vec())
+            }
             "transaction_version" => Some(vec![wire.transaction_version]),
             "flags" => Some(vec![wire.flags]),
             "readwrite_accounts_cnt" => Some(wire.readwrite_accounts_cnt.to_le_bytes().to_vec()),
@@ -584,6 +654,7 @@ impl Transaction {
             "req_state_units" => Some(wire.req_state_units.to_le_bytes().to_vec()),
             "req_memory_units" => Some(wire.req_memory_units.to_le_bytes().to_vec()),
             "expiry_after" => Some(wire.expiry_after.to_le_bytes().to_vec()),
+            "chain_id" => Some(wire.chain_id.to_le_bytes().to_vec()),
             "fee" => Some(wire.fee.to_le_bytes().to_vec()),
             "nonce" => Some(wire.nonce.to_le_bytes().to_vec()),
             "start_slot" => Some(wire.start_slot.to_le_bytes().to_vec()),
@@ -647,7 +718,7 @@ fn calculate_state_proof_footprint(state_proof_data: &[u8]) -> Result<usize, Rpc
 
 pub fn tn_txn_size(bytes: &[u8]) -> Result<usize, RpcError> {
     // Basic size checks
-    if bytes.len() < core::mem::size_of::<WireTxnHdrV1>() {
+    if bytes.len() < core::mem::size_of::<WireTxnHdrV1>() + TN_TXN_SIGNATURE_SZ {
         return Err(RpcError::invalid_format());
     }
 
@@ -710,6 +781,9 @@ pub fn tn_txn_size(bytes: &[u8]) -> Result<usize, RpcError> {
         }
     }
 
+    // Add trailing signature size
+    offset += TN_TXN_SIGNATURE_SZ;
+
     // Verify we don't exceed the provided bytes
     if offset > bytes.len() {
         return Err(RpcError::invalid_format());
@@ -721,8 +795,9 @@ pub fn tn_txn_size(bytes: &[u8]) -> Result<usize, RpcError> {
 /// Validate a wire-format transaction for protocol correctness (matching C tn_txn_parse_core).
 pub fn validate_wire_transaction(bytes: &[u8]) -> Result<(), RpcError> {
     const TN_TXN_MTU: usize = 32_768;
-    const TN_TXN_VERSION_OFFSET: usize = 64;
-    const TN_TXN_FLAGS_OFFSET: usize = 65;
+    // Version and flags are now at offset 0 and 1
+    const TN_TXN_VERSION_OFFSET: usize = 0;
+    const TN_TXN_FLAGS_OFFSET: usize = 1;
 
     use bytemuck::from_bytes;
 
@@ -731,19 +806,18 @@ pub fn validate_wire_transaction(bytes: &[u8]) -> Result<(), RpcError> {
         return Err(RpcError::invalid_transaction_size(bytes.len(), TN_TXN_MTU));
     }
 
-    // 2. Check transaction version
-    if bytes.len() <= TN_TXN_VERSION_OFFSET {
+    // 2. Check minimum size
+    if bytes.len() < core::mem::size_of::<WireTxnHdrV1>() + TN_TXN_SIGNATURE_SZ {
         return Err(RpcError::invalid_format());
     }
+
+    // 3. Check transaction version
     let transaction_version = bytes[TN_TXN_VERSION_OFFSET];
     if transaction_version != 0x01 {
         return Err(RpcError::invalid_version());
     }
 
-    // 3. Check flags
-    if bytes.len() <= TN_TXN_FLAGS_OFFSET {
-        return Err(RpcError::invalid_format());
-    }
+    // 4. Check flags
     let flags = bytes[TN_TXN_FLAGS_OFFSET];
     // Clear the fee payer proof bit and check that all other bits are 0
     let flags_without_proof_bit = flags & !(1 << TN_TXN_FLAG_HAS_FEE_PAYER_PROOF_BIT);
@@ -752,39 +826,43 @@ pub fn validate_wire_transaction(bytes: &[u8]) -> Result<(), RpcError> {
         return Err(RpcError::invalid_flags());
     }
 
-    // 4. Check header size and parse header
-    if bytes.len() < core::mem::size_of::<WireTxnHdrV1>() {
-        return Err(RpcError::invalid_format());
-    }
+    // 5. Parse header
     let hdr: &WireTxnHdrV1 = from_bytes(&bytes[0..core::mem::size_of::<WireTxnHdrV1>()]);
     let mut offset = core::mem::size_of::<WireTxnHdrV1>();
 
-    // 5. Parse accounts
+    let sig_start = bytes.len() - TN_TXN_SIGNATURE_SZ;
+
+    // 6. Validate chain_id is non-zero (matches C tn_txn_parse.c:37)
+    if hdr.chain_id == 0 {
+        return Err(RpcError::invalid_chain_id());
+    }
+
+    // 6. Parse accounts
     let accs_sz = (hdr.readwrite_accounts_cnt as usize + hdr.readonly_accounts_cnt as usize) * 32;
-    if offset + accs_sz > bytes.len() {
+    if offset + accs_sz > sig_start {
         return Err(RpcError::invalid_format());
     }
     offset += accs_sz;
 
-    // 6. Parse instruction data
+    // 7. Parse instruction data
     let instr_sz = hdr.instr_data_sz as usize;
-    if offset + instr_sz > bytes.len() {
+    if offset + instr_sz > sig_start {
         return Err(RpcError::invalid_format());
     }
     offset += instr_sz;
 
-    // 7. Handle fee payer state proof if present
+    // 8. Handle fee payer state proof if present
     if has_fee_payer_state_proof(flags) {
         // Check state proof header size
-        if offset + TN_STATE_PROOF_HDR_SIZE > bytes.len() {
+        if offset + TN_STATE_PROOF_HDR_SIZE > sig_start {
             return Err(RpcError::invalid_format());
         }
 
         // Calculate state proof footprint
-        let state_proof_data = &bytes[offset..];
+        let state_proof_data = &bytes[offset..sig_start];
         let state_proof_sz = calculate_state_proof_footprint(state_proof_data)?;
 
-        if offset + state_proof_sz > bytes.len() {
+        if offset + state_proof_sz > sig_start {
             return Err(RpcError::invalid_format());
         }
 
@@ -810,23 +888,24 @@ pub fn validate_wire_transaction(bytes: &[u8]) -> Result<(), RpcError> {
 
         // If proof type is EXISTING, expect account meta
         if proof_type == TN_STATE_PROOF_TYPE_EXISTING {
-            if offset + TN_ACCOUNT_META_FOOTPRINT > bytes.len() {
+            if offset + TN_ACCOUNT_META_FOOTPRINT > sig_start {
                 return Err(RpcError::invalid_format());
             }
             offset += TN_ACCOUNT_META_FOOTPRINT;
         }
     }
 
-    // 8. Check for exact size match (no trailing bytes)
-    if offset != bytes.len() {
-        // return Err(RpcError::invalid_format());
-        return Err(RpcError::trailing_bytes(offset, bytes.len()));
+    // 9. Check for exact size match (offset should be at signature start)
+    if offset != sig_start {
+        return Err(RpcError::trailing_bytes(offset + TN_TXN_SIGNATURE_SZ, bytes.len()));
     }
-    // 5. Signature check (fee payer signature)
-    let wire_for_signing = &bytes[64..]; // Exclude signature field
+
+    // 10. Signature check
+    let wire_for_signing = &bytes[..sig_start];
+    let signature = &bytes[sig_start..];
     if verify_transaction(
         wire_for_signing,
-        &hdr.fee_payer_signature,
+        signature.try_into().expect("signature should be 64 bytes"),
         &hdr.fee_payer_pubkey,
     )
     .is_err()
@@ -916,8 +995,9 @@ mod tests {
         // The calculated size should match the actual bytes length
         assert_eq!(calculated_size, bytes.len());
 
-        // Should be exactly the header size for minimal transaction
-        assert_eq!(calculated_size, core::mem::size_of::<WireTxnHdrV1>());
+        // Should be header size + trailing signature for minimal transaction
+        let expected_min_size = core::mem::size_of::<WireTxnHdrV1>() + TN_TXN_SIGNATURE_SZ;
+        assert_eq!(calculated_size, expected_min_size);
     }
 
     #[test]
@@ -970,22 +1050,19 @@ mod tests {
     #[test]
     fn test_trailing_bytes() {
         let mut bytes = make_valid_txn_bytes();
-        bytes.push(0);
+        let orig_len = bytes.len();
+        // Insert a byte before the signature (trailing bytes between body and signature)
+        bytes.insert(orig_len - TN_TXN_SIGNATURE_SZ, 0);
         let err = validate_wire_transaction(&bytes).unwrap_err();
-        assert!(matches!(
-            err,
-            RpcError::TrailingBytes {
-                expected: 276,
-                found: 277
-            }
-        ));
+        // Expected size changes due to new wire format (112-byte header instead of 176)
+        assert!(matches!(err, RpcError::TrailingBytes { .. }));
     }
 
     #[test]
     fn test_invalid_transaction_version() {
         let mut bytes = make_valid_txn_bytes();
-        // Corrupt the transaction version (at offset 64)
-        bytes[64] = 0x02; // Invalid version
+        // Corrupt the transaction version
+        bytes[0] = 0x00; // Invalid version
         let err = validate_wire_transaction(&bytes).unwrap_err();
         assert!(matches!(err, RpcError::InvalidVersion));
     }
@@ -996,6 +1073,18 @@ mod tests {
         let bytes = make_valid_txn_bytes_with_flags(0x07);
         let err = validate_wire_transaction(&bytes).unwrap_err();
         assert!(matches!(err, RpcError::InvalidFlags));
+    }
+
+    #[test]
+    fn test_invalid_chain_id_zero() {
+        let mut bytes = make_valid_txn_bytes();
+
+        /* Modify chain_id field to 0 (chain_id is at offset 108-109 in WireTxnHdrV1) */
+        let hdr: &mut WireTxnHdrV1 = bytemuck::from_bytes_mut(&mut bytes[0..core::mem::size_of::<WireTxnHdrV1>()]);
+        hdr.chain_id = 0;
+
+        let err = validate_wire_transaction(&bytes).unwrap_err();
+        assert!(matches!(err, RpcError::InvalidChainId));
     }
 
     #[test]
@@ -1036,7 +1125,7 @@ mod tests {
         let bytes = tx.to_wire();
 
         // Verify state proof is included in wire format
-        assert!(bytes.len() > 168); // Header + state proof should be larger
+        assert!(bytes.len() > core::mem::size_of::<WireTxnHdrV1>() + TN_TXN_SIGNATURE_SZ);
         assert!(validate_wire_transaction(&bytes).is_ok());
 
         // Test deserialization

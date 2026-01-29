@@ -4,8 +4,9 @@ use super::helpers::{
     primitive_to_dataview_setter, primitive_to_ts_type, struct_field_const_offset,
 };
 use super::ir_helpers::{
-    DynamicBinding, TsParamBinding, collect_dynamic_param_bindings, resolve_param_binding,
-    sanitize_param_name, ts_parameter_bindings,
+    DynamicBinding, TsParamBinding, collect_dynamic_param_bindings,
+    deduplicated_ts_parameter_bindings, resolve_param_binding, sanitize_param_name,
+    ts_parameter_bindings,
 };
 use crate::abi::expr::{ConstantExpression, ExprKind};
 use crate::abi::resolved::{
@@ -242,7 +243,8 @@ fn supports_fam_struct<'a>(type_ir: Option<&TypeIr>, fam_infos: &[FamFieldInfo<'
     if fam_infos.is_empty() {
         return false;
     }
-    let bindings: Vec<_> = ts_parameter_bindings(ir)
+    /* Use deduplicated bindings - only unique param names need to match FAM fields */
+    let bindings: Vec<_> = deduplicated_ts_parameter_bindings(ir)
         .into_iter()
         .filter(|binding| !binding.derived)
         .collect();
@@ -757,7 +759,8 @@ fn emit_fam_struct_builder(
             ),
         })
         .sum();
-    let bindings: Vec<_> = ts_parameter_bindings(type_ir)
+    /* Use deduplicated bindings for building param expressions */
+    let bindings: Vec<_> = deduplicated_ts_parameter_bindings(type_ir)
         .into_iter()
         .filter(|binding| !binding.derived)
         .collect();
@@ -1332,7 +1335,8 @@ fn emit_enum_builder(
     let binding_table = collect_dynamic_param_bindings(resolved_type);
     let binding_keys: Vec<String> = binding_table.keys().cloned().collect();
     let prefix_meta_ref = if has_prefix { Some(&prefix_meta) } else { None };
-    for binding in ts_parameter_bindings(type_ir)
+    /* Use deduplicated bindings for building param expressions */
+    for binding in deduplicated_ts_parameter_bindings(type_ir)
         .into_iter()
         .filter(|binding| !binding.derived)
     {
@@ -1816,7 +1820,8 @@ fn emit_multi_enum_builder(
     let mut param_exprs = Vec::new();
     let binding_table = collect_dynamic_param_bindings(resolved_type);
     let binding_keys: Vec<String> = binding_table.keys().cloned().collect();
-    'binding: for binding in ts_parameter_bindings(type_ir)
+    /* Use deduplicated bindings for building param expressions */
+    'binding: for binding in deduplicated_ts_parameter_bindings(type_ir)
         .into_iter()
         .filter(|binding| !binding.derived)
     {
@@ -2382,10 +2387,16 @@ fn enum_param_expression(
     }
 
     if let Some(meta_map) = prefix_meta {
-        if let Some(stripped) = binding
+        // Try both unqualified (e.g., "payload.event_type") and fully qualified
+        // (e.g., "TypeName::payload.event_type") prefixes, matching the pattern
+        // used for .tag and .payload_size handling above.
+        let field_prefix = format!("{}.", info.enum_field.name);
+        let qualified_prefix = format!("{}::{}.", type_name, info.enum_field.name);
+        let stripped = binding
             .canonical
-            .strip_prefix(&(info.enum_field.name.clone() + "."))
-        {
+            .strip_prefix(&field_prefix)
+            .or_else(|| binding.canonical.strip_prefix(&qualified_prefix));
+        if let Some(stripped) = stripped {
             let segments: Vec<&str> = stripped.split('.').collect();
             if let Some((first, rest)) = segments.split_first() {
                 if let Some(meta) = meta_map.get(*first) {

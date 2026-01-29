@@ -158,6 +158,7 @@ struct TransactionContext {
     pub client: Client,
     pub nonce: u64,
     pub start_slot: u64,
+    pub chain_id: u16,
 }
 
 /// Setup common transaction context (config, keypair, client, nonce, block height)
@@ -192,12 +193,17 @@ async fn setup_transaction_context(
         CliError::TransactionSubmission(format!("Failed to get block height: {}", e))
     })?;
 
+    let chain_info = client.get_chain_info().await.map_err(|e| {
+        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
+    })?;
+
     Ok(TransactionContext {
         fee_payer_keypair,
         token_program_bytes,
         client,
         nonce,
         start_slot: block_height.finalized_height,
+        chain_id: chain_info.chain_id,
     })
 }
 
@@ -207,7 +213,8 @@ async fn execute_transaction(
     context: &TransactionContext,
     json_format: bool,
 ) -> Result<TransactionDetails, CliError> {
-    // Sign transaction
+    // Set chain ID and sign transaction
+    transaction = transaction.with_chain_id(context.chain_id);
     transaction
         .sign(&context.fee_payer_keypair.private_key)
         .map_err(|e| CliError::Crypto(format!("Failed to sign transaction: {}", e)))?;

@@ -128,6 +128,7 @@ pub struct UploaderManager {
     rpc_client: RpcClient,
     uploader_program_pubkey: Pubkey,
     fee_payer_keypair: KeyPair,
+    chain_id: u16,
 }
 
 impl UploaderManager {
@@ -148,11 +149,16 @@ impl UploaderManager {
         let private_key_bytes = config.get_private_key_bytes()?;
         let fee_payer_keypair = crypto::keypair_from_hex(&hex::encode(private_key_bytes))?;
 
+        let chain_info = rpc_client.get_chain_info().await.map_err(|e| {
+            CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
+        })?;
+
         Ok(Self {
             config: config.clone(),
             rpc_client,
             uploader_program_pubkey,
             fee_payer_keypair,
+            chain_id: chain_info.chain_id,
         })
     }
 
@@ -561,7 +567,8 @@ impl UploaderManager {
         )
         .map_err(|e| CliError::ProgramUpload(e.to_string()))?;
 
-        // Sign transaction
+        // Set chain ID and sign transaction
+        let mut transaction = transaction.with_chain_id(self.chain_id);
         transaction
             .sign(&self.fee_payer_keypair.private_key)
             .map_err(|e| CliError::Crypto(e.to_string()))?;
@@ -627,7 +634,8 @@ impl UploaderManager {
             )
             .map_err(|e| CliError::ProgramUpload(e.to_string()))?;
 
-            // Sign transaction
+            // Set chain ID and sign transaction
+            let mut transaction = transaction.with_chain_id(self.chain_id);
             transaction
                 .sign(&self.fee_payer_keypair.private_key)
                 .map_err(|e| CliError::Crypto(e.to_string()))?;
@@ -701,7 +709,8 @@ impl UploaderManager {
             )
             .map_err(|e| CliError::ProgramUpload(e.to_string()))?;
 
-            // Sign transaction
+            // Set chain ID and sign transaction
+            let mut transaction = transaction.with_chain_id(self.chain_id);
             transaction
                 .sign(&self.fee_payer_keypair.private_key)
                 .map_err(|e| CliError::Crypto(e.to_string()))?;
@@ -757,7 +766,8 @@ impl UploaderManager {
         .map_err(|e| CliError::ProgramUpload(e.to_string()))?;
         // transaction = transaction.with_compute_units(2147483648);
 
-        // Sign transaction
+        // Set chain ID and sign transaction
+        let mut transaction = transaction.with_chain_id(self.chain_id);
         transaction
             .sign(&self.fee_payer_keypair.private_key)
             .map_err(|e| CliError::Crypto(e.to_string()))?;
@@ -1081,7 +1091,8 @@ impl UploaderManager {
         )
         .map_err(|e| CliError::ProgramCleanup(e.to_string()))?;
 
-        // Sign transaction
+        // Set chain ID and sign transaction
+        let mut transaction = transaction.with_chain_id(self.chain_id);
         transaction
             .sign(&self.fee_payer_keypair.private_key)
             .map_err(|e| CliError::Crypto(e.to_string()))?;

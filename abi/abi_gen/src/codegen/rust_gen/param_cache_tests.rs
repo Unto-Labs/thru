@@ -9,7 +9,7 @@ use std::collections::{BTreeMap, HashMap};
 
 fn primitive(name: &str, int: IntegralType) -> ResolvedType {
     let size = match int {
-        IntegralType::U8 | IntegralType::I8 => 1,
+        IntegralType::U8 | IntegralType::I8 | IntegralType::Char => 1,
         IntegralType::U16 | IntegralType::I16 => 2,
         IntegralType::U32 | IntegralType::I32 => 4,
         IntegralType::U64 | IntegralType::I64 => 8,

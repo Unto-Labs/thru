@@ -42,10 +42,10 @@ rand = "0.9.2"
 base64 = "0.22"
 
 # System utilities
-dirs = "5.0"
+dirs = "6.0"
 
 # Output formatting
-colored = "2.1"
+colored = "3.1"
 chrono = "0.4"
 
 # URL handling
@@ -54,7 +54,7 @@ tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt"] }
 
 # HTTP client for downloading toolchains
-reqwest = { version = "0.11", features = ["stream", "json"] }
+reqwest = { version = "0.12", features = ["stream", "json"] }
 
 # Futures utilities
 futures-util = "0.3"
@@ -64,10 +64,13 @@ tar = "0.4"
 flate2 = "1.0"
 
 # Progress indicators
-indicatif = "0.17"
+indicatif = "0.18"
 
 [build-dependencies]
-vergen-gitcl = { version = "1", features = ["build", "cargo"] }
+# Pin versions to avoid vergen-lib conflict (see https://github.com/rustyhorde/vergen/issues/478)
+vergen-gitcl = { version = "=1.0.8", features = ["build", "cargo"] }
+vergen = "=9.0.6"
+vergen-lib = "=0.1.6"
 
 [dev-dependencies]
 tokio-test = "0.4"

@@ -947,6 +947,16 @@ message GetHeightResponse {
   uint64 cluster_executed = 3 [(google.api.field_behavior) = REQUIRED];
 }
 
+// GetChainInfoRequest retrieves chain-level information.
+message GetChainInfoRequest {}
+
+// GetChainInfoResponse returns chain-level information.
+message GetChainInfoResponse {
+  // Chain identifier, unique per network (similar to Ethereum chain ID).
+  // Used to prevent transaction replay across different chains.
+  uint32 chain_id = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
 // GetStateRootsRequest retrieves up to 257 state roots ending at a specified slot.
 // Used for transaction replay to verify state proofs against historical roots.
 // Returns state roots in ascending slot order, from (slot - 256) to slot (inclusive).
@@ -977,6 +987,13 @@ service QueryService {
   rpc GetHeight(GetHeightRequest) returns (GetHeightResponse) {
     option (google.api.http) = {
       get: "/v1/height"
+    };
+  }
+
+  // Get chain-level information including chain ID.
+  rpc GetChainInfo(GetChainInfoRequest) returns (GetChainInfoResponse) {
+    option (google.api.http) = {
+      get: "/v1/chain-info"
     };
   }
 

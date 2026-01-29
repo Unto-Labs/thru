@@ -254,6 +254,22 @@ impl Client {
         Ok(response.into_inner().versions)
     }
 
+    /// Get chain information including chain ID.
+    pub async fn get_chain_info(&self) -> Result<ChainInfo> {
+        let mut client = QueryServiceClient::new(self.channel.clone())
+            .max_decoding_message_size(128 * 1024 * 1024) /* 128 MB */
+            .max_encoding_message_size(128 * 1024 * 1024); /* 128 MB */
+        let mut request = Request::new(servicesv1::GetChainInfoRequest {});
+        self.apply_metadata(&mut request);
+        request.set_timeout(self.timeout);
+
+        let response = client.get_chain_info(request).await?;
+        let message = response.into_inner();
+        Ok(ChainInfo {
+            chain_id: message.chain_id as u16,
+        })
+    }
+
     /// Get health information from the node.
     pub async fn get_health(&self) -> Result<HealthCheckResponse> {
         let mut client = HealthClient::new(self.channel.clone())
@@ -1145,6 +1161,14 @@ pub struct BlockHeight {
     pub executed_height: u64,
     pub locally_executed_height: u64,
     pub cluster_executed_height: u64,
+}
+
+/// Chain information including chain ID.
+#[derive(Debug, Clone)]
+pub struct ChainInfo {
+    /// Chain identifier, unique per network (similar to Ethereum chain ID).
+    /// Used to prevent transaction replay across different chains.
+    pub chain_id: u16,
 }
 
 /// State root entry for a specific slot.

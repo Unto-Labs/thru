@@ -6,8 +6,8 @@ import type { Account, AccountFlags, AccountMeta } from "@thru/proto";
 import { AccountFlagsSchema, AccountMetaSchema, AccountSchema } from "@thru/proto";
 import type { Block, BlockHeader } from "@thru/proto";
 import { BlockHeaderSchema, BlockSchema } from "@thru/proto";
-import type { GetHeightResponse, ListBlocksResponse } from "@thru/proto";
-import { GetHeightResponseSchema, ListBlocksResponseSchema } from "@thru/proto";
+import type { GetHeightResponse, GetChainInfoResponse, ListBlocksResponse } from "@thru/proto";
+import { GetHeightResponseSchema, GetChainInfoResponseSchema, ListBlocksResponseSchema } from "@thru/proto";
 
 /**
  * Creates a mock ThruClientContext with mock gRPC clients.
@@ -32,6 +32,7 @@ export function createMockContext(overrides: Partial<ThruClientContext> = {}): T
       getEvent: vi.fn(),
       generateStateProof: vi.fn(),
       getVersion: vi.fn(),
+      getChainInfo: vi.fn().mockResolvedValue({ chainId: 1 }),
       ...overrides.query,
     } as any,
     command: {
@@ -162,6 +163,16 @@ export function createMockHeightResponse(overrides: Partial<GetHeightResponse> =
     finalized: 1000n,
     locallyExecuted: 1001n,
     clusterExecuted: 1002n,
+    ...overrides,
+  });
+}
+
+/**
+ * Creates a mock GetChainInfoResponse protobuf message
+ */
+export function createMockChainInfoResponse(overrides: Partial<GetChainInfoResponse> = {}): GetChainInfoResponse {
+  return create(GetChainInfoResponseSchema, {
+    chainId: 1,
     ...overrides,
   });
 }

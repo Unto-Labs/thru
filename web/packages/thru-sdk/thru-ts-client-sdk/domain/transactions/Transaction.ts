@@ -23,7 +23,6 @@ import { Pubkey, PubkeyInput, Signature } from "../primitives";
 import type { OptionalProofs, TransactionAccountsInput, TransactionHeaderInput } from "./types";
 
 const DEFAULT_FLAGS = 0;
-const SIGNATURE_PREFIX_SIZE = SIGNATURE_SIZE;
 const MAX_INSTRUCTION_DATA_LENGTH = 0xffff;
 const BYTE_POPCOUNT = new Uint8Array(256).map((_value, index) => {
     let v = index;
@@ -67,6 +66,7 @@ export class Transaction {
     readonly nonce: bigint;
     readonly startSlot: bigint;
     readonly expiryAfter: number;
+    readonly chainId: number;
 
     readonly requestedComputeUnits: number;
     readonly requestedStateUnits: number;
@@ -105,6 +105,7 @@ export class Transaction {
         this.nonce = params.header.nonce;
         this.startSlot = params.header.startSlot;
         this.expiryAfter = params.header.expiryAfter ?? 0;
+        this.chainId = params.header.chainId ?? 1;
 
         this.requestedComputeUnits = params.header.computeUnits ?? 0;
         this.requestedStateUnits = params.header.stateUnits ?? 0;
@@ -146,17 +147,13 @@ export class Transaction {
         data: Uint8Array,
         options: { strict?: boolean } = {},
     ): { transaction: Transaction; size: number } {
-        if (data.length < TXN_HEADER_SIZE) {
-            throw new Error(`Transaction data too short: ${data.length} bytes (expected at least ${TXN_HEADER_SIZE})`);
+        if (data.length < TXN_HEADER_SIZE + SIGNATURE_SIZE) {
+            throw new Error(`Transaction data too short: ${data.length} bytes (expected at least ${TXN_HEADER_SIZE + SIGNATURE_SIZE})`);
         }
 
         const strict = options.strict ?? false;
         const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
         let offset = 0;
-
-        const signatureBytes = data.slice(offset, offset + SIGNATURE_SIZE);
-        const hasSignature = hasNonZeroBytes(signatureBytes);
-        offset += SIGNATURE_SIZE;
 
         const version = view.getUint8(offset);
         offset += 1;
@@ -191,7 +188,9 @@ export class Transaction {
         offset += 8;
         const expiryAfter = view.getUint32(offset, true);
         offset += 4;
-        offset += 4; // padding
+        const chainId = view.getUint16(offset, true);
+        offset += 2;
+        offset += 2; // padding
 
         Transaction.ensureAvailable(data.length, offset, PUBKEY_SIZE, "fee payer account");
         const feePayer = data.slice(offset, offset + PUBKEY_SIZE);
@@ -212,23 +211,51 @@ export class Transaction {
             );
         }
 
+        // Calculate expected transaction size from header fields to handle
+        // parsing multiple transactions from a buffer
+        const accountsSize = totalAccountCount * PUBKEY_SIZE;
+        let expectedBodySize = accountsSize + instructionDataSize;
+
+        // If fee payer proof flag is set, we need to peek at the proof to get its size
+        // The state proof format has an 8-byte typeSlot (with proofType in bits 62-63)
+        // followed by a 32-byte pathBitset. The total size is calculated using popcount.
+        if ((flags & TXN_FLAG_HAS_FEE_PAYER_PROOF) !== 0) {
+            const proofOffset = TXN_HEADER_SIZE + accountsSize + instructionDataSize;
+            Transaction.ensureAvailable(data.length, proofOffset, STATE_PROOF_HEADER_SIZE, "state proof header");
+            const proofView = new DataView(data.buffer, data.byteOffset + proofOffset, STATE_PROOF_HEADER_SIZE);
+            const typeSlot = proofView.getBigUint64(0, true);
+            const proofType = Number((typeSlot >> 62n) & 0x3n);
+            const pathBitset = data.subarray(proofOffset + 8, proofOffset + 40);
+            const siblingCount = countSetBits(pathBitset);
+            const bodyCount = proofType + siblingCount;
+            const proofFootprint = STATE_PROOF_HEADER_SIZE + bodyCount * HASH_SIZE;
+            expectedBodySize += proofFootprint;
+            if (proofType === STATE_PROOF_TYPE_EXISTING) {
+                expectedBodySize += ACCOUNT_META_FOOTPRINT;
+            }
+        }
+
+        const txnSize = TXN_HEADER_SIZE + expectedBodySize + SIGNATURE_SIZE;
+        Transaction.ensureAvailable(data.length, 0, txnSize, "full transaction");
+        const sigStart = TXN_HEADER_SIZE + expectedBodySize;
+
         const readWriteAccounts: Uint8Array[] = [];
         for (let i = 0; i < readwriteAccountsCount; i++) {
-            Transaction.ensureAvailable(data.length, offset, PUBKEY_SIZE, "read-write accounts");
+            Transaction.ensureAvailable(sigStart, offset, PUBKEY_SIZE, "read-write accounts");
             readWriteAccounts.push(data.slice(offset, offset + PUBKEY_SIZE));
             offset += PUBKEY_SIZE;
         }
 
         const readOnlyAccounts: Uint8Array[] = [];
         for (let i = 0; i < readonlyAccountsCount; i++) {
-            Transaction.ensureAvailable(data.length, offset, PUBKEY_SIZE, "read-only accounts");
+            Transaction.ensureAvailable(sigStart, offset, PUBKEY_SIZE, "read-only accounts");
             readOnlyAccounts.push(data.slice(offset, offset + PUBKEY_SIZE));
             offset += PUBKEY_SIZE;
         }
 
         let instructionData: Uint8Array | undefined;
         if (instructionDataSize > 0) {
-            Transaction.ensureAvailable(data.length, offset, instructionDataSize, "instruction data");
+            Transaction.ensureAvailable(sigStart, offset, instructionDataSize, "instruction data");
             instructionData = data.slice(offset, offset + instructionDataSize);
             offset += instructionDataSize;
         }
@@ -237,16 +264,26 @@ export class Transaction {
         let feePayerAccountMetaRaw: Uint8Array | undefined;
 
         if ((flags & TXN_FLAG_HAS_FEE_PAYER_PROOF) !== 0) {
-            const { proofBytes, footprint, proofType } = Transaction.parseStateProof(data.subarray(offset));
+            const { proofBytes, footprint, proofType } = Transaction.parseStateProof(data.subarray(offset, sigStart));
             feePayerStateProof = proofBytes;
             offset += footprint;
 
             if (proofType === STATE_PROOF_TYPE_EXISTING) {
-                Transaction.ensureAvailable(data.length, offset, ACCOUNT_META_FOOTPRINT, "fee payer account metadata");
+                Transaction.ensureAvailable(sigStart, offset, ACCOUNT_META_FOOTPRINT, "fee payer account metadata");
                 feePayerAccountMetaRaw = data.slice(offset, offset + ACCOUNT_META_FOOTPRINT);
                 offset += ACCOUNT_META_FOOTPRINT;
             }
         }
+
+        // Verify we consumed all bytes before signature
+        if (offset !== sigStart) {
+            throw new Error(
+                `Transaction body has trailing bytes: expected ${offset + SIGNATURE_SIZE} bytes but found ${txnSize}`,
+            );
+        }
+
+        const signatureBytes = data.slice(sigStart, sigStart + SIGNATURE_SIZE);
+        const hasSignature = hasNonZeroBytes(signatureBytes);
 
         const transaction = new Transaction({
             version,
@@ -257,6 +294,7 @@ export class Transaction {
                 nonce,
                 startSlot,
                 expiryAfter,
+                chainId,
                 computeUnits: requestedComputeUnits,
                 stateUnits: requestedStateUnits,
                 memoryUnits: requestedMemoryUnits,
@@ -281,7 +319,7 @@ export class Transaction {
             transaction.setSignature(Signature.from(signatureBytes));
         }
 
-        return { transaction, size: offset };
+        return { transaction, size: offset + SIGNATURE_SIZE };
     }
 
     static fromProto(proto: CoreTransaction): Transaction {
@@ -357,6 +395,7 @@ export class Transaction {
                     nonce: header.nonce ?? 0n,
                     startSlot: header.startSlot ?? 0n,
                     expiryAfter: header.expiryAfter ?? 0,
+                    chainId: header.chainId ?? 1,
                     computeUnits: header.requestedComputeUnits ?? 0,
                     stateUnits: header.requestedStateUnits ?? 0,
                     memoryUnits: header.requestedMemoryUnits ?? 0,
@@ -427,31 +466,21 @@ export class Transaction {
     }
 
     toWireForSigning(): Uint8Array {
-        const header = this.createHeader(undefined);
-        const view = new Uint8Array(header);
-        return this.buildWirePayload(view.subarray(SIGNATURE_PREFIX_SIZE));
+        const header = this.createHeader();
+        return this.buildWirePayload(new Uint8Array(header), false);
     }
 
     toWire(): Uint8Array {
-        const header = this.createHeader(this.signature?.toBytes());
-        return this.buildWirePayload(new Uint8Array(header));
+        const header = this.createHeader();
+        return this.buildWirePayload(new Uint8Array(header), true);
     }
 
-    private createHeader(signature: Uint8Array | undefined): ArrayBufferLike {
+    private createHeader(): ArrayBufferLike {
         const buffer = new ArrayBuffer(TXN_HEADER_SIZE);
         const headerBytes = new Uint8Array(buffer);
         const view = new DataView(buffer);
 
-        if (signature) {
-            if (signature.length !== SIGNATURE_SIZE) {
-                throw new Error(`Signature must contain ${SIGNATURE_SIZE} bytes`);
-            }
-            headerBytes.set(signature, 0);
-        } else {
-            headerBytes.fill(0, 0, SIGNATURE_SIZE);
-        }
-
-        let offset = SIGNATURE_PREFIX_SIZE;
+        let offset = 0;
         view.setUint8(offset, this.version & 0xff);
         offset += 1;
 
@@ -492,7 +521,10 @@ export class Transaction {
         view.setUint32(offset, ensureUint32(this.expiryAfter), true);
         offset += 4;
 
-        offset += 4; // padding
+        view.setUint16(offset, ensureUint16(this.chainId), true);
+        offset += 2;
+
+        offset += 2; // padding
 
         headerBytes.set(this.feePayer.toBytes(), offset);
         offset += PUBKEY_SIZE;
@@ -502,7 +534,7 @@ export class Transaction {
         return buffer;
     }
 
-    private buildWirePayload(headerPrefix: Uint8Array): Uint8Array {
+    private buildWirePayload(headerBytes: Uint8Array, includeSignature: boolean): Uint8Array {
         const dynamicLength =
             this.readWriteAccounts.length * PUBKEY_SIZE +
             this.readOnlyAccounts.length * PUBKEY_SIZE +
@@ -510,10 +542,12 @@ export class Transaction {
             (this.feePayerStateProof?.length ?? 0) +
             (this.feePayerAccountMetaRaw?.length ?? 0);
 
-        const result = new Uint8Array(headerPrefix.length + dynamicLength);
-        result.set(headerPrefix, 0);
+        const signatureLength = includeSignature ? SIGNATURE_SIZE : 0;
 
-        let offset = headerPrefix.length;
+        const result = new Uint8Array(headerBytes.length + dynamicLength + signatureLength);
+        result.set(headerBytes, 0);
+
+        let offset = headerBytes.length;
         offset = appendAccountList(result, offset, this.readWriteAccounts.map(account => account.toBytes()));
         offset = appendAccountList(result, offset, this.readOnlyAccounts.map(account => account.toBytes()));
         if (this.instructionData) {
@@ -527,6 +561,14 @@ export class Transaction {
         if (this.feePayerAccountMetaRaw) {
             result.set(this.feePayerAccountMetaRaw, offset);
             offset += this.feePayerAccountMetaRaw.length;
+        }
+
+        // Append signature at the end
+        if (includeSignature) {
+            if (this.signature) {
+                result.set(this.signature.toBytes(), offset);
+            }
+            // If no signature, bytes remain zero (already initialized)
         }
 
         return result;
