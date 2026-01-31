@@ -1414,6 +1414,18 @@ pub enum WthruCommands {
         #[arg(long = "token-program")]
         token_program: Option<String>,
     },
+
+    /// Derive WTHRU mint and vault addresses
+    #[command(name = "derive")]
+    Derive {
+        /// Override WTHRU program address (ta... or hex)
+        #[arg(long = "program")]
+        program: Option<String>,
+
+        /// Override token program address (ta... or hex)
+        #[arg(long = "token-program")]
+        token_program: Option<String>,
+    },
 }
 
 /// Developer tools subcommands
