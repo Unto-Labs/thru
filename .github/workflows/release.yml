@@ -59,17 +59,19 @@ jobs:
           thru-program-sdk-${{ matrix.sdk }}-${{ github.event.release.tag_name }}.zip
         retention-days: 90
 
-  # Build toolchain for Linux
+  # Build toolchain for Linux and macOS
   build-toolchain:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-large]
+        os: [ubuntu-large, macos-latest-xlarge]
         include:
           - os: ubuntu-large
             arch: x86_64
+          - os: macos-latest-xlarge
+            arch: arm64
 
     steps:
     - name: Checkout code

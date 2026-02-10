@@ -1,6 +1,6 @@
 use core::panic::PanicInfo;
 
-use crate::{PANIC_ERROR_CODE, syscall::sys_exit, tvm_println};
+use crate::{syscall::sys_exit, tvm_println, PANIC_ERROR_CODE};
 
 #[panic_handler]
 fn handle_panic(_info: &PanicInfo) -> ! {

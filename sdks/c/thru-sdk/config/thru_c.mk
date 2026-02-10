@@ -262,8 +262,9 @@ include $(1)
 MKPATH:=
 endef
 
-# Include all Local.mk files
+# Include all Local.mk files from current directory and SDK directory
 $(foreach mk,$(shell $(FIND) . -type f -name Local.mk),$(eval $(call _include-mk,$(mk))))
+$(foreach mk,$(shell $(FIND) $(THRU_C_SDK_DIR)/c -type f -name Local.mk 2>/dev/null),$(eval $(call _include-mk,$(mk))))
 
 # Include all the dependencies.  Must be after the make fragments
 # include so that DEPFILES is fully populated (similarly for the

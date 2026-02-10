@@ -50,6 +50,9 @@ async fn main() -> Result<()> {
         Commands::GetBalance { account } => {
             commands::rpc::get_balance(&config, account.as_deref(), cli.json).await
         }
+        Commands::GetSlotMetrics { slot, end_slot } => {
+            commands::rpc::get_slot_metrics(&config, slot, end_slot, cli.json).await
+        }
         Commands::Transfer { src, dst, value } => {
             commands::transfer::handle_transfer_command(&config, &src, &dst, value, cli.json).await
         }

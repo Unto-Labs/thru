@@ -5,5 +5,5 @@ pub mod hash;
 pub mod pubkey;
 pub mod shadow_stack;
 pub mod signature;
-pub mod txn;
 pub mod state_proof;
+pub mod txn;

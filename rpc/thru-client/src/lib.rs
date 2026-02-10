@@ -682,6 +682,61 @@ impl Client {
         Ok(state_roots)
     }
 
+    /// Get slot-level metrics for a specific slot.
+    ///
+    /// Returns metrics including global state counters and collected fees for the specified slot.
+    pub async fn get_slot_metrics(&self, slot: u64) -> Result<SlotMetrics> {
+        let mut client = QueryServiceClient::new(self.channel.clone())
+            .max_decoding_message_size(128 * 1024 * 1024)
+            .max_encoding_message_size(128 * 1024 * 1024);
+
+        let request = servicesv1::GetSlotMetricsRequest { slot };
+
+        let mut grpc_request = Request::new(request);
+        self.apply_metadata(&mut grpc_request);
+        grpc_request.set_timeout(self.timeout);
+
+        let response = client.get_slot_metrics(grpc_request).await?;
+        let metrics = response.into_inner();
+
+        Ok(SlotMetrics::from_proto(metrics))
+    }
+
+    /// List slot-level metrics for a range of slots.
+    ///
+    /// Returns metrics for slots in the range [start_slot, end_slot].
+    /// If end_slot is not specified, only the start_slot metrics are returned.
+    pub async fn list_slot_metrics(
+        &self,
+        start_slot: u64,
+        end_slot: Option<u64>,
+        limit: Option<u32>,
+    ) -> Result<Vec<SlotMetrics>> {
+        let mut client = QueryServiceClient::new(self.channel.clone())
+            .max_decoding_message_size(128 * 1024 * 1024)
+            .max_encoding_message_size(128 * 1024 * 1024);
+
+        let request = servicesv1::ListSlotMetricsRequest {
+            start_slot,
+            end_slot,
+            limit,
+        };
+
+        let mut grpc_request = Request::new(request);
+        self.apply_metadata(&mut grpc_request);
+        grpc_request.set_timeout(self.timeout);
+
+        let response = client.list_slot_metrics(grpc_request).await?;
+        let metrics = response
+            .into_inner()
+            .metrics
+            .into_iter()
+            .map(SlotMetrics::from_proto)
+            .collect();
+
+        Ok(metrics)
+    }
+
     fn apply_metadata<T>(&self, request: &mut Request<T>) {
         if let Some(header) = &self.auth_header {
             request
@@ -1176,6 +1231,29 @@ pub struct ChainInfo {
 pub struct StateRootEntry {
     pub slot: u64,
     pub state_root: Vec<u8>,
+}
+
+/// Slot-level metrics including state counters and fees.
+#[derive(Debug, Clone)]
+pub struct SlotMetrics {
+    pub slot: u64,
+    pub global_activated_state_counter: u64,
+    pub global_deactivated_state_counter: u64,
+    pub collected_fees: u64,
+    pub block_timestamp: Option<std::time::SystemTime>,
+}
+
+impl SlotMetrics {
+    fn from_proto(proto: servicesv1::GetSlotMetricsResponse) -> Self {
+        let block_timestamp = proto.block_timestamp.and_then(|ts| ts.try_into().ok());
+        Self {
+            slot: proto.slot,
+            global_activated_state_counter: proto.global_activated_state_counter,
+            global_deactivated_state_counter: proto.global_deactivated_state_counter,
+            collected_fees: proto.collected_fees,
+            block_timestamp,
+        }
+    }
 }
 
 /// Paginated transaction signatures for an account.

@@ -6,9 +6,9 @@
 
 #![cfg_attr(not(target_arch = "riscv64"), allow(dead_code))]
 
+use crate::types::signature::Signature;
 #[cfg(target_arch = "riscv64")]
 use core::arch::asm;
-use crate::types::signature::Signature;
 
 // ---------------------------------------------------------------------------
 // Public constants – keep identical numeric values to the original C headers
@@ -195,7 +195,11 @@ mod imp {
     }
 
     #[inline(always)]
-    pub unsafe fn sys_account_compress(account_idx: u64, proof: *const u8, proof_sz: u64) -> SyscallCode {
+    pub unsafe fn sys_account_compress(
+        account_idx: u64,
+        proof: *const u8,
+        proof_sz: u64,
+    ) -> SyscallCode {
         let mut a0 = account_idx;
         asm!(
             "ecall",
@@ -246,7 +250,10 @@ mod imp {
             in("a7") INVOKE,
             options(nostack, preserves_flags),
         );
-        (SyscallCode::from_i64(a0 as i64), SyscallCode::from_i64(a1 as i64))
+        (
+            SyscallCode::from_i64(a0 as i64),
+            SyscallCode::from_i64(a1 as i64),
+        )
     }
 
     #[inline(always)]

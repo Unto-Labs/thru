@@ -19,18 +19,18 @@ pub enum ProofParseError {
 pub enum ProofType {
     /// A proof that an account exists in the compressed accounts trie.
     /// Used to decompress an account.
-    /// 
+    ///
     /// Includes the sibling hashes of the account's path in the trie.
     Existing = 0,
     /// A proof that an account exists with a given hash value.
     /// Used to compress an account which was already previously compressed.
-    /// 
+    ///
     /// Includes the sibling hashes of the account's path in the trie, as well as
     /// the existing hash value of the account.
     Updating = 1,
     /// A proof that an account does not exist in the compressed accounts trie.
     /// Used to create a new account.
-    /// 
+    ///
     /// This consists of an existing account's pubkey and hash value in the tree,
     /// as well as the sibling hashes of the account's path in the trie.
     Creation = 2,
@@ -72,7 +72,7 @@ impl StateProofHeader {
                 .iter()
                 .map(|value| value.count_ones() as usize)
                 .sum::<usize>();
-            
+
         // Will not overflow since `expected_trailing_pubkeys` is at most 2 + 256
         expected_trailing_pubkeys * core::mem::size_of::<Pubkey>()
     }
@@ -117,7 +117,12 @@ impl<'a> StateProof<'a> {
     pub unsafe fn parse_proof_unchecked(data: *const u8) -> Self {
         let header = &*(data as *const StateProofHeader);
         let trailing_bytes = unsafe { header.expected_trailing_bytes() };
-        Self { data: core::slice::from_raw_parts(data, core::mem::size_of::<StateProofHeader>() + trailing_bytes) }
+        Self {
+            data: core::slice::from_raw_parts(
+                data,
+                core::mem::size_of::<StateProofHeader>() + trailing_bytes,
+            ),
+        }
     }
 
     /// Returns the total size of the state proof in bytes.
@@ -129,7 +134,8 @@ impl<'a> StateProof<'a> {
         unsafe {
             // SAFETY: Accessing this data is guaranteed to be valid by the invariant of this struct.
             StateProofHeader::ref_from_prefix(self.data).unwrap_unchecked()
-        }.0
+        }
+        .0
     }
 
     pub fn proof_type(self) -> ProofType {

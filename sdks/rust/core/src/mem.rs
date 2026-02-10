@@ -1,6 +1,8 @@
+use core::ptr;
+
 use crate::types::account::{AccountInfo, AccountInfoMut, AccountMeta, TSDK_ACCOUNT_VERSION_V1};
 use crate::types::block_ctx::BlockCtx;
-use crate::types::txn::{TXN_MAX_SZ, Txn};
+use crate::types::txn::{Txn, TXN_MAX_SZ};
 
 /// Errors that can occur when accessing memory regions.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -25,28 +27,59 @@ pub const SEG_IDX_PROGRAM: usize = 0x0003usize;
 pub const SEG_IDX_BLOCK_CTX: usize = 0x0004usize;
 pub const BLOCK_CTX_VM_SPACING: usize = 0x1000usize;
 
-
 // TODO: need to add some sort of singleton to have borrow checker properly work
 
+/// Compute a VM segment address from type, index, and offset.
+///
+/// The address format is:
+/// ```text
+/// | seg_type (8 bits) | seg_idx (16 bits) | offset (24 bits) |
+/// ```
+#[inline]
+pub const fn compute_segment_addr(seg_type: usize, seg_idx: usize, offset: usize) -> usize {
+    (seg_type << 40) | (seg_idx << 24) | offset
+}
+
+/// Legacy macro for computing segment addresses.
+/// Prefer `compute_segment_addr` function for new code.
 #[macro_export]
 macro_rules! compute_addr {
-    // The `tt` (token tree) designator is used for
-    // operators and tokens.
     ($seg_type:expr, $seg_idx:expr, $offset:expr) => {
-        ($seg_type as usize) << 40 | ($seg_idx as usize) << 24 | ($offset as usize)
+        $crate::mem::compute_segment_addr($seg_type as usize, $seg_idx as usize, $offset as usize)
     };
 }
 
-pub const TXN_DATA_PTR: *const u8 =
-    compute_addr!(SEG_TYPE_READONLY_DATA, SEG_IDX_TXN_DATA, 0x000000_usize) as *const u8;
+/// Create a const pointer to a VM segment with proper provenance.
+///
+/// Uses `with_exposed_provenance` to create a pointer from a VM segment address.
+/// The VM runtime implicitly grants provenance over the memory it provides.
+#[inline]
+pub fn vm_ptr<T>(seg_type: usize, seg_idx: usize, offset: usize) -> *const T {
+    let addr = compute_segment_addr(seg_type, seg_idx, offset);
+    ptr::with_exposed_provenance(addr)
+}
 
-pub const BLOCK_CTX_PTR: *const u8 =
-    compute_addr!(SEG_TYPE_READONLY_DATA, SEG_IDX_BLOCK_CTX, 0x000000_usize) as *const u8;
+/// Create a mutable pointer to a VM segment with proper provenance.
+#[inline]
+pub fn vm_ptr_mut<T>(seg_type: usize, seg_idx: usize, offset: usize) -> *mut T {
+    let addr = compute_segment_addr(seg_type, seg_idx, offset);
+    ptr::with_exposed_provenance_mut(addr)
+}
+
+/// Address of transaction data segment.
+pub const TXN_DATA_ADDR: usize =
+    compute_segment_addr(SEG_TYPE_READONLY_DATA, SEG_IDX_TXN_DATA, 0x000000);
+
+/// Address of block context segment.
+pub const BLOCK_CTX_ADDR: usize =
+    compute_segment_addr(SEG_TYPE_READONLY_DATA, SEG_IDX_BLOCK_CTX, 0x000000);
 
 /* TODO: get the raw parts of the transaction individually */
 
 pub fn get_txn() -> &'static Txn {
-    let txn_data: &[u8] = unsafe { core::slice::from_raw_parts(TXN_DATA_PTR, TXN_MAX_SZ) };
+    // Create pointer with proper provenance from VM segment address
+    let txn_ptr: *const u8 = vm_ptr(SEG_TYPE_READONLY_DATA, SEG_IDX_TXN_DATA, 0);
+    let txn_data: &[u8] = unsafe { core::slice::from_raw_parts(txn_ptr, TXN_MAX_SZ) };
     Txn::parse_txn(txn_data).expect("Failed to parse txn")
 }
 
@@ -60,7 +93,8 @@ pub fn get_txn() -> &'static Txn {
 /// to contain a valid BlockCtx structure. The validity is enforced
 /// by the runtime environment.
 pub fn get_block_ctx() -> &'static BlockCtx {
-    unsafe { &*(BLOCK_CTX_PTR as *const BlockCtx) }
+    let block_ctx_ptr: *const BlockCtx = vm_ptr(SEG_TYPE_READONLY_DATA, SEG_IDX_BLOCK_CTX, 0);
+    unsafe { &*block_ctx_ptr }
 }
 
 pub fn get_past_block_ctx(blocks_ago: usize) -> Option<&'static BlockCtx> {
@@ -72,13 +106,16 @@ pub fn get_past_block_ctx(blocks_ago: usize) -> Option<&'static BlockCtx> {
         return None;
     }
     let offset = blocks_ago.checked_mul(BLOCK_CTX_VM_SPACING)?;
-    let addr = compute_addr!(SEG_TYPE_READONLY_DATA, SEG_IDX_BLOCK_CTX, offset) as *const BlockCtx;
-    Some(unsafe { &*addr })
+    let past_ctx_ptr: *const BlockCtx = vm_ptr(SEG_TYPE_READONLY_DATA, SEG_IDX_BLOCK_CTX, offset);
+    Some(unsafe { &*past_ctx_ptr })
 }
 
-pub unsafe fn get_account_meta_at_idx(account_idx: u16) -> Result<&'static AccountMeta, MemoryError> {
+pub unsafe fn get_account_meta_at_idx(
+    account_idx: u16,
+) -> Result<&'static AccountMeta, MemoryError> {
+    // Create pointer with proper provenance for account metadata segment
     let account_meta_ptr: *const AccountMeta =
-        compute_addr!(SEG_TYPE_ACCOUNT_METADATA, account_idx, 0x000000_usize) as *const AccountMeta;
+        vm_ptr(SEG_TYPE_ACCOUNT_METADATA, account_idx as usize, 0);
 
     let account_meta: &AccountMeta = unsafe { &*account_meta_ptr };
 
@@ -94,29 +131,32 @@ pub unsafe fn get_account_meta_at_idx(account_idx: u16) -> Result<&'static Accou
 pub unsafe fn get_account_data_at_idx(account_idx: u16) -> Result<&'static [u8], MemoryError> {
     let account_meta = unsafe { get_account_meta_at_idx(account_idx)? };
 
-    let account_data_ptr: *const u8 =
-        compute_addr!(SEG_TYPE_ACCOUNT_DATA, account_idx, 0x000000_usize) as *const u8;
+    // Create pointer with proper provenance for account data segment
+    let account_data_ptr: *const u8 = vm_ptr(SEG_TYPE_ACCOUNT_DATA, account_idx as usize, 0);
 
     let account_data: &[u8] =
         unsafe { core::slice::from_raw_parts(account_data_ptr, account_meta.data_sz as usize) };
     Ok(account_data)
 }
 
-pub unsafe fn get_account_info_at_idx_mut(account_idx: u16) -> Result<AccountInfoMut<'static>, MemoryError> {
+pub unsafe fn get_account_info_at_idx_mut(
+    account_idx: u16,
+) -> Result<AccountInfoMut<'static>, MemoryError> {
     let account_meta = unsafe { get_account_meta_at_idx(account_idx)? };
 
-    let account_data_ptr: *mut u8 =
-        compute_addr!(SEG_TYPE_ACCOUNT_DATA, account_idx, 0x000000_usize) as *mut u8;
+    // Create mutable pointer with proper provenance for account data segment
+    let account_data_ptr: *mut u8 = vm_ptr_mut(SEG_TYPE_ACCOUNT_DATA, account_idx as usize, 0);
 
-    let account_data: &mut [u8] = unsafe {
-        core::slice::from_raw_parts_mut(account_data_ptr, account_meta.data_sz as usize)
-    };
+    let account_data: &mut [u8] =
+        unsafe { core::slice::from_raw_parts_mut(account_data_ptr, account_meta.data_sz as usize) };
     Ok(AccountInfoMut {
         meta: account_meta,
         data: account_data,
     })
 }
 
-pub unsafe fn get_account_info_at_idx(account_idx: u16) -> Result<AccountInfo<'static>, MemoryError> {
+pub unsafe fn get_account_info_at_idx(
+    account_idx: u16,
+) -> Result<AccountInfo<'static>, MemoryError> {
     unsafe { get_account_info_at_idx_mut(account_idx).map(Into::into) }
 }

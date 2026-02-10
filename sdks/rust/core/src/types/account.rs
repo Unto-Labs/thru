@@ -1,15 +1,15 @@
 use crate::types::pubkey::Pubkey;
 
-pub const TSDK_ACCOUNT_DATA_SZ_MAX: u64 = 16*1024*1024;
+pub const TSDK_ACCOUNT_DATA_SZ_MAX: u64 = 16 * 1024 * 1024;
 
-pub const TSDK_ACCOUNT_FLAG_PROGRAM: u8         = 0x01;
-pub const TSDK_ACCOUNT_FLAG_PRIVILEGED: u8      = 0x02;
-pub const TSDK_ACCOUNT_FLAG_UNCOMPRESSABLE: u8  = 0x04;
-pub const TSDK_ACCOUNT_FLAG_EPHEMERAL: u8       = 0x08;
-pub const TSDK_ACCOUNT_FLAG_DELETED: u8         = 0x10;
-pub const TSDK_ACCOUNT_FLAG_NEW: u8             = 0x20;
-pub const TSDK_ACCOUNT_FLAG_COMPRESSED: u8      = 0x40;
-pub const TSDK_ACCOUNT_VERSION_V1: u8           = 0x01;
+pub const TSDK_ACCOUNT_FLAG_PROGRAM: u8 = 0x01;
+pub const TSDK_ACCOUNT_FLAG_PRIVILEGED: u8 = 0x02;
+pub const TSDK_ACCOUNT_FLAG_UNCOMPRESSABLE: u8 = 0x04;
+pub const TSDK_ACCOUNT_FLAG_EPHEMERAL: u8 = 0x08;
+pub const TSDK_ACCOUNT_FLAG_DELETED: u8 = 0x10;
+pub const TSDK_ACCOUNT_FLAG_NEW: u8 = 0x20;
+pub const TSDK_ACCOUNT_FLAG_COMPRESSED: u8 = 0x40;
+pub const TSDK_ACCOUNT_VERSION_V1: u8 = 0x01;
 
 #[repr(C, packed)]
 #[derive(Debug, Clone, Copy)]

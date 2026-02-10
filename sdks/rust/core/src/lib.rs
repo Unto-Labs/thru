@@ -5,25 +5,26 @@ pub mod account_safe;
 pub mod mem;
 pub mod syscall;
 pub mod types;
+pub mod vmptr;
 
-pub use account_safe::{next_pow2, AccountManager, AccountError};
 pub use account_safe::AccountRef::*;
+pub use account_safe::{next_pow2, AccountError, AccountManager};
 pub use mem::get_txn;
 pub use mem::MemoryError;
 pub use types::pubkey::Pubkey;
 pub use types::shadow_stack::get_shadow_stack;
-
+pub use vmptr::{copy_bytes_strict, copy_nonoverlapping, VmPtr, VmPtrMut};
 
 /// Error code used by the panic handler
 pub const PANIC_ERROR_CODE: u64 = 555;
 
 mod panic;
 pub mod program_utils {
-    use crate::syscall;
-    use crate::types::state_proof::StateProof;
     use crate::mem::{get_account_meta_at_idx, get_txn};
+    use crate::syscall;
     use crate::types::pubkey::Pubkey;
     use crate::types::shadow_stack::get_shadow_stack;
+    use crate::types::state_proof::StateProof;
 
     pub fn revert(error_code: u64) -> ! {
         syscall::sys_exit(error_code, 1)
@@ -39,7 +40,8 @@ pub mod program_utils {
         unsafe {
             core::arch::asm!("mv {}, sp", out(reg) sp);
         }
-        let (_, addr) = unsafe { syscall::sys_increment_anonymous_segment_sz(sp as *mut (), delta) };
+        let (_, addr) =
+            unsafe { syscall::sys_increment_anonymous_segment_sz(sp as *mut (), delta) };
         addr
     }
 
@@ -178,14 +180,13 @@ pub mod program_utils {
         false
     }
 
-    pub fn account_create(account_idx: u64, seed: &[u8; syscall::SEED_SIZE], proof: StateProof<'_>) -> syscall::SyscallCode {
+    pub fn account_create(
+        account_idx: u64,
+        seed: &[u8; syscall::SEED_SIZE],
+        proof: StateProof<'_>,
+    ) -> syscall::SyscallCode {
         unsafe {
-            syscall::sys_account_create(
-                account_idx,
-                seed,
-                proof.as_ptr(),
-                proof.footprint() as u64
-            )
+            syscall::sys_account_create(account_idx, seed, proof.as_ptr(), proof.footprint() as u64)
         }
     }
 }
@@ -247,4 +248,36 @@ macro_rules! revert {
     (error = $error_code:expr) => {{
         $crate::program_utils::revert($error_code as u64);
     }};
+}
+
+/// Read a potentially misaligned field from a packed struct.
+///
+/// Use this for fields in `#[repr(C, packed)]` structs where the field
+/// may not be naturally aligned for its type.
+///
+/// # Example
+/// ```ignore
+/// let amount = read_packed_field!(token_account.amount);
+/// ```
+#[macro_export]
+macro_rules! read_packed_field {
+    ($struct:expr, $field:ident) => {
+        unsafe { core::ptr::read_unaligned(core::ptr::addr_of!($struct.$field)) }
+    };
+}
+
+/// Write to a potentially misaligned field in a packed struct.
+///
+/// Use this for fields in `#[repr(C, packed)]` structs where the field
+/// may not be naturally aligned for its type.
+///
+/// # Example
+/// ```ignore
+/// write_packed_field!(token_account.amount, new_amount);
+/// ```
+#[macro_export]
+macro_rules! write_packed_field {
+    ($struct:expr, $field:ident, $value:expr) => {
+        unsafe { core::ptr::write_unaligned(core::ptr::addr_of_mut!($struct.$field), $value) }
+    };
 }

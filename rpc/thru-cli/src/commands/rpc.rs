@@ -336,6 +336,138 @@ pub async fn get_balance(
     }
 }
 
+/// Execute the getSlotMetrics command
+pub async fn get_slot_metrics(
+    config: &Config,
+    slot: u64,
+    end_slot: Option<u64>,
+    json_format: bool,
+) -> Result<(), CliError> {
+    let client = create_rpc_client(config)?;
+
+    match end_slot {
+        None => {
+            /* Single slot: use GetSlotMetrics */
+            match client.get_slot_metrics(slot).await {
+                Ok(metrics) => {
+                    if json_format {
+                        let response = serde_json::json!({
+                            "getslotmetrics": {
+                                "status": "success",
+                                "slot": metrics.slot,
+                                "global_activated_state_counter": metrics.global_activated_state_counter,
+                                "global_deactivated_state_counter": metrics.global_deactivated_state_counter,
+                                "collected_fees": metrics.collected_fees,
+                                "block_timestamp": metrics.block_timestamp.map(|ts| {
+                                    ts.duration_since(std::time::UNIX_EPOCH)
+                                        .map(|d| format!("{}.{:09}", d.as_secs(), d.subsec_nanos()))
+                                        .unwrap_or_default()
+                                }),
+                            }
+                        });
+                        output::print_output(response, true);
+                    } else {
+                        println!("Slot: {}", metrics.slot);
+                        println!("Global Activated State Counter: {}", metrics.global_activated_state_counter);
+                        println!("Global Deactivated State Counter: {}", metrics.global_deactivated_state_counter);
+                        println!("Collected Fees: {}", metrics.collected_fees);
+                        if let Some(ts) = metrics.block_timestamp {
+                            if let Ok(duration) = ts.duration_since(std::time::UNIX_EPOCH) {
+                                println!("Block Timestamp: {}.{:09}", duration.as_secs(), duration.subsec_nanos());
+                            }
+                        }
+                    }
+                    Ok(())
+                }
+                Err(e) => {
+                    let error_msg = format!("Failed to get slot metrics: {}", e);
+                    if json_format {
+                        let error_response = serde_json::json!({
+                            "error": error_msg
+                        });
+                        output::print_output(error_response, true);
+                    } else {
+                        output::print_error(&error_msg);
+                    }
+                    Err(e.into())
+                }
+            }
+        }
+        Some(end) => {
+            /* Range of slots: use ListSlotMetrics */
+            /* Server limit is 10000, chunk requests if range is larger */
+            const MAX_CHUNK_SIZE: u64 = 10000;
+
+            let mut all_metrics = Vec::new();
+            let mut current_start = slot;
+
+            while current_start <= end {
+                let chunk_end = std::cmp::min(current_start + MAX_CHUNK_SIZE - 1, end);
+                let chunk_size = (chunk_end - current_start + 1) as u32;
+
+                match client.list_slot_metrics(current_start, Some(chunk_end), Some(chunk_size)).await {
+                    Ok(metrics_list) => {
+                        all_metrics.extend(metrics_list);
+                    }
+                    Err(e) => {
+                        let error_msg = format!("Failed to list slot metrics: {}", e);
+                        if json_format {
+                            let error_response = serde_json::json!({
+                                "error": error_msg
+                            });
+                            output::print_output(error_response, true);
+                        } else {
+                            output::print_error(&error_msg);
+                        }
+                        return Err(e.into());
+                    }
+                }
+
+                /* Break before increment to avoid overflow when chunk_end == u64::MAX */
+                if chunk_end == end {
+                    break;
+                }
+                current_start = chunk_end + 1;
+            }
+
+            if json_format {
+                let metrics_json: Vec<_> = all_metrics.iter().map(|m| {
+                    serde_json::json!({
+                        "slot": m.slot,
+                        "global_activated_state_counter": m.global_activated_state_counter,
+                        "global_deactivated_state_counter": m.global_deactivated_state_counter,
+                        "collected_fees": m.collected_fees,
+                        "block_timestamp": m.block_timestamp.map(|ts| {
+                            ts.duration_since(std::time::UNIX_EPOCH)
+                                .map(|d| format!("{}.{:09}", d.as_secs(), d.subsec_nanos()))
+                                .unwrap_or_default()
+                        }),
+                    })
+                }).collect();
+                let response = serde_json::json!({
+                    "listslotmetrics": {
+                        "status": "success",
+                        "count": all_metrics.len(),
+                        "metrics": metrics_json,
+                    }
+                });
+                output::print_output(response, true);
+            } else {
+                println!("Slot Metrics ({} entries):", all_metrics.len());
+                println!("{:-<80}", "");
+                for m in &all_metrics {
+                    println!("Slot {}: activated={}, deactivated={}, fees={}",
+                        m.slot,
+                        m.global_activated_state_counter,
+                        m.global_deactivated_state_counter,
+                        m.collected_fees);
+                }
+            }
+            Ok(())
+        }
+    }
+}
+
 /// Create an RPC client from configuration
 fn create_rpc_client(config: &Config) -> Result<Client, CliError> {
     let rpc_url = config.get_grpc_url()?;

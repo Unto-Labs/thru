@@ -35,7 +35,7 @@ SECTIONS {
     *(.data.*)
   }
   .rodata_gap : {
-    LONG(0x0)
+    QUAD(0x0)
   }
 
   /DISCARD/ : {

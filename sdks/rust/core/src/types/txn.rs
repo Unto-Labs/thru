@@ -1,6 +1,6 @@
+use crate::types::pubkey::Pubkey;
 use crate::types::state_proof::{ProofParseError, StateProof};
 use crate::types::{account::AccountMeta, ed25519::Ed25519Sig};
-use crate::types::pubkey::Pubkey;
 use core::{mem::MaybeUninit, slice};
 
 // Constants from tn_txn.h
@@ -36,28 +36,28 @@ pub const TN_TXN_FLAGS_OFFSET: usize = 1;
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct TxnHdrUniversal {
-    transaction_version: u8,         /* bytes: [0,1) */
+    transaction_version: u8, /* bytes: [0,1) */
 }
 
 #[repr(C)]
 #[derive(Debug, Clone, Copy)]
 pub struct TxnHdrV1 {
-    transaction_version: u8,         /* bytes: [0,1) */
-    flags: u8,                       /* bytes: [1,2) */
-    readwrite_accounts_cnt: u16,     /* bytes: [2,4) */
-    readonly_accounts_cnt: u16,      /* bytes: [4,6) */
-    instr_data_sz: u16,              /* bytes: [6,8) */
-    req_compute_units: u32,          /* bytes: [8,12) */
-    req_state_units: u16,            /* bytes: [12,14) */
-    req_memory_units: u16,           /* bytes: [14,16) */
-    fee: u64,                        /* bytes: [16,24) */
-    nonce: u64,                      /* bytes: [24,32) */
-    start_slot: u64,                 /* bytes: [32,40) */
-    expiry_after: u32,               /* bytes: [40,44) */
-    chain_id: u16,                   /* bytes: [44,46) */
-    padding_0: u16,                  /* bytes: [46,48) */
-    pub fee_payer_pubkey: Pubkey,    /* bytes: [48,80) */
-    pub program_pubkey: Pubkey,      /* bytes: [80,112) */
+    transaction_version: u8,      /* bytes: [0,1) */
+    flags: u8,                    /* bytes: [1,2) */
+    readwrite_accounts_cnt: u16,  /* bytes: [2,4) */
+    readonly_accounts_cnt: u16,   /* bytes: [4,6) */
+    instr_data_sz: u16,           /* bytes: [6,8) */
+    req_compute_units: u32,       /* bytes: [8,12) */
+    req_state_units: u16,         /* bytes: [12,14) */
+    req_memory_units: u16,        /* bytes: [14,16) */
+    fee: u64,                     /* bytes: [16,24) */
+    nonce: u64,                   /* bytes: [24,32) */
+    start_slot: u64,              /* bytes: [32,40) */
+    expiry_after: u32,            /* bytes: [40,44) */
+    chain_id: u16,                /* bytes: [44,46) */
+    padding_0: u16,               /* bytes: [46,48) */
+    pub fee_payer_pubkey: Pubkey, /* bytes: [48,80) */
+    pub program_pubkey: Pubkey,   /* bytes: [80,112) */
 }
 
 pub const TXN_HDR_V1_SZ: usize = size_of::<TxnHdrV1>();

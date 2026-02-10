@@ -978,6 +978,41 @@ message GetStateRootsResponse {
   repeated StateRootEntry state_roots = 1 [(google.api.field_behavior) = REQUIRED];
 }
 
+// GetSlotMetricsRequest retrieves metrics for a specific slot.
+message GetSlotMetricsRequest {
+  // Block slot number to retrieve metrics for.
+  uint64 slot = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+// GetSlotMetricsResponse contains slot-level metrics.
+message GetSlotMetricsResponse {
+  // Block slot number.
+  uint64 slot = 1 [(google.api.field_behavior) = REQUIRED];
+  // Global counter tracking total activated state across all accounts.
+  uint64 global_activated_state_counter = 2 [(google.api.field_behavior) = REQUIRED];
+  // Global counter tracking total deactivated state across all accounts.
+  uint64 global_deactivated_state_counter = 3 [(google.api.field_behavior) = REQUIRED];
+  // Total fees collected from all transactions in this block.
+  uint64 collected_fees = 4 [(google.api.field_behavior) = REQUIRED];
+  // Block timestamp when available.
+  optional google.protobuf.Timestamp block_timestamp = 5 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// ListSlotMetricsRequest lists slot metrics for a range of slots.
+message ListSlotMetricsRequest {
+  // Start slot for the range (inclusive).
+  uint64 start_slot = 1 [(google.api.field_behavior) = REQUIRED];
+  // End slot for the range (inclusive). Defaults to start_slot if not specified.
+  optional uint64 end_slot = 2 [(google.api.field_behavior) = OPTIONAL];
+  // Maximum number of results to return. Defaults to 100.
+  optional uint32 limit = 3 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// ListSlotMetricsResponse contains a list of slot metrics.
+message ListSlotMetricsResponse {
+  repeated GetSlotMetricsResponse metrics = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
 
 // QueryService defines unary RPCs for accessing blockchain data.
 service QueryService {
@@ -1125,6 +1160,20 @@ service QueryService {
   rpc GetStateRoots(GetStateRootsRequest) returns (GetStateRootsResponse) {
     option (google.api.http) = {
       get: "/v1/stateroots"
+    };
+  }
+
+  // Get slot-level metrics including state counters and collected fees.
+  rpc GetSlotMetrics(GetSlotMetricsRequest) returns (GetSlotMetricsResponse) {
+    option (google.api.http) = {
+      get: "/v1/slots/{slot}/metrics"
+    };
+  }
+
+  // List slot metrics for a range of slots.
+  rpc ListSlotMetrics(ListSlotMetricsRequest) returns (ListSlotMetricsResponse) {
+    option (google.api.http) = {
+      get: "/v1/slots/metrics"
     };
   }
 }

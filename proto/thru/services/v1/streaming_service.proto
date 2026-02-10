@@ -264,8 +264,17 @@ message AccountUpdate {
 }
 
 // BlockFinished is sent when block's execution is complete.
+// Contains block accumulator metrics finalized after execution.
 message BlockFinished {
   uint64 slot = 1 [(google.api.field_behavior) = REQUIRED];
+  // Global counter tracking total activated state across all accounts.
+  // Increments when accounts are created or modified.
+  uint64 global_activated_state_counter = 2 [(google.api.field_behavior) = REQUIRED];
+  // Global counter tracking total deactivated state across all accounts.
+  // Increments when accounts are deleted or compressed.
+  uint64 global_deactivated_state_counter = 3 [(google.api.field_behavior) = REQUIRED];
+  // Total fees collected from all transactions in this block.
+  uint64 collected_fees = 4 [(google.api.field_behavior) = REQUIRED];
 }
 
 // StreamAccountUpdatesResponse contains either an initial snapshot or a delta.
@@ -553,6 +562,28 @@ message TrackTransactionResponse {
       [(google.api.field_behavior) = OPTIONAL];
 }
 
+// StreamSlotMetricsRequest subscribes to per-slot metrics updates.
+// Metrics are emitted after each block's execution completes.
+message StreamSlotMetricsRequest {
+  // Optional starting slot. If specified, starts streaming from this slot.
+  // If not specified, starts from the next executed slot.
+  optional uint64 start_slot = 1 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// StreamSlotMetricsResponse delivers slot metrics after execution completes.
+message StreamSlotMetricsResponse {
+  // Block slot number.
+  uint64 slot = 1 [(google.api.field_behavior) = REQUIRED];
+  // Global counter tracking total activated state across all accounts.
+  uint64 global_activated_state_counter = 2 [(google.api.field_behavior) = REQUIRED];
+  // Global counter tracking total deactivated state across all accounts.
+  uint64 global_deactivated_state_counter = 3 [(google.api.field_behavior) = REQUIRED];
+  // Total fees collected from all transactions in this block.
+  uint64 collected_fees = 4 [(google.api.field_behavior) = REQUIRED];
+  // Block timestamp when available.
+  optional google.protobuf.Timestamp block_timestamp = 5 [(google.api.field_behavior) = OPTIONAL];
+}
+
 // StreamHeightRequest subscribes to real-time height updates.
 message StreamHeightRequest {}
 
@@ -582,4 +613,9 @@ service StreamingService {
 
   rpc StreamHeight(StreamHeightRequest)
       returns (stream StreamHeightResponse);
+
+  // Stream per-slot metrics including state counters and collected fees.
+  // Metrics are emitted after each block's execution completes.
+  rpc StreamSlotMetrics(StreamSlotMetricsRequest)
+      returns (stream StreamSlotMetricsResponse);
 }

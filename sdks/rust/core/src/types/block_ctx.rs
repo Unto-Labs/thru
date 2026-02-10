@@ -2,7 +2,6 @@ use crate::types::hash::Hash;
 use crate::types::pubkey::Pubkey;
 use zerocopy_derive::{FromBytes, Immutable, IntoBytes, KnownLayout};
 
-
 /// Block context structure containing current block information
 ///
 /// Provides access to block-level metadata that programs can use to

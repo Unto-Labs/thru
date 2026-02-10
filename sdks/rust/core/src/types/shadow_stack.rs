@@ -1,7 +1,4 @@
-use crate::{
-    compute_addr,
-    mem::{SEG_IDX_SHADOW_STACK, SEG_TYPE_READONLY_DATA},
-};
+use crate::mem::{vm_ptr, SEG_IDX_SHADOW_STACK, SEG_TYPE_READONLY_DATA};
 
 pub const TSDK_SHADOW_STACK_FRAME_MAX: usize = 17; // 16 call depths (1..16) + 1 for frame -1
 pub const TSDK_REG_MAX: usize = 32;
@@ -96,6 +93,7 @@ impl ShadowStack {
 }
 
 pub fn get_shadow_stack() -> &'static ShadowStack {
-    let addr = compute_addr!(SEG_TYPE_READONLY_DATA, SEG_IDX_SHADOW_STACK, 0);
-    unsafe { &*(addr as *const ShadowStack) }
+    // Create pointer with proper provenance for shadow stack segment
+    let ptr: *const ShadowStack = vm_ptr(SEG_TYPE_READONLY_DATA, SEG_IDX_SHADOW_STACK, 0);
+    unsafe { &*ptr }
 }

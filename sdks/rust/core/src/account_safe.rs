@@ -264,14 +264,19 @@ impl<const NUM_ACCOUNTS: usize> AccountManager<NUM_ACCOUNTS> {
     pub fn from_txn(txn: &'static Txn) -> Result<Self, AccountError> {
         if txn.hdr.version() != 1 {
             return Err(AccountError::UnsupportedTxnVersion {
-                version: txn.hdr.version()
+                version: txn.hdr.version(),
             });
         }
 
         let rw_cnt = txn.readwrite_accounts_cnt();
         let ro_cnt = txn.readonly_accounts_cnt();
 
-        let borrow_states = RefCell::new(IndexMap::<u16, RefCell<()>, BuildHasherDefault<IdentityHasher>, NUM_ACCOUNTS>::new());
+        let borrow_states = RefCell::new(IndexMap::<
+            u16,
+            RefCell<()>,
+            BuildHasherDefault<IdentityHasher>,
+            NUM_ACCOUNTS,
+        >::new());
         Ok(Self {
             borrow_states,
             rw_cnt,
@@ -331,13 +336,15 @@ impl<const NUM_ACCOUNTS: usize> AccountManager<NUM_ACCOUNTS> {
             _ => (false, AccountType::ReadOnly),
         };
 
-        let borrow_cell = self.get_or_insert_borrow_cell(index)
-            .ok_or(AccountError::TooManyAccountsAccessed {
-                max_capacity: NUM_ACCOUNTS
-            })?;
+        let borrow_cell =
+            self.get_or_insert_borrow_cell(index)
+                .ok_or(AccountError::TooManyAccountsAccessed {
+                    max_capacity: NUM_ACCOUNTS,
+                })?;
 
         if is_mutable {
-            let borrow_guard = borrow_cell.try_borrow_mut()
+            let borrow_guard = borrow_cell
+                .try_borrow_mut()
                 .map_err(|_| AccountError::AlreadyBorrowed { index })?;
 
             let account_info = unsafe {
@@ -357,7 +364,8 @@ impl<const NUM_ACCOUNTS: usize> AccountManager<NUM_ACCOUNTS> {
                 _ => unreachable!(),
             }
         } else {
-            let borrow_guard = borrow_cell.try_borrow()
+            let borrow_guard = borrow_cell
+                .try_borrow()
                 .map_err(|_| AccountError::AlreadyBorrowedMutably { index })?;
 
             let account_info = unsafe {
@@ -390,12 +398,14 @@ impl<const NUM_ACCOUNTS: usize> AccountManager<NUM_ACCOUNTS> {
             return Err(AccountError::IndexOutOfBounds { index, max });
         }
 
-        let borrow_cell = self.get_or_insert_borrow_cell(index)
-            .ok_or(AccountError::TooManyAccountsAccessed {
-                max_capacity: NUM_ACCOUNTS
-            })?;
+        let borrow_cell =
+            self.get_or_insert_borrow_cell(index)
+                .ok_or(AccountError::TooManyAccountsAccessed {
+                    max_capacity: NUM_ACCOUNTS,
+                })?;
 
-        let borrow_guard = borrow_cell.try_borrow()
+        let borrow_guard = borrow_cell
+            .try_borrow()
             .map_err(|_| AccountError::AlreadyBorrowedMutably { index })?;
 
         let account_info = unsafe {

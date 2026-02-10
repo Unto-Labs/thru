@@ -58,10 +58,10 @@ SECTIONS
     *(.data.*)
   } > RAM
 
-  /* Simple 4-byte gap used by the original script                         */
+  /* 8-byte trailer required by the VM for safe linear execution bounds     */
   .rodata_gap ALIGN(4) :
   {
-    LONG(0x00000000)
+    QUAD(0x0000000000000000)
   } > RAM
 
   /* -------------------------------------------------------------------- */

@@ -73,6 +73,16 @@ pub enum Commands {
         account: Option<String>,
     },
 
+    /// Get slot metrics (state counters, collected fees)
+    #[command(name = "getslotmetrics")]
+    GetSlotMetrics {
+        /// Start slot number (required)
+        slot: u64,
+
+        /// End slot number (optional, if provided returns range of slots)
+        end_slot: Option<u64>,
+    },
+
     /// Transfer tokens between accounts
     #[command(name = "transfer")]
     Transfer {
