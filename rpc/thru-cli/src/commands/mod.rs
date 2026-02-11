@@ -6,6 +6,7 @@ pub mod faucet;
 pub mod abi;
 pub mod keys;
 pub mod name_service;
+pub mod network;
 pub mod program;
 pub mod rpc;
 pub mod state_proof;

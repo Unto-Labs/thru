@@ -4,9 +4,12 @@ import { nanosecondsToTimestamp, timestampToNanoseconds } from "../../utils/util
 import {
     BLOCK_FOOTER_SIZE,
     BLOCK_HEADER_SIZE,
+    BLOCK_HEADER_SIZE_LEGACY,
     BLOCK_VERSION_V1,
     PUBKEY_SIZE,
     SIGNATURE_SIZE,
+    TXN_HEADER_BODY_SIZE,
+    TXN_VERSION_V1,
 } from "../../wire-format";
 import { Transaction } from "../transactions";
 import { BlockFooter } from "./BlockFooter";
@@ -60,15 +63,41 @@ export class Block {
     }
 
     static fromWire(data: Uint8Array): Block {
-        if (data.length < BLOCK_HEADER_SIZE) {
-            throw new Error(`Block data too short: ${data.length} bytes (expected at least ${BLOCK_HEADER_SIZE})`);
+        // Try parsing with current header size first, then fall back to legacy
+        const result = Block.tryParseWireWithHeaderSize(data, BLOCK_HEADER_SIZE);
+        if (result) {
+            return result;
         }
 
-        const headerBytes = data.slice(0, BLOCK_HEADER_SIZE);
-        const { header, blockTimeNs } = this.parseHeader(headerBytes);
+        // Try legacy header size (160 bytes, before weight_slot was added)
+        const legacyResult = Block.tryParseWireWithHeaderSize(data, BLOCK_HEADER_SIZE_LEGACY);
+        if (legacyResult) {
+            return legacyResult;
+        }
+
+        // If both fail, throw with the current expected size
+        throw new Error(`Block data too short: ${data.length} bytes (expected at least ${BLOCK_HEADER_SIZE})`);
+    }
+
+    private static tryParseWireWithHeaderSize(data: Uint8Array, headerSize: number): Block | null {
+        if (data.length < headerSize) {
+            return null;
+        }
+
+        const headerBytes = data.slice(0, headerSize);
+        let header: BlockHeader;
+        let blockTimeNs: bigint;
+
+        try {
+            const parsed = this.parseHeaderWithSize(headerBytes, headerSize);
+            header = parsed.header;
+            blockTimeNs = parsed.blockTimeNs;
+        } catch {
+            return null;
+        }
 
         if (header.version !== BLOCK_VERSION_V1) {
-            throw new Error(`Unsupported block version: ${header.version}`);
+            return null;
         }
 
         let finalHeader = header;
@@ -76,18 +105,27 @@ export class Block {
         let footerInfo: { blockHash: Uint8Array; attestorPayment: bigint } | undefined;
         let body: Uint8Array | undefined;
 
-        if (data.length >= BLOCK_HEADER_SIZE + BLOCK_FOOTER_SIZE) {
+        if (data.length >= headerSize + BLOCK_FOOTER_SIZE) {
             const footerOffset = data.length - BLOCK_FOOTER_SIZE;
             const footerBytes = data.slice(footerOffset);
-            const parsedFooter = this.parseFooter(footerBytes);
-            footer = parsedFooter.footer;
-            footerInfo = { blockHash: parsedFooter.blockHash, attestorPayment: parsedFooter.attestorPayment };
 
-            finalHeader = header.withBlockHash(parsedFooter.blockHash);
+            try {
+                const parsedFooter = this.parseFooter(footerBytes);
+                footer = parsedFooter.footer;
+                footerInfo = { blockHash: parsedFooter.blockHash, attestorPayment: parsedFooter.attestorPayment };
+                finalHeader = header.withBlockHash(parsedFooter.blockHash);
+            } catch {
+                return null;
+            }
 
-            body = footerOffset > BLOCK_HEADER_SIZE ? data.slice(BLOCK_HEADER_SIZE, footerOffset) : undefined;
+            body = footerOffset > headerSize ? data.slice(headerSize, footerOffset) : undefined;
         } else {
-            body = data.length > BLOCK_HEADER_SIZE ? data.slice(BLOCK_HEADER_SIZE) : undefined;
+            body = data.length > headerSize ? data.slice(headerSize) : undefined;
+        }
+
+        // Validate that the extracted body looks like valid transactions
+        if (body && body.length > 0 && !Block.looksLikeValidTransactionBody(body)) {
+            return null;
         }
 
         const block = new Block({ header: finalHeader, footer, body });
@@ -124,12 +162,37 @@ export class Block {
     }
 
     private static extractTransactionBody(raw: Uint8Array | undefined, hasFooter: boolean): Uint8Array | undefined {
-        if (!raw || raw.length <= BLOCK_HEADER_SIZE) {
-            return raw && raw.length > BLOCK_HEADER_SIZE ? raw.slice(BLOCK_HEADER_SIZE) : undefined;
+        if (!raw || raw.length === 0) {
+            return undefined;
         }
 
-        const footerSize = hasFooter && raw.length >= BLOCK_HEADER_SIZE + BLOCK_FOOTER_SIZE ? BLOCK_FOOTER_SIZE : 0;
-        const start = BLOCK_HEADER_SIZE;
+        // Try current header size first (168 bytes with weight_slot)
+        const bodyWithCurrentHeader = Block.extractWithHeaderSize(raw, hasFooter, BLOCK_HEADER_SIZE);
+        if (bodyWithCurrentHeader && bodyWithCurrentHeader.length > 0 && Block.looksLikeValidTransactionBody(bodyWithCurrentHeader)) {
+            return bodyWithCurrentHeader;
+        }
+
+        // Try legacy header size (160 bytes without weight_slot, for blocks before Dec 2025)
+        const bodyWithLegacyHeader = Block.extractWithHeaderSize(raw, hasFooter, BLOCK_HEADER_SIZE_LEGACY);
+        if (bodyWithLegacyHeader && bodyWithLegacyHeader.length > 0 && Block.looksLikeValidTransactionBody(bodyWithLegacyHeader)) {
+            return bodyWithLegacyHeader;
+        }
+
+        // If stripping header/footer doesn't produce any body, return undefined
+        return undefined;
+    }
+
+    private static extractWithHeaderSize(
+        raw: Uint8Array,
+        hasFooter: boolean,
+        headerSize: number,
+    ): Uint8Array | undefined {
+        if (raw.length <= headerSize) {
+            return undefined;
+        }
+
+        const footerSize = hasFooter && raw.length >= headerSize + BLOCK_FOOTER_SIZE ? BLOCK_FOOTER_SIZE : 0;
+        const start = headerSize;
         const end = Math.max(start, raw.length - footerSize);
 
         if (end <= start) {
@@ -137,6 +200,42 @@ export class Block {
         }
 
         return raw.slice(start, end);
+    }
+
+    /**
+     * Checks if the data looks like a valid transaction body.
+     * Uses heuristics to detect if we've correctly offset into the block data.
+     * Wire format: header (112 bytes) + body + signature (64 bytes at end)
+     * This is a lenient heuristic for format detection - version/flag validation
+     * happens in Transaction.parseWire.
+     */
+    private static looksLikeValidTransactionBody(data: Uint8Array): boolean {
+        const MIN_TXN_SIZE = TXN_HEADER_BODY_SIZE + SIGNATURE_SIZE; // 176 bytes minimum
+
+        if (data.length < MIN_TXN_SIZE) {
+            return false;
+        }
+
+        // Read account counts (little-endian uint16) at offsets 2-5
+        const readwriteCount = data[2] | (data[3] << 8);
+        const readonlyCount = data[4] | (data[5] << 8);
+
+        const totalAccounts = readwriteCount + readonlyCount;
+        if (totalAccounts > 1024) {
+            return false;
+        }
+
+        // Read instruction data size at offsets 6-7
+        const instrDataSize = data[6] | (data[7] << 8);
+
+        // Calculate expected minimum transaction size (header + accounts + instr + signature)
+        const expectedMinSize = TXN_HEADER_BODY_SIZE + totalAccounts * PUBKEY_SIZE + instrDataSize + SIGNATURE_SIZE;
+
+        if (data.length < expectedMinSize) {
+            return false;
+        }
+
+        return true;
     }
 
     private serializeHeader(): Uint8Array {
@@ -289,6 +388,90 @@ export class Block {
         return { header, blockTimeNs };
     }
 
+    /**
+     * Parses a block header with a specific expected size.
+     * Handles both current (168 bytes with weight_slot) and legacy (160 bytes without weight_slot) formats.
+     */
+    private static parseHeaderWithSize(
+        bytes: Uint8Array,
+        expectedSize: number,
+    ): { header: BlockHeader; blockTimeNs: bigint } {
+        if (bytes.length !== expectedSize) {
+            throw new Error(`Invalid block header size: ${bytes.length}, expected ${expectedSize}`);
+        }
+
+        const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+        let offset = 0;
+
+        const signature = bytes.slice(offset, offset + SIGNATURE_SIZE);
+        offset += SIGNATURE_SIZE;
+
+        const version = view.getUint8(offset);
+        offset += 1;
+
+        offset += 5; // padding
+
+        const chainId = view.getUint16(offset, true);
+        offset += 2;
+
+        const producer = bytes.slice(offset, offset + PUBKEY_SIZE);
+        offset += PUBKEY_SIZE;
+
+        const bondAmountLockUp = view.getBigUint64(offset, true);
+        offset += 8;
+
+        const expiryTimestampNs = view.getBigUint64(offset, true);
+        offset += 8;
+
+        const startSlot = view.getBigUint64(offset, true);
+        offset += 8;
+
+        const expiryAfter = view.getUint32(offset, true);
+        offset += 4;
+
+        const maxBlockSize = view.getUint32(offset, true);
+        offset += 4;
+
+        const maxComputeUnits = view.getBigUint64(offset, true);
+        offset += 8;
+
+        const maxStateUnits = view.getUint32(offset, true);
+        offset += 4;
+
+        offset += 4; // reserved
+
+        // Layout differs between current and legacy formats:
+        //   Current (168 bytes): ... reserved(4) | weightSlot(8) | blockTimeNs(8)
+        //   Legacy  (160 bytes): ... reserved(4) | blockTimeNs(8)
+        let weightSlot: bigint | undefined;
+        let blockTimeNs: bigint;
+        if (expectedSize === BLOCK_HEADER_SIZE) {
+            weightSlot = view.getBigUint64(offset, true);
+            offset += 8;
+            blockTimeNs = view.getBigUint64(offset, true);
+        } else {
+            blockTimeNs = view.getBigUint64(offset, true);
+        }
+
+        const header = new BlockHeader({
+            slot: startSlot,
+            version,
+            headerSignature: signature,
+            producer,
+            expiryTimestamp: nanosecondsToTimestamp(expiryTimestampNs),
+            startSlot,
+            expiryAfter,
+            maxBlockSize,
+            maxComputeUnits,
+            maxStateUnits,
+            bondAmountLockUp,
+            weightSlot,
+            chainId,
+        });
+
+        return { header, blockTimeNs };
+    }
+
     private static parseFooter(bytes: Uint8Array): {
         footer: BlockFooter;
         blockHash: Uint8Array;
@@ -326,9 +509,21 @@ export class Block {
 
         while (offset < body.length) {
             const slice = body.subarray(offset);
-            const { transaction, size } = Transaction.parseWire(slice);
-            transactions.push(transaction);
-            offset += size;
+            // Stop parsing if remaining bytes are too short for a transaction
+            // Wire format: header (112 bytes) + body + signature (64 bytes)
+            // Minimum transaction size: 112 header + 64 signature = 176 bytes
+            if (slice.length < 176) {
+                // Remaining bytes are likely padding or the block signature
+                break;
+            }
+            try {
+                const { transaction, size } = Transaction.parseWire(slice);
+                transactions.push(transaction);
+                offset += size;
+            } catch {
+                // Stop parsing on error - remaining bytes may be padding
+                break;
+            }
         }
 
         return transactions;

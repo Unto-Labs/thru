@@ -1120,6 +1120,8 @@ mod tests {
             sdk_paths: None,
             sdk_versions: None,
             github_repo: None,
+            networks: std::collections::HashMap::new(),
+            default_network: None,
         }
     }
 

@@ -2,7 +2,7 @@ import { create } from "@bufbuild/protobuf";
 import { describe, expect, it } from "vitest";
 import { BlockFooterSchema, BlockHeaderSchema, BlockSchema, ExecutionStatus } from "@thru/proto";
 import { nanosecondsToTimestamp } from "../../../utils/utils";
-import { BLOCK_HEADER_SIZE } from "../../../wire-format";
+import { BLOCK_FOOTER_SIZE, BLOCK_HEADER_SIZE, BLOCK_HEADER_SIZE_LEGACY, SIGNATURE_SIZE } from "../../../wire-format";
 import { Transaction } from "../../transactions/Transaction";
 import { Block } from "../Block";
 import { BlockFooter } from "../BlockFooter";
@@ -242,5 +242,73 @@ describe("Block", () => {
         const parsedTransactions = parsed.getTransactions();
         expect(parsedTransactions).toHaveLength(1);
         expect(parsedTransactions[0].fee).toBe(transaction.fee);
+    });
+
+    it("should parse blocks with legacy header format (160 bytes, before weight_slot)", () => {
+        // Create a transaction
+        const transaction = createTestTransaction();
+        const txnWire = transaction.toWire();
+
+        // Create a legacy-format block manually:
+        // - Legacy header: 160 bytes (without weight_slot field)
+        // - Transaction body
+        // - Footer: 104 bytes
+        const legacyHeaderSize = BLOCK_HEADER_SIZE_LEGACY;
+        const footerSize = BLOCK_FOOTER_SIZE;
+
+        // Create a minimal valid legacy header (160 bytes)
+        const legacyHeader = new Uint8Array(legacyHeaderSize);
+        // Set version at offset 64 (after signature)
+        legacyHeader[64] = 1; // BLOCK_VERSION_V1
+        // Set producer at offset 72 (signature + version + padding)
+        legacyHeader.fill(0x11, 72, 104); // 32 bytes for producer
+
+        // Create footer (104 bytes)
+        const footer = new Uint8Array(footerSize);
+        footer.fill(0x33, 8, 40); // block hash (32 bytes at offset 8)
+        footer.fill(0x44, 40, 104); // signature (64 bytes)
+
+        // Combine into legacy raw block
+        const legacyRawBlock = new Uint8Array(legacyHeaderSize + txnWire.length + footerSize);
+        legacyRawBlock.set(legacyHeader, 0);
+        legacyRawBlock.set(txnWire, legacyHeaderSize);
+        legacyRawBlock.set(footer, legacyHeaderSize + txnWire.length);
+
+        // Create proto with legacy raw block as body
+        const headerProto = create(BlockHeaderSchema, {
+            slot: 100n,
+            version: 1,
+            startSlot: 100n,
+            expiryAfter: 5,
+            maxBlockSize: 1024,
+            maxComputeUnits: 1_000_000n,
+            maxStateUnits: 100,
+            bondAmountLockUp: 1n,
+            producer: { value: createUint8Array(32, 0x11) },
+            expiryTimestamp: nanosecondsToTimestamp(100n * 1_000_000_000n),
+            headerSignature: { value: createUint8Array(64, 0x00) },
+        });
+        const footerProto = create(BlockFooterSchema, {
+            signature: { value: createUint8Array(64, 0x44) },
+            status: 0,
+            consumedComputeUnits: 0n,
+            consumedStateUnits: 0,
+            attestorPayment: 0n,
+        });
+        const proto = create(BlockSchema, {
+            header: headerProto,
+            footer: footerProto,
+            body: legacyRawBlock,
+        });
+
+        // Parse the block - should correctly detect legacy format
+        const parsed = Block.fromProto(proto);
+
+        // Verify we got the transaction correctly
+        expect(parsed.body).toEqual(txnWire);
+        const parsedTransactions = parsed.getTransactions();
+        expect(parsedTransactions).toHaveLength(1);
+        expect(parsedTransactions[0].fee).toBe(transaction.fee);
+        expect(parsedTransactions[0].instructionData).toEqual(transaction.instructionData);
     });
 });

@@ -763,7 +763,7 @@ fn get_rust_type(resolved_type: &ResolvedType) -> String {
                 crate::abi::types::IntegralType::I16 => "i16".to_string(),
                 crate::abi::types::IntegralType::I32 => "i32".to_string(),
                 crate::abi::types::IntegralType::I64 => "i64".to_string(),
-                crate::abi::types::IntegralType::Char => "i8".to_string(),
+                crate::abi::types::IntegralType::Char => "u8".to_string(),
             },
             crate::abi::types::PrimitiveType::FloatingPoint(float_type) => match float_type {
                 crate::abi::types::FloatingPointType::F16 => "f16".to_string(),

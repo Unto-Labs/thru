@@ -37,6 +37,7 @@ pub fn flatten_with_options(
     let flattened = AbiFile {
         abi: AbiMetadata {
             package: root_file.abi.package.clone(),
+            name: root_file.abi.name.clone(),
             abi_version: root_file.abi.abi_version,
             package_version: root_file.abi.package_version.clone(),
             description: root_file.abi.description.clone(),

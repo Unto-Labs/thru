@@ -12,8 +12,8 @@ export type AbiAccountState = (typeof ABI_STATE)[keyof typeof ABI_STATE];
  * Parsed header from an ABI account's on-chain data
  */
 export interface AbiAccountHeader {
-  /** The program meta account this ABI is associated with */
-  programMetaAccount: Uint8Array;
+  /** The ABI meta account this ABI is associated with */
+  abiMetaAccount: Uint8Array;
   /** Revision number (incremented on each upgrade) */
   revision: bigint;
   /** Account state: OPEN (0) or FINALIZED (1) */

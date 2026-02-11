@@ -11,9 +11,8 @@ interface UseModalHandlersParams {
 export function useModalHandlers({ deps }: UseModalHandlersParams) {
   const approveConnection = useEmbeddedAppStore(state => state.approveConnection);
   const handleApproveTransaction = useEmbeddedAppStore(state => state.handleApproveTransaction);
-  const handleUnlock = useEmbeddedAppStore(state => state.handleUnlock);
   const rejectRequest = useEmbeddedAppStore(state => state.handleReject);
-  const setPassword = useEmbeddedAppStore(state => state.setPassword);
+  // const setPassword = useEmbeddedAppStore(state => state.setPassword);
 
   const handleApproveConnect = useCallback(() => {
     approveConnection({}, deps);
@@ -21,12 +20,8 @@ export function useModalHandlers({ deps }: UseModalHandlersParams) {
 
   const handleRejectRequest = useCallback(() => {
     rejectRequest(deps);
-    setPassword('');
-  }, [rejectRequest, setPassword, deps]);
-
-  const handleUnlockSubmit = useCallback(() => {
-    handleUnlock(deps);
-  }, [handleUnlock, deps]);
+    // setPassword('');
+  }, [rejectRequest, deps]);
 
   const handleApproveTransactionClick = useCallback(() => {
     handleApproveTransaction(deps);
@@ -35,8 +30,6 @@ export function useModalHandlers({ deps }: UseModalHandlersParams) {
   return {
     handleApproveConnect,
     handleRejectRequest,
-    handleUnlockSubmit,
     handleApproveTransactionClick,
   };
 }
-

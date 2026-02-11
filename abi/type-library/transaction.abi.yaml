@@ -4,9 +4,12 @@ abi:
   package-version: "1.0.0"
   description: "Transaction structures for Thru blockchain"
   imports:
-    - "thru_primitives.abi.yaml"
-    - "state_proof.abi.yaml"
-    - "account_meta.abi.yaml"
+    - type: path
+      path: "thru_primitives.abi.yaml"
+    - type: path
+      path: "state_proof.abi.yaml"
+    - type: path
+      path: "account_meta.abi.yaml"
 
 types:
   # Transaction header V1 structure

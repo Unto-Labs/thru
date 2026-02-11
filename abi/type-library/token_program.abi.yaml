@@ -1,12 +1,15 @@
 abi:
   package: thru.program.token
+  name: "Token Program"
   abi-version: 1
   package-version: 0.1.0
   description: Ideal ABI for the Thru token program instruction envelopes and account
     state
   imports:
-    - "thru_primitives.abi.yaml"
-    - "state_proof.abi.yaml"
+    - type: path
+      path: "thru_primitives.abi.yaml"
+    - type: path
+      path: "state_proof.abi.yaml"
   options:
     program-metadata:
       root-types:

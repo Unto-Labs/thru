@@ -27,7 +27,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file thru/services/v1/streaming_service.proto.
  */
 export const file_thru_services_v1_streaming_service: GenFile = /*@__PURE__*/
-  fileDesc("Cih0aHJ1L3NlcnZpY2VzL3YxL3N0cmVhbWluZ19zZXJ2aWNlLnByb3RvEhB0aHJ1LnNlcnZpY2VzLnYxIo0CChNTdHJlYW1CbG9ja3NSZXF1ZXN0EhwKCnN0YXJ0X3Nsb3QYASABKARCA+BBAUgAiAEBEjAKBmZpbHRlchgCIAEoCzIWLnRocnUuY29tbW9uLnYxLkZpbHRlckID4EEBSAGIAQESLwoEdmlldxgDIAEoDjIXLnRocnUuY29yZS52MS5CbG9ja1ZpZXdCA+BBAUgCiAEBEkAKDW1pbl9jb25zZW5zdXMYBCABKA4yHy50aHJ1LmNvbW1vbi52MS5Db25zZW5zdXNTdGF0dXNCA+BBAUgDiAEBQg0KC19zdGFydF9zbG90QgkKB19maWx0ZXJCBwoFX3ZpZXdCEAoOX21pbl9jb25zZW5zdXMiPwoUU3RyZWFtQmxvY2tzUmVzcG9uc2USJwoFYmxvY2sYASABKAsyEy50aHJ1LmNvcmUudjEuQmxvY2tCA+BBAiKcAQobU3RyZWFtQWNjb3VudFVwZGF0ZXNSZXF1ZXN0EjEKBHZpZXcYAiABKA4yGS50aHJ1LmNvcmUudjEuQWNjb3VudFZpZXdCA+BBAUgAiAEBEjAKBmZpbHRlchgEIAEoCzIWLnRocnUuY29tbW9uLnYxLkZpbHRlckID4EEBSAGIAQFCBwoFX3ZpZXdCCQoHX2ZpbHRlckoECAEQAiLtAQoNQWNjb3VudFVwZGF0ZRIRCgRzbG90GAEgASgEQgPgQQISMQoEcGFnZRgCIAEoCzIZLnRocnUuY29yZS52MS5BY2NvdW50UGFnZUID4EEBSACIAQESMQoEbWV0YRgDIAEoCzIZLnRocnUuY29yZS52MS5BY2NvdW50TWV0YUID4EEBSAGIAQESGAoGZGVsZXRlGAQgASgIQgPgQQFIAogBARIsCgdhZGRyZXNzGAUgASgLMhYudGhydS5jb21tb24udjEuUHVia2V5QgPgQQJCBwoFX3BhZ2VCBwoFX21ldGFCCQoHX2RlbGV0ZSIiCg1CbG9ja0ZpbmlzaGVkEhEKBHNsb3QYASABKARCA+BBAiK8AQocU3RyZWFtQWNjb3VudFVwZGF0ZXNSZXNwb25zZRIpCghzbmFwc2hvdBgBIAEoCzIVLnRocnUuY29yZS52MS5BY2NvdW50SAASMQoGdXBkYXRlGAIgASgLMh8udGhydS5zZXJ2aWNlcy52MS5BY2NvdW50VXBkYXRlSAASMwoIZmluaXNoZWQYAyABKAsyHy50aHJ1LnNlcnZpY2VzLnYxLkJsb2NrRmluaXNoZWRIAEIJCgdtZXNzYWdlIqwBChlTdHJlYW1UcmFuc2FjdGlvbnNSZXF1ZXN0EjAKBmZpbHRlchgBIAEoCzIWLnRocnUuY29tbW9uLnYxLkZpbHRlckID4EEBSACIAQESQAoNbWluX2NvbnNlbnN1cxgCIAEoDjIfLnRocnUuY29tbW9uLnYxLkNvbnNlbnN1c1N0YXR1c0ID4EEBSAGIAQFCCQoHX2ZpbHRlckIQCg5fbWluX2NvbnNlbnN1cyJRChpTdHJlYW1UcmFuc2FjdGlvbnNSZXNwb25zZRIzCgt0cmFuc2FjdGlvbhgBIAEoCzIZLnRocnUuY29yZS52MS5UcmFuc2FjdGlvbkID4EECIlIKE1N0cmVhbUV2ZW50c1JlcXVlc3QSMAoGZmlsdGVyGAEgASgLMhYudGhydS5jb21tb24udjEuRmlsdGVyQgPgQQFIAIgBAUIJCgdfZmlsdGVyIqYCChRTdHJlYW1FdmVudHNSZXNwb25zZRIVCghldmVudF9pZBgBIAEoCUID4EECEhkKB3BheWxvYWQYAiABKAxCA+BBAUgAiAEBEjcKCXRpbWVzdGFtcBgDIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBCA+BBAUgBiAEBEiwKB3Byb2dyYW0YBCABKAsyFi50aHJ1LmNvbW1vbi52MS5QdWJrZXlCA+BBAhIVCghjYWxsX2lkeBgFIAEoDUID4EECEjEKCXNpZ25hdHVyZRgGIAEoCzIZLnRocnUuY29tbW9uLnYxLlNpZ25hdHVyZUID4EECEhEKBHNsb3QYByABKARCA+BBAkIKCghfcGF5bG9hZEIMCgpfdGltZXN0YW1wIo4BChdUcmFja1RyYW5zYWN0aW9uUmVxdWVzdBIxCglzaWduYXR1cmUYASABKAsyGS50aHJ1LmNvbW1vbi52MS5TaWduYXR1cmVCA+BBAhI0Cgd0aW1lb3V0GAIgASgLMhkuZ29vZ2xlLnByb3RvYnVmLkR1cmF0aW9uQgPgQQFIAIgBAUIKCghfdGltZW91dCLWAQoYVHJhY2tUcmFuc2FjdGlvblJlc3BvbnNlEjEKCXNpZ25hdHVyZRgBIAEoCzIZLnRocnUuY29tbW9uLnYxLlNpZ25hdHVyZUID4EECEj4KEGNvbnNlbnN1c19zdGF0dXMYAiABKA4yHy50aHJ1LmNvbW1vbi52MS5Db25zZW5zdXNTdGF0dXNCA+BBARJHChBleGVjdXRpb25fcmVzdWx0GAMgASgLMigudGhydS5jb3JlLnYxLlRyYW5zYWN0aW9uRXhlY3V0aW9uUmVzdWx0QgPgQQEiFQoTU3RyZWFtSGVpZ2h0UmVxdWVzdCJsChRTdHJlYW1IZWlnaHRSZXNwb25zZRIWCglmaW5hbGl6ZWQYASABKARCA+BBAhIdChBsb2NhbGx5X2V4ZWN1dGVkGAIgASgEQgPgQQISHQoQY2x1c3Rlcl9leGVjdXRlZBgDIAEoBEID4EECMo4FChBTdHJlYW1pbmdTZXJ2aWNlEl8KDFN0cmVhbUJsb2NrcxIlLnRocnUuc2VydmljZXMudjEuU3RyZWFtQmxvY2tzUmVxdWVzdBomLnRocnUuc2VydmljZXMudjEuU3RyZWFtQmxvY2tzUmVzcG9uc2UwARJ3ChRTdHJlYW1BY2NvdW50VXBkYXRlcxItLnRocnUuc2VydmljZXMudjEuU3RyZWFtQWNjb3VudFVwZGF0ZXNSZXF1ZXN0Gi4udGhydS5zZXJ2aWNlcy52MS5TdHJlYW1BY2NvdW50VXBkYXRlc1Jlc3BvbnNlMAEScQoSU3RyZWFtVHJhbnNhY3Rpb25zEisudGhydS5zZXJ2aWNlcy52MS5TdHJlYW1UcmFuc2FjdGlvbnNSZXF1ZXN0GiwudGhydS5zZXJ2aWNlcy52MS5TdHJlYW1UcmFuc2FjdGlvbnNSZXNwb25zZTABEl8KDFN0cmVhbUV2ZW50cxIlLnRocnUuc2VydmljZXMudjEuU3RyZWFtRXZlbnRzUmVxdWVzdBomLnRocnUuc2VydmljZXMudjEuU3RyZWFtRXZlbnRzUmVzcG9uc2UwARJrChBUcmFja1RyYW5zYWN0aW9uEikudGhydS5zZXJ2aWNlcy52MS5UcmFja1RyYW5zYWN0aW9uUmVxdWVzdBoqLnRocnUuc2VydmljZXMudjEuVHJhY2tUcmFuc2FjdGlvblJlc3BvbnNlMAESXwoMU3RyZWFtSGVpZ2h0EiUudGhydS5zZXJ2aWNlcy52MS5TdHJlYW1IZWlnaHRSZXF1ZXN0GiYudGhydS5zZXJ2aWNlcy52MS5TdHJlYW1IZWlnaHRSZXNwb25zZTABQuABChRjb20udGhydS5zZXJ2aWNlcy52MUIVU3RyZWFtaW5nU2VydmljZVByb3RvUAFaSGdpdGh1Yi5jb20vVW50by1MYWJzL3RocnUtbmV0L2dycGMvcGtnL3Byb3RvL3RocnUvc2VydmljZXMvdjE7c2VydmljZXN2MaICA1RTWKoCEFRocnUuU2VydmljZXMuVjG6AgRUSFVTygIQVGhydVxTZXJ2aWNlc1xWMeICHFRocnVcU2VydmljZXNcVjFcR1BCTWV0YWRhdGHqAhJUaHJ1OjpTZXJ2aWNlczo6VjFiBnByb3RvMw", [file_buf_validate_validate, file_google_api_field_behavior, file_thru_common_v1_primitives, file_google_protobuf_duration, file_google_protobuf_timestamp, file_thru_common_v1_consensus, file_thru_common_v1_filters, file_thru_core_v1_account, file_thru_core_v1_block, file_thru_core_v1_transaction, file_thru_core_v1_types]);
+  fileDesc("Cih0aHJ1L3NlcnZpY2VzL3YxL3N0cmVhbWluZ19zZXJ2aWNlLnByb3RvEhB0aHJ1LnNlcnZpY2VzLnYxIo0CChNTdHJlYW1CbG9ja3NSZXF1ZXN0EhwKCnN0YXJ0X3Nsb3QYASABKARCA+BBAUgAiAEBEjAKBmZpbHRlchgCIAEoCzIWLnRocnUuY29tbW9uLnYxLkZpbHRlckID4EEBSAGIAQESLwoEdmlldxgDIAEoDjIXLnRocnUuY29yZS52MS5CbG9ja1ZpZXdCA+BBAUgCiAEBEkAKDW1pbl9jb25zZW5zdXMYBCABKA4yHy50aHJ1LmNvbW1vbi52MS5Db25zZW5zdXNTdGF0dXNCA+BBAUgDiAEBQg0KC19zdGFydF9zbG90QgkKB19maWx0ZXJCBwoFX3ZpZXdCEAoOX21pbl9jb25zZW5zdXMiPwoUU3RyZWFtQmxvY2tzUmVzcG9uc2USJwoFYmxvY2sYASABKAsyEy50aHJ1LmNvcmUudjEuQmxvY2tCA+BBAiKcAQobU3RyZWFtQWNjb3VudFVwZGF0ZXNSZXF1ZXN0EjEKBHZpZXcYAiABKA4yGS50aHJ1LmNvcmUudjEuQWNjb3VudFZpZXdCA+BBAUgAiAEBEjAKBmZpbHRlchgEIAEoCzIWLnRocnUuY29tbW9uLnYxLkZpbHRlckID4EEBSAGIAQFCBwoFX3ZpZXdCCQoHX2ZpbHRlckoECAEQAiLtAQoNQWNjb3VudFVwZGF0ZRIRCgRzbG90GAEgASgEQgPgQQISMQoEcGFnZRgCIAEoCzIZLnRocnUuY29yZS52MS5BY2NvdW50UGFnZUID4EEBSACIAQESMQoEbWV0YRgDIAEoCzIZLnRocnUuY29yZS52MS5BY2NvdW50TWV0YUID4EEBSAGIAQESGAoGZGVsZXRlGAQgASgIQgPgQQFIAogBARIsCgdhZGRyZXNzGAUgASgLMhYudGhydS5jb21tb24udjEuUHVia2V5QgPgQQJCBwoFX3BhZ2VCBwoFX21ldGFCCQoHX2RlbGV0ZSKbAQoNQmxvY2tGaW5pc2hlZBIRCgRzbG90GAEgASgEQgPgQQISKwoeZ2xvYmFsX2FjdGl2YXRlZF9zdGF0ZV9jb3VudGVyGAIgASgEQgPgQQISLQogZ2xvYmFsX2RlYWN0aXZhdGVkX3N0YXRlX2NvdW50ZXIYAyABKARCA+BBAhIbCg5jb2xsZWN0ZWRfZmVlcxgEIAEoBEID4EECIrwBChxTdHJlYW1BY2NvdW50VXBkYXRlc1Jlc3BvbnNlEikKCHNuYXBzaG90GAEgASgLMhUudGhydS5jb3JlLnYxLkFjY291bnRIABIxCgZ1cGRhdGUYAiABKAsyHy50aHJ1LnNlcnZpY2VzLnYxLkFjY291bnRVcGRhdGVIABIzCghmaW5pc2hlZBgDIAEoCzIfLnRocnUuc2VydmljZXMudjEuQmxvY2tGaW5pc2hlZEgAQgkKB21lc3NhZ2UirAEKGVN0cmVhbVRyYW5zYWN0aW9uc1JlcXVlc3QSMAoGZmlsdGVyGAEgASgLMhYudGhydS5jb21tb24udjEuRmlsdGVyQgPgQQFIAIgBARJACg1taW5fY29uc2Vuc3VzGAIgASgOMh8udGhydS5jb21tb24udjEuQ29uc2Vuc3VzU3RhdHVzQgPgQQFIAYgBAUIJCgdfZmlsdGVyQhAKDl9taW5fY29uc2Vuc3VzIlEKGlN0cmVhbVRyYW5zYWN0aW9uc1Jlc3BvbnNlEjMKC3RyYW5zYWN0aW9uGAEgASgLMhkudGhydS5jb3JlLnYxLlRyYW5zYWN0aW9uQgPgQQIiUgoTU3RyZWFtRXZlbnRzUmVxdWVzdBIwCgZmaWx0ZXIYASABKAsyFi50aHJ1LmNvbW1vbi52MS5GaWx0ZXJCA+BBAUgAiAEBQgkKB19maWx0ZXIipgIKFFN0cmVhbUV2ZW50c1Jlc3BvbnNlEhUKCGV2ZW50X2lkGAEgASgJQgPgQQISGQoHcGF5bG9hZBgCIAEoDEID4EEBSACIAQESNwoJdGltZXN0YW1wGAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEID4EEBSAGIAQESLAoHcHJvZ3JhbRgEIAEoCzIWLnRocnUuY29tbW9uLnYxLlB1YmtleUID4EECEhUKCGNhbGxfaWR4GAUgASgNQgPgQQISMQoJc2lnbmF0dXJlGAYgASgLMhkudGhydS5jb21tb24udjEuU2lnbmF0dXJlQgPgQQISEQoEc2xvdBgHIAEoBEID4EECQgoKCF9wYXlsb2FkQgwKCl90aW1lc3RhbXAijgEKF1RyYWNrVHJhbnNhY3Rpb25SZXF1ZXN0EjEKCXNpZ25hdHVyZRgBIAEoCzIZLnRocnUuY29tbW9uLnYxLlNpZ25hdHVyZUID4EECEjQKB3RpbWVvdXQYAiABKAsyGS5nb29nbGUucHJvdG9idWYuRHVyYXRpb25CA+BBAUgAiAEBQgoKCF90aW1lb3V0ItYBChhUcmFja1RyYW5zYWN0aW9uUmVzcG9uc2USMQoJc2lnbmF0dXJlGAEgASgLMhkudGhydS5jb21tb24udjEuU2lnbmF0dXJlQgPgQQISPgoQY29uc2Vuc3VzX3N0YXR1cxgCIAEoDjIfLnRocnUuY29tbW9uLnYxLkNvbnNlbnN1c1N0YXR1c0ID4EEBEkcKEGV4ZWN1dGlvbl9yZXN1bHQYAyABKAsyKC50aHJ1LmNvcmUudjEuVHJhbnNhY3Rpb25FeGVjdXRpb25SZXN1bHRCA+BBASJHChhTdHJlYW1TbG90TWV0cmljc1JlcXVlc3QSHAoKc3RhcnRfc2xvdBgBIAEoBEID4EEBSACIAQFCDQoLX3N0YXJ0X3Nsb3Qi+gEKGVN0cmVhbVNsb3RNZXRyaWNzUmVzcG9uc2USEQoEc2xvdBgBIAEoBEID4EECEisKHmdsb2JhbF9hY3RpdmF0ZWRfc3RhdGVfY291bnRlchgCIAEoBEID4EECEi0KIGdsb2JhbF9kZWFjdGl2YXRlZF9zdGF0ZV9jb3VudGVyGAMgASgEQgPgQQISGwoOY29sbGVjdGVkX2ZlZXMYBCABKARCA+BBAhI9Cg9ibG9ja190aW1lc3RhbXAYBSABKAsyGi5nb29nbGUucHJvdG9idWYuVGltZXN0YW1wQgPgQQFIAIgBAUISChBfYmxvY2tfdGltZXN0YW1wIhUKE1N0cmVhbUhlaWdodFJlcXVlc3QibAoUU3RyZWFtSGVpZ2h0UmVzcG9uc2USFgoJZmluYWxpemVkGAEgASgEQgPgQQISHQoQbG9jYWxseV9leGVjdXRlZBgCIAEoBEID4EECEh0KEGNsdXN0ZXJfZXhlY3V0ZWQYAyABKARCA+BBAjL+BQoQU3RyZWFtaW5nU2VydmljZRJfCgxTdHJlYW1CbG9ja3MSJS50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbUJsb2Nrc1JlcXVlc3QaJi50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbUJsb2Nrc1Jlc3BvbnNlMAESdwoUU3RyZWFtQWNjb3VudFVwZGF0ZXMSLS50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbUFjY291bnRVcGRhdGVzUmVxdWVzdBouLnRocnUuc2VydmljZXMudjEuU3RyZWFtQWNjb3VudFVwZGF0ZXNSZXNwb25zZTABEnEKElN0cmVhbVRyYW5zYWN0aW9ucxIrLnRocnUuc2VydmljZXMudjEuU3RyZWFtVHJhbnNhY3Rpb25zUmVxdWVzdBosLnRocnUuc2VydmljZXMudjEuU3RyZWFtVHJhbnNhY3Rpb25zUmVzcG9uc2UwARJfCgxTdHJlYW1FdmVudHMSJS50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbUV2ZW50c1JlcXVlc3QaJi50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbUV2ZW50c1Jlc3BvbnNlMAESawoQVHJhY2tUcmFuc2FjdGlvbhIpLnRocnUuc2VydmljZXMudjEuVHJhY2tUcmFuc2FjdGlvblJlcXVlc3QaKi50aHJ1LnNlcnZpY2VzLnYxLlRyYWNrVHJhbnNhY3Rpb25SZXNwb25zZTABEl8KDFN0cmVhbUhlaWdodBIlLnRocnUuc2VydmljZXMudjEuU3RyZWFtSGVpZ2h0UmVxdWVzdBomLnRocnUuc2VydmljZXMudjEuU3RyZWFtSGVpZ2h0UmVzcG9uc2UwARJuChFTdHJlYW1TbG90TWV0cmljcxIqLnRocnUuc2VydmljZXMudjEuU3RyZWFtU2xvdE1ldHJpY3NSZXF1ZXN0GisudGhydS5zZXJ2aWNlcy52MS5TdHJlYW1TbG90TWV0cmljc1Jlc3BvbnNlMAFC4AEKFGNvbS50aHJ1LnNlcnZpY2VzLnYxQhVTdHJlYW1pbmdTZXJ2aWNlUHJvdG9QAVpIZ2l0aHViLmNvbS9VbnRvLUxhYnMvdGhydS1uZXQvZ3JwYy9wa2cvcHJvdG8vdGhydS9zZXJ2aWNlcy92MTtzZXJ2aWNlc3YxogIDVFNYqgIQVGhydS5TZXJ2aWNlcy5WMboCBFRIVVPKAhBUaHJ1XFNlcnZpY2VzXFYx4gIcVGhydVxTZXJ2aWNlc1xWMVxHUEJNZXRhZGF0YeoCElRocnU6OlNlcnZpY2VzOjpWMWIGcHJvdG8z", [file_buf_validate_validate, file_google_api_field_behavior, file_thru_common_v1_primitives, file_google_protobuf_duration, file_google_protobuf_timestamp, file_thru_common_v1_consensus, file_thru_common_v1_filters, file_thru_core_v1_account, file_thru_core_v1_block, file_thru_core_v1_transaction, file_thru_core_v1_types]);
 
 /**
  * StreamBlocksRequest subscribes to real-time block updates.
@@ -357,6 +357,7 @@ export const AccountUpdateSchema: GenMessage<AccountUpdate> = /*@__PURE__*/
 
 /**
  * BlockFinished is sent when block's execution is complete.
+ * Contains block accumulator metrics finalized after execution.
  *
  * @generated from message thru.services.v1.BlockFinished
  */
@@ -365,6 +366,29 @@ export type BlockFinished = Message<"thru.services.v1.BlockFinished"> & {
    * @generated from field: uint64 slot = 1;
    */
   slot: bigint;
+
+  /**
+   * Global counter tracking total activated state across all accounts.
+   * Increments when accounts are created or modified.
+   *
+   * @generated from field: uint64 global_activated_state_counter = 2;
+   */
+  globalActivatedStateCounter: bigint;
+
+  /**
+   * Global counter tracking total deactivated state across all accounts.
+   * Increments when accounts are deleted or compressed.
+   *
+   * @generated from field: uint64 global_deactivated_state_counter = 3;
+   */
+  globalDeactivatedStateCounter: bigint;
+
+  /**
+   * Total fees collected from all transactions in this block.
+   *
+   * @generated from field: uint64 collected_fees = 4;
+   */
+  collectedFees: bigint;
 };
 
 /**
@@ -805,6 +829,78 @@ export const TrackTransactionResponseSchema: GenMessage<TrackTransactionResponse
   messageDesc(file_thru_services_v1_streaming_service, 11);
 
 /**
+ * StreamSlotMetricsRequest subscribes to per-slot metrics updates.
+ * Metrics are emitted after each block's execution completes.
+ *
+ * @generated from message thru.services.v1.StreamSlotMetricsRequest
+ */
+export type StreamSlotMetricsRequest = Message<"thru.services.v1.StreamSlotMetricsRequest"> & {
+  /**
+   * Optional starting slot. If specified, starts streaming from this slot.
+   * If not specified, starts from the next executed slot.
+   *
+   * @generated from field: optional uint64 start_slot = 1;
+   */
+  startSlot?: bigint;
+};
+
+/**
+ * Describes the message thru.services.v1.StreamSlotMetricsRequest.
+ * Use `create(StreamSlotMetricsRequestSchema)` to create a new message.
+ */
+export const StreamSlotMetricsRequestSchema: GenMessage<StreamSlotMetricsRequest> = /*@__PURE__*/
+  messageDesc(file_thru_services_v1_streaming_service, 12);
+
+/**
+ * StreamSlotMetricsResponse delivers slot metrics after execution completes.
+ *
+ * @generated from message thru.services.v1.StreamSlotMetricsResponse
+ */
+export type StreamSlotMetricsResponse = Message<"thru.services.v1.StreamSlotMetricsResponse"> & {
+  /**
+   * Block slot number.
+   *
+   * @generated from field: uint64 slot = 1;
+   */
+  slot: bigint;
+
+  /**
+   * Global counter tracking total activated state across all accounts.
+   *
+   * @generated from field: uint64 global_activated_state_counter = 2;
+   */
+  globalActivatedStateCounter: bigint;
+
+  /**
+   * Global counter tracking total deactivated state across all accounts.
+   *
+   * @generated from field: uint64 global_deactivated_state_counter = 3;
+   */
+  globalDeactivatedStateCounter: bigint;
+
+  /**
+   * Total fees collected from all transactions in this block.
+   *
+   * @generated from field: uint64 collected_fees = 4;
+   */
+  collectedFees: bigint;
+
+  /**
+   * Block timestamp when available.
+   *
+   * @generated from field: optional google.protobuf.Timestamp block_timestamp = 5;
+   */
+  blockTimestamp?: Timestamp;
+};
+
+/**
+ * Describes the message thru.services.v1.StreamSlotMetricsResponse.
+ * Use `create(StreamSlotMetricsResponseSchema)` to create a new message.
+ */
+export const StreamSlotMetricsResponseSchema: GenMessage<StreamSlotMetricsResponse> = /*@__PURE__*/
+  messageDesc(file_thru_services_v1_streaming_service, 13);
+
+/**
  * StreamHeightRequest subscribes to real-time height updates.
  *
  * @generated from message thru.services.v1.StreamHeightRequest
@@ -817,7 +913,7 @@ export type StreamHeightRequest = Message<"thru.services.v1.StreamHeightRequest"
  * Use `create(StreamHeightRequestSchema)` to create a new message.
  */
 export const StreamHeightRequestSchema: GenMessage<StreamHeightRequest> = /*@__PURE__*/
-  messageDesc(file_thru_services_v1_streaming_service, 12);
+  messageDesc(file_thru_services_v1_streaming_service, 14);
 
 /**
  * StreamHeightResponse delivers height update events.
@@ -846,7 +942,7 @@ export type StreamHeightResponse = Message<"thru.services.v1.StreamHeightRespons
  * Use `create(StreamHeightResponseSchema)` to create a new message.
  */
 export const StreamHeightResponseSchema: GenMessage<StreamHeightResponse> = /*@__PURE__*/
-  messageDesc(file_thru_services_v1_streaming_service, 13);
+  messageDesc(file_thru_services_v1_streaming_service, 15);
 
 /**
  * StreamingService serves server-streaming gRPC APIs for real-time data.
@@ -901,6 +997,17 @@ export const StreamingService: GenService<{
     methodKind: "server_streaming";
     input: typeof StreamHeightRequestSchema;
     output: typeof StreamHeightResponseSchema;
+  },
+  /**
+   * Stream per-slot metrics including state counters and collected fees.
+   * Metrics are emitted after each block's execution completes.
+   *
+   * @generated from rpc thru.services.v1.StreamingService.StreamSlotMetrics
+   */
+  streamSlotMetrics: {
+    methodKind: "server_streaming";
+    input: typeof StreamSlotMetricsRequestSchema;
+    output: typeof StreamSlotMetricsResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_thru_services_v1_streaming_service, 0);

@@ -1,8 +1,9 @@
 import { DerivedAccount } from '@/types/account';
 import { AddressType } from '@thru/chain-interfaces';
-import { EncryptionService, MnemonicGenerator, ThruHDWallet } from '@thru/crypto';
-import { AccountStorage, WalletStorage } from '@thru/indexed-db-stamper';
+import { MnemonicGenerator, ThruHDWallet } from '@thru/crypto';
+import { AccountStorage } from '@thru/wallet-store';
 import { createThruClient } from '@thru/thru-sdk/client';
+import { resolveThruRpcBaseUrl } from '@/lib/thru-rpc';
 
 export type NetworkType = 'default';
 
@@ -11,58 +12,6 @@ export type NetworkType = 'default';
  * Pure TypeScript class with no React dependencies
  */
 export class WalletManager {
-  /**
-   * Check if a wallet exists in storage
-   */
-  static async checkWalletExists(): Promise<boolean> {
-    return await WalletStorage.walletExists();
-  }
-
-  /**
-   * Create a new wallet with optional mnemonic
-   * If mnemonic is not provided, generates a new one
-   */
-  static async createWallet(
-    password: string,
-    mnemonic?: string
-  ): Promise<{ mnemonic: string }> {
-    // Generate or use provided mnemonic
-    const phrase = mnemonic || this.generateMnemonic();
-
-    // Validate mnemonic
-    if (!this.validateMnemonic(phrase)) {
-      throw new Error('Invalid mnemonic phrase');
-    }
-
-    // Convert to seed
-    const seed = MnemonicGenerator.toSeed(phrase);
-
-    // Encrypt seed
-    const encrypted = await EncryptionService.encrypt(seed, password);
-
-    // Save encrypted seed
-    await WalletStorage.saveEncryptedSeed(encrypted);
-
-    // Request persistent storage
-    await WalletStorage.requestPersistentStorage();
-
-    return { mnemonic: phrase };
-  }
-
-  /**
-   * Unlock wallet with password and return decrypted seed
-   */
-  static async unlockWallet(password: string): Promise<Uint8Array> {
-    const encrypted = await WalletStorage.getEncryptedSeed();
-    if (!encrypted) {
-      throw new Error('Wallet not found');
-    }
-
-    // Decrypt and return seed
-    const seed = await EncryptionService.decrypt(encrypted, password);
-    return seed;
-  }
-
   /**
    * Get all accounts from storage
    */
@@ -132,7 +81,7 @@ export class WalletManager {
     publicKey: string,
     _network: NetworkType = 'default'
   ): Promise<bigint> {
-    const client = createThruClient({});
+    const client = createThruClient({ baseUrl: resolveThruRpcBaseUrl() });
     const account = await client.accounts.get(publicKey);
     const balance = account.meta?.balance ?? 0n;
     return balance;
@@ -188,13 +137,5 @@ export class WalletManager {
    */
   static validateMnemonic(phrase: string): boolean {
     return MnemonicGenerator.validate(phrase);
-  }
-
-  /**
-   * Clear all wallet data (for reset/logout)
-   */
-  static async clearWallet(): Promise<void> {
-    await WalletStorage.clearAll();
-    await AccountStorage.clearAccounts();
   }
 }

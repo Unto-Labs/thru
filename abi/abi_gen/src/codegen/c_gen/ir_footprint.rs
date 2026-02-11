@@ -49,17 +49,11 @@ impl<'a> IrFootprintEmitter<'a> {
 
     fn sum_over_array_expr(
         &self,
-        node: &crate::codegen::shared::ir::SumOverArrayNode,
+        _node: &crate::codegen::shared::ir::SumOverArrayNode,
     ) -> Result<String, IrFootprintError> {
-        /* Jagged arrays require iteration-based size calculation.
-           This is handled separately via dedicated accessor functions
-           rather than inline IR expression. */
-        let fn_name = sanitize_symbol(&format!(
-            "{}_{}_size",
-            self.type_ir.type_name, node.field_name
-        ));
-        let count_expr = self.node_to_expr(&node.count)?;
-        Ok(format!("{}( self, {} )", fn_name, count_expr))
+        /* Jagged arrays require instance data for iteration-based size calculation.
+           C IR helpers are free functions without a self pointer. */
+        Err(IrFootprintError::UnsupportedNode)
     }
 
     fn combine_binary(&self, node: &BinaryOpNode, op: &str) -> Result<String, IrFootprintError> {

@@ -15,7 +15,7 @@ import {
     STATE_PROOF_TYPE_UPDATING,
     TXN_FLAG_HAS_FEE_PAYER_PROOF,
     TXN_FLAG_MAY_COMPRESS_ACCOUNT,
-    TXN_HEADER_SIZE,
+    TXN_HEADER_BODY_SIZE,
     TXN_MAX_ACCOUNTS,
     TXN_VERSION_V1,
 } from "../../wire-format";
@@ -147,12 +147,21 @@ export class Transaction {
         data: Uint8Array,
         options: { strict?: boolean } = {},
     ): { transaction: Transaction; size: number } {
-        if (data.length < TXN_HEADER_SIZE + SIGNATURE_SIZE) {
-            throw new Error(`Transaction data too short: ${data.length} bytes (expected at least ${TXN_HEADER_SIZE + SIGNATURE_SIZE})`);
-        }
-
         const strict = options.strict ?? false;
         const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+
+        // Wire format (from tn_txn.h):
+        //   [header (112 bytes)]
+        //   [input_pubkeys (variable)]
+        //   [instr_data (variable)]
+        //   [state_proof (optional, variable)]
+        //   [account_meta (optional, variable)]
+        //   [fee_payer_signature (64 bytes at end)]
+
+        if (data.length < TXN_HEADER_BODY_SIZE) {
+            throw new Error(`Transaction data too short: ${data.length} bytes (minimum ${TXN_HEADER_BODY_SIZE})`);
+        }
+
         let offset = 0;
 
         const version = view.getUint8(offset);
@@ -200,8 +209,9 @@ export class Transaction {
         const program = data.slice(offset, offset + PUBKEY_SIZE);
         offset += PUBKEY_SIZE;
 
-        if (offset !== TXN_HEADER_SIZE) {
-            throw new Error(`Transaction header parsing mismatch (expected offset ${TXN_HEADER_SIZE}, got ${offset})`);
+        // Verify header parsing completed at expected offset
+        if (offset !== TXN_HEADER_BODY_SIZE) {
+            throw new Error(`Transaction header parsing mismatch (expected offset ${TXN_HEADER_BODY_SIZE}, got ${offset})`);
         }
 
         const totalAccountCount = Number(readwriteAccountsCount + readonlyAccountsCount);
@@ -220,7 +230,7 @@ export class Transaction {
         // The state proof format has an 8-byte typeSlot (with proofType in bits 62-63)
         // followed by a 32-byte pathBitset. The total size is calculated using popcount.
         if ((flags & TXN_FLAG_HAS_FEE_PAYER_PROOF) !== 0) {
-            const proofOffset = TXN_HEADER_SIZE + accountsSize + instructionDataSize;
+            const proofOffset = TXN_HEADER_BODY_SIZE + accountsSize + instructionDataSize;
             Transaction.ensureAvailable(data.length, proofOffset, STATE_PROOF_HEADER_SIZE, "state proof header");
             const proofView = new DataView(data.buffer, data.byteOffset + proofOffset, STATE_PROOF_HEADER_SIZE);
             const typeSlot = proofView.getBigUint64(0, true);
@@ -235,9 +245,10 @@ export class Transaction {
             }
         }
 
-        const txnSize = TXN_HEADER_SIZE + expectedBodySize + SIGNATURE_SIZE;
+        // Transaction size: header(112) + body + signature(64) at end
+        const txnSize = TXN_HEADER_BODY_SIZE + expectedBodySize + SIGNATURE_SIZE;
         Transaction.ensureAvailable(data.length, 0, txnSize, "full transaction");
-        const sigStart = TXN_HEADER_SIZE + expectedBodySize;
+        const sigStart = TXN_HEADER_BODY_SIZE + expectedBodySize;
 
         const readWriteAccounts: Uint8Array[] = [];
         for (let i = 0; i < readwriteAccountsCount; i++) {
@@ -278,10 +289,11 @@ export class Transaction {
         // Verify we consumed all bytes before signature
         if (offset !== sigStart) {
             throw new Error(
-                `Transaction body has trailing bytes: expected ${offset + SIGNATURE_SIZE} bytes but found ${txnSize}`,
+                `Transaction body has trailing bytes: expected ${sigStart} bytes consumed but found ${offset}`,
             );
         }
 
+        // Read signature from the end of the transaction
         const signatureBytes = data.slice(sigStart, sigStart + SIGNATURE_SIZE);
         const hasSignature = hasNonZeroBytes(signatureBytes);
 
@@ -319,7 +331,7 @@ export class Transaction {
             transaction.setSignature(Signature.from(signatureBytes));
         }
 
-        return { transaction, size: offset + SIGNATURE_SIZE };
+        return { transaction, size: txnSize };
     }
 
     static fromProto(proto: CoreTransaction): Transaction {
@@ -362,9 +374,9 @@ export class Transaction {
                         header.flags ?? DEFAULT_FLAGS,
                     );
                 } catch (sectionErr) {
-                    if (body.length >= TXN_HEADER_SIZE) {
+                    if (body.length >= TXN_HEADER_BODY_SIZE) {
                         parsed = this.parseBodySections(
-                            body.slice(TXN_HEADER_SIZE),
+                            body.slice(TXN_HEADER_BODY_SIZE),
                             header.readwriteAccountsCount ?? 0,
                             header.readonlyAccountsCount ?? 0,
                             header.instructionDataSize ?? 0,
@@ -476,7 +488,7 @@ export class Transaction {
     }
 
     private createHeader(): ArrayBufferLike {
-        const buffer = new ArrayBuffer(TXN_HEADER_SIZE);
+        const buffer = new ArrayBuffer(TXN_HEADER_BODY_SIZE);
         const headerBytes = new Uint8Array(buffer);
         const view = new DataView(buffer);
 

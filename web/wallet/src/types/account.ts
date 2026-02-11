@@ -1,4 +1,4 @@
-import type { StoredAccount as PersistedStoredAccount } from '@thru/indexed-db-stamper';
+import type { StoredAccount as PersistedStoredAccount } from '@thru/wallet-store';
 
 /**
  * Account with derived keypair (used in-memory only, never stored)

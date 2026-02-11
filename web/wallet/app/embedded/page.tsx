@@ -14,11 +14,16 @@ export default function EmbeddedPage() {
   const {
     accounts,
     isUnlocked,
-    unlockWallet,
+    passkeyError,
+    signInWithPasskey,
+    shouldUsePasskeyPopup,
+    lockWallet,
+    getEmbeddedAccountsSnapshot,
     selectedAccountIndex,
     selectAccount,
     refreshAccounts,
     autoLockCount,
+    signSerializedTransaction,
   } = useWallet();
 
   const { sendResponse, sendEvent } = usePostMessage();
@@ -26,12 +31,17 @@ export default function EmbeddedPage() {
   const deps = useEmbeddedDeps({
     accounts,
     isUnlocked,
+    passkeyError,
+    lockWallet,
     refreshAccounts,
     selectedAccountIndex,
     selectAccount,
-    unlockWallet,
+    signInWithPasskey,
+    shouldUsePasskeyPopup,
+    getEmbeddedAccountsSnapshot,
     sendResponse,
     sendEvent,
+    signSerializedTransaction,
   });
 
   // Setup message router

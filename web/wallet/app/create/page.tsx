@@ -1,94 +1,142 @@
 'use client';
 
-import { PasswordPrompt } from '@/components/wallet/PasswordPrompt';
-import { SeedPhraseDisplay } from '@/components/wallet/SeedPhraseDisplay';
 import { useWallet } from '@/hooks/useWallet';
-import { WalletManager } from '@/lib/wallet/wallet-manager';
 import { useRouter } from 'next/navigation';
-import { useState } from 'react';
-
-type Step = 'password' | 'seed-phrase' | 'saving';
+import { useEffect, useState } from 'react';
+import { Body3, Button, Card, Heading5, Input } from '@thru/design-system';
 
 export default function CreateWallet() {
   const router = useRouter();
-  const { createWallet } = useWallet();
-  const [step, setStep] = useState<Step>('password');
-  const [password, setPassword] = useState('');
-  const [mnemonic, setMnemonic] = useState('');
-  const [error, setError] = useState('');
+  const {
+    isPasskeySupported,
+    passkeyError,
+    isRegisteringPasskey,
+    isSigningWithPasskey,
+    hasPasskey,
+    isInitialized,
+    isUnlocked,
+    registerPasskey,
+    signInWithPasskey,
+    clearPasskeyError,
+  } = useWallet();
+  const [status, setStatus] = useState('');
+  const [passkeyAlias, setPasskeyAlias] = useState('');
+  const [aliasError, setAliasError] = useState('');
 
-  const handlePasswordSubmit = (pass: string) => {
-    setPassword(pass);
-    // Generate mnemonic
-    const newMnemonic = WalletManager.generateMnemonic();
-    setMnemonic(newMnemonic);
-    setStep('seed-phrase');
+  useEffect(() => {
+    if (isInitialized && isUnlocked) {
+      router.push('/accounts');
+    }
+  }, [isInitialized, isUnlocked, router]);
+
+  const handleRegisterPasskey = async () => {
+    setStatus('');
+    const trimmedAlias = passkeyAlias.trim();
+    if (!trimmedAlias) {
+      setAliasError('Enter a passkey name');
+      return;
+    }
+    setAliasError('');
+    const ok = await registerPasskey(trimmedAlias);
+    if (ok) {
+      setStatus('Passkey registered. You can log in now.');
+      setPasskeyAlias('');
+    }
   };
 
-  const handleSeedPhraseConfirm = async () => {
-    setStep('saving');
-    setError('');
-
+  const handlePasskeySignIn = async () => {
+    clearPasskeyError();
     try {
-      await createWallet(password, mnemonic);
-      // Redirect to homepage (user will unlock to access /accounts)
-      router.push('/');
+      await signInWithPasskey();
     } catch (err) {
-      console.error('Error creating wallet:', err);
-      setError(err instanceof Error ? err.message : 'Failed to create wallet');
-      setStep('seed-phrase');
+      console.error('Passkey sign-in error:', err);
     }
   };
 
   return (
     <main className="flex min-h-screen flex-col items-center justify-center p-6 bg-gray-50">
       <div className="w-full max-w-3xl">
-        {step === 'password' && (
-          <PasswordPrompt
-            title="Create Password"
-            description="This password will be used to unlock your wallet. Make sure it's strong and memorable."
-            onSubmit={handlePasswordSubmit}
-            confirmPassword
-          />
-        )}
+        <Card variant="default" className="p-8">
+          <Heading5 className="text-text-primary mb-2" bold>
+            Create Passkey Profile
+          </Heading5>
+          <Body3 className="text-text-secondary mb-6">
+            Register a passkey to unlock your wallet and create passkey-managed accounts.
+          </Body3>
 
-        {step === 'seed-phrase' && (
-          <SeedPhraseDisplay mnemonic={mnemonic} onConfirm={handleSeedPhraseConfirm} />
-        )}
+          {!isPasskeySupported && (
+            <div className="bg-surface-brick border border-border-brand p-4 mb-6">
+              <Body3 className="text-text-primary">
+                Passkeys are not supported in this browser.
+              </Body3>
+            </div>
+          )}
 
-        {step === 'saving' && (
-          <div className="text-center">
-            <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-gray-300 border-t-blue-600 mb-4" />
-            <p className="text-gray-600">Creating your wallet...</p>
-          </div>
-        )}
+          {passkeyError && (
+            <div className="bg-surface-brick border border-border-brand p-4 mb-6">
+              <Body3 className="text-text-primary">{passkeyError}</Body3>
+            </div>
+          )}
 
-        {error && (
-          <div className="mt-6 bg-red-50 border-2 border-red-200 rounded-lg p-4">
-            <p className="text-red-800 text-sm">{error}</p>
-          </div>
-        )}
-        <div className="text-center mt-8">
-          <div className="flex items-center justify-center gap-2">
-            <div
-              className={`w-3 h-3 rounded-full ${
-                step === 'password' ? 'bg-stone-400' : 'bg-steel-400'
-              }`}
-            />
-            <div
-              className={`w-3 h-3 rounded-full ${
-                step === 'seed-phrase'
-                  ? 'bg-stone-400'
-                  : step === 'saving'
-                    ? 'bg-steel-400'
-                    : 'bg-steel-300'
-              }`}
-            />
-          </div>
-        </div>
+          {aliasError && (
+            <div className="bg-surface-brick border border-border-brand p-4 mb-6">
+              <Body3 className="text-text-primary">{aliasError}</Body3>
+            </div>
+          )}
+
+          {status && (
+            <div className="bg-surface-higher border border-border-tertiary p-4 mb-6">
+              <Body3 className="text-text-primary">{status}</Body3>
+            </div>
+          )}
+
+          {hasPasskey ? (
+            <Button
+              type="button"
+              disabled={!isPasskeySupported || isSigningWithPasskey}
+              variant="primary"
+              className="w-full"
+              onClick={handlePasskeySignIn}
+            >
+              {isSigningWithPasskey ? 'Logging in...' : 'Log In with Passkey'}
+            </Button>
+          ) : (
+            <>
+              <div className="mb-6">
+                <Body3 className="text-text-secondary mb-2">Passkey name</Body3>
+                <Input
+                  type="text"
+                  value={passkeyAlias}
+                  onChange={(event) => {
+                    setPasskeyAlias(event.target.value);
+                    if (aliasError) {
+                      setAliasError('');
+                    }
+                  }}
+                  placeholder="e.g. Evelyn's laptop"
+                  disabled={isRegisteringPasskey}
+                />
+              </div>
+
+              <Button
+                type="button"
+                disabled={!isPasskeySupported || isRegisteringPasskey}
+                variant="primary"
+                className="w-full"
+                onClick={handleRegisterPasskey}
+              >
+                {isRegisteringPasskey ? 'Registering...' : 'Register Passkey'}
+              </Button>
+            </>
+          )}
+        </Card>
 
         <div className="mt-8 text-center">
-          <a href="/" className="text-text-secondary hover:text-text-primary text-sm">
+          <a
+            href="/"
+            className="text-text-secondary hover:text-text-primary text-sm"
+            onClick={() => router.push('/')}
+          >
             ← Back to home
           </a>
         </div>

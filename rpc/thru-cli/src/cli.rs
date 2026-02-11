@@ -30,6 +30,14 @@ pub struct Cli {
     #[arg(long, global = true)]
     pub quiet: bool,
 
+    /// Override RPC URL for this invocation
+    #[arg(long = "url", global = true)]
+    pub url: Option<String>,
+
+    /// Use a named network profile for this invocation
+    #[arg(long = "network", global = true)]
+    pub network: Option<String>,
+
     #[command(subcommand)]
     pub command: Commands,
 }
@@ -185,6 +193,13 @@ pub enum Commands {
     Dev {
         #[command(subcommand)]
         subcommand: DevCommands,
+    },
+
+    /// Network profile management commands
+    #[command(name = "network")]
+    Network {
+        #[command(subcommand)]
+        subcommand: NetworkCommands,
     },
 }
 
@@ -370,7 +385,7 @@ pub enum ProgramCommands {
 /// ABI-related subcommands
 #[derive(Subcommand)]
 pub enum AbiCommands {
-    /// Create an ABI account for a managed program
+    /// Create an official ABI account for a managed program
     Create {
         /// Program type (ephemeral matches the managed program)
         #[arg(long)]
@@ -391,7 +406,52 @@ pub enum AbiCommands {
         abi_file: String,
     },
 
-    /// Upgrade an existing ABI account
+    /// Create a third-party ABI account for a target program
+    CreateThirdParty {
+        /// Program type (ephemeral flag for ABI accounts)
+        #[arg(long)]
+        ephemeral: bool,
+
+        /// Target program account public key (Thru address)
+        target_program: String,
+
+        /// 32-byte hex seed for the third-party ABI meta
+        seed: String,
+
+        /// Fee payer account (optional, defaults to config default)
+        #[arg(long = "fee-payer")]
+        fee_payer: Option<String>,
+
+        /// Authority account name from config (optional, defaults to 'default')
+        #[arg(long)]
+        authority: Option<String>,
+
+        /// ABI definition file to upload
+        abi_file: String,
+    },
+
+    /// Create a standalone ABI account (not associated with any program)
+    CreateStandalone {
+        /// Program type (ephemeral flag for ABI accounts)
+        #[arg(long)]
+        ephemeral: bool,
+
+        /// Seed string used to derive the standalone ABI meta seed
+        seed: String,
+
+        /// Fee payer account (optional, defaults to config default)
+        #[arg(long = "fee-payer")]
+        fee_payer: Option<String>,
+
+        /// Authority account name from config (optional, defaults to 'default')
+        #[arg(long)]
+        authority: Option<String>,
+
+        /// ABI definition file to upload
+        abi_file: String,
+    },
+
+    /// Upgrade an existing official ABI account
     Upgrade {
         /// Program type (ephemeral matches the managed program)
         #[arg(long)]
@@ -412,7 +472,52 @@ pub enum AbiCommands {
         abi_file: String,
     },
 
-    /// Finalize an ABI account so it becomes immutable
+    /// Upgrade an existing third-party ABI account
+    UpgradeThirdParty {
+        /// Program type (ephemeral flag for ABI accounts)
+        #[arg(long)]
+        ephemeral: bool,
+
+        /// Target program account public key (Thru address)
+        target_program: String,
+
+        /// 32-byte hex seed for the third-party ABI meta
+        seed: String,
+
+        /// Fee payer account (optional, defaults to config default)
+        #[arg(long = "fee-payer")]
+        fee_payer: Option<String>,
+
+        /// Authority account name from config (optional, defaults to 'default')
+        #[arg(long)]
+        authority: Option<String>,
+
+        /// ABI definition file to upload
+        abi_file: String,
+    },
+
+    /// Upgrade an existing standalone ABI account
+    UpgradeStandalone {
+        /// Program type (ephemeral flag for ABI accounts)
+        #[arg(long)]
+        ephemeral: bool,
+
+        /// Seed string used to derive the standalone ABI meta seed
+        seed: String,
+
+        /// Fee payer account (optional, defaults to config default)
+        #[arg(long = "fee-payer")]
+        fee_payer: Option<String>,
+
+        /// Authority account name from config (optional, defaults to 'default')
+        #[arg(long)]
+        authority: Option<String>,
+
+        /// ABI definition file to upload
+        abi_file: String,
+    },
+
+    /// Finalize an official ABI account so it becomes immutable
     Finalize {
         /// Program type (ephemeral matches the managed program)
         #[arg(long)]
@@ -430,7 +535,46 @@ pub enum AbiCommands {
         authority: Option<String>,
     },
 
-    /// Close an ABI account and reclaim its lamports
+    /// Finalize a third-party ABI account so it becomes immutable
+    FinalizeThirdParty {
+        /// Program type (ephemeral flag for ABI accounts)
+        #[arg(long)]
+        ephemeral: bool,
+
+        /// Target program account public key (Thru address)
+        target_program: String,
+
+        /// 32-byte hex seed for the third-party ABI meta
+        seed: String,
+
+        /// Fee payer account (optional, defaults to config default)
+        #[arg(long = "fee-payer")]
+        fee_payer: Option<String>,
+
+        /// Authority account name from config (optional, defaults to 'default')
+        #[arg(long)]
+        authority: Option<String>,
+    },
+
+    /// Finalize a standalone ABI account so it becomes immutable
+    FinalizeStandalone {
+        /// Program type (ephemeral flag for ABI accounts)
+        #[arg(long)]
+        ephemeral: bool,
+
+        /// Seed string used to derive the standalone ABI meta seed
+        seed: String,
+
+        /// Fee payer account (optional, defaults to config default)
+        #[arg(long = "fee-payer")]
+        fee_payer: Option<String>,
+
+        /// Authority account name from config (optional, defaults to 'default')
+        #[arg(long)]
+        authority: Option<String>,
+    },
+
+    /// Close an official ABI account and reclaim its lamports
     Close {
         /// Program type (ephemeral matches the managed program)
         #[arg(long)]
@@ -448,14 +592,49 @@ pub enum AbiCommands {
         authority: Option<String>,
     },
 
-    /// Inspect an ABI account's metadata and optionally dump its YAML contents
-    Get {
-        /// Program type (ephemeral matches the managed program)
+    /// Close a third-party ABI account and reclaim its lamports
+    CloseThirdParty {
+        /// Program type (ephemeral flag for ABI accounts)
         #[arg(long)]
         ephemeral: bool,
 
-        /// Associated program account public key (base58)
-        program_account: String,
+        /// Target program account public key (Thru address)
+        target_program: String,
+
+        /// 32-byte hex seed for the third-party ABI meta
+        seed: String,
+
+        /// Fee payer account (optional, defaults to config default)
+        #[arg(long = "fee-payer")]
+        fee_payer: Option<String>,
+
+        /// Authority account name from config (optional, defaults to 'default')
+        #[arg(long)]
+        authority: Option<String>,
+    },
+
+    /// Close a standalone ABI account and reclaim its lamports
+    CloseStandalone {
+        /// Program type (ephemeral flag for ABI accounts)
+        #[arg(long)]
+        ephemeral: bool,
+
+        /// Seed string used to derive the standalone ABI meta seed
+        seed: String,
+
+        /// Fee payer account (optional, defaults to config default)
+        #[arg(long = "fee-payer")]
+        fee_payer: Option<String>,
+
+        /// Authority account name from config (optional, defaults to 'default')
+        #[arg(long)]
+        authority: Option<String>,
+    },
+
+    /// Inspect an ABI account's metadata and optionally dump its YAML contents
+    Get {
+        /// ABI account public key (Thru address)
+        abi_account: String,
 
         /// Whether to include ABI YAML contents in the CLI output (Y/N, defaults to N)
         #[arg(long = "data", default_value = "N")]
@@ -543,6 +722,55 @@ pub enum KeysCommands {
     #[command(name = "rm")]
     Remove {
         /// Key name to remove
+        name: String,
+    },
+}
+
+/// Network profile management subcommands
+#[derive(Subcommand)]
+pub enum NetworkCommands {
+    /// Add a new named network profile
+    Add {
+        /// Network profile name (case-insensitive)
+        name: String,
+
+        /// RPC endpoint URL
+        #[arg(long)]
+        url: String,
+
+        /// Optional authorization token
+        #[arg(long = "auth-token")]
+        auth_token: Option<String>,
+    },
+
+    /// Set the default network profile
+    #[command(name = "set-default")]
+    SetDefault {
+        /// Network profile name to use as default
+        name: String,
+    },
+
+    /// Update fields on an existing network profile
+    Set {
+        /// Network profile name to update
+        name: String,
+
+        /// New RPC endpoint URL
+        #[arg(long)]
+        url: Option<String>,
+
+        /// New authorization token (use empty string to clear)
+        #[arg(long = "auth-token")]
+        auth_token: Option<String>,
+    },
+
+    /// List all configured network profiles
+    List,
+
+    /// Remove a network profile
+    #[command(name = "rm")]
+    Remove {
+        /// Network profile name to remove
         name: String,
     },
 }

@@ -18,6 +18,7 @@ export const EMBEDDED_PROVIDER_EVENTS = {
   CONNECT_ERROR: 'connect_error',
   ERROR: 'error',
   LOCK: 'lock',
+  UI_SHOW: 'ui_show',
   ACCOUNT_CHANGED: 'account_changed',
 } as const;
 
@@ -28,7 +29,7 @@ export const POST_MESSAGE_EVENT_TYPE = 'event' as const;
 
 export const IFRAME_READY_EVENT = 'iframe:ready' as const;
 
-export const DEFAULT_IFRAME_URL = 'https://thru-wallet.up.railway.app/embedded';
+export const DEFAULT_IFRAME_URL = 'http://localhost:3000/embedded';
 
 const REQUEST_ID_PREFIX = 'req';
 

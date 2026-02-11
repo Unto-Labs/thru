@@ -39,6 +39,29 @@ async fn main() -> Result<()> {
     // Load configuration
     let mut config = Config::load().await?;
 
+    // Apply global network overrides
+    if let Some(ref url) = cli.url {
+        config.rpc_base_url = url.clone();
+    } else if let Some(ref network_name) = cli.network {
+        let name = network_name.to_lowercase();
+        let net = config.networks.get(&name).cloned().ok_or_else(|| {
+            let available = config.list_network_names();
+            CliError::Validation(format!(
+                "Network '{}' not found. Available networks: {}",
+                name,
+                if available.is_empty() { "(none)".to_string() } else { available.join(", ") }
+            ))
+        })?;
+        config.rpc_base_url = net.url;
+        config.auth_token = net.auth_token;
+    } else if let Some(default_name) = config.default_network.clone() {
+        let default_name = default_name.to_lowercase();
+        if let Some(net) = config.networks.get(&default_name).cloned() {
+            config.rpc_base_url = net.url;
+            config.auth_token = net.auth_token;
+        }
+    }
+
     // Execute the command
     let result: Result<(), CliError> = match cli.command {
         Commands::GetVersion => commands::rpc::get_version(&config, cli.json).await,
@@ -99,6 +122,9 @@ async fn main() -> Result<()> {
         }
         Commands::Dev { subcommand } => {
             commands::dev::handle_dev_command(&mut config, subcommand, cli.json).await
+        }
+        Commands::Network { subcommand } => {
+            commands::network::handle_network_command(&config, subcommand, cli.json).await
         }
     };
 

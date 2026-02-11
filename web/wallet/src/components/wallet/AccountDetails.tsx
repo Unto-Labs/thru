@@ -6,12 +6,14 @@ interface AccountDetailsProps {
   account: DerivedAccount | null;
   balance: bigint;
   onRename: (newLabel: string) => void;
+  onSendTransfer: () => void;
 }
 
 export function AccountDetails({
   account,
   balance,
   onRename,
+  onSendTransfer,
 }: AccountDetailsProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [editLabel, setEditLabel] = useState('');
@@ -26,6 +28,7 @@ export function AccountDetails({
   }
 
   const balanceThru = Number(balance) / 1e9;
+  const accountName = account.path || 'Unknown';
 
   const handleStartEdit = () => {
     setEditLabel(account.label);
@@ -112,6 +115,14 @@ export function AccountDetails({
           </div>
         </div>
 
+        {/* Account Name */}
+        <div className="mb-8">
+          <Body4 className="block mb-2" bold>Account Name</Body4>
+          <div className="text-text-tertiary text-body-xs font-mono break-all">
+            {accountName}
+          </div>
+        </div>
+
         {/* Balance */}
         <div>
           <Body4 className="block mb-3" bold>Balance</Body4>
@@ -119,6 +130,11 @@ export function AccountDetails({
             <Heading5 className="text-text-primary" bold>
               {balanceThru.toFixed(4)} <span className="text-body-l text-text-tertiary font-normal">THRU</span>
             </Heading5>
+          </div>
+          <div className="mt-4">
+            <Button onClick={onSendTransfer} variant="primary" size="md">
+              Send Transfer
+            </Button>
           </div>
         </div>
       </Card>

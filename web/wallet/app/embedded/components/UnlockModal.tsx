@@ -1,31 +1,27 @@
 'use client';
 
-import { Body3, Body4, Button, Card, Heading5, Input } from '@thru/design-system';
-import { KeyboardEvent } from 'react';
+import { Body3, Body4, Button, Card, Heading5 /* Input */ } from '@thru/design-system';
+// import { KeyboardEvent } from 'react';
 
 interface UnlockModalProps {
-  password: string;
   error: string | null;
   isLoading: boolean;
-  onPasswordChange: (value: string) => void;
   onSubmit: () => void;
   onCancel: () => void;
 }
 
 export function UnlockModal({
-  password,
   error,
   isLoading,
-  onPasswordChange,
   onSubmit,
   onCancel,
 }: UnlockModalProps) {
-  const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
-    if (event.key === 'Enter') {
-      event.preventDefault();
-      onSubmit();
-    }
-  };
+  // const handleKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+  //   if (event.key === 'Enter') {
+  //     event.preventDefault();
+  //     onSubmit();
+  //   }
+  // };
 
   return (
     <div className="fixed inset-0 z-[999999] flex items-center justify-center p-4 bg-steel-800/30">
@@ -46,10 +42,11 @@ export function UnlockModal({
         </div>
 
         <Body3 className="text-text-secondary mb-6">
-          Enter your password to unlock your wallet.
+          Authenticate with your passkey to unlock your wallet.
         </Body3>
 
-        <div className="mb-6">
+        {/* Password input disabled for passkey-only flow. */}
+        {/* <div className="mb-6">
           <Input
             type="password"
             label="Password"
@@ -61,7 +58,7 @@ export function UnlockModal({
             autoFocus
             onKeyDown={handleKeyDown}
           />
-        </div>
+        </div> */}
 
         {error && (
           <div className="mb-4 p-4 bg-surface-brick border border-border-brand rounded-lg">
@@ -84,7 +81,7 @@ export function UnlockModal({
             disabled={isLoading}
             className="flex-1"
           >
-            {isLoading ? 'Unlocking...' : 'Unlock'}
+            {isLoading ? 'Signing in...' : 'Sign In with Passkey'}
           </Button>
         </div>
         <div className="flex justify-center">
@@ -98,4 +95,3 @@ export function UnlockModal({
     </div>
   );
 }
-

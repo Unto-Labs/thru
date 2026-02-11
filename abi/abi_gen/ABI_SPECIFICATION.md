@@ -847,11 +847,15 @@ Packages can import types from other packages:
 
 ```yaml
 imports:
-  - "common/primitives.abi.yaml"
-  - "../../shared/types.abi.yaml"
+  - type: path
+    path: "common/primitives.abi.yaml"
+  - type: path
+    path: "../../shared/types.abi.yaml"
 ```
 
-**Import resolution**:
+Imports use structured objects (path, git, http, onchain). See `docs/import-sources.md` for full syntax and rules.
+
+**Import resolution** (path imports):
 1. Relative to current file
 2. Relative to include directories (specified via `-i` flag)
 
@@ -968,7 +972,7 @@ Implementations should define reasonable limits:
 - Maximum structure nesting depth
 - Maximum total message size
 
-## 12. Versioning
+## 12. Versioning and Metadata
 
 ### 12.1 ABI Version
 
@@ -976,7 +980,13 @@ Format: `abi-version: 1`
 
 Indicates the version of the ABI specification used.
 
-### 12.2 Package Version
+### 12.2 Display Name
+
+Format: `name: "Token Program"`
+
+An optional human-readable display name for the ABI. When present, tools (such as block explorers) may use this name instead of the raw program address. If omitted, tools should fall back to the truncated address.
+
+### 12.3 Package Version
 
 Format: `package-version: "1.2.3"`
 
@@ -985,7 +995,7 @@ Semantic versioning for package contents:
 - **Minor**: Backward-compatible additions (new optional fields)
 - **Patch**: Non-functional changes (documentation, metadata)
 
-### 12.3 Compatibility Rules
+### 12.4 Compatibility Rules
 
 **Backward compatible changes**:
 - Adding new types

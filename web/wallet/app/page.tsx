@@ -1,17 +1,23 @@
 'use client';
 
 import { useWallet } from '@/hooks/useWallet';
-import { Body3, Button, Card, Input } from '@thru/design-system';
+import { Body3, Button, Card } from '@thru/design-system';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 
 export default function Home() {
   const router = useRouter();
-  const { walletExists, isUnlocked, unlockWallet, isInitialized } = useWallet();
-  const [password, setPassword] = useState('');
-  const [error, setError] = useState('');
-  const [isUnlocking, setIsUnlocking] = useState(false);
+  const {
+    walletExists,
+    isUnlocked,
+    isInitialized,
+    isPasskeySupported,
+    passkeyError,
+    isSigningWithPasskey,
+    signInWithPasskey,
+    clearPasskeyError,
+  } = useWallet();
 
   // Redirect to accounts if already unlocked
   useEffect(() => {
@@ -20,20 +26,13 @@ export default function Home() {
     }
   }, [isInitialized, isUnlocked, router]);
 
-  const handleUnlock = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setError('');
-    setIsUnlocking(true);
-
+  const handlePasskeySignIn = async () => {
+    clearPasskeyError();
     try {
-      await unlockWallet(password);
+      await signInWithPasskey();
       // Navigation handled by useEffect above
     } catch (err) {
-      console.error('Unlock error:', err);
-      setError('Incorrect password');
-      setPassword('');
-    } finally {
-      setIsUnlocking(false);
+      console.error('Passkey sign-in error:', err);
     }
   };
 
@@ -62,12 +61,12 @@ export default function Home() {
           <div className="flex flex-col gap-4">
             <Link href="/create" className="w-full">
               <Button variant="primary" className="w-full">
-                Create New Wallet
+                Create Passkey Profile
               </Button>
             </Link>
-            <Link href="/import" className="w-full">
+            <Link href="/sign-in" className="w-full">
               <Button variant="outline" className="w-full">
-                Import Wallet
+                Use Existing Passkey
               </Button>
             </Link>
           </div>
@@ -84,34 +83,31 @@ export default function Home() {
           <div className="text-center flex flex-col items-center mb-8">
             <img src="/logo/logo-wordmark_solid_red.svg" alt="Thru" className="h-13" />
           </div>
-
-          <form onSubmit={handleUnlock} className="space-y-6">
-            <Input
-              type="password"
-              label="Password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Enter your password"
-              required
-              disabled={isUnlocking}
-              error={!!error}
-            />
-
-            {error && (
+          <div className="space-y-6">
+            {!isPasskeySupported && (
               <div className="bg-surface-brick border border-border-brand p-4">
-                <Body3 className="text-text-primary">{error}</Body3>
+                <Body3 className="text-text-primary">
+                  Passkeys are not supported in this browser.
+                </Body3>
+              </div>
+            )}
+
+            {passkeyError && (
+              <div className="bg-surface-brick border border-border-brand p-4">
+                <Body3 className="text-text-primary">{passkeyError}</Body3>
               </div>
             )}
 
             <Button
-              type="submit"
-              disabled={isUnlocking || !password}
+              type="button"
+              disabled={isSigningWithPasskey || !isPasskeySupported}
               variant="primary"
               className="w-full"
+              onClick={handlePasskeySignIn}
             >
-              {isUnlocking ? 'Unlocking...' : 'Unlock Wallet'}
+              {isSigningWithPasskey ? 'Signing in...' : 'Sign In with Passkey'}
             </Button>
-          </form>
+          </div>
         </Card>
       </div>
     </main>

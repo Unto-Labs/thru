@@ -27,6 +27,7 @@
     "typecheck": "tsc --noEmit",
     "dev": "tsx watch src/index.ts",
     "test": "vitest run",
+    "test:run": "vitest run",
     "lint": "eslint src/"
   },
   "dependencies": {

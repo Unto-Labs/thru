@@ -26,5 +26,5 @@ layout_graph_trace = []
 path = "src/lib.rs"
 
 [[bin]]
-name = "abi"
+name = "abi-gen"
 path = "src/main.rs"

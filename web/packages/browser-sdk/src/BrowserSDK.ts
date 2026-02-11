@@ -103,6 +103,13 @@ export class BrowserSDK {
   }
 
   /**
+   * Mount the wallet iframe inline in a container.
+   */
+  async mountInline(container: HTMLElement): Promise<void> {
+    await this.provider.mountInline(container);
+  }
+
+  /**
    * Disconnect from wallet
    */
   async disconnect(): Promise<void> {

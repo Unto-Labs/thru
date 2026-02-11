@@ -13,7 +13,7 @@
  */
 
 import { AddressType, type WalletAccount } from '@thru/chain-interfaces';
-import { ConnectedAppsStorage } from '@thru/indexed-db-stamper';
+import { ConnectedAppsStorage } from '@thru/wallet-store';
 import { create } from 'zustand';
 import {
   EMBEDDED_PROVIDER_EVENTS,
@@ -36,13 +36,16 @@ import { resolveAppMetadata } from '../utils/appMetadata';
 export interface EmbeddedAppStoreDeps {
   accounts: Array<{ publicKey: string; index: number; label?: string }>;
   isUnlocked: boolean;
+  passkeyError: string | null;
+  lockWallet: () => void;
   refreshAccounts: () => Promise<void>;
   selectedAccountIndex: number;
   getFallbackAccounts: () => Promise<Array<{ publicKey: string; index: number }>>;
   selectAccount: (index: number) => void;
   sendResponse: <T extends PendingRequest>(response: any) => void;
   sendEvent: (eventName: EmbeddedProviderEvent, data?: any) => void;
-  unlockWallet: (password: string) => Promise<void>;
+  signInWithPasskey: (context?: { appId?: string; appName?: string; appUrl?: string; origin?: string; imageUrl?: string }) => Promise<boolean>;
+  shouldUsePasskeyPopup: () => Promise<boolean>;
   signSerializedTransaction: (accountIndex: number, serializedTransaction: string) => Promise<string>;
 }
 
@@ -57,6 +60,7 @@ interface EmbeddedAppStoreState {
   // Connection state
   isConnected: boolean;
   appMetadata: AppMetadata | null;
+  passkeyContext: { appId?: string; appName?: string; appUrl?: string; origin?: string; imageUrl?: string } | null;
   connectCache: {
     origin: string;
     result: ConnectResult;
@@ -67,7 +71,7 @@ interface EmbeddedAppStoreState {
   error: string | null;
   
   // Unlock state
-  password: string;
+  // password: string;
 }
 
 // Actions
@@ -77,11 +81,16 @@ interface EmbeddedAppStoreActions {
   handleDisconnect: (message: DisconnectRequestMessage, deps: EmbeddedAppStoreDeps) => void;
   handleGetAccounts: (message: GetAccountsRequestMessage, deps: EmbeddedAppStoreDeps) => void;
   handleSelectAccount: (message: SelectAccountRequestMessage, deps: EmbeddedAppStoreDeps) => void;
-  approveConnection: (options?: { skipUnlockCheck?: boolean; metadataOverride?: AppMetadata; }, deps?: EmbeddedAppStoreDeps) => Promise<void>;
-  
-  // Unlock actions
-  setPassword: (password: string) => void;
-  handleUnlock: (deps: EmbeddedAppStoreDeps) => Promise<void>;
+  approveConnection: (
+    options?: {
+      skipUnlockCheck?: boolean;
+      metadataOverride?: AppMetadata;
+      passkeyContext?: { appId?: string; appName?: string; appUrl?: string; origin?: string; imageUrl?: string };
+      showModalOnFailure?: boolean;
+      rejectOnFailure?: boolean;
+    },
+    deps?: EmbeddedAppStoreDeps
+  ) => Promise<void>;
   
   // Transaction actions
   handleSignTransaction: (message: SignTransactionRequestMessage, deps: EmbeddedAppStoreDeps) => void;
@@ -115,23 +124,25 @@ export const useEmbeddedAppStore = create<EmbeddedAppStore>((set, get) => ({
   pendingRequest: null,
   isConnected: false,
   appMetadata: null,
+  passkeyContext: null,
   connectCache: null,
   isLoading: false,
   error: null,
-  password: '',
+  // password: '',
 
   // State management
   resetState: () => set({
     modalType: null,
     pendingRequest: null,
     appMetadata: null,
+    passkeyContext: null,
     isConnected: false,
     isLoading: false,
     error: null,
-    password: '',
+    // password: '',
     connectCache: null,
   }),
-  setPassword: (password) => set({ password }),
+  // setPassword: (password) => set({ password }),
 
   // Connection actions
   approveConnection: async (options = {}, deps) => {
@@ -155,15 +166,48 @@ export const useEmbeddedAppStore = create<EmbeddedAppStore>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
+      console.log('[Embedded] approveConnection start', {
+        isUnlocked: deps.isUnlocked,
+        accountsCount: deps.accounts.length,
+        pendingOrigin: pendingRequest.origin,
+      });
       if (!options.skipUnlockCheck && !deps.isUnlocked) {
-        set({ isLoading: false, modalType: 'unlock' });
-        return;
+        const ok = await deps.signInWithPasskey(options.passkeyContext ?? get().passkeyContext ?? undefined);
+        if (!ok) {
+          set({ error: deps.passkeyError ?? 'Passkey authentication failed' });
+          if (options.showModalOnFailure) {
+            deps.sendEvent(EMBEDDED_PROVIDER_EVENTS.UI_SHOW, { reason: 'passkey_failed' });
+            set({ modalType: 'connect' });
+          }
+          if (options.rejectOnFailure && pendingRequest.type === POST_MESSAGE_REQUEST_TYPES.CONNECT) {
+            deps.sendResponse<ConnectRequestMessage>({
+              id: pendingRequest.id,
+              success: false,
+              error: {
+                code: ErrorCode.USER_REJECTED,
+                message: deps.passkeyError ?? 'Passkey authentication failed',
+              },
+            });
+            set({ pendingRequest: null, modalType: null });
+          }
+          return;
+        }
+        console.log('[Embedded] approveConnection passkey success', {
+          isUnlocked: deps.isUnlocked,
+          passkeyError: deps.passkeyError,
+        });
       }
 
       set({ isConnected: true });
 
       const latestAccounts: Array<{ publicKey: string; index: number; label?: string }> =
-        deps.accounts.length > 0 ? deps.accounts : await deps.getFallbackAccounts();
+        await deps.getFallbackAccounts();
+
+      console.log('[Embedded] approveConnection accounts', {
+        depsAccountsCount: deps.accounts.length,
+        fallbackCount: latestAccounts.length,
+        selectedAccountIndex: deps.selectedAccountIndex,
+      });
 
       if (deps.accounts.length === 0 && latestAccounts.length > 0) {
         deps.refreshAccounts().catch((err) =>
@@ -211,12 +255,17 @@ export const useEmbeddedAppStore = create<EmbeddedAppStore>((set, get) => ({
         },
       });
 
+      console.log('[Embedded] approveConnection sending response', {
+        accountsCount: result.accounts.length,
+        metadata: metadataForResult,
+      });
+
       deps.sendResponse<ConnectRequestMessage>({ id: connectRequest.id, success: true, result });
       deps.sendEvent(EMBEDDED_PROVIDER_EVENTS.CONNECT, {
         ...result,
       });
 
-      set({ modalType: null, pendingRequest: null, appMetadata: metadataForResult ?? null });
+      set({ modalType: null, pendingRequest: null, appMetadata: metadataForResult ?? null, passkeyContext: null });
     } catch (err) {
       console.error('[Embedded] Error approving connect:', err);
       set({ error: err instanceof Error ? err.message : 'Connection failed' });
@@ -227,6 +276,12 @@ export const useEmbeddedAppStore = create<EmbeddedAppStore>((set, get) => ({
 
   handleConnect: async (message, event, deps) => {
     const { isConnected, connectCache } = get();
+    console.log('[Embedded] handleConnect', {
+      origin: event.origin,
+      isConnected,
+      hasCache: Boolean(connectCache),
+      accountsCount: deps.accounts.length,
+    });
 
     // Check cache for same origin
     if (isConnected && connectCache?.origin === event.origin) {
@@ -276,7 +331,24 @@ export const useEmbeddedAppStore = create<EmbeddedAppStore>((set, get) => ({
 
     const suppliedMetadata = message.payload?.metadata;
 
+    const passkeyContext = {
+      appId: metadata.appId,
+      appName: metadata.appName,
+      appUrl: metadata.appUrl,
+      origin: event.origin,
+      imageUrl: metadata.imageUrl,
+    };
+    set({ passkeyContext });
+
+    const shouldTryPopup = await deps.shouldUsePasskeyPopup().catch(() => false);
+    if (shouldTryPopup) {
+      deps.sendEvent(EMBEDDED_PROVIDER_EVENTS.UI_SHOW, { reason: 'connect' });
+      set({ modalType: 'connect' });
+      return;
+    }
+
     if (!suppliedMetadata) {
+      deps.sendEvent(EMBEDDED_PROVIDER_EVENTS.UI_SHOW, { reason: 'connect' });
       set({ modalType: 'connect' });
       return;
     }
@@ -286,7 +358,8 @@ export const useEmbeddedAppStore = create<EmbeddedAppStore>((set, get) => ({
 
       if (existing) {
         if (!deps.isUnlocked) {
-          set({ modalType: 'unlock' });
+          deps.sendEvent(EMBEDDED_PROVIDER_EVENTS.UI_SHOW, { reason: 'unlock_required' });
+          set({ modalType: 'connect' });
           return;
         }
 
@@ -297,6 +370,7 @@ export const useEmbeddedAppStore = create<EmbeddedAppStore>((set, get) => ({
       console.error('[Embedded] Failed to check connected apps store:', err);
     }
 
+    deps.sendEvent(EMBEDDED_PROVIDER_EVENTS.UI_SHOW, { reason: 'connect' });
     set({ modalType: 'connect' });
   },
 
@@ -309,12 +383,19 @@ export const useEmbeddedAppStore = create<EmbeddedAppStore>((set, get) => ({
       connectCache: null,
     });
 
+    deps.lockWallet();
+
     deps.sendResponse<DisconnectRequestMessage>({ id: message.id, success: true, result: {} });
     deps.sendEvent(EMBEDDED_PROVIDER_EVENTS.DISCONNECT, {});
+    console.log('[Embedded] handleDisconnect', { origin: message.origin });
   },
 
   handleGetAccounts: (message, deps) => {
     const { isConnected } = get();
+    console.log('[Embedded] handleGetAccounts', {
+      isConnected,
+      accountsCount: deps.accounts.length,
+    });
 
     if (!isConnected) {
       deps.sendResponse<GetAccountsRequestMessage>({
@@ -377,33 +458,6 @@ export const useEmbeddedAppStore = create<EmbeddedAppStore>((set, get) => ({
   },
 
   // Unlock actions
-  handleUnlock: async (deps) => {
-    const { password, pendingRequest } = get();
-
-    if (!password) {
-      set({ error: 'Password required' });
-      return;
-    }
-
-    set({ isLoading: true, error: null });
-
-    try {
-      await deps.unlockWallet(password);
-      set({ password: '' });
-
-      if (pendingRequest?.type === POST_MESSAGE_REQUEST_TYPES.CONNECT) {
-        await get().approveConnection({ skipUnlockCheck: true }, deps);
-      } else {
-        set({ modalType: 'approve-transaction' });
-      }
-    } catch (err) {
-      console.error('[Embedded] Unlock failed:', err);
-      set({ error: 'Incorrect password', password: '' });
-    } finally {
-      set({ isLoading: false });
-    }
-  },
-
   // Transaction actions
   handleSignTransaction: (message, deps) => {
     const { isConnected } = get();
@@ -422,11 +476,7 @@ export const useEmbeddedAppStore = create<EmbeddedAppStore>((set, get) => ({
 
     set({ pendingRequest: { ...message, origin: message.origin }, appMetadata: null });
 
-    if (!deps.isUnlocked) {
-      set({ modalType: 'unlock' });
-    } else {
-      set({ modalType: 'approve-transaction' });
-    }
+    set({ modalType: 'approve-transaction' });
   },
 
   handleApproveTransaction: async (deps) => {
@@ -440,6 +490,14 @@ export const useEmbeddedAppStore = create<EmbeddedAppStore>((set, get) => ({
     set({ isLoading: true, error: null });
 
     try {
+      if (!deps.isUnlocked) {
+        const ok = await deps.signInWithPasskey();
+        if (!ok) {
+          set({ error: deps.passkeyError ?? 'Passkey authentication failed' });
+          return;
+        }
+      }
+
       const selectedAccount = deps.accounts[deps.selectedAccountIndex];
       if (!selectedAccount) {
         throw new Error('No account selected');
@@ -505,9 +563,9 @@ export const useEmbeddedAppStore = create<EmbeddedAppStore>((set, get) => ({
       modalType: null,
       pendingRequest: null,
       appMetadata: null,
+      passkeyContext: null,
       error: null,
-      password: '',
+      // password: '',
     });
   },
 }));
-

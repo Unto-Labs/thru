@@ -12,7 +12,7 @@ pub fn primitive_to_ts_type(prim_type: &PrimitiveType) -> &'static str {
             IntegralType::I8 | IntegralType::I16 | IntegralType::I32 | IntegralType::I64 => {
                 "number"
             }
-            IntegralType::Char => "string",
+            IntegralType::Char => "number",
         },
         PrimitiveType::FloatingPoint(_) => "number",
     }
@@ -67,7 +67,7 @@ pub fn primitive_to_ts_return_type(prim_type: &PrimitiveType) -> &'static str {
     match prim_type {
         PrimitiveType::Integral(int_type) => match int_type {
             IntegralType::U64 | IntegralType::I64 => "bigint",
-            IntegralType::Char => "string",
+            IntegralType::Char => "number",
             _ => "number",
         },
         PrimitiveType::FloatingPoint(_) => "number",

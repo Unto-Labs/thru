@@ -149,6 +149,13 @@ impl KeyManager {
     }
 }
 
+/// Named network profile
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct NetworkConfig {
+    pub url: String,
+    pub auth_token: Option<String>,
+}
+
 /// Configuration structure for the Thru CLI
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -202,12 +209,20 @@ pub struct Config {
 
     /// GitHub repository for SDK and toolchain downloads (format: "owner/repo")
     pub github_repo: Option<String>,
+
+    /// Named network profiles (e.g. "local", "alphanet")
+    #[serde(default)]
+    pub networks: HashMap<String, NetworkConfig>,
+
+    /// Which named network profile is active by default
+    #[serde(default)]
+    pub default_network: Option<String>,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Self {
-            rpc_base_url: "http://127.0.0.1:8472".to_string(),
+            rpc_base_url: "https://grpc.alphanet.thruput.org".to_string(),
             keys: KeyManager::new(),
             uploader_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIC"
                 .to_string(),
@@ -227,6 +242,8 @@ impl Default for Config {
             sdk_paths: None,
             sdk_versions: None,
             github_repo: None,
+            networks: HashMap::new(),
+            default_network: None,
         }
     }
 }
@@ -321,6 +338,13 @@ impl Config {
     pub fn validate(&self) -> Result<(), CliError> {
         // Validate URL
         Url::parse(&self.rpc_base_url).map_err(|e| ConfigError::InvalidUrl(e.to_string()))?;
+
+        // Validate all network URLs
+        for (name, network) in &self.networks {
+            Url::parse(&network.url).map_err(|e| {
+                ConfigError::InvalidUrl(format!("network '{}': {}", name, e))
+            })?;
+        }
 
         // Validate default key exists
         self.keys
@@ -507,6 +531,13 @@ impl Config {
     pub fn get_token_program_pubkey(&self) -> Result<Pubkey, CliError> {
         Pubkey::new(self.token_program_public_key.clone())
             .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()).into())
+    }
+
+    /// List all configured network profile names (sorted)
+    pub fn list_network_names(&self) -> Vec<String> {
+        let mut names: Vec<String> = self.networks.keys().cloned().collect();
+        names.sort();
+        names
     }
 }
 

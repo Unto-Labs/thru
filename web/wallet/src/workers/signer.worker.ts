@@ -7,7 +7,6 @@ import type {
   DeriveAccountRequest,
   GetPublicKeyRequest,
   SignSerializedTransactionRequest,
-  UnlockRequest,
   WorkerEventMessage,
   WorkerEventType,
   WorkerRequest,
@@ -44,10 +43,6 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
     let result: any;
 
     switch (request.type) {
-      case WORKER_MESSAGE_TYPE.UNLOCK:
-        result = await handleUnlock(request as UnlockRequest);
-        break;
-
       case WORKER_MESSAGE_TYPE.LOCK:
         result = handleLock();
         break;
@@ -98,15 +93,6 @@ self.onmessage = async (event: MessageEvent<WorkerRequest>) => {
     self.postMessage(response);
   }
 };
-
-/**
- * Handle unlock request
- */
-async function handleUnlock(request: UnlockRequest): Promise<{ unlocked: true }> {
-  const { encrypted, password } = request.payload;
-  await keyManager.unlock(encrypted, password);
-  return { unlocked: true };
-}
 
 /**
  * Handle lock request
@@ -168,9 +154,6 @@ function getErrorCode(error: any): string {
   if (error instanceof Error) {
     if (error.message.includes('locked')) {
       return WorkerErrorCode.WALLET_LOCKED;
-    }
-    if (error.message.includes('password')) {
-      return WorkerErrorCode.INVALID_PASSWORD;
     }
     if (error.message.includes('account')) {
       return WorkerErrorCode.ACCOUNT_NOT_FOUND;

@@ -79,7 +79,7 @@ export function TransactionApprovalModal({
             disabled={isLoading}
             className="flex-1"
           >
-            Reject
+            Cancel
           </Button>
           <Button
             onClick={onApprove}
@@ -87,7 +87,7 @@ export function TransactionApprovalModal({
             disabled={isLoading}
             className="flex-1"
           >
-            {isLoading ? 'Approving...' : 'Approve'}
+            {isLoading ? 'Sending...' : 'Send'}
           </Button>
         </div>
         <div className="flex justify-center">

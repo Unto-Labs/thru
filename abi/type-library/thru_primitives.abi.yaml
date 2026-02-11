@@ -51,7 +51,7 @@ types:
                 element-type:
                   primitive: u8
 
-  # Timestamp: Unix epoch timestamp with seconds and nanoseconds
+  # Timestamp: Unix epoch timestamp in seconds
   - name: "Timestamp"
     kind:
       struct:
@@ -60,9 +60,6 @@ types:
           - name: "seconds"
             field-type:
               primitive: i64
-          - name: "nanos"
-            field-type:
-              primitive: i32
 
   # Duration: Time duration with seconds and nanoseconds
   - name: "Duration"

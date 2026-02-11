@@ -94,24 +94,12 @@ impl<'a> IrValidateEmitter<'a> {
 
     fn emit_sum_over_array(
         &mut self,
-        node: &crate::codegen::shared::ir::SumOverArrayNode,
-        indent_lv: usize,
+        _node: &crate::codegen::shared::ir::SumOverArrayNode,
+        _indent_lv: usize,
     ) -> Result<String, IrValidateError> {
-        /* Jagged array validation requires iteration over elements.
-           Emit a call to the dedicated size function. */
-        let count_var = self.emit_node(&node.count, indent_lv)?;
-        let var = self.new_var();
-        writeln!(
-            &mut self.output,
-            "{}uint64_t {} = {}_{}_size( self, {} );",
-            Self::indent(indent_lv),
-            var,
-            self.type_ir.type_name,
-            node.field_name,
-            count_var
-        )
-        .unwrap();
-        Ok(var)
+        /* Jagged arrays require instance data for validation.
+           C IR helpers are free functions without a self pointer. */
+        Err(IrValidateError::UnsupportedNode)
     }
 
     fn emit_binary(

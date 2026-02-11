@@ -1,4 +1,4 @@
-use abi_loader::{flatten, AbiFile};
+use abi_loader::{flatten, AbiFile, flatten_to_yaml};
 use std::path::PathBuf;
 
 fn type_library_path() -> PathBuf {
@@ -115,7 +115,8 @@ abi:
   package-version: "1.0.0"
   description: "Test file with missing import"
   imports:
-    - "nonexistent_file.abi.yaml"
+    - type: path
+      path: "nonexistent_file.abi.yaml"
 types: []
 "#;
 
@@ -147,7 +148,8 @@ abi:
   package-version: "1.0.0"
   description: "Circular import test A"
   imports:
-    - "{}"
+    - type: path
+      path: "{}"
 types:
   - name: TypeA
     kind:
@@ -164,7 +166,8 @@ abi:
   package-version: "1.0.0"
   description: "Circular import test B"
   imports:
-    - "{}"
+    - type: path
+      path: "{}"
 types:
   - name: TypeB
     kind:
@@ -188,4 +191,64 @@ types:
     // Cleanup
     let _ = std::fs::remove_file(&file_a);
     let _ = std::fs::remove_file(&file_b);
+}
+
+#[test]
+fn name_field_parsed_from_yaml() {
+    let yaml = r#"
+abi:
+  package: thru.program.token
+  name: "Token Program"
+  abi-version: 1
+  package-version: "0.1.0"
+  description: "Test"
+types: []
+"#;
+    let parsed: AbiFile = serde_yml::from_str(yaml).expect("Should parse YAML with name");
+    assert_eq!(parsed.abi.name, Some("Token Program".to_string()));
+    assert_eq!(parsed.name(), Some("Token Program"));
+}
+
+#[test]
+fn name_field_defaults_to_none() {
+    let yaml = r#"
+abi:
+  package: thru.common.primitives
+  abi-version: 1
+  package-version: "0.1.0"
+  description: "Test without name"
+types: []
+"#;
+    let parsed: AbiFile = serde_yml::from_str(yaml).expect("Should parse YAML without name");
+    assert_eq!(parsed.abi.name, None);
+    assert_eq!(parsed.name(), None);
+}
+
+#[test]
+fn name_field_preserved_through_flatten() {
+    let file = type_library_path().join("token_program.abi.yaml");
+    let include_dirs = vec![type_library_path()];
+
+    let result = flatten(&file, &include_dirs).expect("flatten should succeed");
+    assert_eq!(result.abi.name, Some("Token Program".to_string()));
+    assert_eq!(result.name(), Some("Token Program"));
+}
+
+#[test]
+fn name_field_survives_yaml_roundtrip() {
+    let file = type_library_path().join("token_program.abi.yaml");
+    let include_dirs = vec![type_library_path()];
+
+    let yaml = flatten_to_yaml(&file, &include_dirs).expect("flatten_to_yaml should succeed");
+    let parsed: AbiFile = serde_yml::from_str(&yaml).expect("Should parse roundtripped YAML");
+    assert_eq!(parsed.abi.name, Some("Token Program".to_string()));
+}
+
+#[test]
+fn name_field_absent_after_flatten_when_not_set() {
+    let file = type_library_path().join("thru_primitives.abi.yaml");
+    let include_dirs = vec![type_library_path()];
+
+    let result = flatten(&file, &include_dirs).expect("flatten should succeed");
+    assert_eq!(result.abi.name, None);
 }

@@ -23,8 +23,11 @@ export const HASH_SIZE = 32;
 // Block Constants
 // ============================================================================
 
-/** Size of a block header in bytes */
+/** Size of a block header in bytes (current format with weight_slot) */
 export const BLOCK_HEADER_SIZE = 168;
+
+/** Size of a block header in bytes (legacy format without weight_slot, before Dec 2025) */
+export const BLOCK_HEADER_SIZE_LEGACY = 160;
 
 /** Size of a block footer in bytes */
 export const BLOCK_FOOTER_SIZE = 104;
@@ -36,8 +39,18 @@ export const BLOCK_VERSION_V1 = 0x01;
 // Transaction Constants
 // ============================================================================
 
-/** Size of a transaction header in bytes (signature is at END, not in header) */
-export const TXN_HEADER_SIZE = 112;
+/**
+ * Wire format (from tn_txn.h):
+ *   [header (112 bytes)]
+ *   [input_pubkeys (variable)]
+ *   [instr_data (variable)]
+ *   [state_proof (optional, variable)]
+ *   [account_meta (optional, variable)]
+ *   [fee_payer_signature (64 bytes at end)]
+ */
+
+/** Size of a transaction header in bytes */
+export const TXN_HEADER_BODY_SIZE = 112;
 
 /** Transaction version 1 */
 export const TXN_VERSION_V1 = 0x01;
@@ -73,5 +86,4 @@ export const STATE_PROOF_TYPE_UPDATING = 1;
 
 /** State proof type: creating account */
 export const STATE_PROOF_TYPE_CREATION = 2;
-
 

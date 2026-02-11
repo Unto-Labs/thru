@@ -4,7 +4,8 @@ abi:
   package-version: "1.0.0"
   description: "Block header and footer structures for Thru blockchain"
   imports:
-    - "thru_primitives.abi.yaml"
+    - type: path
+      path: "thru_primitives.abi.yaml"
 
 types:
   # Block header body structure

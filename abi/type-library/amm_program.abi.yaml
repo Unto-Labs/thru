@@ -1,10 +1,12 @@
 abi:
   package: thru.program.amm
+  name: "AMM Program"
   abi-version: 1
   package-version: 0.1.0
   description: ABI for the Thru AMM program events
   imports:
-    - "thru_primitives.abi.yaml"
+    - type: path
+      path: "thru_primitives.abi.yaml"
 types:
 - name: PoolInitEventData
   kind:

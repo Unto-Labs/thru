@@ -190,7 +190,7 @@ fn emit_read_primitive(prim_type: &crate::abi::types::PrimitiveType, offset_expr
 
     match prim_type {
         PrimitiveType::Integral(int_type) => match int_type {
-            IntegralType::U8 => format!("self.data[{}]", offset_expr),
+            IntegralType::U8 | IntegralType::Char => format!("self.data[{}]", offset_expr),
             IntegralType::U16 => format!(
                 "u16::from_le_bytes([self.data[{}], self.data[{} + 1]])",
                 offset_expr, offset_expr
@@ -211,7 +211,6 @@ fn emit_read_primitive(prim_type: &crate::abi::types::PrimitiveType, offset_expr
                 offset_expr
             ),
             IntegralType::I8 => format!("i8::from_le_bytes([self.data[{}]])", offset_expr),
-            IntegralType::Char => format!("i8::from_le_bytes([self.data[{}]])", offset_expr),
             IntegralType::I16 => format!(
                 "i16::from_le_bytes([self.data[{}], self.data[{} + 1]])",
                 offset_expr, offset_expr
@@ -266,7 +265,7 @@ fn emit_write_primitive(
 
     match prim_type {
         PrimitiveType::Integral(int_type) => match int_type {
-            IntegralType::U8 => format!("self.data[{}] = {};", offset_expr, value_expr),
+            IntegralType::U8 | IntegralType::Char => format!("self.data[{}] = {};", offset_expr, value_expr),
             IntegralType::U16 | IntegralType::I16 => format!(
                 "self.data[{}..{} + 2].copy_from_slice(&{}.to_le_bytes());",
                 offset_expr, offset_expr, value_expr
@@ -280,7 +279,6 @@ fn emit_write_primitive(
                 offset_expr, offset_expr, value_expr
             ),
             IntegralType::I8 => format!("self.data[{}] = {} as u8;", offset_expr, value_expr),
-            IntegralType::Char => format!("self.data[{}] = {} as u8;", offset_expr, value_expr),
         },
         PrimitiveType::FloatingPoint(float_type) => match float_type {
             FloatingPointType::F16 => format!(
@@ -515,7 +513,7 @@ pub fn emit_opaque_functions(
                                         IntegralType::I16 => "i16",
                                         IntegralType::I32 => "i32",
                                         IntegralType::I64 => "i64",
-                                        IntegralType::Char => "i8",
+                                        IntegralType::Char => "u8",
                                     }
                                 }
                                 crate::abi::types::PrimitiveType::FloatingPoint(float_type) => {
@@ -556,7 +554,7 @@ pub fn emit_opaque_functions(
                                                 IntegralType::I16 => "i16",
                                                 IntegralType::I32 => "i32",
                                                 IntegralType::I64 => "i64",
-                                                IntegralType::Char => "i8",
+                                                IntegralType::Char => "u8",
                                             }
                                         }
                                         crate::abi::types::PrimitiveType::FloatingPoint(
@@ -1455,7 +1453,7 @@ pub fn emit_opaque_functions(
                                                 IntegralType::I16 => "i16",
                                                 IntegralType::I32 => "i32",
                                                 IntegralType::I64 => "i64",
-                                                IntegralType::Char => "i8",
+                                                IntegralType::Char => "u8",
                                             }
                                         }
                                         crate::abi::types::PrimitiveType::FloatingPoint(
@@ -1784,7 +1782,7 @@ pub fn emit_opaque_functions(
                                                 IntegralType::I16 => "i16",
                                                 IntegralType::I32 => "i32",
                                                 IntegralType::I64 => "i64",
-                                                IntegralType::Char => "i8",
+                                                IntegralType::Char => "u8",
                                             }
                                         }
                                         crate::abi::types::PrimitiveType::FloatingPoint(
@@ -2615,7 +2613,7 @@ pub fn emit_opaque_functions(
                                             IntegralType::I16 => "i16",
                                             IntegralType::I32 => "i32",
                                             IntegralType::I64 => "i64",
-                                            IntegralType::Char => "i8",
+                                            IntegralType::Char => "u8",
                                         }
                                     }
                                     crate::abi::types::PrimitiveType::FloatingPoint(float_type) => {
@@ -2734,7 +2732,7 @@ pub fn emit_opaque_functions(
                                                 IntegralType::I16 => "i16",
                                                 IntegralType::I32 => "i32",
                                                 IntegralType::I64 => "i64",
-                                                IntegralType::Char => "i8",
+                                                IntegralType::Char => "u8",
                                             },
                                             crate::abi::types::PrimitiveType::FloatingPoint(
                                                 float_type,
@@ -3460,7 +3458,7 @@ pub fn emit_opaque_functions(
                                             IntegralType::I16 => "i16",
                                             IntegralType::I32 => "i32",
                                             IntegralType::I64 => "i64",
-                                            IntegralType::Char => "i8",
+                                            IntegralType::Char => "u8",
                                         }
                                     }
                                     crate::abi::types::PrimitiveType::FloatingPoint(float_type) => {
@@ -3748,7 +3746,7 @@ pub fn emit_opaque_functions(
                                                 IntegralType::I16 => "i16",
                                                 IntegralType::I32 => "i32",
                                                 IntegralType::I64 => "i64",
-                                                IntegralType::Char => "i8",
+                                                IntegralType::Char => "u8",
                                             }
                                         }
                                         crate::abi::types::PrimitiveType::FloatingPoint(
@@ -4134,7 +4132,7 @@ pub fn emit_opaque_functions(
                                                 IntegralType::I16 => "i16",
                                                 IntegralType::I32 => "i32",
                                                 IntegralType::I64 => "i64",
-                                                IntegralType::Char => "i8",
+                                                IntegralType::Char => "u8",
                                             },
                                             crate::abi::types::PrimitiveType::FloatingPoint(
                                                 float_type,
@@ -4232,7 +4230,7 @@ pub fn emit_opaque_functions(
                                         IntegralType::I16 => "i16",
                                         IntegralType::I32 => "i32",
                                         IntegralType::I64 => "i64",
-                                        IntegralType::Char => "i8",
+                                        IntegralType::Char => "u8",
                                     }
                                 }
                                 crate::abi::types::PrimitiveType::FloatingPoint(float_type) => {

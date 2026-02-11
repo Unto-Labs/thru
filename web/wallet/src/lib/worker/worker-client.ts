@@ -12,7 +12,6 @@ import type {
   WorkerEventType,
   WorkerOutboundMessage,
 } from '@/types/worker-messages';
-import { EncryptedData } from '@thru/crypto';
 
 export class WorkerClient {
   private worker: Worker | null = null;
@@ -194,19 +193,6 @@ export class WorkerClient {
   }
 
   // ========== Public API Methods ==========
-
-  /**
-   * Unlock the wallet with password
-   */
-  async unlock(encrypted: EncryptedData, password: string): Promise<void> {
-    const result = await this.sendRequest<{ unlocked: true }>(WORKER_MESSAGE_TYPE.UNLOCK, {
-      encrypted,
-      password,
-    });
-    if (!result.unlocked) {
-      throw new Error('Failed to unlock wallet');
-    }
-  }
 
   /**
    * Lock the wallet

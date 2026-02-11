@@ -22,8 +22,7 @@
   "dependencies": {
     "@thru/helpers": "workspace:*",
     "@scure/bip39": "^1.4.0",
-    "micro-key-producer": "^0.8.2",
-    "scrypt-js": "^3.0.1"
+    "micro-key-producer": "^0.8.2"
   },
   "devDependencies": {
     "@types/node": "^24.10.1",

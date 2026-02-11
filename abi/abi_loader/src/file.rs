@@ -1,6 +1,166 @@
 use abi_types::TypeDef;
 use serde_derive::{Deserialize, Serialize};
 
+/* ============================================================================
+   Import Source Types
+   ============================================================================ */
+
+/* Target type for on-chain ABI imports */
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
+#[serde(rename_all = "kebab-case")]
+pub enum OnchainTarget {
+    /* Official ABI derived from a program account */
+    #[default]
+    Program,
+    /* ABI derived from an ABI meta account */
+    AbiMeta,
+    /* ABI account address provided directly */
+    Abi,
+}
+
+/* Revision specifier for on-chain imports */
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(untagged)]
+pub enum RevisionSpec {
+    /* Exact revision number (e.g., revision: 5) */
+    Exact(u64),
+    /* String specifier: minimum (e.g., ">=5") or "latest" */
+    Specifier(String),
+}
+
+impl RevisionSpec {
+    /* Check if this is a "latest" specifier */
+    pub fn is_latest(&self) -> bool {
+        matches!(self, RevisionSpec::Specifier(s) if s == "latest")
+    }
+
+    /* Check if this is a minimum specifier (e.g., ">=5") */
+    pub fn is_minimum(&self) -> bool {
+        matches!(self, RevisionSpec::Specifier(s) if s.starts_with(">="))
+    }
+
+    /* Parse minimum value from ">=N" specifier */
+    pub fn minimum_value(&self) -> Option<u64> {
+        match self {
+            RevisionSpec::Specifier(s) if s.starts_with(">=") => {
+                s[2..].parse().ok()
+            }
+            _ => None,
+        }
+    }
+
+    /* Get exact value if this is an exact specifier */
+    pub fn exact_value(&self) -> Option<u64> {
+        match self {
+            RevisionSpec::Exact(v) => Some(*v),
+            _ => None,
+        }
+    }
+
+    /* Check if a given revision satisfies this spec */
+    pub fn satisfies(&self, revision: u64) -> bool {
+        match self {
+            RevisionSpec::Exact(v) => revision == *v,
+            RevisionSpec::Specifier(s) if s == "latest" => true,
+            RevisionSpec::Specifier(s) if s.starts_with(">=") => {
+                s[2..].parse::<u64>().map(|min| revision >= min).unwrap_or(false)
+            }
+            _ => false,
+        }
+    }
+}
+
+impl Default for RevisionSpec {
+    fn default() -> Self {
+        RevisionSpec::Specifier("latest".to_string())
+    }
+}
+
+/* Import source specification */
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+#[serde(tag = "type", rename_all = "kebab-case")]
+pub enum ImportSource {
+    /* Local file path import */
+    Path {
+        /* Relative or absolute path to the ABI file */
+        path: String,
+    },
+
+    /* Git repository import */
+    Git {
+        /* Repository URL (https:// or ssh://) */
+        url: String,
+        /* Git reference: branch name, tag, or commit hash */
+        #[serde(rename = "ref")]
+        git_ref: String,
+        /* Path within the repository to the ABI file */
+        path: String,
+    },
+
+    /* HTTP/HTTPS URL import */
+    Http {
+        /* Direct URL to the ABI YAML file */
+        url: String,
+    },
+
+    /* On-chain ABI import */
+    Onchain {
+        /* Thru address or TNS name (ending in .thru) */
+        address: String,
+        /* Whether this is a program meta-derived ABI, ABI meta-derived ABI, or direct ABI */
+        #[serde(default)]
+        target: OnchainTarget,
+        /* Network name (e.g., "mainnet", "testnet") or chain ID */
+        network: String,
+        /* Revision specifier: exact number, ">=N" minimum, or "latest" */
+        #[serde(default)]
+        revision: RevisionSpec,
+    },
+}
+
+impl ImportSource {
+    /* Check if this is a remote import (not local path) */
+    pub fn is_remote(&self) -> bool {
+        !matches!(self, ImportSource::Path { .. })
+    }
+
+    /* Check if this is a local path import */
+    pub fn is_path(&self) -> bool {
+        matches!(self, ImportSource::Path { .. })
+    }
+
+    /* Get the path for path imports */
+    pub fn path(&self) -> Option<&str> {
+        match self {
+            ImportSource::Path { path } => Some(path),
+            _ => None,
+        }
+    }
+
+    /* Get a canonical identifier for this import source (for cycle detection) */
+    pub fn canonical_id(&self) -> String {
+        match self {
+            ImportSource::Path { path } => format!("path:{}", path),
+            ImportSource::Git { url, git_ref, path } => {
+                format!("git:{}@{}:{}", url, git_ref, path)
+            }
+            ImportSource::Http { url } => format!("http:{}", url),
+            ImportSource::Onchain { address, target, network, revision } => {
+                let target_str = match target {
+                    OnchainTarget::Program => "program",
+                    OnchainTarget::AbiMeta => "abi-meta",
+                    OnchainTarget::Abi => "abi",
+                };
+                let rev_str = match revision {
+                    RevisionSpec::Exact(v) => format!("{}", v),
+                    RevisionSpec::Specifier(s) => s.clone(),
+                };
+                format!("onchain:{}:{}@{}?rev={}", network, target_str, address, rev_str)
+            }
+        }
+    }
+}
+
 /* Root type names for program reflection */
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 #[serde(rename_all = "kebab-case")]
@@ -47,6 +207,10 @@ pub struct AbiMetadata {
     /* Fully qualified domain name package identifier (e.g., "thru.ammdex") */
     pub package: String,
 
+    /* Optional human-readable display name (e.g., "Token Program") */
+    #[serde(default)]
+    pub name: Option<String>,
+
     /* ABI specification version */
     pub abi_version: u32,
 
@@ -56,9 +220,9 @@ pub struct AbiMetadata {
     /* File description */
     pub description: String,
 
-    /* List of imported ABI files */
+    /* List of imported ABI sources */
     #[serde(default)]
-    pub imports: Vec<String>,
+    pub imports: Vec<ImportSource>,
 
     /* Optional configuration options */
     #[serde(default)]
@@ -101,9 +265,24 @@ impl AbiFile {
         &self.abi.package
     }
 
+    /* Get the human-readable display name */
+    pub fn name(&self) -> Option<&str> {
+        self.abi.name.as_deref()
+    }
+
     /* Get the imports */
-    pub fn imports(&self) -> &[String] {
+    pub fn imports(&self) -> &[ImportSource] {
         &self.abi.imports
+    }
+
+    /* Check if this file has any remote imports */
+    pub fn has_remote_imports(&self) -> bool {
+        self.abi.imports.iter().any(|i| i.is_remote())
+    }
+
+    /* Check if this file has any local (path) imports */
+    pub fn has_local_imports(&self) -> bool {
+        self.abi.imports.iter().any(|i| i.is_path())
     }
 
     /* Get the ABI version */
@@ -139,6 +318,11 @@ impl AbiFile {
     /* Get the errors type name */
     pub fn errors_type(&self) -> Option<&str> {
         self.abi.options.program_metadata.root_types.errors.as_deref()
+    }
+
+    /* Get the options */
+    pub fn options(&self) -> &AbiOptions {
+        &self.abi.options
     }
 
     /* Get the events type name */

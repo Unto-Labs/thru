@@ -1,0 +1,2008 @@
+abi:
+  package: thru.program.collectibles
+  name: "Collectibles Program"
+  abi-version: 1
+  package-version: '1.0.0'
+  description: Collectibles program for mystery box pack purchases and NFT distribution on Thru blockchain
+  imports: []
+  options:
+    program-metadata:
+      root-types:
+        instruction-root: CollectiblesInstruction
+        account-root: CollectiblesAccount
+        errors: null
+        events: CollectiblesEvent
+types:
+- name: Hash
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: bytes
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+            jagged: false
+- name: Pubkey
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: bytes
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+            jagged: false
+- name: Signature
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: bytes
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 64
+            element-type:
+              primitive: u8
+            jagged: false
+- name: Timestamp
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: seconds
+        field-type:
+          primitive: i64
+      - name: nanos
+        field-type:
+          primitive: i32
+- name: Duration
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: seconds
+        field-type:
+          primitive: i64
+      - name: nanos
+        field-type:
+          primitive: i32
+- name: Date
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: year
+        field-type:
+          primitive: i32
+      - name: month
+        field-type:
+          primitive: u8
+      - name: day
+        field-type:
+          primitive: u8
+- name: FixedPoint
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: mantissa
+        field-type:
+          primitive: i64
+      - name: scale
+        field-type:
+          primitive: u8
+- name: InstructionData
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: program_idx
+        field-type:
+          primitive: u16
+      - name: data_size
+        field-type:
+          primitive: u64
+      - name: data
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              field-ref:
+                path:
+                - data_size
+            element-type:
+              primitive: u8
+            jagged: false
+- name: CollectiblesConfig
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: discriminator
+        field-type:
+          primitive: u8
+      - name: version
+        field-type:
+          primitive: u8
+      - name: admin
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: payment_token_mint
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: nft_mint
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: treasury
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: next_tranche_id
+        field-type:
+          primitive: u64
+      - name: next_pack_id
+        field-type:
+          primitive: u64
+- name: CollectiblesTrancheHeader
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: discriminator
+        field-type:
+          primitive: u8
+      - name: version
+        field-type:
+          primitive: u8
+      - name: id
+        field-type:
+          primitive: u64
+      - name: name_len
+        field-type:
+          primitive: u8
+      - name: name
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+            jagged: false
+      - name: count
+        field-type:
+          primitive: u32
+      - name: _padding1
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: 1 byte padding to align nft_ids to 8-byte boundary (header total 48 bytes)
+            size:
+              literal:
+                u64: 1
+            element-type:
+              primitive: u8
+            jagged: false
+- name: CollectiblesTranche
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: discriminator
+        field-type:
+          primitive: u8
+      - name: version
+        field-type:
+          primitive: u8
+      - name: id
+        field-type:
+          primitive: u64
+      - name: name_len
+        field-type:
+          primitive: u8
+      - name: name
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+            jagged: false
+      - name: count
+        field-type:
+          primitive: u32
+      - name: _padding1
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: 1 byte padding to align nft_ids to 8-byte boundary (header total 48 bytes)
+            size:
+              literal:
+                u64: 1
+            element-type:
+              primitive: u8
+            jagged: false
+      - name: nft_ids
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              field-ref:
+                path:
+                - count
+            element-type:
+              primitive: u64
+            jagged: false
+- name: PackOddsEntry
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: tranche_id
+        field-type:
+          primitive: u64
+      - name: probability_ppm
+        field-type:
+          primitive: u32
+- name: CollectiblesPackHeader
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: discriminator
+        field-type:
+          primitive: u8
+      - name: version
+        field-type:
+          primitive: u8
+      - name: id
+        field-type:
+          primitive: u64
+      - name: name_len
+        field-type:
+          primitive: u8
+      - name: name
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+            jagged: false
+      - name: image_uri_len
+        field-type:
+          primitive: u8
+      - name: image_uri
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 256
+            element-type:
+              primitive: u8
+            jagged: false
+      - name: price
+        field-type:
+          primitive: u64
+      - name: is_active
+        field-type:
+          primitive: u8
+      - name: odds_count
+        field-type:
+          primitive: u8
+      - name: _padding
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: 2 bytes padding to align odds to 8-byte boundary (header total 312 bytes)
+            size:
+              literal:
+                u64: 2
+            element-type:
+              primitive: u8
+            jagged: false
+- name: CollectiblesPack
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: discriminator
+        field-type:
+          primitive: u8
+      - name: version
+        field-type:
+          primitive: u8
+      - name: id
+        field-type:
+          primitive: u64
+      - name: name_len
+        field-type:
+          primitive: u8
+      - name: name
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+            jagged: false
+      - name: image_uri_len
+        field-type:
+          primitive: u8
+      - name: image_uri
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 256
+            element-type:
+              primitive: u8
+            jagged: false
+      - name: price
+        field-type:
+          primitive: u64
+      - name: is_active
+        field-type:
+          primitive: u8
+      - name: odds_count
+        field-type:
+          primitive: u8
+      - name: _padding
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: 2 bytes padding to align odds to 8-byte boundary (header total 312 bytes)
+            size:
+              literal:
+                u64: 2
+            element-type:
+              primitive: u8
+            jagged: false
+      - name: odds
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              field-ref:
+                path:
+                - odds_count
+            element-type:
+              type-ref:
+                name: PackOddsEntry
+                comment: null
+            jagged: false
+- name: FulfillQueueEntry
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: nft_id
+        field-type:
+          primitive: u64
+      - name: recipient
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+- name: FulfillQueueHeader
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: discriminator
+        field-type:
+          primitive: u8
+      - name: version
+        field-type:
+          primitive: u8
+      - name: capacity
+        field-type:
+          primitive: u32
+      - name: head
+        field-type:
+          primitive: u32
+      - name: tail
+        field-type:
+          primitive: u32
+      - name: _padding
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: 2 bytes padding to align entries to 8-byte boundary (header total 16 bytes)
+            size:
+              literal:
+                u64: 2
+            element-type:
+              primitive: u8
+            jagged: false
+- name: FulfillQueue
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: discriminator
+        field-type:
+          primitive: u8
+      - name: version
+        field-type:
+          primitive: u8
+      - name: capacity
+        field-type:
+          primitive: u32
+      - name: head
+        field-type:
+          primitive: u32
+      - name: tail
+        field-type:
+          primitive: u32
+      - name: _padding
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: 2 bytes padding to align entries to 8-byte boundary (header total 16 bytes)
+            size:
+              literal:
+                u64: 2
+            element-type:
+              primitive: u8
+            jagged: false
+      - name: entries
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              field-ref:
+                path:
+                - capacity
+            element-type:
+              type-ref:
+                name: FulfillQueueEntry
+                comment: null
+            jagged: false
+- name: CollectiblesInstructionHeader
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: discriminant
+        field-type:
+          primitive: u32
+- name: Seed
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: bytes
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+            jagged: false
+- name: InitializeConfigArgs
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: config_account_idx
+        field-type:
+          primitive: u16
+      - name: admin
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: payment_token_mint
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: nft_mint
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: treasury
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: seed
+        field-type:
+          type-ref:
+            name: Seed
+            comment: null
+- name: UpdateConfigArgs
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: config_account_idx
+        field-type:
+          primitive: u16
+      - name: has_new_admin
+        field-type:
+          primitive: u8
+      - name: new_admin
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: has_new_treasury
+        field-type:
+          primitive: u8
+      - name: new_treasury
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+- name: InitializeFulfillQueueArgs
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: queue_account_idx
+        field-type:
+          primitive: u16
+      - name: capacity
+        field-type:
+          primitive: u32
+      - name: seed
+        field-type:
+          type-ref:
+            name: Seed
+            comment: null
+- name: CreateTrancheArgs
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: config_account_idx
+        field-type:
+          primitive: u16
+      - name: tranche_account_idx
+        field-type:
+          primitive: u16
+      - name: name_len
+        field-type:
+          primitive: u8
+      - name: name
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+            jagged: false
+      - name: seed
+        field-type:
+          type-ref:
+            name: Seed
+            comment: null
+- name: UpdateTrancheArgs
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: config_account_idx
+        field-type:
+          primitive: u16
+      - name: tranche_account_idx
+        field-type:
+          primitive: u16
+      - name: tranche_id
+        field-type:
+          primitive: u64
+      - name: name_len
+        field-type:
+          primitive: u8
+      - name: name
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+            jagged: false
+- name: DeleteTrancheArgs
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: config_account_idx
+        field-type:
+          primitive: u16
+      - name: tranche_account_idx
+        field-type:
+          primitive: u16
+      - name: tranche_id
+        field-type:
+          primitive: u64
+      - name: pack_account_count
+        field-type:
+          primitive: u8
+      - name: pack_indices
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: Flexible array of pack account indices to check for references
+            size:
+              field-ref:
+                path:
+                - pack_account_count
+            element-type:
+              primitive: u16
+            jagged: false
+- name: AddCollectibleArgs
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: config_account_idx
+        field-type:
+          primitive: u16
+      - name: tranche_account_idx
+        field-type:
+          primitive: u16
+      - name: tranche_id
+        field-type:
+          primitive: u64
+      - name: nft_id
+        field-type:
+          primitive: u64
+      - name: nft_account_idx
+        field-type:
+          primitive: u16
+      - name: other_tranche_count
+        field-type:
+          primitive: u8
+      - name: other_tranche_indices
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: Flexible array of other tranche indices to check for duplicates
+            size:
+              field-ref:
+                path:
+                - other_tranche_count
+            element-type:
+              primitive: u16
+            jagged: false
+- name: RemoveCollectibleArgs
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: config_account_idx
+        field-type:
+          primitive: u16
+      - name: tranche_account_idx
+        field-type:
+          primitive: u16
+      - name: tranche_id
+        field-type:
+          primitive: u64
+      - name: nft_id
+        field-type:
+          primitive: u64
+      - name: pack_account_count
+        field-type:
+          primitive: u8
+      - name: pack_indices
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: Flexible array of pack account indices to check for active references
+            size:
+              field-ref:
+                path:
+                - pack_account_count
+            element-type:
+              primitive: u16
+            jagged: false
+- name: CreatePackArgs
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: config_account_idx
+        field-type:
+          primitive: u16
+      - name: pack_account_idx
+        field-type:
+          primitive: u16
+      - name: name_len
+        field-type:
+          primitive: u8
+      - name: name
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+            jagged: false
+      - name: image_uri_len
+        field-type:
+          primitive: u8
+      - name: image_uri
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 256
+            element-type:
+              primitive: u8
+            jagged: false
+      - name: price
+        field-type:
+          primitive: u64
+      - name: odds_count
+        field-type:
+          primitive: u8
+      - name: odds
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 16
+            element-type:
+              type-ref:
+                name: PackOddsEntry
+                comment: null
+            jagged: false
+      - name: seed
+        field-type:
+          type-ref:
+            name: Seed
+            comment: null
+- name: UpdatePackArgs
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: config_account_idx
+        field-type:
+          primitive: u16
+      - name: pack_account_idx
+        field-type:
+          primitive: u16
+      - name: pack_id
+        field-type:
+          primitive: u64
+      - name: has_new_name
+        field-type:
+          primitive: u8
+      - name: name_len
+        field-type:
+          primitive: u8
+      - name: name
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+            jagged: false
+      - name: has_new_image_uri
+        field-type:
+          primitive: u8
+      - name: image_uri_len
+        field-type:
+          primitive: u8
+      - name: image_uri
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 256
+            element-type:
+              primitive: u8
+            jagged: false
+      - name: has_new_price
+        field-type:
+          primitive: u8
+      - name: price
+        field-type:
+          primitive: u64
+      - name: has_new_odds
+        field-type:
+          primitive: u8
+      - name: odds_count
+        field-type:
+          primitive: u8
+      - name: odds
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 16
+            element-type:
+              type-ref:
+                name: PackOddsEntry
+                comment: null
+            jagged: false
+- name: DeletePackArgs
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: config_account_idx
+        field-type:
+          primitive: u16
+      - name: pack_account_idx
+        field-type:
+          primitive: u16
+      - name: pack_id
+        field-type:
+          primitive: u64
+- name: TogglePackActiveArgs
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: config_account_idx
+        field-type:
+          primitive: u16
+      - name: pack_account_idx
+        field-type:
+          primitive: u16
+      - name: pack_id
+        field-type:
+          primitive: u64
+      - name: is_active
+        field-type:
+          primitive: u8
+      - name: tranche_account_count
+        field-type:
+          primitive: u8
+      - name: tranche_indices
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: Flexible array of tranche account indices (required when activating)
+            size:
+              field-ref:
+                path:
+                - tranche_account_count
+            element-type:
+              primitive: u16
+            jagged: false
+- name: BuyPackArgs
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: config_account_idx
+        field-type:
+          primitive: u16
+      - name: pack_account_idx
+        field-type:
+          primitive: u16
+      - name: fulfill_queue_account_idx
+        field-type:
+          primitive: u16
+      - name: user_account_idx
+        field-type:
+          primitive: u16
+      - name: user_token_account_idx
+        field-type:
+          primitive: u16
+      - name: treasury_token_account_idx
+        field-type:
+          primitive: u16
+      - name: token_program_idx
+        field-type:
+          primitive: u16
+      - name: pack_id
+        field-type:
+          primitive: u64
+      - name: quantity
+        field-type:
+          primitive: u8
+      - name: tranche_account_count
+        field-type:
+          primitive: u8
+      - name: tranche_indices
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: Individual tranche account indices (flexible array)
+            size:
+              field-ref:
+                path:
+                - tranche_account_count
+            element-type:
+              primitive: u16
+            jagged: false
+- name: FulfillNftsArgs
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: Flexible array member for non-consecutive NFT and recipient indices
+      fields:
+      - name: config_account_idx
+        field-type:
+          primitive: u16
+      - name: fulfill_queue_account_idx
+        field-type:
+          primitive: u16
+      - name: nft_program_idx
+        field-type:
+          primitive: u16
+      - name: nft_mint_account_idx
+        field-type:
+          primitive: u16
+      - name: count
+        field-type:
+          primitive: u8
+      - name: indices_count
+        field-type:
+          primitive: u8
+      - name: indices
+        field-type:
+          array:
+            size:
+              field-ref:
+                path:
+                - indices_count
+            element-type:
+              primitive: u16
+            jagged: false
+- name: SkipQueueEntryArgs
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: Admin skips the next queue entry
+      fields:
+      - name: config_account_idx
+        field-type:
+          primitive: u16
+      - name: fulfill_queue_account_idx
+        field-type:
+          primitive: u16
+- name: EventConfigInitialized
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: type
+        field-type:
+          primitive: u8
+      - name: admin
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: payment_token_mint
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: nft_mint
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: treasury
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+- name: EventConfigUpdated
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: type
+        field-type:
+          primitive: u8
+      - name: has_new_admin
+        field-type:
+          primitive: u8
+      - name: new_admin
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: has_new_treasury
+        field-type:
+          primitive: u8
+      - name: new_treasury
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+- name: EventTrancheCreated
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: type
+        field-type:
+          primitive: u8
+      - name: tranche_id
+        field-type:
+          primitive: u64
+      - name: name_len
+        field-type:
+          primitive: u8
+      - name: name
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+            jagged: false
+- name: EventTrancheUpdated
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: type
+        field-type:
+          primitive: u8
+      - name: tranche_id
+        field-type:
+          primitive: u64
+      - name: name_len
+        field-type:
+          primitive: u8
+      - name: name
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+            jagged: false
+- name: EventTrancheDeleted
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: type
+        field-type:
+          primitive: u8
+      - name: tranche_id
+        field-type:
+          primitive: u64
+- name: EventPackCreated
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: type
+        field-type:
+          primitive: u8
+      - name: pack_id
+        field-type:
+          primitive: u64
+      - name: name_len
+        field-type:
+          primitive: u8
+      - name: name
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+            jagged: false
+      - name: price
+        field-type:
+          primitive: u64
+      - name: odds_count
+        field-type:
+          primitive: u8
+- name: EventPackUpdated
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: type
+        field-type:
+          primitive: u8
+      - name: pack_id
+        field-type:
+          primitive: u64
+      - name: name_len
+        field-type:
+          primitive: u8
+      - name: name
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+            jagged: false
+      - name: price
+        field-type:
+          primitive: u64
+      - name: is_active
+        field-type:
+          primitive: u8
+- name: EventPackDeleted
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: type
+        field-type:
+          primitive: u8
+      - name: pack_id
+        field-type:
+          primitive: u64
+- name: EventPackActivated
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: type
+        field-type:
+          primitive: u8
+      - name: pack_id
+        field-type:
+          primitive: u64
+- name: EventPackDeactivated
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: type
+        field-type:
+          primitive: u8
+      - name: pack_id
+        field-type:
+          primitive: u64
+- name: EventCollectibleAdded
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: type
+        field-type:
+          primitive: u8
+      - name: tranche_id
+        field-type:
+          primitive: u64
+      - name: nft_id
+        field-type:
+          primitive: u64
+      - name: pool_count_after
+        field-type:
+          primitive: u32
+- name: EventCollectibleRemoved
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: type
+        field-type:
+          primitive: u8
+      - name: tranche_id
+        field-type:
+          primitive: u64
+      - name: nft_id
+        field-type:
+          primitive: u64
+      - name: pool_count_after
+        field-type:
+          primitive: u32
+- name: EventPackPurchased
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: Emitted once per pack purchased
+      fields:
+      - name: type
+        field-type:
+          primitive: u8
+      - name: user
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: pack_id
+        field-type:
+          primitive: u64
+      - name: price_paid
+        field-type:
+          primitive: u64
+      - name: nft_id
+        field-type:
+          primitive: u64
+- name: EventNftFulfilled
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: type
+        field-type:
+          primitive: u8
+      - name: nft_id
+        field-type:
+          primitive: u64
+      - name: recipient
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+- name: EventQueueEntrySkipped
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: type
+        field-type:
+          primitive: u8
+      - name: nft_id
+        field-type:
+          primitive: u64
+      - name: recipient
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+# ============================================================================
+# UNIFIED ROOT TYPES
+# ============================================================================
+- name: CollectiblesInstruction
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: Root instruction envelope for the collectibles program
+      fields:
+      - name: discriminant
+        field-type:
+          primitive: u32
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            aligned: 0
+            comment: null
+            tag-ref:
+              field-ref:
+                path:
+                - discriminant
+            variants:
+            - name: initialize_config
+              tag-value: 0
+              variant-type:
+                type-ref:
+                  name: InitializeConfigArgs
+                  comment: null
+            - name: update_config
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: UpdateConfigArgs
+                  comment: null
+            - name: initialize_fulfill_queue
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: InitializeFulfillQueueArgs
+                  comment: null
+            - name: create_tranche
+              tag-value: 16
+              variant-type:
+                type-ref:
+                  name: CreateTrancheArgs
+                  comment: null
+            - name: update_tranche
+              tag-value: 17
+              variant-type:
+                type-ref:
+                  name: UpdateTrancheArgs
+                  comment: null
+            - name: delete_tranche
+              tag-value: 18
+              variant-type:
+                type-ref:
+                  name: DeleteTrancheArgs
+                  comment: null
+            - name: add_collectible
+              tag-value: 19
+              variant-type:
+                type-ref:
+                  name: AddCollectibleArgs
+                  comment: null
+            - name: remove_collectible
+              tag-value: 20
+              variant-type:
+                type-ref:
+                  name: RemoveCollectibleArgs
+                  comment: null
+            - name: create_pack
+              tag-value: 32
+              variant-type:
+                type-ref:
+                  name: CreatePackArgs
+                  comment: null
+            - name: update_pack
+              tag-value: 33
+              variant-type:
+                type-ref:
+                  name: UpdatePackArgs
+                  comment: null
+            - name: delete_pack
+              tag-value: 34
+              variant-type:
+                type-ref:
+                  name: DeletePackArgs
+                  comment: null
+            - name: toggle_pack_active
+              tag-value: 35
+              variant-type:
+                type-ref:
+                  name: TogglePackActiveArgs
+                  comment: null
+            - name: buy_pack
+              tag-value: 48
+              variant-type:
+                type-ref:
+                  name: BuyPackArgs
+                  comment: null
+            - name: fulfill_nfts
+              tag-value: 49
+              variant-type:
+                type-ref:
+                  name: FulfillNftsArgs
+                  comment: null
+            - name: skip_queue_entry
+              tag-value: 50
+              variant-type:
+                type-ref:
+                  name: SkipQueueEntryArgs
+                  comment: null
+# Event Data Types (payloads without the type discriminant field)
+- name: ConfigInitializedEventData
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: Payload for config initialized event
+      fields:
+      - name: admin
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: payment_token_mint
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: nft_mint
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: treasury
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+- name: ConfigUpdatedEventData
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: Payload for config updated event
+      fields:
+      - name: has_new_admin
+        field-type:
+          primitive: u8
+      - name: new_admin
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: has_new_treasury
+        field-type:
+          primitive: u8
+      - name: new_treasury
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+- name: TrancheCreatedEventData
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: Payload for tranche created event
+      fields:
+      - name: tranche_id
+        field-type:
+          primitive: u64
+      - name: name_len
+        field-type:
+          primitive: u8
+      - name: name
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+            jagged: false
+- name: TrancheUpdatedEventData
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: Payload for tranche updated event
+      fields:
+      - name: tranche_id
+        field-type:
+          primitive: u64
+      - name: name_len
+        field-type:
+          primitive: u8
+      - name: name
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+            jagged: false
+- name: TrancheDeletedEventData
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: Payload for tranche deleted event
+      fields:
+      - name: tranche_id
+        field-type:
+          primitive: u64
+- name: PackCreatedEventData
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: Payload for pack created event
+      fields:
+      - name: pack_id
+        field-type:
+          primitive: u64
+      - name: name_len
+        field-type:
+          primitive: u8
+      - name: name
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+            jagged: false
+      - name: price
+        field-type:
+          primitive: u64
+      - name: odds_count
+        field-type:
+          primitive: u8
+- name: PackUpdatedEventData
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: Payload for pack updated event
+      fields:
+      - name: pack_id
+        field-type:
+          primitive: u64
+      - name: name_len
+        field-type:
+          primitive: u8
+      - name: name
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+            jagged: false
+      - name: price
+        field-type:
+          primitive: u64
+      - name: is_active
+        field-type:
+          primitive: u8
+- name: PackDeletedEventData
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: Payload for pack deleted event
+      fields:
+      - name: pack_id
+        field-type:
+          primitive: u64
+- name: PackActivatedEventData
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: Payload for pack activated event
+      fields:
+      - name: pack_id
+        field-type:
+          primitive: u64
+- name: PackDeactivatedEventData
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: Payload for pack deactivated event
+      fields:
+      - name: pack_id
+        field-type:
+          primitive: u64
+- name: CollectibleAddedEventData
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: Payload for collectible added event
+      fields:
+      - name: tranche_id
+        field-type:
+          primitive: u64
+      - name: nft_id
+        field-type:
+          primitive: u64
+      - name: pool_count_after
+        field-type:
+          primitive: u32
+- name: CollectibleRemovedEventData
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: Payload for collectible removed event
+      fields:
+      - name: tranche_id
+        field-type:
+          primitive: u64
+      - name: nft_id
+        field-type:
+          primitive: u64
+      - name: pool_count_after
+        field-type:
+          primitive: u32
+- name: PackPurchasedEventData
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: Payload for pack purchased event (emitted once per pack)
+      fields:
+      - name: user
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: pack_id
+        field-type:
+          primitive: u64
+      - name: price_paid
+        field-type:
+          primitive: u64
+      - name: nft_id
+        field-type:
+          primitive: u64
+- name: NftFulfilledEventData
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: Payload for NFT fulfilled event
+      fields:
+      - name: nft_id
+        field-type:
+          primitive: u64
+      - name: recipient
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+- name: QueueEntrySkippedEventData
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: Payload for queue entry skipped event
+      fields:
+      - name: nft_id
+        field-type:
+          primitive: u64
+      - name: recipient
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+- name: CollectiblesEvent
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: Root event envelope for the collectibles program
+      fields:
+      - name: event_type
+        field-type:
+          primitive: u8
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            aligned: 0
+            comment: null
+            tag-ref:
+              field-ref:
+                path:
+                - event_type
+            variants:
+            - name: config_initialized
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: ConfigInitializedEventData
+                  comment: null
+            - name: config_updated
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: ConfigUpdatedEventData
+                  comment: null
+            - name: tranche_created
+              tag-value: 16
+              variant-type:
+                type-ref:
+                  name: TrancheCreatedEventData
+                  comment: null
+            - name: tranche_updated
+              tag-value: 17
+              variant-type:
+                type-ref:
+                  name: TrancheUpdatedEventData
+                  comment: null
+            - name: tranche_deleted
+              tag-value: 18
+              variant-type:
+                type-ref:
+                  name: TrancheDeletedEventData
+                  comment: null
+            - name: pack_created
+              tag-value: 32
+              variant-type:
+                type-ref:
+                  name: PackCreatedEventData
+                  comment: null
+            - name: pack_updated
+              tag-value: 33
+              variant-type:
+                type-ref:
+                  name: PackUpdatedEventData
+                  comment: null
+            - name: pack_deleted
+              tag-value: 34
+              variant-type:
+                type-ref:
+                  name: PackDeletedEventData
+                  comment: null
+            - name: pack_activated
+              tag-value: 35
+              variant-type:
+                type-ref:
+                  name: PackActivatedEventData
+                  comment: null
+            - name: pack_deactivated
+              tag-value: 36
+              variant-type:
+                type-ref:
+                  name: PackDeactivatedEventData
+                  comment: null
+            - name: collectible_added
+              tag-value: 48
+              variant-type:
+                type-ref:
+                  name: CollectibleAddedEventData
+                  comment: null
+            - name: collectible_removed
+              tag-value: 49
+              variant-type:
+                type-ref:
+                  name: CollectibleRemovedEventData
+                  comment: null
+            - name: pack_purchased
+              tag-value: 64
+              variant-type:
+                type-ref:
+                  name: PackPurchasedEventData
+                  comment: null
+            - name: nft_fulfilled
+              tag-value: 65
+              variant-type:
+                type-ref:
+                  name: NftFulfilledEventData
+                  comment: null
+            - name: queue_entry_skipped
+              tag-value: 66
+              variant-type:
+                type-ref:
+                  name: QueueEntrySkippedEventData
+                  comment: null
+- name: CollectiblesAccount
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: Root account envelope using size-discriminated union for collectibles program accounts
+      fields:
+      - name: data
+        field-type:
+          size-discriminated-union:
+            packed: true
+            aligned: 0
+            comment: null
+            variants:
+            - name: fulfill_queue_header
+              expected-size: 16
+              variant-type:
+                type-ref:
+                  name: FulfillQueueHeader
+                  comment: null
+            - name: tranche_header
+              expected-size: 48
+              variant-type:
+                type-ref:
+                  name: CollectiblesTrancheHeader
+                  comment: null
+            - name: config
+              expected-size: 146
+              variant-type:
+                type-ref:
+                  name: CollectiblesConfig
+                  comment: null
+            - name: pack
+              expected-size: 312
+              variant-type:
+                type-ref:
+                  name: CollectiblesPackHeader
+                  comment: null

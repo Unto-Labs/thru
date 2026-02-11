@@ -37,6 +37,7 @@ export class EmbeddedProvider {
   private accounts: WalletAccount[] = [];
   private selectedAccount: WalletAccount | null = null;
   private eventListeners = new Map<string, Set<Function>>();
+  private inlineMode = false;
   constructor(config: EmbeddedProviderConfig) {
     const iframeUrl = config.iframeUrl || DEFAULT_IFRAME_URL;
     this.iframeManager = new IframeManager(iframeUrl);
@@ -44,6 +45,15 @@ export class EmbeddedProvider {
     // Set up event forwarding from iframe
     this.iframeManager.onEvent = (eventType: string, payload: any) => {
       this.emit(eventType, payload);
+
+      if (eventType === EMBEDDED_PROVIDER_EVENTS.UI_SHOW) {
+        if (this.inlineMode) {
+          this.iframeManager.showInline();
+        } else {
+          this.iframeManager.showModal();
+        }
+        return;
+      }
 
       if (
         eventType === EMBEDDED_PROVIDER_EVENTS.DISCONNECT ||
@@ -77,6 +87,14 @@ export class EmbeddedProvider {
   }
 
   /**
+   * Mount the wallet iframe inline in a container (for inline connect button).
+   */
+  async mountInline(container: HTMLElement): Promise<void> {
+    this.inlineMode = true;
+    await this.iframeManager.mountInline(container);
+  }
+
+  /**
    * Connect to wallet
    * Shows iframe modal and requests connection
    */
@@ -84,10 +102,13 @@ export class EmbeddedProvider {
     // Emit connecting event
     this.emit(EMBEDDED_PROVIDER_EVENTS.CONNECT_START, {});
 
-    // Show iframe modal
-    this.iframeManager.show();
-
     try {
+      if (this.inlineMode) {
+        this.iframeManager.showInline();
+      } else {
+        this.iframeManager.showModal();
+      }
+
       const payload: ConnectRequestPayload = {};
 
       if (options?.metadata) {
@@ -109,11 +130,15 @@ export class EmbeddedProvider {
       this.emit(EMBEDDED_PROVIDER_EVENTS.CONNECT, response.result);
 
       // Hide iframe after successful connection
-      this.iframeManager.hide();
+      if (!this.inlineMode) {
+        this.iframeManager.hide();
+      }
 
       return response.result;
     } catch (error) {
-      this.iframeManager.hide();
+      if (!this.inlineMode) {
+        this.iframeManager.hide();
+      }
       this.emit(EMBEDDED_PROVIDER_EVENTS.CONNECT_ERROR, { error });
       throw error;
     }
@@ -130,14 +155,17 @@ export class EmbeddedProvider {
         origin: window.location.origin,
       });
 
-      this.connected = false;
-      this.accounts = [];
-      this.iframeManager.hide();
-
       this.emit(EMBEDDED_PROVIDER_EVENTS.DISCONNECT, {});
     } catch (error) {
       this.emit(EMBEDDED_PROVIDER_EVENTS.ERROR, { error });
       throw error;
+    } finally {
+      this.connected = false;
+      this.accounts = [];
+      this.selectedAccount = null;
+      if (!this.inlineMode) {
+        this.iframeManager.hide();
+      }
     }
   }
 

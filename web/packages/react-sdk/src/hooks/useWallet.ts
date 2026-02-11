@@ -47,11 +47,18 @@ export function useWallet() {
     }
   };
 
+  const mountInline = async (container: HTMLElement): Promise<void> => {
+    const readySdk =
+      walletRef.current ?? (await waitForWallet(() => walletRef.current));
+    await readySdk.mountInline(container);
+  };
+
   return {
     wallet: wallet?.thru as IThruChain | undefined,
     accounts,
     connect,
     disconnect,
+    mountInline,
     isConnected: isConnected && !!wallet,
     isConnecting,
     selectedAccount,

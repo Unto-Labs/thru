@@ -1,5 +1,6 @@
 abi:
   package: thru.program.token
+  name: "Token Program"
   abi-version: 1
   package-version: '0.1.0'
   description: Ideal ABI for the Thru token program instruction envelopes and account state

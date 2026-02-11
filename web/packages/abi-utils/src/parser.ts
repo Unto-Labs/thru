@@ -3,7 +3,7 @@ import { ABI_STATE } from "./types";
 
 /**
  * Size of the ABI account header in bytes:
- * - 32 bytes: program_meta_acc (pubkey)
+ * - 32 bytes: abi_meta_acc (pubkey)
  * - 8 bytes: revision (u64)
  * - 1 byte: state (u8)
  * - 4 bytes: content_sz (u32)
@@ -27,8 +27,8 @@ export function parseAbiAccountHeader(data: Uint8Array): AbiAccountHeader {
 
   const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
 
-  // program_meta_acc: bytes 0-31 (32 bytes)
-  const programMetaAccount = data.slice(0, 32);
+  // abi_meta_acc: bytes 0-31 (32 bytes)
+  const abiMetaAccount = data.slice(0, 32);
 
   // revision: bytes 32-39 (8 bytes, little-endian u64)
   const revision = view.getBigUint64(32, true);
@@ -43,7 +43,7 @@ export function parseAbiAccountHeader(data: Uint8Array): AbiAccountHeader {
   const contentSize = view.getUint32(41, true);
 
   return {
-    programMetaAccount,
+    abiMetaAccount,
     revision,
     state,
     contentSize,

@@ -1,7 +1,6 @@
 import { useEmbeddedAppStore } from '../store/useEmbeddedAppStore';
 import { ConnectModal } from './ConnectModal';
 import { TransactionApprovalModal } from './TransactionApprovalModal';
-import { UnlockModal } from './UnlockModal';
 
 interface EmbeddedModalRendererProps {
   accounts: Array<{ index: number; publicKey: string; label?: string }>;
@@ -9,7 +8,6 @@ interface EmbeddedModalRendererProps {
   handlers: {
     handleApproveConnect: () => void;
     handleRejectRequest: () => void;
-    handleUnlockSubmit: () => void;
     handleApproveTransactionClick: () => void;
   };
 }
@@ -27,8 +25,8 @@ export function EmbeddedModalRenderer({
   const appMetadata = useEmbeddedAppStore(state => state.appMetadata);
   const error = useEmbeddedAppStore(state => state.error);
   const isLoading = useEmbeddedAppStore(state => state.isLoading);
-  const password = useEmbeddedAppStore(state => state.password);
-  const setPassword = useEmbeddedAppStore(state => state.setPassword);
+  // const password = useEmbeddedAppStore(state => state.password);
+  // const setPassword = useEmbeddedAppStore(state => state.setPassword);
 
   if (!modalType) {
     return null;
@@ -44,17 +42,6 @@ export function EmbeddedModalRenderer({
           isLoading={isLoading}
           onApprove={handlers.handleApproveConnect}
           onReject={handlers.handleRejectRequest}
-        />
-      );
-    case 'unlock':
-      return (
-        <UnlockModal
-          password={password}
-          error={error}
-          isLoading={isLoading}
-          onPasswordChange={setPassword}
-          onSubmit={handlers.handleUnlockSubmit}
-          onCancel={handlers.handleRejectRequest}
         />
       );
     case 'approve-transaction': {
@@ -77,4 +64,3 @@ export function EmbeddedModalRenderer({
       return null;
   }
 }
-

@@ -1,18 +1,22 @@
-import { workerClient } from '@/lib/worker/worker-client';
-import { AccountStorage } from '@thru/indexed-db-stamper';
-import { useMemo } from 'react';
+import { AccountStorage } from '@thru/wallet-store';
+import { useCallback, useMemo } from 'react';
 import type { EmbeddedAppStoreDeps } from '../store/useEmbeddedAppStore';
 import type { EmbeddedProviderEvent, InferPostMessageResponse, PostMessageRequest } from '../types';
 
 interface UseEmbeddedDepsParams {
   accounts: Array<{ index: number; publicKey: string; label?: string }>;
   isUnlocked: boolean;
+  passkeyError: string | null;
+  lockWallet: () => void;
   refreshAccounts: () => Promise<void>;
   selectedAccountIndex: number;
   selectAccount: (index: number) => void;
-  unlockWallet: (password: string) => Promise<void>;
+  signInWithPasskey: (context?: { appId?: string; appName?: string; appUrl?: string; origin?: string; imageUrl?: string }) => Promise<boolean>;
+  shouldUsePasskeyPopup: () => Promise<boolean>;
+  getEmbeddedAccountsSnapshot: () => Array<{ publicKey: string; index: number; label?: string }>;
   sendResponse: <T extends PostMessageRequest>(response: InferPostMessageResponse<T>) => void;
   sendEvent: (eventName: EmbeddedProviderEvent, data?: any) => void;
+  signSerializedTransaction: (serializedTransaction: string) => Promise<string>;
 }
 
 /**
@@ -21,13 +25,26 @@ interface UseEmbeddedDepsParams {
 export function useEmbeddedDeps({
   accounts,
   isUnlocked,
+  passkeyError,
+  lockWallet,
   refreshAccounts,
   selectedAccountIndex,
   selectAccount,
-  unlockWallet,
+  signInWithPasskey,
+  shouldUsePasskeyPopup,
+  getEmbeddedAccountsSnapshot,
   sendResponse,
   sendEvent,
+  signSerializedTransaction,
 }: UseEmbeddedDepsParams): EmbeddedAppStoreDeps {
+  const getFallbackAccounts = useCallback(async () => {
+    const snapshot = getEmbeddedAccountsSnapshot();
+    if (snapshot.length > 0) {
+      return snapshot;
+    }
+    return AccountStorage.getAccounts();
+  }, [getEmbeddedAccountsSnapshot]);
+
   return useMemo(
     () => ({
       // Store only needs { index, publicKey, label } - accounts already has these
@@ -37,26 +54,34 @@ export function useEmbeddedDeps({
         label,
       })),
       isUnlocked,
+      passkeyError,
+      lockWallet,
       refreshAccounts,
       selectedAccountIndex,
-      getFallbackAccounts: () => AccountStorage.getAccounts(),
+      getFallbackAccounts,
       selectAccount,
       sendResponse,
       sendEvent,
-      unlockWallet,
-      signSerializedTransaction: (accountIndex: number, serialized: string) =>
-        workerClient.signSerializedTransaction(accountIndex, serialized),
+      signInWithPasskey,
+      shouldUsePasskeyPopup,
+      signSerializedTransaction: (_accountIndex: number, serialized: string) =>
+        signSerializedTransaction(serialized),
     }),
     [
       accounts,
       isUnlocked,
+      passkeyError,
+      lockWallet,
       refreshAccounts,
       selectedAccountIndex,
       selectAccount,
       sendResponse,
       sendEvent,
-      unlockWallet,
+      signInWithPasskey,
+      shouldUsePasskeyPopup,
+      getFallbackAccounts,
+      signSerializedTransaction,
+      getEmbeddedAccountsSnapshot,
     ]
   );
 }
-

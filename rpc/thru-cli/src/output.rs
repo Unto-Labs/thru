@@ -39,6 +39,7 @@ fn print_human_readable(data: &Value) {
                     "program_upload" => print_program_upload_info(value),
                     "program_cleanup" => print_program_cleanup_info(value),
                     "keys" => print_keys_info(value),
+                    "networks" => print_networks_info(value),
                     "account_create" => print_account_create_info(value),
                     "account_transactions" => print_account_transactions(value),
                     _ => println!("{}: {}", key.cyan(), format_value(value)),
@@ -515,6 +516,101 @@ fn print_transfer_info(data: &Value) {
     }
 }
 
+/// Print network profile information
+fn print_networks_info(data: &Value) {
+    if let Value::Object(net_data) = data {
+        // Handle network list
+        if let Some(list) = net_data.get("list") {
+            if let Value::Array(entries) = list {
+                if entries.is_empty() {
+                    println!("{}", "No networks configured.".italic());
+                    return;
+                }
+
+                let default_name = net_data
+                    .get("default")
+                    .and_then(|v| v.as_str())
+                    .unwrap_or("");
+
+                println!("{}", "Networks".bold().green());
+                for entry in entries {
+                    if let Value::Object(e) = entry {
+                        let name = e
+                            .get("name")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("?");
+                        let url = e
+                            .get("url")
+                            .and_then(|v| v.as_str())
+                            .unwrap_or("?");
+                        let has_auth = e
+                            .get("has_auth_token")
+                            .and_then(|v| v.as_bool())
+                            .unwrap_or(false);
+
+                        let marker = if name == default_name {
+                            " (default)".green().to_string()
+                        } else {
+                            String::new()
+                        };
+
+                        let auth_info = if has_auth { " [auth]" } else { "" };
+
+                        println!(
+                            "  {}{}: {}{}",
+                            name.cyan(),
+                            marker,
+                            url,
+                            auth_info
+                        );
+                    }
+                }
+            }
+        }
+
+        // Handle network operations
+        if let Some(operation) = net_data.get("operation") {
+            let op_str = format_value(operation);
+            if let Some(name) = net_data.get("name") {
+                let name_str = format_value(name);
+                match op_str.as_str() {
+                    "add" => {
+                        if let Some(url) = net_data.get("url") {
+                            println!(
+                                "{}: Network '{}' added ({})",
+                                "Success".bold().green(),
+                                name_str,
+                                format_value(url)
+                            );
+                        }
+                    }
+                    "set-default" => println!(
+                        "{}: Default network set to '{}'",
+                        "Success".bold().green(),
+                        name_str
+                    ),
+                    "set" => println!(
+                        "{}: Network '{}' updated",
+                        "Success".bold().green(),
+                        name_str
+                    ),
+                    "remove" => println!(
+                        "{}: Network '{}' removed",
+                        "Success".bold().green(),
+                        name_str
+                    ),
+                    _ => println!(
+                        "{}: Operation '{}' on network '{}'",
+                        "Info".bold().blue(),
+                        op_str,
+                        name_str
+                    ),
+                }
+            }
+        }
+    }
+}
+
 /// Print error message
 pub fn print_error(error: &str) {
     eprintln!("{}: {}", "Error".bold().red(), error);
@@ -701,4 +797,55 @@ pub fn create_account_create_response(
             "status": status
         }
     })
+}
+
+/// Create a JSON response for network list
+pub fn create_network_list_response(config: &crate::config::Config) -> Value {
+    let entries: Vec<Value> = config
+        .list_network_names()
+        .iter()
+        .filter_map(|name| {
+            config.networks.get(name).map(|net| {
+                json!({
+                    "name": name,
+                    "url": net.url,
+                    "has_auth_token": net.auth_token.is_some(),
+                })
+            })
+        })
+        .collect();
+
+    let mut response = json!({
+        "networks": {
+            "list": entries,
+        }
+    });
+
+    if let Some(ref default) = config.default_network {
+        response["networks"]["default"] = json!(default);
+    }
+
+    response
+}
+
+/// Create a JSON response for network operations (add, set-default, set, remove)
+pub fn create_network_operation_response(
+    operation: &str,
+    name: &str,
+    status: &str,
+    url: Option<&str>,
+) -> Value {
+    let mut response = json!({
+        "networks": {
+            "operation": operation,
+            "name": name,
+            "status": status,
+        }
+    });
+
+    if let Some(u) = url {
+        response["networks"]["url"] = json!(u);
+    }
+
+    response
 }

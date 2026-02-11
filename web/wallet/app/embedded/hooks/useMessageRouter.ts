@@ -9,9 +9,7 @@
 
 import { useEffect } from 'react';
 import { useEmbeddedAppStore, type EmbeddedAppStoreDeps } from '../store/useEmbeddedAppStore';
-import type {
-    SelectAccountRequestMessage
-} from '../types';
+import type { SelectAccountRequestMessage } from '../types';
 import { ErrorCode, POST_MESSAGE_REQUEST_TYPES, type PostMessageRequest } from '../types';
 
 const isPostMessageRequest = (value: unknown): value is PostMessageRequest => {
@@ -47,6 +45,12 @@ export function useMessageRouter(deps: UseMessageRouterParams) {
 
   useEffect(() => {
     const handleMessage = (event: MessageEvent) => {
+      /* In most browsers, `event.source` is the parent window.
+         Safari can sometimes deliver a `null` source for cross-origin postMessage. */
+      if (event.source && event.source !== window.parent) {
+        return;
+      }
+
       if (!isPostMessageRequest(event.data)) {
         // Handle unknown messages
         const { data } = event;
@@ -64,6 +68,17 @@ export function useMessageRouter(deps: UseMessageRouterParams) {
       }
 
       const message = event.data;
+      if (message.origin !== event.origin) {
+        deps.sendResponse({
+          id: message.id,
+          success: false,
+          error: {
+            code: ErrorCode.UNKNOWN_ERROR,
+            message: 'Origin mismatch for postMessage request',
+          },
+        });
+        return;
+      }
 
       switch (message.type) {
         case POST_MESSAGE_REQUEST_TYPES.CONNECT:
@@ -103,4 +118,3 @@ export function useMessageRouter(deps: UseMessageRouterParams) {
     // Store actions are stable, deps object is memoized in parent
   }, [handleConnect, handleDisconnect, handleSignTransaction, handleGetAccounts, handleSelectAccount, deps]);
 }
-

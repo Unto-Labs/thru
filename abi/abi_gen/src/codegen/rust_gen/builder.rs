@@ -284,7 +284,7 @@ fn primitive_to_rust_type(prim_type: &PrimitiveType) -> &'static str {
             IntegralType::I16 => "i16",
             IntegralType::I32 => "i32",
             IntegralType::I64 => "i64",
-            IntegralType::Char => "i8",
+            IntegralType::Char => "u8",
         },
         PrimitiveType::FloatingPoint(float_type) => match float_type {
             FloatingPointType::F16 => "f16",

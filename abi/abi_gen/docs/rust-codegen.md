@@ -84,7 +84,7 @@ This plan makes Rust codegen IR-first, mirrors the proven TypeScript pipeline, a
 - Remove legacy code paths and TODOs; guardrails to prevent reintroduction (lint/test asserting absence).
 - Tests/Automation:
   - Update `abi/scripts/run_ir_parity_checks.py` to include Rust parity-by-default.
-  - CI: `cargo test -p abi_gen`, `cargo test -p abi_reflect`, `cargo run -p abi_gen -- analyze --print-ir` smoke, `cargo test -p compliance_harness_rust`.
+  - CI: `cargo test -p abi_gen`, `cargo test -p abi_reflect`, `cargo run -p abi_gen --bin abi-gen -- analyze --print-ir` smoke, `cargo test -p compliance_harness_rust`.
 
 ## Milestones & Exit Criteria
 - M1: IR runtime + FAT pointer core merged; node-level tests green.

@@ -4,7 +4,12 @@ import type {
   PostMessageRequest,
   PostMessageResponse,
 } from './types/messages';
-import { IFRAME_READY_EVENT, POST_MESSAGE_EVENT_TYPE } from './types/messages';
+import {
+  IFRAME_READY_EVENT,
+  POST_MESSAGE_EVENT_TYPE,
+  POST_MESSAGE_REQUEST_TYPES,
+  createRequestId,
+} from './types/messages';
 
 /**
  * Allowed origins for wallet iframe URLs
@@ -12,6 +17,7 @@ import { IFRAME_READY_EVENT, POST_MESSAGE_EVENT_TYPE } from './types/messages';
  */
 const ALLOWED_IFRAME_ORIGINS = [
   'https://thru-wallet.up.railway.app',
+  'https://wallet.thru.io',
   'https://wallet.thru.org',
   // Allow localhost for development (any port)
   'http://localhost',
@@ -60,9 +66,13 @@ export class IframeManager {
   private iframe: HTMLIFrameElement | null = null;
   private iframeUrl: string;
   private iframeOrigin: string;
+  private frameId: string;
   private messageHandlers = new Map<string, (response: PostMessageResponse) => void>();
   private messageListener: ((event: MessageEvent) => void) | null = null;
   private readyPromise: Promise<void> | null = null;
+  private displayMode: 'modal' | 'inline' = 'modal';
+  private inlineContainer: HTMLElement | null = null;
+  private visible = false;
 
   /**
    * Callback for event broadcasts from iframe (no request id)
@@ -75,6 +85,15 @@ export class IframeManager {
 
     this.iframeUrl = iframeUrl;
     this.iframeOrigin = new URL(iframeUrl).origin;
+    /* Used to correlate postMessage traffic with the correct iframe instance.
+       Important in dev (React Strict Mode) where iframes can be created twice. */
+    this.frameId = createRequestId('frame');
+  }
+
+  private getIframeSrc(): string {
+    const url = new URL(this.iframeUrl);
+    url.searchParams.set('tn_frame_id', this.frameId);
+    return url.toString();
   }
 
   /**
@@ -89,29 +108,29 @@ export class IframeManager {
     this.readyPromise = (async () => {
       if (!this.iframe) {
         this.iframe = document.createElement('iframe');
-        this.iframe.src = this.iframeUrl;
-        this.iframe.style.cssText = `
-          position: fixed;
-          top: 0;
-          left: 0;
-          width: 100%;
-          height: 100%;
-          border: none;
-          z-index: 999999;
-          display: none;
-          background: rgba(0, 0, 0, 0.5);
-        `;
+        this.iframe.src = this.getIframeSrc();
+        /* Allow WebAuthn in cross-origin iframe for passkey auth. */
+        this.iframe.allow = 'publickey-credentials-get; publickey-credentials-create';
+        this.applyIframeStyles();
+        /* Keep hidden (but still load) until the wallet asks to show UI. */
+        this.setVisibility(false);
 
-        document.body.appendChild(this.iframe);
+        if (this.displayMode === 'inline' && this.inlineContainer) {
+          this.inlineContainer.appendChild(this.iframe);
+        } else {
+          document.body.appendChild(this.iframe);
+        }
 
         // Set up message listener
         this.messageListener = this.handleMessage.bind(this);
         window.addEventListener('message', this.messageListener);
       }
 
-      // Wait for iframe ready signal
       await this.waitForReady();
-    })();
+    })().catch((error) => {
+      this.readyPromise = null;
+      throw error;
+    });
 
     return this.readyPromise;
   }
@@ -121,18 +140,29 @@ export class IframeManager {
    */
   private waitForReady(): Promise<void> {
     return new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => {
-        reject(new Error('Iframe ready timeout - wallet failed to load'));
-      }, 10000); // 10 second timeout
+      let resolved = false;
+      let readyHandler: (event: MessageEvent) => void;
+      const cleanup = () => {
+        if (resolved) {
+          return;
+        }
+        resolved = true;
+        window.removeEventListener('message', readyHandler);
+        clearTimeout(timeout);
+      };
 
-      const readyHandler = (event: MessageEvent) => {
-        if (event.origin !== this.iframeOrigin) {
+      const timeout = setTimeout(() => {
+        cleanup();
+        reject(new Error('Iframe ready timeout - wallet failed to load'));
+      }, 10000);
+
+      readyHandler = (event: MessageEvent) => {
+        if (!this.isMessageFromIframe(event)) {
           return;
         }
 
-        if (event.data.type === IFRAME_READY_EVENT) {
-          clearTimeout(timeout);
-          window.removeEventListener('message', readyHandler);
+        if (event.data?.type === IFRAME_READY_EVENT) {
+          cleanup();
           resolve();
         }
       };
@@ -142,21 +172,102 @@ export class IframeManager {
   }
 
   /**
+   * Mount iframe inline inside the provided container.
+   */
+  async mountInline(container: HTMLElement): Promise<void> {
+    this.inlineContainer = container;
+    this.displayMode = 'inline';
+    await this.createIframe();
+    this.showInline();
+  }
+
+  /**
+   * Show iframe inline (embedded in container).
+   */
+  showInline(): void {
+    if (!this.iframe) {
+      return;
+    }
+    this.displayMode = 'inline';
+    if (this.inlineContainer && this.iframe.parentElement !== this.inlineContainer) {
+      this.inlineContainer.appendChild(this.iframe);
+    }
+    this.applyIframeStyles();
+    this.setVisibility(true);
+  }
+
+  /**
+   * Show iframe as a full-screen modal.
+   */
+  showModal(): void {
+    if (!this.iframe) {
+      return;
+    }
+    this.displayMode = 'modal';
+    if (this.iframe.parentElement !== document.body) {
+      document.body.appendChild(this.iframe);
+    }
+    this.applyIframeStyles();
+    this.setVisibility(true);
+  }
+
+  /**
    * Show iframe modal
    */
   show(): void {
-    if (this.iframe) {
-      this.iframe.style.display = 'block';
-    }
+    this.showModal();
   }
 
   /**
    * Hide iframe modal
    */
   hide(): void {
-    if (this.iframe) {
-      this.iframe.style.display = 'none';
+    this.setVisibility(false);
+  }
+
+  isInline(): boolean {
+    return this.displayMode === 'inline';
+  }
+
+  private applyIframeStyles(): void {
+    if (!this.iframe) {
+      return;
     }
+
+    if (this.displayMode === 'inline') {
+      this.iframe.style.cssText = `
+        position: relative;
+        width: 100%;
+        height: 100%;
+        border: none;
+        z-index: 1;
+        display: block;
+        background: transparent;
+      `;
+      return;
+    }
+
+    this.iframe.style.cssText = `
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      border: none;
+      z-index: 999999;
+      display: block;
+      background: rgba(0, 0, 0, 0.5);
+    `;
+  }
+
+  private setVisibility(visible: boolean): void {
+    if (!this.iframe) {
+      return;
+    }
+    this.visible = visible;
+    this.iframe.style.opacity = visible ? '1' : '0';
+    this.iframe.style.pointerEvents = visible ? 'auto' : 'none';
+    this.iframe.style.visibility = visible ? 'visible' : 'hidden';
   }
 
   /**
@@ -165,15 +276,33 @@ export class IframeManager {
   async sendMessage<TRequest extends PostMessageRequest>(
     request: TRequest
   ): Promise<InferSuccessfulPostMessageResponse<TRequest>> {
+    /* Ensure the iframe has navigated to the wallet origin before we try to
+       postMessage to a strict targetOrigin. Otherwise the iframe can still be
+       about:blank (same-origin with the dapp) and postMessage will throw. */
+    if (this.readyPromise) {
+      await this.readyPromise;
+    } else {
+      await this.createIframe();
+    }
+
     if (!this.iframe?.contentWindow) {
       throw new Error('Iframe not initialized - call createIframe() first');
     }
 
     return new Promise<InferSuccessfulPostMessageResponse<TRequest>>((resolve, reject) => {
+      /* CONNECT/SIGN_* requests require a human click and can take minutes.
+         Keep a longer timeout to avoid breaking "inline connect button" flows. */
+      const timeoutMs =
+        request.type === POST_MESSAGE_REQUEST_TYPES.CONNECT ||
+        request.type === POST_MESSAGE_REQUEST_TYPES.SIGN_MESSAGE ||
+        request.type === POST_MESSAGE_REQUEST_TYPES.SIGN_TRANSACTION
+          ? 5 * 60 * 1000 /* 5 minutes */
+          : 30 * 1000; /* 30 seconds */
+
       const timeout = setTimeout(() => {
         this.messageHandlers.delete(request.id);
         reject(new Error('Request timeout - wallet did not respond'));
-      }, 30000); // 30 second timeout
+      }, timeoutMs);
 
       // Store handler for this request
       this.messageHandlers.set(request.id, (response: PostMessageResponse) => {
@@ -198,9 +327,7 @@ export class IframeManager {
    * Handle incoming messages from iframe
    */
   private handleMessage(event: MessageEvent): void {
-    // Validate origin
-    const iframeOrigin = new URL(this.iframeUrl).origin;
-    if (event.origin !== iframeOrigin) {
+    if (!this.isMessageFromIframe(event)) {
       return; // Ignore messages from other origins
     }
 
@@ -229,6 +356,29 @@ export class IframeManager {
     if (this.onEvent) {
       this.onEvent(data.event, data.data);
     }
+  }
+
+  private isMessageFromIframe(event: MessageEvent): boolean {
+    if (event.origin !== this.iframeOrigin) {
+      return false;
+    }
+
+    const data = event.data as any;
+    if (!data || data.frameId !== this.frameId) {
+      return false;
+    }
+
+    /* Some browsers (notably Safari) can provide a null `event.source` for
+       cross-origin postMessage events. Frame id + origin is sufficient. */
+    if (!event.source) {
+      return true;
+    }
+
+    if (this.iframe?.contentWindow && event.source !== this.iframe.contentWindow) {
+      return false;
+    }
+
+    return true;
   }
 
   /**

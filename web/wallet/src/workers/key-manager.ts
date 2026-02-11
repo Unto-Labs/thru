@@ -3,7 +3,7 @@
  * Handles seed storage, derivation, and automatic zeroization
  */
 
-import { EncryptedData, EncryptionService, ThruHDWallet } from '@thru/crypto';
+import { ThruHDWallet } from '@thru/crypto';
 import { signWithDomain, SignatureDomain } from '@thru/thru-sdk';
 
 function decodeBase64String(value: string): Uint8Array {
@@ -31,24 +31,6 @@ export class KeyManager {
 
   constructor(onAutoLock?: () => void) {
     this.onAutoLock = onAutoLock;
-  }
-
-  /**
-   * Unlock the wallet by decrypting the seed with password
-   */
-  async unlock(encrypted: EncryptedData, password: string): Promise<void> {
-    try {
-      // Decrypt seed
-      const decryptedSeed = await EncryptionService.decrypt(encrypted, password);
-
-      // Store seed in memory
-      this.seed = decryptedSeed;
-
-      // Start auto-lock timer
-      this.resetLockTimer();
-    } catch (error) {
-      throw new Error('Invalid password or corrupted data');
-    }
   }
 
   /**

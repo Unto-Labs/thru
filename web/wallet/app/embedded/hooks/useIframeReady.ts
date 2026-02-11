@@ -6,11 +6,12 @@ import { IFRAME_READY_EVENT } from '../types';
  */
 export function useIframeReady() {
   useEffect(() => {
+    const frameId = new URLSearchParams(window.location.search).get('tn_frame_id');
     const readyMessage = {
       type: IFRAME_READY_EVENT,
+      frameId,
       data: { ready: true },
     };
     window.parent.postMessage(readyMessage, '*');
   }, []);
 }
-

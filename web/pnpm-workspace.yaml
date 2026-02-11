@@ -6,3 +6,4 @@ packages:
   - 'mint'
   - 'etl-bridge'
   - 'superapp-be'
+  - 'eve-token-app'

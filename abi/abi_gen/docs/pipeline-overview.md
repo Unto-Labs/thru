@@ -7,9 +7,11 @@ This note gives new contributors a single view of the ABI generator’s end‑to
 1. **CLI front-end** (`abi/abi_gen/src/main.rs`, `cmds/mod.rs`)
    - `abi codegen` and `abi analyze` share the same parsing layer.
    - Subcommands only differ in their terminal action; everything up to type resolution is identical.
-2. **Import resolution** (`abi/abi_gen/src/abi/file.rs`)
-   - `ImportResolver::load_file_with_imports` recursively walks include paths, dedupes files, records package metadata, and accumulates raw `TypeDef`s.
+2. **Import resolution** (`abi/abi_loader/src/`)
+   - `EnhancedImportResolver` supports multiple import source types: path, git, http, and on-chain.
+   - For local-only resolution, `ImportResolver::load_file_with_imports` recursively walks include paths, dedupes files, records package metadata, and accumulates raw `TypeDef`s.
    - Normalization (`cmds/common.rs::normalize_type_refs`) strips fully qualified package prefixes so downstream logic can compare short names.
+   - See `docs/import-sources.md` for detailed import source documentation.
 3. **Dependency analysis & validation** (`abi/abi_gen/src/dependency.rs`)
    - Captures structural dependencies (type refs, field refs, size expressions) and layout constraints (size-affecting fields, FAM ordering rules).
    - `analyze_and_resolve_types()` prints issues during `abi analyze` and fails `abi codegen` if any cycle/violation/validation error remains.
@@ -51,6 +53,14 @@ C / Rust / TS emitters
 ### Adding a new CLI flag or subcommand
 1. Extend `Cli` / `Commands` in `src/main.rs`.
 2. Add a handler in `cmds/<new>.rs` that mirrors the existing pattern: build an `ImportResolver`, normalize names, run `analyze_and_resolve_types`, then branch into whatever new work is needed.
+
+### Available CLI commands
+- `abi codegen` - Generate code from ABI type definitions
+- `abi analyze` - Analyze ABI types and show detailed information
+- `abi reflect` - Parse binary data and print JSON reflection
+- `abi flatten` - Flatten an ABI by resolving all imports
+- `abi prep-for-publish` - Prepare an ABI for on-chain publishing
+- `abi bundle` - Create a dependency manifest for WASM/browser consumption
 
 ### Consuming the shared IR in a backend
 1. Build `TypeIr` using `IrBuilder::build_type` or `build_all`. Handle `IrBuildError` explicitly—forward these to the user rather than swallowing them.

@@ -1,5 +1,6 @@
 import { GlobalPolyfill } from '@/components/GlobalPolyfill';
-import { WalletProvider } from '@/contexts/WalletProvider';
+import { PreAlphaBanner } from '@/components/PreAlphaBanner';
+import { WalletProviders } from '@/providers/WalletProviders';
 import { interTight, jetbrainsMono } from '@/lib/fonts';
 import type { Metadata } from 'next';
 import './globals.css';
@@ -18,12 +19,10 @@ export default function RootLayout({
     <html lang="en">
       <body className={`${interTight.variable} ${jetbrainsMono.variable} font-sans antialiased`}>
         <GlobalPolyfill />
-        <div className="bg-black text-white text-center py-2 px-4 text-sm">
-          This is a pre-alpha unaudited application only for preview purposes.
-        </div>
-        <WalletProvider>
+        <PreAlphaBanner />
+        <WalletProviders>
           {children}
-        </WalletProvider>
+        </WalletProviders>
       </body>
     </html>
   );

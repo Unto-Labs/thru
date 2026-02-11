@@ -4,7 +4,8 @@ abi:
   package-version: "1.0.0"
   description: "State proof structures for Merkle tree verification"
   imports:
-    - "thru_primitives.abi.yaml"
+    - type: path
+      path: "thru_primitives.abi.yaml"
 
 types:
   - name: "StateProofHeader"

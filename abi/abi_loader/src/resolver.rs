@@ -2,7 +2,7 @@ use abi_types::TypeDef;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-use crate::file::AbiFile;
+use crate::file::{AbiFile, ImportSource};
 
 /* Import resolver for loading and merging imported ABI files */
 pub struct ImportResolver {
@@ -65,6 +65,24 @@ impl ImportResolver {
         file_path: &Path,
         verbose: bool,
     ) -> anyhow::Result<()> {
+        self.load_file_with_imports_internal(file_path, verbose, false)
+    }
+
+    /* Load an ABI file and recursively load only local (path) imports */
+    pub fn load_file_with_imports_skip_remote(
+        &mut self,
+        file_path: &Path,
+        verbose: bool,
+    ) -> anyhow::Result<()> {
+        self.load_file_with_imports_internal(file_path, verbose, true)
+    }
+
+    fn load_file_with_imports_internal(
+        &mut self,
+        file_path: &Path,
+        verbose: bool,
+        skip_remote: bool,
+    ) -> anyhow::Result<()> {
         /* Canonicalize the path to detect duplicates */
         let canonical_path = file_path.canonicalize()?;
 
@@ -99,17 +117,35 @@ impl ImportResolver {
             }
         }
 
-        /* Recursively load imports */
+        /* Recursively load imports (only path imports supported in this resolver) */
         let imports = abi_file.imports().to_vec();
         for import in &imports {
-            if verbose {
-                println!("    [~] Resolving import: {}", import);
+            match import {
+                ImportSource::Path { path } => {
+                    if verbose {
+                        println!("    [~] Resolving path import: {}", path);
+                    }
+
+                    let import_path = self.resolve_import_path(path, file_path)?;
+
+                    /* Recursively load the imported file */
+                    self.load_file_with_imports_internal(&import_path, verbose, skip_remote)?;
+                }
+                _ => {
+                    if skip_remote {
+                        if verbose {
+                            println!("    [~] Skipping non-path import: {:?}", import);
+                        }
+                        continue;
+                    }
+
+                    /* Remote imports (git, http, onchain) not supported in basic resolver */
+                    anyhow::bail!(
+                        "Remote imports not supported in ImportResolver. Use EnhancedImportResolver for {:?}",
+                        import
+                    );
+                }
             }
-
-            let import_path = self.resolve_import_path(import, file_path)?;
-
-            /* Recursively load the imported file */
-            self.load_file_with_imports(&import_path, verbose)?;
         }
 
         /* Add types from this file and register them with the package */

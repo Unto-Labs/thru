@@ -17,7 +17,7 @@
 import { decodeAddress, encodeAddress } from "@thru/helpers";
 import { AccountView, ChainClient, createAccountsByOwnerReplay } from "../src";
 
-const BASE_URL = process.env.GRPC_URL || "http://unto-tsw-slc1-3:8473";
+const BASE_URL = process.env.GRPC_URL || "https://grpc.alphanet.thruput.org";
 const TOKEN_PROGRAM = "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKqq";
 
 // Account data sizes from token_program.abi.yaml

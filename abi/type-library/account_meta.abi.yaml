@@ -4,7 +4,8 @@ abi:
   package-version: "1.0.0"
   description: "Account metadata structures"
   imports:
-    - "thru_primitives.abi.yaml"
+    - type: path
+      path: "thru_primitives.abi.yaml"
 
 types:
   # Account metadata structure

@@ -370,7 +370,7 @@ fn primitive_to_c_type(prim: &abi_gen::abi::types::PrimitiveType) -> String {
         PrimitiveType::Integral(IntegralType::I16) => "int16_t",
         PrimitiveType::Integral(IntegralType::I32) => "int32_t",
         PrimitiveType::Integral(IntegralType::I64) => "int64_t",
-        PrimitiveType::Integral(IntegralType::Char) => "char",
+        PrimitiveType::Integral(IntegralType::Char) => "uint8_t",
         PrimitiveType::FloatingPoint(FloatingPointType::F16) => "uint16_t", /* No native f16 in C */
         PrimitiveType::FloatingPoint(FloatingPointType::F32) => "float",
         PrimitiveType::FloatingPoint(FloatingPointType::F64) => "double",

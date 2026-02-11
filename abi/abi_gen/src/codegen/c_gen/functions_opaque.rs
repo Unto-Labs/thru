@@ -324,7 +324,7 @@ fn primitive_to_c_type(prim_type: &PrimitiveType) -> &'static str {
             IntegralType::I16 => "int16_t",
             IntegralType::I32 => "int32_t",
             IntegralType::I64 => "int64_t",
-            IntegralType::Char => "char",
+            IntegralType::Char => "uint8_t",
         },
         PrimitiveType::FloatingPoint(float_type) => match float_type {
             FloatingPointType::F16 => "_Float16",

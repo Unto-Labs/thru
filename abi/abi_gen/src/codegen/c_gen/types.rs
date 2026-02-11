@@ -19,7 +19,7 @@ fn format_resolved_type_to_c(resolved_type: &ResolvedType, indent: usize) -> Str
                 IntegralType::I16 => "int16_t".to_string(),
                 IntegralType::I32 => "int32_t".to_string(),
                 IntegralType::I64 => "int64_t".to_string(),
-                IntegralType::Char => "char".to_string(),
+                IntegralType::Char => "uint8_t".to_string(),
             },
             PrimitiveType::FloatingPoint(float_type) => match float_type {
                 FloatingPointType::F16 => "_Float16".to_string(),

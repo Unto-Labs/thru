@@ -1,50 +1,59 @@
 import { decodeAddress, encodeAddress } from "@thru/helpers";
 
-/**
- * Suffix appended to program account bytes for ABI seed derivation
- */
-const ABI_SEED_SUFFIX = "_abi_account";
+const ABI_META_BODY_SIZE = 96;
+const ABI_ACCOUNT_SUFFIX = "_abi_account";
+const ABI_ACCOUNT_SUFFIX_BYTES = new TextEncoder().encode(ABI_ACCOUNT_SUFFIX);
 
-/**
- * Derives the ABI seed bytes from a program account pubkey.
- *
- * Algorithm:
- * 1. Get program account bytes (32 bytes)
- * 2. Append "_abi_account" suffix (12 bytes)
- * 3. SHA256 hash the combined 44 bytes
- * 4. Return the 32-byte hash as the seed
- *
- * @param programAccountBytes - The 32-byte program account public key
- * @returns 32-byte seed for PDA derivation
- */
-export async function deriveAbiSeed(programAccountBytes: Uint8Array): Promise<Uint8Array> {
-  if (programAccountBytes.length !== 32) {
-    throw new Error(`Expected 32-byte program account, got ${programAccountBytes.length} bytes`);
+function concatBytes(...chunks: Uint8Array[]): Uint8Array {
+  const total = chunks.reduce((sum, chunk) => sum + chunk.length, 0);
+  const out = new Uint8Array(total);
+  let offset = 0;
+  for (const chunk of chunks) {
+    out.set(chunk, offset);
+    offset += chunk.length;
   }
+  return out;
+}
 
-  // Combine program account bytes with suffix
-  const suffixBytes = new TextEncoder().encode(ABI_SEED_SUFFIX);
-  const combined = new Uint8Array(programAccountBytes.length + suffixBytes.length);
-  combined.set(programAccountBytes, 0);
-  combined.set(suffixBytes, programAccountBytes.length);
-
-  // SHA256 hash
-  const hashBuffer = await crypto.subtle.digest("SHA-256", combined);
+async function sha256Bytes(data: Uint8Array): Promise<Uint8Array> {
+  const hashBuffer = await crypto.subtle.digest("SHA-256", data as BufferSource);
   return new Uint8Array(hashBuffer);
 }
 
 /**
- * Derives a program address (PDA) from a seed and program ID.
- *
- * This implements the Thru PDA derivation algorithm:
- * 1. Combine seed + program ID bytes
- * 2. SHA256 hash the combined bytes
- * 3. Return as the derived address
- *
- * @param seed - The 32-byte seed
- * @param programId - The program ID bytes (32 bytes)
- * @param ephemeral - Whether to derive an ephemeral address (affects prefix byte)
- * @returns The derived 32-byte address
+ * Builds the ABI meta body for an official ABI (program account).
+ */
+export function abiMetaBodyForProgram(programBytes: Uint8Array): Uint8Array {
+  if (programBytes.length !== 32) {
+    throw new Error(`Expected 32-byte program account, got ${programBytes.length} bytes`);
+  }
+  const body = new Uint8Array(ABI_META_BODY_SIZE);
+  body.set(programBytes, 0);
+  return body;
+}
+
+/**
+ * Derives the ABI meta seed from ABI meta kind + body.
+ */
+export async function deriveAbiMetaSeed(kind: number, body: Uint8Array): Promise<Uint8Array> {
+  if (body.length !== ABI_META_BODY_SIZE) {
+    throw new Error(`Expected ${ABI_META_BODY_SIZE}-byte ABI meta body, got ${body.length} bytes`);
+  }
+  return sha256Bytes(concatBytes(new Uint8Array([kind]), body));
+}
+
+/**
+ * Derives the ABI account seed from ABI meta kind + body.
+ */
+export async function deriveAbiAccountSeed(kind: number, body: Uint8Array): Promise<Uint8Array> {
+  if (body.length !== ABI_META_BODY_SIZE) {
+    throw new Error(`Expected ${ABI_META_BODY_SIZE}-byte ABI meta body, got ${body.length} bytes`);
+  }
+  return sha256Bytes(concatBytes(new Uint8Array([kind]), body, ABI_ACCOUNT_SUFFIX_BYTES));
+}
+
+/**
+ * Derives a program-defined account address (owner || ephemeral || seed).
  */
 export async function deriveProgramAddress(
   seed: Uint8Array,
@@ -58,54 +67,40 @@ export async function deriveProgramAddress(
     throw new Error(`Expected 32-byte program ID, got ${programId.length} bytes`);
   }
 
-  // Combine seed + program ID
-  const combined = new Uint8Array(seed.length + programId.length);
-  combined.set(seed, 0);
-  combined.set(programId, seed.length);
-
-  // SHA256 hash
-  const hashBuffer = await crypto.subtle.digest("SHA-256", combined);
-  const result = new Uint8Array(hashBuffer);
-
-  // Set the ephemeral bit in the first byte if needed
-  // Ephemeral addresses have bit 0x80 set in the first byte
-  if (ephemeral) {
-    result[0] = result[0] | 0x80;
-  } else {
-    result[0] = result[0] & 0x7f;
-  }
-
-  return result;
+  const flag = new Uint8Array([ephemeral ? 1 : 0]);
+  return sha256Bytes(concatBytes(programId, flag, seed));
 }
 
 /**
- * Derives the ABI account address for a given program account.
- *
- * @param programAccount - The program account address (ta-prefixed string or 32-byte array)
- * @param abiManagerProgramId - The ABI manager program ID (ta-prefixed string or 32-byte array)
- * @param ephemeral - Whether to derive an ephemeral address
- * @returns The derived ABI account address as a ta-prefixed string
+ * Derives the ABI meta account address (as a ta-prefixed string).
  */
-export async function deriveAbiAddress(
-  programAccount: string | Uint8Array,
+export async function deriveAbiMetaAddress(
+  kind: number,
+  body: Uint8Array,
   abiManagerProgramId: string | Uint8Array,
   ephemeral: boolean = false
 ): Promise<string> {
-  // Convert string addresses to bytes
-  const programAccountBytes = typeof programAccount === "string"
-    ? decodeAddress(programAccount)
-    : programAccount;
-
   const abiManagerBytes = typeof abiManagerProgramId === "string"
     ? decodeAddress(abiManagerProgramId)
     : abiManagerProgramId;
+  const seed = await deriveAbiMetaSeed(kind, body);
+  const addressBytes = await deriveProgramAddress(seed, abiManagerBytes, ephemeral);
+  return encodeAddress(addressBytes);
+}
 
-  // Derive the seed
-  const seed = await deriveAbiSeed(programAccountBytes);
-
-  // Derive the PDA
-  const abiAccountBytes = await deriveProgramAddress(seed, abiManagerBytes, ephemeral);
-
-  // Encode as ta-prefixed address
-  return encodeAddress(abiAccountBytes);
+/**
+ * Derives the ABI account address (as a ta-prefixed string).
+ */
+export async function deriveAbiAddress(
+  kind: number,
+  body: Uint8Array,
+  abiManagerProgramId: string | Uint8Array,
+  ephemeral: boolean = false
+): Promise<string> {
+  const abiManagerBytes = typeof abiManagerProgramId === "string"
+    ? decodeAddress(abiManagerProgramId)
+    : abiManagerProgramId;
+  const seed = await deriveAbiAccountSeed(kind, body);
+  const addressBytes = await deriveProgramAddress(seed, abiManagerBytes, ephemeral);
+  return encodeAddress(addressBytes);
 }
