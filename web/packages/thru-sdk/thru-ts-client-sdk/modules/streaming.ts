@@ -15,13 +15,17 @@ import {
     ConsensusStatus,
     type AccountView,
     type BlockView,
+    type NodeRecord,
     StreamAccountUpdatesRequestSchema,
     StreamBlocksRequestSchema,
     StreamEventsRequestSchema,
     StreamHeightRequestSchema,
+    StreamNodeRecordsRequestSchema,
+    StreamSlotMetricsRequestSchema,
     StreamTransactionsRequestSchema,
     TrackTransactionRequestSchema,
 } from "@thru/proto";
+import type { Timestamp } from "@bufbuild/protobuf/wkt";
 
 export type { StreamTransactionUpdate, TrackTransactionUpdate } from "../domain/transactions";
 
@@ -85,7 +89,7 @@ export function streamAccountUpdates(
     // Build address filter - StreamAccountUpdatesRequest now uses filter-based approach
     const addressBytes = Pubkey.from(address).toBytes();
     const addressFilter = new Filter({
-        expression: "snapshot.address.value == params.address || account_update.address.value == params.address",
+        expression: "account_address.value == params.address",
         params: {
             address: FilterParamValue.bytes(addressBytes),
         },
@@ -238,6 +242,73 @@ export function streamHeight(
     async function* mapper() {
         for await (const response of iterable) {
             yield { height: HeightSnapshot.fromProto(response) };
+        }
+    }
+
+    return mapper();
+}
+
+export interface StreamSlotMetricsOptions {
+    startSlot?: bigint;
+    signal?: AbortSignal;
+}
+
+export interface StreamSlotMetricsResult {
+    slot: bigint;
+    collectedFees: bigint;
+    globalActivatedStateCounter: bigint;
+    globalDeactivatedStateCounter: bigint;
+    blockTimestamp?: Timestamp;
+}
+
+export function streamSlotMetrics(
+    ctx: ThruClientContext,
+    options: StreamSlotMetricsOptions = {},
+): AsyncIterable<StreamSlotMetricsResult> {
+    const request = create(StreamSlotMetricsRequestSchema, {
+        startSlot: options.startSlot,
+    });
+
+    const iterable = ctx.streaming.streamSlotMetrics(request, withCallOptions(ctx, { signal: options.signal }));
+
+    async function* mapper() {
+        for await (const response of iterable) {
+            yield {
+                slot: response.slot,
+                collectedFees: response.collectedFees,
+                globalActivatedStateCounter: response.globalActivatedStateCounter,
+                globalDeactivatedStateCounter: response.globalDeactivatedStateCounter,
+                blockTimestamp: response.blockTimestamp,
+            };
+        }
+    }
+
+    return mapper();
+}
+
+export type StreamNodeRecordsResult =
+    | { type: "record"; record: NodeRecord }
+    | { type: "finished" };
+
+export interface StreamNodeRecordsOptions {
+    signal?: AbortSignal;
+}
+
+export function streamNodeRecords(
+    ctx: ThruClientContext,
+    options: StreamNodeRecordsOptions = {},
+): AsyncIterable<StreamNodeRecordsResult> {
+    const request = create(StreamNodeRecordsRequestSchema, {});
+
+    const iterable = ctx.streaming.streamNodeRecords(request, withCallOptions(ctx, { signal: options.signal }));
+
+    async function* mapper(): AsyncGenerator<StreamNodeRecordsResult> {
+        for await (const response of iterable) {
+            if (response.message.case === "record") {
+                yield { type: "record", record: response.message.value };
+            } else if (response.message.case === "finished") {
+                yield { type: "finished" };
+            }
         }
     }
 

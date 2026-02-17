@@ -1,5 +1,33 @@
 use crate::mem::{vm_ptr, SEG_IDX_SHADOW_STACK, SEG_TYPE_READONLY_DATA};
 
+pub const INVOKE_AUTH_MAGIC: u64 = 0xC3F7A1D9E5B20846;
+
+#[repr(C)]
+pub struct InvokeAuth {
+    pub magic: u64,
+    pub auth_cnt: u16,
+    pub deauth_cnt: u16,
+    /* Flexible array: auth_cnt + deauth_cnt u16 indices follow in memory */
+}
+
+impl InvokeAuth {
+    const ACC_IDXS_OFFSET: usize =
+        core::mem::size_of::<u64>() + core::mem::size_of::<u16>() + core::mem::size_of::<u16>();
+
+    /// Get the authorization account indices (first auth_cnt entries after the struct)
+    pub unsafe fn auth_idxs(&self) -> &[u16] {
+        let base = (self as *const InvokeAuth as *const u8).add(Self::ACC_IDXS_OFFSET) as *const u16;
+        core::slice::from_raw_parts(base, self.auth_cnt as usize)
+    }
+
+    /// Get the deauthorization account indices (after auth entries)
+    pub unsafe fn deauth_idxs(&self) -> &[u16] {
+        let base = (self as *const InvokeAuth as *const u8).add(Self::ACC_IDXS_OFFSET) as *const u16;
+        let deauth_base = base.add(self.auth_cnt as usize);
+        core::slice::from_raw_parts(deauth_base, self.deauth_cnt as usize)
+    }
+}
+
 pub const TSDK_SHADOW_STACK_FRAME_MAX: usize = 17; // 16 call depths (1..16) + 1 for frame -1
 pub const TSDK_REG_MAX: usize = 32;
 

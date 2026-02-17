@@ -530,5 +530,3 @@ pub unsafe fn slice_from_vm_ptr<'a, T>(ptr: VmPtr<T>, len: usize) -> &'a [T] {
 pub unsafe fn slice_from_vm_ptr_mut<'a, T>(ptr: VmPtrMut<T>, len: usize) -> &'a mut [T] {
     core::slice::from_raw_parts_mut(ptr.as_mut_ptr(), len)
 }
-
-

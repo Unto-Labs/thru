@@ -63,6 +63,26 @@ typedef struct tsdk_txn tsdk_txn_t;
 
 #define TSDK_SHADOW_STACK_FRAME_MAX (17U) /* 16 call depths (1..16) + 1 for frame -1 */
 
+/* Magic value for invoke authorization struct validation */
+#define TSDK_INVOKE_AUTH_MAGIC (0xC3F7A1D9E5B20846UL)
+
+/* Authorization/deauthorization descriptor for cross-program invocations.
+   Passed to tsys_invoke() to authorize or deauthorize specific accounts
+   across CPI boundaries.  The acc_idxs flexible array contains auth_cnt
+   authorization entries followed by deauth_cnt deauthorization entries.
+
+   Authorization rules:
+   - Auth entries must reference accounts owned by the calling program
+   - Deauth entries can reference any account */
+
+struct tsdk_invoke_auth {
+  ulong  magic;       /* Must be TSDK_INVOKE_AUTH_MAGIC */
+  ushort auth_cnt;    /* Number of authorized account indices */
+  ushort deauth_cnt;  /* Number of deauthorized account indices */
+  ushort acc_idxs[];  /* auth_cnt auth indices, then deauth_cnt deauth indices */
+};
+typedef struct tsdk_invoke_auth tsdk_invoke_auth_t;
+
 /* Account metadata structure containing account state information */
 struct __attribute__(( packed )) tsdk_account_meta {
   uchar       version; /* bytes: [0,1) - Account metadata version */

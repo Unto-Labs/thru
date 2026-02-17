@@ -24,6 +24,7 @@ pub mod program_utils {
     use crate::syscall;
     use crate::types::pubkey::Pubkey;
     use crate::types::shadow_stack::get_shadow_stack;
+    use crate::types::shadow_stack::{InvokeAuth, INVOKE_AUTH_MAGIC};
     use crate::types::state_proof::StateProof;
 
     pub fn revert(error_code: u64) -> ! {
@@ -51,29 +52,65 @@ pub mod program_utils {
     /// - It is the fee payer (index 0)
     /// - It is the current program
     /// - It is in the chain of program invocations (shadow stack)
+    /// - A parent frame explicitly authorized it via InvokeAuth and the authorizing
+    ///   program owns the target account
     pub fn is_account_authorized_by_idx(account_idx: u16) -> bool {
-        // If account is the fee payer, it has authorized
         if account_idx == 0 {
             return true;
         }
 
         let shadow_stack = get_shadow_stack();
 
-        // If account is the current program, this program has authorized
         if shadow_stack.current_program_acc_idx() == account_idx {
             return true;
         }
 
-        // If there are no called program invocations by this point, the account is
-        // not authorized. This is an optimization to avoid the loop below.
         if shadow_stack.call_depth() == 1 {
             return false;
         }
 
-        // If account is in the chain of program invocations, that program has authorized
+        let txn = get_txn();
+        let account_pubkeys = match txn.account_pubkeys() {
+            Ok(pubkeys) => pubkeys,
+            Err(_) => return false,
+        };
+        let target_meta = unsafe {
+            match get_account_meta_at_idx(account_idx) {
+                Ok(meta) => meta,
+                Err(_) => return false,
+            }
+        };
+
         let depth = shadow_stack.call_depth() as usize;
         for i in (1..depth).rev() {
             if let Some(frame) = shadow_stack.get_frame(i as u16) {
+                let auth_ptr = frame.saved_reg(13).unwrap_or(0);
+
+                if auth_ptr != 0 {
+                    let auth = unsafe { &*(auth_ptr as *const InvokeAuth) };
+                    if auth.magic == INVOKE_AUTH_MAGIC {
+                        let deauth_idxs = unsafe { auth.deauth_idxs() };
+                        for &didx in deauth_idxs {
+                            if didx == account_idx {
+                                return false;
+                            }
+                        }
+                        let auth_idxs = unsafe { auth.auth_idxs() };
+                        for &aidx in auth_idxs {
+                            if aidx == account_idx {
+                                let frame_prog_idx = frame.program_acc_idx() as usize;
+                                if let Some(frame_prog_pubkey) = account_pubkeys.get(frame_prog_idx)
+                                {
+                                    if &target_meta.owner == frame_prog_pubkey {
+                                        return true;
+                                    }
+                                }
+                                revert(0xBAD0A174);
+                            }
+                        }
+                    }
+                }
+
                 if frame.program_acc_idx() == account_idx {
                     return true;
                 }
@@ -89,38 +126,69 @@ pub mod program_utils {
     /// - It is the fee payer (index 0)
     /// - It is the current program
     /// - It is in the chain of program invocations (shadow stack)
+    /// - A parent frame explicitly authorized it via InvokeAuth and the authorizing
+    ///   program owns the target account
     pub fn is_account_authorized_by_pubkey(pubkey: &Pubkey) -> bool {
         let txn = get_txn();
 
-        // Get all account pubkeys from transaction
         let account_pubkeys = match txn.account_pubkeys() {
             Ok(pubkeys) => pubkeys,
             Err(_) => return false,
         };
 
-        // If account is the fee payer, it has authorized
         if account_pubkeys.get(0) == Some(pubkey) {
             return true;
         }
 
         let shadow_stack = get_shadow_stack();
 
-        // If account is the current program, this program has authorized
         let current_program_idx = shadow_stack.current_program_acc_idx();
         if account_pubkeys.get(current_program_idx as usize) == Some(pubkey) {
             return true;
         }
 
-        // If there are no called program invocations by this point, the account is
-        // not authorized. This is an optimization to avoid the loop below.
         if shadow_stack.call_depth() == 1 {
             return false;
         }
 
-        // If account is in the chain of program invocations, that program has authorized
         let depth = shadow_stack.call_depth() as usize;
         for i in (1..depth).rev() {
             if let Some(frame) = shadow_stack.get_frame(i as u16) {
+                let auth_ptr = frame.saved_reg(13).unwrap_or(0);
+
+                if auth_ptr != 0 {
+                    let auth = unsafe { &*(auth_ptr as *const InvokeAuth) };
+                    if auth.magic == INVOKE_AUTH_MAGIC {
+                        let deauth_idxs = unsafe { auth.deauth_idxs() };
+                        for &didx in deauth_idxs {
+                            if account_pubkeys.get(didx as usize) == Some(pubkey) {
+                                return false;
+                            }
+                        }
+                        let auth_idxs = unsafe { auth.auth_idxs() };
+                        for &aidx in auth_idxs {
+                            if account_pubkeys.get(aidx as usize) == Some(pubkey) {
+                                let target_meta = unsafe {
+                                    match get_account_meta_at_idx(aidx) {
+                                        Ok(meta) => meta,
+                                        Err(_) => {
+                                            revert(0xBAD0A174);
+                                        }
+                                    }
+                                };
+                                let frame_prog_idx = frame.program_acc_idx() as usize;
+                                if let Some(frame_prog_pubkey) = account_pubkeys.get(frame_prog_idx)
+                                {
+                                    if &target_meta.owner == frame_prog_pubkey {
+                                        return true;
+                                    }
+                                }
+                                revert(0xBAD0A174);
+                            }
+                        }
+                    }
+                }
+
                 let program_idx = frame.program_acc_idx();
                 if account_pubkeys.get(program_idx as usize) == Some(pubkey) {
                     return true;

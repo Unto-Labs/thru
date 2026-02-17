@@ -36,6 +36,10 @@ use crate::{
     },
 };
 
+const INVOKE_AUTH_ERR_BAD_MAGIC: u64 = 0xBAD0A170;
+const INVOKE_AUTH_ERR_UNOWNED_AUTH_ACCOUNT: u64 = 0xBAD0A171;
+const INVOKE_AUTH_ERR_INVALID_ACCOUNT_INDEX: u64 = 0xBAD0A173;
+
 /// Errors that can occur when accessing accounts through AccountManager.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AccountError {
@@ -526,11 +530,42 @@ impl<const NUM_ACCOUNTS: usize> AccountManager<NUM_ACCOUNTS> {
         &self,
         program_account_idx: u16,
         instr_data: &[u8],
+        auth: Option<&crate::types::shadow_stack::InvokeAuth>,
     ) -> (crate::syscall::SyscallCode, crate::syscall::SyscallCode) {
         /* Ensure no accounts are currently borrowed */
         if self.has_active_borrows() {
             panic!("Cannot invoke program while accounts are borrowed");
         }
+
+        if let Some(auth) = auth {
+            if auth.magic != crate::types::shadow_stack::INVOKE_AUTH_MAGIC {
+                crate::program_utils::revert(INVOKE_AUTH_ERR_BAD_MAGIC);
+            }
+
+            let account_cnt = get_txn().accounts_cnt();
+            let auth_idxs = unsafe { auth.auth_idxs() };
+            for &idx in auth_idxs {
+                if idx >= account_cnt {
+                    crate::program_utils::revert(INVOKE_AUTH_ERR_INVALID_ACCOUNT_INDEX);
+                }
+                if !crate::program_utils::is_account_idx_owned_by_current_program(idx) {
+                    crate::program_utils::revert(INVOKE_AUTH_ERR_UNOWNED_AUTH_ACCOUNT);
+                }
+            }
+
+            let deauth_idxs = unsafe { auth.deauth_idxs() };
+            for &idx in deauth_idxs {
+                if idx >= account_cnt {
+                    crate::program_utils::revert(INVOKE_AUTH_ERR_INVALID_ACCOUNT_INDEX);
+                }
+            }
+
+        }
+
+        let auth_ptr = match auth {
+            Some(a) => a as *const crate::types::shadow_stack::InvokeAuth as *const u8,
+            None => core::ptr::null(),
+        };
 
         /* Perform the syscall */
         unsafe {
@@ -538,6 +573,7 @@ impl<const NUM_ACCOUNTS: usize> AccountManager<NUM_ACCOUNTS> {
                 instr_data.as_ptr(),
                 instr_data.len() as u64,
                 program_account_idx,
+                auth_ptr,
             )
         }
     }

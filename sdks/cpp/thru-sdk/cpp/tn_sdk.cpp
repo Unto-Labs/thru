@@ -63,28 +63,59 @@ void tsdk_printf(const char* fmt, ...) {
 }
 
 int tsdk_is_account_authorized_by_idx(ushort account_idx) {
-  // If account is the fee payer, it has authorized
+  /* Fee payer is always authorized */
   if (account_idx == 0) {
     return 1;
   }
 
-  // If account is the current program, this program has authorized
   const tsdk_shadow_stack* shadow_stack = tsdk_get_shadow_stack();
-  ushort current_program_acc_idx = shadow_stack->stack_frames[shadow_stack->call_depth].program_acc_idx;
+
+  /* Current program is always authorized */
+  ushort current_program_acc_idx =
+      shadow_stack->stack_frames[shadow_stack->call_depth].program_acc_idx;
   if (current_program_acc_idx == account_idx) {
     return 1;
   }
 
-  // If there are no called program invocations by this point, the account is
-  // not authorized. This is an optimization to avoid the loop below.
+  /* No parent frames to check */
   if (shadow_stack->call_depth == 1) {
     return 0;
   }
 
-  // If account is in the chain of program invocations, that program has
-  // authorized.
-  for (ushort i = shadow_stack->call_depth - 1; i > 0; i--) {
+  const pubkey_t* accs = tn_txn_get_acct_addrs(tsdk_get_txn());
+  const tn_account_meta* target_meta = tsdk_get_account_meta(account_idx);
+
+  /* Walk shadow stack from most recent parent down to root.
+     First match wins - deeper frames override shallower ones. */
+  for (ushort i = static_cast<ushort>(shadow_stack->call_depth - 1U); i > 0;
+       i--) {
     const tsdk_shadow_stack_frame* frame = &shadow_stack->stack_frames[i];
+    ulong auth_ptr = frame->saved_regs[13]; /* a3 register */
+
+    if (auth_ptr != 0UL) {
+      const tsdk_invoke_auth_t* auth =
+          reinterpret_cast<const tsdk_invoke_auth_t*>(auth_ptr);
+      if (auth->magic == TSDK_INVOKE_AUTH_MAGIC) {
+        const ushort* deauth = auth->deauth_idxs();
+        for (ushort j = 0; j < auth->deauth_cnt; j++) {
+          if (deauth[j] == account_idx) {
+            return 0;
+          }
+        }
+        const ushort* auth_idxs = auth->auth_idxs();
+        for (ushort j = 0; j < auth->auth_cnt; j++) {
+          if (auth_idxs[j] == account_idx) {
+            if (std::memcmp(&target_meta->owner, &accs[frame->program_acc_idx],
+                            sizeof(pubkey_t)) == 0) {
+              return 1;
+            }
+            tsdk_revert(0xBAD0A174UL); /* auth entry for unowned account */
+          }
+        }
+      }
+    }
+
+    /* Existing behavior: program in call chain is authorized */
     if (frame->program_acc_idx == account_idx) {
       return 1;
     }
@@ -96,33 +127,62 @@ int tsdk_is_account_authorized_by_idx(ushort account_idx) {
 int tsdk_is_account_authorized_by_pubkey(const pubkey_t* pubkey) {
   const pubkey_t* accs = tn_txn_get_acct_addrs(tsdk_get_txn());
 
-  // If account is the fee payer, it has authorized
-  if (std::memcmp(pubkey->key.data(), accs[0].key.data(), sizeof(pubkey_t)) ==
+  /* Fee payer is always authorized */
+  if (std::memcmp(pubkey, &accs[0], sizeof(pubkey_t)) == 0) {
+    return 1;
+  }
+
+  const tsdk_shadow_stack* shadow_stack = tsdk_get_shadow_stack();
+
+  /* Current program is always authorized */
+  ushort current_program_acc_idx =
+      shadow_stack->stack_frames[shadow_stack->call_depth].program_acc_idx;
+  if (std::memcmp(pubkey, &accs[current_program_acc_idx], sizeof(pubkey_t)) ==
       0) {
     return 1;
   }
 
-  // If account is the current program, this program has authorized
-  const tsdk_shadow_stack* shadow_stack = tsdk_get_shadow_stack();
-  ushort current_program_acc_idx = shadow_stack->stack_frames[shadow_stack->call_depth].program_acc_idx;
-  if (std::memcmp(pubkey->key.data(),
-                  accs[current_program_acc_idx].key.data(),
-                  sizeof(pubkey_t)) == 0) {
-    return 1;
-  }
-
-  // If there are no called program invocations by this point, the account is
-  // not authorized. This is an optimization to avoid the loop below.
+  /* No parent frames to check */
   if (shadow_stack->call_depth == 1) {
     return 0;
   }
 
-  // If account is in the chain of program invocations, that program has
-  // authorized.
-  for (ushort i = shadow_stack->call_depth - 1; i > 0; i--) {
+  /* Walk shadow stack from most recent parent down to root.
+     First match wins - deeper frames override shallower ones. */
+  for (ushort i = static_cast<ushort>(shadow_stack->call_depth - 1U); i > 0;
+       i--) {
     const tsdk_shadow_stack_frame* frame = &shadow_stack->stack_frames[i];
-    if (std::memcmp(pubkey->key.data(), accs[frame->program_acc_idx].key.data(),
-                    sizeof(pubkey_t)) == 0) {
+    ulong auth_ptr = frame->saved_regs[13]; /* a3 register */
+
+    if (auth_ptr != 0UL) {
+      const tsdk_invoke_auth_t* auth =
+          reinterpret_cast<const tsdk_invoke_auth_t*>(auth_ptr);
+      if (auth->magic == TSDK_INVOKE_AUTH_MAGIC) {
+        const ushort* deauth_idxs = auth->deauth_idxs();
+        for (ushort j = 0; j < auth->deauth_cnt; j++) {
+          if (std::memcmp(pubkey, &accs[deauth_idxs[j]], sizeof(pubkey_t)) ==
+              0) {
+            return 0;
+          }
+        }
+        const ushort* auth_idxs = auth->auth_idxs();
+        for (ushort j = 0; j < auth->auth_cnt; j++) {
+          if (std::memcmp(pubkey, &accs[auth_idxs[j]], sizeof(pubkey_t)) ==
+              0) {
+            const tn_account_meta* target_meta = tsdk_get_account_meta(auth_idxs[j]);
+            if (std::memcmp(&target_meta->owner, &accs[frame->program_acc_idx],
+                            sizeof(pubkey_t)) == 0) {
+              return 1;
+            }
+            tsdk_revert(0xBAD0A174UL); /* auth entry for unowned account */
+          }
+        }
+      }
+    }
+
+    /* Existing behavior: program in call chain is authorized */
+    if (std::memcmp(pubkey, &accs[frame->program_acc_idx], sizeof(pubkey_t)) ==
+        0) {
       return 1;
     }
   }

@@ -239,6 +239,7 @@ mod imp {
         instr_data: *const u8,
         instr_data_sz: u64,
         program_account_idx: u16,
+        auth: *const u8,
     ) -> (SyscallCode, SyscallCode) {
         let mut a0 = instr_data as u64;
         let mut a1 = instr_data_sz as u64;
@@ -247,6 +248,7 @@ mod imp {
             inout("a0") a0,
             inout("a1") a1,
             in("a2") program_account_idx as u64,
+            in("a3") auth as u64,
             in("a7") INVOKE,
             options(nostack, preserves_flags),
         );

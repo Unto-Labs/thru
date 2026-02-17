@@ -8,6 +8,8 @@ import {
     StateProofRequestSchema,
     GenerateStateProofRequestSchema,
     GenerateStateProofResponse,
+    GetStateRootsRequestSchema,
+    type GetStateRootsResponse,
 } from "@thru/proto";
 import { GenerateStateProofOptions } from "../types/types";
 
@@ -34,4 +36,18 @@ export async function generateStateProof(
         throw new Error("State proof response missing proof");
     }
     return StateProof.fromProto(response.proof);
+}
+
+export interface GetStateRootsOptions {
+    slot?: bigint;
+}
+
+export async function getStateRoots(
+    ctx: ThruClientContext,
+    options: GetStateRootsOptions = {},
+): Promise<GetStateRootsResponse> {
+    const request = create(GetStateRootsRequestSchema, {
+        slot: options.slot,
+    });
+    return ctx.query.getStateRoots(request, withCallOptions(ctx));
 }

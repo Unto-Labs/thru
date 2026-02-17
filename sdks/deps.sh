@@ -21,12 +21,25 @@ fi
 OS="$(uname -s)"
 case "$OS" in
   Darwin)
-    NJOBS=$(sysctl -n hw.physicalcpu)
+    NJOBS=${NJOBS:-$(sysctl -n hw.physicalcpu)}
     MAKE=( make -j $NJOBS )
     ID=macos
     ;;
   Linux)
-    NJOBS=$(nproc)
+    # Detect available memory in MB
+    AVAILABLE_MEM_MB=$(awk '/MemAvailable/ {print int($2/1024)}' /proc/meminfo 2>/dev/null || echo "16384")
+    MACHINE_ARCH=$(uname -m)
+
+    # RISC-V toolchain builds require significant memory (>12GB for parallel builds)
+    # Automatically limit parallelism on low-memory RISC-V systems
+    if [[ "$MACHINE_ARCH" == "riscv64" ]] && [[ $AVAILABLE_MEM_MB -lt 12288 ]]; then
+      echo "[!] Low memory detected on RISC-V ($AVAILABLE_MEM_MB MB available)"
+      echo "[!] Limiting build to single process to avoid OOM during toolchain build"
+      NJOBS=1
+    else
+      NJOBS=${NJOBS:-$(nproc)}
+    fi
+
     MAKE=( make -j $NJOBS -Otarget )
     # Load distro information
     if [[ -f /etc/os-release ]]; then
@@ -186,7 +199,21 @@ check_fedora_pkgs () {
 }
 
 check_debian_pkgs () {
-  local REQUIRED_DEBS=( curl perl autoconf gettext automake autopoint flex bison build-essential gcc-multilib protobuf-compiler llvm lcov libgmp-dev libudev-dev cmake libclang-dev pkgconf meson ninja-build texinfo libexpat1-dev libmpfr-dev gawk libmpc-dev python3 python3-pip python3-tomli bc zlib1g-dev git libglib2.0-dev libslirp-dev zstd zlib1g bear )
+  local REQUIRED_DEBS=( curl perl autoconf gettext automake autopoint flex bison build-essential protobuf-compiler llvm lcov libgmp-dev libudev-dev cmake libclang-dev pkgconf meson ninja-build texinfo libexpat1-dev libmpfr-dev gawk libmpc-dev python3 python3-pip python3-tomli bc zlib1g-dev git libglib2.0-dev libslirp-dev zstd zlib1g bear )
+
+  # Architecture-specific packages
+  local MACHINE_NAME=$(uname -m)
+  case "${MACHINE_NAME}" in
+    x86_64)
+      REQUIRED_DEBS+=( gcc-multilib )
+      ;;
+    aarch64)
+      : # No multilib needed on ARM64
+      ;;
+    riscv64)
+      : # No multilib needed on RISC-V
+      ;;
+  esac
 
   echo "[~] Checking for required DEB packages"
 

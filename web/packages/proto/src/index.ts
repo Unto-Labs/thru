@@ -11,6 +11,7 @@ export * from "./gen/thru/common/v1/primitives_pb";
 // Core types
 export * from "./gen/thru/core/v1/account_pb";
 export * from "./gen/thru/core/v1/block_pb";
+export * from "./gen/thru/core/v1/node_pb";
 export * from "./gen/thru/core/v1/state_pb";
 export * from "./gen/thru/core/v1/transaction_pb";
 export * from "./gen/thru/core/v1/types_pb";

@@ -10,7 +10,9 @@ export * as consensus from "./modules/consensus";
 export * as events from "./modules/events";
 export * as height from "./modules/height";
 export * as keys from "./modules/keys";
+export * as node from "./modules/node";
 export * as proofs from "./modules/proofs";
+export * as slots from "./modules/slots";
 export * as streaming from "./modules/streaming";
 export * as transactions from "./modules/transactions";
 
@@ -39,6 +41,7 @@ export {
   AccountView,
   BlockView,
   ExecutionStatus,
+  SubmissionStatus,
   TransactionView,
   TransactionVmError
 } from "@thru/proto";
@@ -96,6 +99,11 @@ export type {
 export type { GeneratedKeyPair } from "./modules/keys";
 
 // ============================================================================
+// Type Exports - Slots Module
+// ============================================================================
+export type { ListSlotMetricsOptions } from "./modules/slots";
+
+// ============================================================================
 // Type Exports - Streaming Module
 // ============================================================================
 export type { StreamAccountUpdate } from "./domain/accounts";
@@ -106,7 +114,12 @@ export type {
   StreamBlocksOptions,
   StreamBlocksResult,
   StreamEventsOptions,
-  StreamEventsResult, StreamTransactionsOptions,
+  StreamEventsResult,
+  StreamNodeRecordsOptions,
+  StreamNodeRecordsResult,
+  StreamSlotMetricsOptions,
+  StreamSlotMetricsResult,
+  StreamTransactionsOptions,
   StreamTransactionsResult, StreamTransactionUpdate, TrackTransactionOptions,
   TrackTransactionUpdate
 } from "./modules/streaming";
@@ -128,6 +141,8 @@ export type {
   BuildTransactionOptions,
   InstructionData,
   ListTransactionsForAccountOptions, RawTransactionQueryOptions,
+  SendAndTrackTxnOptions,
+  SendAndTrackTxnUpdate,
   TransactionAccountsConfig,
   TransactionFeePayerConfig,
   TransactionHeaderConfig, TransactionList, TransactionQueryOptions
@@ -137,3 +152,4 @@ export type {
 // Type Exports - Proofs Module
 // ============================================================================
 export type { GenerateStateProofOptions } from "./types/types";
+export type { GetStateRootsOptions } from "./modules/proofs";

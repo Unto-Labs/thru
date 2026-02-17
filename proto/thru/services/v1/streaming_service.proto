@@ -13,6 +13,7 @@ import "thru/core/v1/account.proto";
 import "thru/core/v1/block.proto";
 import "thru/core/v1/transaction.proto";
 import "thru/core/v1/types.proto";
+import "thru/core/v1/node.proto";
 
 option go_package = "github.com/Unto-Labs/thru-net/grpc/pkg/proto/thru/services/v1;servicesv1";
 option java_multiple_files = true;
@@ -580,8 +581,8 @@ message StreamSlotMetricsResponse {
   uint64 global_deactivated_state_counter = 3 [(google.api.field_behavior) = REQUIRED];
   // Total fees collected from all transactions in this block.
   uint64 collected_fees = 4 [(google.api.field_behavior) = REQUIRED];
-  // Block timestamp when available.
-  optional google.protobuf.Timestamp block_timestamp = 5 [(google.api.field_behavior) = OPTIONAL];
+  // Block timestamp.
+  google.protobuf.Timestamp block_timestamp = 5 [(google.api.field_behavior) = REQUIRED];
 }
 
 // StreamHeightRequest subscribes to real-time height updates.
@@ -592,6 +593,19 @@ message StreamHeightResponse {
   uint64 finalized = 1 [(google.api.field_behavior) = REQUIRED];
   uint64 locally_executed = 2 [(google.api.field_behavior) = REQUIRED];
   uint64 cluster_executed = 3 [(google.api.field_behavior) = REQUIRED];
+}
+
+// StreamNodeRecordsRequest subscribes to node record updates from the gossip network.
+message StreamNodeRecordsRequest {}
+
+// StreamNodeRecordsResponse delivers node record updates.
+message StreamNodeRecordsResponse {
+  oneof message {
+    // A node record (initial snapshot or update).
+    thru.core.v1.NodeRecord record = 1;
+    // Signals the initial batch of records is complete.
+    bool finished = 2;
+  }
 }
 
 // StreamingService serves server-streaming gRPC APIs for real-time data.
@@ -618,4 +632,9 @@ service StreamingService {
   // Metrics are emitted after each block's execution completes.
   rpc StreamSlotMetrics(StreamSlotMetricsRequest)
       returns (stream StreamSlotMetricsResponse);
+
+  // Stream node records from the gossip network.
+  // Returns an initial snapshot of all known records, followed by live updates.
+  rpc StreamNodeRecords(StreamNodeRecordsRequest)
+      returns (stream StreamNodeRecordsResponse);
 }

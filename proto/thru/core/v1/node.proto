@@ -1,0 +1,50 @@
+syntax = "proto3";
+
+package thru.core.v1;
+
+import "google/api/field_behavior.proto";
+import "thru/common/v1/primitives.proto";
+
+option go_package = "github.com/Unto-Labs/thru-net/grpc/pkg/proto/thru/core/v1;corev1";
+option java_multiple_files = true;
+option java_package = "network.thru.core.v1";
+option csharp_namespace = "Thru.Core.V1";
+option ruby_package = "Thru::Core::V1";
+option objc_class_prefix = "THUC";
+option swift_prefix = "THUC";
+
+// NodeContact represents a network contact address for a node.
+message NodeContact {
+  // IPv4 address as 32-bit integer (network byte order).
+  uint32 ip4_addr = 1 [(google.api.field_behavior) = REQUIRED];
+  // Port number.
+  uint32 port = 2 [(google.api.field_behavior) = REQUIRED];
+}
+
+// NodeProtocol represents a protocol supported by a node contact.
+message NodeProtocol {
+  // Index into the contacts array.
+  uint32 contact_idx = 1 [(google.api.field_behavior) = REQUIRED];
+  // Protocol identifier (discovery=1, block_dissem=2, consensus=3, snapshot=4, repair=5, transaction=6).
+  uint32 protocol_id = 2 [(google.api.field_behavior) = REQUIRED];
+}
+
+// NodeRecord represents a node's signed identity and network information.
+message NodeRecord {
+  // Record version.
+  uint32 version = 1 [(google.api.field_behavior) = REQUIRED];
+  // Chain identifier.
+  uint32 chain_id = 2 [(google.api.field_behavior) = REQUIRED];
+  // Sequence number (incremented on each record update).
+  uint64 seqnum = 3 [(google.api.field_behavior) = REQUIRED];
+  // Node's ED25519 public key.
+  thru.common.v1.Pubkey pubkey = 4 [(google.api.field_behavior) = REQUIRED];
+  // Network contact addresses.
+  repeated NodeContact contacts = 5 [(google.api.field_behavior) = OPTIONAL];
+  // Protocols supported at each contact.
+  repeated NodeProtocol protocols = 6 [(google.api.field_behavior) = OPTIONAL];
+  // ED25519 signature over the record.
+  bytes signature = 7 [(google.api.field_behavior) = REQUIRED];
+  // True if this is the responding node's own record.
+  bool is_own = 8 [(google.api.field_behavior) = REQUIRED];
+}

@@ -14,8 +14,11 @@ import {
     type DeriveProgramAddressOptions,
     type DeriveProgramAddressResult
 } from "../modules/helpers";
+import * as chainModule from "../modules/chain";
 import * as keysModule from "../modules/keys";
+import * as nodeModule from "../modules/node";
 import * as proofsModule from "../modules/proofs";
+import * as slotsModule from "../modules/slots";
 import * as streamingModule from "../modules/streaming";
 import * as transactionsModule from "../modules/transactions";
 import * as versionModule from "../modules/version";
@@ -59,6 +62,7 @@ interface BoundTransactions {
     buildAndSign: BoundFunction<typeof transactionsModule.buildAndSignTransaction>;
     send: BoundFunction<typeof transactionsModule.sendTransaction>;
     batchSend: BoundFunction<typeof transactionsModule.batchSendTransactions>;
+    sendAndTrack: BoundFunction<typeof transactionsModule.sendAndTrackTxn>;
     track: BoundFunction<typeof streamingModule.trackTransaction>;
 }
 
@@ -70,6 +74,7 @@ interface BoundEvents {
 
 interface BoundProofs {
     generate: BoundFunction<typeof proofsModule.generateStateProof>;
+    getStateRoots: BoundFunction<typeof proofsModule.getStateRoots>;
 }
 
 interface BoundKeys {
@@ -79,6 +84,23 @@ interface BoundKeys {
 
 interface BoundVersion {
     get: BoundFunction<typeof versionModule.getVersion>;
+}
+
+interface BoundSlots {
+    getMetrics: BoundFunction<typeof slotsModule.getSlotMetrics>;
+    listMetrics: BoundFunction<typeof slotsModule.listSlotMetrics>;
+    streamMetrics: BoundFunction<typeof streamingModule.streamSlotMetrics>;
+}
+
+interface BoundNode {
+    getPubkey: BoundFunction<typeof nodeModule.getNodePubkey>;
+    getRecords: BoundFunction<typeof nodeModule.getNodeRecords>;
+    streamRecords: BoundFunction<typeof streamingModule.streamNodeRecords>;
+}
+
+interface BoundChain {
+    getChainInfo: BoundFunction<typeof chainModule.getChainInfo>;
+    getChainId: BoundFunction<typeof chainModule.getChainId>;
 }
 
 interface BoundConsensus {
@@ -104,10 +126,13 @@ export interface Thru {
     accounts: BoundAccounts;
     transactions: BoundTransactions;
     events: BoundEvents;
+    slots: BoundSlots;
     proofs: BoundProofs;
     keys: BoundKeys;
     version: BoundVersion;
     consensus: BoundConsensus;
+    node: BoundNode;
+    chain: BoundChain;
     helpers: Helpers;
 }
 
@@ -140,6 +165,7 @@ export function createBoundThruClient(ctx: ThruClientContext): Thru {
             buildAndSign: bind(ctx, transactionsModule.buildAndSignTransaction),
             send: bind(ctx, transactionsModule.sendTransaction),
             batchSend: bind(ctx, transactionsModule.batchSendTransactions),
+            sendAndTrack: bind(ctx, transactionsModule.sendAndTrackTxn),
             track: bind(ctx, streamingModule.trackTransaction),
         },
         helpers: {
@@ -157,8 +183,23 @@ export function createBoundThruClient(ctx: ThruClientContext): Thru {
             list: bind(ctx, eventsModule.listEvents),
             stream: bind(ctx, streamingModule.streamEvents),
         },
+        slots: {
+            getMetrics: bind(ctx, slotsModule.getSlotMetrics),
+            listMetrics: bind(ctx, slotsModule.listSlotMetrics),
+            streamMetrics: bind(ctx, streamingModule.streamSlotMetrics),
+        },
         proofs: {
             generate: bind(ctx, proofsModule.generateStateProof),
+            getStateRoots: bind(ctx, proofsModule.getStateRoots),
+        },
+        node: {
+            getPubkey: bind(ctx, nodeModule.getNodePubkey),
+            getRecords: bind(ctx, nodeModule.getNodeRecords),
+            streamRecords: bind(ctx, streamingModule.streamNodeRecords),
+        },
+        chain: {
+            getChainInfo: bind(ctx, chainModule.getChainInfo),
+            getChainId: bind(ctx, chainModule.getChainId),
         },
         version: {
             get: bind(ctx, versionModule.getVersion),

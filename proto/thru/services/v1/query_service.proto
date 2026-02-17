@@ -16,6 +16,7 @@ import "thru/core/v1/block.proto";
 import "thru/core/v1/state.proto";
 import "thru/core/v1/transaction.proto";
 import "thru/core/v1/types.proto";
+import "thru/core/v1/node.proto";
 
 option go_package = "github.com/Unto-Labs/thru-net/grpc/pkg/proto/thru/services/v1;servicesv1";
 option java_multiple_files = true;
@@ -1013,6 +1014,22 @@ message ListSlotMetricsResponse {
   repeated GetSlotMetricsResponse metrics = 1 [(google.api.field_behavior) = REQUIRED];
 }
 
+// GetNodePubkeyRequest requests the node's own public key.
+message GetNodePubkeyRequest {}
+
+// GetNodePubkeyResponse returns the node's ED25519 public key.
+message GetNodePubkeyResponse {
+  thru.common.v1.Pubkey pubkey = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+// GetNodeRecordsRequest requests all known node records.
+message GetNodeRecordsRequest {}
+
+// GetNodeRecordsResponse returns all known node records from the gossip network.
+message GetNodeRecordsResponse {
+  repeated thru.core.v1.NodeRecord records = 1 [(google.api.field_behavior) = OPTIONAL];
+}
+
 
 // QueryService defines unary RPCs for accessing blockchain data.
 service QueryService {
@@ -1174,6 +1191,20 @@ service QueryService {
   rpc ListSlotMetrics(ListSlotMetricsRequest) returns (ListSlotMetricsResponse) {
     option (google.api.http) = {
       get: "/v1/slots/metrics"
+    };
+  }
+
+  // Get the node's own ED25519 public key.
+  rpc GetNodePubkey(GetNodePubkeyRequest) returns (GetNodePubkeyResponse) {
+    option (google.api.http) = {
+      get: "/v1/node/pubkey"
+    };
+  }
+
+  // Get all known node records from the gossip network.
+  rpc GetNodeRecords(GetNodeRecordsRequest) returns (GetNodeRecordsResponse) {
+    option (google.api.http) = {
+      get: "/v1/node/records"
     };
   }
 }

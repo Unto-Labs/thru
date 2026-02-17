@@ -35,6 +35,9 @@ import {
     TransactionView,
     BatchSendTransactionsRequestSchema,
     type BatchSendTransactionsResponse,
+    SendAndTrackTxnRequestSchema,
+    type SendAndTrackTxnResponse,
+    type SubmissionStatus,
     SendTransactionRequestSchema,
     GetRawTransactionRequestSchema,
     GetTransactionRequestSchema,
@@ -255,6 +258,64 @@ export async function batchSendTransactions(
         numRetries: options.numRetries ?? 0,
     });
     return ctx.command.batchSendTransactions(request, withCallOptions(ctx));
+}
+
+export interface SendAndTrackTxnOptions {
+    timeoutMs?: number;
+    signal?: AbortSignal;
+}
+
+export interface SendAndTrackTxnUpdate {
+    status: SubmissionStatus;
+    signature?: { value: Uint8Array };
+    consensusStatus: number;
+    executionResult?: {
+        vmError: number;
+        consumedComputeUnits: number;
+        userErrorCode: bigint;
+    };
+}
+
+export function sendAndTrackTxn(
+    ctx: ThruClientContext,
+    transaction: LocalTransaction | Uint8Array,
+    options: SendAndTrackTxnOptions = {},
+): AsyncIterable<SendAndTrackTxnUpdate> {
+    const raw = transaction instanceof Uint8Array ? transaction : transaction.toWire();
+    const request = create(SendAndTrackTxnRequestSchema, {
+        transaction: raw,
+        timeout:
+            options.timeoutMs != null
+                ? {
+                    seconds: BigInt(Math.floor(options.timeoutMs / 1000)),
+                    nanos: (options.timeoutMs % 1000) * 1_000_000,
+                }
+                : undefined,
+    });
+
+    const iterable = ctx.command.sendAndTrackTxn(request, {
+        ...withCallOptions(ctx),
+        signal: options.signal,
+    });
+
+    async function* mapper(): AsyncGenerator<SendAndTrackTxnUpdate> {
+        for await (const response of iterable) {
+            yield {
+                status: response.status,
+                signature: response.signature ? { value: response.signature.value } : undefined,
+                consensusStatus: response.consensusStatus,
+                executionResult: response.executionResult
+                    ? {
+                        vmError: response.executionResult.vmError,
+                        consumedComputeUnits: response.executionResult.consumedComputeUnits,
+                        userErrorCode: response.executionResult.userErrorCode,
+                    }
+                    : undefined,
+            };
+        }
+    }
+
+    return mapper();
 }
 
 async function sendRawTransaction(ctx: ThruClientContext, rawTransaction: Uint8Array): Promise<string> {
