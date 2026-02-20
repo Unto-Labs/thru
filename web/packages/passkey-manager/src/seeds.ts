@@ -45,3 +45,36 @@ export async function deriveWalletAddress(
   const hashBuffer = await crypto.subtle.digest('SHA-256', preimage);
   return new Uint8Array(hashBuffer);
 }
+
+/**
+ * Create a 32-byte seed for a credential lookup PDA.
+ * SHA-256(credentialId || walletName)
+ *
+ * Including walletName makes the lookup unique per (credential, wallet) pair,
+ * so one passkey can be an authority on multiple wallets with separate lookups.
+ */
+export async function createCredentialLookupSeed(
+  credentialId: Uint8Array,
+  walletName: string
+): Promise<Uint8Array> {
+  const nameBytes = new TextEncoder().encode(walletName);
+  const data = new Uint8Array(credentialId.length + nameBytes.length);
+  data.set(credentialId, 0);
+  data.set(nameBytes, credentialId.length);
+
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  return new Uint8Array(hashBuffer);
+}
+
+/**
+ * Derive credential lookup PDA address from a credential ID and wallet name.
+ * Convenience wrapper: deriveWalletAddress(SHA-256(credentialId || walletName), programAddress)
+ */
+export async function deriveCredentialLookupAddress(
+  credentialId: Uint8Array,
+  walletName: string,
+  programAddress: string
+): Promise<Uint8Array> {
+  const seed = await createCredentialLookupSeed(credentialId, walletName);
+  return deriveWalletAddress(seed, programAddress);
+}

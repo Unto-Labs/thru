@@ -22,8 +22,11 @@ import {
   concatenateInstructions,
   createWalletSeed,
   deriveWalletAddress,
+  createCredentialLookupSeed,
   encodeCreateInstruction,
+  encodeRegisterCredentialInstruction,
   buildPasskeyReadWriteAccounts,
+  base64UrlToBytes,
   PASSKEY_MANAGER_PROGRAM_ADDRESS,
 } from '@thru/passkey-manager';
 import { uint8ArrayToBase64 } from '@/lib/wallet/utils';
@@ -67,7 +70,7 @@ export function useAccounts(): AccountContextState {
 
 export function AccountProvider({ children }: { children: React.ReactNode }) {
   const { isUnlocked, resetLockTimer, network } = useSession();
-  const { passkeyPublicKey } = usePasskeyAuth();
+  const { passkeyPublicKey, currentPasskey } = usePasskeyAuth();
 
   const [accounts, setAccounts] = useState<DerivedAccount[]>([]);
   const [balances, setBalances] = useState<Map<number, bigint>>(new Map());
@@ -192,8 +195,23 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
         const feePayerPublicKey = decodeAddress(MANAGER_PROFILE.address);
         const programAddress = decodeAddress(PASSKEY_MANAGER_PROGRAM_ADDRESS);
 
+        // Determine if we can register a credential lookup PDA
+        const credentialId = currentPasskey?.credentialId;
+        let lookupAddressBytes: Uint8Array | null = null;
+        let lookupSeed: Uint8Array | null = null;
+
+        if (credentialId) {
+          const credentialIdBytes = base64UrlToBytes(credentialId);
+          lookupSeed = await createCredentialLookupSeed(credentialIdBytes, walletName);
+          lookupAddressBytes = await deriveWalletAddress(lookupSeed, PASSKEY_MANAGER_PROGRAM_ADDRESS);
+        }
+
+        const readWriteAccounts = lookupAddressBytes
+          ? [walletAddress, lookupAddressBytes]
+          : [walletAddress];
+
         const { readWriteAddresses, findAccountIndex } = buildPasskeyReadWriteAccounts(
-          [walletAddress],
+          readWriteAccounts,
           feePayerPublicKey,
           programAddress
         );
@@ -223,7 +241,33 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
           stateProof: stateProof.proof,
         });
 
-        const instructionData = concatenateInstructions([fullCreateInstr]);
+        const instructions = [fullCreateInstr];
+
+        // Register credential lookup PDA if credentialId is available
+        if (lookupAddressBytes && lookupSeed) {
+          const lookupAccountIdx = findAccountIndex(lookupAddressBytes);
+          const lookupAddressStr = encodeAddress(lookupAddressBytes);
+
+          const lookupStateProof = await sdk.proofs.generate({
+            proofType: StateProofType.CREATING,
+            address: lookupAddressStr,
+          });
+
+          if (!lookupStateProof.proof || lookupStateProof.proof.length === 0) {
+            throw new Error('Failed to get state proof for credential lookup PDA');
+          }
+
+          const registerCredentialInstr = encodeRegisterCredentialInstruction({
+            walletAccountIdx,
+            lookupAccountIdx,
+            seed: lookupSeed,
+            stateProof: lookupStateProof.proof,
+          });
+
+          instructions.push(registerCredentialInstr);
+        }
+
+        const instructionData = concatenateInstructions(instructions);
 
         walletDebug('create instruction data', {
           fullCreateInstrLength: fullCreateInstr.length,
@@ -348,7 +392,7 @@ export function AccountProvider({ children }: { children: React.ReactNode }) {
         setIsLoading(false);
       }
     },
-    [accounts, isUnlocked, loadAccounts, passkeyPublicKey, resetLockTimer]
+    [accounts, currentPasskey, isUnlocked, loadAccounts, passkeyPublicKey, resetLockTimer]
   );
 
   const renameAccount = useCallback(async (index: number, label: string): Promise<void> => {

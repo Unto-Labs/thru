@@ -1,4 +1,5 @@
 import { Body4, Body5, Ui5 } from '@thru/design-system';
+import { formatLamportsAsThru } from '@/lib/wallet/utils';
 
 interface AccountListItemProps {
   label: string;
@@ -15,7 +16,7 @@ export function AccountListItem({
   isSelected,
   onClick,
 }: AccountListItemProps) {
-  const balanceThru = Number(balance) / 1e9;
+  const balanceThru = formatLamportsAsThru(balance);
 
   return (
     <button
@@ -37,7 +38,7 @@ export function AccountListItem({
         </div>
         <div className="ml-2 text-right flex-shrink-0">
           <Body4 className={isSelected ? 'text-text-primary' : 'text-text-secondary'} bold>
-            {balanceThru.toFixed(4)}
+            {balanceThru}
           </Body4>
           <Body5 className="text-text-tertiary">THRU</Body5>
         </div>

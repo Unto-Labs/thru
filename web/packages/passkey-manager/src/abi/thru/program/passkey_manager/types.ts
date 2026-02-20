@@ -2836,6 +2836,297 @@ export class AddAuthorityArgsBuilder {
   }
 }
 
+/* ----- TYPE DEFINITION FOR CredentialLookup ----- */
+
+const __tn_ir_CredentialLookup = {
+  typeName: "CredentialLookup",
+  root: { op: "const", value: 32n }
+} as const;
+
+export class CredentialLookup {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): CredentialLookup {
+    if (!buffer || buffer.length === undefined) throw new Error("CredentialLookup.__tnCreateView requires a Uint8Array");
+    return new CredentialLookup(new Uint8Array(buffer));
+  }
+
+  static builder(): CredentialLookupBuilder {
+    return new CredentialLookupBuilder();
+  }
+
+  static fromBuilder(builder: CredentialLookupBuilder): CredentialLookup | null {
+    const buffer = builder.build();
+    return CredentialLookup.from_array(buffer);
+  }
+
+  get_wallet(): Pubkey {
+    const offset = 0;
+    const slice = this.buffer.subarray(offset, offset + 32);
+    return Pubkey.from_array(slice)!;
+  }
+
+  set_wallet(value: Pubkey): void {
+    /* Copy bytes from source struct to this field */
+    const sourceBytes = (value as any).buffer as Uint8Array;
+    const offset = 0;
+    this.buffer.set(sourceBytes, offset);
+  }
+
+  get wallet(): Pubkey {
+    return this.get_wallet();
+  }
+
+  set wallet(value: Pubkey) {
+    this.set_wallet(value);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_CredentialLookup.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_CredentialLookup, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for CredentialLookup');
+    }
+    return __tnBigIntToNumber(irResult, 'CredentialLookup::footprint');
+  }
+
+  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    if (buffer.length < 32) return { ok: false, code: "tn.buffer_too_small", consumed: 32 };
+    return { ok: true, consumed: 32 };
+  }
+
+  static from_array(buffer: Uint8Array): CredentialLookup | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new CredentialLookup(buffer);
+  }
+
+}
+
+__tnRegisterFootprint("CredentialLookup", (params) => CredentialLookup.__tnInvokeFootprint(params));
+__tnRegisterValidate("CredentialLookup", (buffer, params) => CredentialLookup.__tnInvokeValidate(buffer, params));
+
+export class CredentialLookupBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+
+  constructor() {
+    this.buffer = new Uint8Array(32);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  set_wallet(value: Uint8Array): this {
+    if (value.length !== 32) throw new Error("wallet expects 32 bytes");
+    this.buffer.set(value, 0);
+    return this;
+  }
+
+  build(): Uint8Array {
+    return this.buffer.slice();
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    target.set(this.buffer, offset);
+    return target;
+  }
+
+  finish(): CredentialLookup {
+    const view = CredentialLookup.from_array(this.buffer.slice());
+    if (!view) throw new Error("failed to build CredentialLookup");
+    return view;
+  }
+}
+
+/* ----- TYPE DEFINITION FOR CredentialRegisteredEventData ----- */
+
+const __tn_ir_CredentialRegisteredEventData = {
+  typeName: "CredentialRegisteredEventData",
+  root: { op: "const", value: 64n }
+} as const;
+
+export class CredentialRegisteredEventData {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): CredentialRegisteredEventData {
+    if (!buffer || buffer.length === undefined) throw new Error("CredentialRegisteredEventData.__tnCreateView requires a Uint8Array");
+    return new CredentialRegisteredEventData(new Uint8Array(buffer));
+  }
+
+  static builder(): CredentialRegisteredEventDataBuilder {
+    return new CredentialRegisteredEventDataBuilder();
+  }
+
+  static fromBuilder(builder: CredentialRegisteredEventDataBuilder): CredentialRegisteredEventData | null {
+    const buffer = builder.build();
+    return CredentialRegisteredEventData.from_array(buffer);
+  }
+
+  get_wallet(): Pubkey {
+    const offset = 0;
+    const slice = this.buffer.subarray(offset, offset + 32);
+    return Pubkey.from_array(slice)!;
+  }
+
+  set_wallet(value: Pubkey): void {
+    /* Copy bytes from source struct to this field */
+    const sourceBytes = (value as any).buffer as Uint8Array;
+    const offset = 0;
+    this.buffer.set(sourceBytes, offset);
+  }
+
+  get wallet(): Pubkey {
+    return this.get_wallet();
+  }
+
+  set wallet(value: Pubkey) {
+    this.set_wallet(value);
+  }
+
+  get_lookup(): Pubkey {
+    const offset = 32;
+    const slice = this.buffer.subarray(offset, offset + 32);
+    return Pubkey.from_array(slice)!;
+  }
+
+  set_lookup(value: Pubkey): void {
+    /* Copy bytes from source struct to this field */
+    const sourceBytes = (value as any).buffer as Uint8Array;
+    const offset = 32;
+    this.buffer.set(sourceBytes, offset);
+  }
+
+  get lookup(): Pubkey {
+    return this.get_lookup();
+  }
+
+  set lookup(value: Pubkey) {
+    this.set_lookup(value);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_CredentialRegisteredEventData.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_CredentialRegisteredEventData, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for CredentialRegisteredEventData');
+    }
+    return __tnBigIntToNumber(irResult, 'CredentialRegisteredEventData::footprint');
+  }
+
+  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    if (buffer.length < 64) return { ok: false, code: "tn.buffer_too_small", consumed: 64 };
+    return { ok: true, consumed: 64 };
+  }
+
+  static from_array(buffer: Uint8Array): CredentialRegisteredEventData | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new CredentialRegisteredEventData(buffer);
+  }
+
+}
+
+__tnRegisterFootprint("CredentialRegisteredEventData", (params) => CredentialRegisteredEventData.__tnInvokeFootprint(params));
+__tnRegisterValidate("CredentialRegisteredEventData", (buffer, params) => CredentialRegisteredEventData.__tnInvokeValidate(buffer, params));
+
+export class CredentialRegisteredEventDataBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+
+  constructor() {
+    this.buffer = new Uint8Array(64);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  set_wallet(value: Uint8Array): this {
+    if (value.length !== 32) throw new Error("wallet expects 32 bytes");
+    this.buffer.set(value, 0);
+    return this;
+  }
+
+  set_lookup(value: Uint8Array): this {
+    if (value.length !== 32) throw new Error("lookup expects 32 bytes");
+    this.buffer.set(value, 32);
+    return this;
+  }
+
+  build(): Uint8Array {
+    return this.buffer.slice();
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    target.set(this.buffer, offset);
+    return target;
+  }
+
+  finish(): CredentialRegisteredEventData {
+    const view = CredentialRegisteredEventData.from_array(this.buffer.slice());
+    if (!view) throw new Error("failed to build CredentialRegisteredEventData");
+    return view;
+  }
+}
+
 /* ----- TYPE DEFINITION FOR InvokeArgs ----- */
 
 const __tn_ir_InvokeArgs = {
@@ -3242,7 +3533,7 @@ export class InvokeArgsBuilder {
 
 const __tn_ir_PasskeyEvent = {
   typeName: "PasskeyEvent",
-  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "align", alignment: 1, node: { op: "const", value: 1n } }, right: { op: "align", alignment: 1, node: { op: "switch", tag: "PasskeyEvent::payload.event_type", cases: [{ value: 0, node: { op: "align", alignment: 1, node: { op: "const", value: 97n } } }, { value: 1, node: { op: "align", alignment: 1, node: { op: "const", value: 40n } } }, { value: 2, node: { op: "align", alignment: 1, node: { op: "const", value: 72n } } }] } } } }
+  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "align", alignment: 1, node: { op: "const", value: 1n } }, right: { op: "align", alignment: 1, node: { op: "switch", tag: "PasskeyEvent::payload.event_type", cases: [{ value: 0, node: { op: "align", alignment: 1, node: { op: "const", value: 97n } } }, { value: 1, node: { op: "align", alignment: 1, node: { op: "const", value: 40n } } }, { value: 2, node: { op: "align", alignment: 1, node: { op: "const", value: 72n } } }, { value: 3, node: { op: "align", alignment: 1, node: { op: "const", value: 64n } } }] } } } }
 } as const;
 
 export class PasskeyEvent_payload_Inner {
@@ -3278,6 +3569,11 @@ export class PasskeyEvent_payload_Inner {
   asWalletTransfer(): WalletTransferEventData | null {
     if (!this.descriptor || this.descriptor.tag !== 2) return null;
     return WalletTransferEventData.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asCredentialRegistered(): CredentialRegisteredEventData | null {
+    if (!this.descriptor || this.descriptor.tag !== 3) return null;
+    return CredentialRegisteredEventData.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
 }
@@ -3348,6 +3644,13 @@ export class PasskeyEvent {
       payloadSize: 72,
       payloadType: "PasskeyEvent::payload::wallet_transfer",
       createPayloadBuilder: () => __tnMaybeCallBuilder(WalletTransferEventData),
+    },
+    {
+      name: "credential_registered",
+      tag: 3,
+      payloadSize: 64,
+      payloadType: "PasskeyEvent::payload::credential_registered",
+      createPayloadBuilder: () => __tnMaybeCallBuilder(CredentialRegisteredEventData),
     },
   ] as const);
 
@@ -3911,6 +4214,275 @@ export class CreateArgsBuilder {
   }
 }
 
+/* ----- TYPE DEFINITION FOR RegisterCredentialArgs ----- */
+
+const __tn_ir_RegisterCredentialArgs = {
+  typeName: "RegisterCredentialArgs",
+  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "add", left: { op: "add", left: { op: "align", alignment: 2, node: { op: "const", value: 2n } }, right: { op: "align", alignment: 2, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 32n } } }, right: { op: "align", alignment: 1, node: { op: "call", typeName: "StateProof", args: [{ name: "proof_body.hdr.type_slot", source: "proof_body.hdr.type_slot" }, { name: "proof_body.payload_size", source: "proof_body.payload_size" }] } } } }
+} as const;
+
+export class RegisterCredentialArgs {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): RegisterCredentialArgs {
+    if (!buffer || buffer.length === undefined) throw new Error("RegisterCredentialArgs.__tnCreateView requires a Uint8Array");
+    return new RegisterCredentialArgs(new Uint8Array(buffer));
+  }
+
+  static builder(): RegisterCredentialArgsBuilder {
+    return new RegisterCredentialArgsBuilder();
+  }
+
+  static fromBuilder(builder: RegisterCredentialArgsBuilder): RegisterCredentialArgs | null {
+    const buffer = builder.build();
+    return RegisterCredentialArgs.from_array(buffer);
+  }
+
+  get_wallet_account_idx(): number {
+    const offset = 0;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_wallet_account_idx(value: number): void {
+    const offset = 0;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get wallet_account_idx(): number {
+    return this.get_wallet_account_idx();
+  }
+
+  set wallet_account_idx(value: number) {
+    this.set_wallet_account_idx(value);
+  }
+
+  get_lookup_account_idx(): number {
+    const offset = 2;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_lookup_account_idx(value: number): void {
+    const offset = 2;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get lookup_account_idx(): number {
+    return this.get_lookup_account_idx();
+  }
+
+  set lookup_account_idx(value: number) {
+    this.set_lookup_account_idx(value);
+  }
+
+  get_seed(): Seed32 {
+    const offset = 4;
+    const slice = this.buffer.subarray(offset, offset + 32);
+    return Seed32.from_array(slice)!;
+  }
+
+  set_seed(value: Seed32): void {
+    /* Copy bytes from source struct to this field */
+    const sourceBytes = (value as any).buffer as Uint8Array;
+    const offset = 4;
+    this.buffer.set(sourceBytes, offset);
+  }
+
+  get seed(): Seed32 {
+    return this.get_seed();
+  }
+
+  set seed(value: Seed32) {
+    this.set_seed(value);
+  }
+
+  get_state_proof(): StateProof {
+    const offset = 36;
+    const tail = this.buffer.subarray(offset);
+    const validation = StateProof.validate(tail);
+    if (!validation.ok || validation.consumed === undefined) {
+      throw new Error("RegisterCredentialArgs: failed to read field 'state_proof' (invalid nested payload)");
+    }
+    const length = validation.consumed;
+    const slice = tail.subarray(0, length);
+    const opts = validation.params ? { params: validation.params } : undefined;
+    return StateProof.from_array(slice, opts)!;
+  }
+
+  set_state_proof(value: StateProof): void {
+    /* Copy bytes from source struct to this field */
+    const sourceBytes = (value as any).buffer as Uint8Array;
+    const offset = 36;
+    this.buffer.set(sourceBytes, offset);
+  }
+
+  get state_proof(): StateProof {
+    return this.get_state_proof();
+  }
+
+  set state_proof(value: StateProof) {
+    this.set_state_proof(value);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_RegisterCredentialArgs.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_RegisterCredentialArgs, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for RegisterCredentialArgs');
+    }
+    return __tnBigIntToNumber(irResult, 'RegisterCredentialArgs::footprint');
+  }
+
+  static validate(_buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    __tnLogWarn("RegisterCredentialArgs::validate falling back to basic length check");
+    return { ok: true, consumed: _buffer.length };
+  }
+
+  static from_array(buffer: Uint8Array): RegisterCredentialArgs | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new RegisterCredentialArgs(buffer);
+  }
+
+}
+
+__tnRegisterFootprint("RegisterCredentialArgs", (params) => RegisterCredentialArgs.__tnInvokeFootprint(params));
+__tnRegisterValidate("RegisterCredentialArgs", (buffer, params) => RegisterCredentialArgs.__tnInvokeValidate(buffer, params));
+
+export class RegisterCredentialArgsBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+  private __tnTail_state_proof: Uint8Array | null = null;
+
+  constructor() {
+    this.buffer = new Uint8Array(36);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  private __tnInvalidate(): void {
+    /* Placeholder for future cache invalidation. */
+  }
+
+  set_wallet_account_idx(value: number): this {
+    this.view.setUint16(0, value, true);
+    this.__tnInvalidate();
+    return this;
+  }
+
+  set_lookup_account_idx(value: number): this {
+    this.view.setUint16(2, value, true);
+    this.__tnInvalidate();
+    return this;
+  }
+
+  set_seed(value: Uint8Array): this {
+    if (value.length !== 32) throw new Error("seed expects 32 bytes");
+    this.buffer.set(value, 4);
+    this.__tnInvalidate();
+    return this;
+  }
+
+  set_state_proof(value: StateProof | __TnStructFieldInput): this {
+    const bytes = __tnResolveStructFieldInput(value as __TnStructFieldInput, "RegisterCredentialArgsBuilder::state_proof");
+    this.__tnTail_state_proof = bytes;
+    this.__tnInvalidate();
+    return this;
+  }
+
+  build(): Uint8Array {
+    const fragments = this.__tnCollectTailFragments();
+    const size = this.__tnComputeSize(fragments);
+    const buffer = new Uint8Array(size);
+    this.__tnWriteInto(buffer, fragments);
+    this.__tnValidateOrThrow(buffer);
+    return buffer;
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    const fragments = this.__tnCollectTailFragments();
+    const size = this.__tnComputeSize(fragments);
+    if (target.length - offset < size) throw new Error("RegisterCredentialArgsBuilder: target buffer too small");
+    const slice = target.subarray(offset, offset + size);
+    this.__tnWriteInto(slice, fragments);
+    this.__tnValidateOrThrow(slice);
+    return target;
+  }
+
+  finish(): RegisterCredentialArgs {
+    const buffer = this.build();
+    const view = RegisterCredentialArgs.from_array(buffer);
+    if (!view) throw new Error("RegisterCredentialArgsBuilder: failed to finalize view");
+    return view;
+  }
+
+  finishView(): RegisterCredentialArgs {
+    return this.finish();
+  }
+
+  private __tnCollectTailFragments(): Uint8Array[] {
+    return [
+      (() => {
+        const bytes = this.__tnTail_state_proof;
+        if (!bytes) throw new Error("RegisterCredentialArgsBuilder: field 'state_proof' must be set before build()");
+        return bytes;
+      })(),
+    ];
+  }
+
+  private __tnComputeSize(fragments: readonly Uint8Array[]): number {
+    let total = this.buffer.length;
+    for (const fragment of fragments) {
+      total += fragment.length;
+    }
+    return total;
+  }
+
+  private __tnWriteInto(target: Uint8Array, fragments: readonly Uint8Array[]): void {
+    target.set(this.buffer, 0);
+    let cursor = this.buffer.length;
+    for (const fragment of fragments) {
+      target.set(fragment, cursor);
+      cursor += fragment.length;
+    }
+  }
+
+  private __tnValidateOrThrow(buffer: Uint8Array): void {
+    const result = RegisterCredentialArgs.validate(buffer);
+    if (!result.ok) {
+      throw new Error(`RegisterCredentialArgsBuilder: builder produced invalid buffer (code=${result.code ?? "unknown"})`);
+    }
+  }
+}
+
 /* ----- TYPE DEFINITION FOR PasskeyInstruction ----- */
 
 const __tn_ir_PasskeyInstruction = {
@@ -3966,6 +4538,11 @@ export class PasskeyInstruction_payload_Inner {
   asRemoveAuthority(): RemoveAuthorityArgs | null {
     if (!this.descriptor || this.descriptor.tag !== 5) return null;
     return RemoveAuthorityArgs.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asRegisterCredential(): RegisterCredentialArgs | null {
+    if (!this.descriptor || this.descriptor.tag !== 6) return null;
+    return RegisterCredentialArgs.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
 }
@@ -4058,6 +4635,13 @@ export class PasskeyInstruction {
       payloadType: "PasskeyInstruction::payload::remove_authority",
       createPayloadBuilder: () => __tnMaybeCallBuilder(RemoveAuthorityArgs),
     },
+    {
+      name: "register_credential",
+      tag: 6,
+      payloadSize: null,
+      payloadType: "PasskeyInstruction::payload::register_credential",
+      createPayloadBuilder: () => __tnMaybeCallBuilder(RegisterCredentialArgs),
+    },
   ] as const);
 
   static __tnComputeSequentialLayout(view: DataView, buffer: Uint8Array): { params: Record<string, bigint> | null; offsets: Record<string, number> | null; derived: Record<string, bigint> | null } | null {
@@ -4079,6 +4663,7 @@ export class PasskeyInstruction {
       case 3: break;
       case 4: break;
       case 5: break;
+      case 6: break;
       default: return null;
     }
     if (__tnCursorMutable > __tnLength) return null;

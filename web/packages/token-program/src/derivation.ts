@@ -1,9 +1,11 @@
-import { deriveAddress, deriveProgramAddress, Pubkey } from '@thru/thru-sdk';
+import { Pubkey } from '@thru/thru-sdk';
+import type { Thru } from '@thru/thru-sdk/client';
 import { PUBKEY_LENGTH } from './constants';
 
 const TOKEN_ACCOUNT_DEFAULT_SEED = new Uint8Array(PUBKEY_LENGTH);
 
 export function deriveMintAddress(
+  thru: Thru,
   mintAuthorityAddress: string,
   seed: string,
   tokenProgramAddress: string
@@ -12,9 +14,9 @@ export function deriveMintAddress(
   const seedBytes = hexToBytes(seed);
   if (seedBytes.length !== 32) throw new Error('Seed must be 32 bytes (64 hex characters)');
 
-  const { bytes: derivedSeed } = deriveAddress([mintAuthorityBytes, seedBytes]);
+  const { bytes: derivedSeed } = thru.helpers.deriveAddress([mintAuthorityBytes, seedBytes]);
 
-  const result = deriveProgramAddress({
+  const result = thru.helpers.deriveProgramAddress({
     programAddress: tokenProgramAddress,
     seed: derivedSeed,
     ephemeral: false,
@@ -28,6 +30,7 @@ export function deriveMintAddress(
 }
 
 export function deriveTokenAccountAddress(
+  thru: Thru,
   ownerAddress: string,
   mintAddress: string,
   tokenProgramAddress: string,
@@ -38,9 +41,9 @@ export function deriveTokenAccountAddress(
   const ownerBytes = Pubkey.from(ownerAddress).toBytes();
   const mintBytes = Pubkey.from(mintAddress).toBytes();
 
-  const { bytes: derivedSeed } = deriveAddress([ownerBytes, mintBytes, seed]);
+  const { bytes: derivedSeed } = thru.helpers.deriveAddress([ownerBytes, mintBytes, seed]);
 
-  const result = deriveProgramAddress({
+  const result = thru.helpers.deriveProgramAddress({
     programAddress: tokenProgramAddress,
     seed: derivedSeed,
     ephemeral: false,
@@ -54,11 +57,12 @@ export function deriveTokenAccountAddress(
 }
 
 export function deriveWalletSeed(
+  thru: Thru,
   walletAddress: string,
   extraSeeds: Uint8Array[] = []
 ): Uint8Array {
   const walletBytes = Pubkey.from(walletAddress).toBytes();
-  return deriveAddress([walletBytes, ...extraSeeds]).bytes;
+  return thru.helpers.deriveAddress([walletBytes, ...extraSeeds]).bytes;
 }
 
 function hexToBytes(hex: string): Uint8Array {

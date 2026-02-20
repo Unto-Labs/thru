@@ -7,6 +7,7 @@ export {
   INSTRUCTION_INVOKE,
   INSTRUCTION_ADD_AUTHORITY,
   INSTRUCTION_REMOVE_AUTHORITY,
+  INSTRUCTION_REGISTER_CREDENTIAL,
   AUTHORITY_TAG_PASSKEY,
   AUTHORITY_TAG_PUBKEY,
 } from './constants';
@@ -17,6 +18,7 @@ export type {
   CreateInstructionParams,
   TransferInstructionParams,
   ValidateInstructionParams,
+  RegisterCredentialInstructionParams,
   AccountContext,
   WalletSigner,
   TransactionExecutionSummary,
@@ -33,13 +35,14 @@ export { encodeTransferInstruction } from './instructions/transfer';
 export { encodeInvokeInstruction } from './instructions/invoke';
 export { encodeAddAuthorityInstruction } from './instructions/add-authority';
 export { encodeRemoveAuthorityInstruction } from './instructions/remove-authority';
+export { encodeRegisterCredentialInstruction } from './instructions/register-credential';
 export { concatenateInstructions } from './instructions/shared';
 
 // Challenge
 export { createValidateChallenge } from './challenge';
 
 // Seeds & derivation
-export { createWalletSeed, deriveWalletAddress } from './seeds';
+export { createWalletSeed, deriveWalletAddress, createCredentialLookupSeed, deriveCredentialLookupAddress } from './seeds';
 
 // Account context building
 export { buildAccountContext, buildPasskeyReadWriteAccounts, FEE_PAYER_ADDRESS } from './context';

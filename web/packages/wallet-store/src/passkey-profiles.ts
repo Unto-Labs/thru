@@ -97,7 +97,8 @@ export async function savePasskeyProfiles(store: PasskeyProfileStore): Promise<b
 
     await tx.done;
     return true;
-  } catch {
+  } catch (error) {
+    console.error('[wallet-store] Failed to save passkey profiles:', error);
     return false;
   }
 }

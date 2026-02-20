@@ -28,6 +28,17 @@ export const walletDebug = (...args: unknown[]): void => {
 
 export const formatU64Hex = (value: bigint): string => `0x${value.toString(16).padStart(16, '0')}`;
 
+export const THRU_DECIMALS = 9;
+export const LAMPORTS_PER_THRU = 1_000_000_000n;
+
+export const formatLamportsAsThru = (lamports: bigint): string => {
+  const negative = lamports < 0n;
+  const value = negative ? -lamports : lamports;
+  const whole = value / LAMPORTS_PER_THRU;
+  const fractional = (value % LAMPORTS_PER_THRU).toString().padStart(THRU_DECIMALS, '0');
+  return `${negative ? '-' : ''}${whole.toString()}.${fractional}`;
+};
+
 export const toSignedU64 = (value: bigint): bigint => {
   const maxSigned = (1n << 63n) - 1n;
   return value > maxSigned ? value - (1n << 64n) : value;

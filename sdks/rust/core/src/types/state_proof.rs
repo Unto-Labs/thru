@@ -100,7 +100,14 @@ impl<'a> StateProof<'a> {
         if expected_trailing_bytes > rest.len() {
             return Err(ProofParseError::MisSized);
         }
-        Ok((Self { data }, &rest[expected_trailing_bytes..]))
+        /* Slice data to contain only the proof bytes (header + trailing pubkeys).
+           This ensures footprint() returns the exact proof size, consistent with
+           parse_proof_unchecked() and the C implementation
+           (tn_state_proof_footprint_from_header). Previously, data contained the
+           entire input buffer which caused footprint() to over-report when the
+           proof was followed by additional data (e.g. concatenated instructions). */
+        let proof_len = core::mem::size_of::<StateProofHeader>() + expected_trailing_bytes;
+        Ok((Self { data: &data[..proof_len] }, &data[proof_len..]))
     }
 
     // Parses a state proof consisting of the entirety of the provided `data`.

@@ -1,6 +1,7 @@
 import { DerivedAccount } from '@/types/account';
 import { Body3, Body4, Button, Card, Heading4, Heading5, Input } from '@thru/design-system';
 import { useState } from 'react';
+import { formatLamportsAsThru } from '@/lib/wallet/utils';
 
 interface AccountDetailsProps {
   account: DerivedAccount | null;
@@ -27,7 +28,7 @@ export function AccountDetails({
     );
   }
 
-  const balanceThru = Number(balance) / 1e9;
+  const balanceThru = formatLamportsAsThru(balance);
   const accountName = account.path || 'Unknown';
 
   const handleStartEdit = () => {
@@ -128,7 +129,7 @@ export function AccountDetails({
           <Body4 className="block mb-3" bold>Balance</Body4>
           <div className="flex items-center justify-between">
             <Heading5 className="text-text-primary" bold>
-              {balanceThru.toFixed(4)} <span className="text-body-l text-text-tertiary font-normal">THRU</span>
+              {balanceThru} <span className="text-body-l text-text-tertiary font-normal">THRU</span>
             </Heading5>
           </div>
           <div className="mt-4">

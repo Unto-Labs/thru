@@ -26,6 +26,8 @@ import type { PasskeyPopupContext } from '@thru/passkey';
 import { AccountStorage } from '@thru/wallet-store';
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 
+const PASSKEY_RP_ID = process.env.NEXT_PUBLIC_PASSKEY_RP_ID?.trim() || (typeof window !== 'undefined' ? window.location.hostname : 'wallet.thru.org');
+
 export interface PasskeyAuthContextState {
   isInitialized: boolean;
   walletExists: boolean;
@@ -201,7 +203,7 @@ export function PasskeyAuthProvider({ children, postSignInHandlerRef }: PasskeyA
       setPasskeyError(null);
 
       try {
-        const result = await registerPasskey(trimmedAlias, profile.id, 'wallet.thru.org');
+        const result = await registerPasskey(trimmedAlias, profile.id, PASSKEY_RP_ID);
         const now = new Date().toISOString();
 
         const passkeyMetadata: PasskeyMetadata = {
@@ -268,7 +270,7 @@ export function PasskeyAuthProvider({ children, postSignInHandlerRef }: PasskeyA
 
           const popupResult = await signWithStoredPasskey(
             challenge,
-            'wallet.thru.org',
+            PASSKEY_RP_ID,
             preferred,
             allPasskeys,
             context,

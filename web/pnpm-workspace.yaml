@@ -7,3 +7,5 @@ packages:
   - 'etl-bridge'
   - 'superapp-be'
   - 'eve-token-app'
+  - 'wallet-auth-manager'
+  - 'wallet-keypair-manager'

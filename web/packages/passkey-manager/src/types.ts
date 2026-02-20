@@ -81,6 +81,13 @@ export interface AccountContext {
   getAccountIndex: (pubkey: Uint8Array) => number;
 }
 
+export interface RegisterCredentialInstructionParams {
+  walletAccountIdx: number;
+  lookupAccountIdx: number;
+  seed: Uint8Array; // SHA-256(credentialId), 32 bytes
+  stateProof: Uint8Array;
+}
+
 export type WalletSigner = {
   signTransaction: (payloadBase64: string) => Promise<string>;
 };
