@@ -156,6 +156,10 @@ export class ChainClient implements ReplayDataSource {
       baseUrl: this.options.baseUrl,
       useBinaryFormat: this.options.useBinaryFormat ?? true,
       interceptors: mergedInterceptors.length ? mergedInterceptors : undefined,
+      pingIntervalMs: 30_000,
+      pingIdleConnection: true,
+      pingTimeoutMs: 10_000,
+      idleConnectionTimeoutMs: 0,
     });
   }
 

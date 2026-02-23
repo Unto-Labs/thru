@@ -14,7 +14,7 @@ export interface RetryConfig {
 export const DEFAULT_RETRY_CONFIG: RetryConfig = {
   initialDelayMs: 1000,
   maxDelayMs: 30000,
-  connectionTimeoutMs: 30000,
+  connectionTimeoutMs: 300_000,
 };
 
 /**
