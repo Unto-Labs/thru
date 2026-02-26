@@ -95,13 +95,27 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
       `replay entering BACKFILLING state (startSlot=${startSlot}, safetyMargin=${safetyMargin})`
     );
 
+    let emptyPageRetries = 0;
+    const MAX_EMPTY_PAGE_RETRIES = 10;
+
     while (!backfillDone) {
-      const page = await fetchBackfill({ startSlot, cursor });
+      const page = await currentFetchBackfill({ startSlot, cursor });
       if (!page.items.length && !page.cursor && !page.done) {
-        // Nothing returned but not marked done: continue to avoid tight loops
-        this.logger.warn("empty backfill page without cursor; retrying");
+        emptyPageRetries++;
+        if (emptyPageRetries > MAX_EMPTY_PAGE_RETRIES) {
+          this.logger.error(
+            `backfill returned ${MAX_EMPTY_PAGE_RETRIES} consecutive empty pages; treating as done`
+          );
+          break;
+        }
+        const backoffMs = calculateBackoff(emptyPageRetries - 1, DEFAULT_RETRY_CONFIG);
+        this.logger.warn(
+          `empty backfill page without cursor; retrying in ${backoffMs}ms (${emptyPageRetries}/${MAX_EMPTY_PAGE_RETRIES})`
+        );
+        await delay(backoffMs);
         continue;
       }
+      emptyPageRetries = 0;
 
       const sorted = [...page.items].sort((a, b) =>
         compareBigint(extractSlot(a), extractSlot(b)),
@@ -253,15 +267,15 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
   ): AsyncGenerator<T> {
     this.logger.info(`mini-backfill starting from slot ${fromSlot}`);
     const MINI_BACKFILL_TIMEOUT = 30000; // 30 seconds max
-    const startTime = Date.now();
+    let lastProgressTime = Date.now();
 
     let cursor: Cursor | undefined;
     let itemsYielded = 0;
 
     try {
       while (true) {
-        if (Date.now() - startTime > MINI_BACKFILL_TIMEOUT) {
-          this.logger.warn(`mini-backfill timed out after ${MINI_BACKFILL_TIMEOUT}ms`);
+        if (Date.now() - lastProgressTime > MINI_BACKFILL_TIMEOUT) {
+          this.logger.warn(`mini-backfill timed out after ${MINI_BACKFILL_TIMEOUT}ms with no progress`);
           break;
         }
 
@@ -271,6 +285,7 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
           compareBigint(extractSlot(a), extractSlot(b))
         );
 
+        let pageYielded = 0;
         for (const item of sorted) {
           const slot = extractSlot(item);
           const key = keyOf(item);
@@ -280,9 +295,11 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
           }
           recordEmission(slot, key);
           itemsYielded++;
+          pageYielded++;
           this.metrics.emittedReconnect += 1;
           yield item;
         }
+        if (pageYielded > 0) lastProgressTime = Date.now();
 
         cursor = page.cursor;
         if (page.done || cursor === undefined) break;
@@ -299,12 +316,15 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
 
 async function safeClose<T>(pump: LivePump<T>): Promise<void> {
   try {
-    // Timeout the close to prevent hanging on stale gRPC connections
-    await Promise.race([
-      pump.close(),
-      new Promise<void>((resolve) => setTimeout(resolve, 5000)),
+    const result = await Promise.race([
+      pump.close().then(() => "closed" as const),
+      new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), 5000)),
     ]);
+    if (result === "timeout") {
+      // pump.close() is still pending — the underlying gRPC stream may leak
+      // until garbage collected. This is expected for stale connections.
+    }
   } catch {
-    /* ignore */
+    /* ignore close errors */
   }
 }

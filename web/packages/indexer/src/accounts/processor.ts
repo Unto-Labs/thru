@@ -75,10 +75,11 @@ export async function runAccountStreamProcessor(
     meta?: Record<string, unknown>
   ) => {
     if (shouldLog(level, logLevel)) {
-      console.log(
-        `[account-stream:${stream.name}] ${msg}`,
-        meta ?? ""
-      );
+      if (meta) {
+        console.log(`[account-stream:${stream.name}] ${msg}`, meta);
+      } else {
+        console.log(`[account-stream:${stream.name}] ${msg}`);
+      }
     }
   };
 
@@ -90,7 +91,7 @@ export async function runAccountStreamProcessor(
 
   // Load checkpoint for resumable backfill
   const checkpoint = await getCheckpoint(db, checkpointName);
-  const minUpdatedSlot = checkpoint?.slot ?? undefined;
+  const minUpdatedSlot = checkpoint?.slot;
   if (minUpdatedSlot) {
     log("info", `Resuming from checkpoint: slot ${minUpdatedSlot}`);
   }
