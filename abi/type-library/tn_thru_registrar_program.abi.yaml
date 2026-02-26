@@ -1,0 +1,299 @@
+abi:
+  package: thru.program.thru_registrar
+  name: "Thru Registrar"
+  abi-version: 1
+  package-version: "0.1.0"
+  description: ABI for the Thru registrar program instruction envelopes and account state
+  imports: []
+  options:
+    program-metadata:
+      root-types:
+        instruction-root: "ThruRegistrarInstruction"
+        account-root: "ThruRegistrarAccount"
+        errors: "ThruRegistrarError"
+types:
+- name: Pubkey
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: bytes
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+- name: Config
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: name_service_program_id
+        field-type:
+          type-ref:
+            name: Pubkey
+      - name: root_registrar_account
+        field-type:
+          type-ref:
+            name: Pubkey
+      - name: treasurer_account
+        field-type:
+          type-ref:
+            name: Pubkey
+      - name: token_mint_account
+        field-type:
+          type-ref:
+            name: Pubkey
+      - name: token_program_id
+        field-type:
+          type-ref:
+            name: Pubkey
+      - name: root_domain_name
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 64
+            element-type:
+              primitive: u8
+      - name: root_domain_name_length
+        field-type:
+          primitive: u32
+      - name: price_per_year
+        field-type:
+          primitive: u64
+      - name: total_domains_sold
+        field-type:
+          primitive: u64
+- name: Lease
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: domain_account
+        field-type:
+          type-ref:
+            name: Pubkey
+      - name: owner
+        field-type:
+          type-ref:
+            name: Pubkey
+      - name: domain_name
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 64
+            element-type:
+              primitive: u8
+      - name: domain_name_length
+        field-type:
+          primitive: u32
+      - name: lease_start_time
+        field-type:
+          primitive: u64
+      - name: lease_end_time
+        field-type:
+          primitive: u64
+- name: ThruRegistrarAccount
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: data
+        field-type:
+          size-discriminated-union:
+            packed: true
+            variants:
+            - name: lease
+              expected-size: 148
+              variant-type:
+                type-ref:
+                  name: Lease
+            - name: config
+              expected-size: 244
+              variant-type:
+                type-ref:
+                  name: Config
+- name: InitializeRegistryArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: config_account_idx
+        field-type:
+          primitive: u16
+      - name: name_service_program_account_idx
+        field-type:
+          primitive: u16
+      - name: root_registrar_account_idx
+        field-type:
+          primitive: u16
+      - name: treasurer_account_idx
+        field-type:
+          primitive: u16
+      - name: token_mint_account_idx
+        field-type:
+          primitive: u16
+      - name: token_program_account_idx
+        field-type:
+          primitive: u16
+      - name: root_domain_name
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 64
+            element-type:
+              primitive: u8
+      - name: root_domain_name_length
+        field-type:
+          primitive: u32
+      - name: price_per_year
+        field-type:
+          primitive: u64
+- name: PurchaseDomainArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: config_account_idx
+        field-type:
+          primitive: u16
+      - name: lease_account_idx
+        field-type:
+          primitive: u16
+      - name: domain_account_idx
+        field-type:
+          primitive: u16
+      - name: name_service_program_account_idx
+        field-type:
+          primitive: u16
+      - name: root_registrar_account_idx
+        field-type:
+          primitive: u16
+      - name: treasurer_account_idx
+        field-type:
+          primitive: u16
+      - name: payer_token_account_idx
+        field-type:
+          primitive: u16
+      - name: token_mint_account_idx
+        field-type:
+          primitive: u16
+      - name: token_program_account_idx
+        field-type:
+          primitive: u16
+      - name: domain_name
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 64
+            element-type:
+              primitive: u8
+      - name: domain_name_length
+        field-type:
+          primitive: u32
+      - name: years
+        field-type:
+          primitive: u8
+- name: RenewLeaseArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: config_account_idx
+        field-type:
+          primitive: u16
+      - name: lease_account_idx
+        field-type:
+          primitive: u16
+      - name: treasurer_account_idx
+        field-type:
+          primitive: u16
+      - name: payer_token_account_idx
+        field-type:
+          primitive: u16
+      - name: token_mint_account_idx
+        field-type:
+          primitive: u16
+      - name: token_program_account_idx
+        field-type:
+          primitive: u16
+      - name: years
+        field-type:
+          primitive: u8
+- name: ClaimExpiredDomainArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: config_account_idx
+        field-type:
+          primitive: u16
+      - name: lease_account_idx
+        field-type:
+          primitive: u16
+      - name: treasurer_account_idx
+        field-type:
+          primitive: u16
+      - name: payer_token_account_idx
+        field-type:
+          primitive: u16
+      - name: token_mint_account_idx
+        field-type:
+          primitive: u16
+      - name: token_program_account_idx
+        field-type:
+          primitive: u16
+      - name: years
+        field-type:
+          primitive: u8
+- name: ThruRegistrarInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: tag
+        field-type:
+          primitive: u32
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - tag
+            variants:
+            - name: initialize_registry
+              tag-value: 0
+              variant-type:
+                type-ref:
+                  name: InitializeRegistryArgs
+            - name: purchase_domain
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: PurchaseDomainArgs
+            - name: renew_lease
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: RenewLeaseArgs
+            - name: claim_expired_domain
+              tag-value: 3
+              variant-type:
+                type-ref:
+                  name: ClaimExpiredDomainArgs
+- name: ThruRegistrarError
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: code
+        field-type:
+          primitive: u64

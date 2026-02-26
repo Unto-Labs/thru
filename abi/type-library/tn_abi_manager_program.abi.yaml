@@ -1,0 +1,557 @@
+abi:
+  package: thru.program.abi_manager
+  name: "ABI Manager"
+  abi-version: 1
+  package-version: 0.1.0
+  description: ABI for the Thru ABI manager program instructions and account state.
+    Manages on-chain ABI metadata and content for both official (program-authority-gated)
+    and external (publisher-gated) ABIs.
+  imports:
+    # thru_primitives
+    - type: onchain
+      address: ta1blxgaYR0dei5aldWJe1vbUtt-LkVEBOzNJtSRhHQcTG
+      target: abi
+      network: mainnet
+      revision: latest
+    # state_proof
+    - type: onchain
+      address: ta1l4yBjT6a7PQ4Wu_sJPQwb8jJiJ8Ei71gOuE5Dnotfrl
+      target: abi
+      network: mainnet
+      revision: latest
+  options:
+    program-metadata:
+      root-types:
+        instruction-root: "AbiManagerInstruction"
+
+types:
+# ── Shared helper types ──
+
+- name: Seed32
+  kind:
+    array:
+      packed: true
+      size:
+        literal:
+          u64: 32
+      element-type:
+        primitive: u8
+
+# ── ABI Meta Account types ──
+
+# Official meta body: references the program whose authority controls the ABI
+- name: AbiMetaBodyOfficial
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: program
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+
+# External meta body: a publisher creates an ABI for a target program with a seed
+- name: AbiMetaBodyExternal
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: publisher
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: target_program
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: seed
+        field-type:
+          type-ref:
+            name: Seed32
+
+# Union of official/external bodies (C union: size = max(32, 96) = 96 bytes)
+- name: AbiMetaBody
+  kind:
+    union:
+      packed: true
+      variants:
+      - name: official
+        variant-type:
+          type-ref:
+            name: AbiMetaBodyOfficial
+      - name: external
+        variant-type:
+          type-ref:
+            name: AbiMetaBodyExternal
+
+# Full ABI meta account (100 bytes).  kind field discriminates the body:
+#   0x00 = official, 0x01 = external
+- name: AbiMetaAccount
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: version
+        field-type:
+          primitive: u8
+      - name: kind
+        field-type:
+          primitive: u8
+      - name: flags
+        field-type:
+          primitive: u16
+      - name: body
+        field-type:
+          type-ref:
+            name: AbiMetaBody
+
+# ── ABI Content Account ──
+
+# Stores the actual ABI blob, linked to an ABI meta account
+- name: AbiAccount
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: abi_meta_acc
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: revision
+        field-type:
+          primitive: u64
+      - name: state
+        field-type:
+          primitive: u8
+      - name: content_sz
+        field-type:
+          primitive: u32
+      - name: contents
+        field-type:
+          array:
+            size:
+              field-ref:
+                path: ["content_sz"]
+            element-type:
+              primitive: u8
+
+# ── Instruction argument types ──
+
+# CREATE_META_OFFICIAL_PERMANENT (0x00): creates a permanent official meta account
+- name: CreateMetaOfficialPermanentArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: abi_meta_account_idx
+        field-type:
+          primitive: u16
+      - name: program_meta_account_idx
+        field-type:
+          primitive: u16
+      - name: authority_account_idx
+        field-type:
+          primitive: u16
+      - name: state_proof
+        field-type:
+          type-ref:
+            name: StateProof
+            package: "thru.blockchain.state_proof"
+
+# CREATE_META_OFFICIAL_EPHEMERAL (0x01): creates an ephemeral official meta account
+- name: CreateMetaOfficialEphemeralArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: abi_meta_account_idx
+        field-type:
+          primitive: u16
+      - name: program_meta_account_idx
+        field-type:
+          primitive: u16
+      - name: authority_account_idx
+        field-type:
+          primitive: u16
+
+# CREATE_META_EXTERNAL_PERMANENT (0x02): creates a permanent external meta account
+- name: CreateMetaExternalPermanentArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: abi_meta_account_idx
+        field-type:
+          primitive: u16
+      - name: authority_account_idx
+        field-type:
+          primitive: u16
+      - name: target_program
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: seed
+        field-type:
+          type-ref:
+            name: Seed32
+      - name: state_proof
+        field-type:
+          type-ref:
+            name: StateProof
+            package: "thru.blockchain.state_proof"
+
+# CREATE_META_EXTERNAL_EPHEMERAL (0x03): creates an ephemeral external meta account
+- name: CreateMetaExternalEphemeralArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: abi_meta_account_idx
+        field-type:
+          primitive: u16
+      - name: authority_account_idx
+        field-type:
+          primitive: u16
+      - name: target_program
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: seed
+        field-type:
+          type-ref:
+            name: Seed32
+
+# CREATE_ABI_OFFICIAL_PERMANENT (0x04): creates a permanent official ABI content account
+- name: CreateAbiOfficialPermanentArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: abi_meta_account_idx
+        field-type:
+          primitive: u16
+      - name: program_meta_account_idx
+        field-type:
+          primitive: u16
+      - name: abi_account_idx
+        field-type:
+          primitive: u16
+      - name: srcbuf_account_idx
+        field-type:
+          primitive: u16
+      - name: srcbuf_offset
+        field-type:
+          primitive: u32
+      - name: srcbuf_size
+        field-type:
+          primitive: u32
+      - name: authority_account_idx
+        field-type:
+          primitive: u16
+      - name: state_proof
+        field-type:
+          type-ref:
+            name: StateProof
+            package: "thru.blockchain.state_proof"
+
+# CREATE_ABI_OFFICIAL_EPHEMERAL (0x05): creates an ephemeral official ABI content account
+- name: CreateAbiOfficialEphemeralArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: abi_meta_account_idx
+        field-type:
+          primitive: u16
+      - name: program_meta_account_idx
+        field-type:
+          primitive: u16
+      - name: abi_account_idx
+        field-type:
+          primitive: u16
+      - name: srcbuf_account_idx
+        field-type:
+          primitive: u16
+      - name: srcbuf_offset
+        field-type:
+          primitive: u32
+      - name: srcbuf_size
+        field-type:
+          primitive: u32
+      - name: authority_account_idx
+        field-type:
+          primitive: u16
+
+# CREATE_ABI_EXTERNAL_PERMANENT (0x06): creates a permanent external ABI content account
+- name: CreateAbiExternalPermanentArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: abi_meta_account_idx
+        field-type:
+          primitive: u16
+      - name: abi_account_idx
+        field-type:
+          primitive: u16
+      - name: srcbuf_account_idx
+        field-type:
+          primitive: u16
+      - name: srcbuf_offset
+        field-type:
+          primitive: u32
+      - name: srcbuf_size
+        field-type:
+          primitive: u32
+      - name: authority_account_idx
+        field-type:
+          primitive: u16
+      - name: state_proof
+        field-type:
+          type-ref:
+            name: StateProof
+            package: "thru.blockchain.state_proof"
+
+# CREATE_ABI_EXTERNAL_EPHEMERAL (0x07): creates an ephemeral external ABI content account
+- name: CreateAbiExternalEphemeralArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: abi_meta_account_idx
+        field-type:
+          primitive: u16
+      - name: abi_account_idx
+        field-type:
+          primitive: u16
+      - name: srcbuf_account_idx
+        field-type:
+          primitive: u16
+      - name: srcbuf_offset
+        field-type:
+          primitive: u32
+      - name: srcbuf_size
+        field-type:
+          primitive: u32
+      - name: authority_account_idx
+        field-type:
+          primitive: u16
+
+# UPGRADE_ABI_OFFICIAL (0x08): replaces content in an official ABI account
+- name: UpgradeAbiOfficialArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: abi_meta_account_idx
+        field-type:
+          primitive: u16
+      - name: program_meta_account_idx
+        field-type:
+          primitive: u16
+      - name: abi_account_idx
+        field-type:
+          primitive: u16
+      - name: srcbuf_account_idx
+        field-type:
+          primitive: u16
+      - name: srcbuf_offset
+        field-type:
+          primitive: u32
+      - name: srcbuf_size
+        field-type:
+          primitive: u32
+      - name: authority_account_idx
+        field-type:
+          primitive: u16
+
+# UPGRADE_ABI_EXTERNAL (0x09): replaces content in an external ABI account
+- name: UpgradeAbiExternalArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: abi_meta_account_idx
+        field-type:
+          primitive: u16
+      - name: abi_account_idx
+        field-type:
+          primitive: u16
+      - name: srcbuf_account_idx
+        field-type:
+          primitive: u16
+      - name: srcbuf_offset
+        field-type:
+          primitive: u32
+      - name: srcbuf_size
+        field-type:
+          primitive: u32
+      - name: authority_account_idx
+        field-type:
+          primitive: u16
+
+# CLOSE_ABI_OFFICIAL (0x0A): deletes an official ABI content account
+- name: CloseAbiOfficialArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: abi_meta_account_idx
+        field-type:
+          primitive: u16
+      - name: program_meta_account_idx
+        field-type:
+          primitive: u16
+      - name: abi_account_idx
+        field-type:
+          primitive: u16
+      - name: authority_account_idx
+        field-type:
+          primitive: u16
+
+# CLOSE_ABI_EXTERNAL (0x0B): deletes an external ABI content account
+- name: CloseAbiExternalArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: abi_meta_account_idx
+        field-type:
+          primitive: u16
+      - name: abi_account_idx
+        field-type:
+          primitive: u16
+      - name: authority_account_idx
+        field-type:
+          primitive: u16
+
+# FINALIZE_ABI_OFFICIAL (0x0C): marks an official ABI account as immutable
+- name: FinalizeAbiOfficialArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: abi_meta_account_idx
+        field-type:
+          primitive: u16
+      - name: program_meta_account_idx
+        field-type:
+          primitive: u16
+      - name: abi_account_idx
+        field-type:
+          primitive: u16
+      - name: authority_account_idx
+        field-type:
+          primitive: u16
+
+# FINALIZE_ABI_EXTERNAL (0x0D): marks an external ABI account as immutable
+- name: FinalizeAbiExternalArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: abi_meta_account_idx
+        field-type:
+          primitive: u16
+      - name: abi_account_idx
+        field-type:
+          primitive: u16
+      - name: authority_account_idx
+        field-type:
+          primitive: u16
+
+# ── Instruction envelope ──
+
+- name: AbiManagerInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: discriminant
+        field-type:
+          primitive: u8
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - discriminant
+            variants:
+            - name: create_meta_official_permanent
+              tag-value: 0
+              variant-type:
+                type-ref:
+                  name: CreateMetaOfficialPermanentArgs
+            - name: create_meta_official_ephemeral
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: CreateMetaOfficialEphemeralArgs
+            - name: create_meta_external_permanent
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: CreateMetaExternalPermanentArgs
+            - name: create_meta_external_ephemeral
+              tag-value: 3
+              variant-type:
+                type-ref:
+                  name: CreateMetaExternalEphemeralArgs
+            - name: create_abi_official_permanent
+              tag-value: 4
+              variant-type:
+                type-ref:
+                  name: CreateAbiOfficialPermanentArgs
+            - name: create_abi_official_ephemeral
+              tag-value: 5
+              variant-type:
+                type-ref:
+                  name: CreateAbiOfficialEphemeralArgs
+            - name: create_abi_external_permanent
+              tag-value: 6
+              variant-type:
+                type-ref:
+                  name: CreateAbiExternalPermanentArgs
+            - name: create_abi_external_ephemeral
+              tag-value: 7
+              variant-type:
+                type-ref:
+                  name: CreateAbiExternalEphemeralArgs
+            - name: upgrade_abi_official
+              tag-value: 8
+              variant-type:
+                type-ref:
+                  name: UpgradeAbiOfficialArgs
+            - name: upgrade_abi_external
+              tag-value: 9
+              variant-type:
+                type-ref:
+                  name: UpgradeAbiExternalArgs
+            - name: close_abi_official
+              tag-value: 10
+              variant-type:
+                type-ref:
+                  name: CloseAbiOfficialArgs
+            - name: close_abi_external
+              tag-value: 11
+              variant-type:
+                type-ref:
+                  name: CloseAbiExternalArgs
+            - name: finalize_abi_official
+              tag-value: 12
+              variant-type:
+                type-ref:
+                  name: FinalizeAbiOfficialArgs
+            - name: finalize_abi_external
+              tag-value: 13
+              variant-type:
+                type-ref:
+                  name: FinalizeAbiExternalArgs

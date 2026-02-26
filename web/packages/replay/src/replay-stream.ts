@@ -299,7 +299,11 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
 
 async function safeClose<T>(pump: LivePump<T>): Promise<void> {
   try {
-    await pump.close();
+    // Timeout the close to prevent hanging on stale gRPC connections
+    await Promise.race([
+      pump.close(),
+      new Promise<void>((resolve) => setTimeout(resolve, 5000)),
+    ]);
   } catch {
     /* ignore */
   }

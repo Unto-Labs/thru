@@ -7,7 +7,7 @@ fn type_library_path() -> PathBuf {
 
 #[test]
 fn flatten_token_program() {
-    let file = type_library_path().join("token_program.abi.yaml");
+    let file = type_library_path().join("tn_token_program.abi.yaml");
     let include_dirs = vec![type_library_path()];
 
     let result = flatten(&file, &include_dirs).expect("flatten should succeed");
@@ -29,7 +29,7 @@ fn flatten_token_program() {
     // Types from state_proof.abi.yaml
     assert!(type_names.contains(&"StateProof"), "Should contain StateProof");
 
-    // Types from root file (token_program.abi.yaml)
+    // Types from root file (tn_token_program.abi.yaml)
     assert!(type_names.contains(&"TokenInstruction"), "Should contain TokenInstruction");
     assert!(type_names.contains(&"TokenProgramAccount"), "Should contain TokenProgramAccount");
 
@@ -226,7 +226,7 @@ types: []
 
 #[test]
 fn name_field_preserved_through_flatten() {
-    let file = type_library_path().join("token_program.abi.yaml");
+    let file = type_library_path().join("tn_token_program.abi.yaml");
     let include_dirs = vec![type_library_path()];
 
     let result = flatten(&file, &include_dirs).expect("flatten should succeed");
@@ -236,7 +236,7 @@ fn name_field_preserved_through_flatten() {
 
 #[test]
 fn name_field_survives_yaml_roundtrip() {
-    let file = type_library_path().join("token_program.abi.yaml");
+    let file = type_library_path().join("tn_token_program.abi.yaml");
     let include_dirs = vec![type_library_path()];
 
     let yaml = flatten_to_yaml(&file, &include_dirs).expect("flatten_to_yaml should succeed");

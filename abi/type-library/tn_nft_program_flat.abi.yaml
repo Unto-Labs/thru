@@ -1,0 +1,734 @@
+abi:
+  package: thru.program.nft_token
+  name: "NFT Token Program"
+  abi-version: 1
+  package-version: '1.0.0'
+  description: NFT token program for minting, transferring, and managing NFTs on Thru blockchain
+  imports: []
+  options:
+    program-metadata:
+      root-types:
+        instruction-root: NftInstruction
+        account-root: NftProgramAccount
+        errors: null
+        events: null
+types:
+- name: Hash
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: bytes
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+            jagged: false
+- name: Pubkey
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: bytes
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+            jagged: false
+- name: Signature
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: bytes
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 64
+            element-type:
+              primitive: u8
+            jagged: false
+- name: Timestamp
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: seconds
+        field-type:
+          primitive: i64
+      - name: nanos
+        field-type:
+          primitive: i32
+- name: Duration
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: seconds
+        field-type:
+          primitive: i64
+      - name: nanos
+        field-type:
+          primitive: i32
+- name: Date
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: year
+        field-type:
+          primitive: i32
+      - name: month
+        field-type:
+          primitive: u8
+      - name: day
+        field-type:
+          primitive: u8
+- name: FixedPoint
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: mantissa
+        field-type:
+          primitive: i64
+      - name: scale
+        field-type:
+          primitive: u8
+- name: InstructionData
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: program_idx
+        field-type:
+          primitive: u16
+      - name: data_size
+        field-type:
+          primitive: u64
+      - name: data
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              field-ref:
+                path:
+                - data_size
+            element-type:
+              primitive: u8
+            jagged: false
+- name: StateProofHeader
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: type_slot
+        field-type:
+          primitive: u64
+      - name: path_bitset
+        field-type:
+          type-ref:
+            name: Hash
+            comment: null
+- name: StateProof
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: hdr
+        field-type:
+          type-ref:
+            name: StateProofHeader
+            comment: null
+      - name: proof_body
+        field-type:
+          enum:
+            packed: true
+            aligned: 0
+            comment: null
+            tag-ref:
+              bit-and:
+                left:
+                  right-shift:
+                    left:
+                      field-ref:
+                        path:
+                        - hdr
+                        - type_slot
+                    right:
+                      literal:
+                        u8: 62
+                right:
+                  literal:
+                    u8: 3
+            variants:
+            - name: existing
+              tag-value: 0
+              variant-type:
+                struct:
+                  packed: true
+                  aligned: 0
+                  comment: null
+                  fields:
+                  - name: sibling_hashes
+                    field-type:
+                      array:
+                        packed: false
+                        aligned: 0
+                        comment: null
+                        size:
+                          add:
+                            left:
+                              add:
+                                left:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '0'
+                                right:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '1'
+                            right:
+                              add:
+                                left:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '2'
+                                right:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '3'
+                        element-type:
+                          type-ref:
+                            name: Hash
+                            comment: null
+                        jagged: false
+            - name: updating
+              tag-value: 1
+              variant-type:
+                struct:
+                  packed: true
+                  aligned: 0
+                  comment: null
+                  fields:
+                  - name: existing_leaf_hash
+                    field-type:
+                      type-ref:
+                        name: Hash
+                        comment: null
+                  - name: sibling_hashes
+                    field-type:
+                      array:
+                        packed: false
+                        aligned: 0
+                        comment: null
+                        size:
+                          add:
+                            left:
+                              add:
+                                left:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '0'
+                                right:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '1'
+                            right:
+                              add:
+                                left:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '2'
+                                right:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '3'
+                        element-type:
+                          type-ref:
+                            name: Hash
+                            comment: null
+                        jagged: false
+            - name: creation
+              tag-value: 2
+              variant-type:
+                struct:
+                  packed: true
+                  aligned: 0
+                  comment: null
+                  fields:
+                  - name: existing_leaf_pubkey
+                    field-type:
+                      type-ref:
+                        name: Pubkey
+                        comment: null
+                  - name: existing_leaf_hash
+                    field-type:
+                      type-ref:
+                        name: Hash
+                        comment: null
+                  - name: sibling_hashes
+                    field-type:
+                      array:
+                        packed: false
+                        aligned: 0
+                        comment: null
+                        size:
+                          add:
+                            left:
+                              add:
+                                left:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '0'
+                                right:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '1'
+                            right:
+                              add:
+                                left:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '2'
+                                right:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '3'
+                        element-type:
+                          type-ref:
+                            name: Hash
+                            comment: null
+                        jagged: false
+- name: Seed
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: bytes
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+            jagged: false
+- name: NftInstructionHeader
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: discriminant
+        field-type:
+          primitive: u32
+- name: NftMintAccount
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: mint_authority
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: supply
+        field-type:
+          primitive: u64
+      - name: next_id
+        field-type:
+          primitive: u64
+- name: NftMetadata
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: flags
+        field-type:
+          primitive: u64
+      - name: external_metadata_uri
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 256
+            element-type:
+              primitive: u8
+            jagged: false
+- name: NftAccount
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: mint
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: owner
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: id
+        field-type:
+          primitive: u64
+      - name: metadata
+        field-type:
+          type-ref:
+            name: NftMetadata
+            comment: null
+- name: NftInitializeMintArgs
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: mint_account_idx
+        field-type:
+          primitive: u16
+      - name: mint_authority
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: seed
+        field-type:
+          type-ref:
+            name: Seed
+            comment: null
+- name: NftMintToArgs
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: mint_account_idx
+        field-type:
+          primitive: u16
+      - name: nft_account_idx
+        field-type:
+          primitive: u16
+      - name: owner_account_idx
+        field-type:
+          primitive: u16
+      - name: metadata
+        field-type:
+          type-ref:
+            name: NftMetadata
+            comment: null
+- name: NftTransferArgs
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: nft_account_idx
+        field-type:
+          primitive: u16
+      - name: dest_account_idx
+        field-type:
+          primitive: u16
+      - name: mint_account_idx
+        field-type:
+          primitive: u16
+- name: NftBurnArgs
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: nft_account_idx
+        field-type:
+          primitive: u16
+      - name: mint_account_idx
+        field-type:
+          primitive: u16
+- name: NftUpdateMetadataArgs
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: nft_account_idx
+        field-type:
+          primitive: u16
+      - name: mint_account_idx
+        field-type:
+          primitive: u16
+      - name: metadata
+        field-type:
+          type-ref:
+            name: NftMetadata
+            comment: null
+- name: NftSetAuthorityArgs
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: mint_account_idx
+        field-type:
+          primitive: u16
+      - name: new_authority
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+- name: NftInitializeMintWithProof
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: mint_account_idx
+        field-type:
+          primitive: u16
+      - name: mint_authority
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: seed
+        field-type:
+          type-ref:
+            name: Seed
+            comment: null
+      - name: state_proof
+        field-type:
+          type-ref:
+            name: StateProof
+            comment: null
+- name: NftMintToWithProof
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: mint_account_idx
+        field-type:
+          primitive: u16
+      - name: nft_account_idx
+        field-type:
+          primitive: u16
+      - name: owner_account_idx
+        field-type:
+          primitive: u16
+      - name: metadata
+        field-type:
+          type-ref:
+            name: NftMetadata
+            comment: null
+      - name: state_proof
+        field-type:
+          type-ref:
+            name: StateProof
+            comment: null
+- name: NftInstruction
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: discriminant
+        field-type:
+          primitive: u32
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            aligned: 0
+            comment: null
+            tag-ref:
+              field-ref:
+                path:
+                - discriminant
+            variants:
+            - name: initialize_mint
+              tag-value: 0
+              variant-type:
+                type-ref:
+                  name: NftInitializeMintWithProof
+                  comment: null
+            - name: mint_to
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: NftMintToWithProof
+                  comment: null
+            - name: transfer
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: NftTransferArgs
+                  comment: null
+            - name: burn
+              tag-value: 3
+              variant-type:
+                type-ref:
+                  name: NftBurnArgs
+                  comment: null
+            - name: update_metadata
+              tag-value: 4
+              variant-type:
+                type-ref:
+                  name: NftUpdateMetadataArgs
+                  comment: null
+            - name: set_authority
+              tag-value: 5
+              variant-type:
+                type-ref:
+                  name: NftSetAuthorityArgs
+                  comment: null
+# ============================================================================
+# UNIFIED ROOT TYPES
+# ============================================================================
+- name: NftProgramAccount
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: Root account envelope using size-discriminated union for NFT program accounts
+      fields:
+      - name: data
+        field-type:
+          size-discriminated-union:
+            packed: true
+            aligned: 0
+            comment: null
+            variants:
+            - name: mint_account
+              expected-size: 48
+              variant-type:
+                type-ref:
+                  name: NftMintAccount
+                  comment: null
+            - name: nft_account
+              expected-size: 336
+              variant-type:
+                type-ref:
+                  name: NftAccount
+                  comment: null

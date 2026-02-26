@@ -1,0 +1,153 @@
+abi:
+  package: thru.program.wthru
+  name: "wThru"
+  abi-version: 1
+  package-version: "0.1.0"
+  description: ABI for the Thru wrapped-thru program instruction envelopes and account state
+  imports: []
+  options:
+    program-metadata:
+      root-types:
+        instruction-root: "WthruInstruction"
+        account-root: "VaultMetadata"
+        errors: "WthruError"
+types:
+- name: Pubkey
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: bytes
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+- name: InitializeMintArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: token_program_idx
+        field-type:
+          primitive: u16
+      - name: mint_account_idx
+        field-type:
+          primitive: u16
+      - name: vault_account_idx
+        field-type:
+          primitive: u16
+      - name: decimals
+        field-type:
+          primitive: u8
+      - name: mint_seed
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+      - name: mint_proof_size
+        field-type:
+          primitive: u64
+      - name: vault_proof_size
+        field-type:
+          primitive: u64
+- name: DepositArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: token_program_idx
+        field-type:
+          primitive: u16
+      - name: vault_account_idx
+        field-type:
+          primitive: u16
+      - name: mint_account_idx
+        field-type:
+          primitive: u16
+      - name: dest_token_account_idx
+        field-type:
+          primitive: u16
+- name: WithdrawArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: token_program_idx
+        field-type:
+          primitive: u16
+      - name: vault_account_idx
+        field-type:
+          primitive: u16
+      - name: mint_account_idx
+        field-type:
+          primitive: u16
+      - name: wthru_token_account_idx
+        field-type:
+          primitive: u16
+      - name: owner_account_idx
+        field-type:
+          primitive: u16
+      - name: recipient_account_idx
+        field-type:
+          primitive: u16
+      - name: amount
+        field-type:
+          primitive: u64
+- name: WthruInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: tag
+        field-type:
+          primitive: u32
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - tag
+            variants:
+            - name: initialize_mint
+              tag-value: 0
+              variant-type:
+                type-ref:
+                  name: InitializeMintArgs
+            - name: deposit
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: DepositArgs
+            - name: withdraw
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: WithdrawArgs
+- name: VaultMetadata
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: mint_address
+        field-type:
+          type-ref:
+            name: Pubkey
+      - name: last_balance
+        field-type:
+          primitive: u64
+- name: WthruError
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: code
+        field-type:
+          primitive: u64

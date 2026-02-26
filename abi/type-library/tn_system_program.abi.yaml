@@ -1,0 +1,201 @@
+abi:
+  package: thru.program.system
+  name: "System Program"
+  abi-version: 1
+  package-version: "0.1.0"
+  description: ABI for the Thru system program instruction envelopes
+  imports: []
+  options:
+    program-metadata:
+      root-types:
+        instruction-root: "SystemInstruction"
+        errors: "SystemError"
+types:
+- name: Pubkey
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: bytes
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+- name: TransferArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: from_pubkey_idx
+        field-type:
+          primitive: u16
+      - name: to_pubkey_idx
+        field-type:
+          primitive: u16
+      - name: amount
+        field-type:
+          primitive: u64
+- name: ResizeArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: account_idx
+        field-type:
+          primitive: u16
+      - name: new_size
+        field-type:
+          primitive: u64
+- name: CreateArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: account_idx
+        field-type:
+          primitive: u16
+      - name: seed_len
+        field-type:
+          primitive: u64
+      - name: has_proof
+        field-type:
+          primitive: u8
+- name: CreateEphemeralArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: account_idx
+        field-type:
+          primitive: u16
+      - name: seed_len
+        field-type:
+          primitive: u64
+- name: DeleteArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: account_idx
+        field-type:
+          primitive: u16
+- name: CompressArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: account_idx
+        field-type:
+          primitive: u16
+- name: DecompressArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: account_idx
+        field-type:
+          primitive: u16
+      - name: data_len
+        field-type:
+          primitive: u64
+- name: Decompress2Args
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: target_account_idx
+        field-type:
+          primitive: u16
+      - name: meta_account_idx
+        field-type:
+          primitive: u16
+      - name: data_account_idx
+        field-type:
+          primitive: u16
+      - name: data_offset
+        field-type:
+          primitive: u32
+- name: SetFlagsArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: account_idx
+        field-type:
+          primitive: u16
+      - name: flags
+        field-type:
+          primitive: u8
+- name: SystemInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: tag
+        field-type:
+          primitive: u8
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - tag
+            variants:
+            - name: create
+              tag-value: 0
+              variant-type:
+                type-ref:
+                  name: CreateArgs
+            - name: create_ephemeral
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: CreateEphemeralArgs
+            - name: delete
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: DeleteArgs
+            - name: transfer
+              tag-value: 3
+              variant-type:
+                type-ref:
+                  name: TransferArgs
+            - name: resize
+              tag-value: 4
+              variant-type:
+                type-ref:
+                  name: ResizeArgs
+            - name: compress
+              tag-value: 5
+              variant-type:
+                type-ref:
+                  name: CompressArgs
+            - name: decompress
+              tag-value: 6
+              variant-type:
+                type-ref:
+                  name: DecompressArgs
+            - name: set_flags
+              tag-value: 7
+              variant-type:
+                type-ref:
+                  name: SetFlagsArgs
+            - name: decompress2
+              tag-value: 8
+              variant-type:
+                type-ref:
+                  name: Decompress2Args
+- name: SystemError
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: code
+        field-type:
+          primitive: u64

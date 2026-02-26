@@ -90,7 +90,7 @@ fn simple_struct_formats_like_js() {
 
 #[test]
 fn token_instruction_fixture_formats() {
-    let reflector = load_reflector_with_imports("../type-library/token_program.abi.yaml");
+    let reflector = load_reflector_with_imports("../type-library/tn_token_program.abi.yaml");
     let token_instruction_hex = "\
         00020009ace7124bd312557a711a15c92d38a2d7e0d2fbf6ede3092df4a543d0\
         a00122ae00000000000000000000000000000000000000000000000000000000000000000000044845454700000000\
@@ -132,7 +132,7 @@ fn token_instruction_fixture_formats() {
 
 #[test]
 fn token_account_fixture_formats() {
-    let reflector = load_reflector_with_imports("../type-library/token_program.abi.yaml");
+    let reflector = load_reflector_with_imports("../type-library/tn_token_program.abi.yaml");
     let token_account_hex =
         "906b582852c5940dfe2664bc77717eb62e05e9c5b5b5c8d59cd4756d5c3dd771ace7124bd312557a711a15c92d38a2d7e0d2fbf6ede3092df4a543d0a00122ae00d0ed902e00000000";
     let bytes = hex_to_bytes(token_account_hex);
@@ -451,7 +451,7 @@ fn simple_union_fixture_should_distinguish_variants() {
 
 #[test]
 fn token_instruction_layout_has_payload_param() {
-    let reflector = load_reflector_with_imports("../type-library/token_program.abi.yaml");
+    let reflector = load_reflector_with_imports("../type-library/tn_token_program.abi.yaml");
     let type_ir = reflector
         .type_ir("TokenInstruction")
         .expect("token instruction IR");
@@ -467,7 +467,7 @@ fn token_instruction_layout_has_payload_param() {
 
 #[test]
 fn pubkey_zero_address_formats_correctly() {
-    let reflector = load_reflector_with_imports("../type-library/token_program.abi.yaml");
+    let reflector = load_reflector_with_imports("../type-library/tn_token_program.abi.yaml");
     /* TokenAccount = mint(32) + owner(32) + amount(8) + is_frozen(1) = 73 bytes */
     let zero_account_hex = "\
         0000000000000000000000000000000000000000000000000000000000000000\

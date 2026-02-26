@@ -100,6 +100,22 @@ export async function runAccountStreamProcessor(
     log("info", `Expected data size: ${stream.expectedSize} bytes`);
   }
 
+  // Create logger for the underlying replay stream (mirrors event stream processor)
+  const replayLogger =
+    logLevel === "debug"
+      ? {
+          debug: (msg: string) => log("debug", msg),
+          info: (msg: string) => log("info", msg),
+          warn: (msg: string) => log("warn", msg),
+          error: (msg: string) => log("error", msg),
+        }
+      : {
+          debug: () => {},
+          info: (msg: string) => log("info", msg),
+          warn: (msg: string) => log("warn", msg),
+          error: (msg: string) => log("error", msg),
+        };
+
   // Track highest slot seen for checkpoint persistence
   let lastProcessedSlot = minUpdatedSlot ?? 0n;
 
@@ -111,6 +127,7 @@ export async function runAccountStreamProcessor(
       view: AccountView.FULL,
       dataSizes: stream.dataSizes ?? (stream.expectedSize ? [stream.expectedSize] : undefined),
       minUpdatedSlot,
+      logger: replayLogger,
       onBackfillComplete: (highestSlot) => {
         log(
           "info",

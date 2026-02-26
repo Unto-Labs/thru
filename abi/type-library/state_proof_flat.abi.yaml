@@ -2,16 +2,38 @@ abi:
   package: "thru.blockchain.state_proof"
   abi-version: 1
   package-version: "1.0.0"
-  description: "State proof structures for Merkle tree verification"
-  imports:
-    # thru_primitives
-    - type: onchain
-      address: ta1blxgaYR0dei5aldWJe1vbUtt-LkVEBOzNJtSRhHQcTG
-      target: abi
-      network: mainnet
-      revision: latest
+  description: "State proof structures for Merkle tree verification (flat, no imports)"
+  imports: []
 
 types:
+  - name: "Hash"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "bytes"
+            field-type:
+              array:
+                size:
+                  literal:
+                    u64: 32
+                element-type:
+                  primitive: u8
+
+  - name: "Pubkey"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "bytes"
+            field-type:
+              array:
+                size:
+                  literal:
+                    u64: 32
+                element-type:
+                  primitive: u8
+
   - name: "StateProofHeader"
     kind:
       struct:
@@ -24,7 +46,6 @@ types:
             field-type:
               type-ref:
                 name: "Hash"
-                package: "thru.common.primitives"
   - name: "StateProof"
     kind:
       struct:
@@ -90,7 +111,6 @@ types:
                                 element-type:
                                   type-ref:
                                     name: "Hash"
-                                    package: "thru.common.primitives"
                   - name: "updating"
                     tag-value: 1
                     variant-type:
@@ -101,7 +121,6 @@ types:
                             field-type:
                               type-ref:
                                 name: "Hash"
-                                package: "thru.common.primitives"
                           - name: "sibling_hashes"
                             field-type:
                               array:
@@ -134,7 +153,6 @@ types:
                                 element-type:
                                   type-ref:
                                     name: "Hash"
-                                    package: "thru.common.primitives"
                   - name: "creation"
                     tag-value: 2
                     variant-type:
@@ -145,12 +163,10 @@ types:
                             field-type:
                               type-ref:
                                 name: "Pubkey"
-                                package: "thru.common.primitives"
                           - name: "existing_leaf_hash"
                             field-type:
                               type-ref:
                                 name: "Hash"
-                                package: "thru.common.primitives"
                           - name: "sibling_hashes"
                             field-type:
                               array:
@@ -183,4 +199,3 @@ types:
                                 element-type:
                                   type-ref:
                                     name: "Hash"
-                                    package: "thru.common.primitives"

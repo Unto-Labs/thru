@@ -813,7 +813,7 @@ console.log("dual arrays ok");
 #[test]
 fn test_ts_enum_builder_supports_variant_selectors() {
     let test_dir = setup_test_dir("token_builder");
-    let abi_path = PathBuf::from("..").join("type-library").join("token_program.abi.yaml");
+    let abi_path = PathBuf::from("..").join("type-library").join("tn_token_program.abi.yaml");
 
     generate_ts_code(
         abi_path.to_str().expect("token_program.abi.yaml path utf8"),
@@ -904,7 +904,7 @@ fn test_ts_enum_builder_supports_variant_selectors() {
 #[test]
 fn test_ts_tail_typeref_struct_builders() {
     let test_dir = setup_test_dir("token_tail_typeref_builder");
-    let abi_path = PathBuf::from("..").join("type-library").join("token_program.abi.yaml");
+    let abi_path = PathBuf::from("..").join("type-library").join("tn_token_program.abi.yaml");
 
     generate_ts_code(
         abi_path.to_str().expect("token_program.abi.yaml path utf8"),
@@ -948,7 +948,7 @@ fn test_ts_tail_typeref_struct_builders() {
 #[test]
 fn test_ts_generated_code_has_no_todo_placeholders() {
     let test_dir = setup_test_dir("token_no_todo");
-    let abi_path = PathBuf::from("..").join("type-library").join("token_program.abi.yaml");
+    let abi_path = PathBuf::from("..").join("type-library").join("tn_token_program.abi.yaml");
 
     generate_ts_code(
         abi_path.to_str().expect("token_program.abi.yaml path utf8"),

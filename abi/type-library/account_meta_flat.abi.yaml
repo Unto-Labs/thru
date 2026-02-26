@@ -1,0 +1,52 @@
+abi:
+  package: "thru.blockchain.account"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Account metadata structures (flat, no imports)"
+  imports: []
+
+types:
+  - name: "Pubkey"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "bytes"
+            field-type:
+              array:
+                size:
+                  literal:
+                    u64: 32
+                element-type:
+                  primitive: u8
+
+  - name: "AccountMeta"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "magic"
+            field-type:
+              primitive: u16
+          - name: "version"
+            field-type:
+              primitive: u8
+          - name: "flags"
+            field-type:
+              primitive: u8
+          - name: "data_sz"
+            field-type:
+              primitive: u32
+          - name: "seq"
+            field-type:
+              primitive: u64
+          - name: "owner"
+            field-type:
+              type-ref:
+                name: "Pubkey"
+          - name: "balance"
+            field-type:
+              primitive: u64
+          - name: "nonce"
+            field-type:
+              primitive: u64

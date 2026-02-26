@@ -1,0 +1,404 @@
+abi:
+  package: thru.program.passkey_manager
+  name: "Passkey Manager"
+  abi-version: 1
+  package-version: 0.1.0
+  description: ABI for the Thru passkey manager program instructions, account state,
+    and events
+  imports:
+    # thru_primitives
+    - type: onchain
+      address: ta1blxgaYR0dei5aldWJe1vbUtt-LkVEBOzNJtSRhHQcTG
+      target: abi
+      network: mainnet
+      revision: latest
+    # state_proof
+    - type: onchain
+      address: ta1l4yBjT6a7PQ4Wu_sJPQwb8jJiJ8Ei71gOuE5Dnotfrl
+      target: abi
+      network: mainnet
+      revision: latest
+  options:
+    program-metadata:
+      root-types:
+        instruction-root: "PasskeyInstruction"
+        account-root: "WalletAccount"
+        errors: "PasskeyError"
+        events: "PasskeyEvent"
+
+types:
+# ── Shared types ──
+
+- name: Seed32
+  kind:
+    array:
+      packed: true
+      size:
+        literal:
+          u64: 32
+      element-type:
+        primitive: u8
+
+- name: P256Point
+  kind:
+    array:
+      packed: true
+      size:
+        literal:
+          u64: 32
+      element-type:
+        primitive: u8
+
+# Authority: 65-byte tagged union
+# tag=1 (passkey): pubkey_x[32] || pubkey_y[32]
+# tag=2 (pubkey):  pubkey[32]   || padding[32]
+- name: Authority
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: tag
+        field-type:
+          primitive: u8
+      - name: data
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 64
+            element-type:
+              primitive: u8
+
+# ── Instruction argument types ──
+
+# CREATE (tag 0x00): 99 bytes fixed + StateProof
+- name: CreateArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: wallet_account_idx
+        field-type:
+          primitive: u16
+      - name: authority
+        field-type:
+          type-ref:
+            name: Authority
+      - name: seed
+        field-type:
+          type-ref:
+            name: Seed32
+      - name: state_proof
+        field-type:
+          type-ref:
+            name: StateProof
+            package: "thru.blockchain.state_proof"
+
+# VALIDATE (tag 0x01): 71 bytes fixed + variable data
+- name: ValidateArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: wallet_account_idx
+        field-type:
+          primitive: u16
+      - name: auth_idx
+        field-type:
+          primitive: u8
+      - name: signature_r
+        field-type:
+          type-ref:
+            name: P256Point
+      - name: signature_s
+        field-type:
+          type-ref:
+            name: P256Point
+      - name: authenticator_data_len
+        field-type:
+          primitive: u16
+      - name: client_data_len
+        field-type:
+          primitive: u16
+      - name: authenticator_data
+        field-type:
+          array:
+            size:
+              field-ref:
+                path: ["authenticator_data_len"]
+            element-type:
+              primitive: u8
+      - name: client_data
+        field-type:
+          array:
+            size:
+              field-ref:
+                path: ["client_data_len"]
+            element-type:
+              primitive: u8
+
+# TRANSFER (tag 0x02): 12 bytes fixed
+- name: TransferArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: wallet_account_idx
+        field-type:
+          primitive: u16
+      - name: to_account_idx
+        field-type:
+          primitive: u16
+      - name: amount
+        field-type:
+          primitive: u64
+
+# INVOKE (tag 0x03): 34 bytes fixed + instruction data
+- name: InvokeArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: program_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: instr_len
+        field-type:
+          primitive: u16
+      - name: instr
+        field-type:
+          array:
+            size:
+              field-ref:
+                path: ["instr_len"]
+            element-type:
+              primitive: u8
+
+# ADD_AUTHORITY (tag 0x04): 65 bytes
+- name: AddAuthorityArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: authority
+        field-type:
+          type-ref:
+            name: Authority
+
+# REMOVE_AUTHORITY (tag 0x05): 1 byte
+- name: RemoveAuthorityArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: auth_idx
+        field-type:
+          primitive: u8
+
+# REGISTER_CREDENTIAL (tag 0x06): 36 bytes fixed + StateProof
+- name: RegisterCredentialArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: wallet_account_idx
+        field-type:
+          primitive: u16
+      - name: lookup_account_idx
+        field-type:
+          primitive: u16
+      - name: seed
+        field-type:
+          type-ref:
+            name: Seed32
+      - name: state_proof
+        field-type:
+          type-ref:
+            name: StateProof
+            package: "thru.blockchain.state_proof"
+
+# ── Instruction envelope ──
+
+- name: PasskeyInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: tag
+        field-type:
+          primitive: u8
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - tag
+            variants:
+            - name: create
+              tag-value: 0
+              variant-type:
+                type-ref:
+                  name: CreateArgs
+            - name: validate
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: ValidateArgs
+            - name: transfer
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: TransferArgs
+            - name: invoke
+              tag-value: 3
+              variant-type:
+                type-ref:
+                  name: InvokeArgs
+            - name: add_authority
+              tag-value: 4
+              variant-type:
+                type-ref:
+                  name: AddAuthorityArgs
+            - name: remove_authority
+              tag-value: 5
+              variant-type:
+                type-ref:
+                  name: RemoveAuthorityArgs
+            - name: register_credential
+              tag-value: 6
+              variant-type:
+                type-ref:
+                  name: RegisterCredentialArgs
+
+# ── Account state ──
+
+- name: WalletAccount
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: num_auth
+        field-type:
+          primitive: u8
+      - name: nonce
+        field-type:
+          primitive: u64
+
+- name: CredentialLookup
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: wallet
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+
+# ── Events ──
+
+- name: WalletCreatedEventData
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: wallet
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: authority
+        field-type:
+          type-ref:
+            name: Authority
+
+- name: WalletValidatedEventData
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: wallet
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: new_nonce
+        field-type:
+          primitive: u64
+
+- name: WalletTransferEventData
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: wallet
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: to
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: amount
+        field-type:
+          primitive: u64
+
+- name: CredentialRegisteredEventData
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: wallet
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: lookup
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+
+- name: PasskeyEvent
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: event_type
+        field-type:
+          primitive: u8
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - event_type
+            variants:
+            - name: wallet_created
+              tag-value: 0
+              variant-type:
+                type-ref:
+                  name: WalletCreatedEventData
+            - name: wallet_validated
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: WalletValidatedEventData
+            - name: wallet_transfer
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: WalletTransferEventData
+            - name: credential_registered
+              tag-value: 3
+              variant-type:
+                type-ref:
+                  name: CredentialRegisteredEventData

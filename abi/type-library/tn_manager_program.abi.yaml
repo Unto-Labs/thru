@@ -1,0 +1,223 @@
+abi:
+  package: thru.program.manager
+  name: "Manager Program"
+  abi-version: 1
+  package-version: "0.1.0"
+  description: ABI for the Thru manager program instruction envelopes and account state
+  imports: []
+  options:
+    program-metadata:
+      root-types:
+        instruction-root: "ManagerInstruction"
+        account-root: "ManagerProgramMeta"
+        errors: "ManagerError"
+types:
+- name: Pubkey
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: bytes
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+- name: CreatePermanentArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: meta_account_idx
+        field-type:
+          primitive: u16
+      - name: program_account_idx
+        field-type:
+          primitive: u16
+      - name: srcbuf_account_idx
+        field-type:
+          primitive: u16
+      - name: srcbuf_offset
+        field-type:
+          primitive: u32
+      - name: srcbuf_size
+        field-type:
+          primitive: u32
+      - name: authority_account_idx
+        field-type:
+          primitive: u16
+      - name: seed_len
+        field-type:
+          primitive: u32
+- name: CreateEphemeralArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: meta_account_idx
+        field-type:
+          primitive: u16
+      - name: program_account_idx
+        field-type:
+          primitive: u16
+      - name: srcbuf_account_idx
+        field-type:
+          primitive: u16
+      - name: srcbuf_offset
+        field-type:
+          primitive: u32
+      - name: srcbuf_size
+        field-type:
+          primitive: u32
+      - name: authority_account_idx
+        field-type:
+          primitive: u16
+      - name: seed_len
+        field-type:
+          primitive: u32
+- name: UpgradeArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: meta_account_idx
+        field-type:
+          primitive: u16
+      - name: program_account_idx
+        field-type:
+          primitive: u16
+      - name: srcbuf_account_idx
+        field-type:
+          primitive: u16
+      - name: srcbuf_offset
+        field-type:
+          primitive: u32
+      - name: srcbuf_size
+        field-type:
+          primitive: u32
+- name: SetPauseArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: meta_account_idx
+        field-type:
+          primitive: u16
+      - name: program_account_idx
+        field-type:
+          primitive: u16
+      - name: is_paused
+        field-type:
+          primitive: u8
+- name: HeaderOnlyArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: meta_account_idx
+        field-type:
+          primitive: u16
+      - name: program_account_idx
+        field-type:
+          primitive: u16
+- name: SetAuthorityArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: meta_account_idx
+        field-type:
+          primitive: u16
+      - name: program_account_idx
+        field-type:
+          primitive: u16
+      - name: authority_candidate
+        field-type:
+          type-ref:
+            name: Pubkey
+- name: ManagerInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: tag
+        field-type:
+          primitive: u8
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - tag
+            variants:
+            - name: create_permanent
+              tag-value: 0
+              variant-type:
+                type-ref:
+                  name: CreatePermanentArgs
+            - name: create_ephemeral
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: CreateEphemeralArgs
+            - name: upgrade
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: UpgradeArgs
+            - name: set_pause
+              tag-value: 3
+              variant-type:
+                type-ref:
+                  name: SetPauseArgs
+            - name: destroy
+              tag-value: 4
+              variant-type:
+                type-ref:
+                  name: HeaderOnlyArgs
+            - name: finalize
+              tag-value: 5
+              variant-type:
+                type-ref:
+                  name: HeaderOnlyArgs
+            - name: set_authority
+              tag-value: 6
+              variant-type:
+                type-ref:
+                  name: SetAuthorityArgs
+            - name: claim_authority
+              tag-value: 7
+              variant-type:
+                type-ref:
+                  name: HeaderOnlyArgs
+- name: ManagerProgramMeta
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: authority
+        field-type:
+          type-ref:
+            name: Pubkey
+      - name: authority_candidate
+        field-type:
+          type-ref:
+            name: Pubkey
+      - name: version
+        field-type:
+          primitive: u64
+      - name: state
+        field-type:
+          primitive: u8
+- name: ManagerError
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: code
+        field-type:
+          primitive: u16

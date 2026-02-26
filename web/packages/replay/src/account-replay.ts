@@ -317,6 +317,7 @@ export async function* createAccountsByOwnerReplay(
   const streamBuffer: AccountReplayEvent[] = [];
   let streamDone = false;
   let streamError: Error | null = null;
+  let lastActivityTime = Date.now();
 
   try {
     // Set up periodic cleanup for page assembler
@@ -332,6 +333,7 @@ export async function* createAccountsByOwnerReplay(
     const streamProcessor = (async () => {
       try {
         for await (const response of stream) {
+          lastActivityTime = Date.now();
           const event = processResponseMulti(response, assembler);
           if (event) {
             if (event.type === "account") {
@@ -449,6 +451,7 @@ export async function* createAccountsByOwnerReplay(
     let retryAttempt = 0;
     let currentStream = stream;
     let currentStreamProcessor = streamProcessor;
+    lastActivityTime = Date.now();
 
     // Helper to create a new stream and processor with fresh client
     const createStreamProcessor = () => {
@@ -469,6 +472,7 @@ export async function* createAccountsByOwnerReplay(
         try {
           for await (const response of newStream) {
             retryAttempt = 0; // Reset on successful message
+            lastActivityTime = Date.now();
             const event = processResponseMulti(response, assembler);
             if (event) {
               if (event.type === "account") {
@@ -492,7 +496,20 @@ export async function* createAccountsByOwnerReplay(
     // Continue yielding stream events with reconnection on error
     while (true) {
       // Yield any buffered events
+      const hadEvents = streamBuffer.length > 0;
       yield* yieldStreamBuffer();
+      if (hadEvents) {
+        lastActivityTime = Date.now();
+      }
+
+      // Check for idle timeout - force reconnection if no activity
+      if (!streamDone && Date.now() - lastActivityTime > retryConfig.connectionTimeoutMs) {
+        logger.warn(
+          `[account-stream] no activity for ${retryConfig.connectionTimeoutMs}ms; forcing reconnection`
+        );
+        streamDone = true;
+        streamError = new Error(`Operation timed out after ${retryConfig.connectionTimeoutMs}ms`);
+      }
 
       // Check if stream finished (normally or with error)
       if (streamDone) {
@@ -509,6 +526,7 @@ export async function* createAccountsByOwnerReplay(
           streamDone = false;
           streamError = null;
           streamBuffer.length = 0;
+          lastActivityTime = Date.now();
 
           // Create new stream
           const { stream: newStream, processor: newProcessor } = createStreamProcessor();
@@ -520,6 +538,7 @@ export async function* createAccountsByOwnerReplay(
           // but if it does, reconnect to maintain live updates
           logger.warn("[account-stream] stream ended unexpectedly; reconnecting...");
           streamDone = false;
+          lastActivityTime = Date.now();
           const { stream: newStream, processor: newProcessor } = createStreamProcessor();
           currentStream = newStream;
           currentStreamProcessor = newProcessor;
