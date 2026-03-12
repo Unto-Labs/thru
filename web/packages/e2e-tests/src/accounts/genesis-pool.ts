@@ -49,8 +49,19 @@ export class GenesisAccountPool {
 
   /**
    * Release a genesis account back to the pool.
+   *
+   * NOTE: This is intentionally a no-op. Accounts are never returned to the
+   * pool to prevent nonce conflicts — when a later test reuses a
+   * previously-used account whose on-chain nonce has advanced, the test
+   * can read a stale nonce and produce transactions that fail with
+   * TN_RUNTIME_TXN_ERR_NONCE_TOO_LOW (vmError=-511).
+   * With 1024 genesis accounts and ~32 tests using ~4 accounts each,
+   * there is no risk of exhaustion.
    */
   release(account: GenesisAccount): void {
+    // Keep inUse=true so this account is never re-issued to another test.
+    return;
+
     if (account.index < 0 || account.index >= GENESIS_ACCOUNT_COUNT) {
       throw new Error(`Invalid account index: ${account.index}`);
     }
@@ -102,6 +113,7 @@ export class GenesisAccountPool {
 
   /**
    * Release multiple genesis accounts back to the pool.
+   * See release() for why this is a no-op.
    */
   releaseMultiple(accounts: GenesisAccount[]): void {
     for (const account of accounts) {

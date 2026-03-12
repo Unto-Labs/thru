@@ -6,9 +6,11 @@ BUILDDIR?=thruvm
 include $(THRU_CPP_SDK_DIR)/config/extra/with-gcc.mk
 
 # Standard flags
+# -g adds DWARF debug sections without changing code generation, enabling
+# thru-cli debug resolve to map PCs to source locations and variables.
 CXXFLAGS+=-std=c++20 \
 	-march=rv64imc_zba_zbb_zbc_zbs_zknh -mabi=lp64 -mcmodel=medlow -mstrict-align \
-	-specs=picolibcpp.specs --picolibc-prefix=$(RISCV_TOOLCHAIN_ROOT) -O3 -fno-stack-protector -ffreestanding \
+	-specs=picolibcpp.specs --picolibc-prefix=$(RISCV_TOOLCHAIN_ROOT) -O3 -g -fno-stack-protector -ffreestanding \
 	-ffunction-sections -fdata-sections -nostartfiles -static-pie -fPIE \
 	-Werror -Wall -Wextra -Wpedantic -Wstrict-aliasing=2 -Wconversion \
 	-fno-exceptions -fno-rtti

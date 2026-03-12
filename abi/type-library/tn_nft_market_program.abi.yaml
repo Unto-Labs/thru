@@ -1,0 +1,635 @@
+abi:
+  package: thru.program.nft_market
+  name: "NFT Market Program"
+  abi-version: 1
+  package-version: 0.1.0
+  description: Peer-to-peer NFT trading via resting bid/ask orders with configurable marketplace fees
+  imports:
+    # thru_primitives
+    - type: onchain
+      address: ta1blxgaYR0dei5aldWJe1vbUtt-LkVEBOzNJtSRhHQcTG
+      target: abi
+      network: mainnet
+      revision: latest
+    # state_proof
+    - type: onchain
+      address: ta1l4yBjT6a7PQ4Wu_sJPQwb8jJiJ8Ei71gOuE5Dnotfrl
+      target: abi
+      network: mainnet
+      revision: latest
+  options:
+    program-metadata:
+      root-types:
+        instruction-root: NftMarketInstruction
+        account-root: NftMarketProgramAccount
+        errors: null
+        events: NftMarketEvent
+types:
+# ============================================================================
+# Shared types
+# ============================================================================
+- name: Seed32
+  kind:
+    array:
+      packed: true
+      size:
+        literal:
+          u64: 32
+      element-type:
+        primitive: u8
+# ============================================================================
+# Account structures
+# ============================================================================
+# Config account (66 bytes packed)
+- name: NftMarketConfig
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: admin
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: fee_recipient
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: fee_bps
+        field-type:
+          primitive: u16
+# Order account (145 bytes packed, same struct for bid and ask)
+- name: NftMarketOrder
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: side
+        field-type:
+          primitive: u8
+      - name: nft_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: token_mint
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: maker
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: vault
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: amount
+        field-type:
+          primitive: u64
+      - name: expiry_slot
+        field-type:
+          primitive: u64
+# ============================================================================
+# Account root (size-discriminated union)
+# ============================================================================
+- name: NftMarketProgramAccount
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: data
+        field-type:
+          size-discriminated-union:
+            packed: true
+            variants:
+            - name: config
+              expected-size: 66
+              variant-type:
+                type-ref:
+                  name: NftMarketConfig
+            - name: order
+              expected-size: 145
+              variant-type:
+                type-ref:
+                  name: NftMarketOrder
+# ============================================================================
+# Instruction argument structures
+# ============================================================================
+- name: InitializeConfigArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: config_account_idx
+        field-type:
+          primitive: u16
+      - name: fee_recipient
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: fee_bps
+        field-type:
+          primitive: u16
+      - name: seed
+        field-type:
+          type-ref:
+            name: Seed32
+      - name: state_proof
+        field-type:
+          type-ref:
+            name: StateProof
+            package: "thru.blockchain.state_proof"
+- name: UpdateConfigArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: config_account_idx
+        field-type:
+          primitive: u16
+      - name: new_admin
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: new_fee_recipient
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: new_fee_bps
+        field-type:
+          primitive: u16
+- name: PlaceBidArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: order_account_idx
+        field-type:
+          primitive: u16
+      - name: maker_token_account_idx
+        field-type:
+          primitive: u16
+      - name: vault_account_idx
+        field-type:
+          primitive: u16
+      - name: token_program_idx
+        field-type:
+          primitive: u16
+      - name: nft_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: token_mint
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: amount
+        field-type:
+          primitive: u64
+      - name: expiry_slot
+        field-type:
+          primitive: u64
+      - name: seed
+        field-type:
+          type-ref:
+            name: Seed32
+      - name: state_proof
+        field-type:
+          type-ref:
+            name: StateProof
+            package: "thru.blockchain.state_proof"
+- name: PlaceAskArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: order_account_idx
+        field-type:
+          primitive: u16
+      - name: nft_account_idx
+        field-type:
+          primitive: u16
+      - name: nft_mint_account_idx
+        field-type:
+          primitive: u16
+      - name: nft_program_idx
+        field-type:
+          primitive: u16
+      - name: token_mint
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: amount
+        field-type:
+          primitive: u64
+      - name: expiry_slot
+        field-type:
+          primitive: u64
+      - name: seed
+        field-type:
+          type-ref:
+            name: Seed32
+      - name: state_proof
+        field-type:
+          type-ref:
+            name: StateProof
+            package: "thru.blockchain.state_proof"
+- name: ModifyBidArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: order_account_idx
+        field-type:
+          primitive: u16
+      - name: maker_token_account_idx
+        field-type:
+          primitive: u16
+      - name: vault_account_idx
+        field-type:
+          primitive: u16
+      - name: token_program_idx
+        field-type:
+          primitive: u16
+      - name: new_amount
+        field-type:
+          primitive: u64
+      - name: new_expiry_slot
+        field-type:
+          primitive: u64
+- name: ModifyAskArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: order_account_idx
+        field-type:
+          primitive: u16
+      - name: new_amount
+        field-type:
+          primitive: u64
+      - name: new_expiry_slot
+        field-type:
+          primitive: u64
+- name: FillBidArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: order_account_idx
+        field-type:
+          primitive: u16
+      - name: config_account_idx
+        field-type:
+          primitive: u16
+      - name: nft_account_idx
+        field-type:
+          primitive: u16
+      - name: nft_mint_account_idx
+        field-type:
+          primitive: u16
+      - name: nft_program_idx
+        field-type:
+          primitive: u16
+      - name: maker_account_idx
+        field-type:
+          primitive: u16
+      - name: vault_account_idx
+        field-type:
+          primitive: u16
+      - name: taker_token_account_idx
+        field-type:
+          primitive: u16
+      - name: fee_recipient_account_idx
+        field-type:
+          primitive: u16
+      - name: token_program_idx
+        field-type:
+          primitive: u16
+- name: FillAskArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: order_account_idx
+        field-type:
+          primitive: u16
+      - name: config_account_idx
+        field-type:
+          primitive: u16
+      - name: nft_account_idx
+        field-type:
+          primitive: u16
+      - name: nft_mint_account_idx
+        field-type:
+          primitive: u16
+      - name: nft_program_idx
+        field-type:
+          primitive: u16
+      - name: taker_nft_dest_idx
+        field-type:
+          primitive: u16
+      - name: taker_token_account_idx
+        field-type:
+          primitive: u16
+      - name: maker_token_account_idx
+        field-type:
+          primitive: u16
+      - name: fee_recipient_account_idx
+        field-type:
+          primitive: u16
+      - name: token_program_idx
+        field-type:
+          primitive: u16
+- name: CancelBidArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: order_account_idx
+        field-type:
+          primitive: u16
+      - name: vault_account_idx
+        field-type:
+          primitive: u16
+      - name: maker_token_account_idx
+        field-type:
+          primitive: u16
+      - name: token_program_idx
+        field-type:
+          primitive: u16
+- name: CancelAskArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: order_account_idx
+        field-type:
+          primitive: u16
+      - name: nft_account_idx
+        field-type:
+          primitive: u16
+      - name: nft_mint_account_idx
+        field-type:
+          primitive: u16
+      - name: nft_program_idx
+        field-type:
+          primitive: u16
+      - name: maker_dest_account_idx
+        field-type:
+          primitive: u16
+# ============================================================================
+# Instruction root (discriminant + enum payload)
+# ============================================================================
+- name: NftMarketInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: discriminant
+        field-type:
+          primitive: u32
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - discriminant
+            variants:
+            - name: initialize_config
+              tag-value: 0
+              variant-type:
+                type-ref:
+                  name: InitializeConfigArgs
+            - name: update_config
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: UpdateConfigArgs
+            - name: place_bid
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: PlaceBidArgs
+            - name: place_ask
+              tag-value: 3
+              variant-type:
+                type-ref:
+                  name: PlaceAskArgs
+            - name: modify_bid
+              tag-value: 4
+              variant-type:
+                type-ref:
+                  name: ModifyBidArgs
+            - name: modify_ask
+              tag-value: 5
+              variant-type:
+                type-ref:
+                  name: ModifyAskArgs
+            - name: fill_bid
+              tag-value: 6
+              variant-type:
+                type-ref:
+                  name: FillBidArgs
+            - name: fill_ask
+              tag-value: 7
+              variant-type:
+                type-ref:
+                  name: FillAskArgs
+            - name: cancel_bid
+              tag-value: 8
+              variant-type:
+                type-ref:
+                  name: CancelBidArgs
+            - name: cancel_ask
+              tag-value: 9
+              variant-type:
+                type-ref:
+                  name: CancelAskArgs
+# ============================================================================
+# Event data structures
+# ============================================================================
+- name: OrderPlacedEventData
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: side
+        field-type:
+          primitive: u8
+      - name: nft_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: token_mint
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: maker
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: amount
+        field-type:
+          primitive: u64
+      - name: expiry_slot
+        field-type:
+          primitive: u64
+- name: OrderModifiedEventData
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: side
+        field-type:
+          primitive: u8
+      - name: nft_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: maker
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: old_amount
+        field-type:
+          primitive: u64
+      - name: new_amount
+        field-type:
+          primitive: u64
+      - name: new_expiry_slot
+        field-type:
+          primitive: u64
+- name: OrderFilledEventData
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: side
+        field-type:
+          primitive: u8
+      - name: nft_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: token_mint
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: maker
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: taker
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: amount
+        field-type:
+          primitive: u64
+      - name: fee
+        field-type:
+          primitive: u64
+- name: OrderCancelledEventData
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: side
+        field-type:
+          primitive: u8
+      - name: nft_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: maker
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+- name: ConfigUpdatedEventData
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: admin
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: fee_recipient
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: fee_bps
+        field-type:
+          primitive: u16
+# ============================================================================
+# Event root (event_type tag + enum payload)
+# ============================================================================
+- name: NftMarketEvent
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: event_type
+        field-type:
+          primitive: u8
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - event_type
+            variants:
+            - name: order_placed
+              tag-value: 0
+              variant-type:
+                type-ref:
+                  name: OrderPlacedEventData
+            - name: order_modified
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: OrderModifiedEventData
+            - name: order_filled
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: OrderFilledEventData
+            - name: order_cancelled
+              tag-value: 3
+              variant-type:
+                type-ref:
+                  name: OrderCancelledEventData
+            - name: config_updated
+              tag-value: 4
+              variant-type:
+                type-ref:
+                  name: ConfigUpdatedEventData

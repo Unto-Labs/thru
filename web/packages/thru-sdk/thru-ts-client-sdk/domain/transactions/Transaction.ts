@@ -55,6 +55,7 @@ export interface TransactionExecutionResultData {
     readwriteAccounts: Pubkey[];
     readonlyAccounts: Pubkey[];
     events?: TransactionExecutionEvent[];
+    errorProgramAccIdx: number;
 }
 
 export class Transaction {
@@ -721,6 +722,7 @@ export class Transaction {
                       payload: new Uint8Array(event.payload ?? new Uint8Array(0)),
                   }))
                 : undefined,
+            errorProgramAccIdx: proto.errorProgramAccIdx ?? 0,
         };
     }
 }

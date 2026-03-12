@@ -25,6 +25,7 @@ fn test_complete_abi_analysis_pipeline() {
                         name: "header".to_string(),
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "BaseType".to_string(),
+                            package: None,
                             comment: None,
                         }),
                     },
@@ -55,6 +56,7 @@ fn test_complete_abi_analysis_pipeline() {
                     tag_value: 1,
                     variant_type: TypeKind::TypeRef(TypeRefType {
                         name: "ValidStruct".to_string(),
+                        package: None,
                         comment: None,
                     }),
                 }],
@@ -138,6 +140,7 @@ fn test_invalid_enum_tag_layout_cycle_detection() {
                         name: "problematic_enum".to_string(),
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "ProblematicEnum".to_string(),
+                            package: None,
                             comment: None,
                         }),
                     },
@@ -201,6 +204,7 @@ fn test_forward_field_reference_detection() {
                         name: "early_array".to_string(),
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "ForwardRefArray".to_string(),
+                            package: None,
                             comment: None,
                         }),
                     },
@@ -305,6 +309,7 @@ fn test_complex_transitive_dependency_chain() {
                         name: "level1".to_string(),
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "Level1".to_string(),
+                            package: None,
                             comment: None,
                         }),
                     },
@@ -324,6 +329,7 @@ fn test_complex_transitive_dependency_chain() {
                     name: "level2".to_string(),
                     field_type: TypeKind::TypeRef(TypeRefType {
                         name: "Level2".to_string(),
+                        package: None,
                         comment: None,
                     }),
                 }],
@@ -338,6 +344,7 @@ fn test_complex_transitive_dependency_chain() {
                     name: "problematic_array".to_string(),
                     field_type: TypeKind::TypeRef(TypeRefType {
                         name: "TransitiveArray".to_string(),
+                        package: None,
                         comment: None,
                     }),
                 }],
@@ -556,6 +563,7 @@ fn test_comprehensive_error_reporting() {
                         name: "problematic_enum".to_string(),
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "BadEnum".to_string(),
+                            package: None,
                             comment: None,
                         }),
                     },
@@ -563,6 +571,7 @@ fn test_comprehensive_error_reporting() {
                         name: "problematic_array".to_string(),
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "BadArray".to_string(),
+                            package: None,
                             comment: None,
                         }),
                     },
@@ -750,6 +759,7 @@ fn test_comprehensive_validation_integration() {
                         name: "duplicate_field".to_string(), // Duplicate field!
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "ProblematicArray".to_string(),
+                            package: None,
                             comment: None,
                         }),
                     },
@@ -757,6 +767,7 @@ fn test_comprehensive_validation_integration() {
                         name: "problematic_enum".to_string(),
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "ProblematicEnum".to_string(),
+                            package: None,
                             comment: None,
                         }),
                     },
@@ -819,6 +830,7 @@ fn test_comprehensive_validation_integration() {
                         name: "field1".to_string(),
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "BaseType".to_string(),
+                            package: None,
                             comment: None,
                         }),
                     },

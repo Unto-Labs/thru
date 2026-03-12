@@ -15,8 +15,7 @@ use crate::output;
 use crate::utils::format_vm_error;
 use thru_client::{Client as RpcClient, VersionContext};
 
-// Transaction verification constants
-const TRANSACTION_VERIFICATION_TIMEOUT: Duration = Duration::from_secs(30);
+
 
 /// Handle program subcommands
 pub async fn handle_uploader_command(
@@ -480,7 +479,7 @@ impl UploaderManager {
         json_format: bool,
     ) -> Result<(), CliError> {
         let wire_bytes = transaction.to_wire();
-        let timeout = TRANSACTION_VERIFICATION_TIMEOUT;
+        let timeout = Duration::from_secs(self.config.timeout_seconds);
 
         let transaction_details = self
             .rpc_client

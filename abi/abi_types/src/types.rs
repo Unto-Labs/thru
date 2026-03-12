@@ -87,6 +87,8 @@ pub struct ArrayType {
 #[serde(rename_all = "kebab-case")]
 pub struct TypeRefType {
     pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub package: Option<String>,
     pub comment: Option<String>,
 }
 

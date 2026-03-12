@@ -19,5 +19,6 @@ export * from "./gen/thru/core/v1/types_pb";
 // Service types (messages + service definitions)
 // In protobuf v2, service definitions are generated in the _pb files
 export * from "./gen/thru/services/v1/command_service_pb";
+export * from "./gen/thru/services/v1/debug_service_pb";
 export * from "./gen/thru/services/v1/query_service_pb";
 export * from "./gen/thru/services/v1/streaming_service_pb";

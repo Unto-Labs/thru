@@ -100,7 +100,7 @@ pub async fn handle_transfer_command(
 
     // Submit the transaction
     let transaction_bytes = transaction.to_wire();
-    let timeout = Duration::from_secs(30);
+    let timeout = Duration::from_secs(config.timeout_seconds);
     let transaction_details = client
         .execute_transaction(&transaction_bytes, timeout)
         .await

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import { Command } from "commander";
-import { TestExecutor, defaultTestConfig } from "../framework";
+import { TestExecutor, defaultTestConfig, DEFAULT_BTP_ENDPOINT, DEFAULT_BPROT_ENDPOINT } from "../framework";
 import {
   createBasicRPCScenario,
   createBalanceTransferScenario,
@@ -36,6 +36,8 @@ import {
   createStreamNodeRecordsScenario,
   createGetAndListEventsScenario,
   createStreamErrorPathsScenario,
+  createErrorProgramAccIdxScenario,
+  createDebugReExecuteScenario,
 } from "../scenarios";
 import type { TestScenario } from "../framework/scenario";
 
@@ -46,7 +48,7 @@ program
   .description("Thru Network TypeScript E2E Test Suite")
   .version("0.0.1")
   .option("--base-url <url>", "gRPC-Web endpoint", "http://127.0.0.1:8472")
-  .option("--blockbuilder <endpoint>", "Block builder BTP endpoint", "127.0.0.1:9002")
+  .option("--blockbuilder <endpoint>", "Block builder BTP endpoint", DEFAULT_BTP_ENDPOINT)
   .option("--producer-key <hex>", "Block producer private key (hex)")
   .option("--send-block-path <path>", "Path to send-block binary", "./send-block")
   .option("--grpc <endpoint>", "gRPC endpoint for send-block", "127.0.0.1:8472")
@@ -56,6 +58,9 @@ program
   .option("--seed <n>", "Random seed for deterministic runs", "0")
   .option("--timeout <ms>", "Test timeout in milliseconds", "300000")
   .option("--chain-id <n>", "Chain ID for transactions", "1")
+  .option("--wait-for-vote", "Wait for consensus vote before sending next block", false)
+  .option("--vote-timeout <ms>", "Timeout in ms waiting for vote per block", "30000")
+  .option("--sequencer-mode", "Use bprot protocol for block submission", false)
   .argument("[scenario]", "Specific scenario to run (optional)")
   .action(async (scenario: string | undefined, options) => {
     // Generate random seed if not provided
@@ -78,6 +83,16 @@ program
     config.seed = seed;
     config.testTimeoutMs = parseInt(options.timeout, 10);
     config.chainId = parseInt(options.chainId, 10);
+    config.waitForVote = options.waitForVote;
+    if (config.waitForVote) {
+      config.voteTimeoutMs = parseInt(options.voteTimeout, 10);
+    }
+    config.sequencerMode = options.sequencerMode;
+    /* When sequencer mode is on and blockbuilder wasn't explicitly set,
+       override to the default bprot port */
+    if (config.sequencerMode && options.blockbuilder === DEFAULT_BTP_ENDPOINT) {
+      config.blockBuilderEndpoint = DEFAULT_BPROT_ENDPOINT;
+    }
 
     // Validate chain ID
     if (config.chainId === 0) {
@@ -170,6 +185,8 @@ function getScenarioByName(name: string): TestScenario | null {
     stream_node_records: createStreamNodeRecordsScenario,
     get_and_list_events: createGetAndListEventsScenario,
     stream_error_paths: createStreamErrorPathsScenario,
+    error_program_acc_idx: createErrorProgramAccIdxScenario,
+    debug_reexecute: createDebugReExecuteScenario,
   };
 
   const factory = scenarios[name];
@@ -211,6 +228,8 @@ function getScenarioNames(): string[] {
     "stream_node_records",
     "get_and_list_events",
     "stream_error_paths",
+    "error_program_acc_idx",
+    "debug_reexecute",
   ];
 }
 
@@ -288,6 +307,12 @@ function registerAllScenarios(executor: TestExecutor): void {
 
   // Phase 21 - Error path tests
   executor.registerScenario(createStreamErrorPathsScenario());
+
+  // Phase 22 - Verify error_program_acc_idx identifies the faulting program
+  executor.registerScenario(createErrorProgramAccIdxScenario());
+
+  // Phase 23 - Debug re-execute tests
+  executor.registerScenario(createDebugReExecuteScenario());
 }
 
 program.parse();

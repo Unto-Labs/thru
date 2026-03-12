@@ -79,6 +79,8 @@ fn normalize_type_kind(kind: &mut TypeKind, resolver: &ImportResolver) {
             if let Some(simple_name) = resolver.resolve_type_name(&type_ref.name) {
                 type_ref.name = simple_name;
             }
+            /* Strip package qualifier — types are now inlined */
+            type_ref.package = None;
         }
         TypeKind::Struct(struct_type) => {
             for field in &mut struct_type.fields {

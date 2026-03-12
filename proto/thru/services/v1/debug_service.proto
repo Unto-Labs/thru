@@ -1,0 +1,112 @@
+syntax = "proto3";
+
+package thru.services.v1;
+
+import "buf/validate/validate.proto";
+import "google/api/annotations.proto";
+import "google/api/client.proto";
+import "google/api/field_behavior.proto";
+import "google/protobuf/timestamp.proto";
+import "thru/common/v1/consensus.proto";
+import "thru/common/v1/filters.proto";
+import "thru/common/v1/pagination.proto";
+import "thru/common/v1/primitives.proto";
+import "thru/core/v1/account.proto";
+import "thru/core/v1/block.proto";
+import "thru/core/v1/state.proto";
+import "thru/core/v1/transaction.proto";
+import "thru/core/v1/types.proto";
+
+option go_package = "github.com/Unto-Labs/thru-net/grpc/pkg/proto/thru/services/v1;servicesv1";
+
+// CallFrame represents a single shadow stack frame from the VM.
+message CallFrame {
+  uint32 program_acc_idx = 1;
+  uint64 program_counter = 2;
+  uint64 stack_pointer = 3;
+  repeated uint64 saved_registers = 4;
+  bytes stack_window = 5;         // Up to 1024 bytes above sp
+  uint64 stack_window_base = 6;   // Virtual address of first byte (== stack_pointer)
+}
+
+// MemoryPage represents a single allocated page of VM memory.
+message MemoryPage {
+  uint32 page_index = 1;    // Index within the segment's page array
+  bytes data = 2;           // Page contents (4096 bytes)
+}
+
+// MemorySegment represents all allocated pages of a VM memory segment.
+message MemorySegment {
+  uint32 segment_type = 1;  // VM segment type (5=stack, 7=heap)
+  uint64 segment_size = 2;  // Total virtual size of segment in bytes
+  repeated MemoryPage pages = 3;
+}
+
+// VmFaultCode enumerates VM halt conditions.
+enum VmFaultCode {
+  VM_FAULT_NONE   = 0;  // No fault
+  VM_FAULT_REVERT = 1;  // TN_VM_FAULT_REVERT — explicit revert by program
+  VM_FAULT_SIGCU  = 2;  // TN_VM_FAULT_SIGCU  — compute units exhausted
+  VM_FAULT_SIGSU  = 3;  // TN_VM_FAULT_SIGSU  — state units exhausted
+}
+
+// VmExecutionDetails contains detailed VM state after execution.
+message VmExecutionDetails {
+  uint64 execution_code = 1;
+  uint64 user_error_code = 2;
+  uint64 compute_units_consumed = 3;
+  uint64 state_units_consumed = 4;
+  uint64 pages_used = 5;
+  uint64 program_counter = 6;
+  uint64 instruction_counter = 7;
+  VmFaultCode fault_code = 8;
+  uint64 segv_vaddr = 9;
+  uint64 segv_size = 10;
+  bool segv_write = 11;
+  repeated uint64 registers = 12;
+  uint64 call_depth = 13;
+  uint64 max_call_depth = 14;
+  repeated CallFrame call_frames = 15;
+}
+
+// AccountSnapshot represents the state of an account at a point in time.
+message AccountSnapshot {
+  thru.common.v1.Pubkey address = 1;
+  thru.core.v1.AccountMeta meta = 2;
+  optional bytes data = 3;
+  bool exists = 4;
+}
+
+// DebugReExecuteRequest is a request to re-execute a transaction in simulated environment.
+message DebugReExecuteRequest {
+  thru.common.v1.Signature signature = 1 [(google.api.field_behavior) = REQUIRED];
+  bool include_state_before = 2;
+  bool include_state_after = 3;
+  bool include_account_data = 4;
+  bool include_memory_dump = 5;    // Return all allocated stack+heap pages
+}
+
+// DebugReExecuteResponse is a response from the debug service.
+message DebugReExecuteResponse {
+  thru.core.v1.Transaction transaction = 1 [(google.api.field_behavior) = REQUIRED];
+  string stdout = 2 [(google.api.field_behavior) = REQUIRED];
+  string log = 3 [(google.api.field_behavior) = REQUIRED];
+  string trace = 4 [(google.api.field_behavior) = REQUIRED];
+  VmExecutionDetails execution_details = 5;
+  repeated AccountSnapshot state_before = 6;
+  repeated AccountSnapshot state_after = 7;
+  repeated MemorySegment memory_segments = 8;
+}
+
+// DebugService defines unary RPCs helpful for debugging.
+service DebugService {
+  option (google.api.default_host) = "api.thru.network";
+
+  // DebugReExecute executes a transaction in simulated environment.
+  rpc DebugReExecute(DebugReExecuteRequest) returns (DebugReExecuteResponse) {
+    option (google.api.http) = {
+      post: "/v1/debug/re-execute"
+      body: "*"
+    };
+  }
+}

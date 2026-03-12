@@ -171,9 +171,16 @@ export class GetAndListEventsScenario extends BaseScenario {
       },
     });
 
-    const listResponse = await ctx.sdk.events.list({ filter });
+    // Retry: events may not be flushed to ClickHouse immediately after tx finalization
+    let listResponse: Awaited<ReturnType<typeof ctx.sdk.events.list>> | null = null;
+    for (let attempt = 0; attempt < 10; attempt++) {
+      listResponse = await ctx.sdk.events.list({ filter });
+      if (listResponse.events && listResponse.events.length > 0) break;
+      ctx.logInfo("ListEvents returned 0 events, retrying (%d/10)...", attempt + 1);
+      await new Promise((r) => setTimeout(r, 500 + attempt * 200));
+    }
 
-    if (!listResponse.events || listResponse.events.length === 0) {
+    if (!listResponse?.events || listResponse.events.length === 0) {
       return {
         ...result,
         success: false,

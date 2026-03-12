@@ -1,6 +1,7 @@
 //! Command implementations for the Thru CLI
 
 pub mod account;
+pub mod debug;
 pub mod dev;
 pub mod faucet;
 pub mod abi;

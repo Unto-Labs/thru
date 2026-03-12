@@ -159,6 +159,7 @@ struct TransactionContext {
     pub nonce: u64,
     pub start_slot: u64,
     pub chain_id: u16,
+    pub timeout_seconds: u64,
 }
 
 /// Setup common transaction context (config, keypair, client, nonce, block height)
@@ -204,6 +205,7 @@ async fn setup_transaction_context(
         nonce,
         start_slot: block_height.finalized_height,
         chain_id: chain_info.chain_id,
+        timeout_seconds: config.timeout_seconds,
     })
 }
 
@@ -221,7 +223,7 @@ async fn execute_transaction(
 
     // Submit transaction
     let transaction_bytes = transaction.to_wire();
-    let timeout = Duration::from_secs(30);
+    let timeout = Duration::from_secs(context.timeout_seconds);
 
     let transaction_details = context
         .client
@@ -580,7 +582,7 @@ async fn initialize_mint(
 
     // Submit transaction
     let transaction_bytes = transaction.to_wire();
-    let timeout = Duration::from_secs(30);
+    let timeout = Duration::from_secs(config.timeout_seconds);
 
     let transaction_details = client
         .execute_transaction(&transaction_bytes, timeout)
@@ -752,7 +754,7 @@ async fn initialize_account(
 
     // Submit transaction
     let transaction_bytes = transaction.to_wire();
-    let timeout = Duration::from_secs(30);
+    let timeout = Duration::from_secs(config.timeout_seconds);
 
     let transaction_details = client
         .execute_transaction(&transaction_bytes, timeout)
@@ -1043,7 +1045,7 @@ async fn burn(
 
     // Submit transaction
     let transaction_bytes = transaction.to_wire();
-    let timeout = Duration::from_secs(30);
+    let timeout = Duration::from_secs(config.timeout_seconds);
 
     let transaction_details = client
         .execute_transaction(&transaction_bytes, timeout)
@@ -1149,7 +1151,7 @@ async fn close_account(
 
     // Submit transaction
     let transaction_bytes = transaction.to_wire();
-    let timeout = Duration::from_secs(30);
+    let timeout = Duration::from_secs(config.timeout_seconds);
 
     let transaction_details = client
         .execute_transaction(&transaction_bytes, timeout)
@@ -1253,7 +1255,7 @@ async fn freeze_account(
 
     // Submit transaction
     let transaction_bytes = transaction.to_wire();
-    let timeout = Duration::from_secs(30);
+    let timeout = Duration::from_secs(config.timeout_seconds);
 
     let transaction_details = client
         .execute_transaction(&transaction_bytes, timeout)
@@ -1357,7 +1359,7 @@ async fn thaw_account(
 
     // Submit transaction
     let transaction_bytes = transaction.to_wire();
-    let timeout = Duration::from_secs(30);
+    let timeout = Duration::from_secs(config.timeout_seconds);
 
     let transaction_details = client
         .execute_transaction(&transaction_bytes, timeout)

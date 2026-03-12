@@ -1,7 +1,22 @@
 import { BaseScenario } from "../framework/scenario";
 import type { TestContext } from "../framework/context";
 import type { TestResult } from "../framework/result";
+import type { GenesisAccount } from "../accounts";
 import type { NodeRecord } from "@thru/proto";
+
+const EOA_PROGRAM = new Uint8Array(32);
+const TRANSFER_AMOUNT = 1n;
+const TRANSFER_FEE = 1n;
+
+function buildTransferInstruction(amount: bigint): Uint8Array {
+  const data = new Uint8Array(16);
+  const view = new DataView(data.buffer);
+  view.setUint32(0, 1, true); // TN_EOA_INSTRUCTION_TRANSFER
+  view.setBigUint64(4, amount, true);
+  view.setUint16(12, 0, true); // from_account_idx = 0 (fee payer)
+  view.setUint16(14, 2, true); // to_account_idx = 2 (first RW account)
+  return data;
+}
 
 /**
  * StreamNodeRecordsScenario tests the StreamNodeRecords streaming RPC.
@@ -14,6 +29,13 @@ import type { NodeRecord } from "@thru/proto";
 export class StreamNodeRecordsScenario extends BaseScenario {
   name = "Stream Node Records";
   description = "Tests StreamNodeRecords RPC for gossip-based node record streaming";
+
+  private recipientAccount: GenesisAccount | null = null;
+
+  async setup(ctx: TestContext): Promise<void> {
+    const accounts = ctx.getGenesisAccounts(1);
+    this.recipientAccount = accounts[0];
+  }
 
   async execute(ctx: TestContext): Promise<TestResult> {
     const result: TestResult = {
@@ -57,14 +79,36 @@ export class StreamNodeRecordsScenario extends BaseScenario {
       }
     })();
 
-    // Use send-block to trigger gossip activity (if available)
-    // send-block connects via BTP which should cause the node to update records
+    // Send a transfer transaction via block builder to trigger gossip activity
     try {
-      // Just send an empty block to trigger gossip
-      await ctx.blockSender.sendAsBlock([]);
+      const sender = ctx.genesisAccount;
+      const recipient = this.recipientAccount!;
+      const senderAcct = await ctx.sdk.accounts.get(sender.publicKeyString);
+      const height = await ctx.sdk.blocks.getBlockHeight();
+      const tx = await ctx.sdk.transactions.buildAndSign({
+        feePayer: {
+          publicKey: sender.publicKey,
+          privateKey: sender.seed,
+        },
+        program: EOA_PROGRAM,
+        header: {
+          fee: TRANSFER_FEE,
+          nonce: senderAcct?.meta?.nonce ?? 0n,
+          startSlot: height.finalized + 1n,
+          expiryAfter: 1_000_000,
+          computeUnits: 1_000_000,
+          stateUnits: 10_000,
+          memoryUnits: 10_000,
+          chainId: ctx.config.chainId,
+        },
+        accounts: {
+          readWrite: [recipient.publicKey],
+        },
+        instructionData: buildTransferInstruction(TRANSFER_AMOUNT),
+      });
+      await ctx.blockSender.sendAsBlock([tx.rawTransaction]);
     } catch {
-      // Block sender may fail with no transactions, that's ok
-      ctx.logInfo("Block sender skipped (empty block or not configured)");
+      ctx.logInfo("Block sender skipped (not configured)");
     }
 
     // Wait with timeout
@@ -136,6 +180,12 @@ export class StreamNodeRecordsScenario extends BaseScenario {
     result.message = `StreamNodeRecords test passed (${records.length} records, finished=${gotFinished})`;
     ctx.logInfo("=== Stream Node Records Test Completed ===");
     return result;
+  }
+
+  async cleanup(ctx: TestContext): Promise<void> {
+    if (this.recipientAccount) {
+      ctx.releaseGenesisAccounts([this.recipientAccount]);
+    }
   }
 }
 

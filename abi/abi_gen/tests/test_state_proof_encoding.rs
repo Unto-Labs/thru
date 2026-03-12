@@ -53,6 +53,7 @@ fn test_state_proof_encoding() {
                         name: "path_bitset".to_string(),
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "Hash".to_string(),
+                            package: None,
                             comment: Some("256-bit bitset representing proof path".to_string()),
                         }),
                     },
@@ -73,6 +74,7 @@ fn test_state_proof_encoding() {
                         name: "existing_leaf_pubkey".to_string(),
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "Pubkey".to_string(),
+                            package: None,
                             comment: None,
                         }),
                     },
@@ -80,6 +82,7 @@ fn test_state_proof_encoding() {
                         name: "existing_leaf_hash".to_string(),
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "Hash".to_string(),
+                            package: None,
                             comment: None,
                         }),
                     },
@@ -96,6 +99,7 @@ fn test_state_proof_encoding() {
                             }),
                             element_type: Box::new(TypeKind::TypeRef(TypeRefType {
                                 name: "Hash".to_string(),
+                                package: None,
                                 comment: None,
                             })),
                             jagged: false,
@@ -124,6 +128,7 @@ fn test_state_proof_encoding() {
                         }),
                         element_type: Box::new(TypeKind::TypeRef(TypeRefType {
                             name: "Hash".to_string(),
+                            package: None,
                             comment: None,
                         })),
                         jagged: false,
@@ -145,6 +150,7 @@ fn test_state_proof_encoding() {
                         name: "existing_leaf_hash".to_string(),
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "Hash".to_string(),
+                            package: None,
                             comment: None,
                         }),
                     },
@@ -159,6 +165,7 @@ fn test_state_proof_encoding() {
                             }),
                             element_type: Box::new(TypeKind::TypeRef(TypeRefType {
                                 name: "Hash".to_string(),
+                                package: None,
                                 comment: None,
                             })),
                             jagged: false,
@@ -185,6 +192,7 @@ fn test_state_proof_encoding() {
                         tag_value: 2, // TN_STATE_PROOF_TYPE_CREATION = 0x2
                         variant_type: TypeKind::TypeRef(TypeRefType {
                             name: "CreationProofBody".to_string(),
+                            package: None,
                             comment: None,
                         }),
                     },
@@ -193,6 +201,7 @@ fn test_state_proof_encoding() {
                         tag_value: 0, // TN_STATE_PROOF_TYPE_EXISTING = 0x0
                         variant_type: TypeKind::TypeRef(TypeRefType {
                             name: "ExistingProofBody".to_string(),
+                            package: None,
                             comment: None,
                         }),
                     },
@@ -201,6 +210,7 @@ fn test_state_proof_encoding() {
                         tag_value: 1, // TN_STATE_PROOF_TYPE_UPDATING = 0x1
                         variant_type: TypeKind::TypeRef(TypeRefType {
                             name: "UpdatingProofBody".to_string(),
+                            package: None,
                             comment: None,
                         }),
                     },
@@ -221,6 +231,7 @@ fn test_state_proof_encoding() {
                         name: "hdr".to_string(),
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "StateProofHeader".to_string(),
+                            package: None,
                             comment: None,
                         }),
                     },
@@ -228,6 +239,7 @@ fn test_state_proof_encoding() {
                         name: "proof_body".to_string(),
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "ProofBodyEnum".to_string(),
+                            package: None,
                             comment: None,
                         }),
                     },

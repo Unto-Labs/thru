@@ -44,9 +44,17 @@ base64 = "0.22"
 # System utilities
 dirs = "6.0"
 
+# DWARF debug info resolution
+addr2line = "0.24"
+gimli = "0.31"
+object = { version = "0.36", default-features = false, features = ["read", "elf", "std"] }
+
 # Output formatting
 colored = "3.1"
 chrono = "0.4"
+
+# Pattern matching
+regex = "1"
 
 # URL handling
 url = "2.5"

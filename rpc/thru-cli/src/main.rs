@@ -126,6 +126,9 @@ async fn main() -> Result<()> {
         Commands::Network { subcommand } => {
             commands::network::handle_network_command(&config, subcommand, cli.json).await
         }
+        Commands::Debug { subcommand } => {
+            commands::debug::handle_debug_command(&config, subcommand, cli.json).await
+        }
     };
 
     if let Err(err) = result {

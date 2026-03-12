@@ -201,6 +201,13 @@ pub enum Commands {
         #[command(subcommand)]
         subcommand: NetworkCommands,
     },
+
+    /// Debug commands for transaction analysis
+    #[command(name = "debug")]
+    Debug {
+        #[command(subcommand)]
+        subcommand: DebugCommands,
+    },
 }
 
 /// Program-related subcommands
@@ -1821,5 +1828,64 @@ pub enum InitCommands {
         /// Project directory (optional, defaults to current directory)
         #[arg(long)]
         path: Option<String>,
+    },
+}
+
+/// Debug subcommands
+#[derive(Subcommand)]
+pub enum DebugCommands {
+    /// Re-execute a transaction in a simulated environment
+    #[command(name = "re-execute")]
+    ReExecute {
+        /// Transaction signature (ts... format or 128 hex characters)
+        signature: String,
+
+        /// Include account state snapshots before execution
+        #[arg(long)]
+        include_state_before: bool,
+
+        /// Include account state snapshots after execution
+        #[arg(long)]
+        include_state_after: bool,
+
+        /// Include full account data in state snapshots
+        #[arg(long)]
+        include_account_data: bool,
+
+        /// Save VM execution trace to file
+        #[arg(long, value_name = "FILE")]
+        output_trace: Option<String>,
+
+        /// Include full memory dump (stack + heap pages)
+        #[arg(long)]
+        include_memory_dump: bool,
+    },
+
+    /// Resolve DWARF debug info for a DebugReExecute response
+    ///
+    /// Takes a program .elf (built with -g) and either a response JSON file or a
+    /// transaction signature (calls DebugReExecute via gRPC). Produces a source-level
+    /// error report with file:line mappings, call stack, variables, and annotated trace.
+    #[command(name = "resolve")]
+    Resolve {
+        /// Path to the program .elf file with DWARF debug info
+        #[arg(long)]
+        elf: std::path::PathBuf,
+
+        /// Path to the DebugReExecuteResponse JSON file (mutually exclusive with --signature)
+        #[arg(long, group = "input")]
+        response: Option<std::path::PathBuf>,
+
+        /// Transaction signature to re-execute via gRPC (mutually exclusive with --response)
+        #[arg(long, group = "input")]
+        signature: Option<String>,
+
+        /// Number of trace lines to include before the fault
+        #[arg(long, default_value = "20")]
+        trace_tail: usize,
+
+        /// Source context lines above/below the fault line
+        #[arg(long, default_value = "5")]
+        context: u32,
     },
 }

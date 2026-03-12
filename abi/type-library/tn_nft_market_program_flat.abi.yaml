@@ -1,0 +1,1051 @@
+abi:
+  package: thru.program.nft_market
+  name: NFT Market Program
+  abi-version: 1
+  package-version: '0.1.0'
+  description: Peer-to-peer NFT trading via resting bid/ask orders with configurable marketplace fees
+  imports: []
+  options:
+    program-metadata:
+      root-types:
+        instruction-root: NftMarketInstruction
+        account-root: NftMarketProgramAccount
+        errors: null
+        events: NftMarketEvent
+types:
+- name: Seed32
+  kind:
+    array:
+      packed: true
+      aligned: 0
+      comment: null
+      size:
+        literal:
+          u64: 32
+      element-type:
+        primitive: u8
+      jagged: false
+- name: NftMarketConfig
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: admin
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: fee_recipient
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: fee_bps
+        field-type:
+          primitive: u16
+- name: NftMarketOrder
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: side
+        field-type:
+          primitive: u8
+      - name: nft_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: token_mint
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: maker
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: vault
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: amount
+        field-type:
+          primitive: u64
+      - name: expiry_slot
+        field-type:
+          primitive: u64
+- name: NftMarketProgramAccount
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: data
+        field-type:
+          size-discriminated-union:
+            packed: true
+            aligned: 0
+            comment: null
+            variants:
+            - name: config
+              expected-size: 66
+              variant-type:
+                type-ref:
+                  name: NftMarketConfig
+                  comment: null
+            - name: order
+              expected-size: 145
+              variant-type:
+                type-ref:
+                  name: NftMarketOrder
+                  comment: null
+- name: InitializeConfigArgs
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: config_account_idx
+        field-type:
+          primitive: u16
+      - name: fee_recipient
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: fee_bps
+        field-type:
+          primitive: u16
+      - name: seed
+        field-type:
+          type-ref:
+            name: Seed32
+            comment: null
+      - name: state_proof
+        field-type:
+          type-ref:
+            name: StateProof
+            comment: null
+- name: UpdateConfigArgs
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: config_account_idx
+        field-type:
+          primitive: u16
+      - name: new_admin
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: new_fee_recipient
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: new_fee_bps
+        field-type:
+          primitive: u16
+- name: PlaceBidArgs
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: order_account_idx
+        field-type:
+          primitive: u16
+      - name: maker_token_account_idx
+        field-type:
+          primitive: u16
+      - name: vault_account_idx
+        field-type:
+          primitive: u16
+      - name: token_program_idx
+        field-type:
+          primitive: u16
+      - name: nft_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: token_mint
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: amount
+        field-type:
+          primitive: u64
+      - name: expiry_slot
+        field-type:
+          primitive: u64
+      - name: seed
+        field-type:
+          type-ref:
+            name: Seed32
+            comment: null
+      - name: state_proof
+        field-type:
+          type-ref:
+            name: StateProof
+            comment: null
+- name: PlaceAskArgs
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: order_account_idx
+        field-type:
+          primitive: u16
+      - name: nft_account_idx
+        field-type:
+          primitive: u16
+      - name: nft_mint_account_idx
+        field-type:
+          primitive: u16
+      - name: nft_program_idx
+        field-type:
+          primitive: u16
+      - name: token_mint
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: amount
+        field-type:
+          primitive: u64
+      - name: expiry_slot
+        field-type:
+          primitive: u64
+      - name: seed
+        field-type:
+          type-ref:
+            name: Seed32
+            comment: null
+      - name: state_proof
+        field-type:
+          type-ref:
+            name: StateProof
+            comment: null
+- name: ModifyBidArgs
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: order_account_idx
+        field-type:
+          primitive: u16
+      - name: maker_token_account_idx
+        field-type:
+          primitive: u16
+      - name: vault_account_idx
+        field-type:
+          primitive: u16
+      - name: token_program_idx
+        field-type:
+          primitive: u16
+      - name: new_amount
+        field-type:
+          primitive: u64
+      - name: new_expiry_slot
+        field-type:
+          primitive: u64
+- name: ModifyAskArgs
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: order_account_idx
+        field-type:
+          primitive: u16
+      - name: new_amount
+        field-type:
+          primitive: u64
+      - name: new_expiry_slot
+        field-type:
+          primitive: u64
+- name: FillBidArgs
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: order_account_idx
+        field-type:
+          primitive: u16
+      - name: config_account_idx
+        field-type:
+          primitive: u16
+      - name: nft_account_idx
+        field-type:
+          primitive: u16
+      - name: nft_mint_account_idx
+        field-type:
+          primitive: u16
+      - name: nft_program_idx
+        field-type:
+          primitive: u16
+      - name: maker_account_idx
+        field-type:
+          primitive: u16
+      - name: vault_account_idx
+        field-type:
+          primitive: u16
+      - name: taker_token_account_idx
+        field-type:
+          primitive: u16
+      - name: fee_recipient_account_idx
+        field-type:
+          primitive: u16
+      - name: token_program_idx
+        field-type:
+          primitive: u16
+- name: FillAskArgs
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: order_account_idx
+        field-type:
+          primitive: u16
+      - name: config_account_idx
+        field-type:
+          primitive: u16
+      - name: nft_account_idx
+        field-type:
+          primitive: u16
+      - name: nft_mint_account_idx
+        field-type:
+          primitive: u16
+      - name: nft_program_idx
+        field-type:
+          primitive: u16
+      - name: taker_nft_dest_idx
+        field-type:
+          primitive: u16
+      - name: taker_token_account_idx
+        field-type:
+          primitive: u16
+      - name: maker_token_account_idx
+        field-type:
+          primitive: u16
+      - name: fee_recipient_account_idx
+        field-type:
+          primitive: u16
+      - name: token_program_idx
+        field-type:
+          primitive: u16
+- name: CancelBidArgs
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: order_account_idx
+        field-type:
+          primitive: u16
+      - name: vault_account_idx
+        field-type:
+          primitive: u16
+      - name: maker_token_account_idx
+        field-type:
+          primitive: u16
+      - name: token_program_idx
+        field-type:
+          primitive: u16
+- name: CancelAskArgs
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: order_account_idx
+        field-type:
+          primitive: u16
+      - name: nft_account_idx
+        field-type:
+          primitive: u16
+      - name: nft_mint_account_idx
+        field-type:
+          primitive: u16
+      - name: nft_program_idx
+        field-type:
+          primitive: u16
+      - name: maker_dest_account_idx
+        field-type:
+          primitive: u16
+- name: NftMarketInstruction
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: discriminant
+        field-type:
+          primitive: u32
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            aligned: 0
+            comment: null
+            tag-ref:
+              field-ref:
+                path:
+                - discriminant
+            variants:
+            - name: initialize_config
+              tag-value: 0
+              variant-type:
+                type-ref:
+                  name: InitializeConfigArgs
+                  comment: null
+            - name: update_config
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: UpdateConfigArgs
+                  comment: null
+            - name: place_bid
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: PlaceBidArgs
+                  comment: null
+            - name: place_ask
+              tag-value: 3
+              variant-type:
+                type-ref:
+                  name: PlaceAskArgs
+                  comment: null
+            - name: modify_bid
+              tag-value: 4
+              variant-type:
+                type-ref:
+                  name: ModifyBidArgs
+                  comment: null
+            - name: modify_ask
+              tag-value: 5
+              variant-type:
+                type-ref:
+                  name: ModifyAskArgs
+                  comment: null
+            - name: fill_bid
+              tag-value: 6
+              variant-type:
+                type-ref:
+                  name: FillBidArgs
+                  comment: null
+            - name: fill_ask
+              tag-value: 7
+              variant-type:
+                type-ref:
+                  name: FillAskArgs
+                  comment: null
+            - name: cancel_bid
+              tag-value: 8
+              variant-type:
+                type-ref:
+                  name: CancelBidArgs
+                  comment: null
+            - name: cancel_ask
+              tag-value: 9
+              variant-type:
+                type-ref:
+                  name: CancelAskArgs
+                  comment: null
+- name: OrderPlacedEventData
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: side
+        field-type:
+          primitive: u8
+      - name: nft_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: token_mint
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: maker
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: amount
+        field-type:
+          primitive: u64
+      - name: expiry_slot
+        field-type:
+          primitive: u64
+- name: OrderModifiedEventData
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: side
+        field-type:
+          primitive: u8
+      - name: nft_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: maker
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: old_amount
+        field-type:
+          primitive: u64
+      - name: new_amount
+        field-type:
+          primitive: u64
+      - name: new_expiry_slot
+        field-type:
+          primitive: u64
+- name: OrderFilledEventData
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: side
+        field-type:
+          primitive: u8
+      - name: nft_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: token_mint
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: maker
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: taker
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: amount
+        field-type:
+          primitive: u64
+      - name: fee
+        field-type:
+          primitive: u64
+- name: OrderCancelledEventData
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: side
+        field-type:
+          primitive: u8
+      - name: nft_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: maker
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+- name: ConfigUpdatedEventData
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: admin
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: fee_recipient
+        field-type:
+          type-ref:
+            name: Pubkey
+            comment: null
+      - name: fee_bps
+        field-type:
+          primitive: u16
+- name: NftMarketEvent
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: event_type
+        field-type:
+          primitive: u8
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            aligned: 0
+            comment: null
+            tag-ref:
+              field-ref:
+                path:
+                - event_type
+            variants:
+            - name: order_placed
+              tag-value: 0
+              variant-type:
+                type-ref:
+                  name: OrderPlacedEventData
+                  comment: null
+            - name: order_modified
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: OrderModifiedEventData
+                  comment: null
+            - name: order_filled
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: OrderFilledEventData
+                  comment: null
+            - name: order_cancelled
+              tag-value: 3
+              variant-type:
+                type-ref:
+                  name: OrderCancelledEventData
+                  comment: null
+            - name: config_updated
+              tag-value: 4
+              variant-type:
+                type-ref:
+                  name: ConfigUpdatedEventData
+                  comment: null
+- name: StateProofHeader
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: type_slot
+        field-type:
+          primitive: u64
+      - name: path_bitset
+        field-type:
+          type-ref:
+            name: Hash
+            comment: null
+- name: StateProof
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: hdr
+        field-type:
+          type-ref:
+            name: StateProofHeader
+            comment: null
+      - name: proof_body
+        field-type:
+          enum:
+            packed: true
+            aligned: 0
+            comment: null
+            tag-ref:
+              bit-and:
+                left:
+                  right-shift:
+                    left:
+                      field-ref:
+                        path:
+                        - hdr
+                        - type_slot
+                    right:
+                      literal:
+                        u8: 62
+                right:
+                  literal:
+                    u8: 3
+            variants:
+            - name: existing
+              tag-value: 0
+              variant-type:
+                struct:
+                  packed: true
+                  aligned: 0
+                  comment: null
+                  fields:
+                  - name: sibling_hashes
+                    field-type:
+                      array:
+                        packed: false
+                        aligned: 0
+                        comment: null
+                        size:
+                          add:
+                            left:
+                              add:
+                                left:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '0'
+                                right:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '1'
+                            right:
+                              add:
+                                left:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '2'
+                                right:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '3'
+                        element-type:
+                          type-ref:
+                            name: Hash
+                            comment: null
+                        jagged: false
+            - name: updating
+              tag-value: 1
+              variant-type:
+                struct:
+                  packed: true
+                  aligned: 0
+                  comment: null
+                  fields:
+                  - name: existing_leaf_hash
+                    field-type:
+                      type-ref:
+                        name: Hash
+                        comment: null
+                  - name: sibling_hashes
+                    field-type:
+                      array:
+                        packed: false
+                        aligned: 0
+                        comment: null
+                        size:
+                          add:
+                            left:
+                              add:
+                                left:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '0'
+                                right:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '1'
+                            right:
+                              add:
+                                left:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '2'
+                                right:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '3'
+                        element-type:
+                          type-ref:
+                            name: Hash
+                            comment: null
+                        jagged: false
+            - name: creation
+              tag-value: 2
+              variant-type:
+                struct:
+                  packed: true
+                  aligned: 0
+                  comment: null
+                  fields:
+                  - name: existing_leaf_pubkey
+                    field-type:
+                      type-ref:
+                        name: Pubkey
+                        comment: null
+                  - name: existing_leaf_hash
+                    field-type:
+                      type-ref:
+                        name: Hash
+                        comment: null
+                  - name: sibling_hashes
+                    field-type:
+                      array:
+                        packed: false
+                        aligned: 0
+                        comment: null
+                        size:
+                          add:
+                            left:
+                              add:
+                                left:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '0'
+                                right:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '1'
+                            right:
+                              add:
+                                left:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '2'
+                                right:
+                                  popcount:
+                                    operand:
+                                      field-ref:
+                                        path:
+                                        - hdr
+                                        - path_bitset
+                                        - bytes
+                                        - '3'
+                        element-type:
+                          type-ref:
+                            name: Hash
+                            comment: null
+                        jagged: false
+- name: Hash
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: bytes
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+            jagged: false
+- name: Pubkey
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: bytes
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
+            jagged: false
+- name: Signature
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: bytes
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              literal:
+                u64: 64
+            element-type:
+              primitive: u8
+            jagged: false
+- name: Timestamp
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: seconds
+        field-type:
+          primitive: i64
+- name: Duration
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: seconds
+        field-type:
+          primitive: i64
+      - name: nanos
+        field-type:
+          primitive: i32
+- name: Date
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: year
+        field-type:
+          primitive: i32
+      - name: month
+        field-type:
+          primitive: u8
+      - name: day
+        field-type:
+          primitive: u8
+- name: FixedPoint
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: mantissa
+        field-type:
+          primitive: i64
+      - name: scale
+        field-type:
+          primitive: u8
+- name: InstructionData
+  kind:
+    struct:
+      packed: true
+      aligned: 0
+      comment: null
+      fields:
+      - name: program_idx
+        field-type:
+          primitive: u16
+      - name: data_size
+        field-type:
+          primitive: u64
+      - name: data
+        field-type:
+          array:
+            packed: false
+            aligned: 0
+            comment: null
+            size:
+              field-ref:
+                path:
+                - data_size
+            element-type:
+              primitive: u8
+            jagged: false

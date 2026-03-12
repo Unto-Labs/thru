@@ -5,9 +5,10 @@
  * with slot-aware upserts and checkpointing.
  */
 
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { ChainClientFactory } from "@thru/replay";
 import { createAccountsByOwnerReplay, AccountView } from "@thru/replay";
+import { encodeAddress } from "@thru/helpers";
 import type { DatabaseClient } from "../schema/types";
 import { validateParsedData } from "../schema/validation";
 import { getCheckpoint, updateCheckpoint } from "../checkpoint";
@@ -156,6 +157,25 @@ export async function runAccountStreamProcessor(
           );
         }
 
+        const table = stream.table as any;
+        const idField = stream.api?.idField ?? "address";
+
+        // Handle account deletions before parsing — deleted accounts have
+        // zeroed data so parse() would return null and the delete would be
+        // silently skipped.
+        if (account.isDelete) {
+          log("debug", `Account deleted: ${account.addressHex}`);
+          const idValue = encodeAddress(account.address);
+          try {
+            await db.delete(stream.table).where(eq(table[idField], idValue));
+            stats.accountsDeleted++;
+            log("info", `Deleted row for account ${account.addressHex}`);
+          } catch (err) {
+            log("error", `Failed to delete account ${account.addressHex}: ${err}`);
+          }
+          continue;
+        }
+
         // Parse using stream's parser
         const parsed = stream.parse(account);
         if (!parsed) {
@@ -175,16 +195,7 @@ export async function runAccountStreamProcessor(
           }
         }
 
-        if (account.isDelete) {
-          log("debug", `Account deleted: ${account.addressHex}`);
-          stats.accountsDeleted++;
-          // Optionally delete from DB - for now we skip
-          continue;
-        }
-
         // Slot-aware upsert: only update if incoming slot >= existing slot
-        const table = stream.table as any;
-        const idField = stream.api?.idField ?? "address";
 
         try {
           await db

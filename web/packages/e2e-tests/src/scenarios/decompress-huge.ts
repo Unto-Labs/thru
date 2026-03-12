@@ -5,6 +5,7 @@ import type { GenesisAccount } from "../accounts";
 import { deriveProgramAddress, consensus } from "@thru/thru-sdk";
 import { StateProofType } from "@thru/proto";
 import { sha256 } from "@noble/hashes/sha256";
+import { advanceSlots } from "../utils/timing";
 import {
   TEST_UPLOADER_PROGRAM,
   SYSTEM_PROGRAM,
@@ -177,7 +178,15 @@ export class DecompressHugeScenario extends BaseScenario {
     if (currentSlot < 256n) {
       const slotsNeeded = Number(256n - currentSlot);
       ctx.logInfo("Need to advance %d slots to reach slot 256", slotsNeeded);
-      await this.executeDumbFill(ctx, slotsNeeded);
+      await advanceSlots(
+        ctx.sdk,
+        ctx.blockSender,
+        this.bob!,
+        this.dom!,
+        BigInt(slotsNeeded),
+        ctx.config.chainId,
+        ctx.logInfo.bind(ctx)
+      );
       result.details.push(`Advanced ${slotsNeeded} slots to reach slot 256`);
     }
 
@@ -208,7 +217,15 @@ export class DecompressHugeScenario extends BaseScenario {
 
     /* Phase 6: Execute dumb fill to advance slots */
     ctx.logInfo("Phase 6: Executing dumb fill (%d blocks)", DUMB_FILL_COUNT);
-    await this.executeDumbFill(ctx, DUMB_FILL_COUNT);
+    await advanceSlots(
+      ctx.sdk,
+      ctx.blockSender,
+      this.bob!,
+      this.dom!,
+      BigInt(DUMB_FILL_COUNT),
+      ctx.config.chainId,
+      ctx.logInfo.bind(ctx)
+    );
     result.details.push(`Executed ${DUMB_FILL_COUNT} dumb fill blocks`);
 
     /* Phase 7: Decompress account */
@@ -229,84 +246,6 @@ export class DecompressHugeScenario extends BaseScenario {
     if (this.alice && this.bob && this.dom) {
       ctx.releaseGenesisAccounts([this.alice, this.bob, this.dom]);
     }
-  }
-
-  /**
-   * Execute dumb fill transactions to advance slots
-   */
-  private async executeDumbFill(ctx: TestContext, count: number): Promise<void> {
-    const bob = this.bob!;
-    const dom = this.dom!;
-
-    /* Get starting slot for finality tracking */
-    const startHeight = await ctx.sdk.blocks.getBlockHeight();
-    const startingSlot = startHeight.finalized;
-
-    /* Get current nonce */
-    const bobAcct = await ctx.sdk.accounts.get(bob.publicKeyString);
-    let bobNonce = bobAcct?.meta?.nonce ?? 0n;
-
-    for (let i = 0; i < count; i++) {
-      const height = await ctx.sdk.blocks.getBlockHeight();
-      const startSlot = height.finalized + 1n;
-
-      /* Build transfer transaction from bob to dom */
-      const tx = await ctx.sdk.transactions.buildAndSign({
-        feePayer: {
-          publicKey: bob.publicKey,
-          privateKey: bob.seed,
-        },
-        program: new Uint8Array(32), /* EOA program (all zeros) */
-        header: {
-          fee: 1n,
-          nonce: bobNonce,
-          startSlot,
-          expiryAfter: 1_000_000,
-          computeUnits: 1_000_000,
-          stateUnits: 10_000,
-          memoryUnits: 10_000,
-          chainId: ctx.config.chainId,
-        },
-        accounts: {
-          readWrite: [dom.publicKey],
-        },
-        instructionData: buildTransferInstruction(1n, 0, 2),
-      });
-
-      /* Send as single-transaction block */
-      await ctx.blockSender.sendAsBlock([tx.rawTransaction]);
-      bobNonce++;
-
-      if ((i + 1) % 32 === 0) {
-        ctx.logInfo("Submitted %d/%d dumb fill blocks", i + 1, count);
-      }
-    }
-
-    /* Wait for finality - target slot is startingSlot + count */
-    const targetSlot = startingSlot + BigInt(count);
-    await this.waitForFinalizedSlot(ctx, targetSlot, 60_000);
-  }
-
-  /**
-   * Wait for a specific slot to be finalized
-   */
-  private async waitForFinalizedSlot(
-    ctx: TestContext,
-    targetSlot: bigint,
-    timeoutMs: number
-  ): Promise<void> {
-    const startTime = Date.now();
-
-    while (Date.now() - startTime < timeoutMs) {
-      const height = await ctx.sdk.blocks.getBlockHeight();
-      if (height.finalized >= targetSlot) {
-        ctx.logInfo("Reached finalized slot %d (target: %d)", height.finalized, targetSlot);
-        return;
-      }
-      await new Promise((r) => setTimeout(r, 500));
-    }
-
-    throw new Error(`Timeout waiting for finalized slot ${targetSlot}`);
   }
 
   /**
@@ -499,12 +438,39 @@ export class DecompressHugeScenario extends BaseScenario {
 
     ctx.logInfo("Built %d transactions for upload", transactions.length);
 
-    /* Send all transactions as a single block */
-    const blockResult = await ctx.blockSender.sendAsBlock(transactions);
-    ctx.logInfo("Uploaded all %d chunks in block slot %d", totalChunks, blockResult.slot);
+    /* Batch transactions into blocks that fit under MAX_BLOCK_SIZE (1MB).
+       Block overhead: header (168 bytes) + footer (104 bytes) = 272 bytes. */
+    const BLOCK_OVERHEAD = 272;
+    const MAX_BLOCK_SIZE = 1024 * 1024;
+    const batches: Uint8Array[][] = [];
+    let currentBatch: Uint8Array[] = [];
+    let currentSize = BLOCK_OVERHEAD;
 
-    /* Wait for block to be finalized */
-    await ctx.accountStateTracker.waitForFinalizedSlot(blockResult.slot, 60000);
+    for (const tx of transactions) {
+      if (currentSize + tx.length > MAX_BLOCK_SIZE && currentBatch.length > 0) {
+        batches.push(currentBatch);
+        currentBatch = [];
+        currentSize = BLOCK_OVERHEAD;
+      }
+      currentBatch.push(tx);
+      currentSize += tx.length;
+    }
+    if (currentBatch.length > 0) {
+      batches.push(currentBatch);
+    }
+
+    ctx.logInfo("Sending %d transactions in %d block(s)", transactions.length, batches.length);
+
+    let lastSlot = 0n;
+    for (let i = 0; i < batches.length; i++) {
+      const blockResult = await ctx.blockSender.sendAsBlock(batches[i]);
+      lastSlot = blockResult.slot;
+      ctx.logInfo("Uploaded batch %d/%d (%d txns) in block slot %d",
+        i + 1, batches.length, batches[i].length, blockResult.slot);
+    }
+
+    /* Wait for last block to be finalized */
+    await ctx.accountStateTracker.waitForFinalizedSlot(lastSlot, 60000);
 
     /* Small delay for state to settle after finalization */
     await new Promise((r) => setTimeout(r, 500));
@@ -857,21 +823,6 @@ export class DecompressHugeScenario extends BaseScenario {
     }
     throw new Error("Timeout waiting for account to exist");
   }
-}
-
-/**
- * Build EOA transfer instruction
- */
-function buildTransferInstruction(amount: bigint, fromIdx: number, toIdx: number): Uint8Array {
-  const data = new Uint8Array(4 + 8 + 2 + 2);
-  const view = new DataView(data.buffer);
-
-  view.setUint32(0, 1, true); /* discriminant = TN_EOA_INSTRUCTION_TRANSFER */
-  view.setBigUint64(4, amount, true);
-  view.setUint16(12, fromIdx, true);
-  view.setUint16(14, toIdx, true);
-
-  return data;
 }
 
 function arraysEqual(a: Uint8Array, b: Uint8Array): boolean {

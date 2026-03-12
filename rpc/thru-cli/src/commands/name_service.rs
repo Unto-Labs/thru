@@ -83,6 +83,7 @@ struct TransactionContext {
     pub fee_payer_keypair: KeyPair,
     pub client: Client,
     pub chain_id: u16,
+    pub timeout_seconds: u64,
 }
 
 /// Common context for base name service operations
@@ -92,6 +93,7 @@ struct FeePayerContext {
     pub nonce: u64,
     pub start_slot: u64,
     pub chain_id: u16,
+    pub timeout_seconds: u64,
 }
 
 /// Validate a token account matches expected mint, token program, and optionally owner
@@ -210,6 +212,7 @@ async fn setup_fee_payer_context(
         nonce,
         start_slot: block_height.finalized_height,
         chain_id: chain_info.chain_id,
+        timeout_seconds: config.timeout_seconds,
     })
 }
 
@@ -351,7 +354,7 @@ async fn execute_transaction(
 
     // Submit transaction
     let transaction_bytes = transaction.to_wire();
-    let timeout = Duration::from_secs(30);
+    let timeout = Duration::from_secs(context.timeout_seconds);
 
     let transaction_details = context
         .client
@@ -901,7 +904,7 @@ async fn initialize_registry(
 
     // Submit transaction
     let transaction_bytes = transaction.to_wire();
-    let timeout = Duration::from_secs(30);
+    let timeout = Duration::from_secs(config.timeout_seconds);
 
     let transaction_details = client
         .execute_transaction(&transaction_bytes, timeout)
@@ -1132,6 +1135,7 @@ async fn purchase_domain(
         fee_payer_keypair: fee_ctx.fee_payer_keypair,
         client,
         chain_id: fee_ctx.chain_id,
+        timeout_seconds: fee_ctx.timeout_seconds,
     };
 
     let transaction_details = execute_transaction(transaction, &context, json_format).await?;
@@ -1291,6 +1295,7 @@ async fn renew_lease(
         fee_payer_keypair: fee_ctx.fee_payer_keypair,
         client,
         chain_id: fee_ctx.chain_id,
+        timeout_seconds: fee_ctx.timeout_seconds,
     };
 
     let transaction_details = execute_transaction(transaction, &context, json_format).await?;
@@ -1440,6 +1445,7 @@ async fn claim_expired_domain(
         fee_payer_keypair: fee_ctx.fee_payer_keypair,
         client,
         chain_id: fee_ctx.chain_id,
+        timeout_seconds: fee_ctx.timeout_seconds,
     };
 
     let transaction_details = execute_transaction(transaction, &context, json_format).await?;
@@ -1620,6 +1626,7 @@ async fn initialize_root_registrar(
         fee_payer_keypair: fee_ctx.fee_payer_keypair,
         client: fee_ctx.client,
         chain_id: fee_ctx.chain_id,
+        timeout_seconds: fee_ctx.timeout_seconds,
     };
 
     let transaction_details = execute_transaction(transaction, &context, json_format).await?;
@@ -1733,6 +1740,7 @@ async fn register_subdomain(
         fee_payer_keypair: fee_ctx.fee_payer_keypair,
         client: fee_ctx.client,
         chain_id: fee_ctx.chain_id,
+        timeout_seconds: fee_ctx.timeout_seconds,
     };
 
     let transaction_details = execute_transaction(transaction, &context, json_format).await?;
@@ -1834,6 +1842,7 @@ async fn append_record(
         fee_payer_keypair: fee_ctx.fee_payer_keypair,
         client: fee_ctx.client,
         chain_id: fee_ctx.chain_id,
+        timeout_seconds: fee_ctx.timeout_seconds,
     };
 
     let transaction_details = execute_transaction(transaction, &context, json_format).await?;
@@ -1911,6 +1920,7 @@ async fn delete_record(
         fee_payer_keypair: fee_ctx.fee_payer_keypair,
         client: fee_ctx.client,
         chain_id: fee_ctx.chain_id,
+        timeout_seconds: fee_ctx.timeout_seconds,
     };
 
     let transaction_details = execute_transaction(transaction, &context, json_format).await?;
@@ -1968,6 +1978,7 @@ async fn unregister_subdomain(
         fee_payer_keypair: fee_ctx.fee_payer_keypair,
         client: fee_ctx.client,
         chain_id: fee_ctx.chain_id,
+        timeout_seconds: fee_ctx.timeout_seconds,
     };
 
     let transaction_details = execute_transaction(transaction, &context, json_format).await?;

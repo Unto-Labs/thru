@@ -120,6 +120,7 @@ export interface TrackedTransactionStatus {
   executionResult?: {
     vmError?: number;
     consumedComputeUnits?: number;
+    userErrorCode?: bigint;
   };
 }
 
@@ -195,6 +196,10 @@ export function deferred<T>(): {
 /**
  * Advance the blockchain by sending dummy transfer transactions.
  * Used to reach a minimum slot number before running certain program tests.
+ *
+ * Sends blocks in batches via sendMultipleBlocks (one BTP connection per
+ * batch) and waits for finalization between batches to avoid overflowing
+ * the consensus finalization ringbuffer (~128 entries).
  */
 export async function advanceSlots(
   sdk: {
@@ -202,10 +207,9 @@ export async function advanceSlots(
     accounts: { get: (addr: string) => Promise<{ meta?: { nonce?: bigint } } | null> };
     transactions: {
       buildAndSign: (params: unknown) => Promise<{ rawTransaction: Uint8Array; signature: { toThruFmt: () => string } }>;
-      track: (sig: string, opts?: { timeoutMs?: number }) => AsyncIterable<TrackedTransactionStatus>;
     };
   },
-  blockSender: { sendAsBlock: (txs: Uint8Array[]) => Promise<unknown> },
+  blockSender: { sendMultipleBlocks: (blocks: Array<{ transactions: Uint8Array[] }>, options?: { pauseMs?: number }) => Promise<unknown[]> },
   feePayer: { publicKey: Uint8Array; publicKeyString: string; seed: Uint8Array },
   recipient: { publicKey: Uint8Array },
   numSlots: bigint,
@@ -213,6 +217,7 @@ export async function advanceSlots(
   logFn?: (msg: string, ...args: unknown[]) => void
 ): Promise<void> {
   const EOA_PROGRAM = new Uint8Array(32);
+  const BATCH_SIZE = 64;
 
   const feePayerAcct = await sdk.accounts.get(feePayer.publicKeyString);
   if (!feePayerAcct) {
@@ -221,12 +226,14 @@ export async function advanceSlots(
   let nonce = feePayerAcct.meta?.nonce ?? 0n;
 
   const initialHeight = await sdk.blocks.getBlockHeight();
-  const baseSlot = initialHeight.finalized;
-  let lastSig = "";
+  const startingSlot = initialHeight.finalized;
+  const txStartSlot = startingSlot + 1n;
+  const count = Number(numSlots);
 
-  for (let i = 0n; i < numSlots; i++) {
-    const startSlot = baseSlot + 1n;
-
+  /* Build all transactions up front with a single startSlot.
+     The transaction startSlot just needs to be <= the block slot. */
+  const transactions: Uint8Array[] = [];
+  for (let i = 0; i < count; i++) {
     const transferData = new Uint8Array(16);
     const view = new DataView(transferData.buffer);
     view.setUint32(0, 1, true);
@@ -243,7 +250,7 @@ export async function advanceSlots(
       header: {
         fee: 1n,
         nonce: nonce,
-        startSlot: startSlot,
+        startSlot: txStartSlot,
         expiryAfter: 1_000_000,
         computeUnits: 1_000_000,
         stateUnits: 10_000,
@@ -256,16 +263,42 @@ export async function advanceSlots(
       instructionData: transferData,
     });
 
-    await blockSender.sendAsBlock([tx.rawTransaction]);
-    lastSig = tx.signature.toThruFmt();
+    transactions.push(tx.rawTransaction);
     nonce++;
-
-    if (logFn && (i + 1n) % 32n === 0n) {
-      logFn("Submitted %d/%d dumb fill blocks", i + 1n, numSlots);
-    }
   }
 
-  if (lastSig) {
-    await trackTransactionUntilFinalized(sdk, lastSig);
+  /* Send in batches of BATCH_SIZE, each batch over a single BTP connection.
+     Wait for each batch to finalize before sending the next to avoid
+     overflowing the consensus finalization ringbuffer. */
+  for (let batchStart = 0; batchStart < count; batchStart += BATCH_SIZE) {
+    const batchEnd = Math.min(batchStart + BATCH_SIZE, count);
+    const batchTxns = transactions.slice(batchStart, batchEnd);
+    const blocks = batchTxns.map((tx) => ({ transactions: [tx] }));
+
+    await blockSender.sendMultipleBlocks(blocks, { pauseMs: 100 });
+
+    /* Wait for this batch to finalize */
+    const batchTargetSlot = startingSlot + BigInt(batchEnd);
+    const batchTimeout = 120_000;
+    const deadline = Date.now() + batchTimeout;
+
+    while (Date.now() < deadline) {
+      const height = await sdk.blocks.getBlockHeight();
+      if (height.finalized >= batchTargetSlot) {
+        break;
+      }
+      await new Promise((r) => setTimeout(r, 500));
+    }
+
+    const checkHeight = await sdk.blocks.getBlockHeight();
+    if (checkHeight.finalized < batchTargetSlot) {
+      throw new Error(
+        `Timeout waiting for finalized slot ${batchTargetSlot} (current: ${checkHeight.finalized}) after ${batchTimeout}ms`
+      );
+    }
+
+    if (logFn) {
+      logFn("Dumb fill: %d/%d blocks finalized", batchEnd, count);
+    }
   }
 }

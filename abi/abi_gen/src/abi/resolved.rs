@@ -2243,6 +2243,7 @@ mod tests {
             name: "DynAlias".to_string(),
             kind: TypeKind::TypeRef(TypeRefType {
                 name: "DynStruct".to_string(),
+                package: None,
                 comment: None,
             }),
         });

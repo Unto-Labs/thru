@@ -30,3 +30,5 @@ export * from "./stream-slot-metrics";
 export * from "./stream-node-records";
 export * from "./get-and-list-events";
 export * from "./stream-error-paths";
+export * from "./error-program-acc-idx";
+export * from "./debug-reexecute";

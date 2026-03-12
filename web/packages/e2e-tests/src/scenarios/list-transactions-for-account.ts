@@ -143,34 +143,33 @@ export class ListTransactionsForAccountScenario extends BaseScenario {
   }
 
   private async testBasicList(ctx: TestContext, result: TestResult): Promise<TestResult> {
-    // List transactions for alice - pass address as first argument, options as second
-    const resp = await ctx.sdk.transactions.listForAccount(this.alice!.publicKeyString, {
-      page: new PageRequest({ pageSize: 10 }),
-    });
+    // Poll until indexer has all transactions (async indexing may lag behind execution)
+    const expected = this.transferSignatures.length;
+    const deadline = Date.now() + 30_000;
+    let lastCount = 0;
 
-    if (!resp || !resp.transactions) {
-      return {
-        ...result,
-        success: false,
-        message: "ListTransactionsForAccount returned null or empty",
-      };
+    while (Date.now() < deadline) {
+      const resp = await ctx.sdk.transactions.listForAccount(this.alice!.publicKeyString, {
+        page: new PageRequest({ pageSize: 10 }),
+      });
+
+      lastCount = resp?.transactions?.length ?? 0;
+      if (lastCount >= expected) {
+        ctx.logInfo("ListTransactionsForAccount returned %d transactions", lastCount);
+        result.verificationDetails.push(
+          `✓ ListTransactionsForAccount returned ${lastCount} transactions`
+        );
+        return result;
+      }
+
+      await new Promise((r) => setTimeout(r, 500));
     }
 
-    ctx.logInfo("ListTransactionsForAccount returned %d transactions", resp.transactions.length);
-
-    // Verify we got at least our transactions
-    if (resp.transactions.length < this.transferSignatures.length) {
-      return {
-        ...result,
-        success: false,
-        message: `Expected at least ${this.transferSignatures.length} transactions, got ${resp.transactions.length}`,
-      };
-    }
-
-    result.verificationDetails.push(
-      `✓ ListTransactionsForAccount returned ${resp.transactions.length} transactions`
-    );
-    return result;
+    return {
+      ...result,
+      success: false,
+      message: `Expected at least ${expected} transactions, got ${lastCount}`,
+    };
   }
 
   private async testVmErrorFiltering(

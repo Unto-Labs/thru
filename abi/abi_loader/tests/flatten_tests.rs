@@ -252,3 +252,115 @@ fn name_field_absent_after_flatten_when_not_set() {
     let result = flatten(&file, &include_dirs).expect("flatten should succeed");
     assert_eq!(result.abi.name, None);
 }
+
+#[test]
+fn flatten_nft_market_program() {
+    let file = type_library_path().join("tn_nft_market_program.abi.yaml");
+    let include_dirs = vec![type_library_path()];
+
+    let result = flatten(&file, &include_dirs).expect("flatten should succeed");
+
+    assert!(
+        result.abi.imports.is_empty(),
+        "Flattened ABI should have no imports"
+    );
+
+    let type_names: Vec<&str> = result.types.iter().map(|t| t.name.as_str()).collect();
+
+    // Types from thru_primitives (imported via onchain)
+    assert!(type_names.contains(&"Pubkey"), "Should contain Pubkey from primitives");
+    assert!(type_names.contains(&"Hash"), "Should contain Hash from primitives");
+
+    // Types from state_proof (imported via onchain)
+    assert!(type_names.contains(&"StateProof"), "Should contain StateProof");
+
+    // Types from root file
+    assert!(type_names.contains(&"NftMarketInstruction"), "Should contain NftMarketInstruction");
+    assert!(type_names.contains(&"NftMarketOrder"), "Should contain NftMarketOrder");
+    assert!(type_names.contains(&"NftMarketConfig"), "Should contain NftMarketConfig");
+    assert!(type_names.contains(&"NftMarketProgramAccount"), "Should contain NftMarketProgramAccount");
+    assert!(type_names.contains(&"NftMarketEvent"), "Should contain NftMarketEvent");
+
+    // Verify no type-refs have a package field in flattened output
+    fn assert_no_packages(kind: &abi_types::TypeKind) {
+        match kind {
+            abi_types::TypeKind::TypeRef(tr) => {
+                assert!(
+                    tr.package.is_none(),
+                    "TypeRef '{}' should have no package in flattened output",
+                    tr.name
+                );
+            }
+            abi_types::TypeKind::Struct(s) => {
+                for f in &s.fields {
+                    assert_no_packages(&f.field_type);
+                }
+            }
+            abi_types::TypeKind::Enum(e) => {
+                for v in &e.variants {
+                    assert_no_packages(&v.variant_type);
+                }
+            }
+            abi_types::TypeKind::Array(a) => {
+                assert_no_packages(&a.element_type);
+            }
+            abi_types::TypeKind::Union(u) => {
+                for v in &u.variants {
+                    assert_no_packages(&v.variant_type);
+                }
+            }
+            abi_types::TypeKind::SizeDiscriminatedUnion(sdu) => {
+                for v in &sdu.variants {
+                    assert_no_packages(&v.variant_type);
+                }
+            }
+            abi_types::TypeKind::Primitive(_) => {}
+        }
+    }
+
+    for typedef in &result.types {
+        assert_no_packages(&typedef.kind);
+    }
+
+    // Verify roundtrip: flat YAML should parse back correctly and type-refs
+    // should have no package fields (only the top-level abi.package remains)
+    let yaml = serde_yml::to_string(&result).expect("Should serialize to YAML");
+    let reparsed: AbiFile = serde_yml::from_str(&yaml).expect("Should re-parse flattened YAML");
+    assert_eq!(reparsed.abi.package, "thru.program.nft_market");
+    assert!(reparsed.types.iter().any(|t| t.name == "Pubkey"));
+    assert!(reparsed.types.iter().any(|t| t.name == "StateProof"));
+}
+
+#[test]
+fn flatten_preserves_package_in_non_flat_roundtrip() {
+    // Verify that the package field is preserved when parsing non-flat ABI files
+    let yaml = r#"
+abi:
+  package: test.with.packages
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Test package field preservation"
+types:
+  - name: MyStruct
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: key
+            field-type:
+              type-ref:
+                name: Pubkey
+                package: "thru.common.primitives"
+"#;
+    let parsed: AbiFile = serde_yml::from_str(yaml).expect("Should parse YAML with package field");
+    let field = &parsed.types[0];
+    if let abi_types::TypeKind::Struct(s) = &field.kind {
+        if let abi_types::TypeKind::TypeRef(tr) = &s.fields[0].field_type {
+            assert_eq!(tr.package.as_deref(), Some("thru.common.primitives"));
+        } else {
+            panic!("Expected TypeRef");
+        }
+    } else {
+        panic!("Expected Struct");
+    }
+}

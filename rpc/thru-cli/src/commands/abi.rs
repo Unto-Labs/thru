@@ -285,6 +285,7 @@ struct AbiProgramManager {
     rpc_client: RpcClient,
     fee_payer_keypair: KeyPair,
     chain_id: u16,
+    timeout_seconds: u64,
 }
 
 impl AbiProgramManager {
@@ -315,6 +316,7 @@ impl AbiProgramManager {
             rpc_client,
             fee_payer_keypair,
             chain_id: chain_info.chain_id,
+            timeout_seconds: config.timeout_seconds,
         })
     }
 
@@ -360,7 +362,7 @@ impl AbiProgramManager {
         transaction: &Transaction,
     ) -> Result<(), CliError> {
         let wire_bytes = transaction.to_wire();
-        let timeout = Duration::from_secs(30);
+        let timeout = Duration::from_secs(self.timeout_seconds);
 
         let transaction_details = self
             .rpc_client

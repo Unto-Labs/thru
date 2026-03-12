@@ -49,7 +49,7 @@ export class StreamErrorPathsScenario extends BaseScenario {
     result: TestResult
   ): Promise<TestResult> {
     const invalidFilter = new Filter({
-      expression: "this.is.not.a.valid.field == params.bad",
+      expression: "bogus_field.does_not_exist == params.bad",
       params: {
         bad: FilterParamValue.uint(0n),
       },

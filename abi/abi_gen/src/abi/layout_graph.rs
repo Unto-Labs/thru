@@ -162,6 +162,7 @@ mod tests {
                         name: "field_b".to_string(),
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "B".to_string(),
+                            package: None,
                             comment: None,
                         }),
                     }],
@@ -185,6 +186,7 @@ mod tests {
                         name: "y".to_string(),
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "Y".to_string(),
+                            package: None,
                             comment: None,
                         }),
                     }],
@@ -198,6 +200,7 @@ mod tests {
                         name: "x".to_string(),
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "X".to_string(),
+                            package: None,
                             comment: None,
                         }),
                     }],
@@ -232,6 +235,7 @@ mod tests {
                             size: ExprKind::Literal(crate::abi::expr::LiteralExpr::U8(1)),
                             element_type: Box::new(TypeKind::TypeRef(TypeRefType {
                                 name: "Leaf".to_string(),
+                                package: None,
                                 comment: None,
                             })),
                         jagged: false,
@@ -290,6 +294,7 @@ mod tests {
                                 name: "parent_link".to_string(),
                                 field_type: TypeKind::TypeRef(TypeRefType {
                                     name: "Node".to_string(),
+                                    package: None,
                                     comment: None,
                                 }),
                             }],
@@ -322,6 +327,7 @@ mod tests {
                             name: "child".to_string(),
                             field_type: TypeKind::TypeRef(TypeRefType {
                                 name: "Child".to_string(),
+                                package: None,
                                 comment: None,
                             }),
                         },
@@ -343,6 +349,7 @@ mod tests {
                             name: "payload".to_string(),
                             field_type: TypeKind::TypeRef(TypeRefType {
                                 name: "Parent".to_string(),
+                                package: None,
                                 comment: None,
                             }),
                         },

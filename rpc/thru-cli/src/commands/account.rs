@@ -202,7 +202,7 @@ async fn create_account(
 
     // Submit the transaction
     let transaction_bytes = transaction.to_wire();
-    let timeout = Duration::from_secs(30);
+    let timeout = Duration::from_secs(config.timeout_seconds);
     let transaction_details = client
         .execute_transaction(&transaction_bytes, timeout)
         .await
@@ -419,7 +419,7 @@ async fn compress_account(
 
     // Execute the transaction and wait for completion
     let transaction_bytes = transaction.to_wire();
-    let timeout = Duration::from_secs(30);
+    let timeout = Duration::from_secs(config.timeout_seconds);
     let transaction_details = client
         .execute_transaction(&transaction_bytes, timeout)
         .await
@@ -691,7 +691,7 @@ async fn decompress_direct(
 
     // Execute the transaction and wait for completion
     let transaction_bytes = transaction.to_wire();
-    let timeout = Duration::from_secs(30);
+    let timeout = Duration::from_secs(config.timeout_seconds);
     let transaction_details = client
         .execute_transaction(&transaction_bytes, timeout)
         .await
@@ -871,7 +871,7 @@ async fn decompress_with_uploader(
         })?;
 
     let transaction_bytes = transaction.to_wire();
-    let timeout = Duration::from_secs(30);
+    let timeout = Duration::from_secs(config.timeout_seconds);
     let transaction_details = client
         .execute_transaction(&transaction_bytes, timeout)
         .await

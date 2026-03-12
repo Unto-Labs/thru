@@ -10,6 +10,7 @@ TIMEOUT ?= 300000
 CONCURRENCY ?= 1
 SEED ?= 0
 SCENARIO ?=
+SEQUENCER_MODE ?= 0
 
 # Common flags
 E2E_FLAGS = --send-block-path $(SEND_BLOCK_PATH) \
@@ -22,6 +23,10 @@ E2E_FLAGS = --send-block-path $(SEND_BLOCK_PATH) \
 
 ifneq ($(SEED),0)
 E2E_FLAGS += --seed $(SEED)
+endif
+
+ifneq ($(SEQUENCER_MODE),0)
+E2E_FLAGS += --sequencer-mode
 endif
 
 # All scenario names (underscore form, matching run-e2e.ts)
@@ -71,6 +76,7 @@ help:
 	@echo "  CONCURRENCY        Max concurrent tests (default: 1)"
 	@echo "  SEED               Random seed for reproducibility (default: 0 = random)"
 	@echo "  SCENARIO           Specific scenario to run"
+	@echo "  SEQUENCER_MODE     Use bprot protocol for sequencer nodes (default: 0)"
 	@echo ""
 	@echo "Per-scenario targets (run 'make list-scenarios' for full list):"
 	@echo "  make test-basic-rpc              Run basic_rpc scenario"
@@ -83,6 +89,8 @@ help:
 	@echo "  make test SCENARIO=basic_rpc           # Run basic_rpc test only"
 	@echo "  make test-verbose SCENARIO=balance_transfer"
 	@echo "  make test SEED=12345                   # Reproducible run"
+	@echo "  make test SEQUENCER_MODE=1             # Run against sequencer node"
+	@echo "  make test SEQUENCER_MODE=1 SCENARIO=basic_rpc"
 
 # Build the test suite (and workspace dependencies)
 build:

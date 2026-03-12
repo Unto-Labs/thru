@@ -991,6 +991,7 @@ mod tests {
             name: "Ptr".into(),
             kind: TypeKind::TypeRef(crate::abi::types::TypeRefType {
                 name: "BaseType".into(),
+                package: None,
                 comment: None,
             }),
         });
@@ -1114,6 +1115,7 @@ mod tests {
                                 tag_value: 0,
                                 variant_type: TypeKind::TypeRef(TypeRefType {
                                     name: "VariantPayload".into(),
+                                    package: None,
                                     comment: None,
                                 }),
                             }],
@@ -1447,6 +1449,7 @@ mod tests {
                     name: "b".into(),
                     field_type: TypeKind::TypeRef(TypeRefType {
                         name: "B".into(),
+                        package: None,
                         comment: None,
                     }),
                 }],
@@ -1460,6 +1463,7 @@ mod tests {
                     name: "a".into(),
                     field_type: TypeKind::TypeRef(TypeRefType {
                         name: "A".into(),
+                        package: None,
                         comment: None,
                     }),
                 }],
@@ -1494,6 +1498,7 @@ mod tests {
             name: "InnerAlias".into(),
             kind: TypeKind::TypeRef(crate::abi::types::TypeRefType {
                 name: "Inner".into(),
+                package: None,
                 comment: None,
             }),
         });
@@ -1545,6 +1550,7 @@ mod tests {
                                     element_type: Box::new(TypeKind::TypeRef(
                                         crate::abi::types::TypeRefType {
                                             name: "Leaf".into(),
+                                            package: None,
                                             comment: None,
                                         },
                                     )),

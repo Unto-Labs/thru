@@ -168,35 +168,53 @@ async fn execute_transaction(
     let instruction_bytes = hex::decode(instruction_data)
         .map_err(|e| CliError::Validation(format!("Invalid hex instruction data: {}", e)))?;
 
-    // Build and sign transaction
-    let transaction = build_and_sign_transaction(
-        config,
-        program,
-        &instruction_bytes,
-        fee_payer,
-        fee,
-        compute_units,
-        state_units,
-        memory_units,
-        expiry_after,
-        readwrite_accounts,
-        readonly_accounts,
-    )
-    .await?;
-
     // Create RPC client
     let client = create_rpc_client(config)?;
 
-    // Submit and execute transaction
-    let transaction_bytes = transaction.to_wire();
     let timeout_duration = Duration::from_secs(timeout);
+    /* TN_RUNTIME_TXN_ERR_NONCE_TOO_LOW = (int)(0x01 | 0xFFFFFE00) = -511 */
+    const TN_ERR_NONCE_TOO_LOW: i32 = -511;
+    const MAX_NONCE_RETRIES: u32 = 3;
 
-    let transaction_details = client
-        .execute_transaction(&transaction_bytes, timeout_duration)
-        .await
-        .map_err(|e| {
-            CliError::TransactionSubmission(format!("Failed to execute transaction: {:?}", e))
-        })?;
+    /* Retry loop: on nonce-too-low errors the RPC may return a stale nonce;
+       rebuild and re-sign with a fresh nonce fetch on each attempt. */
+    let mut transaction_details_opt = None;
+    for attempt in 0..MAX_NONCE_RETRIES {
+        if attempt > 0 {
+            tokio::time::sleep(Duration::from_millis(500)).await;
+        }
+
+        /* Build and sign transaction (fetches fresh nonce each attempt) */
+        let transaction = build_and_sign_transaction(
+            config,
+            program,
+            &instruction_bytes,
+            fee_payer,
+            fee,
+            compute_units,
+            state_units,
+            memory_units,
+            expiry_after,
+            readwrite_accounts,
+            readonly_accounts,
+        )
+        .await?;
+
+        let transaction_bytes = transaction.to_wire();
+        let details = client
+            .execute_transaction(&transaction_bytes, timeout_duration)
+            .await
+            .map_err(|e| {
+                CliError::TransactionSubmission(format!("Failed to execute transaction: {:?}", e))
+            })?;
+
+        let is_nonce_err = details.execution_result as i32 == TN_ERR_NONCE_TOO_LOW;
+        transaction_details_opt = Some(details);
+        if !is_nonce_err {
+            break;
+        }
+    }
+    let transaction_details = transaction_details_opt.unwrap();
 
     let has_failure =
         transaction_details.execution_result != 0 || transaction_details.vm_error != 0;

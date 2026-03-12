@@ -46,11 +46,13 @@ use thru_grpc_client::thru::{
     core::v1 as corev1,
     services::v1::{
         self as servicesv1, command_service_client::CommandServiceClient,
+        debug_service_client::DebugServiceClient,
         query_service_client::QueryServiceClient, streaming_service_client::StreamingServiceClient,
     },
 };
 
 pub use error::ClientError;
+pub use thru_grpc_client::thru as proto;
 
 /* Convenience type alias for Result */
 pub type Result<T> = std::result::Result<T, ClientError>;
@@ -568,13 +570,34 @@ impl Client {
     }
 
     /// Submit a transaction and wait for execution or timeout.
+    /// Uses server-side streaming to wait for confirmation, then fetches
+    /// full transaction details with a single query.
     pub async fn execute_transaction(
         &self,
         transaction: &[u8],
         timeout: Duration,
     ) -> Result<TransactionDetails> {
         let signature_bytes = self.send_transaction(transaction).await?;
-        self.track_transaction_polling(&signature_bytes, timeout).await
+        let track_resp = self.track_transaction(&signature_bytes, timeout).await?;
+
+        /* If the stream returned an execution error, propagate it early so
+           callers that only check Result don't miss it. */
+        if let Some(ref exec) = track_resp.execution_result {
+            if exec.execution_result != 0 || exec.vm_error != 0 {
+                /* Still need full details for the caller to inspect */
+            }
+        }
+
+        /* Fetch the full Transaction proto (header, body, slot, etc.) */
+        let remaining = timeout.saturating_sub(Duration::from_millis(100));
+        match self.fetch_transaction_details(&signature_bytes, remaining, 3).await? {
+            Some(transaction_proto) => {
+                self.transaction_proto_to_details(transaction_proto, &signature_bytes).await
+            }
+            None => Err(ClientError::TransactionVerification(
+                "Transaction confirmed via stream but not found in query".to_string(),
+            )),
+        }
     }
 
     /// Generate a state proof using the gRPC service.
@@ -737,6 +760,37 @@ impl Client {
         Ok(metrics)
     }
 
+    /// Re-execute a transaction in a simulated environment for debugging.
+    pub async fn debug_re_execute(
+        &self,
+        signature: &[u8; 64],
+        include_state_before: bool,
+        include_state_after: bool,
+        include_account_data: bool,
+        include_memory_dump: bool,
+    ) -> Result<servicesv1::DebugReExecuteResponse> {
+        let mut client = DebugServiceClient::new(self.channel.clone())
+            .max_decoding_message_size(128 * 1024 * 1024)
+            .max_encoding_message_size(128 * 1024 * 1024);
+
+        let request = servicesv1::DebugReExecuteRequest {
+            signature: Some(commonv1::Signature {
+                value: signature.to_vec(),
+            }),
+            include_state_before,
+            include_state_after,
+            include_account_data,
+            include_memory_dump,
+        };
+
+        let mut grpc_request = Request::new(request);
+        self.apply_metadata(&mut grpc_request);
+        grpc_request.set_timeout(self.timeout);
+
+        let response = client.debug_re_execute(grpc_request).await?;
+        Ok(response.into_inner())
+    }
+
     fn apply_metadata<T>(&self, request: &mut Request<T>) {
         if let Some(header) = &self.auth_header {
             request
@@ -820,14 +874,14 @@ impl Client {
         &self,
         signature: &[u8; 64],
         timeout: Duration,
-        max_attempts: u32,
+        _max_attempts: u32,
     ) -> Result<Option<corev1::Transaction>> {
         let mut client = QueryServiceClient::new(self.channel.clone())
             .max_decoding_message_size(128 * 1024 * 1024) /* 128 MB */
             .max_encoding_message_size(128 * 1024 * 1024); /* 128 MB */
         let deadline = Instant::now() + timeout;
 
-        for _ in 0..max_attempts {
+        loop {
             if Instant::now() >= deadline {
                 break;
             }

@@ -80,6 +80,33 @@ export class SlotMetricsScenario extends BaseScenario {
     const currentSlot = height.finalized;
     ctx.logInfo("Starting at slot %d", currentSlot);
 
+    // Subscribe to slot metrics stream BEFORE sending the transaction,
+    // so we don't miss the metrics if the tx lands quickly.
+    const controller = new AbortController();
+    const stream = ctx.sdk.slots.streamMetrics({
+      startSlot: currentSlot,
+      signal: controller.signal,
+    });
+    const timeout = setTimeout(() => controller.abort(), 30000);
+
+    // Collect metrics in background while we send the transaction
+    const metricsPromise = (async () => {
+      try {
+        for await (const metric of stream) {
+          if (metric.collectedFees > 0n) {
+            this.finalSlot = metric.slot;
+            break;
+          }
+        }
+      } catch (err) {
+        const errName = (err as Error).name;
+        const errMessage = (err as Error).message || "";
+        if (errName !== "AbortError" && !errMessage.includes("canceled")) {
+          throw err;
+        }
+      }
+    })();
+
     // Get alice's nonce
     const aliceNonce = ctx.accountStateTracker.getNonce(this.alice!.publicKeyString);
 
@@ -111,28 +138,10 @@ export class SlotMetricsScenario extends BaseScenario {
 
     // Submit transaction
     await ctx.sdk.transactions.send(tx.rawTransaction);
+    ctx.logInfo("Transaction submitted, waiting for metrics...");
 
-    // Wait for nonce increment to confirm execution
-    await ctx.accountStateTracker.waitForNonceIncrement(this.alice!.publicKeyString, 30000);
-
-    // Stream metrics to find the slot that actually contains our fees.
-    // Using the finalized height is racy — it may not be indexed yet.
-    const controller = new AbortController();
-    const stream = ctx.sdk.slots.streamMetrics({
-      startSlot: currentSlot,
-      signal: controller.signal,
-    });
-    const timeout = setTimeout(() => controller.abort(), 30000);
-    try {
-      for await (const metric of stream) {
-        if (metric.collectedFees > 0n) {
-          this.finalSlot = metric.slot;
-          break;
-        }
-      }
-    } catch (err) {
-      if ((err as Error).name !== "AbortError") throw err;
-    }
+    // Wait for the stream to find our slot with fees
+    await metricsPromise;
     clearTimeout(timeout);
     controller.abort();
 

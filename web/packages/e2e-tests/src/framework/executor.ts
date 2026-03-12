@@ -78,6 +78,10 @@ export class TestExecutor {
       target: this.config.blockBuilderEndpoint,
       grpcEndpoint: this.config.grpcEndpoint,
       chainId: this.config.chainId,
+      verbose: this.config.verbose,
+      waitForVote: this.config.waitForVote,
+      voteTimeoutMs: this.config.voteTimeoutMs,
+      sequencerMode: this.config.sequencerMode,
     });
 
     // Seed block sender's local slot counter from current finalized height.

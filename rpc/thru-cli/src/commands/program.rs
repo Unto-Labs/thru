@@ -199,6 +199,7 @@ pub struct ProgramManager {
     rpc_client: RpcClient,
     fee_payer_keypair: KeyPair,
     chain_id: u16,
+    timeout_seconds: u64,
 }
 
 impl ProgramManager {
@@ -239,6 +240,7 @@ impl ProgramManager {
             rpc_client,
             fee_payer_keypair,
             chain_id: chain_info.chain_id,
+            timeout_seconds: config.timeout_seconds,
         })
     }
 
@@ -398,7 +400,7 @@ impl ProgramManager {
     ) -> Result<(), CliError> {
         // Execute transaction and wait for completion
         let wire_bytes = transaction.to_wire();
-        let timeout = Duration::from_secs(30); // 30 second timeout
+        let timeout = Duration::from_secs(self.timeout_seconds);
 
         let transaction_details = self
             .rpc_client

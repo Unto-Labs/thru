@@ -105,6 +105,9 @@ message TransactionExecutionResult {
       [(google.api.field_behavior) = OPTIONAL];
   repeated TransactionEvent events = 12
       [(google.api.field_behavior) = OPTIONAL];
+  // Account index of the program that caused the error (revert, fault, etc.).
+  // Only meaningful when vm_error indicates a failure.
+  uint32 error_program_acc_idx = 13 [(google.api.field_behavior) = OPTIONAL];
 }
 // TransactionEvent describes an event emitted during transaction execution.
 message TransactionEvent {

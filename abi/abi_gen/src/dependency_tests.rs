@@ -27,6 +27,7 @@ mod dependency_tests {
     fn create_type_ref(name: &str) -> TypeKind {
         TypeKind::TypeRef(TypeRefType {
             name: name.to_string(),
+            package: None,
             comment: None,
         })
     }
@@ -2070,6 +2071,7 @@ mod resolved_tests {
                         name: "field_b".to_string(),
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "TypeB".to_string(),
+                            package: None,
                             comment: None,
                         }),
                     }],
@@ -2079,6 +2081,7 @@ mod resolved_tests {
                 name: "TypeB".to_string(),
                 kind: TypeKind::TypeRef(TypeRefType {
                     name: "TypeA".to_string(),
+                    package: None,
                     comment: None,
                 }),
             },
