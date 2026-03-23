@@ -16,8 +16,6 @@ import {
  * Only iframes from these origins can be loaded for security
  */
 const ALLOWED_IFRAME_ORIGINS = [
-  'https://thru-wallet.up.railway.app',
-  'https://wallet.thru.io',
   'https://wallet.thru.org',
   // Allow localhost for development (any port)
   'http://localhost',

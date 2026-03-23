@@ -177,7 +177,7 @@ async fn execute_transaction(
     const MAX_NONCE_RETRIES: u32 = 3;
 
     /* Retry loop: on nonce-too-low errors the RPC may return a stale nonce;
-       rebuild and re-sign with a fresh nonce fetch on each attempt. */
+    rebuild and re-sign with a fresh nonce fetch on each attempt. */
     let mut transaction_details_opt = None;
     for attempt in 0..MAX_NONCE_RETRIES {
         if attempt > 0 {

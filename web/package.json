@@ -4,9 +4,9 @@
   "private": true,
   "scripts": {
     "build": "pnpm -r build",
-    "test": "pnpm -r --filter './packages/*' test:run",
-    "test:watch": "pnpm -r --filter './packages/*' test:watch",
-    "test:coverage": "pnpm -r --filter './packages/*' test:coverage",
+    "test": "pnpm -r --filter './packages/*' --filter './packages-private/*' test:run",
+    "test:watch": "pnpm -r --filter './packages/*' --filter './packages-private/*' test:watch",
+    "test:coverage": "pnpm -r --filter './packages/*' --filter './packages-private/*' test:coverage",
     "test:thru-sdk": "pnpm --filter @thru/thru-sdk test",
     "test:wallet": "pnpm --filter thru-wallet test"
   },

@@ -14,7 +14,7 @@ npm install @thru/embedded-provider
 import { EmbeddedProvider } from '@thru/embedded-provider';
 
 const provider = new EmbeddedProvider({
-  iframeUrl: 'https://wallet.thru.io',
+  iframeUrl: 'https://wallet.thru.org',
 });
 
 // Initialize iframe (must be called before any other operation)
@@ -112,9 +112,7 @@ await provider.mountInline(container);
 
 The `IframeManager` validates that the iframe URL belongs to a set of trusted origins before loading it. Allowed origins:
 
-- `https://wallet.thru.io`
 - `https://wallet.thru.org`
-- `https://thru-wallet.up.railway.app`
 - `http://localhost` (any port, for development)
 
 Messages are sent with a strict `targetOrigin` and each iframe instance is tagged with a unique frame ID to prevent cross-talk.

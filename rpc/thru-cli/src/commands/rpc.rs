@@ -147,7 +147,10 @@ pub async fn get_account_info(
     // Resolve account input to public key
     let pubkey = resolve_account_input(account_input, config)?;
 
-    match client.get_account_info(&pubkey, None, Some(VersionContext::Current)).await {
+    match client
+        .get_account_info(&pubkey, None, Some(VersionContext::Current))
+        .await
+    {
         Ok(Some(account)) => {
             let mut account_data = HashMap::new();
             account_data.insert(
@@ -197,7 +200,10 @@ pub async fn get_account_info(
                 // User wants to see hex data
                 if let Some(data_b64) = account.data {
                     // Decode base64 data
-                    match base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &data_b64) {
+                    match base64::Engine::decode(
+                        &base64::engine::general_purpose::STANDARD,
+                        &data_b64,
+                    ) {
                         Ok(data_bytes) => {
                             let start = data_start.unwrap_or(0);
                             let len = data_len.unwrap_or(data_bytes.len().saturating_sub(start));
@@ -225,12 +231,19 @@ pub async fn get_account_info(
                                 );
                                 account_data.insert(
                                     "error".to_string(),
-                                    serde_json::Value::String(format!("data_start {} exceeds data size {}", start, data_bytes.len())),
+                                    serde_json::Value::String(format!(
+                                        "data_start {} exceeds data size {}",
+                                        start,
+                                        data_bytes.len()
+                                    )),
                                 );
                             }
                         }
                         Err(e) => {
-                            return Err(CliError::Validation(format!("Failed to decode account data: {}", e)));
+                            return Err(CliError::Validation(format!(
+                                "Failed to decode account data: {}",
+                                e
+                            )));
                         }
                     }
                 } else {
@@ -368,12 +381,22 @@ pub async fn get_slot_metrics(
                         output::print_output(response, true);
                     } else {
                         println!("Slot: {}", metrics.slot);
-                        println!("Global Activated State Counter: {}", metrics.global_activated_state_counter);
-                        println!("Global Deactivated State Counter: {}", metrics.global_deactivated_state_counter);
+                        println!(
+                            "Global Activated State Counter: {}",
+                            metrics.global_activated_state_counter
+                        );
+                        println!(
+                            "Global Deactivated State Counter: {}",
+                            metrics.global_deactivated_state_counter
+                        );
                         println!("Collected Fees: {}", metrics.collected_fees);
                         if let Some(ts) = metrics.block_timestamp {
                             if let Ok(duration) = ts.duration_since(std::time::UNIX_EPOCH) {
-                                println!("Block Timestamp: {}.{:09}", duration.as_secs(), duration.subsec_nanos());
+                                println!(
+                                    "Block Timestamp: {}.{:09}",
+                                    duration.as_secs(),
+                                    duration.subsec_nanos()
+                                );
                             }
                         }
                     }
@@ -405,7 +428,10 @@ pub async fn get_slot_metrics(
                 let chunk_end = std::cmp::min(current_start + MAX_CHUNK_SIZE - 1, end);
                 let chunk_size = (chunk_end - current_start + 1) as u32;
 
-                match client.list_slot_metrics(current_start, Some(chunk_end), Some(chunk_size)).await {
+                match client
+                    .list_slot_metrics(current_start, Some(chunk_end), Some(chunk_size))
+                    .await
+                {
                     Ok(metrics_list) => {
                         all_metrics.extend(metrics_list);
                     }
@@ -431,19 +457,22 @@ pub async fn get_slot_metrics(
             }
 
             if json_format {
-                let metrics_json: Vec<_> = all_metrics.iter().map(|m| {
-                    serde_json::json!({
-                        "slot": m.slot,
-                        "global_activated_state_counter": m.global_activated_state_counter,
-                        "global_deactivated_state_counter": m.global_deactivated_state_counter,
-                        "collected_fees": m.collected_fees,
-                        "block_timestamp": m.block_timestamp.map(|ts| {
-                            ts.duration_since(std::time::UNIX_EPOCH)
-                                .map(|d| format!("{}.{:09}", d.as_secs(), d.subsec_nanos()))
-                                .unwrap_or_default()
-                        }),
+                let metrics_json: Vec<_> = all_metrics
+                    .iter()
+                    .map(|m| {
+                        serde_json::json!({
+                            "slot": m.slot,
+                            "global_activated_state_counter": m.global_activated_state_counter,
+                            "global_deactivated_state_counter": m.global_deactivated_state_counter,
+                            "collected_fees": m.collected_fees,
+                            "block_timestamp": m.block_timestamp.map(|ts| {
+                                ts.duration_since(std::time::UNIX_EPOCH)
+                                    .map(|d| format!("{}.{:09}", d.as_secs(), d.subsec_nanos()))
+                                    .unwrap_or_default()
+                            }),
+                        })
                     })
-                }).collect();
+                    .collect();
                 let response = serde_json::json!({
                     "listslotmetrics": {
                         "status": "success",
@@ -456,11 +485,13 @@ pub async fn get_slot_metrics(
                 println!("Slot Metrics ({} entries):", all_metrics.len());
                 println!("{:-<80}", "");
                 for m in &all_metrics {
-                    println!("Slot {}: activated={}, deactivated={}, fees={}",
+                    println!(
+                        "Slot {}: activated={}, deactivated={}, fees={}",
                         m.slot,
                         m.global_activated_state_counter,
                         m.global_deactivated_state_counter,
-                        m.collected_fees);
+                        m.collected_fees
+                    );
                 }
             }
             Ok(())
@@ -567,7 +598,10 @@ mod tests {
         // Test with 0x prefix
         let hex_with_prefix = "0x0000000000000000000000000000000000000000000000000000000000000001";
         let result_with_prefix = resolve_account_input(Some(hex_with_prefix), &config);
-        assert!(result_with_prefix.is_ok(), "Should resolve hex public key with 0x prefix");
+        assert!(
+            result_with_prefix.is_ok(),
+            "Should resolve hex public key with 0x prefix"
+        );
     }
 
     #[test]

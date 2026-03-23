@@ -186,6 +186,12 @@ pub async fn handle_program_command(
             seed,
             ephemeral,
         } => derive_manager_accounts(config, manager.as_deref(), &seed, ephemeral, json_format),
+        ProgramCommands::SeedToHex { seed } => seed_to_hex(&seed, json_format),
+        ProgramCommands::DeriveProgramAccount {
+            manager,
+            seed,
+            ephemeral,
+        } => derive_program_account(config, manager.as_deref(), &seed, ephemeral, json_format),
         ProgramCommands::Status {
             manager,
             seed,
@@ -369,7 +375,11 @@ impl ProgramManager {
     async fn get_current_nonce(&self) -> Result<u64, CliError> {
         match self
             .rpc_client
-            .get_account_info(&self.fee_payer_keypair.address_string, None, Some(VersionContext::Current))
+            .get_account_info(
+                &self.fee_payer_keypair.address_string,
+                None,
+                Some(VersionContext::Current),
+            )
             .await
         {
             Ok(Some(account)) => Ok(account.nonce),
@@ -472,7 +482,6 @@ impl ProgramManager {
 
         Ok(())
     }
-
 }
 
 /// Create a new managed program from a program file
@@ -636,7 +645,7 @@ async fn create_program(
     };
 
     // Build and submit transaction to create managed program
-    let mut transaction = TransactionBuilder::build_manager_create(
+    let transaction = TransactionBuilder::build_manager_create(
         program_manager.fee_payer_keypair.public_key,
         manager_program_pubkey
             .to_bytes()
@@ -734,7 +743,6 @@ async fn create_program(
 
     Ok(())
 }
-
 
 /// Upgrade an existing managed program from a program file
 async fn upgrade_program(
@@ -847,7 +855,7 @@ async fn upgrade_program(
     }
 
     // Build and submit transaction to upgrade managed program
-    let mut transaction = TransactionBuilder::build_manager_upgrade(
+    let transaction = TransactionBuilder::build_manager_upgrade(
         program_manager.fee_payer_keypair.public_key,
         manager_program_pubkey
             .to_bytes()
@@ -1607,6 +1615,74 @@ fn derive_program_address(
     Ok(())
 }
 
+/// Convert a UTF-8 seed string into zero-padded 32-byte hex
+fn seed_to_hex(seed: &str, json_format: bool) -> Result<(), CliError> {
+    let seed_bytes = seed.as_bytes();
+    if seed_bytes.len() > 32 {
+        return Err(CliError::Validation(format!(
+            "UTF-8 seed too long: {} bytes, maximum 32",
+            seed_bytes.len()
+        )));
+    }
+
+    let mut padded = [0u8; 32];
+    padded[..seed_bytes.len()].copy_from_slice(seed_bytes);
+    let padded_hex = hex::encode(padded);
+
+    if json_format {
+        let response = serde_json::json!({
+            "seed_to_hex": {
+                "seed": seed,
+                "padded_hex": padded_hex
+            }
+        });
+        output::print_output(response, true);
+    } else {
+        println!("Seed: {}", seed);
+        println!("Padded Hex: {}", padded_hex);
+    }
+
+    Ok(())
+}
+
+/// Derive managed program account address from a seed
+fn derive_program_account(
+    config: &Config,
+    manager: Option<&str>,
+    seed: &str,
+    ephemeral: bool,
+    json_format: bool,
+) -> Result<(), CliError> {
+    let manager_pubkey = if let Some(manager_str) = manager {
+        let bytes = crate::utils::validate_address_or_hex(manager_str)?;
+        Pubkey::from_bytes(&bytes)
+    } else {
+        config.get_manager_pubkey()?
+    };
+
+    let (_meta_account, program_account) =
+        crypto::derive_manager_accounts_from_seed(seed, &manager_pubkey, ephemeral)?;
+
+    if json_format {
+        let response = serde_json::json!({
+            "derive_program_account": {
+                "manager_program": manager_pubkey.to_string(),
+                "seed": seed,
+                "ephemeral": ephemeral,
+                "program_account": program_account.to_string()
+            }
+        });
+        output::print_output(response, true);
+    } else {
+        println!("Manager Program: {}", manager_pubkey.to_string());
+        println!("Seed: {}", seed);
+        println!("Ephemeral: {}", ephemeral);
+        println!("Program Account: {}", program_account.to_string());
+    }
+
+    Ok(())
+}
+
 /// Derive both meta and program account addresses from a seed
 fn derive_manager_accounts(
     config: &Config,
@@ -1663,7 +1739,11 @@ fn derive_manager_accounts(
         println!("  Program Account: {}", program_account.to_string());
         println!();
         println!("Uploader Accounts (temporary, used during create):");
-        println!("  Temp Seed: {}{}", temp_seed, if temp_seed_hashed { " (hashed)" } else { "" });
+        println!(
+            "  Temp Seed: {}{}",
+            temp_seed,
+            if temp_seed_hashed { " (hashed)" } else { "" }
+        );
         println!("  Meta Account: {}", uploader_meta_account.to_string());
         println!("  Buffer Account: {}", uploader_buffer_account.to_string());
     }
@@ -1743,7 +1823,11 @@ async fn get_program_status(
         client.get_account_info(&meta_account, None, Some(VersionContext::Current)),
         client.get_account_info(&program_account, None, Some(VersionContext::Current)),
         client.get_account_info(&uploader_meta_account, None, Some(VersionContext::Current)),
-        client.get_account_info(&uploader_buffer_account, None, Some(VersionContext::Current)),
+        client.get_account_info(
+            &uploader_buffer_account,
+            None,
+            Some(VersionContext::Current)
+        ),
     );
 
     /* Convert to status */
@@ -1755,11 +1839,19 @@ async fn get_program_status(
     /* Detect corrupted accounts (exist but have 0 bytes) */
     let program_meta_corrupted = meta_status.exists && meta_status.data_size == 0;
     let program_account_corrupted = program_status.exists && program_status.data_size == 0;
-    let uploader_meta_corrupted = uploader_meta_status.exists && uploader_meta_status.data_size == 0;
-    let uploader_buffer_corrupted = uploader_buffer_status.exists && uploader_buffer_status.data_size == 0;
-    let any_corrupted = program_meta_corrupted || program_account_corrupted || uploader_meta_corrupted || uploader_buffer_corrupted;
+    let uploader_meta_corrupted =
+        uploader_meta_status.exists && uploader_meta_status.data_size == 0;
+    let uploader_buffer_corrupted =
+        uploader_buffer_status.exists && uploader_buffer_status.data_size == 0;
+    let any_corrupted = program_meta_corrupted
+        || program_account_corrupted
+        || uploader_meta_corrupted
+        || uploader_buffer_corrupted;
 
-    let program_deployed = meta_status.exists && program_status.exists && program_status.is_program && program_status.data_size > 0;
+    let program_deployed = meta_status.exists
+        && program_status.exists
+        && program_status.is_program
+        && program_status.data_size > 0;
 
     if json_format {
         let status = if program_deployed {
@@ -1832,12 +1924,24 @@ async fn get_program_status(
 
         println!("Program Accounts:");
         print_account_status("  Meta Account", &meta_account.to_string(), &meta_status);
-        print_account_status("  Program Account", &program_account.to_string(), &program_status);
+        print_account_status(
+            "  Program Account",
+            &program_account.to_string(),
+            &program_status,
+        );
         println!();
 
         println!("Uploader Accounts (temp_seed: {}):", temp_seed);
-        print_account_status("  Meta Account", &uploader_meta_account.to_string(), &uploader_meta_status);
-        print_account_status("  Buffer Account", &uploader_buffer_account.to_string(), &uploader_buffer_status);
+        print_account_status(
+            "  Meta Account",
+            &uploader_meta_account.to_string(),
+            &uploader_meta_status,
+        );
+        print_account_status(
+            "  Buffer Account",
+            &uploader_buffer_account.to_string(),
+            &uploader_buffer_status,
+        );
         println!();
 
         let upload_in_progress = uploader_meta_status.exists || uploader_buffer_status.exists;
@@ -1874,14 +1978,19 @@ async fn get_program_status(
         }
 
         if upload_in_progress && !any_corrupted {
-            println!("  Upload buffer exists (cleanup may be needed: thru-cli uploader cleanup {})", temp_seed);
+            println!(
+                "  Upload buffer exists (cleanup may be needed: thru-cli uploader cleanup {})",
+                temp_seed
+            );
         }
     }
 
     Ok(())
 }
 
-fn account_to_status(result: Result<Option<thru_client::Account>, thru_client::ClientError>) -> AccountStatus {
+fn account_to_status(
+    result: Result<Option<thru_client::Account>, thru_client::ClientError>,
+) -> AccountStatus {
     match result {
         Ok(Some(account)) => AccountStatus {
             exists: true,
@@ -1908,7 +2017,10 @@ fn print_account_status(label: &str, address: &str, status: &AccountStatus) {
     if status.exists {
         let program_flag = if status.is_program { " [PROGRAM]" } else { "" };
         println!("{}: {}", label, address);
-        println!("    Status: EXISTS{}, {} bytes", program_flag, status.data_size);
+        println!(
+            "    Status: EXISTS{}, {} bytes",
+            program_flag, status.data_size
+        );
         if let Some(owner) = &status.owner {
             println!("    Owner: {}", owner);
         }

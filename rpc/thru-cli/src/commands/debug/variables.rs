@@ -62,8 +62,17 @@ fn resolve_inner<'data>(
         let mut result = Vec::new();
         for (name, type_offset, loc_attr) in &raw_vars {
             let type_name = type_offset.and_then(|off| resolve_type_name(dwarf, &unit, off));
-            let info =
-                evaluate_variable(dwarf, &unit, name, type_name, loc_attr, pc, frame_base, registers, stack_windows);
+            let info = evaluate_variable(
+                dwarf,
+                &unit,
+                name,
+                type_name,
+                loc_attr,
+                pc,
+                frame_base,
+                registers,
+                stack_windows,
+            );
             result.push(info);
         }
         return Some(result);
@@ -94,9 +103,9 @@ fn unit_contains_pc<'data>(
 // --- Collect variables in scope at PC ---
 
 type RawVariable<'data> = (
-    String,                              // name
-    Option<gimli::UnitOffset>,           // DW_AT_type offset
-    gimli::AttributeValue<R<'data>>,     // DW_AT_location
+    String,                          // name
+    Option<gimli::UnitOffset>,       // DW_AT_type offset
+    gimli::AttributeValue<R<'data>>, // DW_AT_location
 );
 
 fn collect_variables<'data>(
@@ -145,14 +154,15 @@ fn collect_variables<'data>(
 
                 let Some(name) = name else { continue };
 
-                let type_offset = entry
-                    .attr_value(gimli::DW_AT_type)
-                    .ok()
-                    .flatten()
-                    .and_then(|v| match v {
-                        gimli::AttributeValue::UnitRef(offset) => Some(offset),
-                        _ => None,
-                    });
+                let type_offset =
+                    entry
+                        .attr_value(gimli::DW_AT_type)
+                        .ok()
+                        .flatten()
+                        .and_then(|v| match v {
+                            gimli::AttributeValue::UnitRef(offset) => Some(offset),
+                            _ => None,
+                        });
 
                 let loc_attr = entry.attr_value(gimli::DW_AT_location).ok().flatten();
                 let Some(loc_attr) = loc_attr else {
@@ -217,10 +227,7 @@ fn compute_frame_base<'data>(
             continue;
         }
 
-        let fb_attr = entry
-            .attr_value(gimli::DW_AT_frame_base)
-            .ok()
-            .flatten()?;
+        let fb_attr = entry.attr_value(gimli::DW_AT_frame_base).ok().flatten()?;
 
         return eval_frame_base(dwarf, unit, debug_frame, &fb_attr, pc, registers);
     }
@@ -238,12 +245,11 @@ fn eval_frame_base<'data>(
     let expr = match attr {
         gimli::AttributeValue::Exprloc(expr) => expr.clone(),
         gimli::AttributeValue::LocationListsRef(offset) => {
-            let mut locs = dwarf
-                .locations(unit, *offset)
-                .ok()?;
+            let mut locs = dwarf.locations(unit, *offset).ok()?;
             let mut found_expr = None;
             while let Ok(Some(entry)) = locs.next() {
-                { let gimli::LocationListEntry { range, data, .. } = entry;
+                {
+                    let gimli::LocationListEntry { range, data, .. } = entry;
                     if range.begin <= pc && pc < range.end {
                         found_expr = Some(data);
                         break;
@@ -260,7 +266,9 @@ fn eval_frame_base<'data>(
         Ok(Some(gimli::Operation::Register { register })) => {
             registers.get(register.0 as usize).copied()
         }
-        Ok(Some(gimli::Operation::RegisterOffset { register, offset, .. })) => {
+        Ok(Some(gimli::Operation::RegisterOffset {
+            register, offset, ..
+        })) => {
             let base = registers.get(register.0 as usize).copied()?;
             Some((base as i64 + offset) as u64)
         }
@@ -281,7 +289,9 @@ fn compute_cfa<'data>(
         .fde_for_address(&bases, pc, gimli::DebugFrame::cie_from_offset)
         .ok()?;
 
-    let row = fde.unwind_info_for_address(debug_frame, &bases, &mut ctx, pc).ok()?;
+    let row = fde
+        .unwind_info_for_address(debug_frame, &bases, &mut ctx, pc)
+        .ok()?;
 
     match row.cfa() {
         gimli::CfaRule::RegisterAndOffset { register, offset } => {
@@ -315,9 +325,7 @@ fn evaluate_variable<'data>(
             };
         }
         gimli::AttributeValue::Exprloc(expr) => Some(expr.clone()),
-        gimli::AttributeValue::LocationListsRef(offset) => {
-            find_loc_entry(dwarf, unit, *offset, pc)
-        }
+        gimli::AttributeValue::LocationListsRef(offset) => find_loc_entry(dwarf, unit, *offset, pc),
         _ => None,
     };
 
@@ -330,7 +338,15 @@ fn evaluate_variable<'data>(
         };
     };
 
-    eval_expr(name, type_name, &expr, unit.encoding(), frame_base, registers, stack_windows)
+    eval_expr(
+        name,
+        type_name,
+        &expr,
+        unit.encoding(),
+        frame_base,
+        registers,
+        stack_windows,
+    )
 }
 
 fn find_loc_entry<'data>(
@@ -341,7 +357,8 @@ fn find_loc_entry<'data>(
 ) -> Option<gimli::Expression<R<'data>>> {
     let mut locs = dwarf.locations(unit, offset).ok()?;
     while let Ok(Some(entry)) = locs.next() {
-        { let gimli::LocationListEntry { range, data, .. } = entry;
+        {
+            let gimli::LocationListEntry { range, data, .. } = entry;
             if range.begin <= pc && pc < range.end {
                 return Some(data);
             }
@@ -380,7 +397,10 @@ fn eval_expr<'data>(
         }
 
         // DW_OP_fbreg <offset> — variable at frame_base + offset
-        (Some(gimli::Operation::FrameOffset { offset }), None | Some(gimli::Operation::Piece { .. })) => {
+        (
+            Some(gimli::Operation::FrameOffset { offset }),
+            None | Some(gimli::Operation::Piece { .. }),
+        ) => {
             let offset = *offset;
             match frame_base {
                 Some(fb) => {
@@ -403,7 +423,12 @@ fn eval_expr<'data>(
         }
 
         // DW_OP_bregN <offset> — value at register + offset
-        (Some(gimli::Operation::RegisterOffset { register, offset, .. }), second) => {
+        (
+            Some(gimli::Operation::RegisterOffset {
+                register, offset, ..
+            }),
+            second,
+        ) => {
             let idx = register.0 as usize;
             let offset = *offset;
             let reg_name = RISCV_ABI_NAMES.get(idx).unwrap_or(&"??");
@@ -489,7 +514,10 @@ fn resolve_type_inner<'data>(
     let tag = entry.tag();
 
     match tag {
-        gimli::DW_TAG_base_type | gimli::DW_TAG_structure_type | gimli::DW_TAG_union_type | gimli::DW_TAG_enumeration_type => {
+        gimli::DW_TAG_base_type
+        | gimli::DW_TAG_structure_type
+        | gimli::DW_TAG_union_type
+        | gimli::DW_TAG_enumeration_type => {
             let name = entry
                 .attr_value(gimli::DW_AT_name)
                 .ok()
@@ -506,14 +534,12 @@ fn resolve_type_inner<'data>(
                 Some(format!("{prefix} <anon>"))
             })
         }
-        gimli::DW_TAG_typedef => {
-            entry
-                .attr_value(gimli::DW_AT_name)
-                .ok()
-                .flatten()
-                .and_then(|v| dwarf.attr_string(unit, v).ok())
-                .and_then(|s| Some(s.to_string_lossy().into_owned()))
-        }
+        gimli::DW_TAG_typedef => entry
+            .attr_value(gimli::DW_AT_name)
+            .ok()
+            .flatten()
+            .and_then(|v| dwarf.attr_string(unit, v).ok())
+            .and_then(|s| Some(s.to_string_lossy().into_owned())),
         gimli::DW_TAG_pointer_type => {
             let inner = entry
                 .attr_value(gimli::DW_AT_type)

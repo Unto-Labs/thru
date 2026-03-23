@@ -33,6 +33,7 @@ export {
   deriveAddress,
   deriveProgramAddress
 } from "./modules/helpers";
+export { createThruClient } from "./client";
 export { collectStream, firstStreamValue, forEachStreamValue } from "./modules/streaming";
 export {
   ConsensusStatus,
@@ -51,9 +52,10 @@ export { signWithDomain, verifyWithDomain, SignatureDomain } from "./domain/tran
 // ============================================================================
 // Type Exports - Common Types
 // ============================================================================
-    export type { PageRequestParams, PageResponseParams } from "./domain/pagination";
-  export type { PubkeyInput, SignatureInput } from "./domain/primitives";
-  export type { VersionContextInput } from "./modules/consensus";
+export type { PageRequestParams, PageResponseParams } from "./domain/pagination";
+export type { Thru, ThruClientConfig } from "./client";
+export type { PubkeyInput, SignatureInput } from "./domain/primitives";
+export type { VersionContextInput } from "./modules/consensus";
 // ============================================================================
 // Type Exports - Proto/Protocol Types
 // ============================================================================

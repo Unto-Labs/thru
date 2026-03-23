@@ -61,7 +61,8 @@ pub async fn init_c_project(
 
     /* Create GNUmakefile */
     let gnumakefile_path = project_dir.join("GNUmakefile");
-    let gnumakefile_content = templates::replace_template_vars(templates::GNUMAKEFILE_TEMPLATE, &vars);
+    let gnumakefile_content =
+        templates::replace_template_vars(templates::GNUMAKEFILE_TEMPLATE, &vars);
     tokio::fs::write(&gnumakefile_path, gnumakefile_content)
         .await
         .map_err(|e| CliError::Generic {
@@ -79,8 +80,7 @@ pub async fn init_c_project(
 
     /* Create examples/{program_name}.c */
     let program_c_path = examples_dir.join(format!("{}.c", program_name));
-    let program_c_content =
-        templates::replace_template_vars(templates::PROGRAM_C_TEMPLATE, &vars);
+    let program_c_content = templates::replace_template_vars(templates::PROGRAM_C_TEMPLATE, &vars);
     tokio::fs::write(&program_c_path, program_c_content)
         .await
         .map_err(|e| CliError::Generic {
@@ -111,10 +111,7 @@ pub async fn init_c_project(
             project_dir.display()
         );
     } else {
-        println!(
-            "\n{}",
-            "✓ Project initialized successfully".green().bold()
-        );
+        println!("\n{}", "✓ Project initialized successfully".green().bold());
         println!("\nCreated files:");
         println!("  {}", gnumakefile_path.display());
         println!("  {}", readme_path.display());
@@ -143,7 +140,10 @@ pub async fn init_cpp_project(
     if json_format {
         println!("{{\"status\":\"error\",\"message\":\"C++ projects not yet implemented\"}}");
     } else {
-        println!("{}", "C++ project initialization is not yet implemented.".yellow());
+        println!(
+            "{}",
+            "C++ project initialization is not yet implemented.".yellow()
+        );
         println!("This feature will be available in a future release.");
     }
     Ok(())
@@ -158,7 +158,10 @@ pub async fn init_rust_project(
     if json_format {
         println!("{{\"status\":\"error\",\"message\":\"Rust projects not yet implemented\"}}");
     } else {
-        println!("{}", "Rust project initialization is not yet implemented.".yellow());
+        println!(
+            "{}",
+            "Rust project initialization is not yet implemented.".yellow()
+        );
         println!("This feature will be available in a future release.");
     }
     Ok(())

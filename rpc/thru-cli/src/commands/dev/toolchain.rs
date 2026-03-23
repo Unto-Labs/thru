@@ -1,6 +1,6 @@
 //! Toolchain management commands
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use colored::Colorize;
 use flate2::read::GzDecoder;
 use std::path::{Path, PathBuf};
@@ -57,9 +57,7 @@ fn detect_arch() -> Result<String> {
 
 /// Verify that the toolchain is properly installed
 fn verify_toolchain(toolchain_path: &Path) -> Result<String> {
-    let gcc_path = toolchain_path
-        .join("bin")
-        .join("riscv64-unknown-elf-gcc");
+    let gcc_path = toolchain_path.join("bin").join("riscv64-unknown-elf-gcc");
 
     if !gcc_path.exists() {
         return Err(anyhow!(
@@ -306,10 +304,7 @@ pub async fn update_toolchain(
     if let Some(ref current) = current_version {
         if current == &latest_version {
             if json_format {
-                println!(
-                    "{{\"status\":\"up_to_date\",\"version\":\"{}\"}}",
-                    current
-                );
+                println!("{{\"status\":\"up_to_date\",\"version\":\"{}\"}}", current);
             } else {
                 println!(
                     "{}",
@@ -423,7 +418,11 @@ pub async fn uninstall_toolchain(
     if !force && !json_format {
         println!(
             "{}",
-            format!("This will remove the toolchain at: {}", install_path.display()).yellow()
+            format!(
+                "This will remove the toolchain at: {}",
+                install_path.display()
+            )
+            .yellow()
         );
         println!("Are you sure? (yes/no)");
 

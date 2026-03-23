@@ -91,10 +91,8 @@ async fn debug_re_execute(
 
     if let Some(path) = output_trace {
         if !response.trace.is_empty() {
-            std::fs::write(path, &response.trace).map_err(|e| {
-                CliError::Generic {
-                    message: format!("Failed to write trace to {}: {}", path, e),
-                }
+            std::fs::write(path, &response.trace).map_err(|e| CliError::Generic {
+                message: format!("Failed to write trace to {}: {}", path, e),
             })?;
         }
     }
@@ -194,24 +192,53 @@ fn print_json_output(
 
     if let Some(path) = output_trace {
         if !response.trace.is_empty() {
-            let obj = result.get_mut("debug_re_execute").unwrap().as_object_mut().unwrap();
+            let obj = result
+                .get_mut("debug_re_execute")
+                .unwrap()
+                .as_object_mut()
+                .unwrap();
             obj.insert("trace_file".to_string(), json!(path));
         }
     }
 
     if let Some(details) = exec {
-        let obj = result.get_mut("debug_re_execute").unwrap().as_object_mut().unwrap();
+        let obj = result
+            .get_mut("debug_re_execute")
+            .unwrap()
+            .as_object_mut()
+            .unwrap();
         obj.insert("execution_code".to_string(), json!(details.execution_code));
-        obj.insert("user_error_code".to_string(), json!(details.user_error_code));
-        obj.insert("compute_units_consumed".to_string(), json!(details.compute_units_consumed));
-        obj.insert("state_units_consumed".to_string(), json!(details.state_units_consumed));
+        obj.insert(
+            "user_error_code".to_string(),
+            json!(details.user_error_code),
+        );
+        obj.insert(
+            "compute_units_consumed".to_string(),
+            json!(details.compute_units_consumed),
+        );
+        obj.insert(
+            "state_units_consumed".to_string(),
+            json!(details.state_units_consumed),
+        );
         obj.insert("pages_used".to_string(), json!(details.pages_used));
-        obj.insert("program_counter".to_string(), json!(details.program_counter));
-        obj.insert("instruction_counter".to_string(), json!(details.instruction_counter));
+        obj.insert(
+            "program_counter".to_string(),
+            json!(details.program_counter),
+        );
+        obj.insert(
+            "instruction_counter".to_string(),
+            json!(details.instruction_counter),
+        );
         obj.insert("fault_code".to_string(), json!(details.fault_code));
-        obj.insert("fault_code_label".to_string(), json!(fault_label(details.fault_code)));
+        obj.insert(
+            "fault_code_label".to_string(),
+            json!(fault_label(details.fault_code)),
+        );
         if details.segv_vaddr != 0 || details.segv_size != 0 {
-            obj.insert("segv_vaddr".to_string(), json!(format!("0x{:x}", details.segv_vaddr)));
+            obj.insert(
+                "segv_vaddr".to_string(),
+                json!(format!("0x{:x}", details.segv_vaddr)),
+            );
             obj.insert("segv_size".to_string(), json!(details.segv_size));
             obj.insert("segv_write".to_string(), json!(details.segv_write));
         }
@@ -221,52 +248,88 @@ fn print_json_output(
             obj.insert("registers".to_string(), json!(details.registers));
         }
         if !details.call_frames.is_empty() {
-            let frames: Vec<_> = details.call_frames.iter().map(|f| {
-                let mut frame = json!({
-                    "program_acc_idx": f.program_acc_idx,
-                    "program_counter": f.program_counter,
-                    "stack_pointer": f.stack_pointer,
-                    "saved_registers": f.saved_registers,
-                });
-                if !f.stack_window.is_empty() {
-                    let frame_obj = frame.as_object_mut().unwrap();
-                    frame_obj.insert("stack_window".to_string(), json!(hex::encode(&f.stack_window)));
-                    frame_obj.insert("stack_window_base".to_string(), json!(f.stack_window_base));
-                }
-                frame
-            }).collect();
+            let frames: Vec<_> = details
+                .call_frames
+                .iter()
+                .map(|f| {
+                    let mut frame = json!({
+                        "program_acc_idx": f.program_acc_idx,
+                        "program_counter": f.program_counter,
+                        "stack_pointer": f.stack_pointer,
+                        "saved_registers": f.saved_registers,
+                    });
+                    if !f.stack_window.is_empty() {
+                        let frame_obj = frame.as_object_mut().unwrap();
+                        frame_obj.insert(
+                            "stack_window".to_string(),
+                            json!(hex::encode(&f.stack_window)),
+                        );
+                        frame_obj
+                            .insert("stack_window_base".to_string(), json!(f.stack_window_base));
+                    }
+                    frame
+                })
+                .collect();
             obj.insert("call_frames".to_string(), json!(frames));
         }
     }
 
     if !response.state_before.is_empty() {
-        let snapshots: Vec<_> = response.state_before.iter().map(format_snapshot_json).collect();
-        let obj = result.get_mut("debug_re_execute").unwrap().as_object_mut().unwrap();
+        let snapshots: Vec<_> = response
+            .state_before
+            .iter()
+            .map(format_snapshot_json)
+            .collect();
+        let obj = result
+            .get_mut("debug_re_execute")
+            .unwrap()
+            .as_object_mut()
+            .unwrap();
         obj.insert("state_before".to_string(), json!(snapshots));
     }
 
     if !response.state_after.is_empty() {
-        let snapshots: Vec<_> = response.state_after.iter().map(format_snapshot_json).collect();
-        let obj = result.get_mut("debug_re_execute").unwrap().as_object_mut().unwrap();
+        let snapshots: Vec<_> = response
+            .state_after
+            .iter()
+            .map(format_snapshot_json)
+            .collect();
+        let obj = result
+            .get_mut("debug_re_execute")
+            .unwrap()
+            .as_object_mut()
+            .unwrap();
         obj.insert("state_after".to_string(), json!(snapshots));
     }
 
     if !response.memory_segments.is_empty() {
-        let segments: Vec<_> = response.memory_segments.iter().map(|seg| {
-            let pages: Vec<_> = seg.pages.iter().map(|p| {
+        let segments: Vec<_> = response
+            .memory_segments
+            .iter()
+            .map(|seg| {
+                let pages: Vec<_> = seg
+                    .pages
+                    .iter()
+                    .map(|p| {
+                        json!({
+                            "page_index": p.page_index,
+                            "data_hex": hex::encode(&p.data),
+                        })
+                    })
+                    .collect();
                 json!({
-                    "page_index": p.page_index,
-                    "data_hex": hex::encode(&p.data),
+                    "segment_type": seg.segment_type,
+                    "segment_type_label": segment_type_label(seg.segment_type),
+                    "segment_size": seg.segment_size,
+                    "pages": pages,
                 })
-            }).collect();
-            json!({
-                "segment_type": seg.segment_type,
-                "segment_type_label": segment_type_label(seg.segment_type),
-                "segment_size": seg.segment_size,
-                "pages": pages,
             })
-        }).collect();
-        let obj = result.get_mut("debug_re_execute").unwrap().as_object_mut().unwrap();
+            .collect();
+        let obj = result
+            .get_mut("debug_re_execute")
+            .unwrap()
+            .as_object_mut()
+            .unwrap();
         obj.insert("memory_segments".to_string(), json!(segments));
     }
 
@@ -332,7 +395,11 @@ fn print_text_output(
         println!("  {}: {}", "Status".cyan(), status);
         println!("  {}: {}", "Execution Code".cyan(), details.execution_code);
         if details.user_error_code != 0 {
-            println!("  {}: {}", "User Error Code".cyan(), details.user_error_code);
+            println!(
+                "  {}: {}",
+                "User Error Code".cyan(),
+                details.user_error_code
+            );
         }
         println!(
             "  {}: {}",
@@ -358,7 +425,12 @@ fn print_text_output(
 
         if details.fault_code != 0 {
             println!("\n{}", "Fault Info".bold().red());
-            println!("  {}: {} ({})", "Fault Code".cyan(), details.fault_code, fault_label(details.fault_code));
+            println!(
+                "  {}: {} ({})",
+                "Fault Code".cyan(),
+                details.fault_code,
+                fault_label(details.fault_code)
+            );
             if details.segv_vaddr != 0 || details.segv_size != 0 {
                 println!(
                     "  {}: 0x{:x}",
@@ -477,9 +549,7 @@ fn print_text_output(
     }
 }
 
-fn print_account_snapshot(
-    snapshot: &thru_client::proto::services::v1::AccountSnapshot,
-) {
+fn print_account_snapshot(snapshot: &thru_client::proto::services::v1::AccountSnapshot) {
     let address = snapshot
         .address
         .as_ref()

@@ -1,7 +1,7 @@
 //! Registrar and name service command implementation
 
 use anyhow::Result;
-use base64::{engine::general_purpose, Engine};
+use base64::{Engine, engine::general_purpose};
 use sha2::{Digest, Sha256};
 
 use crate::cli::{NameServiceCommands, RegistrarCommands};
@@ -16,8 +16,8 @@ use thru_base::rpc_types::ProofType;
 use thru_base::tn_public_address::tn_pubkey_to_address_string;
 use thru_base::tn_tools::{KeyPair, Pubkey};
 use thru_base::txn_tools::{
-    TransactionBuilder, TN_NAME_SERVICE_MAX_DOMAIN_LENGTH, TN_NAME_SERVICE_MAX_KEY_LENGTH,
-    TN_NAME_SERVICE_MAX_VALUE_LENGTH,
+    TN_NAME_SERVICE_MAX_DOMAIN_LENGTH, TN_NAME_SERVICE_MAX_KEY_LENGTH,
+    TN_NAME_SERVICE_MAX_VALUE_LENGTH, TransactionBuilder,
 };
 use thru_client::{Client, ClientBuilder, TransactionDetails};
 
@@ -57,8 +57,8 @@ fn resolve_thru_registrar_program(
     config: &Config,
     thru_registrar_program: Option<&str>,
 ) -> Result<(Pubkey, [u8; 32]), CliError> {
-    let program_str = thru_registrar_program
-        .unwrap_or_else(|| config.thru_registrar_program_public_key.as_str());
+    let program_str =
+        thru_registrar_program.unwrap_or_else(|| config.thru_registrar_program_public_key.as_str());
     let bytes = validate_address_or_hex(program_str)?;
     let pubkey = Pubkey::from_bytes(&bytes);
     Ok((pubkey, bytes))
@@ -127,7 +127,10 @@ async fn validate_token_account(
 
     if let Some(data_b64) = account_info.data {
         let data = general_purpose::STANDARD.decode(data_b64).map_err(|e| {
-            CliError::Validation(format!("Failed to decode {} account data: {}", account_label, e))
+            CliError::Validation(format!(
+                "Failed to decode {} account data: {}",
+                account_label, e
+            ))
         })?;
 
         // Validate mint
@@ -145,12 +148,12 @@ async fn validate_token_account(
 
         // Validate owner if specified
         if let Some(expected_owner_bytes) = expected_owner {
-            let owner_bytes: [u8; 32] =
-                data[TOKEN_ACCOUNT_OWNER_OFFSET..TOKEN_ACCOUNT_OWNER_OFFSET + 32]
-                    .try_into()
-                    .map_err(|_| {
-                        CliError::Validation(format!("Failed to parse {} owner bytes", account_label))
-                    })?;
+            let owner_bytes: [u8; 32] = data
+                [TOKEN_ACCOUNT_OWNER_OFFSET..TOKEN_ACCOUNT_OWNER_OFFSET + 32]
+                .try_into()
+                .map_err(|_| {
+                    CliError::Validation(format!("Failed to parse {} owner bytes", account_label))
+                })?;
             if owner_bytes != expected_owner_bytes {
                 return Err(CliError::Validation(format!(
                     "{} token account owner does not match expected owner",
@@ -202,9 +205,10 @@ async fn setup_fee_payer_context(
         CliError::TransactionSubmission(format!("Failed to get block height: {}", e))
     })?;
 
-    let chain_info = client.get_chain_info().await.map_err(|e| {
-        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
-    })?;
+    let chain_info = client
+        .get_chain_info()
+        .await
+        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
 
     Ok(FeePayerContext {
         fee_payer_keypair,
@@ -220,11 +224,26 @@ fn resolve_name_service_program(
     config: &Config,
     name_service_program: Option<&str>,
 ) -> Result<(Pubkey, [u8; 32]), CliError> {
-    let program_str = name_service_program
-        .unwrap_or_else(|| config.name_service_program_public_key.as_str());
+    let program_str =
+        name_service_program.unwrap_or_else(|| config.name_service_program_public_key.as_str());
     let program_bytes = validate_address_or_hex(program_str)?;
     let program_pubkey = Pubkey::from_bytes(&program_bytes);
     Ok((program_pubkey, program_bytes))
+}
+
+fn derive_root_registrar_seed(root_bytes: &[u8]) -> [u8; 32] {
+    let mut seed_bytes = [0u8; 32];
+
+    // For names <=32 bytes, keep the legacy zero-padded seed behavior.
+    // For longer names, hash them to fit into the 32-byte seed.
+    if root_bytes.len() <= seed_bytes.len() {
+        seed_bytes[..root_bytes.len()].copy_from_slice(root_bytes);
+    } else {
+        let hash = Sha256::digest(root_bytes);
+        seed_bytes.copy_from_slice(&hash);
+    }
+
+    seed_bytes
 }
 
 fn derive_root_registrar_account_pubkey(
@@ -238,8 +257,7 @@ fn derive_root_registrar_account_pubkey(
             TN_NAME_SERVICE_MAX_DOMAIN_LENGTH
         )));
     }
-    let mut seed_bytes = [0u8; 32];
-    seed_bytes[..root_bytes.len()].copy_from_slice(root_bytes);
+    let seed_bytes = derive_root_registrar_seed(root_bytes);
 
     derive_program_address(&seed_bytes, name_service_program_pubkey, false)
         .map_err(|e| CliError::Crypto(format!("Failed to derive registrar pubkey: {}", e)))
@@ -258,10 +276,7 @@ fn derive_domain_account_pubkey(
         )));
     }
     let parent_bytes = parent_account.to_bytes().map_err(|e| {
-        CliError::Crypto(format!(
-            "Failed to convert parent account to bytes: {}",
-            e
-        ))
+        CliError::Crypto(format!("Failed to convert parent account to bytes: {}", e))
     })?;
     let mut hasher = Sha256::new();
     hasher.update(&parent_bytes);
@@ -524,14 +539,7 @@ pub async fn handle_name_service_command(
         }
         NameServiceCommands::DeriveConfigAccount {
             thru_registrar_program,
-        } => {
-            derive_config_account(
-                config,
-                thru_registrar_program.as_deref(),
-                json_format,
-            )
-            .await
-        }
+        } => derive_config_account(config, thru_registrar_program.as_deref(), json_format).await,
         NameServiceCommands::InitRoot {
             root_name,
             name_service_program,
@@ -647,29 +655,41 @@ pub async fn handle_name_service_command(
         NameServiceCommands::ListRecords {
             domain_account,
             name_service_program,
-        } => list_records(config, &domain_account, name_service_program.as_deref(), json_format).await,
+        } => {
+            list_records(
+                config,
+                &domain_account,
+                name_service_program.as_deref(),
+                json_format,
+            )
+            .await
+        }
         NameServiceCommands::DeriveDomainAccount {
             parent_account,
             domain_name,
             name_service_program,
-        } => derive_domain_account(
-            config,
-            &parent_account,
-            &domain_name,
-            name_service_program.as_deref(),
-            json_format,
-        )
-        .await,
+        } => {
+            derive_domain_account(
+                config,
+                &parent_account,
+                &domain_name,
+                name_service_program.as_deref(),
+                json_format,
+            )
+            .await
+        }
         NameServiceCommands::DeriveRegistrarAccount {
             root_name,
             name_service_program,
-        } => derive_registrar_account(
-            config,
-            &root_name,
-            name_service_program.as_deref(),
-            json_format,
-        )
-        .await,
+        } => {
+            derive_registrar_account(
+                config,
+                &root_name,
+                name_service_program.as_deref(),
+                json_format,
+            )
+            .await
+        }
     }
 }
 
@@ -728,8 +748,7 @@ async fn initialize_registry(
     let treasurer_account_pubkey = validate_address_or_hex(treasurer_account)?;
     let token_mint_account_pubkey = validate_address_or_hex(token_mint_account)?;
     let token_program_pubkey = {
-        let token_prog = token_program
-            .unwrap_or_else(|| config.token_program_public_key.as_str());
+        let token_prog = token_program.unwrap_or_else(|| config.token_program_public_key.as_str());
         validate_address_or_hex(token_prog)?
     };
     let token_program_pubkey_struct = Pubkey::from_bytes(&token_program_pubkey);
@@ -747,7 +766,9 @@ async fn initialize_registry(
     if let Some(existing) = client
         .get_account_info(&root_registrar_pubkey, None, None)
         .await
-        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get registrar account info: {}", e)))?
+        .map_err(|e| {
+            CliError::TransactionSubmission(format!("Failed to get registrar account info: {}", e))
+        })?
     {
         if !existing.is_new {
             return Err(CliError::Validation(
@@ -761,7 +782,9 @@ async fn initialize_registry(
     if let Some(mint_info) = client
         .get_account_info(&Pubkey::from_bytes(&token_mint_account_pubkey), None, None)
         .await
-        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get token mint account info: {}", e)))?
+        .map_err(|e| {
+            CliError::TransactionSubmission(format!("Failed to get token mint account info: {}", e))
+        })?
     {
         if mint_info.owner != token_program_pubkey_struct {
             return Err(CliError::Validation(format!(
@@ -770,13 +793,14 @@ async fn initialize_registry(
                 tn_pubkey_to_address_string(&token_program_pubkey)
             )));
         }
-
     }
 
     if let Some(treasurer_info) = client
         .get_account_info(&Pubkey::from_bytes(&treasurer_account_pubkey), None, None)
         .await
-        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get treasurer account info: {}", e)))?
+        .map_err(|e| {
+            CliError::TransactionSubmission(format!("Failed to get treasurer account info: {}", e))
+        })?
     {
         if treasurer_info.owner != token_program_pubkey_struct {
             return Err(CliError::Validation(format!(
@@ -788,14 +812,14 @@ async fn initialize_registry(
 
         // Decode treasurer token account data to verify mint matches
         if let Some(data_b64) = treasurer_info.data {
-            let data = general_purpose::STANDARD
-                .decode(data_b64)
-                .map_err(|e| CliError::Validation(format!("Failed to decode treasurer account data: {}", e)))?;
+            let data = general_purpose::STANDARD.decode(data_b64).map_err(|e| {
+                CliError::Validation(format!("Failed to decode treasurer account data: {}", e))
+            })?;
             let mint_bytes = &data[..32];
             if mint_bytes != token_mint_account_pubkey {
                 return Err(CliError::Validation(format!(
                     "Treasurer token account mint {} does not match provided mint {}",
-                    tn_pubkey_to_address_string(&mint_bytes.try_into().unwrap_or([0u8;32])),
+                    tn_pubkey_to_address_string(&mint_bytes.try_into().unwrap_or([0u8; 32])),
                     tn_pubkey_to_address_string(&token_mint_account_pubkey)
                 )));
             }
@@ -803,12 +827,13 @@ async fn initialize_registry(
                 let is_frozen = data[TOKEN_ACCOUNT_FROZEN_OFFSET];
                 if is_frozen != 0 {
                     return Err(CliError::Validation(
-                        "Treasurer token account is frozen; must be active to receive payments".to_string(),
+                        "Treasurer token account is frozen; must be active to receive payments"
+                            .to_string(),
                     ));
                 }
             }
         }
-        }
+    }
 
     // Get current nonce and block height
     let account_info = client
@@ -833,13 +858,15 @@ async fn initialize_registry(
 
     // Derive config account address
     let config_account_pubkey = derive_config_account_pubkey(&thru_registrar_program_pubkey)?;
-    let config_account_bytes = config_account_pubkey
-        .to_bytes()
-        .map_err(|e| CliError::Crypto(format!("Failed to convert config pubkey to bytes: {}", e)))?;
+    let config_account_bytes = config_account_pubkey.to_bytes().map_err(|e| {
+        CliError::Crypto(format!("Failed to convert config pubkey to bytes: {}", e))
+    })?;
     if let Some(existing_config) = client
         .get_account_info(&config_account_pubkey, None, None)
         .await
-        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get config account info: {}", e)))?
+        .map_err(|e| {
+            CliError::TransactionSubmission(format!("Failed to get config account info: {}", e))
+        })?
     {
         if !existing_config.is_new {
             return Err(CliError::Validation(
@@ -854,13 +881,7 @@ async fn initialize_registry(
         hex::decode(proof_hex)
             .map_err(|e| CliError::Validation(format!("Invalid config proof hex: {}", e)))?
     } else {
-        make_state_proof(
-            &client,
-            &config_account_pubkey,
-            ProofType::Creating,
-            None,
-        )
-        .await?
+        make_state_proof(&client, &config_account_pubkey, ProofType::Creating, None).await?
     };
 
     let registrar_proof_bytes = if let Some(proof_hex) = registrar_proof {
@@ -868,13 +889,7 @@ async fn initialize_registry(
             .map_err(|e| CliError::Validation(format!("Invalid registrar proof hex: {}", e)))?
     } else {
         let registrar_pubkey = Pubkey::from_bytes(&root_registrar_account_pubkey);
-        make_state_proof(
-            &client,
-            &registrar_pubkey,
-            ProofType::Creating,
-            None,
-        )
-        .await?
+        make_state_proof(&client, &registrar_pubkey, ProofType::Creating, None).await?
     };
 
     // Build transaction using TransactionBuilder
@@ -917,8 +932,7 @@ async fn initialize_registry(
     check_transaction_result(&transaction_details, json_format)?;
 
     // Convert config account address to string for output
-    let config_account_address =
-        tn_pubkey_to_address_string(&config_account_bytes);
+    let config_account_address = tn_pubkey_to_address_string(&config_account_bytes);
 
     if json_format {
         let response = serde_json::json!({
@@ -998,16 +1012,18 @@ async fn purchase_domain(
     // Determine config account
     let config_pubkey_bytes_raw = validate_address_or_hex(config_account)?;
     let config_pubkey = Pubkey::from_bytes(&config_pubkey_bytes_raw);
-    let config_pubkey_bytes = config_pubkey
-        .to_bytes()
-        .map_err(|e| CliError::Crypto(format!("Failed to convert config pubkey to bytes: {}", e)))?;
+    let config_pubkey_bytes = config_pubkey.to_bytes().map_err(|e| {
+        CliError::Crypto(format!("Failed to convert config pubkey to bytes: {}", e))
+    })?;
 
     // Fetch and parse config account
     let client = create_rpc_client(config)?;
     let config_info = client
         .get_account_info(&config_pubkey, None, None)
         .await
-        .map_err(|e| CliError::TransactionSubmission(format!("Failed to fetch config account: {}", e)))?
+        .map_err(|e| {
+            CliError::TransactionSubmission(format!("Failed to fetch config account: {}", e))
+        })?
         .ok_or_else(|| CliError::Validation("Config account not found".to_string()))?;
 
     if config_info.owner != thru_program_pubkey {
@@ -1021,7 +1037,9 @@ async fn purchase_domain(
     })?;
     let config_data = general_purpose::STANDARD
         .decode(config_data_b64)
-        .map_err(|e| CliError::Validation(format!("Failed to decode config account data: {}", e)))?;
+        .map_err(|e| {
+            CliError::Validation(format!("Failed to decode config account data: {}", e))
+        })?;
 
     let cfg_name_service_program_bytes: [u8; 32] = config_data[0..32]
         .try_into()
@@ -1043,10 +1061,12 @@ async fn purchase_domain(
     let name_service_program_pubkey = Pubkey::from_bytes(&cfg_name_service_program_bytes);
 
     // Derive lease and domain accounts
-    let lease_account_pubkey =
-        derive_lease_account_pubkey(&thru_program_pubkey, domain_name)?;
-    let domain_account_pubkey =
-        derive_domain_account_pubkey(&name_service_program_pubkey, &Pubkey::from_bytes(&cfg_root_registrar_bytes), domain_name)?;
+    let lease_account_pubkey = derive_lease_account_pubkey(&thru_program_pubkey, domain_name)?;
+    let domain_account_pubkey = derive_domain_account_pubkey(
+        &name_service_program_pubkey,
+        &Pubkey::from_bytes(&cfg_root_registrar_bytes),
+        domain_name,
+    )?;
 
     // Payer token account
     let payer_token_account_bytes = validate_address_or_hex(payer_token_account)?;
@@ -1056,34 +1076,22 @@ async fn purchase_domain(
         hex::decode(lp)
             .map_err(|e| CliError::Validation(format!("Invalid lease proof hex: {}", e)))?
     } else {
-        make_state_proof(
-            &client,
-            &lease_account_pubkey,
-            ProofType::Creating,
-            None,
-        )
-        .await?
+        make_state_proof(&client, &lease_account_pubkey, ProofType::Creating, None).await?
     };
 
     let domain_proof_bytes = if let Some(dp) = domain_proof {
         hex::decode(dp)
             .map_err(|e| CliError::Validation(format!("Invalid domain proof hex: {}", e)))?
     } else {
-        make_state_proof(
-            &client,
-            &domain_account_pubkey,
-            ProofType::Creating,
-            None,
-        )
-        .await?
+        make_state_proof(&client, &domain_account_pubkey, ProofType::Creating, None).await?
     };
 
     let lease_account_bytes = lease_account_pubkey
         .to_bytes()
         .map_err(|e| CliError::Crypto(format!("Failed to convert lease pubkey to bytes: {}", e)))?;
-    let domain_account_bytes = domain_account_pubkey
-        .to_bytes()
-        .map_err(|e| CliError::Crypto(format!("Failed to convert domain pubkey to bytes: {}", e)))?;
+    let domain_account_bytes = domain_account_pubkey.to_bytes().map_err(|e| {
+        CliError::Crypto(format!("Failed to convert domain pubkey to bytes: {}", e))
+    })?;
 
     let token_program_pubkey = Pubkey::from_bytes(&cfg_token_program_bytes);
 
@@ -1217,7 +1225,9 @@ async fn renew_lease(
     let config_info = client
         .get_account_info(&config_pubkey, None, None)
         .await
-        .map_err(|e| CliError::TransactionSubmission(format!("Failed to fetch config account: {}", e)))?
+        .map_err(|e| {
+            CliError::TransactionSubmission(format!("Failed to fetch config account: {}", e))
+        })?
         .ok_or_else(|| CliError::Validation("Config account not found".to_string()))?;
     if config_info.owner != thru_program_pubkey {
         return Err(CliError::Validation(
@@ -1229,7 +1239,9 @@ async fn renew_lease(
     })?;
     let config_data = general_purpose::STANDARD
         .decode(config_data_b64)
-        .map_err(|e| CliError::Validation(format!("Failed to decode config account data: {}", e)))?;
+        .map_err(|e| {
+            CliError::Validation(format!("Failed to decode config account data: {}", e))
+        })?;
     let cfg_treasurer_bytes: [u8; 32] = config_data[64..96]
         .try_into()
         .map_err(|_| CliError::Validation("Failed to parse treasurer".to_string()))?;
@@ -1245,7 +1257,9 @@ async fn renew_lease(
     let lease_info = client
         .get_account_info(&lease_pubkey, None, None)
         .await
-        .map_err(|e| CliError::TransactionSubmission(format!("Failed to fetch lease account: {}", e)))?
+        .map_err(|e| {
+            CliError::TransactionSubmission(format!("Failed to fetch lease account: {}", e))
+        })?
         .ok_or_else(|| CliError::Validation("Lease account not found".to_string()))?;
     if lease_info.owner != thru_program_pubkey {
         return Err(CliError::Validation(
@@ -1367,7 +1381,9 @@ async fn claim_expired_domain(
     let config_info = client
         .get_account_info(&config_pubkey, None, None)
         .await
-        .map_err(|e| CliError::TransactionSubmission(format!("Failed to fetch config account: {}", e)))?
+        .map_err(|e| {
+            CliError::TransactionSubmission(format!("Failed to fetch config account: {}", e))
+        })?
         .ok_or_else(|| CliError::Validation("Config account not found".to_string()))?;
     if config_info.owner != thru_program_pubkey {
         return Err(CliError::Validation(
@@ -1379,7 +1395,9 @@ async fn claim_expired_domain(
     })?;
     let config_data = general_purpose::STANDARD
         .decode(config_data_b64)
-        .map_err(|e| CliError::Validation(format!("Failed to decode config account data: {}", e)))?;
+        .map_err(|e| {
+            CliError::Validation(format!("Failed to decode config account data: {}", e))
+        })?;
     let cfg_treasurer_bytes: [u8; 32] = config_data[64..96]
         .try_into()
         .map_err(|_| CliError::Validation("Failed to parse treasurer".to_string()))?;
@@ -1395,7 +1413,9 @@ async fn claim_expired_domain(
     let lease_info = client
         .get_account_info(&lease_pubkey, None, None)
         .await
-        .map_err(|e| CliError::TransactionSubmission(format!("Failed to fetch lease account: {}", e)))?
+        .map_err(|e| {
+            CliError::TransactionSubmission(format!("Failed to fetch lease account: {}", e))
+        })?
         .ok_or_else(|| CliError::Validation("Lease account not found".to_string()))?;
     if lease_info.owner != thru_program_pubkey {
         return Err(CliError::Validation(
@@ -1484,7 +1504,8 @@ async fn derive_lease_account(
     let (thru_registrar_program_pubkey, _) =
         resolve_thru_registrar_program(config, thru_registrar_program)?;
 
-    let lease_account_pubkey = derive_lease_account_pubkey(&thru_registrar_program_pubkey, domain_name)?;
+    let lease_account_pubkey =
+        derive_lease_account_pubkey(&thru_registrar_program_pubkey, domain_name)?;
 
     let lease_account_bytes = lease_account_pubkey.to_bytes().map_err(|e| {
         CliError::Crypto(format!(
@@ -1702,23 +1723,14 @@ async fn register_subdomain(
     };
 
     let domain_bytes = domain_pubkey.to_bytes().map_err(|e| {
-        CliError::Crypto(format!(
-            "Failed to convert domain pubkey to bytes: {}",
-            e
-        ))
+        CliError::Crypto(format!("Failed to convert domain pubkey to bytes: {}", e))
     })?;
 
     let proof_bytes = if let Some(proof_hex) = state_proof {
         hex::decode(proof_hex)
             .map_err(|e| CliError::Validation(format!("Invalid state proof hex: {}", e)))?
     } else {
-        make_state_proof(
-            &fee_ctx.client,
-            &domain_pubkey,
-            ProofType::Creating,
-            None,
-        )
-        .await?
+        make_state_proof(&fee_ctx.client, &domain_pubkey, ProofType::Creating, None).await?
     };
 
     let transaction = TransactionBuilder::build_name_service_register_subdomain(
@@ -2025,8 +2037,7 @@ struct ParsedRootRegistrar {
     total_subdomains: u64,
 }
 
-const DOMAIN_BASE_SIZE: usize =
-    32 + 32 + TN_NAME_SERVICE_MAX_DOMAIN_LENGTH + 4 + 8 + 4;
+const DOMAIN_BASE_SIZE: usize = 32 + 32 + TN_NAME_SERVICE_MAX_DOMAIN_LENGTH + 4 + 8 + 4;
 const RECORD_SIZE: usize =
     4 + TN_NAME_SERVICE_MAX_KEY_LENGTH + 4 + TN_NAME_SERVICE_MAX_VALUE_LENGTH;
 const ROOT_BASE_SIZE: usize = 32 + TN_NAME_SERVICE_MAX_DOMAIN_LENGTH + 4 + 8;
@@ -2166,8 +2177,7 @@ fn parse_root_registrar_account_data(data: &[u8]) -> Result<ParsedRootRegistrar,
             .map_err(|_| CliError::Validation("Invalid total subdomains encoding".to_string()))?,
     );
 
-    let root_name =
-        String::from_utf8_lossy(&root_name_bytes[..root_name_length]).to_string();
+    let root_name = String::from_utf8_lossy(&root_name_bytes[..root_name_length]).to_string();
 
     Ok(ParsedRootRegistrar {
         authority,
@@ -2198,7 +2208,9 @@ async fn resolve_domain(
     let account_info = client
         .get_account_info(&domain_pubkey, None, None)
         .await
-        .map_err(|e| CliError::TransactionSubmission(format!("Failed to fetch account info: {}", e)))?
+        .map_err(|e| {
+            CliError::TransactionSubmission(format!("Failed to fetch account info: {}", e))
+        })?
         .ok_or_else(|| CliError::Validation(format!("Account {} not found", domain_address)))?;
 
     if account_info.owner != name_service_program_pubkey {
@@ -2209,10 +2221,7 @@ async fn resolve_domain(
     }
 
     let data_b64 = account_info.data.ok_or_else(|| {
-        CliError::Validation(format!(
-            "Account {} has no data to parse",
-            domain_address
-        ))
+        CliError::Validation(format!("Account {} has no data to parse", domain_address))
     })?;
     let data = general_purpose::STANDARD
         .decode(data_b64)
@@ -2335,7 +2344,14 @@ async fn list_records(
     name_service_program: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
-    resolve_domain(config, domain_account, None, name_service_program, json_format).await
+    resolve_domain(
+        config,
+        domain_account,
+        None,
+        name_service_program,
+        json_format,
+    )
+    .await
 }
 
 /// Derive a domain account address from parent and name
@@ -2354,10 +2370,7 @@ async fn derive_domain_account(
     let domain_pubkey =
         derive_domain_account_pubkey(&name_service_program_pubkey, &parent_pubkey, domain_name)?;
     let domain_bytes = domain_pubkey.to_bytes().map_err(|e| {
-        CliError::Crypto(format!(
-            "Failed to convert domain pubkey to bytes: {}",
-            e
-        ))
+        CliError::Crypto(format!("Failed to convert domain pubkey to bytes: {}", e))
     })?;
     let domain_address = tn_pubkey_to_address_string(&domain_bytes);
 

@@ -36,7 +36,11 @@ async fn handle_toolchain_command(
     json_format: bool,
 ) -> Result<(), CliError> {
     match subcommand {
-        ToolchainCommands::Install { version, path, repo } => {
+        ToolchainCommands::Install {
+            version,
+            path,
+            repo,
+        } => {
             /* Update config with repo if specified */
             if let Some(ref r) = repo {
                 config.github_repo = Some(r.clone());
@@ -89,7 +93,11 @@ async fn handle_sdk_command(
             )
             .await
         }
-        SdkCommands::Update { language, path, repo } => {
+        SdkCommands::Update {
+            language,
+            path,
+            repo,
+        } => {
             /* Update config with repo if specified */
             if let Some(ref r) = repo {
                 config.github_repo = Some(r.clone());
@@ -115,17 +123,14 @@ async fn handle_init_command(
     json_format: bool,
 ) -> Result<(), CliError> {
     match subcommand {
-        InitCommands::C {
-            project_name,
-            path,
-        } => init::init_c_project(&project_name, path.as_deref(), json_format).await,
-        InitCommands::Cpp {
-            project_name,
-            path,
-        } => init::init_cpp_project(&project_name, path.as_deref(), json_format).await,
-        InitCommands::Rust {
-            project_name,
-            path,
-        } => init::init_rust_project(&project_name, path.as_deref(), json_format).await,
+        InitCommands::C { project_name, path } => {
+            init::init_c_project(&project_name, path.as_deref(), json_format).await
+        }
+        InitCommands::Cpp { project_name, path } => {
+            init::init_cpp_project(&project_name, path.as_deref(), json_format).await
+        }
+        InitCommands::Rust { project_name, path } => {
+            init::init_rust_project(&project_name, path.as_deref(), json_format).await
+        }
     }
 }

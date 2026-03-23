@@ -166,11 +166,7 @@ fn print_account_info(data: &Value) {
         }
 
         if let Some(seq) = account_data.get("seq") {
-            println!(
-                "  {}: {}",
-                "Seq".cyan(),
-                format_value(seq)
-            );
+            println!("  {}: {}", "Seq".cyan(), format_value(seq));
         }
 
         if let Some(program) = account_data.get("program") {
@@ -198,7 +194,11 @@ fn print_account_info(data: &Value) {
             println!(
                 "  {}: {}",
                 "Is Ephemeral".cyan(),
-                if is_ephemeral { "Yes".green() } else { "No".red() }
+                if is_ephemeral {
+                    "Yes".green()
+                } else {
+                    "No".red()
+                }
             );
         }
         if let Some(is_deleted) = account_data.get("isDeleted") {
@@ -206,7 +206,11 @@ fn print_account_info(data: &Value) {
             println!(
                 "  {}: {}",
                 "Is Deleted".cyan(),
-                if is_deleted { "Yes".yellow() } else { "No".green() }
+                if is_deleted {
+                    "Yes".yellow()
+                } else {
+                    "No".green()
+                }
             );
         }
         if let Some(is_privileged) = account_data.get("isPrivileged") {
@@ -214,7 +218,11 @@ fn print_account_info(data: &Value) {
             println!(
                 "  {}: {}",
                 "Is Privileged".cyan(),
-                if is_privileged { "Yes".green() } else { "No".red() }
+                if is_privileged {
+                    "Yes".green()
+                } else {
+                    "No".red()
+                }
             );
         }
 
@@ -535,14 +543,8 @@ fn print_networks_info(data: &Value) {
                 println!("{}", "Networks".bold().green());
                 for entry in entries {
                     if let Value::Object(e) = entry {
-                        let name = e
-                            .get("name")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("?");
-                        let url = e
-                            .get("url")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("?");
+                        let name = e.get("name").and_then(|v| v.as_str()).unwrap_or("?");
+                        let url = e.get("url").and_then(|v| v.as_str()).unwrap_or("?");
                         let has_auth = e
                             .get("has_auth_token")
                             .and_then(|v| v.as_bool())
@@ -556,13 +558,7 @@ fn print_networks_info(data: &Value) {
 
                         let auth_info = if has_auth { " [auth]" } else { "" };
 
-                        println!(
-                            "  {}{}: {}{}",
-                            name.cyan(),
-                            marker,
-                            url,
-                            auth_info
-                        );
+                        println!("  {}{}: {}{}", name.cyan(), marker, url, auth_info);
                     }
                 }
             }

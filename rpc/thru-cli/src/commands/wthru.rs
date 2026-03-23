@@ -125,16 +125,17 @@ async fn initialize_wthru(
         CliError::TransactionSubmission(format!("Failed to get block height: {}", e))
     })?;
 
-    let chain_info = client.get_chain_info().await.map_err(|e| {
-        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
-    })?;
+    let chain_info = client
+        .get_chain_info()
+        .await
+        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
 
     let mint_proof =
         make_state_proof(&client, &mint_account_pubkey, ProofType::Creating, None).await?;
     let vault_proof =
         make_state_proof(&client, &vault_account_pubkey, ProofType::Creating, None).await?;
 
-    let mut transaction = TransactionBuilder::build_wthru_initialize_mint(
+    let transaction = TransactionBuilder::build_wthru_initialize_mint(
         fee_payer_keypair.public_key,
         wthru_program_bytes,
         token_program_bytes,
@@ -269,7 +270,7 @@ async fn deposit_wthru(
             CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
         })?;
 
-        let mut transfer_tx = TransactionBuilder::build_transfer(
+        let transfer_tx = TransactionBuilder::build_transfer(
             fee_payer_keypair.public_key,
             EOA_PROGRAM,
             vault_account_bytes,
@@ -321,11 +322,12 @@ async fn deposit_wthru(
         CliError::TransactionSubmission(format!("Failed to get block height: {}", e))
     })?;
 
-    let chain_info = client.get_chain_info().await.map_err(|e| {
-        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
-    })?;
+    let chain_info = client
+        .get_chain_info()
+        .await
+        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
 
-    let mut deposit_tx = TransactionBuilder::build_wthru_deposit(
+    let deposit_tx = TransactionBuilder::build_wthru_deposit(
         fee_payer_keypair.public_key,
         wthru_program_bytes,
         token_program_bytes,
@@ -457,11 +459,12 @@ async fn withdraw_wthru(
         CliError::TransactionSubmission(format!("Failed to get block height: {}", e))
     })?;
 
-    let chain_info = client.get_chain_info().await.map_err(|e| {
-        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
-    })?;
+    let chain_info = client
+        .get_chain_info()
+        .await
+        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
 
-    let mut withdraw_tx = TransactionBuilder::build_wthru_withdraw(
+    let withdraw_tx = TransactionBuilder::build_wthru_withdraw(
         fee_payer_keypair.public_key,
         wthru_program_bytes,
         token_program_bytes,
@@ -637,9 +640,13 @@ async fn ensure_account_absent(
     account: &Pubkey,
     label: &str,
 ) -> Result<(), CliError> {
-    if let Some(existing) = client.get_account_info(account, None, None).await.map_err(|e| {
-        CliError::TransactionSubmission(format!("Failed to get {} account info: {}", label, e))
-    })? {
+    if let Some(existing) = client
+        .get_account_info(account, None, None)
+        .await
+        .map_err(|e| {
+            CliError::TransactionSubmission(format!("Failed to get {} account info: {}", label, e))
+        })?
+    {
         if !existing.is_new {
             return Err(CliError::Validation(format!(
                 "{} account {} already exists",

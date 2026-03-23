@@ -17,7 +17,7 @@ const PKG_ROOT = resolve(
   "..",
 );
 const WORKSPACE_ROOT = resolve(PKG_ROOT, "../../../");
-const ABI_ROOT = resolve(WORKSPACE_ROOT, "abi");
+const ABI_ROOT = resolve(WORKSPACE_ROOT, "rpc", "abi");
 const ABI_GEN_MANIFEST = resolve(ABI_ROOT, "abi_gen/Cargo.toml");
 
 function parseArgs(argv: string[]): CliOptions {
@@ -57,6 +57,7 @@ function requireValue(flag: string, value: string | undefined): string {
 }
 
 function normalizeAbiPath(path: string): string {
+  if (path.startsWith("rpc/abi/")) return path.slice("rpc/abi/".length);
   if (path.startsWith("abi/")) return path.slice(4);
   return path;
 }

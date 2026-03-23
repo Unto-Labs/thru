@@ -1,6 +1,6 @@
 //! GitHub API interaction for downloading toolchain releases
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use indicatif::{ProgressBar, ProgressStyle};
 use reqwest::Client;
 use serde::Deserialize;
@@ -104,7 +104,10 @@ pub async fn download_toolchain(
     let release = get_release(version, repo).await?;
 
     /* Construct the asset name */
-    let asset_name = format!("thru-toolchain-{}-{}-{}.tar.gz", os_name, arch_name, version);
+    let asset_name = format!(
+        "thru-toolchain-{}-{}-{}.tar.gz",
+        os_name, arch_name, version
+    );
 
     /* Find the asset in the release */
     let asset = release
@@ -133,7 +136,11 @@ pub async fn download_toolchain(
 }
 
 /// Download a file with progress indication
-pub async fn download_file_with_progress(url: &str, total_size: u64, dest_path: &Path) -> Result<()> {
+pub async fn download_file_with_progress(
+    url: &str,
+    total_size: u64,
+    dest_path: &Path,
+) -> Result<()> {
     let client = Client::new();
 
     /* Create progress bar */
@@ -151,7 +158,10 @@ pub async fn download_file_with_progress(url: &str, total_size: u64, dest_path: 
     let response = client.get(url).send().await?;
 
     if !response.status().is_success() {
-        return Err(anyhow!("Failed to download file: HTTP {}", response.status()));
+        return Err(anyhow!(
+            "Failed to download file: HTTP {}",
+            response.status()
+        ));
     }
 
     /* Create temporary file */

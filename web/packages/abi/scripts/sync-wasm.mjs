@@ -4,7 +4,7 @@ import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const packageRoot = path.resolve(__dirname, "..");
-const repoRoot = path.resolve(packageRoot, "..", "..", "..", "abi", "abi_reflect_wasm", "pkg");
+const repoRoot = path.resolve(packageRoot, "..", "..", "..", "rpc", "abi", "abi_reflect_wasm", "pkg");
 const targets = ["bundler", "node", "web"];
 
 for (const target of targets) {
@@ -14,7 +14,7 @@ for (const target of targets) {
     await stat(source);
   } catch {
     throw new Error(
-      `Missing WASM artifacts for target "${target}". Run "wasm-pack build --target ${target}" in abi/abi_reflect_wasm first.`,
+      `Missing WASM artifacts for target "${target}". Run "wasm-pack build --target ${target}" in rpc/abi/abi_reflect_wasm first.`,
     );
   }
 

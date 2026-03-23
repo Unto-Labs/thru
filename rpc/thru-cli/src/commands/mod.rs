@@ -1,10 +1,10 @@
 //! Command implementations for the Thru CLI
 
+pub mod abi;
 pub mod account;
 pub mod debug;
 pub mod dev;
 pub mod faucet;
-pub mod abi;
 pub mod keys;
 pub mod name_service;
 pub mod network;

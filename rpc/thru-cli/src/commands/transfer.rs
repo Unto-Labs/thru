@@ -1,9 +1,9 @@
 //! Transfer command implementation
 
 use std::time::Duration;
-use thru_base::{tn_tools::Pubkey, txn_tools::EOA_PROGRAM};
 use thru_base::txn_lib::TnPubkey;
 use thru_base::txn_tools::TransactionBuilder;
+use thru_base::{tn_tools::Pubkey, txn_tools::EOA_PROGRAM};
 
 use crate::config::Config;
 use crate::crypto::keypair_from_hex;
@@ -74,13 +74,14 @@ pub async fn handle_transfer_command(
     })?;
 
     // Get chain ID
-    let chain_info = client.get_chain_info().await.map_err(|e| {
-        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
-    })?;
+    let chain_info = client
+        .get_chain_info()
+        .await
+        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
 
     // Build transfer transaction
     let mut transaction = TransactionBuilder::build_transfer(
-        src_keypair.public_key,        // fee_payer
+        src_keypair.public_key, // fee_payer
         EOA_PROGRAM,
         dst_pubkey,                    // to_account
         value,                         // amount

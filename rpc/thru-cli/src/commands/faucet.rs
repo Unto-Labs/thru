@@ -10,7 +10,7 @@ use crate::utils::{format_vm_error, validate_address_or_hex};
 #[cfg(test)]
 use hex;
 use thru_base::tn_tools::{KeyPair, Pubkey};
-use thru_base::txn_tools::{TransactionBuilder, FAUCET_PROGRAM, EOA_PROGRAM};
+use thru_base::txn_tools::{EOA_PROGRAM, FAUCET_PROGRAM, TransactionBuilder};
 use thru_client::{Client, ClientBuilder, TransactionDetails};
 
 /// Faucet program fee (0 for now)
@@ -101,9 +101,10 @@ async fn setup_transaction_context(
         CliError::TransactionSubmission(format!("Failed to get block height: {}", e))
     })?;
 
-    let chain_info = client.get_chain_info().await.map_err(|e| {
-        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
-    })?;
+    let chain_info = client
+        .get_chain_info()
+        .await
+        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
 
     Ok(TransactionContext {
         fee_payer_keypair,
@@ -204,30 +205,12 @@ pub async fn handle_faucet_command(
             account,
             amount,
             fee_payer,
-        } => {
-            deposit(
-                config,
-                &account,
-                amount,
-                fee_payer.as_deref(),
-                json_format,
-            )
-            .await
-        }
+        } => deposit(config, &account, amount, fee_payer.as_deref(), json_format).await,
         FaucetCommands::Withdraw {
             account,
             amount,
             fee_payer,
-        } => {
-            withdraw(
-                config,
-                &account,
-                amount,
-                fee_payer.as_deref(),
-                json_format,
-            )
-            .await
-        }
+        } => withdraw(config, &account, amount, fee_payer.as_deref(), json_format).await,
     }
 }
 
@@ -302,9 +285,7 @@ async fn deposit(
     if context.fee_payer_keypair.public_key != depositor_account_bytes {
         let error_msg = format!(
             "Depositor '{}' resolves to {} but the active fee payer is {}. They must match.",
-            account,
-            depositor_address_display,
-            context.fee_payer_keypair.address_string
+            account, depositor_address_display, context.fee_payer_keypair.address_string
         );
         if json_format {
             let error_response = serde_json::json!({

@@ -232,8 +232,10 @@ impl Default for Config {
                 .to_string(),
             token_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKqq".to_string(),
             wthru_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcH".to_string(),
-            name_service_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUF".to_string(),
-            thru_registrar_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYG".to_string(),
+            name_service_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUF"
+                .to_string(),
+            thru_registrar_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYG"
+                .to_string(),
             timeout_seconds: 30,
             max_retries: 3,
             auth_token: None,
@@ -284,13 +286,13 @@ impl Config {
     /// Migrate an old config by adding missing fields with default values
     async fn migrate_config(config_path: &PathBuf, config_content: &str) -> Result<Self, CliError> {
         // Parse existing config as a generic YAML value
-        let mut existing: serde_yaml::Value = serde_yaml::from_str(config_content)
-            .map_err(|e| ConfigError::InvalidFormat(e))?;
+        let mut existing: serde_yaml::Value =
+            serde_yaml::from_str(config_content).map_err(|e| ConfigError::InvalidFormat(e))?;
 
         // Get default config as YAML value
         let default_config = Config::default();
-        let default_yaml: serde_yaml::Value = serde_yaml::to_value(&default_config)
-            .map_err(|e| ConfigError::InvalidFormat(e))?;
+        let default_yaml: serde_yaml::Value =
+            serde_yaml::to_value(&default_config).map_err(|e| ConfigError::InvalidFormat(e))?;
 
         // Track what fields were added
         let mut added_fields: Vec<String> = Vec::new();
@@ -310,8 +312,8 @@ impl Config {
         }
 
         // Try to deserialize the merged config
-        let config: Config = serde_yaml::from_value(existing.clone())
-            .map_err(|e| ConfigError::InvalidFormat(e))?;
+        let config: Config =
+            serde_yaml::from_value(existing.clone()).map_err(|e| ConfigError::InvalidFormat(e))?;
 
         // Save the updated config
         let updated_content = Self::generate_config_template(&config);
@@ -319,7 +321,10 @@ impl Config {
 
         // Notify user about the migration
         if !added_fields.is_empty() {
-            eprintln!("Config migrated: added missing field(s): {}", added_fields.join(", "));
+            eprintln!(
+                "Config migrated: added missing field(s): {}",
+                added_fields.join(", ")
+            );
             eprintln!("Updated config saved to: {}", config_path.display());
         }
 
@@ -341,9 +346,8 @@ impl Config {
 
         // Validate all network URLs
         for (name, network) in &self.networks {
-            Url::parse(&network.url).map_err(|e| {
-                ConfigError::InvalidUrl(format!("network '{}': {}", name, e))
-            })?;
+            Url::parse(&network.url)
+                .map_err(|e| ConfigError::InvalidUrl(format!("network '{}': {}", name, e)))?;
         }
 
         // Validate default key exists

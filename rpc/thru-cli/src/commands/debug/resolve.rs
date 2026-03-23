@@ -26,10 +26,8 @@ use super::variables;
 // --- Trace parsing regexes ---
 
 static TRACE_RE: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(
-        r"\[(\d+)\]\[(\d+)\]\(([0-9a-fA-F]+)\)\s+([0-9a-fA-F]+):\s+([0-9a-fA-F]+)\s+(.*)",
-    )
-    .unwrap()
+    Regex::new(r"\[(\d+)\]\[(\d+)\]\(([0-9a-fA-F]+)\)\s+([0-9a-fA-F]+):\s+([0-9a-fA-F]+)\s+(.*)")
+        .unwrap()
 });
 
 static REG_DUMP_RE: LazyLock<Regex> =
@@ -67,7 +65,7 @@ pub async fn handle_resolve(
         _ => {
             return Err(CliError::Validation(
                 "either --response or --signature must be provided".to_string(),
-            ))
+            ));
         }
     };
 
@@ -166,12 +164,9 @@ impl<'data> DwarfResolver<'data> {
             message: format!("failed to load DWARF sections: {e}"),
         })?;
 
-        let ctx =
-            addr2line::Context::from_dwarf(dwarf).map_err(|e| CliError::Generic {
-                message: format!(
-                    "failed to build DWARF context (was the ELF built with -g?): {e}"
-                ),
-            })?;
+        let ctx = addr2line::Context::from_dwarf(dwarf).map_err(|e| CliError::Generic {
+            message: format!("failed to build DWARF context (was the ELF built with -g?): {e}"),
+        })?;
 
         // Extract the .text section virtual address — VM PCs are offsets from the
         // start of the text segment, but DWARF uses the ELF virtual addresses.
@@ -180,7 +175,12 @@ impl<'data> DwarfResolver<'data> {
             .map(|s| s.address())
             .unwrap_or(0);
 
-        Ok(Self { ctx, dwarf: dwarf_for_vars, debug_frame, text_base })
+        Ok(Self {
+            ctx,
+            dwarf: dwarf_for_vars,
+            debug_frame,
+            text_base,
+        })
     }
 
     fn dwarf(&self) -> &gimli::Dwarf<gimli::EndianSlice<'data, gimli::RunTimeEndian>> {
@@ -197,11 +197,14 @@ impl<'data> DwarfResolver<'data> {
     }
 
     fn resolve_pc(&self, pc: u64) -> ResolvedFrame {
-        self.resolve_frames(pc).into_iter().next().unwrap_or(ResolvedFrame {
-            function: None,
-            file: None,
-            line: None,
-        })
+        self.resolve_frames(pc)
+            .into_iter()
+            .next()
+            .unwrap_or(ResolvedFrame {
+                function: None,
+                file: None,
+                line: None,
+            })
     }
 
     fn resolve_frames(&self, pc: u64) -> Vec<ResolvedFrame> {
@@ -220,7 +223,11 @@ impl<'data> DwarfResolver<'data> {
                 Some(loc) => (loc.file.map(|s| s.to_string()), loc.line),
                 None => (None, None),
             };
-            result.push(ResolvedFrame { function, file, line });
+            result.push(ResolvedFrame {
+                function,
+                file,
+                line,
+            });
         }
         result
     }
@@ -231,11 +238,15 @@ impl<'data> DwarfResolver<'data> {
 fn de_u64<'de, D: serde::Deserializer<'de>>(d: D) -> Result<u64, D::Error> {
     let v = Value::deserialize(d)?;
     match &v {
-        Value::Number(n) => n.as_u64().ok_or_else(|| serde::de::Error::custom("invalid u64")),
+        Value::Number(n) => n
+            .as_u64()
+            .ok_or_else(|| serde::de::Error::custom("invalid u64")),
         Value::String(s) if s.is_empty() => Ok(0),
         Value::String(s) => s.parse().map_err(serde::de::Error::custom),
         Value::Null => Ok(0),
-        _ => Err(serde::de::Error::custom("expected number or string for u64")),
+        _ => Err(serde::de::Error::custom(
+            "expected number or string for u64",
+        )),
     }
 }
 
@@ -244,9 +255,9 @@ fn de_vec_u64<'de, D: serde::Deserializer<'de>>(d: D) -> Result<Vec<u64>, D::Err
     items
         .into_iter()
         .map(|v| match &v {
-            Value::Number(n) => {
-                n.as_u64().ok_or_else(|| serde::de::Error::custom("invalid u64"))
-            }
+            Value::Number(n) => n
+                .as_u64()
+                .ok_or_else(|| serde::de::Error::custom("invalid u64")),
             Value::String(s) => s.parse().map_err(serde::de::Error::custom),
             _ => Err(serde::de::Error::custom("expected number or string")),
         })
@@ -300,11 +311,13 @@ fn parse_response_json(text: &str) -> Result<Response, CliError> {
             }
         };
         let get_str = |key: &str| -> String {
-            obj.get(key).and_then(|v| v.as_str()).unwrap_or("").to_string()
+            obj.get(key)
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string()
         };
-        let get_bool = |key: &str| -> bool {
-            obj.get(key).and_then(|v| v.as_bool()).unwrap_or(false)
-        };
+        let get_bool =
+            |key: &str| -> bool { obj.get(key).and_then(|v| v.as_bool()).unwrap_or(false) };
         let fault_code = match get_u64("fault_code") {
             0 => FaultCode::None,
             1 => FaultCode::Revert,
@@ -350,9 +363,7 @@ fn parse_response_json(text: &str) -> Result<Response, CliError> {
                             .and_then(|v| v.as_str())
                             .filter(|s| !s.is_empty())
                             .and_then(|hex| hex::decode(hex).ok())
-                            .map(|bytes| {
-                                base64::engine::general_purpose::STANDARD.encode(&bytes)
-                            });
+                            .map(|bytes| base64::engine::general_purpose::STANDARD.encode(&bytes));
                         Some(CallFrame {
                             program_acc_idx: cf
                                 .get("program_acc_idx")
@@ -432,22 +443,31 @@ impl Response {
                     registers: d.registers.clone(),
                     call_depth: d.call_depth,
                     max_call_depth: d.max_call_depth,
-                    call_frames: d.call_frames.iter().map(|cf| {
-                        let stack_window = if cf.stack_window.is_empty() {
-                            None
-                        } else {
-                            Some(base64::engine::general_purpose::STANDARD.encode(&cf.stack_window))
-                        };
-                        CallFrame {
-                            program_acc_idx: cf.program_acc_idx,
-                            program_counter: cf.program_counter,
-                            stack_pointer: cf.stack_pointer,
-                            saved_registers: cf.saved_registers.clone(),
-                            stack_window,
-                            stack_window_base: cf.stack_window_base,
-                        }
-                    }).collect(),
-                    error_program_acc_idx: r.transaction.as_ref()
+                    call_frames: d
+                        .call_frames
+                        .iter()
+                        .map(|cf| {
+                            let stack_window = if cf.stack_window.is_empty() {
+                                None
+                            } else {
+                                Some(
+                                    base64::engine::general_purpose::STANDARD
+                                        .encode(&cf.stack_window),
+                                )
+                            };
+                            CallFrame {
+                                program_acc_idx: cf.program_acc_idx,
+                                program_counter: cf.program_counter,
+                                stack_pointer: cf.stack_pointer,
+                                saved_registers: cf.saved_registers.clone(),
+                                stack_window,
+                                stack_window_base: cf.stack_window_base,
+                            }
+                        })
+                        .collect(),
+                    error_program_acc_idx: r
+                        .transaction
+                        .as_ref()
                         .and_then(|t| t.execution_result.as_ref())
                         .map(|er| er.error_program_acc_idx)
                         .filter(|&idx| idx != 0),
@@ -530,7 +550,9 @@ impl<'de> serde::Deserialize<'de> for FaultCode {
                 "VM_FAULT_REVERT" | "1" => Ok(Self::Revert),
                 "VM_FAULT_SIGCU" | "2" => Ok(Self::Sigcu),
                 "VM_FAULT_SIGSU" | "3" => Ok(Self::Sigsu),
-                other => Err(serde::de::Error::custom(format!("unknown fault code: {other}"))),
+                other => Err(serde::de::Error::custom(format!(
+                    "unknown fault code: {other}"
+                ))),
             },
             Value::Number(n) => match n.as_u64() {
                 Some(0) => Ok(Self::None),
@@ -1048,12 +1070,7 @@ fn print_source_context(ctx: &Option<SourceContext>) {
             );
             println!("  {}", marker.red().bold());
         } else {
-            println!(
-                "  {:>width$} \u{2502} {}",
-                line_no,
-                text,
-                width = width + 2
-            );
+            println!("  {:>width$} \u{2502} {}", line_no, text, width = width + 2);
         }
     }
     println!();

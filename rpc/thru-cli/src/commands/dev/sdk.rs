@@ -1,6 +1,6 @@
 //! SDK management commands
 
-use anyhow::{anyhow, Result};
+use anyhow::{Result, anyhow};
 use colored::Colorize;
 use flate2::read::GzDecoder;
 use std::path::{Path, PathBuf};
@@ -130,7 +130,12 @@ async fn extract_sdk_tarball(archive_path: &Path, dest_dir: &Path) -> Result<()>
 }
 
 /// Download SDK from GitHub releases
-async fn download_sdk(version: &str, language: &str, dest_path: &Path, repo: Option<&str>) -> Result<()> {
+async fn download_sdk(
+    version: &str,
+    language: &str,
+    dest_path: &Path,
+    repo: Option<&str>,
+) -> Result<()> {
     /* Construct the asset name */
     let asset_name = format!("thru-program-sdk-{}-{}.tar.gz", language, version);
 
@@ -234,17 +239,20 @@ pub async fn install_sdk(
     if !json_format {
         println!(
             "{}",
-            format!("Installing {} SDK version: {}", language.to_uppercase(), version_to_install)
-                .cyan()
+            format!(
+                "Installing {} SDK version: {}",
+                language.to_uppercase(),
+                version_to_install
+            )
+            .cyan()
         );
     }
 
     /* Get installation path */
-    let install_path = get_sdk_path(config, language, custom_path).map_err(|e| {
-        CliError::Generic {
+    let install_path =
+        get_sdk_path(config, language, custom_path).map_err(|e| CliError::Generic {
             message: format!("Failed to determine installation path: {}", e),
-        }
-    })?;
+        })?;
 
     if !json_format {
         println!(
@@ -411,8 +419,12 @@ pub async fn update_sdk(
             } else {
                 println!(
                     "{}",
-                    format!("{} SDK is already up to date ({})", language.to_uppercase(), current)
-                        .green()
+                    format!(
+                        "{} SDK is already up to date ({})",
+                        language.to_uppercase(),
+                        current
+                    )
+                    .green()
                 );
             }
             return Ok(());
@@ -428,11 +440,10 @@ pub async fn update_sdk(
     }
 
     /* Backup existing SDK if it exists */
-    let install_path = get_sdk_path(config, language, custom_path).map_err(|e| {
-        CliError::Generic {
+    let install_path =
+        get_sdk_path(config, language, custom_path).map_err(|e| CliError::Generic {
             message: format!("Failed to determine installation path: {}", e),
-        }
-    })?;
+        })?;
 
     let backup_path = install_path.with_extension("backup");
 
@@ -457,7 +468,14 @@ pub async fn update_sdk(
     }
 
     /* Install new version */
-    let result = install_sdk(config, language, Some(&latest_version), custom_path, json_format).await;
+    let result = install_sdk(
+        config,
+        language,
+        Some(&latest_version),
+        custom_path,
+        json_format,
+    )
+    .await;
 
     match result {
         Ok(_) => {
@@ -507,11 +525,10 @@ pub async fn uninstall_sdk(
 ) -> Result<(), CliError> {
     validate_language(language)?;
 
-    let install_path = get_sdk_path(config, language, custom_path).map_err(|e| {
-        CliError::Generic {
+    let install_path =
+        get_sdk_path(config, language, custom_path).map_err(|e| CliError::Generic {
             message: format!("Failed to determine installation path: {}", e),
-        }
-    })?;
+        })?;
 
     if !install_path.exists() {
         if json_format {
@@ -593,11 +610,10 @@ pub async fn get_sdk_path_command(
 ) -> Result<(), CliError> {
     validate_language(language)?;
 
-    let install_path = get_sdk_path(config, language, custom_path).map_err(|e| {
-        CliError::Generic {
+    let install_path =
+        get_sdk_path(config, language, custom_path).map_err(|e| CliError::Generic {
             message: format!("Failed to determine installation path: {}", e),
-        }
-    })?;
+        })?;
 
     let exists = install_path.exists();
 

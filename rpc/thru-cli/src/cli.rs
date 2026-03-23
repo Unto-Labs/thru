@@ -1,6 +1,7 @@
 //! CLI argument parsing and command definitions
 
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
+use std::path::PathBuf;
 
 /// Parse and validate chunk size (1024-31000 bytes)
 fn parse_chunk_size(s: &str) -> Result<usize, String> {
@@ -374,6 +375,26 @@ pub enum ProgramCommands {
         ephemeral: bool,
     },
 
+    /// Convert a UTF-8 seed string into zero-padded 32-byte hex
+    SeedToHex {
+        /// Seed string (UTF-8, maximum 32 bytes)
+        seed: String,
+    },
+
+    /// Derive the managed program account address from a seed
+    DeriveProgramAccount {
+        /// Manager program public key (optional, uses config default if not specified)
+        #[arg(long)]
+        manager: Option<String>,
+
+        /// Seed for account derivation (UTF-8 string, max 32 bytes)
+        seed: String,
+
+        /// Ephemeral flag
+        #[arg(long)]
+        ephemeral: bool,
+    },
+
     /// Check status of program and related accounts
     Status {
         /// Manager program public key (optional, uses config default if not specified)
@@ -392,250 +413,324 @@ pub enum ProgramCommands {
 /// ABI-related subcommands
 #[derive(Subcommand)]
 pub enum AbiCommands {
-    /// Create an official ABI account for a managed program
+    /// On-chain ABI account management commands
+    #[command(name = "account")]
+    Account {
+        #[command(subcommand)]
+        subcommand: AbiAccountCommands,
+    },
+
+    /// Generate code from ABI type definitions
+    Codegen {
+        /// Input YAML files containing type definitions
+        #[arg(short = 'f', long = "files", value_name = "FILE", required = true)]
+        files: Vec<PathBuf>,
+
+        /// Include directories for imported type files
+        #[arg(short = 'i', long = "include-dir", value_name = "DIR")]
+        include_dirs: Vec<PathBuf>,
+
+        /// Target language for code generation
+        #[arg(short = 'l', long = "language", value_enum)]
+        language: AbiLanguage,
+
+        /// Output directory for generated code
+        #[arg(
+            short = 'o',
+            long = "output",
+            value_name = "DIR",
+            default_value = "generated"
+        )]
+        output_dir: PathBuf,
+
+        /// Enable verbose output
+        #[arg(short = 'v', long = "verbose")]
+        verbose: bool,
+    },
+
+    /// Analyze ABI type definitions and show detailed type information
+    Analyze {
+        /// Input YAML files containing type definitions
+        #[arg(short = 'f', long = "files", value_name = "FILE", required = true)]
+        files: Vec<PathBuf>,
+
+        /// Include directories for imported type files
+        #[arg(short = 'i', long = "include-dir", value_name = "DIR")]
+        include_dirs: Vec<PathBuf>,
+
+        /// Print the shared layout IR after analysis
+        #[arg(long = "print-ir")]
+        print_ir: bool,
+
+        /// Format to use when printing the shared layout IR
+        #[arg(long = "ir-format", value_enum, default_value = "json")]
+        ir_format: AbiIrFormat,
+
+        /// Print the generated legacy + IR footprint helpers for a specific type
+        #[arg(long = "print-footprint", value_name = "TYPE")]
+        print_footprint: Option<String>,
+
+        /// Print the generated legacy + IR validate helpers for a specific type
+        #[arg(long = "print-validate", value_name = "TYPE")]
+        print_validate: Option<String>,
+    },
+
+    /// Parse ABI binary data and print JSON reflection results
+    Reflect {
+        /// ABI file(s) to load
+        #[arg(short = 'f', long = "abi-file", required = true)]
+        abi_files: Vec<PathBuf>,
+
+        /// Include directories for resolving imports
+        #[arg(short = 'i', long = "include-dir")]
+        include_dirs: Vec<PathBuf>,
+
+        /// Type name to parse
+        #[arg(short = 't', long = "type-name", required = true)]
+        type_name: String,
+
+        /// Binary data file to parse
+        #[arg(short = 'd', long = "data-file", required = true)]
+        data_file: PathBuf,
+
+        /// Pretty print JSON output
+        #[arg(short = 'p', long = "pretty")]
+        pretty: bool,
+
+        /// Show only values (no type information)
+        #[arg(
+            long = "values-only",
+            conflicts_with_all = ["validate_only", "include_byte_offsets"]
+        )]
+        values_only: bool,
+
+        /// Only validate buffer without decoding
+        #[arg(
+            long = "validate-only",
+            conflicts_with_all = ["values_only", "include_byte_offsets"]
+        )]
+        validate_only: bool,
+
+        /// Print dynamic parameters inferred from the buffer
+        #[arg(long = "show-params")]
+        show_params: bool,
+
+        /// Include byte offset information in the output
+        #[arg(
+            long = "include-byte-offsets",
+            conflicts_with_all = ["validate_only", "values_only"]
+        )]
+        include_byte_offsets: bool,
+    },
+
+    /// Flatten an ABI file by resolving all imports
+    Flatten {
+        /// Input ABI file
+        #[arg(short = 'f', long = "file", required = true)]
+        file: PathBuf,
+
+        /// Include directories for resolving imports
+        #[arg(short = 'i', long = "include-dir")]
+        include_dirs: Vec<PathBuf>,
+
+        /// Output file path
+        #[arg(short = 'o', long = "output", required = true)]
+        output: PathBuf,
+
+        /// Verbose output
+        #[arg(short = 'v', long = "verbose")]
+        verbose: bool,
+    },
+
+    /// Prepare an ABI file for on-chain publishing
+    ///
+    /// This command inlines all types from local imports, removes local import
+    /// declarations, and ensures remaining imports (if any) are on-chain imports
+    /// from the same network.
+    #[command(name = "prep-for-publish")]
+    PrepForPublish {
+        /// Input ABI file
+        #[arg(short = 'f', long = "file", required = true)]
+        file: PathBuf,
+
+        /// Include directories for resolving local imports
+        #[arg(short = 'i', long = "include-dir")]
+        include_dirs: Vec<PathBuf>,
+
+        /// Target network for validation (e.g., "mainnet", "testnet")
+        #[arg(short = 'n', long = "target-network", required = true)]
+        target_network: String,
+
+        /// Output file path
+        #[arg(short = 'o', long = "output", required = true)]
+        output: PathBuf,
+
+        /// Verbose output
+        #[arg(short = 'v', long = "verbose")]
+        verbose: bool,
+    },
+
+    /// Create a dependency manifest for WASM consumption
+    ///
+    /// This command resolves all imports (local and remote) and outputs a JSON
+    /// manifest mapping package names to their resolved ABI YAML content.
+    Bundle {
+        /// Input ABI file
+        #[arg(short = 'f', long = "file", required = true)]
+        file: PathBuf,
+
+        /// Include directories for resolving imports
+        #[arg(short = 'i', long = "include-dir")]
+        include_dirs: Vec<PathBuf>,
+
+        /// Output manifest file path (JSON)
+        #[arg(short = 'o', long = "output", required = true)]
+        output: PathBuf,
+
+        /// Verbose output
+        #[arg(short = 'v', long = "verbose")]
+        verbose: bool,
+    },
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
+pub enum AbiAccountType {
+    /// ABI account for a managed program
+    Program,
+    /// ABI account for an unmanaged target program
+    #[value(name = "third-party")]
+    ThirdParty,
+    /// ABI account not associated with a program
+    Standalone,
+}
+
+/// On-chain ABI account subcommands
+#[derive(Subcommand)]
+pub enum AbiAccountCommands {
+    /// Create an ABI account
     Create {
-        /// Program type (ephemeral matches the managed program)
+        /// Program type (ephemeral matches the ABI account target)
         #[arg(long)]
         ephemeral: bool,
 
-        /// Seed for the managed program meta account
-        seed: String,
+        /// ABI account type
+        #[arg(long = "account-type", value_enum, default_value = "program")]
+        account_type: AbiAccountType,
+
+        /// Target program account public key (required for `third-party`)
+        #[arg(long = "target-program")]
+        target_program: Option<String>,
 
         /// Fee payer account (optional, defaults to config default)
         #[arg(long = "fee-payer")]
         fee_payer: Option<String>,
 
-        /// Authority account name from config (optional, defaults to 'default')
-        #[arg(long)]
+        /// Authority account name from config (`program` only, accepted as alias for `publisher`)
+        #[arg(long, conflicts_with = "publisher")]
         authority: Option<String>,
 
-        /// ABI definition file to upload
-        abi_file: String,
-    },
+        /// Publisher account name from config (`third-party` and `standalone` only)
+        #[arg(long, conflicts_with = "authority")]
+        publisher: Option<String>,
 
-    /// Create a third-party ABI account for a target program
-    CreateThirdParty {
-        /// Program type (ephemeral flag for ABI accounts)
-        #[arg(long)]
-        ephemeral: bool,
-
-        /// Target program account public key (Thru address)
-        target_program: String,
-
-        /// 32-byte hex seed for the third-party ABI meta
+        /// Managed program seed, third-party 32-byte hex seed, or standalone seed string
         seed: String,
 
-        /// Fee payer account (optional, defaults to config default)
-        #[arg(long = "fee-payer")]
-        fee_payer: Option<String>,
-
-        /// Authority account name from config (optional, defaults to 'default')
-        #[arg(long)]
-        authority: Option<String>,
-
         /// ABI definition file to upload
         abi_file: String,
     },
 
-    /// Create a standalone ABI account (not associated with any program)
-    CreateStandalone {
-        /// Program type (ephemeral flag for ABI accounts)
-        #[arg(long)]
-        ephemeral: bool,
-
-        /// Seed string used to derive the standalone ABI meta seed
-        seed: String,
-
-        /// Fee payer account (optional, defaults to config default)
-        #[arg(long = "fee-payer")]
-        fee_payer: Option<String>,
-
-        /// Authority account name from config (optional, defaults to 'default')
-        #[arg(long)]
-        authority: Option<String>,
-
-        /// ABI definition file to upload
-        abi_file: String,
-    },
-
-    /// Upgrade an existing official ABI account
+    /// Upgrade an existing ABI account
     Upgrade {
-        /// Program type (ephemeral matches the managed program)
+        /// Program type (ephemeral matches the ABI account target)
         #[arg(long)]
         ephemeral: bool,
 
-        /// Seed for the managed program meta account
-        seed: String,
+        /// ABI account type
+        #[arg(long = "account-type", value_enum, default_value = "program")]
+        account_type: AbiAccountType,
+
+        /// Target program account public key (required for `third-party`)
+        #[arg(long = "target-program")]
+        target_program: Option<String>,
 
         /// Fee payer account (optional, defaults to config default)
         #[arg(long = "fee-payer")]
         fee_payer: Option<String>,
 
-        /// Authority account name from config (optional, defaults to 'default')
-        #[arg(long)]
+        /// Authority account name from config (`program` only, accepted as alias for `publisher`)
+        #[arg(long, conflicts_with = "publisher")]
         authority: Option<String>,
 
-        /// ABI definition file to upload
-        abi_file: String,
-    },
+        /// Publisher account name from config (`third-party` and `standalone` only)
+        #[arg(long, conflicts_with = "authority")]
+        publisher: Option<String>,
 
-    /// Upgrade an existing third-party ABI account
-    UpgradeThirdParty {
-        /// Program type (ephemeral flag for ABI accounts)
-        #[arg(long)]
-        ephemeral: bool,
-
-        /// Target program account public key (Thru address)
-        target_program: String,
-
-        /// 32-byte hex seed for the third-party ABI meta
+        /// Managed program seed, third-party 32-byte hex seed, or standalone seed string
         seed: String,
 
-        /// Fee payer account (optional, defaults to config default)
-        #[arg(long = "fee-payer")]
-        fee_payer: Option<String>,
-
-        /// Authority account name from config (optional, defaults to 'default')
-        #[arg(long)]
-        authority: Option<String>,
-
         /// ABI definition file to upload
         abi_file: String,
     },
 
-    /// Upgrade an existing standalone ABI account
-    UpgradeStandalone {
-        /// Program type (ephemeral flag for ABI accounts)
-        #[arg(long)]
-        ephemeral: bool,
-
-        /// Seed string used to derive the standalone ABI meta seed
-        seed: String,
-
-        /// Fee payer account (optional, defaults to config default)
-        #[arg(long = "fee-payer")]
-        fee_payer: Option<String>,
-
-        /// Authority account name from config (optional, defaults to 'default')
-        #[arg(long)]
-        authority: Option<String>,
-
-        /// ABI definition file to upload
-        abi_file: String,
-    },
-
-    /// Finalize an official ABI account so it becomes immutable
+    /// Finalize an ABI account so it becomes immutable
     Finalize {
-        /// Program type (ephemeral matches the managed program)
+        /// Program type (ephemeral matches the ABI account target)
         #[arg(long)]
         ephemeral: bool,
 
-        /// Seed for the managed program meta account
-        seed: String,
+        /// ABI account type
+        #[arg(long = "account-type", value_enum, default_value = "program")]
+        account_type: AbiAccountType,
+
+        /// Target program account public key (required for `third-party`)
+        #[arg(long = "target-program")]
+        target_program: Option<String>,
 
         /// Fee payer account (optional, defaults to config default)
         #[arg(long = "fee-payer")]
         fee_payer: Option<String>,
 
-        /// Authority account name from config (optional, defaults to 'default')
-        #[arg(long)]
+        /// Authority account name from config (`program` only, accepted as alias for `publisher`)
+        #[arg(long, conflicts_with = "publisher")]
         authority: Option<String>,
-    },
 
-    /// Finalize a third-party ABI account so it becomes immutable
-    FinalizeThirdParty {
-        /// Program type (ephemeral flag for ABI accounts)
-        #[arg(long)]
-        ephemeral: bool,
+        /// Publisher account name from config (`third-party` and `standalone` only)
+        #[arg(long, conflicts_with = "authority")]
+        publisher: Option<String>,
 
-        /// Target program account public key (Thru address)
-        target_program: String,
-
-        /// 32-byte hex seed for the third-party ABI meta
+        /// Managed program seed, third-party 32-byte hex seed, or standalone seed string
         seed: String,
-
-        /// Fee payer account (optional, defaults to config default)
-        #[arg(long = "fee-payer")]
-        fee_payer: Option<String>,
-
-        /// Authority account name from config (optional, defaults to 'default')
-        #[arg(long)]
-        authority: Option<String>,
     },
 
-    /// Finalize a standalone ABI account so it becomes immutable
-    FinalizeStandalone {
-        /// Program type (ephemeral flag for ABI accounts)
-        #[arg(long)]
-        ephemeral: bool,
-
-        /// Seed string used to derive the standalone ABI meta seed
-        seed: String,
-
-        /// Fee payer account (optional, defaults to config default)
-        #[arg(long = "fee-payer")]
-        fee_payer: Option<String>,
-
-        /// Authority account name from config (optional, defaults to 'default')
-        #[arg(long)]
-        authority: Option<String>,
-    },
-
-    /// Close an official ABI account and reclaim its lamports
+    /// Close an ABI account and reclaim its balance
     Close {
-        /// Program type (ephemeral matches the managed program)
+        /// Program type (ephemeral matches the ABI account target)
         #[arg(long)]
         ephemeral: bool,
 
-        /// Seed for the managed program meta account
-        seed: String,
+        /// ABI account type
+        #[arg(long = "account-type", value_enum, default_value = "program")]
+        account_type: AbiAccountType,
+
+        /// Target program account public key (required for `third-party`)
+        #[arg(long = "target-program")]
+        target_program: Option<String>,
 
         /// Fee payer account (optional, defaults to config default)
         #[arg(long = "fee-payer")]
         fee_payer: Option<String>,
 
-        /// Authority account name from config (optional, defaults to 'default')
-        #[arg(long)]
+        /// Authority account name from config (`program` only, accepted as alias for `publisher`)
+        #[arg(long, conflicts_with = "publisher")]
         authority: Option<String>,
-    },
 
-    /// Close a third-party ABI account and reclaim its lamports
-    CloseThirdParty {
-        /// Program type (ephemeral flag for ABI accounts)
-        #[arg(long)]
-        ephemeral: bool,
+        /// Publisher account name from config (`third-party` and `standalone` only)
+        #[arg(long, conflicts_with = "authority")]
+        publisher: Option<String>,
 
-        /// Target program account public key (Thru address)
-        target_program: String,
-
-        /// 32-byte hex seed for the third-party ABI meta
+        /// Managed program seed, third-party 32-byte hex seed, or standalone seed string
         seed: String,
-
-        /// Fee payer account (optional, defaults to config default)
-        #[arg(long = "fee-payer")]
-        fee_payer: Option<String>,
-
-        /// Authority account name from config (optional, defaults to 'default')
-        #[arg(long)]
-        authority: Option<String>,
-    },
-
-    /// Close a standalone ABI account and reclaim its lamports
-    CloseStandalone {
-        /// Program type (ephemeral flag for ABI accounts)
-        #[arg(long)]
-        ephemeral: bool,
-
-        /// Seed string used to derive the standalone ABI meta seed
-        seed: String,
-
-        /// Fee payer account (optional, defaults to config default)
-        #[arg(long = "fee-payer")]
-        fee_payer: Option<String>,
-
-        /// Authority account name from config (optional, defaults to 'default')
-        #[arg(long)]
-        authority: Option<String>,
     },
 
     /// Inspect an ABI account's metadata and optionally dump its YAML contents
@@ -643,14 +738,31 @@ pub enum AbiCommands {
         /// ABI account public key (Thru address)
         abi_account: String,
 
-        /// Whether to include ABI YAML contents in the CLI output (Y/N, defaults to N)
-        #[arg(long = "data", default_value = "N")]
-        data: String,
+        /// Include ABI YAML contents in the CLI output
+        #[arg(long = "include-data", alias = "data")]
+        include_data: bool,
 
         /// Optional file path to write the ABI YAML contents
         #[arg(long = "out")]
         out: Option<String>,
     },
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
+pub enum AbiLanguage {
+    /// Generate C code (.h and .c files)
+    C,
+    /// Generate Rust code (.rs files)
+    Rust,
+    /// Generate TypeScript code (.ts files)
+    #[value(name = "typescript")]
+    TypeScript,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
+pub enum AbiIrFormat {
+    Json,
+    Protobuf,
 }
 
 /// Uploader-related subcommands
@@ -721,6 +833,10 @@ pub enum KeysCommands {
 
     /// Generate a new random key
     Generate {
+        /// Overwrite existing key
+        #[arg(long)]
+        overwrite: bool,
+
         /// Key name for the new key
         name: String,
     },
@@ -1888,4 +2004,345 @@ pub enum DebugCommands {
         #[arg(long, default_value = "5")]
         context: u32,
     },
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_abi_codegen_command() {
+        let cli = Cli::try_parse_from([
+            "thru-cli",
+            "abi",
+            "codegen",
+            "-f",
+            "input.abi.yaml",
+            "-l",
+            "rust",
+        ])
+        .expect("codegen command should parse");
+
+        match cli.command {
+            Commands::Abi {
+                subcommand:
+                    AbiCommands::Codegen {
+                        files,
+                        include_dirs,
+                        language,
+                        output_dir,
+                        verbose,
+                    },
+            } => {
+                assert_eq!(files, vec![PathBuf::from("input.abi.yaml")]);
+                assert!(include_dirs.is_empty());
+                assert_eq!(language, AbiLanguage::Rust);
+                assert_eq!(output_dir, PathBuf::from("generated"));
+                assert!(!verbose);
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn parses_abi_account_create_command() {
+        let cli = Cli::try_parse_from([
+            "thru-cli",
+            "abi",
+            "account",
+            "create",
+            "seed-1",
+            "program.abi.yaml",
+        ])
+        .expect("abi account create should parse");
+
+        match cli.command {
+            Commands::Abi {
+                subcommand:
+                    AbiCommands::Account {
+                        subcommand:
+                            AbiAccountCommands::Create {
+                                ephemeral,
+                                account_type,
+                                target_program,
+                                seed,
+                                fee_payer,
+                                authority,
+                                publisher,
+                                abi_file,
+                            },
+                    },
+            } => {
+                assert!(!ephemeral);
+                assert_eq!(account_type, AbiAccountType::Program);
+                assert_eq!(target_program, None);
+                assert_eq!(seed, "seed-1");
+                assert_eq!(fee_payer, None);
+                assert_eq!(authority, None);
+                assert_eq!(publisher, None);
+                assert_eq!(abi_file, "program.abi.yaml");
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn parses_abi_account_get_include_data_flag() {
+        let cli = Cli::try_parse_from([
+            "thru-cli",
+            "abi",
+            "account",
+            "get",
+            "ta123",
+            "--include-data",
+        ])
+        .expect("abi account get should parse");
+
+        match cli.command {
+            Commands::Abi {
+                subcommand:
+                    AbiCommands::Account {
+                        subcommand:
+                            AbiAccountCommands::Get {
+                                abi_account,
+                                include_data,
+                                out,
+                            },
+                    },
+            } => {
+                assert_eq!(abi_account, "ta123");
+                assert!(include_data);
+                assert_eq!(out, None);
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn parses_abi_account_upgrade_third_party_command() {
+        let cli = Cli::try_parse_from([
+            "thru-cli",
+            "abi",
+            "account",
+            "upgrade",
+            "--account-type",
+            "third-party",
+            "--target-program",
+            "ta_target",
+            "--publisher",
+            "alice",
+            "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
+            "program.abi.yaml",
+        ])
+        .expect("third-party abi account upgrade should parse");
+
+        match cli.command {
+            Commands::Abi {
+                subcommand:
+                    AbiCommands::Account {
+                        subcommand:
+                            AbiAccountCommands::Upgrade {
+                                account_type,
+                                publisher,
+                                authority,
+                                target_program,
+                                seed,
+                                abi_file,
+                                ..
+                            },
+                    },
+            } => {
+                assert_eq!(account_type, AbiAccountType::ThirdParty);
+                assert_eq!(publisher.as_deref(), Some("alice"));
+                assert_eq!(authority, None);
+                assert_eq!(target_program.as_deref(), Some("ta_target"));
+                assert_eq!(
+                    seed,
+                    "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+                );
+                assert_eq!(abi_file, "program.abi.yaml");
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn parses_abi_account_finalize_standalone_authority_alias() {
+        let cli = Cli::try_parse_from([
+            "thru-cli",
+            "abi",
+            "account",
+            "finalize",
+            "--account-type",
+            "standalone",
+            "--authority",
+            "alice",
+            "my-abi-seed",
+        ])
+        .expect("standalone abi account finalize should parse authority alias");
+
+        match cli.command {
+            Commands::Abi {
+                subcommand:
+                    AbiCommands::Account {
+                        subcommand:
+                            AbiAccountCommands::Finalize {
+                                account_type,
+                                target_program,
+                                authority,
+                                publisher,
+                                seed,
+                                ..
+                            },
+                    },
+            } => {
+                assert_eq!(account_type, AbiAccountType::Standalone);
+                assert_eq!(target_program, None);
+                assert_eq!(authority.as_deref(), Some("alice"));
+                assert_eq!(publisher, None);
+                assert_eq!(seed, "my-abi-seed");
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn parses_abi_account_close_command() {
+        let cli = Cli::try_parse_from([
+            "thru-cli",
+            "abi",
+            "account",
+            "close",
+            "--fee-payer",
+            "bob",
+            "--authority",
+            "alice",
+            "seed-1",
+        ])
+        .expect("abi account close should parse");
+
+        match cli.command {
+            Commands::Abi {
+                subcommand:
+                    AbiCommands::Account {
+                        subcommand:
+                            AbiAccountCommands::Close {
+                                account_type,
+                                target_program,
+                                fee_payer,
+                                authority,
+                                publisher,
+                                seed,
+                                ..
+                            },
+                    },
+            } => {
+                assert_eq!(account_type, AbiAccountType::Program);
+                assert_eq!(target_program, None);
+                assert_eq!(fee_payer.as_deref(), Some("bob"));
+                assert_eq!(authority.as_deref(), Some("alice"));
+                assert_eq!(publisher, None);
+                assert_eq!(seed, "seed-1");
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn rejects_conflicting_abi_account_actor_flags() {
+        let result = Cli::try_parse_from([
+            "thru-cli",
+            "abi",
+            "account",
+            "create",
+            "--account-type",
+            "standalone",
+            "--authority",
+            "alice",
+            "--publisher",
+            "bob",
+            "my-abi-seed",
+            "program.abi.yaml",
+        ]);
+
+        assert!(
+            result.is_err(),
+            "conflicting abi account actor flags should fail"
+        );
+    }
+
+    #[test]
+    fn rejects_conflicting_abi_reflect_flags() {
+        let result = Cli::try_parse_from([
+            "thru-cli",
+            "abi",
+            "reflect",
+            "-f",
+            "input.abi.yaml",
+            "-t",
+            "MyType",
+            "-d",
+            "data.bin",
+            "--validate-only",
+            "--values-only",
+        ]);
+
+        assert!(result.is_err(), "conflicting reflect flags should fail");
+    }
+
+    #[test]
+    fn abi_reflect_short_v_is_no_longer_values_only() {
+        let result = Cli::try_parse_from([
+            "thru-cli",
+            "abi",
+            "reflect",
+            "-f",
+            "input.abi.yaml",
+            "-t",
+            "MyType",
+            "-d",
+            "data.bin",
+            "-v",
+        ]);
+
+        assert!(
+            result.is_err(),
+            "short -v should no longer parse for abi reflect"
+        );
+    }
+
+    #[test]
+    fn parses_abi_prep_for_publish_command() {
+        let cli = Cli::try_parse_from([
+            "thru-cli",
+            "abi",
+            "prep-for-publish",
+            "-f",
+            "root.abi.yaml",
+            "--target-network",
+            "mainnet",
+            "-o",
+            "publish.abi.yaml",
+        ])
+        .expect("prep-for-publish command should parse");
+        match cli.command {
+            Commands::Abi {
+                subcommand:
+                    AbiCommands::PrepForPublish {
+                        file,
+                        include_dirs,
+                        target_network,
+                        output,
+                        verbose,
+                    },
+            } => {
+                assert_eq!(file, PathBuf::from("root.abi.yaml"));
+                assert!(include_dirs.is_empty());
+                assert_eq!(target_network, "mainnet");
+                assert_eq!(output, PathBuf::from("publish.abi.yaml"));
+                assert!(!verbose);
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
 }

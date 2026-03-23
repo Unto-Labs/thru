@@ -44,7 +44,7 @@ export function App() {
   return (
     <ThruProvider
       config={{
-        iframeUrl: 'https://thru-wallet.up.railway.app/embedded',
+        iframeUrl: 'https://wallet.thru.org/embedded',
         rpcUrl: 'https://grpc-web.alphanet.thruput.org',
       }}
     >

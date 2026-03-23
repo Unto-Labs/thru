@@ -22,7 +22,7 @@ importers:
     dependencies:
       '@thru/design-system':
         specifier: workspace:*
-        version: link:../packages/design-system
+        version: link:../packages-private/design-system
       '@thru/passkey':
         specifier: workspace:*
         version: link:../packages/passkey
@@ -89,7 +89,7 @@ importers:
         version: link:../packages/abi
       '@thru/design-system':
         specifier: workspace:*
-        version: link:../packages/design-system
+        version: link:../packages-private/design-system
       '@thru/helpers':
         specifier: workspace:*
         version: link:../packages/helpers
@@ -162,7 +162,7 @@ importers:
         version: 1.8.0
       '@thru/design-system':
         specifier: workspace:*
-        version: link:../packages/design-system
+        version: link:../packages-private/design-system
       '@thru/react-sdk':
         specifier: workspace:*
         version: link:../packages/react-sdk
@@ -219,25 +219,6 @@ importers:
       '@thru/thru-sdk':
         specifier: workspace:*
         version: link:../thru-sdk
-      '@types/node':
-        specifier: ^24.10.1
-        version: 24.10.2
-      tsup:
-        specifier: ^8.5.0
-        version: 8.5.1(jiti@2.6.1)(postcss@8.5.6)(tsx@4.21.0)(typescript@5.9.3)(yaml@2.8.2)
-      typescript:
-        specifier: ^5.9.3
-        version: 5.9.3
-      vitest:
-        specifier: ^3.2.4
-        version: 3.2.4(@types/node@24.10.2)(jiti@2.6.1)(jsdom@27.3.0(postcss@8.5.6))(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
-
-  packages/abi-utils:
-    dependencies:
-      '@thru/helpers':
-        specifier: workspace:*
-        version: link:../helpers
-    devDependencies:
       '@types/node':
         specifier: ^24.10.1
         version: 24.10.2
@@ -309,7 +290,7 @@ importers:
         specifier: ^3.2.4
         version: 3.2.4(@types/node@24.10.2)(jiti@2.6.1)(jsdom@27.3.0(postcss@8.5.6))(lightningcss@1.30.2)(terser@5.44.1)(tsx@4.21.0)(yaml@2.8.2)
 
-  packages/design-system:
+  packages-private/design-system:
     dependencies:
       react:
         specifier: ^18.0.0 || ^19.0.0
@@ -331,7 +312,7 @@ importers:
         specifier: ^5.0.0
         version: 5.9.3
 
-  packages/e2e-tests:
+  packages-private/e2e-tests:
     dependencies:
       '@bufbuild/protobuf':
         specifier: ^2.9.0
@@ -651,7 +632,7 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
-  packages/wallet-store:
+  packages-private/wallet-store:
     dependencies:
       '@thru/chain-interfaces':
         specifier: workspace:*
@@ -786,7 +767,7 @@ importers:
         version: link:../packages/crypto
       '@thru/design-system':
         specifier: workspace:*
-        version: link:../packages/design-system
+        version: link:../packages-private/design-system
       '@thru/passkey':
         specifier: workspace:*
         version: link:../packages/passkey
@@ -801,7 +782,7 @@ importers:
         version: link:../packages/thru-sdk
       '@thru/wallet-store':
         specifier: workspace:*
-        version: link:../packages/wallet-store
+        version: link:../packages-private/wallet-store
       clsx:
         specifier: ^2.1.1
         version: 2.1.1
@@ -859,7 +840,7 @@ importers:
     dependencies:
       '@thru/design-system':
         specifier: workspace:*
-        version: link:../packages/design-system
+        version: link:../packages-private/design-system
       '@thru/helpers':
         specifier: workspace:*
         version: link:../packages/helpers
@@ -911,7 +892,7 @@ importers:
         version: 2.3.0
       '@thru/design-system':
         specifier: workspace:*
-        version: link:../packages/design-system
+        version: link:../packages-private/design-system
       '@thru/helpers':
         specifier: workspace:*
         version: link:../packages/helpers

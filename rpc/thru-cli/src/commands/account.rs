@@ -1,10 +1,10 @@
 //! Account management command implementations
 
 use base64::Engine;
-use thru_base::txn_tools::SYSTEM_PROGRAM;
 use std::time::Duration;
 use thru_base::rpc_types::{MakeStateProofConfig, ProofType};
 use thru_base::tn_account::{TN_ACCOUNT_META_FOOTPRINT, TnAccountMeta};
+use thru_base::txn_tools::SYSTEM_PROGRAM;
 use thru_base::{StateProof, TransactionBuilder};
 
 use crate::cli::AccountCommands;
@@ -140,9 +140,10 @@ async fn create_account(
         CliError::TransactionSubmission(format!("Failed to get current slot: {}", e))
     })?;
 
-    let chain_info = client.get_chain_info().await.map_err(|e| {
-        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
-    })?;
+    let chain_info = client
+        .get_chain_info()
+        .await
+        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
 
     let current_slot = block_height.finalized_height;
 
@@ -179,7 +180,7 @@ async fn create_account(
     }
 
     // Build transaction using TransactionBuilder::build_create_with_fee_payer_proof
-    let mut transaction = TransactionBuilder::build_create_with_fee_payer_proof(
+    let transaction = TransactionBuilder::build_create_with_fee_payer_proof(
         keypair.public_key,
         current_slot,
         &state_proof,
@@ -293,9 +294,10 @@ async fn compress_account(
         CliError::TransactionSubmission(format!("Failed to get current block height: {}", e))
     })?;
 
-    let chain_info = client.get_chain_info().await.map_err(|e| {
-        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
-    })?;
+    let chain_info = client
+        .get_chain_info()
+        .await
+        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
 
     let start_slot = block_height.executed_height + 1;
 
@@ -578,9 +580,10 @@ async fn decompress_account(
         CliError::TransactionSubmission(format!("Failed to get current block height: {}", e))
     })?;
 
-    let chain_info = client.get_chain_info().await.map_err(|e| {
-        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
-    })?;
+    let chain_info = client
+        .get_chain_info()
+        .await
+        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
 
     let start_slot = block_height.executed_height + 1;
 
@@ -656,7 +659,7 @@ async fn decompress_direct(
         output::print_info("Using direct decompression (data fits in single transaction)");
     }
 
-    let mut transaction = TransactionBuilder::build_decompress_account(
+    let transaction = TransactionBuilder::build_decompress_account(
         fee_payer_keypair.public_key, // Fee payer
         SYSTEM_PROGRAM,               // System program
         target_pubkey.to_bytes()?,    // Target account to decompress
@@ -823,9 +826,10 @@ async fn decompress_with_uploader(
     })?;
     let start_slot = block_height.executed_height + 1;
 
-    let chain_info = client.get_chain_info().await.map_err(|e| {
-        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
-    })?;
+    let chain_info = client
+        .get_chain_info()
+        .await
+        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
     // Get current nonce for fee payer account
     let fee_payer_account_info = client
         .get_account_info(&fee_payer_keypair.address_string, None, None)
@@ -1074,9 +1078,10 @@ async fn decompress_with_uploader_huge(
     })?;
     let start_slot = block_height.executed_height + 1;
 
-    let chain_info = client.get_chain_info().await.map_err(|e| {
-        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
-    })?;
+    let chain_info = client
+        .get_chain_info()
+        .await
+        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
     // Get current nonce for fee payer account
     let fee_payer_account_info = client
         .get_account_info(&fee_payer_keypair.address_string, None, None)

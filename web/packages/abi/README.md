@@ -56,7 +56,7 @@ the filesystem (Node) or issue dynamic imports (bundlers).
 
 ## WASM workflow
 
-The generated artifacts live under `web/packages/abi/wasm/{bundler,node}` and are
+The generated artifacts live under `web/packages/abi/wasm/{bundler,node,web}` and are
 checked in so the package works without a local Rust toolchain. When
 `abi_reflect` or the shared IR changes, rebuild everything with:
 
@@ -65,8 +65,8 @@ checked in so the package works without a local Rust toolchain. When
 pnpm --filter @thru/abi run build:wasm
 ```
 
-That script runs `wasm-pack build` twice (bundler + node targets) inside
-`abi/abi_reflect_wasm`, then copies the fresh outputs into
+That script runs `wasm-pack build` three times (bundler + node + web targets) inside
+`rpc/abi/abi_reflect_wasm`, then copies the fresh outputs into
 `web/packages/abi/wasm`. The regular `pnpm --filter @thru/abi build` step runs
 `tsup` and copies those WASM folders into `dist/wasm` so published packages
 resolve the dynamic imports automatically.
@@ -99,13 +99,13 @@ tests pick up the updated binaries.
   `wasm/node` build via `createRequire`, while bundlers dynamically import the
   `wasm/bundler` module.
 * The JSON shape returned by `reflect*` matches `abi_reflect`'s CLI output, so
-  parity debugging can use `abi/scripts/show_reflection.py`.
+  parity debugging can use the `abi-reflect` CLI under `rpc/abi/abi_reflect`.
 * Layout IR consumers can feed `buildLayoutIr` into caches or ship a prebuilt
   snapshot alongside the WASM runtime to guard against future schema changes.
 
 ---
 
 Questions? Ping the thru-net ABI team (same folks maintaining
-`abi/abi_reflect`). Whenever you extend the Rust reflection engine or shared IR,
+`rpc/abi/abi_reflect`). Whenever you extend the Rust reflection engine or shared IR,
 regenerate the WASM artifacts and mention the change in `enums-fam-impl.md` so
 tooling consumers know which version to depend on.

@@ -15,7 +15,7 @@ import { BrowserSDK } from '@thru/browser-sdk';
 
 // Configure the wallet iframe location and the RPC endpoint to talk to
 const sdk = new BrowserSDK({
-  iframeUrl: 'https://thru-wallet.up.railway.app/embedded',
+  iframeUrl: 'https://wallet.thru.org/embedded',
   rpcUrl: 'https://grpc-web.alphanet.thruput.org',
 });
 

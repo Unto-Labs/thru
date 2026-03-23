@@ -12,10 +12,7 @@ pub async fn make_state_proof(
     proof_type: ProofType,
     slot: Option<u64>,
 ) -> Result<Vec<u8>, CliError> {
-    let state_proof_config = MakeStateProofConfig {
-        proof_type,
-        slot,
-    };
+    let state_proof_config = MakeStateProofConfig { proof_type, slot };
 
     let proof_data = client
         .make_state_proof(account_pubkey, &state_proof_config)

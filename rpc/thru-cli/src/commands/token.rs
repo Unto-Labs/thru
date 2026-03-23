@@ -194,9 +194,10 @@ async fn setup_transaction_context(
         CliError::TransactionSubmission(format!("Failed to get block height: {}", e))
     })?;
 
-    let chain_info = client.get_chain_info().await.map_err(|e| {
-        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
-    })?;
+    let chain_info = client
+        .get_chain_info()
+        .await
+        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
 
     Ok(TransactionContext {
         fee_payer_keypair,

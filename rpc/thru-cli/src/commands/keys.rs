@@ -21,7 +21,9 @@ pub async fn handle_keys_command(
             key,
         } => add_key(config, &name, &key, overwrite, json_format).await,
         KeysCommands::Get { name } => get_key(config, &name, json_format).await,
-        KeysCommands::Generate { name } => generate_key(config, &name, json_format).await,
+        KeysCommands::Generate { overwrite, name } => {
+            generate_key(config, &name, overwrite, json_format).await
+        }
         KeysCommands::Remove { name } => remove_key(config, &name, json_format).await,
     }
 }
@@ -70,12 +72,17 @@ async fn get_key(config: &Config, name: &str, json_format: bool) -> Result<(), C
 }
 
 /// Generate a new random key and add it to the configuration
-async fn generate_key(_config: &Config, name: &str, json_format: bool) -> Result<(), CliError> {
+async fn generate_key(
+    _config: &Config,
+    name: &str,
+    overwrite: bool,
+    json_format: bool,
+) -> Result<(), CliError> {
     // Load current config
     let mut current_config = Config::load().await?;
 
     // Generate the key
-    let generated_key = current_config.keys.generate_key(name, false)?;
+    let generated_key = current_config.keys.generate_key(name, overwrite)?;
 
     // Save the updated config
     save_config(&current_config).await?;

@@ -15,8 +15,6 @@ use crate::output;
 use crate::utils::format_vm_error;
 use thru_client::{Client as RpcClient, VersionContext};
 
-
-
 /// Handle program subcommands
 pub async fn handle_uploader_command(
     config: &Config,
@@ -133,6 +131,14 @@ pub struct UploaderManager {
 impl UploaderManager {
     /// Create new uploader manager
     pub async fn new(config: &Config) -> Result<Self, CliError> {
+        Self::new_with_fee_payer(config, None).await
+    }
+
+    /// Create new uploader manager with an optional fee payer override
+    pub async fn new_with_fee_payer(
+        config: &Config,
+        fee_payer_name: Option<&str>,
+    ) -> Result<Self, CliError> {
         // Create RPC client
         let rpc_url = config.get_grpc_url()?;
         let rpc_client = RpcClient::builder()
@@ -144,9 +150,12 @@ impl UploaderManager {
         // Get uploader program public key
         let uploader_program_pubkey = config.get_uploader_pubkey()?;
 
-        // Create fee payer keypair from config
-        let private_key_bytes = config.get_private_key_bytes()?;
-        let fee_payer_keypair = crypto::keypair_from_hex(&hex::encode(private_key_bytes))?;
+        let fee_payer_key_hex = if let Some(name) = fee_payer_name {
+            config.keys.get_key(name)?
+        } else {
+            config.keys.get_default_key()?
+        };
+        let fee_payer_keypair = crypto::keypair_from_hex(fee_payer_key_hex)?;
 
         let chain_info = rpc_client.get_chain_info().await.map_err(|e| {
             CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
@@ -173,7 +182,11 @@ impl UploaderManager {
         // Query the actual account nonce from the blockchain
         match self
             .rpc_client
-            .get_account_info(&self.fee_payer_keypair.address_string, None, Some(VersionContext::Current))
+            .get_account_info(
+                &self.fee_payer_keypair.address_string,
+                None,
+                Some(VersionContext::Current),
+            )
             .await
         {
             Ok(Some(account)) => Ok(account.nonce),
@@ -224,7 +237,11 @@ impl UploaderManager {
         buffer_account: &Pubkey,
     ) -> Result<Option<UploadState>, CliError> {
         // Check if meta account exists
-        let meta_account_info = match self.rpc_client.get_account_info(meta_account, None, Some(VersionContext::Current)).await {
+        let meta_account_info = match self
+            .rpc_client
+            .get_account_info(meta_account, None, Some(VersionContext::Current))
+            .await
+        {
             Ok(Some(account)) => account,
             Ok(None) => return Ok(None), // No existing upload
             Err(e) => {
@@ -236,7 +253,10 @@ impl UploaderManager {
         };
 
         // Check if buffer account exists
-        let buffer_account_info = match self.rpc_client.get_account_info(buffer_account, None, Some(VersionContext::Current)).await
+        let buffer_account_info = match self
+            .rpc_client
+            .get_account_info(buffer_account, None, Some(VersionContext::Current))
+            .await
         {
             Ok(Some(account)) => account,
             Ok(None) => return Ok(None), // No existing upload
@@ -544,7 +564,7 @@ impl UploaderManager {
             output::print_info("Creating meta and buffer accounts...");
         }
 
-        let mut transaction = TransactionBuilder::build_uploader_create(
+        let transaction = TransactionBuilder::build_uploader_create(
             self.fee_payer_keypair.public_key,
             self.uploader_program_pubkey
                 .to_bytes()
@@ -612,7 +632,7 @@ impl UploaderManager {
                 ));
             }
 
-            let mut transaction = TransactionBuilder::build_uploader_write(
+            let transaction = TransactionBuilder::build_uploader_write(
                 self.fee_payer_keypair.public_key,
                 self.uploader_program_pubkey
                     .to_bytes()
@@ -687,7 +707,7 @@ impl UploaderManager {
                 ));
             }
 
-            let mut transaction = TransactionBuilder::build_uploader_write(
+            let transaction = TransactionBuilder::build_uploader_write(
                 self.fee_payer_keypair.public_key,
                 self.uploader_program_pubkey
                     .to_bytes()
@@ -743,7 +763,7 @@ impl UploaderManager {
             output::print_info("Finalizing upload...");
         }
 
-        let mut transaction = TransactionBuilder::build_uploader_finalize(
+        let transaction = TransactionBuilder::build_uploader_finalize(
             self.fee_payer_keypair.public_key,
             self.uploader_program_pubkey
                 .to_bytes()
@@ -1073,7 +1093,7 @@ impl UploaderManager {
         }
 
         // Create DESTROY transaction
-        let mut transaction = TransactionBuilder::build_uploader_destroy(
+        let transaction = TransactionBuilder::build_uploader_destroy(
             self.fee_payer_keypair.public_key,
             self.uploader_program_pubkey
                 .to_bytes()
@@ -1300,7 +1320,9 @@ struct AccountStatus {
     owner: Option<String>,
 }
 
-fn account_to_status(result: Result<Option<thru_client::Account>, thru_client::ClientError>) -> AccountStatus {
+fn account_to_status(
+    result: Result<Option<thru_client::Account>, thru_client::ClientError>,
+) -> AccountStatus {
     match result {
         Ok(Some(account)) => AccountStatus {
             exists: true,
@@ -1327,7 +1349,10 @@ fn print_account_status(label: &str, address: &str, status: &AccountStatus) {
     if status.exists {
         let program_flag = if status.is_program { " [PROGRAM]" } else { "" };
         println!("{}: {}", label, address);
-        println!("    Status: EXISTS{}, {} bytes", program_flag, status.data_size);
+        println!(
+            "    Status: EXISTS{}, {} bytes",
+            program_flag, status.data_size
+        );
         if let Some(owner) = &status.owner {
             println!("    Owner: {}", owner);
         }
@@ -1456,12 +1481,19 @@ async fn get_uploader_status(
 
         println!("Accounts:");
         print_account_status("  Meta Account", &meta_account.to_string(), &meta_status);
-        print_account_status("  Buffer Account", &buffer_account.to_string(), &buffer_status);
+        print_account_status(
+            "  Buffer Account",
+            &buffer_account.to_string(),
+            &buffer_status,
+        );
         println!();
 
         println!("Summary:");
         if upload_complete {
-            println!("  Upload exists with {} bytes in buffer", buffer_status.data_size);
+            println!(
+                "  Upload exists with {} bytes in buffer",
+                buffer_status.data_size
+            );
         } else if any_corrupted {
             println!("  CORRUPTED STATE DETECTED - accounts exist but have no data:");
             if meta_corrupted {
@@ -1493,8 +1525,15 @@ mod tests {
     #[tokio::test]
     async fn test_upload_program_file_not_found() {
         let config = Config::default();
-        let result =
-            upload_program(&config, None, "test_seed", "nonexistent_file.bin", 30720, false).await;
+        let result = upload_program(
+            &config,
+            None,
+            "test_seed",
+            "nonexistent_file.bin",
+            30720,
+            false,
+        )
+        .await;
         assert!(result.is_err());
     }
 }
