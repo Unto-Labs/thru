@@ -2,6 +2,9 @@
 name = "thru-abi-types"
 version = "0.1.0"
 edition = "2021"
+description = "ABI type definitions for the Thru blockchain"
+license = "Apache-2.0"
+repository = "https://github.com/Unto-Labs/thru"
 
 [lib]
 name = "abi_types"

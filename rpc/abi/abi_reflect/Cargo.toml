@@ -2,6 +2,9 @@
 name = "thru-abi-reflect"
 version = "0.1.0"
 edition = "2021"
+description = "ABI reflection utilities for the Thru blockchain"
+license = "Apache-2.0"
+repository = "https://github.com/Unto-Labs/thru"
 
 [dependencies]
 abi_gen = { package = "thru-abi-gen", version = "0.1.0", path = "../abi_gen" }

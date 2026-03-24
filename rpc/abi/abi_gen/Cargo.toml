@@ -2,6 +2,9 @@
 name = "thru-abi-gen"
 version = "0.1.0"
 edition = "2024"
+description = "ABI code generation utilities for the Thru blockchain"
+license = "Apache-2.0"
+repository = "https://github.com/Unto-Labs/thru"
 
 [dependencies]
 abi_types = { package = "thru-abi-types", version = "0.1.0", path = "../abi_types" }
