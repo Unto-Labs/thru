@@ -1,0 +1,19 @@
+[package]
+name = "thru"
+version = "0.1.0"
+description = "Command-line interface for the Thru blockchain"
+license = "Apache-2.0"
+repository = "https://github.com/Unto-Labs/thru"
+edition = "2024"
+keywords = ["thru", "cli", "blockchain", "rpc"]
+categories = ["command-line-utilities", "cryptography::cryptocurrencies"]
+
+[[bin]]
+name = "thru"
+path = "src/main.rs"
+
+[dependencies]
+thru-core = { version = "0.1.0", path = "../thru-core" }
+anyhow = "1.0"
+tokio = { version = "1.47", features = ["full"] }
+tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt"] }

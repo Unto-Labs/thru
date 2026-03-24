@@ -7,5 +7,5 @@ members = [
 [profile.release]
 panic = "abort"
 # Include full DWARF debug info without changing optimization level,
-# enabling thru-cli debug resolve to map PCs to source locations.
+# enabling thru debug resolve to map PCs to source locations.
 debug = 2

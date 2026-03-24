@@ -187,7 +187,7 @@ pub struct PackageId {
 
 ## On-chain ABI Reference
 
-From `rpc/thru-cli/src/commands/abi.rs`:
+From `rpc/cli/crates/thru-core/src/commands/abi.rs`:
 
 **Account Derivation**:
 ```rust

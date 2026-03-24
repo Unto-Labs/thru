@@ -129,7 +129,7 @@ export async function createAccount(
     const startSlot = proofResponse.slot;
 
     const program = new Uint8Array(32);
-    program[31] = 0x03; /* NOOP program id used by thru-cli account creation */
+    program[31] = 0x03; /* NOOP program id used by thru account creation */
 
     const builder = new TransactionBuilder();
     const headerDefaults: TransactionHeaderInput = {

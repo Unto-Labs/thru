@@ -3,6 +3,7 @@ name = "thru-client"
 version = "0.1.0"
 license = "Apache-2.0"
 description = "High-level gRPC client library for the Thru blockchain"
+repository = "https://github.com/Unto-Labs/thru"
 edition = "2024"
 keywords = ["thru", "grpc", "client", "blockchain", "rpc"]
 categories = ["api-bindings", "asynchronous", "network-programming"]

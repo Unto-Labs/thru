@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 description = "Thru GRPC Client"
 license = "Apache-2.0"
+repository = "https://github.com/Unto-Labs/thru"
 
 [dependencies]
 bytes = "1"
