@@ -6,88 +6,28 @@ version = 4
 name = "abi_cli"
 version = "0.1.0"
 dependencies = [
- "abi_gen",
- "abi_loader",
- "abi_reflect",
- "abi_types",
  "anyhow",
  "clap",
  "serde_json",
  "serde_yml",
-]
-
-[[package]]
-name = "abi_gen"
-version = "0.1.0"
-dependencies = [
- "abi_loader",
- "abi_types",
- "anyhow",
- "clap",
- "indexmap",
- "lexpr",
- "prost",
- "serde",
- "serde-lexpr",
- "serde_derive",
- "serde_json",
- "serde_yml",
- "thiserror 2.0.17",
-]
-
-[[package]]
-name = "abi_loader"
-version = "0.1.0"
-dependencies = [
- "abi_types",
- "anyhow",
- "base64",
- "clap",
- "dirs",
- "git2",
- "reqwest",
- "serde",
- "serde_derive",
- "serde_yml",
- "sha2",
- "tempfile",
-]
-
-[[package]]
-name = "abi_reflect"
-version = "0.1.0"
-dependencies = [
- "abi_gen",
- "anyhow",
- "chrono",
- "clap",
- "serde",
- "serde_json",
- "serde_yml",
- "thiserror 2.0.17",
+ "thru-abi-gen",
+ "thru-abi-loader",
+ "thru-abi-reflect",
+ "thru-abi-types",
 ]
 
 [[package]]
 name = "abi_reflect_wasm"
 version = "0.1.0"
 dependencies = [
- "abi_gen",
- "abi_reflect",
  "console_error_panic_hook",
  "js-sys",
  "serde",
  "serde_json",
  "serde_yml",
+ "thru-abi-gen",
+ "thru-abi-reflect",
  "wasm-bindgen",
-]
-
-[[package]]
-name = "abi_types"
-version = "0.1.0"
-dependencies = [
- "serde",
- "serde_derive",
- "serde_yml",
 ]
 
 [[package]]
@@ -1572,6 +1512,66 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "thru-abi-gen"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "clap",
+ "indexmap",
+ "lexpr",
+ "prost",
+ "serde",
+ "serde-lexpr",
+ "serde_derive",
+ "serde_json",
+ "serde_yml",
+ "thiserror 2.0.17",
+ "thru-abi-loader",
+ "thru-abi-types",
+]
+
+[[package]]
+name = "thru-abi-loader"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64",
+ "clap",
+ "dirs",
+ "git2",
+ "reqwest",
+ "serde",
+ "serde_derive",
+ "serde_yml",
+ "sha2",
+ "tempfile",
+ "thru-abi-types",
+]
+
+[[package]]
+name = "thru-abi-reflect"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "chrono",
+ "clap",
+ "serde",
+ "serde_json",
+ "serde_yml",
+ "thiserror 2.0.17",
+ "thru-abi-gen",
+]
+
+[[package]]
+name = "thru-abi-types"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_derive",
+ "serde_yml",
 ]
 
 [[package]]

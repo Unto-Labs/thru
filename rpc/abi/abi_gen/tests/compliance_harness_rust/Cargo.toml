@@ -10,7 +10,7 @@ name = "compliance_harness"
 path = "src/main.rs"
 
 [dependencies]
-abi_gen = { path = "../.." }
+abi_gen = { package = "thru-abi-gen", path = "../.." }
 serde = { version = "1.0", features = ["derive"] }
 serde_yaml = "0.9"
 serde_json = "1.0"

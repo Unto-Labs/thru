@@ -1,11 +1,11 @@
 [package]
-name = "abi_gen"
+name = "thru-abi-gen"
 version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-abi_types = { path = "../abi_types" }
-abi_loader = { path = "../abi_loader" }
+abi_types = { package = "thru-abi-types", version = "0.1.0", path = "../abi_types" }
+abi_loader = { package = "thru-abi-loader", version = "0.1.0", path = "../abi_loader" }
 lexpr = "0.2.7"
 serde = "1.0.89"
 serde_derive = "1.0"
@@ -23,6 +23,7 @@ default = []
 layout_graph_trace = []
 
 [lib]
+name = "abi_gen"
 path = "src/lib.rs"
 
 [[bin]]

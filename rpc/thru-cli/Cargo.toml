@@ -15,9 +15,9 @@ path = "src/main.rs"
 # Thru dependencies
 thru-client = { version = "0.1.0", path = "../thru-client" }
 thru-base = { version = "0.1.0", path = "../thru-base" }
-abi_gen = { version = "0.1.0", path = "../abi/abi_gen" }
-abi_loader = { version = "0.1.0", path = "../abi/abi_loader" }
-abi_reflect = { version = "0.1.0", path = "../abi/abi_reflect" }
+abi_gen = { package = "thru-abi-gen", version = "0.1.0", path = "../abi/abi_gen" }
+abi_loader = { package = "thru-abi-loader", version = "0.1.0", path = "../abi/abi_loader" }
+abi_reflect = { package = "thru-abi-reflect", version = "0.1.0", path = "../abi/abi_reflect" }
 
 # CLI framework
 clap = { version = "4.4", features = ["derive", "env"] }

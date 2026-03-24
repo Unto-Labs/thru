@@ -7,8 +7,8 @@ edition = "2024"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-abi_reflect = { path = "../abi_reflect" }
-abi_gen = { path = "../abi_gen" }
+abi_reflect = { package = "thru-abi-reflect", path = "../abi_reflect" }
+abi_gen = { package = "thru-abi-gen", path = "../abi_gen" }
 console_error_panic_hook = "0.1"
 js-sys = "0.3"
 serde = { version = "1.0", features = ["derive"] }
