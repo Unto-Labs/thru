@@ -1,37 +1,44 @@
-import type { AppMetadata, ConnectResult, WalletAccount } from '@thru/chain-interfaces';
+import type {
+  AppMetadata,
+  ConnectResult,
+  ThruSigningContext,
+  WalletAccount,
+} from "@thru/chain-interfaces";
 
 export const POST_MESSAGE_REQUEST_TYPES = {
-  CONNECT: 'connect',
-  DISCONNECT: 'disconnect',
-  SIGN_MESSAGE: 'signMessage',
-  SIGN_TRANSACTION: 'signTransaction',
-  GET_ACCOUNTS: 'getAccounts',
-  SELECT_ACCOUNT: 'selectAccount',
+  CONNECT: "connect",
+  DISCONNECT: "disconnect",
+  SIGN_MESSAGE: "signMessage",
+  SIGN_TRANSACTION: "signTransaction",
+  GET_ACCOUNTS: "getAccounts",
+  GET_SIGNING_CONTEXT: "getSigningContext",
+  SELECT_ACCOUNT: "selectAccount",
 } as const;
 
-export type RequestType = typeof POST_MESSAGE_REQUEST_TYPES[keyof typeof POST_MESSAGE_REQUEST_TYPES];
+export type RequestType =
+  (typeof POST_MESSAGE_REQUEST_TYPES)[keyof typeof POST_MESSAGE_REQUEST_TYPES];
 
 export const EMBEDDED_PROVIDER_EVENTS = {
-  CONNECT_START: 'connect_start',
-  CONNECT: 'connect',
-  DISCONNECT: 'disconnect',
-  CONNECT_ERROR: 'connect_error',
-  ERROR: 'error',
-  LOCK: 'lock',
-  UI_SHOW: 'ui_show',
-  ACCOUNT_CHANGED: 'account_changed',
+  CONNECT_START: "connect_start",
+  CONNECT: "connect",
+  DISCONNECT: "disconnect",
+  CONNECT_ERROR: "connect_error",
+  ERROR: "error",
+  LOCK: "lock",
+  UI_SHOW: "ui_show",
+  ACCOUNT_CHANGED: "account_changed",
 } as const;
 
 export type EmbeddedProviderEvent =
-  typeof EMBEDDED_PROVIDER_EVENTS[keyof typeof EMBEDDED_PROVIDER_EVENTS];
+  (typeof EMBEDDED_PROVIDER_EVENTS)[keyof typeof EMBEDDED_PROVIDER_EVENTS];
 
-export const POST_MESSAGE_EVENT_TYPE = 'event' as const;
+export const POST_MESSAGE_EVENT_TYPE = "event" as const;
 
-export const IFRAME_READY_EVENT = 'iframe:ready' as const;
+export const IFRAME_READY_EVENT = "iframe:ready" as const;
 
-export const DEFAULT_IFRAME_URL = 'http://localhost:3000/embedded';
+export const DEFAULT_IFRAME_URL = "http://localhost:3000/embedded";
 
-const REQUEST_ID_PREFIX = 'req';
+const REQUEST_ID_PREFIX = "req";
 
 export const createRequestId = (prefix: string = REQUEST_ID_PREFIX): string => {
   const random = Math.random().toString(36).slice(2, 11);
@@ -68,6 +75,11 @@ export interface GetAccountsRequestMessage extends BaseRequest {
   payload?: undefined;
 }
 
+export interface GetSigningContextRequestMessage extends BaseRequest {
+  type: typeof POST_MESSAGE_REQUEST_TYPES.GET_SIGNING_CONTEXT;
+  payload?: undefined;
+}
+
 export interface SelectAccountRequestMessage extends BaseRequest {
   type: typeof POST_MESSAGE_REQUEST_TYPES.SELECT_ACCOUNT;
   payload: SelectAccountPayload;
@@ -79,6 +91,7 @@ export type PostMessageRequest =
   | SignMessageRequestMessage
   | SignTransactionRequestMessage
   | GetAccountsRequestMessage
+  | GetSigningContextRequestMessage
   | SelectAccountRequestMessage;
 
 export interface DisconnectResult {
@@ -103,6 +116,7 @@ type RequestResultMap = {
   [POST_MESSAGE_REQUEST_TYPES.SIGN_MESSAGE]: SignMessageResult;
   [POST_MESSAGE_REQUEST_TYPES.SIGN_TRANSACTION]: SignTransactionResult;
   [POST_MESSAGE_REQUEST_TYPES.GET_ACCOUNTS]: GetAccountsResult;
+  [POST_MESSAGE_REQUEST_TYPES.GET_SIGNING_CONTEXT]: GetSigningContextResult;
   [POST_MESSAGE_REQUEST_TYPES.SELECT_ACCOUNT]: SelectAccountResult;
 };
 
@@ -127,36 +141,41 @@ export type PostMessageResponse<TType extends RequestType = RequestType> =
   | SuccessResponse<TType>
   | ErrorResponse;
 
-export type SuccessfulPostMessageResponse<TType extends RequestType = RequestType> =
-  Extract<PostMessageResponse<TType>, { success: true }>;
+export type SuccessfulPostMessageResponse<
+  TType extends RequestType = RequestType,
+> = Extract<PostMessageResponse<TType>, { success: true }>;
 
 export type InferPostMessageResponse<TRequest extends PostMessageRequest> =
-  PostMessageResponse<TRequest['type']>;
+  PostMessageResponse<TRequest["type"]>;
 
-export type InferSuccessfulPostMessageResponse<TRequest extends PostMessageRequest> =
-  SuccessfulPostMessageResponse<TRequest['type']>;
+export type InferSuccessfulPostMessageResponse<
+  TRequest extends PostMessageRequest,
+> = SuccessfulPostMessageResponse<TRequest["type"]>;
 
-export interface PostMessageEvent<TEvent extends EmbeddedProviderEvent = EmbeddedProviderEvent, TData = any> {
+export interface PostMessageEvent<
+  TEvent extends EmbeddedProviderEvent = EmbeddedProviderEvent,
+  TData = any,
+> {
   type: typeof POST_MESSAGE_EVENT_TYPE;
   event: TEvent;
   data?: TData;
 }
 
 export const ErrorCode = {
-  USER_REJECTED: 'USER_REJECTED',
-  WALLET_LOCKED: 'WALLET_LOCKED',
-  INVALID_PASSWORD: 'INVALID_PASSWORD',
-  ALREADY_CONNECTED: 'ALREADY_CONNECTED',
-  ACCOUNT_NOT_FOUND: 'ACCOUNT_NOT_FOUND',
-  INVALID_TRANSACTION: 'INVALID_TRANSACTION',
-  TRANSACTION_FAILED: 'TRANSACTION_FAILED',
-  INSUFFICIENT_FUNDS: 'INSUFFICIENT_FUNDS',
-  NETWORK_ERROR: 'NETWORK_ERROR',
-  TIMEOUT: 'TIMEOUT',
-  UNKNOWN_ERROR: 'UNKNOWN_ERROR',
+  USER_REJECTED: "USER_REJECTED",
+  WALLET_LOCKED: "WALLET_LOCKED",
+  INVALID_PASSWORD: "INVALID_PASSWORD",
+  ALREADY_CONNECTED: "ALREADY_CONNECTED",
+  ACCOUNT_NOT_FOUND: "ACCOUNT_NOT_FOUND",
+  INVALID_TRANSACTION: "INVALID_TRANSACTION",
+  TRANSACTION_FAILED: "TRANSACTION_FAILED",
+  INSUFFICIENT_FUNDS: "INSUFFICIENT_FUNDS",
+  NETWORK_ERROR: "NETWORK_ERROR",
+  TIMEOUT: "TIMEOUT",
+  UNKNOWN_ERROR: "UNKNOWN_ERROR",
 } as const;
 
-export type ErrorCode = typeof ErrorCode[keyof typeof ErrorCode];
+export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
 
 export type ConnectMetadataInput = Partial<AppMetadata>;
 
@@ -183,4 +202,8 @@ export interface SignTransactionPayload {
 
 export interface SignTransactionResult {
   signedTransaction: string;
+}
+
+export interface GetSigningContextResult {
+  signingContext: ThruSigningContext;
 }

@@ -14,9 +14,11 @@ export {
   type SignMessageRequestMessage,
   type SignTransactionRequestMessage,
   type GetAccountsRequestMessage,
+  type GetSigningContextRequestMessage,
   type SelectAccountRequestMessage,
   type DisconnectResult,
   type GetAccountsResult,
+  type GetSigningContextResult,
   type SelectAccountPayload,
   type SelectAccountResult,
   type PostMessageResponse,
@@ -30,4 +32,4 @@ export {
   type SignMessageResult,
   type SignTransactionPayload,
   type SignTransactionResult,
-} from '@thru/protocol';
+} from "@thru/protocol";

@@ -799,7 +799,7 @@ impl Client {
         }
     }
 
-    async fn send_transaction(&self, transaction: &[u8]) -> Result<[u8; 64]> {
+    pub async fn send_transaction(&self, transaction: &[u8]) -> Result<[u8; 64]> {
         let mut client = CommandServiceClient::new(self.channel.clone())
             .max_decoding_message_size(128 * 1024 * 1024) /* 128 MB */
             .max_encoding_message_size(128 * 1024 * 1024); /* 128 MB */

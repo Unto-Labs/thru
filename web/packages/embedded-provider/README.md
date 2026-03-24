@@ -11,10 +11,10 @@ npm install @thru/embedded-provider
 ## Basic Usage
 
 ```typescript
-import { EmbeddedProvider } from '@thru/embedded-provider';
+import { EmbeddedProvider } from "@thru/embedded-provider";
 
 const provider = new EmbeddedProvider({
-  iframeUrl: 'https://wallet.thru.org',
+  iframeUrl: "https://wallet.thru.org",
 });
 
 // Initialize iframe (must be called before any other operation)
@@ -24,7 +24,10 @@ await provider.initialize();
 const result = await provider.connect();
 console.log(result.accounts);
 
-// Sign a transaction via the Thru chain interface
+// Inspect the signing contract before building a transaction
+const signingContext = await provider.thru.getSigningContext();
+
+// Build your Thru transaction using signingContext.feePayerPublicKey, then sign it
 const signed = await provider.thru.signTransaction(base64EncodedTx);
 
 // Disconnect
@@ -46,42 +49,43 @@ Main entry point. Creates and manages the wallet iframe.
 new EmbeddedProvider(config: EmbeddedProviderConfig)
 ```
 
-| Option | Type | Default | Description |
-|--------|------|---------|-------------|
-| `iframeUrl` | `string` | `DEFAULT_IFRAME_URL` | URL of the hosted wallet application |
-| `addressTypes` | `AddressType[]` | `[AddressType.THRU]` | Chain types to enable |
+| Option         | Type            | Default              | Description                          |
+| -------------- | --------------- | -------------------- | ------------------------------------ |
+| `iframeUrl`    | `string`        | `DEFAULT_IFRAME_URL` | URL of the hosted wallet application |
+| `addressTypes` | `AddressType[]` | `[AddressType.THRU]` | Chain types to enable                |
 
 #### Methods
 
-| Method | Returns | Description |
-|--------|---------|-------------|
-| `initialize()` | `Promise<void>` | Create the iframe and wait for it to signal readiness |
-| `connect(options?)` | `Promise<ConnectResult>` | Open the wallet modal and request a connection |
-| `disconnect()` | `Promise<void>` | Disconnect the current session |
-| `isConnected()` | `boolean` | Whether a wallet session is active |
-| `getAccounts()` | `WalletAccount[]` | List of connected accounts |
-| `getSelectedAccount()` | `WalletAccount \| null` | Currently selected account |
-| `selectAccount(publicKey)` | `Promise<WalletAccount>` | Switch the active account |
-| `mountInline(container)` | `Promise<void>` | Mount the wallet inline inside a DOM element instead of as a modal |
-| `on(event, callback)` | `void` | Subscribe to provider events |
-| `off(event, callback)` | `void` | Unsubscribe from provider events |
-| `destroy()` | `void` | Remove the iframe and clean up all listeners |
+| Method                     | Returns                  | Description                                                        |
+| -------------------------- | ------------------------ | ------------------------------------------------------------------ |
+| `initialize()`             | `Promise<void>`          | Create the iframe and wait for it to signal readiness              |
+| `connect(options?)`        | `Promise<ConnectResult>` | Open the wallet modal and request a connection                     |
+| `disconnect()`             | `Promise<void>`          | Disconnect the current session                                     |
+| `isConnected()`            | `boolean`                | Whether a wallet session is active                                 |
+| `getAccounts()`            | `WalletAccount[]`        | List of connected accounts                                         |
+| `getSelectedAccount()`     | `WalletAccount \| null`  | Currently selected account                                         |
+| `selectAccount(publicKey)` | `Promise<WalletAccount>` | Switch the active account                                          |
+| `mountInline(container)`   | `Promise<void>`          | Mount the wallet inline inside a DOM element instead of as a modal |
+| `on(event, callback)`      | `void`                   | Subscribe to provider events                                       |
+| `off(event, callback)`     | `void`                   | Unsubscribe from provider events                                   |
+| `destroy()`                | `void`                   | Remove the iframe and clean up all listeners                       |
 
 #### Properties
 
-| Property | Type | Description |
-|----------|------|-------------|
-| `thru` | `IThruChain` | Chain-specific interface for signing transactions on the Thru network |
+| Property | Type         | Description                                                           |
+| -------- | ------------ | --------------------------------------------------------------------- |
+| `thru`   | `IThruChain` | Chain-specific interface for signing transactions on the Thru network |
 
 ### `EmbeddedThruChain`
 
 Implements `IThruChain`. Accessed via `provider.thru`.
 
-| Method | Returns | Description |
-|--------|---------|-------------|
-| `connect()` | `Promise<{ publicKey: string }>` | Connect and return the Thru address |
-| `disconnect()` | `Promise<void>` | Disconnect |
-| `signTransaction(serializedTransaction)` | `Promise<string>` | Sign a base64-encoded transaction, returns the signed result |
+| Method                                   | Returns                          | Description                                                                                                        |
+| ---------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| `connect()`                              | `Promise<{ publicKey: string }>` | Connect and return the Thru address                                                                                |
+| `disconnect()`                           | `Promise<void>`                  | Disconnect                                                                                                         |
+| `getSigningContext()`                    | `Promise<ThruSigningContext>`    | Return the current selected account plus the actual fee payer/signer contract used by the embedded wallet          |
+| `signTransaction(serializedTransaction)` | `Promise<string>`                | Accept a base64 signing payload or raw transaction and return canonical raw transaction bytes ready for submission |
 
 ### Events
 
@@ -104,7 +108,7 @@ The provider supports two display modes:
 
 ```typescript
 // Inline mode
-const container = document.getElementById('wallet-mount');
+const container = document.getElementById("wallet-mount");
 await provider.mountInline(container);
 ```
 
@@ -126,6 +130,21 @@ Messages are sent with a strict `targetOrigin` and each iframe instance is tagge
 - Event-driven architecture for connection state changes
 - WebAuthn (passkey) support via iframe `allow` policy
 - Chain-specific interfaces via the `IThruChain` abstraction
+
+## Thru Signing Contract
+
+For the embedded passkey wallet, the selected wallet account shown in the UI can
+differ from the network fee payer / signer that actually authorizes the Thru
+transaction. Call `provider.thru.getSigningContext()` before building a
+transaction to retrieve:
+
+- `selectedAccountPublicKey` - the managed account currently selected in the wallet
+- `feePayerPublicKey` - the address that must be used as the transaction fee payer
+- `signerPublicKey` - the cryptographic signer used by the wallet
+
+`signTransaction()` always returns canonical `Transaction.toWire()` bytes
+encoded as base64, so apps can decode and submit the result directly without
+reordering signature bytes.
 
 ## Dependencies
 

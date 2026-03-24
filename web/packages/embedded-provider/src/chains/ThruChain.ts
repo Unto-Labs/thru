@@ -1,7 +1,11 @@
-import { AddressType, type IThruChain } from '@thru/chain-interfaces';
-import { POST_MESSAGE_REQUEST_TYPES, createRequestId } from '@thru/protocol';
-import type { EmbeddedProvider } from '../EmbeddedProvider';
-import type { IframeManager } from '../IframeManager';
+import {
+  AddressType,
+  type IThruChain,
+  type ThruSigningContext,
+} from "@thru/chain-interfaces";
+import { POST_MESSAGE_REQUEST_TYPES, createRequestId } from "@thru/protocol";
+import type { EmbeddedProvider } from "../EmbeddedProvider";
+import type { IframeManager } from "../IframeManager";
 
 /**
  * EmbeddedThruChain - postMessage-backed Thru chain adapter.
@@ -21,10 +25,12 @@ export class EmbeddedThruChain implements IThruChain {
 
   async connect(): Promise<{ publicKey: string }> {
     const result = await this.provider.connect();
-    const thruAccount = result.accounts.find((addr) => addr.accountType === AddressType.THRU);
+    const thruAccount = result.accounts.find(
+      (addr) => addr.accountType === AddressType.THRU,
+    );
 
     if (!thruAccount) {
-      throw new Error('Thru address not found in connection result');
+      throw new Error("Thru address not found in connection result");
     }
 
     return { publicKey: thruAccount.address };
@@ -34,12 +40,29 @@ export class EmbeddedThruChain implements IThruChain {
     await this.provider.disconnect();
   }
 
+  async getSigningContext(): Promise<ThruSigningContext> {
+    if (!this.provider.isConnected()) {
+      throw new Error("Wallet not connected");
+    }
+
+    const response = await this.iframeManager.sendMessage({
+      id: createRequestId(),
+      type: POST_MESSAGE_REQUEST_TYPES.GET_SIGNING_CONTEXT,
+      origin: window.location.origin,
+    });
+
+    return response.result.signingContext;
+  }
+
   async signTransaction(serializedTransaction: string): Promise<string> {
     if (!this.provider.isConnected()) {
-      throw new Error('Wallet not connected');
+      throw new Error("Wallet not connected");
     }
-    if (typeof serializedTransaction !== 'string' || serializedTransaction.length === 0) {
-      throw new Error('Transaction payload must be a base64 encoded string');
+    if (
+      typeof serializedTransaction !== "string" ||
+      serializedTransaction.length === 0
+    ) {
+      throw new Error("Transaction payload must be a base64 encoded string");
     }
 
     this.iframeManager.show();

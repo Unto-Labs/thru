@@ -1,8 +1,8 @@
 export const AddressType = {
-  THRU: 'thru',
+  THRU: "thru",
 } as const;
 
-export type AddressType = typeof AddressType[keyof typeof AddressType];
+export type AddressType = (typeof AddressType)[keyof typeof AddressType];
 
 export interface WalletAccount {
   accountType: AddressType;
@@ -20,8 +20,25 @@ export interface AppMetadata {
 export interface ConnectResult {
   walletId?: string;
   accounts: WalletAccount[];
-  status?: 'pending' | 'completed';
+  status?: "pending" | "completed";
   metadata?: AppMetadata;
+}
+
+export const ThruTransactionEncoding = {
+  SIGNING_PAYLOAD_BASE64: "signing_payload_base64",
+  RAW_TRANSACTION_BASE64: "raw_transaction_base64",
+} as const;
+
+export type ThruTransactionEncoding =
+  (typeof ThruTransactionEncoding)[keyof typeof ThruTransactionEncoding];
+
+export interface ThruSigningContext {
+  mode: "managed_fee_payer";
+  selectedAccountPublicKey: string | null;
+  feePayerPublicKey: string;
+  signerPublicKey: string;
+  acceptedInputEncodings: ThruTransactionEncoding[];
+  outputEncoding: typeof ThruTransactionEncoding.RAW_TRANSACTION_BASE64;
 }
 
 export interface ConnectedApp {
