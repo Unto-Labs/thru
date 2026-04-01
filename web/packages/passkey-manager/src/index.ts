@@ -65,6 +65,7 @@ export {
 export {
   arrayBufferToBase64Url,
   base64UrlToArrayBuffer,
+  bytesToBase64,
   bytesToBase64Url,
   base64UrlToBytes,
   bytesToHex,
@@ -73,4 +74,3 @@ export {
   compareBytes,
   uniqueAccounts,
 } from './encoding';
-

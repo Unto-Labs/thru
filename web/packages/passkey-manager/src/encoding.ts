@@ -1,3 +1,5 @@
+import { hexToBytes as sharedHexToBytes } from '@thru/helpers';
+
 export function arrayBufferToBase64Url(buffer: ArrayBuffer | SharedArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
   let base64 = '';
@@ -23,6 +25,24 @@ export function bytesToBase64Url(bytes: Uint8Array): string {
   return arrayBufferToBase64Url(slice);
 }
 
+export function bytesToBase64(bytes: Uint8Array): string {
+  const globalBuffer =
+    typeof globalThis !== 'undefined' ? (globalThis as { Buffer?: typeof Buffer }).Buffer : undefined;
+  if (globalBuffer) {
+    return globalBuffer.from(bytes).toString('base64');
+  }
+
+  if (typeof btoa === 'function') {
+    let binary = '';
+    for (let i = 0; i < bytes.length; i++) {
+      binary += String.fromCharCode(bytes[i]);
+    }
+    return btoa(binary);
+  }
+
+  throw new Error('Base64 encoding is not supported in this environment');
+}
+
 export function base64UrlToBytes(base64Url: string): Uint8Array {
   return new Uint8Array(base64UrlToArrayBuffer(base64Url));
 }
@@ -32,12 +52,7 @@ export function bytesToHex(bytes: Uint8Array): string {
 }
 
 export function hexToBytes(hex: string): Uint8Array {
-  const normalized = hex.startsWith('0x') ? hex.slice(2) : hex;
-  const bytes = new Uint8Array(normalized.length / 2);
-  for (let i = 0; i < bytes.length; i++) {
-    bytes[i] = parseInt(normalized.slice(i * 2, i * 2 + 2), 16);
-  }
-  return bytes;
+  return sharedHexToBytes(hex);
 }
 
 export function bytesEqual(a: Uint8Array, b: Uint8Array): boolean {

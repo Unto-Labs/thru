@@ -1,6 +1,6 @@
 {
   "name": "@thru/passkey",
-  "version": "0.0.1",
+  "version": "0.1.0",
   "type": "module",
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
@@ -10,6 +10,31 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
+    },
+    "./web": {
+      "types": "./dist/web.d.ts",
+      "import": "./dist/web.js",
+      "require": "./dist/web.cjs"
+    },
+    "./popup": {
+      "types": "./dist/popup.d.ts",
+      "import": "./dist/popup.js",
+      "require": "./dist/popup.cjs"
+    },
+    "./mobile": {
+      "types": "./dist/mobile.d.ts",
+      "import": "./dist/mobile.js",
+      "require": "./dist/mobile.cjs"
+    },
+    "./auth": {
+      "types": "./dist/auth.d.ts",
+      "import": "./dist/auth.js",
+      "require": "./dist/auth.cjs"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "import": "./dist/server.js",
+      "require": "./dist/server.cjs"
     }
   },
   "scripts": {
@@ -19,6 +44,26 @@
   },
   "dependencies": {
     "@thru/passkey-manager": "workspace:*"
+  },
+  "peerDependencies": {
+    "expo-secure-store": "*",
+    "react-native": "*",
+    "react-native-passkeys": "*",
+    "zustand": ">=4"
+  },
+  "peerDependenciesMeta": {
+    "expo-secure-store": {
+      "optional": true
+    },
+    "react-native": {
+      "optional": true
+    },
+    "react-native-passkeys": {
+      "optional": true
+    },
+    "zustand": {
+      "optional": true
+    }
   },
   "devDependencies": {
     "tsup": "^8.5.0",

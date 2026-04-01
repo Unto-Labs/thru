@@ -1,4 +1,8 @@
-// Types
+/**
+ * @deprecated Import browser APIs from `@thru/passkey/web` and popup APIs from
+ * `@thru/passkey/popup`. The root export path remains as a temporary
+ * compatibility shim and will be removed after downstream consumers migrate.
+ */
 export type {
   PasskeyRegistrationResult,
   PasskeySigningResult,
@@ -8,6 +12,46 @@ export type {
   PasskeyClientCapabilities,
   PasskeyPopupContext,
   PasskeyPopupAccount,
+} from './web';
+
+/**
+ * @deprecated Import browser APIs from `@thru/passkey/web`.
+ */
+export {
+  registerPasskey,
+  signWithPasskey,
+  signWithStoredPasskey,
+  signWithDiscoverablePasskey,
+  parseDerSignature,
+  normalizeLowS,
+  normalizeSignatureComponent,
+  P256_N,
+  P256_HALF_N,
+  bytesToBigIntBE,
+  bigIntToBytesBE,
+  isWebAuthnSupported,
+  preloadPasskeyClientCapabilities,
+  getPasskeyClientCapabilities,
+  getCachedPasskeyClientCapabilities,
+  shouldUsePasskeyPopup,
+  isInIframe,
+  arrayBufferToBase64Url,
+  base64UrlToArrayBuffer,
+  bytesToBase64,
+  bytesToBase64Url,
+  base64UrlToBytes,
+  bytesToHex,
+  hexToBytes,
+  bytesEqual,
+  compareBytes,
+  uniqueAccounts,
+  type PasskeyPromptAction,
+} from './web';
+
+/**
+ * @deprecated Import popup APIs from `@thru/passkey/popup`.
+ */
+export type {
   PasskeyPopupAction,
   PasskeyPopupGetRequestPayload,
   PasskeyPopupCreateRequestPayload,
@@ -19,50 +63,11 @@ export type {
   PasskeyPopupStoredSigningResult,
   PasskeyPopupRegistrationResult,
   PasskeyPopupResponse,
-} from './types';
+} from './popup-entry';
 
-// Registration
-export { registerPasskey } from './register';
-
-// Signing
-export { signWithPasskey, signWithStoredPasskey, signWithDiscoverablePasskey } from './sign';
-
-// Crypto (re-exported from @thru/passkey-manager)
-export {
-  parseDerSignature,
-  normalizeLowS,
-  normalizeSignatureComponent,
-  P256_N,
-  P256_HALF_N,
-  bytesToBigIntBE,
-  bigIntToBytesBE,
-} from '@thru/passkey-manager';
-
-// Capabilities
-export {
-  isWebAuthnSupported,
-  preloadPasskeyClientCapabilities,
-  getPasskeyClientCapabilities,
-  getCachedPasskeyClientCapabilities,
-  shouldUsePasskeyPopup,
-  isInIframe,
-  type PasskeyPromptAction,
-} from './capabilities';
-
-// Encoding (re-exported from @thru/passkey-manager)
-export {
-  arrayBufferToBase64Url,
-  base64UrlToArrayBuffer,
-  bytesToBase64Url,
-  base64UrlToBytes,
-  bytesToHex,
-  hexToBytes,
-  bytesEqual,
-  compareBytes,
-  uniqueAccounts,
-} from '@thru/passkey-manager';
-
-// Popup (parent side)
+/**
+ * @deprecated Import popup APIs from `@thru/passkey/popup`.
+ */
 export {
   PASSKEY_POPUP_PATH,
   PASSKEY_POPUP_READY_EVENT,
@@ -72,15 +77,8 @@ export {
   openPasskeyPopupWindow,
   closePopup,
   requestPasskeyPopup,
-} from './popup';
-
-// Popup service (popup window side)
-export {
   toPopupSigningResult,
   buildSuccessResponse,
   decodeChallenge,
-  getPopupDisplayInfo,
   getResponseError,
-  signWithPreferredPasskey,
-  buildStoredPasskeyResult,
-} from './popup-service';
+} from './popup-entry';

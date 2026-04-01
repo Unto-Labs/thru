@@ -1,4 +1,4 @@
-//! DWARF variable resolution for DebugReExecute responses.
+//! DWARF variable resolution for transaction debug responses.
 //!
 //! Finds variables in scope at a given PC and resolves their values
 //! from the register dump and stack windows.
@@ -167,13 +167,17 @@ fn collect_variables<'data>(
                 // Non-scope DIEs: push a dummy scope entry if they have children
                 // so the depth tracking stays correct
                 if entry.has_children() {
-                    scope_stack.push(scope_stack.last().copied().unwrap_or(false));
+                    scope_stack.push(inherit_scope_contains_pc(&scope_stack));
                 }
             }
         }
     }
 
     Some(result)
+}
+
+fn inherit_scope_contains_pc(scope_stack: &[bool]) -> bool {
+    scope_stack.last().copied().unwrap_or(true)
 }
 
 fn make_empty_loc<'data>() -> gimli::AttributeValue<R<'data>> {
@@ -266,6 +270,22 @@ fn eval_frame_base<'data>(
         }
         Ok(Some(gimli::Operation::CallFrameCFA)) => compute_cfa(debug_frame, pc, registers),
         _ => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::inherit_scope_contains_pc;
+
+    #[test]
+    fn root_scope_defaults_to_in_scope() {
+        assert!(inherit_scope_contains_pc(&[]));
+    }
+
+    #[test]
+    fn inherited_scope_tracks_parent_scope_value() {
+        assert!(inherit_scope_contains_pc(&[true]));
+        assert!(!inherit_scope_contains_pc(&[false]));
     }
 }
 

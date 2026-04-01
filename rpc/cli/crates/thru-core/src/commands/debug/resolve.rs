@@ -1,7 +1,7 @@
-//! DWARF-powered error report for DebugReExecute responses.
+//! DWARF-powered error report for transaction debug responses.
 //!
-//! Takes a program .elf (built with -g) and either a DebugReExecuteResponse JSON
-//! file or a transaction signature (calls DebugReExecute via gRPC).
+//! Takes a program .elf (built with -g) and either a transaction debug response JSON
+//! file or a transaction signature (calls transaction debug via gRPC).
 //! Resolves PCs to source locations and produces a rich error report.
 
 use std::collections::BTreeMap;
@@ -105,7 +105,7 @@ async fn fetch_via_grpc(config: &Config, signature_str: &str) -> Result<Response
     let proto_resp = client
         .debug_re_execute(&sig_bytes, false, false, false, false)
         .await
-        .map_err(|e| CliError::Rpc(format!("debug re-execute failed: {e}")))?;
+        .map_err(|e| CliError::Rpc(format!("txn debug failed: {e}")))?;
 
     Ok(Response::from_proto(&proto_resp))
 }
@@ -267,14 +267,16 @@ struct Response {
 
 /// Parse a response JSON file, accepting either:
 /// - Proto3 JSON (camelCase, with nested `executionDetails`)
-/// - CLI `--json debug re-execute` output (snake_case, flat, optionally wrapped in `debug_re_execute`)
+/// - CLI `--json txn debug` output (snake_case, flat, optionally wrapped in `txn_debug`)
 fn parse_response_json(text: &str) -> Result<Response, CliError> {
     let raw: Value = serde_json::from_str(text).map_err(|e| CliError::Generic {
         message: format!("failed to parse response JSON: {e}"),
     })?;
 
     // Unwrap CLI wrapper if present
-    let obj = if let Some(inner) = raw.get("debug_re_execute") {
+    let obj = if let Some(inner) = raw.get("txn_debug") {
+        inner
+    } else if let Some(inner) = raw.get("debug_re_execute") {
         inner
     } else {
         &raw

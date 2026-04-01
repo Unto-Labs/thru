@@ -2,7 +2,12 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": {
     "outDir": "./dist",
-    "rootDir": "./src"
+    "rootDir": "..",
+    "baseUrl": ".",
+    "paths": {
+      "@thru/helpers": ["../helpers/src/index.ts"],
+      "@thru/passkey-manager": ["../passkey-manager/src/index.ts"]
+    }
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

@@ -956,6 +956,10 @@ message GetChainInfoResponse {
   // Chain identifier, unique per network (similar to Ethereum chain ID).
   // Used to prevent transaction replay across different chains.
   uint32 chain_id = 1 [(google.api.field_behavior) = REQUIRED];
+
+  // Minimum timestamp (nanoseconds since epoch) at which 4f+1 validator weight
+  // has reported advancement. Zero if not yet available.
+  uint64 min_lock_time = 2 [(google.api.field_behavior) = OPTIONAL];
 }
 
 // GetStateRootsRequest retrieves up to 257 state roots ending at a specified slot.
@@ -977,6 +981,25 @@ message StateRootEntry {
 // GetStateRootsResponse contains up to 257 state roots ending at the requested slot.
 message GetStateRootsResponse {
   repeated StateRootEntry state_roots = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+// GetActiveStateHashesRequest retrieves active state hashes for a range of slots.
+message GetActiveStateHashesRequest {
+  // The upper bound slot (inclusive). If not specified, defaults to the latest finalized slot.
+  optional uint64 end_slot = 1 [(google.api.field_behavior) = OPTIONAL];
+  // The lower bound slot (inclusive). If not specified, defaults to max(0, end_slot - 127).
+  optional uint64 start_slot = 2 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// ActiveStateHashEntry represents an active state hash for a specific slot.
+message ActiveStateHashEntry {
+  uint64 slot = 1 [(google.api.field_behavior) = REQUIRED];
+  bytes active_state_hash = 2 [(google.api.field_behavior) = REQUIRED];
+}
+
+// GetActiveStateHashesResponse contains active state hashes ending at the requested slot.
+message GetActiveStateHashesResponse {
+  repeated ActiveStateHashEntry active_state_hashes = 1 [(google.api.field_behavior) = REQUIRED];
 }
 
 // GetSlotMetricsRequest retrieves metrics for a specific slot.
@@ -1177,6 +1200,13 @@ service QueryService {
   rpc GetStateRoots(GetStateRootsRequest) returns (GetStateRootsResponse) {
     option (google.api.http) = {
       get: "/v1/stateroots"
+    };
+  }
+
+  // Get active state hashes for a range of slots.
+  rpc GetActiveStateHashes(GetActiveStateHashesRequest) returns (GetActiveStateHashesResponse) {
+    option (google.api.http) = {
+      get: "/v1/active-state-hashes"
     };
   }
 

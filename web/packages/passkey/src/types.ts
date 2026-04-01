@@ -69,6 +69,7 @@ export interface PasskeyPopupGetRequestPayload {
 export interface PasskeyPopupCreateRequestPayload {
   alias: string;
   userId: string;
+  rpId: string;
 }
 
 export interface PasskeyPopupGetStoredRequestPayload {

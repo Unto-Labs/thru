@@ -33,7 +33,7 @@ readonly RPC_BASE_URL="${RPC_BASE_URL:-$RPC_BASE_URL_DEFAULT}"
 readonly ADVANCE_TRANSFERS_VALUE="${ADVANCE_TRANSFERS_VALUE:-1}"
 readonly RETRY_ATTEMPTS="${RETRY_ATTEMPTS:-5}"
 readonly RETRY_DELAY_SECS="${RETRY_DELAY_SECS:-2}"
-readonly AVAILABLE_SCENARIOS=(core keys accounts transfers txn program event token util debug)
+readonly AVAILABLE_SCENARIOS=(core keys accounts transfers txn program program-upgrade event token util debug)
 
 SELECTED_SCENARIO="${TEST_SCOPE:-all}"
 
@@ -882,7 +882,7 @@ scenario_util() {
 
 scenario_debug() {
   should_run "debug" || return 0
-  log_section "Scenario: debug re-execute"
+  log_section "Scenario: txn debug"
 
   # Debug test program addresses (deployed at genesis)
   local DEBUG_TEST_PROG_A_HEX="00000000000000000000000000000000000000000000000000000000000000EB"
@@ -921,38 +921,38 @@ scenario_debug() {
   sleep 3
 
   # --- Phase 1: Availability check + basic JSON response + execution details ---
-  log "Phase 1: Basic debug re-execute (JSON output + execution details)"
+  log "Phase 1: Basic txn debug (JSON output + execution details)"
   local debug_json
-  debug_json=$(with_cli_env "$THRU_CLI_BIN" --json debug re-execute "$test_sig" 2>&1) || {
+  debug_json=$(with_cli_env "$THRU_CLI_BIN" --json txn debug "$test_sig" 2>&1) || {
     if grep -qi "unimplemented" <<<"$debug_json"; then
       log "Debug service unavailable (CGO-disabled build?) — skipping scenario"
       return 0
     fi
-    die "debug re-execute failed: $debug_json"
+    die "txn debug failed: $debug_json"
   }
 
   # Verify JSON structure
-  assert_jq_eq "$debug_json" '.debug_re_execute.signature' "$test_sig"
+  assert_jq_eq "$debug_json" '.txn_debug.signature' "$test_sig"
 
   # Verify execution details
   local exec_code cu_consumed
-  exec_code=$(printf '%s' "$debug_json" | jq -er '.debug_re_execute.execution_code')
-  cu_consumed=$(printf '%s' "$debug_json" | jq -er '.debug_re_execute.compute_units_consumed')
+  exec_code=$(printf '%s' "$debug_json" | jq -er '.txn_debug.execution_code')
+  cu_consumed=$(printf '%s' "$debug_json" | jq -er '.txn_debug.compute_units_consumed')
   [[ "$exec_code" == "0" ]] || die "Expected execution_code 0 (success), got $exec_code"
   (( cu_consumed > 0 )) || die "Expected non-zero compute_units_consumed, got $cu_consumed"
 
   # Verify fault_code and fault_code_label fields exist and are parseable
   local fc fc_label
-  fc=$(printf '%s' "$debug_json" | jq -er '.debug_re_execute.fault_code')
-  fc_label=$(printf '%s' "$debug_json" | jq -er '.debug_re_execute.fault_code_label')
+  fc=$(printf '%s' "$debug_json" | jq -er '.txn_debug.fault_code')
+  fc_label=$(printf '%s' "$debug_json" | jq -er '.txn_debug.fault_code_label')
   [[ -n "$fc" ]] || die "fault_code field missing"
   [[ -n "$fc_label" ]] || die "fault_code_label field missing"
 
   # Verify VM state fields (matches Go Phase 5: testExecutionDetails)
   local pc ic reg_count
-  pc=$(printf '%s' "$debug_json" | jq -er '.debug_re_execute.program_counter')
-  ic=$(printf '%s' "$debug_json" | jq -er '.debug_re_execute.instruction_counter')
-  reg_count=$(printf '%s' "$debug_json" | jq -er '.debug_re_execute.registers | length')
+  pc=$(printf '%s' "$debug_json" | jq -er '.txn_debug.program_counter')
+  ic=$(printf '%s' "$debug_json" | jq -er '.txn_debug.instruction_counter')
+  reg_count=$(printf '%s' "$debug_json" | jq -er '.txn_debug.registers | length')
   (( pc > 0 )) || die "Expected non-zero program_counter, got $pc"
   (( ic > 0 )) || die "Expected non-zero instruction_counter, got $ic"
   [[ "$reg_count" == "32" ]] || die "Expected 32 registers, got $reg_count"
@@ -960,16 +960,18 @@ scenario_debug() {
 
   # Verify captured output fields exist
   local stdout_val trace_bytes log_val
-  stdout_val=$(printf '%s' "$debug_json" | jq -er '.debug_re_execute.stdout')
-  log_val=$(printf '%s' "$debug_json" | jq -er '.debug_re_execute.log')
-  trace_bytes=$(printf '%s' "$debug_json" | jq -er '.debug_re_execute.trace_bytes')
+  stdout_val=$(printf '%s' "$debug_json" | jq -er '.txn_debug.stdout')
+  log_val=$(printf '%s' "$debug_json" | jq -er '.txn_debug.log')
+  trace_bytes=$(printf '%s' "$debug_json" | jq -er '.txn_debug.trace_bytes')
+  printf '%s' "$debug_json" | jq -e '(.txn_debug | has("trace")) | not' >/dev/null \
+    || die "Default JSON output should stay compact and omit trace"
   log "Captured: stdout=${#stdout_val} bytes, log=${#log_val} bytes, trace=$trace_bytes bytes"
 
   # --- Phase 2: Text output mode ---
   log "Phase 2: Text output mode"
   local debug_text
-  debug_text=$(with_cli_env "$THRU_CLI_BIN" debug re-execute "$test_sig" 2>&1) || die "debug re-execute (text) failed"
-  assert_contains "$debug_text" "Debug Re-Execute"
+  debug_text=$(with_cli_env "$THRU_CLI_BIN" txn debug "$test_sig" 2>&1) || die "txn debug (text) failed"
+  assert_contains "$debug_text" "Transaction Debug"
   assert_contains "$debug_text" "Execution Details"
   assert_contains "$debug_text" "Captured Output"
 
@@ -977,61 +979,98 @@ scenario_debug() {
   log "Phase 2b: Save trace to file (--output-trace)"
   local trace_file="$CLI_TMP_HOME/debug_trace.bin"
   local debug_trace_json
-  debug_trace_json=$(run_cli_json "debug re-execute +trace" debug re-execute "$test_sig" --output-trace "$trace_file")
+  debug_trace_json=$(run_cli_json "txn debug +trace" txn debug "$test_sig" --output-trace "$trace_file")
   [[ -f "$trace_file" ]] || die "Trace file not created at $trace_file"
   local trace_size
   trace_size=$(stat -c '%s' "$trace_file" 2>/dev/null || stat --printf='%s' "$trace_file" 2>/dev/null || stat -f '%z' "$trace_file")
   (( trace_size > 0 )) || die "Trace file is empty"
   local reported_bytes
-  reported_bytes=$(printf '%s' "$debug_trace_json" | jq -er '.debug_re_execute.trace_bytes')
+  reported_bytes=$(printf '%s' "$debug_trace_json" | jq -er '.txn_debug.trace_bytes')
   [[ "$trace_size" == "$reported_bytes" ]] || die "Trace file size ($trace_size) != reported trace_bytes ($reported_bytes)"
   local trace_file_field
-  trace_file_field=$(printf '%s' "$debug_trace_json" | jq -er '.debug_re_execute.trace_file')
+  trace_file_field=$(printf '%s' "$debug_trace_json" | jq -er '.txn_debug.trace_file')
   [[ "$trace_file_field" == "$trace_file" ]] || die "trace_file field mismatch: expected $trace_file, got $trace_file_field"
   log "Trace saved: $trace_size bytes to $trace_file"
+
+  # --- Phase 2c: Inline trace in JSON output ---
+  log "Phase 2c: Inline trace in JSON output (--inline-trace)"
+  local debug_inline_json inline_trace
+  debug_inline_json=$(run_cli_json "txn debug +inline trace" txn debug "$test_sig" --inline-trace)
+  inline_trace=$(printf '%s' "$debug_inline_json" | jq -er '.txn_debug.trace')
+  [[ -n "$inline_trace" ]] || die "Expected inline trace to be present with --inline-trace"
+  reported_bytes=$(printf '%s' "$debug_inline_json" | jq -er '.txn_debug.trace_bytes')
+  local inline_trace_bytes
+  inline_trace_bytes=$(printf '%s' "$inline_trace" | wc -c | tr -d '[:space:]')
+  [[ "$inline_trace_bytes" == "$reported_bytes" ]] || die "Inline trace byte length ($inline_trace_bytes) != reported trace_bytes ($reported_bytes)"
+
+  local inline_trace_file="$CLI_TMP_HOME/debug_trace_inline.bin"
+  local debug_inline_trace_json
+  debug_inline_trace_json=$(run_cli_json "txn debug +inline trace +output" txn debug "$test_sig" --inline-trace --output-trace "$inline_trace_file")
+  [[ -f "$inline_trace_file" ]] || die "Inline trace file not created at $inline_trace_file"
+  printf '%s' "$debug_inline_trace_json" | jq -e '.txn_debug.trace | length > 0' >/dev/null \
+    || die "Expected inline trace to remain present with --inline-trace --output-trace"
+  printf '%s' "$debug_inline_trace_json" | jq -e --arg path "$inline_trace_file" '.txn_debug.trace_file == $path' >/dev/null \
+    || die "trace_file missing or incorrect when using --inline-trace with --output-trace"
 
   # --- Phase 3: State before snapshots ---
   log "Phase 3: State before snapshots"
   local debug_before state_before_len
-  debug_before=$(run_cli_json "debug re-execute +state_before" debug re-execute "$test_sig" --include-state-before --include-account-data)
-  state_before_len=$(printf '%s' "$debug_before" | jq -er '.debug_re_execute.state_before | length')
+  debug_before=$(run_cli_json "txn debug +state_before" txn debug "$test_sig" --state-before --account-data)
+  state_before_len=$(printf '%s' "$debug_before" | jq -er '.txn_debug.state_before | length')
   (( state_before_len > 0 )) || die "Expected non-empty state_before, got $state_before_len snapshots"
   log "state_before: $state_before_len snapshots"
 
   # Verify fee payer (acc_0) is present
   local fp_before
   fp_before=$(printf '%s' "$debug_before" | jq -er --arg addr "$ACC_0_ADDRESS" \
-    '[.debug_re_execute.state_before[] | select(.address == $addr)] | length')
+    '[.txn_debug.state_before[] | select(.address == $addr)] | length')
   (( fp_before > 0 )) || die "Fee payer $ACC_0_ADDRESS not in state_before"
 
   # Verify fee payer has metadata
   local fp_balance
   fp_balance=$(printf '%s' "$debug_before" | jq -er --arg addr "$ACC_0_ADDRESS" \
-    '[.debug_re_execute.state_before[] | select(.address == $addr)][0].balance')
+    '[.txn_debug.state_before[] | select(.address == $addr)][0].balance')
   log "Fee payer balance (before): $fp_balance"
+  printf '%s' "$debug_before" | jq -e '
+    [.txn_debug.state_before[]
+      | select(.meta != null and .meta.version != null and .meta.flags != null)
+      | .meta.flags
+      | has("is_program")
+      and has("is_privileged")
+      and has("is_uncompressable")
+      and has("is_ephemeral")
+      and has("is_deleted")
+      and has("is_new")
+      and has("is_compressed")] | any' >/dev/null \
+    || die "Expected state_before snapshots to preserve full account flags metadata"
+  printf '%s' "$debug_before" | jq -e '
+    [.txn_debug.state_before[]
+      | select(.data_hex != null)
+      | .data_hex | type == "string"] | any' >/dev/null \
+    || die "Expected state_before snapshots with account data to preserve data_hex"
 
   # --- Phase 4: State after snapshots ---
   log "Phase 4: State after snapshots"
   local debug_after state_after_len
-  debug_after=$(run_cli_json "debug re-execute +state_after" debug re-execute "$test_sig" --include-state-after)
-  state_after_len=$(printf '%s' "$debug_after" | jq -er '.debug_re_execute.state_after | length')
+  debug_after=$(run_cli_json "txn debug +state_after" txn debug "$test_sig" --state-after)
+  state_after_len=$(printf '%s' "$debug_after" | jq -er '.txn_debug.state_after | length')
   (( state_after_len > 0 )) || die "Expected non-empty state_after, got $state_after_len snapshots"
   log "state_after: $state_after_len snapshots"
 
   # Verify fee payer in state_after
   local fp_after
   fp_after=$(printf '%s' "$debug_after" | jq -er --arg addr "$ACC_0_ADDRESS" \
-    '[.debug_re_execute.state_after[] | select(.address == $addr)] | length')
+    '[.txn_debug.state_after[] | select(.address == $addr)] | length')
   (( fp_after > 0 )) || die "Fee payer $ACC_0_ADDRESS not in state_after"
 
   # --- Phase 5: All flags combined ---
   log "Phase 5: All flags combined"
   local debug_full
-  debug_full=$(run_cli_json "debug re-execute +all" debug re-execute "$test_sig" \
-    --include-state-before --include-state-after --include-account-data)
-  printf '%s' "$debug_full" | jq -e '.debug_re_execute.state_before | length > 0' >/dev/null \
+  debug_full=$(run_cli_json "txn debug +all" txn debug "$test_sig" \
+    --state-before --state-after --account-data)
+  printf '%s' "$debug_full" | jq -e '.txn_debug.state_before | length > 0' >/dev/null \
     || die "state_before missing with all flags"
-  printf '%s' "$debug_full" | jq -e '.debug_re_execute.state_after | length > 0' >/dev/null \
+  printf '%s' "$debug_full" | jq -e '.txn_debug.state_after | length > 0' >/dev/null \
     || die "state_after missing with all flags"
   log "All flags: state_before and state_after present"
 
@@ -1045,9 +1084,9 @@ scenario_debug() {
   sleep 3
 
   local debug2_json
-  debug2_json=$(run_cli_json "debug re-execute second tx" debug re-execute "$test_sig2")
+  debug2_json=$(run_cli_json "txn debug second tx" txn debug "$test_sig2")
   local exec_code2
-  exec_code2=$(printf '%s' "$debug2_json" | jq -er '.debug_re_execute.execution_code')
+  exec_code2=$(printf '%s' "$debug2_json" | jq -er '.txn_debug.execution_code')
   [[ "$exec_code2" == "0" ]] || die "Second tx: expected execution_code 0, got $exec_code2"
   log "Second tx: execution_code=$exec_code2"
 
@@ -1069,10 +1108,10 @@ scenario_debug() {
   sleep 3
 
   local success_debug_json success_fc success_fc_label success_ec
-  success_debug_json=$(run_cli_json "debug re-execute success tx" debug re-execute "$success_sig")
-  success_ec=$(printf '%s' "$success_debug_json" | jq -er '.debug_re_execute.execution_code')
-  success_fc=$(printf '%s' "$success_debug_json" | jq -er '.debug_re_execute.fault_code')
-  success_fc_label=$(printf '%s' "$success_debug_json" | jq -er '.debug_re_execute.fault_code_label')
+  success_debug_json=$(run_cli_json "txn debug success tx" txn debug "$success_sig")
+  success_ec=$(printf '%s' "$success_debug_json" | jq -er '.txn_debug.execution_code')
+  success_fc=$(printf '%s' "$success_debug_json" | jq -er '.txn_debug.fault_code')
+  success_fc_label=$(printf '%s' "$success_debug_json" | jq -er '.txn_debug.fault_code_label')
   [[ "$success_ec" == "0" ]] || die "Expected execution_code 0 for debug test success, got $success_ec"
   [[ -n "$success_fc_label" ]] || die "fault_code_label field missing for debug test success"
   log "Debug test success: exec_code=$success_ec fault=$success_fc($success_fc_label)"
@@ -1095,15 +1134,17 @@ scenario_debug() {
   sleep 3
 
   local revert_debug_json
-  revert_debug_json=$(run_cli_json "debug re-execute revert tx" debug re-execute "$revert_sig")
-  local revert_fc revert_fc_label revert_uerr
-  revert_fc=$(printf '%s' "$revert_debug_json" | jq -er '.debug_re_execute.fault_code')
-  revert_fc_label=$(printf '%s' "$revert_debug_json" | jq -er '.debug_re_execute.fault_code_label')
-  revert_uerr=$(printf '%s' "$revert_debug_json" | jq -er '.debug_re_execute.user_error_code')
+  revert_debug_json=$(run_cli_json "txn debug revert tx" txn debug "$revert_sig")
+  local revert_fc revert_fc_label revert_uerr revert_err_prog_idx
+  revert_fc=$(printf '%s' "$revert_debug_json" | jq -er '.txn_debug.fault_code')
+  revert_fc_label=$(printf '%s' "$revert_debug_json" | jq -er '.txn_debug.fault_code_label')
+  revert_uerr=$(printf '%s' "$revert_debug_json" | jq -er '.txn_debug.user_error_code')
+  revert_err_prog_idx=$(printf '%s' "$revert_debug_json" | jq -er '.txn_debug.error_program_acc_idx')
   [[ "$revert_fc" != "0" ]] || die "Expected non-zero fault_code for revert, got 0"
   [[ "$revert_fc_label" == "Revert" ]] || die "Expected fault_code_label 'Revert', got '$revert_fc_label'"
   [[ "$revert_uerr" == "42" ]] || die "Expected user_error_code 42, got $revert_uerr"
-  log "Revert: fault=$revert_fc($revert_fc_label) user_error=$revert_uerr"
+  [[ "$revert_err_prog_idx" == "1" ]] || die "Expected error_program_acc_idx 1 for single-program revert, got $revert_err_prog_idx"
+  log "Revert: fault=$revert_fc($revert_fc_label) user_error=$revert_uerr err_prog=$revert_err_prog_idx"
 
   # --- Phase 8: Segfault detection (matches Go Phase 9: testSegfault) ---
   log "Phase 8: Segfault detection"
@@ -1123,16 +1164,16 @@ scenario_debug() {
   sleep 3
 
   local segfault_debug_json segfault_ec segfault_pc segfault_vaddr segfault_sz segfault_wr
-  segfault_debug_json=$(run_cli_json "debug re-execute segfault tx" debug re-execute "$segfault_sig")
-  segfault_ec=$(printf '%s' "$segfault_debug_json" | jq -er '.debug_re_execute.execution_code')
-  segfault_pc=$(printf '%s' "$segfault_debug_json" | jq -er '.debug_re_execute.program_counter')
+  segfault_debug_json=$(run_cli_json "txn debug segfault tx" txn debug "$segfault_sig")
+  segfault_ec=$(printf '%s' "$segfault_debug_json" | jq -er '.txn_debug.execution_code')
+  segfault_pc=$(printf '%s' "$segfault_debug_json" | jq -er '.txn_debug.program_counter')
   [[ "$segfault_ec" != "0" ]] || die "Expected non-zero execution_code for segfault, got 0"
   (( segfault_pc > 0 )) || die "Expected non-zero program_counter at crash location"
 
   # Program writes to address 0xDEAD — verify exact segv_vaddr
-  segfault_vaddr=$(printf '%s' "$segfault_debug_json" | jq -er '.debug_re_execute.segv_vaddr')
-  segfault_sz=$(printf '%s' "$segfault_debug_json" | jq -er '.debug_re_execute.segv_size')
-  segfault_wr=$(printf '%s' "$segfault_debug_json" | jq -r '.debug_re_execute.segv_write')
+  segfault_vaddr=$(printf '%s' "$segfault_debug_json" | jq -er '.txn_debug.segv_vaddr')
+  segfault_sz=$(printf '%s' "$segfault_debug_json" | jq -er '.txn_debug.segv_size')
+  segfault_wr=$(printf '%s' "$segfault_debug_json" | jq -r '.txn_debug.segv_write')
   [[ "$segfault_vaddr" == "0xdead" ]] || die "Expected segv_vaddr=0xdead, got $segfault_vaddr"
   [[ "$segfault_sz" == "1" ]] || die "Expected segv_size=1 (single byte write), got $segfault_sz"
   [[ "$segfault_wr" == "true" ]] || die "Expected segv_write=true (write access), got $segfault_wr"
@@ -1157,10 +1198,10 @@ scenario_debug() {
   sleep 3
 
   local cpi_debug_json cpi_cd cpi_mcd cpi_fc
-  cpi_debug_json=$(run_cli_json "debug re-execute CPI tx" debug re-execute "$cpi_sig")
-  cpi_cd=$(printf '%s' "$cpi_debug_json" | jq -er '.debug_re_execute.call_depth')
-  cpi_mcd=$(printf '%s' "$cpi_debug_json" | jq -er '.debug_re_execute.max_call_depth')
-  cpi_fc=$(printf '%s' "$cpi_debug_json" | jq -er '.debug_re_execute.fault_code')
+  cpi_debug_json=$(run_cli_json "txn debug CPI tx" txn debug "$cpi_sig")
+  cpi_cd=$(printf '%s' "$cpi_debug_json" | jq -er '.txn_debug.call_depth')
+  cpi_mcd=$(printf '%s' "$cpi_debug_json" | jq -er '.txn_debug.max_call_depth')
+  cpi_fc=$(printf '%s' "$cpi_debug_json" | jq -er '.txn_debug.fault_code')
   [[ "$cpi_cd" == "1" ]] || die "Phase 9: expected call_depth=1 (fully unwound), got $cpi_cd"
   [[ "$cpi_mcd" == "5" ]] || die "Phase 9: expected max_call_depth=5 (root + 4 CPI), got $cpi_mcd"
   log "Deep CPI: call_depth=$cpi_cd max_call_depth=$cpi_mcd fault=$cpi_fc"
@@ -1184,34 +1225,36 @@ scenario_debug() {
 
   sleep 3
 
-  local rcpi_debug_json rcpi_cd rcpi_mcd rcpi_frame_count rcpi_f0 rcpi_f1 rcpi_f2 rcpi_f3
-  rcpi_debug_json=$(run_cli_json "debug re-execute revert CPI tx" debug re-execute "$revert_cpi_sig")
-  rcpi_cd=$(printf '%s' "$rcpi_debug_json" | jq -er '.debug_re_execute.call_depth')
-  rcpi_mcd=$(printf '%s' "$rcpi_debug_json" | jq -er '.debug_re_execute.max_call_depth')
-  rcpi_frame_count=$(printf '%s' "$rcpi_debug_json" | jq -er '.debug_re_execute.call_frames | length')
+  local rcpi_debug_json rcpi_cd rcpi_mcd rcpi_frame_count rcpi_err_prog_idx rcpi_f0 rcpi_f1 rcpi_f2 rcpi_f3
+  rcpi_debug_json=$(run_cli_json "txn debug revert CPI tx" txn debug "$revert_cpi_sig")
+  rcpi_cd=$(printf '%s' "$rcpi_debug_json" | jq -er '.txn_debug.call_depth')
+  rcpi_mcd=$(printf '%s' "$rcpi_debug_json" | jq -er '.txn_debug.max_call_depth')
+  rcpi_frame_count=$(printf '%s' "$rcpi_debug_json" | jq -er '.txn_debug.call_frames | length')
+  rcpi_err_prog_idx=$(printf '%s' "$rcpi_debug_json" | jq -er '.txn_debug.error_program_acc_idx')
   [[ "$rcpi_cd" == "2" ]] || die "Phase 9b: expected call_depth=2 (A→B, B reverts), got $rcpi_cd"
   [[ "$rcpi_mcd" == "2" ]] || die "Phase 9b: expected max_call_depth=2, got $rcpi_mcd"
   [[ "$rcpi_frame_count" == "3" ]] || die "Phase 9b: expected 3 call_frames, got $rcpi_frame_count"
-  rcpi_f0=$(printf '%s' "$rcpi_debug_json" | jq -er '.debug_re_execute.call_frames[0].program_acc_idx')
-  rcpi_f1=$(printf '%s' "$rcpi_debug_json" | jq -er '.debug_re_execute.call_frames[1].program_acc_idx')
-  rcpi_f2=$(printf '%s' "$rcpi_debug_json" | jq -er '.debug_re_execute.call_frames[2].program_acc_idx')
+  [[ "$rcpi_err_prog_idx" == "2" ]] || die "Phase 9b: expected error_program_acc_idx=2, got $rcpi_err_prog_idx"
+  rcpi_f0=$(printf '%s' "$rcpi_debug_json" | jq -er '.txn_debug.call_frames[0].program_acc_idx')
+  rcpi_f1=$(printf '%s' "$rcpi_debug_json" | jq -er '.txn_debug.call_frames[1].program_acc_idx')
+  rcpi_f2=$(printf '%s' "$rcpi_debug_json" | jq -er '.txn_debug.call_frames[2].program_acc_idx')
   [[ "$rcpi_f0" == "0" ]] || die "Phase 9b: call_frames[0].program_acc_idx=$rcpi_f0, expected 0 (sentinel)"
   [[ "$rcpi_f1" == "1" ]] || die "Phase 9b: call_frames[1].program_acc_idx=$rcpi_f1, expected 1 (Program A)"
   [[ "$rcpi_f2" == "2" ]] || die "Phase 9b: call_frames[2].program_acc_idx=$rcpi_f2, expected 2 (Program B)"
 
   # Verify saved_registers is an array of values (not just a count)
   local rcpi_f0_regcnt rcpi_f1_regcnt rcpi_f1_reg0
-  rcpi_f0_regcnt=$(printf '%s' "$rcpi_debug_json" | jq -er '.debug_re_execute.call_frames[0].saved_registers | length')
-  rcpi_f1_regcnt=$(printf '%s' "$rcpi_debug_json" | jq -er '.debug_re_execute.call_frames[1].saved_registers | length')
+  rcpi_f0_regcnt=$(printf '%s' "$rcpi_debug_json" | jq -er '.txn_debug.call_frames[0].saved_registers | length')
+  rcpi_f1_regcnt=$(printf '%s' "$rcpi_debug_json" | jq -er '.txn_debug.call_frames[1].saved_registers | length')
   [[ "$rcpi_f0_regcnt" == "32" ]] || die "Phase 9b: call_frames[0].saved_registers length=$rcpi_f0_regcnt, expected 32"
   [[ "$rcpi_f1_regcnt" == "32" ]] || die "Phase 9b: call_frames[1].saved_registers length=$rcpi_f1_regcnt, expected 32"
   # Sentinel frame (index 0) should have all-zero registers
-  rcpi_f0_reg0=$(printf '%s' "$rcpi_debug_json" | jq -er '.debug_re_execute.call_frames[0].saved_registers[0]')
+  rcpi_f0_reg0=$(printf '%s' "$rcpi_debug_json" | jq -er '.txn_debug.call_frames[0].saved_registers[0]')
   [[ "$rcpi_f0_reg0" == "0" ]] || die "Phase 9b: sentinel frame saved_registers[0]=$rcpi_f0_reg0, expected 0"
   # Non-sentinel frame (index 1): reg[2] is sp, must be in stack segment (seg_type=0x05, i.e. addr >> 40 == 5)
   # Stack segment addresses are >= 0x50001000000 (5497558138880)
   local rcpi_f1_sp
-  rcpi_f1_sp=$(printf '%s' "$rcpi_debug_json" | jq -er '.debug_re_execute.call_frames[1].saved_registers[2]')
+  rcpi_f1_sp=$(printf '%s' "$rcpi_debug_json" | jq -er '.txn_debug.call_frames[1].saved_registers[2]')
   local rcpi_f1_sp_seg
   rcpi_f1_sp_seg=$(( rcpi_f1_sp / 1099511627776 ))  # divide by 2^40 to get seg_type
   [[ "$rcpi_f1_sp_seg" == "5" ]] || die "Phase 9b: frame[1] sp=$rcpi_f1_sp seg_type=$rcpi_f1_sp_seg, expected stack segment (5)"
@@ -1220,24 +1263,24 @@ scenario_debug() {
   # Before the tn_litevm_exec fix, these were stale (zero) because tn_vm_set_shadow_stack_frame
   # was only called for the caller at CPI invoke time, not for the active/deepest frame.
   local rcpi_f2_frame_sp rcpi_f2_frame_sp_seg rcpi_f2_frame_pc
-  rcpi_f2_frame_sp=$(printf '%s' "$rcpi_debug_json" | jq -er '.debug_re_execute.call_frames[2].stack_pointer')
+  rcpi_f2_frame_sp=$(printf '%s' "$rcpi_debug_json" | jq -er '.txn_debug.call_frames[2].stack_pointer')
   rcpi_f2_frame_sp_seg=$(( rcpi_f2_frame_sp / 1099511627776 ))  # divide by 2^40 to get seg_type
   [[ "$rcpi_f2_frame_sp_seg" == "5" ]] || die "Phase 9b: active frame[2] stack_pointer=$rcpi_f2_frame_sp seg_type=$rcpi_f2_frame_sp_seg, expected stack segment (5)"
-  rcpi_f2_frame_pc=$(printf '%s' "$rcpi_debug_json" | jq -er '.debug_re_execute.call_frames[2].program_counter')
+  rcpi_f2_frame_pc=$(printf '%s' "$rcpi_debug_json" | jq -er '.txn_debug.call_frames[2].program_counter')
   [[ "$rcpi_f2_frame_pc" != "0" ]] || die "Phase 9b: active frame[2] program_counter=0, expected non-zero (stale active frame bug)"
 
   # Verify caller frame (index 1) has valid stack_pointer and program_counter
   local rcpi_f1_frame_sp rcpi_f1_frame_sp_seg rcpi_f1_frame_pc
-  rcpi_f1_frame_sp=$(printf '%s' "$rcpi_debug_json" | jq -er '.debug_re_execute.call_frames[1].stack_pointer')
+  rcpi_f1_frame_sp=$(printf '%s' "$rcpi_debug_json" | jq -er '.txn_debug.call_frames[1].stack_pointer')
   rcpi_f1_frame_sp_seg=$(( rcpi_f1_frame_sp / 1099511627776 ))
   [[ "$rcpi_f1_frame_sp_seg" == "5" ]] || die "Phase 9b: frame[1] stack_pointer=$rcpi_f1_frame_sp seg_type=$rcpi_f1_frame_sp_seg, expected stack segment (5)"
-  rcpi_f1_frame_pc=$(printf '%s' "$rcpi_debug_json" | jq -er '.debug_re_execute.call_frames[1].program_counter')
+  rcpi_f1_frame_pc=$(printf '%s' "$rcpi_debug_json" | jq -er '.txn_debug.call_frames[1].program_counter')
   [[ "$rcpi_f1_frame_pc" != "0" ]] || die "Phase 9b: frame[1] program_counter=0, expected non-zero"
 
   # Verify stack_window is present on non-sentinel frames
   local rcpi_f1_sw rcpi_f1_swb rcpi_f1_sw_len
-  rcpi_f1_sw=$(printf '%s' "$rcpi_debug_json" | jq -er '.debug_re_execute.call_frames[1].stack_window')
-  rcpi_f1_swb=$(printf '%s' "$rcpi_debug_json" | jq -er '.debug_re_execute.call_frames[1].stack_window_base')
+  rcpi_f1_sw=$(printf '%s' "$rcpi_debug_json" | jq -er '.txn_debug.call_frames[1].stack_window')
+  rcpi_f1_swb=$(printf '%s' "$rcpi_debug_json" | jq -er '.txn_debug.call_frames[1].stack_window_base')
   [[ -n "$rcpi_f1_sw" && "$rcpi_f1_sw" != "null" && "$rcpi_f1_sw" != "" ]] \
     || die "Phase 9b: call_frames[1].stack_window is empty, expected non-empty hex"
   rcpi_f1_sw_len=${#rcpi_f1_sw}
@@ -1249,15 +1292,15 @@ scenario_debug() {
 
   log "Revert CPI: call_depth=$rcpi_cd max_call_depth=$rcpi_mcd frames=$rcpi_frame_count accIdx=[$rcpi_f0,$rcpi_f1,$rcpi_f2] regs=[${rcpi_f0_regcnt},${rcpi_f1_regcnt}] sp=$rcpi_f1_sp active_frame_sp=$rcpi_f2_frame_sp active_frame_pc=$rcpi_f2_frame_pc"
 
-  # --- Phase 9c: Memory dump (--include-memory-dump) ---
-  log "Phase 9c: Memory dump (--include-memory-dump)"
+  # --- Phase 9c: Memory dump (--memory-dump) ---
+  log "Phase 9c: Memory dump (--memory-dump)"
   local memdump_json memdump_seg_count memdump_stack_pages
-  memdump_json=$(run_cli_json "debug re-execute +memdump" debug re-execute "$revert_cpi_sig" --include-memory-dump)
-  memdump_seg_count=$(printf '%s' "$memdump_json" | jq -er '.debug_re_execute.memory_segments | length')
+  memdump_json=$(run_cli_json "txn debug +memdump" txn debug "$revert_cpi_sig" --memory-dump)
+  memdump_seg_count=$(printf '%s' "$memdump_json" | jq -er '.txn_debug.memory_segments | length')
   (( memdump_seg_count > 0 )) || die "Phase 9c: expected memory_segments, got $memdump_seg_count segments"
   # At least one stack segment (type=5)
   memdump_stack_pages=$(printf '%s' "$memdump_json" | jq -er \
-    '[.debug_re_execute.memory_segments[] | select(.segment_type == 5) | .pages | length] | add // 0')
+    '[.txn_debug.memory_segments[] | select(.segment_type == 5) | .pages | length] | add // 0')
   (( memdump_stack_pages > 0 )) || die "Phase 9c: expected stack segment (type=5) with pages, got $memdump_stack_pages pages"
   log "Memory dump: $memdump_seg_count segments, $memdump_stack_pages stack pages"
 
@@ -1279,10 +1322,10 @@ scenario_debug() {
   sleep 3
 
   local exhaust_debug_json exhaust_ec exhaust_cu exhaust_fc
-  exhaust_debug_json=$(run_cli_json "debug re-execute CU exhaust tx" debug re-execute "$exhaust_sig")
-  exhaust_ec=$(printf '%s' "$exhaust_debug_json" | jq -er '.debug_re_execute.execution_code')
-  exhaust_cu=$(printf '%s' "$exhaust_debug_json" | jq -er '.debug_re_execute.compute_units_consumed')
-  exhaust_fc=$(printf '%s' "$exhaust_debug_json" | jq -er '.debug_re_execute.fault_code')
+  exhaust_debug_json=$(run_cli_json "txn debug CU exhaust tx" txn debug "$exhaust_sig")
+  exhaust_ec=$(printf '%s' "$exhaust_debug_json" | jq -er '.txn_debug.execution_code')
+  exhaust_cu=$(printf '%s' "$exhaust_debug_json" | jq -er '.txn_debug.compute_units_consumed')
+  exhaust_fc=$(printf '%s' "$exhaust_debug_json" | jq -er '.txn_debug.fault_code')
   [[ "$exhaust_ec" != "0" ]] || die "Expected non-zero execution_code for CU exhaustion, got 0"
   log "CU exhaustion: exec_code=$exhaust_ec cu_consumed=$exhaust_cu fault=$exhaust_fc"
 
@@ -1304,9 +1347,9 @@ scenario_debug() {
   sleep 3
 
   local sigcu_debug_json sigcu_fc sigcu_label
-  sigcu_debug_json=$(run_cli_json "debug re-execute SIGCU tx" debug re-execute "$sigcu_sig")
-  sigcu_fc=$(printf '%s' "$sigcu_debug_json" | jq -er '.debug_re_execute.fault_code')
-  sigcu_label=$(printf '%s' "$sigcu_debug_json" | jq -er '.debug_re_execute.fault_code_label')
+  sigcu_debug_json=$(run_cli_json "txn debug SIGCU tx" txn debug "$sigcu_sig")
+  sigcu_fc=$(printf '%s' "$sigcu_debug_json" | jq -er '.txn_debug.fault_code')
+  sigcu_label=$(printf '%s' "$sigcu_debug_json" | jq -er '.txn_debug.fault_code_label')
   [[ "$sigcu_fc" == "2" ]] || die "Expected fault_code=2 (SIGCU), got $sigcu_fc"
   [[ "$sigcu_label" == "ComputeUnitsExhausted" ]] || die "Expected fault_code_label=ComputeUnitsExhausted, got $sigcu_label"
   log "SIGCU: fault_code=$sigcu_fc label=$sigcu_label"
@@ -1335,9 +1378,9 @@ scenario_debug() {
   sleep 3
 
   local sigsu_debug_json sigsu_fc sigsu_label
-  sigsu_debug_json=$(run_cli_json "debug re-execute SIGSU tx" debug re-execute "$sigsu_sig")
-  sigsu_fc=$(printf '%s' "$sigsu_debug_json" | jq -er '.debug_re_execute.fault_code')
-  sigsu_label=$(printf '%s' "$sigsu_debug_json" | jq -er '.debug_re_execute.fault_code_label')
+  sigsu_debug_json=$(run_cli_json "txn debug SIGSU tx" txn debug "$sigsu_sig")
+  sigsu_fc=$(printf '%s' "$sigsu_debug_json" | jq -er '.txn_debug.fault_code')
+  sigsu_label=$(printf '%s' "$sigsu_debug_json" | jq -er '.txn_debug.fault_code_label')
   [[ "$sigsu_fc" == "3" ]] || die "Expected fault_code=3 (SIGSU), got $sigsu_fc"
   [[ "$sigsu_label" == "StateUnitsExhausted" ]] || die "Expected fault_code_label=StateUnitsExhausted, got $sigsu_label"
   log "SIGSU: fault_code=$sigsu_fc label=$sigsu_label"
@@ -1418,12 +1461,12 @@ scenario_debug() {
   # --- Phase 14: Debug resolve — revert (--response file mode) ---
   log "Phase 14: Debug resolve — revert (--response file mode)"
   local reexec_save_json="$CLI_TMP_HOME/revert_reexec.json"
-  run_cli_json "save re-execute response" debug re-execute "$revert_sig" > "$reexec_save_json"
-  [[ -s "$reexec_save_json" ]] || die "Phase 14: saved re-execute response is empty"
+  run_cli_json "save txn debug response" txn debug "$revert_sig" > "$reexec_save_json"
+  [[ -s "$reexec_save_json" ]] || die "Phase 14: saved txn debug response is empty"
 
   # Strip the CLI wrapper to get the inner JSON for --response
   local reexec_inner_json="$CLI_TMP_HOME/revert_reexec_inner.json"
-  jq '.debug_re_execute' "$reexec_save_json" > "$reexec_inner_json"
+  jq '.txn_debug' "$reexec_save_json" > "$reexec_inner_json"
 
   local resolve_file_json resolve_file_source resolve_file_function
   resolve_file_json=$(run_cli_json "debug resolve from file" debug resolve --elf "$DEBUG_TEST_ELF" --response "$reexec_inner_json")
@@ -1519,7 +1562,7 @@ scenario_debug() {
 
   fi  # end ELF exists check
 
-  log "All debug re-execute phases passed"
+  log "All txn debug phases passed"
 }
 
 # ---------------------------------------------------------------------------

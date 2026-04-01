@@ -978,6 +978,36 @@ pub enum TxnCommands {
         retry_count: u32,
     },
 
+    /// Debug a confirmed transaction
+    Debug {
+        /// Transaction signature (ts... format or 128 hex characters)
+        signature: String,
+
+        /// Include account state snapshots before execution
+        #[arg(long = "state-before", alias = "include-state-before")]
+        include_state_before: bool,
+
+        /// Include account state snapshots after execution
+        #[arg(long = "state-after", alias = "include-state-after")]
+        include_state_after: bool,
+
+        /// Include full account data in state snapshots
+        #[arg(long = "account-data", alias = "include-account-data")]
+        include_account_data: bool,
+
+        /// Save VM execution trace to file
+        #[arg(long, value_name = "FILE")]
+        output_trace: Option<String>,
+
+        /// Include the full trace string in JSON output
+        #[arg(long)]
+        inline_trace: bool,
+
+        /// Include full memory dump (stack + heap pages)
+        #[arg(long = "memory-dump", alias = "include-memory-dump")]
+        include_memory_dump: bool,
+    },
+
     /// Sort public keys for inclusion in transaction account lists
     Sort {
         /// Public keys to sort (hex or ta... format)
@@ -1917,37 +1947,10 @@ pub enum InitCommands {
 /// Debug subcommands
 #[derive(Subcommand)]
 pub enum DebugCommands {
-    /// Re-execute a transaction in a simulated environment
-    #[command(name = "re-execute")]
-    ReExecute {
-        /// Transaction signature (ts... format or 128 hex characters)
-        signature: String,
-
-        /// Include account state snapshots before execution
-        #[arg(long)]
-        include_state_before: bool,
-
-        /// Include account state snapshots after execution
-        #[arg(long)]
-        include_state_after: bool,
-
-        /// Include full account data in state snapshots
-        #[arg(long)]
-        include_account_data: bool,
-
-        /// Save VM execution trace to file
-        #[arg(long, value_name = "FILE")]
-        output_trace: Option<String>,
-
-        /// Include full memory dump (stack + heap pages)
-        #[arg(long)]
-        include_memory_dump: bool,
-    },
-
-    /// Resolve DWARF debug info for a DebugReExecute response
+    /// Resolve DWARF debug info for a transaction debug response
     ///
     /// Takes a program .elf (built with -g) and either a response JSON file or a
-    /// transaction signature (calls DebugReExecute via gRPC). Produces a source-level
+    /// transaction signature (calls transaction debug via gRPC). Produces a source-level
     /// error report with file:line mappings, call stack, variables, and annotated trace.
     #[command(name = "resolve")]
     Resolve {
@@ -1955,11 +1958,11 @@ pub enum DebugCommands {
         #[arg(long)]
         elf: std::path::PathBuf,
 
-        /// Path to the DebugReExecuteResponse JSON file (mutually exclusive with --signature)
+        /// Path to the transaction debug response JSON file (mutually exclusive with --signature)
         #[arg(long, group = "input")]
         response: Option<std::path::PathBuf>,
 
-        /// Transaction signature to re-execute via gRPC (mutually exclusive with --response)
+        /// Transaction signature to debug via gRPC (mutually exclusive with --response)
         #[arg(long, group = "input")]
         signature: Option<String>,
 
@@ -2305,5 +2308,92 @@ mod tests {
             }
             _ => panic!("unexpected command"),
         }
+    }
+
+    #[test]
+    fn parses_txn_debug_inline_trace_flag() {
+        let cli = Cli::try_parse_from([
+            "thru",
+            "txn",
+            "debug",
+            "ts11111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+            "--inline-trace",
+            "--output-trace",
+            "trace.log",
+            "--state-before",
+        ])
+        .expect("txn debug command should parse");
+
+        match cli.command {
+            Commands::Txn {
+                subcommand:
+                    TxnCommands::Debug {
+                        signature,
+                        include_state_before,
+                        include_state_after,
+                        include_account_data,
+                        output_trace,
+                        inline_trace,
+                        include_memory_dump,
+                    },
+            } => {
+                assert_eq!(
+                    signature,
+                    "ts11111111111111111111111111111111111111111111111111111111111111111111111111111111111111"
+                );
+                assert!(include_state_before);
+                assert!(!include_state_after);
+                assert!(!include_account_data);
+                assert_eq!(output_trace.as_deref(), Some("trace.log"));
+                assert!(inline_trace);
+                assert!(!include_memory_dump);
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn parses_txn_debug_legacy_include_flag_aliases() {
+        let cli = Cli::try_parse_from([
+            "thru",
+            "txn",
+            "debug",
+            "ts11111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+            "--include-state-after",
+            "--include-account-data",
+            "--include-memory-dump",
+        ])
+        .expect("legacy txn debug flag aliases should continue to parse");
+
+        match cli.command {
+            Commands::Txn {
+                subcommand:
+                    TxnCommands::Debug {
+                        include_state_before,
+                        include_state_after,
+                        include_account_data,
+                        include_memory_dump,
+                        ..
+                    },
+            } => {
+                assert!(!include_state_before);
+                assert!(include_state_after);
+                assert!(include_account_data);
+                assert!(include_memory_dump);
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn rejects_debug_re_execute_command() {
+        let result = Cli::try_parse_from([
+            "thru",
+            "debug",
+            "re-execute",
+            "ts11111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+        ]);
+
+        assert!(result.is_err(), "debug re-execute should no longer parse");
     }
 }

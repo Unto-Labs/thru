@@ -1,6 +1,7 @@
 //! Transaction signing and execution commands
 
 use crate::cli::TxnCommands;
+use crate::commands::debug::run_txn_debug;
 use crate::commands::state_proof::make_state_proof as make_state_proof_util;
 use crate::config::Config;
 use crate::crypto;
@@ -89,6 +90,28 @@ pub async fn handle_txn_command(
             signature,
             retry_count,
         } => get_transaction(config, &signature, json_format, retry_count).await,
+        TxnCommands::Debug {
+            signature,
+            include_state_before,
+            include_state_after,
+            include_account_data,
+            output_trace,
+            inline_trace,
+            include_memory_dump,
+        } => {
+            run_txn_debug(
+                config,
+                &signature,
+                include_state_before,
+                include_state_after,
+                include_account_data,
+                include_memory_dump,
+                output_trace.as_deref(),
+                inline_trace,
+                json_format,
+            )
+            .await
+        }
         TxnCommands::Sort { pubkeys } => sort_pubkeys(&pubkeys, json_format),
     }
 }
