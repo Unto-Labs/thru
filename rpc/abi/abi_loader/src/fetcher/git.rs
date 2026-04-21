@@ -8,14 +8,12 @@ use git2::{Cred, FetchOptions, RemoteCallbacks, Repository};
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
 
-/* Git repository fetcher */
 pub struct GitFetcher {
     config: GitFetcherConfig,
     cache_dir: PathBuf,
 }
 
 impl GitFetcher {
-    /* Create a new git fetcher with the given configuration */
     pub fn new(config: &GitFetcherConfig) -> Self {
         let cache_dir = dirs::cache_dir()
             .unwrap_or_else(|| PathBuf::from("/tmp"))
@@ -27,7 +25,6 @@ impl GitFetcher {
         }
     }
 
-    /* Generate a cache key for a repository URL */
     fn cache_key(&self, url: &str) -> String {
         let mut hasher = Sha256::new();
         hasher.update(url.as_bytes());
@@ -35,39 +32,27 @@ impl GitFetcher {
         hex::encode(&result[..16])
     }
 
-    /* Get the cached repository path */
     fn repo_cache_path(&self, url: &str) -> PathBuf {
         self.cache_dir.join(self.cache_key(url))
     }
 
-    /* Create fetch options with authentication callbacks */
     fn create_fetch_options(&self) -> FetchOptions<'_> {
         let mut callbacks = RemoteCallbacks::new();
 
-        /* Set up credentials callback */
         let ssh_key_path = self.config.ssh_key_path.clone();
         let use_credential_helper = self.config.use_credential_helper;
 
         callbacks.credentials(move |url, username_from_url, allowed_types| {
-            /* Try SSH key authentication first */
             if allowed_types.contains(git2::CredentialType::SSH_KEY) {
                 if let Some(ref key_path) = ssh_key_path {
-                    /* Use explicit SSH key */
-                    return Cred::ssh_key(
-                        username_from_url.unwrap_or("git"),
-                        None,
-                        key_path,
-                        None,
-                    );
-                } else {
-                    /* Try SSH agent */
-                    if let Ok(cred) = Cred::ssh_key_from_agent(username_from_url.unwrap_or("git")) {
-                        return Ok(cred);
-                    }
+                    return Cred::ssh_key(username_from_url.unwrap_or("git"), None, key_path, None);
+                } else if let Ok(cred) =
+                    Cred::ssh_key_from_agent(username_from_url.unwrap_or("git"))
+                {
+                    return Ok(cred);
                 }
             }
 
-            /* Try credential helper for HTTPS */
             if allowed_types.contains(git2::CredentialType::USER_PASS_PLAINTEXT)
                 && use_credential_helper
             {
@@ -78,7 +63,6 @@ impl GitFetcher {
                 );
             }
 
-            /* Try default credentials */
             if allowed_types.contains(git2::CredentialType::DEFAULT) {
                 return Cred::default();
             }
@@ -90,7 +74,6 @@ impl GitFetcher {
         fetch_options.remote_callbacks(callbacks);
         fetch_options.download_tags(git2::AutotagOption::All);
 
-        /* Set proxy if configured */
         if let Some(ref proxy_url) = self.config.proxy {
             let mut proxy_opts = git2::ProxyOptions::new();
             proxy_opts.url(proxy_url);
@@ -100,79 +83,51 @@ impl GitFetcher {
         fetch_options
     }
 
-    /* Clone or update a repository */
     fn clone_or_fetch(&self, url: &str) -> Result<Repository, FetchError> {
         let repo_path = self.repo_cache_path(url);
 
-        if repo_path.exists() {
-            /* Try to open existing repo and fetch updates */
-            match Repository::open(&repo_path) {
-                Ok(repo) => {
-                    /* Fetch latest from origin */
-                    {
-                        let mut remote = repo
-                            .find_remote("origin")
-                            .map_err(|e| FetchError::Git(format!("Failed to find remote: {}", e)))?;
+        match Repository::open(&repo_path) {
+            Ok(repo) => {
+                let mut remote = repo
+                    .find_remote("origin")
+                    .map_err(|e| FetchError::Git(format!("Failed to find remote: {}", e)))?;
 
-                        let mut fetch_options = self.create_fetch_options();
-                        remote
-                            .fetch(
-                                &["refs/heads/*:refs/heads/*", "refs/tags/*:refs/tags/*"],
-                                Some(&mut fetch_options),
-                                None,
-                            )
-                            .map_err(|e| FetchError::Git(format!("Failed to fetch: {}", e)))?;
-                    } /* Drop remote here before returning repo */
+                let mut fetch_options = self.create_fetch_options();
+                remote
+                    .fetch(
+                        &["refs/heads/*:refs/heads/*", "refs/tags/*:refs/tags/*"],
+                        Some(&mut fetch_options),
+                        None,
+                    )
+                    .map_err(|e| FetchError::Git(format!("Failed to fetch: {}", e)))?;
+                drop(remote);
 
-                    return Ok(repo);
+                Ok(repo)
+            }
+            Err(_) => {
+                /* Open failed: either the cache is absent or corrupted.
+                Wipe any remnant (no-op if absent) and clone fresh. */
+                if repo_path.exists() {
+                    std::fs::remove_dir_all(&repo_path).map_err(FetchError::Io)?;
                 }
-                Err(_) => {
-                    /* Remove corrupted cache and re-clone */
-                    let _ = std::fs::remove_dir_all(&repo_path);
-                }
+                std::fs::create_dir_all(&self.cache_dir).map_err(FetchError::Io)?;
+
+                let mut builder = git2::build::RepoBuilder::new();
+                builder.fetch_options(self.create_fetch_options());
+
+                builder
+                    .clone(url, &repo_path)
+                    .map_err(|e| FetchError::Git(format!("Failed to clone {}: {}", url, e)))
             }
         }
-
-        /* Create cache directory if needed */
-        std::fs::create_dir_all(&self.cache_dir)
-            .map_err(|e| FetchError::Io(e))?;
-
-        /* Clone the repository */
-        let mut builder = git2::build::RepoBuilder::new();
-        builder.fetch_options(self.create_fetch_options());
-
-        builder
-            .clone(url, &repo_path)
-            .map_err(|e| FetchError::Git(format!("Failed to clone {}: {}", url, e)))
     }
 
-    /* Checkout a specific ref (branch, tag, or commit) */
-    #[allow(dead_code)]
-    fn checkout_ref(&self, repo: &Repository, git_ref: &str) -> Result<(), FetchError> {
-        /* Try to resolve the ref */
-        let obj = repo
-            .revparse_single(git_ref)
-            .map_err(|e| FetchError::Git(format!("Failed to resolve ref '{}': {}", git_ref, e)))?;
-
-        /* Checkout the commit */
-        repo.checkout_tree(&obj, None)
-            .map_err(|e| FetchError::Git(format!("Failed to checkout '{}': {}", git_ref, e)))?;
-
-        /* Set HEAD to detached state at the commit */
-        repo.set_head_detached(obj.id())
-            .map_err(|e| FetchError::Git(format!("Failed to set HEAD: {}", e)))?;
-
-        Ok(())
-    }
-
-    /* Read a file from the repository at a specific ref */
     fn read_file_at_ref(
         &self,
         repo: &Repository,
         git_ref: &str,
         path: &str,
     ) -> Result<String, FetchError> {
-        /* Resolve the ref to a commit */
         let obj = repo
             .revparse_single(git_ref)
             .map_err(|e| FetchError::Git(format!("Failed to resolve ref '{}': {}", git_ref, e)))?;
@@ -185,16 +140,14 @@ impl GitFetcher {
             .tree()
             .map_err(|e| FetchError::Git(format!("Failed to get tree: {}", e)))?;
 
-        /* Find the file in the tree */
-        let entry = tree
-            .get_path(std::path::Path::new(path))
-            .map_err(|_| FetchError::NotFound(format!("File '{}' not found at ref '{}'", path, git_ref)))?;
+        let entry = tree.get_path(std::path::Path::new(path)).map_err(|_| {
+            FetchError::NotFound(format!("File '{}' not found at ref '{}'", path, git_ref))
+        })?;
 
         let blob = repo
             .find_blob(entry.id())
             .map_err(|e| FetchError::Git(format!("Failed to get blob: {}", e)))?;
 
-        /* Read content as UTF-8 */
         let content = std::str::from_utf8(blob.content())
             .map_err(|e| FetchError::Parse(format!("File is not valid UTF-8: {}", e)))?;
 
@@ -214,13 +167,8 @@ impl ImportFetcher for GitFetcher {
             ));
         };
 
-        /* Clone or update the repository */
         let repo = self.clone_or_fetch(url)?;
-
-        /* Read the file at the specified ref */
         let content = self.read_file_at_ref(&repo, git_ref, path)?;
-
-        /* Create canonical location identifier */
         let canonical_location = format!("git:{}@{}:{}", url, git_ref, path);
 
         Ok(FetchResult {
@@ -229,13 +177,6 @@ impl ImportFetcher for GitFetcher {
             is_remote: true,
             resolved_path: None,
         })
-    }
-}
-
-/* Hex encoding helper (simple implementation to avoid extra dependency) */
-mod hex {
-    pub fn encode(bytes: &[u8]) -> String {
-        bytes.iter().map(|b| format!("{:02x}", b)).collect()
     }
 }
 

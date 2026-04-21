@@ -1054,6 +1054,57 @@ message GetNodeRecordsResponse {
 }
 
 
+// NodeMode represents the consensus/repair operating mode.
+enum NodeMode {
+  NODE_MODE_UNKNOWN = 0;
+  NODE_MODE_REGULAR = 1;
+  NODE_MODE_CATASTROPHIC = 2;
+}
+
+// GetNodeStatusRequest requests the node's operational status.
+message GetNodeStatusRequest {}
+
+// GetNodeStatusResponse returns the node's operational status including
+// consensus readiness, repair state, and current heights.
+message GetNodeStatusResponse {
+  // High-level readiness flag. True when consensus is active and the node
+  // is ready to accept and process transactions.
+  bool ready = 1;
+
+  // Consensus subsystem state.
+  NodeConsensusStatus consensus = 2;
+
+  // Repair subsystem state.
+  NodeRepairStatus repair = 3;
+
+  // Latest finalized slot.
+  uint64 finalized_slot = 4;
+
+  // Latest locally executed slot.
+  uint64 locally_executed_slot = 5;
+}
+
+// NodeConsensusStatus describes the consensus driver state.
+message NodeConsensusStatus {
+  // Whether post-repair consensus is active and voting.
+  bool active = 1;
+
+  // How consensus was entered: regular startup or catastrophic recovery.
+  NodeMode mode = 2;
+
+  // Current consensus frontier slot (first slot without EXECUTION_FINISHED).
+  uint64 frontier = 3;
+}
+
+// NodeRepairStatus describes the repair subsystem state.
+message NodeRepairStatus {
+  // Whether catastrophic repair gating is active. When true, the node is
+  // suppressing consensus output and rejecting transactions.
+  // Note: during normal gap repair (non-catastrophic), this is false but
+  // consensus.active is also false, so ready is correctly false.
+  bool active = 1;
+}
+
 // QueryService defines unary RPCs for accessing blockchain data.
 service QueryService {
   option (google.api.default_host) = "api.thru.network";
@@ -1235,6 +1286,13 @@ service QueryService {
   rpc GetNodeRecords(GetNodeRecordsRequest) returns (GetNodeRecordsResponse) {
     option (google.api.http) = {
       get: "/v1/node/records"
+    };
+  }
+
+  // Get the node's operational status including consensus readiness.
+  rpc GetNodeStatus(GetNodeStatusRequest) returns (GetNodeStatusResponse) {
+    option (google.api.http) = {
+      get: "/v1/node/status"
     };
   }
 }

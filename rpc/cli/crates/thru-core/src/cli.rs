@@ -54,6 +54,10 @@ pub enum Commands {
     #[command(name = "gethealth")]
     GetHealth,
 
+    /// Get the node's operational status (consensus, repair, heights)
+    #[command(name = "getstatus")]
+    GetStatus,
+
     /// Get cluster block heights
     #[command(name = "getheight")]
     GetHeight,
@@ -189,6 +193,13 @@ pub enum Commands {
         subcommand: WthruCommands,
     },
 
+    /// Validator program commands
+    #[command(name = "validator")]
+    Validator {
+        #[command(subcommand)]
+        subcommand: ValidatorCommands,
+    },
+
     /// Developer tools for toolchain and project management
     #[command(name = "dev")]
     Dev {
@@ -200,7 +211,7 @@ pub enum Commands {
     #[command(name = "network")]
     Network {
         #[command(subcommand)]
-        subcommand: NetworkCommands,
+        subcommand: Option<NetworkCommands>,
     },
 
     /// Debug commands for transaction analysis
@@ -833,10 +844,10 @@ pub enum NetworkCommands {
         auth_token: Option<String>,
     },
 
-    /// Set the default network profile
-    #[command(name = "set-default")]
-    SetDefault {
-        /// Network profile name to use as default
+    /// Use a named network profile
+    #[command(name = "use")]
+    Use {
+        /// Network profile name to make active
         name: String,
     },
 
@@ -853,9 +864,6 @@ pub enum NetworkCommands {
         #[arg(long = "auth-token")]
         auth_token: Option<String>,
     },
-
-    /// List all configured network profiles
-    List,
 
     /// Remove a network profile
     #[command(name = "rm")]
@@ -1774,6 +1782,188 @@ pub enum WthruCommands {
     },
 }
 
+/// Validator program subcommands
+#[derive(Subcommand)]
+pub enum ValidatorCommands {
+    /// Activate a validator in the validator program
+    Activate {
+        /// Source token account holding stake tokens
+        #[arg(long = "source-token-account")]
+        source_token_account: String,
+
+        /// Amount of tokens to stake
+        #[arg(long = "token-amount")]
+        token_amount: u64,
+
+        /// Validator BLS public key as 96-byte uncompressed hex
+        #[arg(
+            long = "bls-pubkey",
+            conflicts_with = "bls_seed",
+            required_unless_present = "bls_seed"
+        )]
+        bls_pubkey: Option<String>,
+
+        /// Deterministic test seed used to derive a valid BLS public key
+        #[arg(long = "bls-seed", conflicts_with = "bls_pubkey")]
+        bls_seed: Option<u64>,
+
+        /// Claim authority pubkey or key name (defaults to fee payer)
+        #[arg(long = "claim-authority")]
+        claim_authority: Option<String>,
+
+        /// Fee payer account name (defaults to 'default')
+        #[arg(long = "fee-payer")]
+        fee_payer: Option<String>,
+
+        /// Override consensus validator program address
+        #[arg(long = "program")]
+        program: Option<String>,
+
+        /// Override attestor table account address
+        #[arg(long = "attestor-table")]
+        attestor_table: Option<String>,
+
+        /// Override token program address
+        #[arg(long = "token-program")]
+        token_program: Option<String>,
+
+        /// Override converted vault address
+        #[arg(long = "converted-vault")]
+        converted_vault: Option<String>,
+    },
+
+    /// Deactivate a validator and withdraw unclaimed rewards
+    Deactivate {
+        /// Destination token account for unclaimed rewards
+        #[arg(long = "dest-token-account")]
+        dest_token_account: String,
+
+        /// Fee payer account name (defaults to 'default')
+        #[arg(long = "fee-payer")]
+        fee_payer: Option<String>,
+
+        /// Override consensus validator program address
+        #[arg(long = "program")]
+        program: Option<String>,
+
+        /// Override attestor table account address
+        #[arg(long = "attestor-table")]
+        attestor_table: Option<String>,
+
+        /// Override token program address
+        #[arg(long = "token-program")]
+        token_program: Option<String>,
+
+        /// Override unclaimed vault address
+        #[arg(long = "unclaimed-vault")]
+        unclaimed_vault: Option<String>,
+    },
+
+    /// Convert additional tokens into stake weight
+    #[command(name = "convert-tokens")]
+    ConvertTokens {
+        /// Source token account holding additional stake tokens
+        #[arg(long = "source-token-account")]
+        source_token_account: String,
+
+        /// Amount of tokens to convert
+        #[arg(long = "token-amount")]
+        token_amount: u64,
+
+        /// Fee payer account name (defaults to 'default')
+        #[arg(long = "fee-payer")]
+        fee_payer: Option<String>,
+
+        /// Override consensus validator program address
+        #[arg(long = "program")]
+        program: Option<String>,
+
+        /// Override attestor table account address
+        #[arg(long = "attestor-table")]
+        attestor_table: Option<String>,
+
+        /// Override token program address
+        #[arg(long = "token-program")]
+        token_program: Option<String>,
+
+        /// Override converted vault address
+        #[arg(long = "converted-vault")]
+        converted_vault: Option<String>,
+    },
+
+    /// Claim accumulated rewards for a validator subject
+    Claim {
+        /// Validator identity pubkey or key name whose rewards should be claimed
+        #[arg(long = "subject-attestor")]
+        subject_attestor: String,
+
+        /// Destination token account for claimed rewards
+        #[arg(long = "dest-token-account")]
+        dest_token_account: String,
+
+        /// Fee payer account name (defaults to 'default')
+        #[arg(long = "fee-payer")]
+        fee_payer: Option<String>,
+
+        /// Override consensus validator program address
+        #[arg(long = "program")]
+        program: Option<String>,
+
+        /// Override attestor table account address
+        #[arg(long = "attestor-table")]
+        attestor_table: Option<String>,
+
+        /// Override token program address
+        #[arg(long = "token-program")]
+        token_program: Option<String>,
+
+        /// Override unclaimed vault address
+        #[arg(long = "unclaimed-vault")]
+        unclaimed_vault: Option<String>,
+    },
+
+    /// Update the claim authority for a validator subject
+    #[command(name = "set-claim-authority")]
+    SetClaimAuthority {
+        /// Validator identity pubkey or key name whose claim authority is changing
+        #[arg(long = "subject-attestor")]
+        subject_attestor: String,
+
+        /// New claim authority pubkey or key name
+        #[arg(long = "new-claim-authority")]
+        new_claim_authority: String,
+
+        /// Fee payer account name (defaults to 'default')
+        #[arg(long = "fee-payer")]
+        fee_payer: Option<String>,
+
+        /// Override consensus validator program address
+        #[arg(long = "program")]
+        program: Option<String>,
+
+        /// Override attestor table account address
+        #[arg(long = "attestor-table")]
+        attestor_table: Option<String>,
+    },
+
+    /// Show the validator table
+    Table {
+        /// Override attestor table account address
+        #[arg(long = "attestor-table")]
+        attestor_table: Option<String>,
+    },
+
+    /// Show details for a specific validator by SID, address, or key name
+    Info {
+        /// Validator SID, address, or configured key name
+        validator: String,
+
+        /// Override attestor table account address
+        #[arg(long = "attestor-table")]
+        attestor_table: Option<String>,
+    },
+}
+
 /// Developer tools subcommands
 #[derive(Subcommand)]
 pub enum DevCommands {
@@ -2235,6 +2425,62 @@ mod tests {
     }
 
     #[test]
+    fn parses_network_use_command() {
+        let cli =
+            Cli::try_parse_from(["thru", "network", "use", "1"]).expect("network use should parse");
+
+        match cli.command {
+            Commands::Network {
+                subcommand: Some(NetworkCommands::Use { name }),
+            } => assert_eq!(name, "1"),
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn parses_bare_network_command() {
+        let cli = Cli::try_parse_from(["thru", "network"]).expect("bare network should parse");
+
+        match cli.command {
+            Commands::Network { subcommand: None } => {}
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn rejects_legacy_network_set_default_alias() {
+        let cli = Cli::try_parse_from(["thru", "network", "set-default", "1"]);
+
+        assert!(
+            cli.is_err(),
+            "legacy network set-default alias should no longer parse"
+        );
+    }
+
+    #[test]
+    fn rejects_legacy_network_list_subcommand() {
+        let cli = Cli::try_parse_from(["thru", "network", "list"]);
+
+        assert!(
+            cli.is_err(),
+            "legacy network list subcommand should no longer parse"
+        );
+    }
+
+    #[test]
+    fn parses_network_remove_command() {
+        let cli =
+            Cli::try_parse_from(["thru", "network", "rm", "1"]).expect("network rm should parse");
+
+        match cli.command {
+            Commands::Network {
+                subcommand: Some(NetworkCommands::Remove { name }),
+            } => assert_eq!(name, "1"),
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
     fn rejects_conflicting_abi_reflect_flags() {
         let result = Cli::try_parse_from([
             "thru",
@@ -2380,6 +2626,193 @@ mod tests {
                 assert!(include_state_after);
                 assert!(include_account_data);
                 assert!(include_memory_dump);
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn parses_consensus_validator_activate_command() {
+        let cli = Cli::try_parse_from([
+            "thru",
+            "validator",
+            "activate",
+            "--source-token-account",
+            "ta_source",
+            "--token-amount",
+            "1000",
+            "--bls-pubkey",
+            &"11".repeat(96),
+            "--claim-authority",
+            "alice",
+            "--fee-payer",
+            "bob",
+            "--converted-vault",
+            "ta_vault",
+        ])
+        .expect("validator activate should parse");
+
+        match cli.command {
+            Commands::Validator {
+                subcommand:
+                    ValidatorCommands::Activate {
+                        source_token_account,
+                        token_amount,
+                        bls_pubkey,
+                        bls_seed,
+                        claim_authority,
+                        fee_payer,
+                        converted_vault,
+                        ..
+                    },
+            } => {
+                assert_eq!(source_token_account, "ta_source");
+                assert_eq!(token_amount, 1000);
+                assert_eq!(bls_pubkey.as_deref(), Some("11".repeat(96).as_str()));
+                assert_eq!(bls_seed, None);
+                assert_eq!(claim_authority.as_deref(), Some("alice"));
+                assert_eq!(fee_payer.as_deref(), Some("bob"));
+                assert_eq!(converted_vault.as_deref(), Some("ta_vault"));
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn parses_consensus_validator_convert_tokens_command() {
+        let cli = Cli::try_parse_from([
+            "thru",
+            "validator",
+            "convert-tokens",
+            "--source-token-account",
+            "ta_source",
+            "--token-amount",
+            "250",
+            "--token-program",
+            "ta_token",
+        ])
+        .expect("validator convert-tokens should parse");
+
+        match cli.command {
+            Commands::Validator {
+                subcommand:
+                    ValidatorCommands::ConvertTokens {
+                        source_token_account,
+                        token_amount,
+                        token_program,
+                        ..
+                    },
+            } => {
+                assert_eq!(source_token_account, "ta_source");
+                assert_eq!(token_amount, 250);
+                assert_eq!(token_program.as_deref(), Some("ta_token"));
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn parses_consensus_validator_set_claim_authority_command() {
+        let cli = Cli::try_parse_from([
+            "thru",
+            "validator",
+            "set-claim-authority",
+            "--subject-attestor",
+            "alice",
+            "--new-claim-authority",
+            "bob",
+            "--attestor-table",
+            "ta_table",
+        ])
+        .expect("validator set-claim-authority should parse");
+
+        match cli.command {
+            Commands::Validator {
+                subcommand:
+                    ValidatorCommands::SetClaimAuthority {
+                        subject_attestor,
+                        new_claim_authority,
+                        attestor_table,
+                        ..
+                    },
+            } => {
+                assert_eq!(subject_attestor, "alice");
+                assert_eq!(new_claim_authority, "bob");
+                assert_eq!(attestor_table.as_deref(), Some("ta_table"));
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn parses_validator_table_command() {
+        let cli =
+            Cli::try_parse_from(["thru", "validator", "table", "--attestor-table", "ta_table"])
+                .expect("validator table should parse");
+
+        match cli.command {
+            Commands::Validator {
+                subcommand: ValidatorCommands::Table { attestor_table },
+            } => {
+                assert_eq!(attestor_table.as_deref(), Some("ta_table"));
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn parses_validator_activate_with_bls_seed() {
+        let cli = Cli::try_parse_from([
+            "thru",
+            "validator",
+            "activate",
+            "--source-token-account",
+            "ta_source",
+            "--token-amount",
+            "1000",
+            "--bls-seed",
+            "17",
+        ])
+        .expect("validator activate with bls seed should parse");
+
+        match cli.command {
+            Commands::Validator {
+                subcommand:
+                    ValidatorCommands::Activate {
+                        bls_pubkey,
+                        bls_seed,
+                        ..
+                    },
+            } => {
+                assert_eq!(bls_pubkey, None);
+                assert_eq!(bls_seed, Some(17));
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn parses_validator_info_command() {
+        let cli = Cli::try_parse_from([
+            "thru",
+            "validator",
+            "info",
+            "alice",
+            "--attestor-table",
+            "ta_table",
+        ])
+        .expect("validator info should parse");
+
+        match cli.command {
+            Commands::Validator {
+                subcommand:
+                    ValidatorCommands::Info {
+                        validator,
+                        attestor_table,
+                    },
+            } => {
+                assert_eq!(validator, "alice");
+                assert_eq!(attestor_table.as_deref(), Some("ta_table"));
             }
             _ => panic!("unexpected command"),
         }

@@ -381,13 +381,17 @@ impl Client {
             .fetch_transaction_details(&signature_bytes, timeout, max_attempts)
             .await?;
 
-        if transaction_proto.is_none() {
-            return Ok(None);
+        match transaction_proto {
+            Some(proto) => Self::parse_transaction_proto(proto, signature),
+            None => Ok(None),
         }
+    }
 
-        let transaction_proto = transaction_proto.unwrap();
-
-        /* Extract header fields */
+    /// Parse a Transaction proto into TransactionDetails.
+    fn parse_transaction_proto(
+        transaction_proto: corev1::Transaction,
+        signature: &Signature,
+    ) -> Result<Option<TransactionDetails>> {
         let header = transaction_proto.header.as_ref()
             .ok_or_else(|| ClientError::Rpc("transaction missing header".into()))?;
 
@@ -415,7 +419,6 @@ impl Client {
                 .map_err(ClientError::Validation)?
         );
 
-        /* Extract execution result fields */
         let transaction_slot = transaction_proto.slot.unwrap_or(0);
         let execution_proto = transaction_proto.execution_result.clone();
         let execution = execution_proto.unwrap_or_default();
@@ -471,7 +474,6 @@ impl Client {
             .collect::<Vec<_>>();
 
         Ok(Some(TransactionDetails {
-            /* Execution result fields */
             compute_units_consumed: execution.consumed_compute_units as u64,
             memory_units_consumed: execution.consumed_memory_units,
             state_units_consumed: execution.consumed_state_units as u64,
@@ -488,8 +490,6 @@ impl Client {
             rw_accounts,
             ro_accounts,
             events,
-
-            /* Transaction header fields */
             fee_payer_signature,
             version: header.version,
             flags: header.flags,
@@ -505,14 +505,10 @@ impl Client {
             start_slot: header.start_slot,
             fee_payer_pubkey,
             program_pubkey,
-
-            /* Transaction metadata */
             signature: signature.clone(),
             body: transaction_proto.body,
             slot: transaction_slot,
             block_offset: transaction_proto.block_offset,
-
-            /* Legacy field */
             proof_slot: transaction_slot,
         }))
     }
@@ -1059,6 +1055,20 @@ impl Client {
         })
     }
 
+    /// Get the node's operational status.
+    pub async fn get_node_status(&self) -> Result<NodeStatus> {
+        let mut client = QueryServiceClient::new(self.channel.clone())
+            .max_decoding_message_size(128 * 1024 * 1024) /* 128 MB */
+            .max_encoding_message_size(128 * 1024 * 1024); /* 128 MB */
+        let mut grpc_request = Request::new(servicesv1::GetNodeStatusRequest {});
+        self.apply_metadata(&mut grpc_request);
+        grpc_request.set_timeout(self.timeout);
+
+        let response = client.get_node_status(grpc_request).await?;
+        let msg = response.into_inner();
+        Ok(NodeStatus::from_proto(msg))
+    }
+
     async fn get_raw_account(&self, pubkey: &Pubkey) -> Result<corev1::RawAccount> {
         let mut client = QueryServiceClient::new(self.channel.clone())
             .max_decoding_message_size(128 * 1024 * 1024) /* 128 MB */
@@ -1270,6 +1280,76 @@ pub struct BlockHeight {
     pub executed_height: u64,
     pub locally_executed_height: u64,
     pub cluster_executed_height: u64,
+}
+
+/// Node operational mode as exposed by the query service.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum NodeMode {
+    Unknown,
+    Regular,
+    Catastrophic,
+}
+
+impl NodeMode {
+    fn from_i32(value: i32) -> Self {
+        match servicesv1::NodeMode::try_from(value) {
+            Ok(servicesv1::NodeMode::Regular) => NodeMode::Regular,
+            Ok(servicesv1::NodeMode::Catastrophic) => NodeMode::Catastrophic,
+            _ => NodeMode::Unknown,
+        }
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            NodeMode::Unknown => "unknown",
+            NodeMode::Regular => "regular",
+            NodeMode::Catastrophic => "catastrophic",
+        }
+    }
+}
+
+/// Consensus subsystem state.
+#[derive(Debug, Clone)]
+pub struct NodeConsensusStatus {
+    pub active: bool,
+    pub mode: NodeMode,
+    pub frontier: u64,
+}
+
+/// Repair subsystem state.
+#[derive(Debug, Clone)]
+pub struct NodeRepairStatus {
+    pub active: bool,
+}
+
+/// Node operational status returned by the query service.
+#[derive(Debug, Clone)]
+pub struct NodeStatus {
+    pub ready: bool,
+    pub consensus: NodeConsensusStatus,
+    pub repair: NodeRepairStatus,
+    pub finalized_slot: u64,
+    pub locally_executed_slot: u64,
+}
+
+impl NodeStatus {
+    fn from_proto(proto: servicesv1::GetNodeStatusResponse) -> Self {
+        let consensus = proto.consensus.unwrap_or_default();
+        let repair = proto.repair.unwrap_or_default();
+        Self {
+            ready: proto.ready,
+            consensus: NodeConsensusStatus {
+                active: consensus.active,
+                mode: NodeMode::from_i32(consensus.mode),
+                frontier: consensus.frontier,
+            },
+            repair: NodeRepairStatus {
+                active: repair.active,
+            },
+            finalized_slot: proto.finalized_slot,
+            locally_executed_slot: proto.locally_executed_slot,
+        }
+    }
 }
 
 /// Chain information including chain ID.

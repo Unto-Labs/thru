@@ -47,7 +47,11 @@ pub async fn run() -> anyhow::Result<()> {
             CliError::Validation(format!(
                 "Network '{}' not found. Available networks: {}",
                 name,
-                if available.is_empty() { "(none)".to_string() } else { available.join(", ") }
+                if available.is_empty() {
+                    "(none)".to_string()
+                } else {
+                    available.join(", ")
+                }
             ))
         })?;
         config.rpc_base_url = net.url;
@@ -64,9 +68,21 @@ pub async fn run() -> anyhow::Result<()> {
     let result: Result<(), CliError> = match cli.command {
         Commands::GetVersion => commands::rpc::get_version(&config, cli.json).await,
         Commands::GetHealth => commands::rpc::get_health(&config, cli.json).await,
+        Commands::GetStatus => commands::rpc::get_status(&config, cli.json).await,
         Commands::GetHeight => commands::rpc::get_height(&config, cli.json).await,
-        Commands::GetAccountInfo { account, data_start, data_len } => {
-            commands::rpc::get_account_info(&config, account.as_deref(), data_start, data_len, cli.json).await
+        Commands::GetAccountInfo {
+            account,
+            data_start,
+            data_len,
+        } => {
+            commands::rpc::get_account_info(
+                &config,
+                account.as_deref(),
+                data_start,
+                data_len,
+                cli.json,
+            )
+            .await
         }
         Commands::GetBalance { account } => {
             commands::rpc::get_balance(&config, account.as_deref(), cli.json).await
@@ -91,6 +107,10 @@ pub async fn run() -> anyhow::Result<()> {
         }
         Commands::Wthru { subcommand } => {
             commands::wthru::handle_wthru_command(&config, subcommand, cli.json).await
+        }
+        Commands::Validator { subcommand } => {
+            commands::consensus_validator::handle_validator_command(&config, subcommand, cli.json)
+                .await
         }
         Commands::Uploader { subcommand } => {
             commands::uploader::handle_uploader_command(&config, subcommand, cli.json).await
@@ -228,7 +248,11 @@ pub fn format_error_json(err: &CliError) -> Value {
                 "message": message,
             }
         }),
-        CliError::ResumeValidationAccount { message, account, seed } => json!({
+        CliError::ResumeValidationAccount {
+            message,
+            account,
+            seed,
+        } => json!({
             "error": {
                 "type": "resume_validation",
                 "message": message,

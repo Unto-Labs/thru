@@ -22,9 +22,7 @@ impl PathFetcher {
             if let Some(parent) = base.parent() {
                 let relative_path = parent.join(import_path);
                 if relative_path.exists() {
-                    return relative_path
-                        .canonicalize()
-                        .map_err(|e| FetchError::Io(e));
+                    return relative_path.canonicalize().map_err(|e| FetchError::Io(e));
                 }
             }
         }
@@ -33,16 +31,13 @@ impl PathFetcher {
         for include_dir in &ctx.include_dirs {
             let include_path = include_dir.join(import_path);
             if include_path.exists() {
-                return include_path
-                    .canonicalize()
-                    .map_err(|e| FetchError::Io(e));
+                return include_path.canonicalize().map_err(|e| FetchError::Io(e));
             }
         }
 
         Err(FetchError::NotFound(format!(
             "Import '{}' not found relative to {:?} or in include directories",
-            import_path,
-            ctx.base_path
+            import_path, ctx.base_path
         )))
     }
 }

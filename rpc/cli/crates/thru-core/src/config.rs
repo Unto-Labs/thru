@@ -177,6 +177,18 @@ pub struct Config {
     /// Token program public key
     pub token_program_public_key: String,
 
+    /// Consensus validator program public key
+    pub consensus_validator_program_public_key: String,
+
+    /// Consensus attestor table public key
+    pub consensus_attestor_table_public_key: String,
+
+    /// Consensus converted vault public key
+    pub consensus_converted_vault_public_key: String,
+
+    /// Consensus unclaimed vault public key
+    pub consensus_unclaimed_vault_public_key: String,
+
     /// WTHRU program public key
     pub wthru_program_public_key: String,
 
@@ -231,9 +243,19 @@ impl Default for Config {
             abi_manager_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACrG7"
                 .to_string(),
             token_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKqq".to_string(),
+            consensus_validator_program_public_key:
+                "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAEN".to_string(),
+            consensus_attestor_table_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAIO"
+                .to_string(),
+            consensus_converted_vault_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAQQ"
+                .to_string(),
+            consensus_unclaimed_vault_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAUR"
+                .to_string(),
             wthru_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcH".to_string(),
-            name_service_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUF".to_string(),
-            thru_registrar_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYG".to_string(),
+            name_service_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUF"
+                .to_string(),
+            thru_registrar_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYG"
+                .to_string(),
             timeout_seconds: 30,
             max_retries: 3,
             auth_token: None,
@@ -284,13 +306,13 @@ impl Config {
     /// Migrate an old config by adding missing fields with default values
     async fn migrate_config(config_path: &PathBuf, config_content: &str) -> Result<Self, CliError> {
         // Parse existing config as a generic YAML value
-        let mut existing: serde_yaml::Value = serde_yaml::from_str(config_content)
-            .map_err(|e| ConfigError::InvalidFormat(e))?;
+        let mut existing: serde_yaml::Value =
+            serde_yaml::from_str(config_content).map_err(|e| ConfigError::InvalidFormat(e))?;
 
         // Get default config as YAML value
         let default_config = Config::default();
-        let default_yaml: serde_yaml::Value = serde_yaml::to_value(&default_config)
-            .map_err(|e| ConfigError::InvalidFormat(e))?;
+        let default_yaml: serde_yaml::Value =
+            serde_yaml::to_value(&default_config).map_err(|e| ConfigError::InvalidFormat(e))?;
 
         // Track what fields were added
         let mut added_fields: Vec<String> = Vec::new();
@@ -310,8 +332,8 @@ impl Config {
         }
 
         // Try to deserialize the merged config
-        let config: Config = serde_yaml::from_value(existing.clone())
-            .map_err(|e| ConfigError::InvalidFormat(e))?;
+        let config: Config =
+            serde_yaml::from_value(existing.clone()).map_err(|e| ConfigError::InvalidFormat(e))?;
 
         // Save the updated config
         let updated_content = Self::generate_config_template(&config);
@@ -319,7 +341,10 @@ impl Config {
 
         // Notify user about the migration
         if !added_fields.is_empty() {
-            eprintln!("Config migrated: added missing field(s): {}", added_fields.join(", "));
+            eprintln!(
+                "Config migrated: added missing field(s): {}",
+                added_fields.join(", ")
+            );
             eprintln!("Updated config saved to: {}", config_path.display());
         }
 
@@ -341,9 +366,8 @@ impl Config {
 
         // Validate all network URLs
         for (name, network) in &self.networks {
-            Url::parse(&network.url).map_err(|e| {
-                ConfigError::InvalidUrl(format!("network '{}': {}", name, e))
-            })?;
+            Url::parse(&network.url)
+                .map_err(|e| ConfigError::InvalidUrl(format!("network '{}': {}", name, e)))?;
         }
 
         // Validate default key exists
@@ -367,7 +391,47 @@ impl Config {
         Pubkey::new(self.token_program_public_key.clone())
             .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()))?;
 
+        // Validate consensus validator program public key
+        Pubkey::new(self.consensus_validator_program_public_key.clone())
+            .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()))?;
+
+        // Validate consensus attestor table public key
+        Pubkey::new(self.consensus_attestor_table_public_key.clone())
+            .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()))?;
+
+        // Validate consensus converted vault public key
+        Pubkey::new(self.consensus_converted_vault_public_key.clone())
+            .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()))?;
+
+        // Validate consensus unclaimed vault public key
+        Pubkey::new(self.consensus_unclaimed_vault_public_key.clone())
+            .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()))?;
+
         Ok(())
+    }
+
+    /// Get the consensus validator program public key
+    pub fn get_consensus_validator_program_pubkey(&self) -> Result<Pubkey, CliError> {
+        Pubkey::new(self.consensus_validator_program_public_key.clone())
+            .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()).into())
+    }
+
+    /// Get the consensus attestor table public key
+    pub fn get_consensus_attestor_table_pubkey(&self) -> Result<Pubkey, CliError> {
+        Pubkey::new(self.consensus_attestor_table_public_key.clone())
+            .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()).into())
+    }
+
+    /// Get the consensus converted vault public key
+    pub fn get_consensus_converted_vault_pubkey(&self) -> Result<Pubkey, CliError> {
+        Pubkey::new(self.consensus_converted_vault_public_key.clone())
+            .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()).into())
+    }
+
+    /// Get the consensus unclaimed vault public key
+    pub fn get_consensus_unclaimed_vault_pubkey(&self) -> Result<Pubkey, CliError> {
+        Pubkey::new(self.consensus_unclaimed_vault_public_key.clone())
+            .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()).into())
     }
 
     /// Resolve the configured WTHRU program public key or return a helpful error

@@ -2,8 +2,8 @@ use abi_types::TypeDef;
 use serde_derive::{Deserialize, Serialize};
 
 /* ============================================================================
-   Import Source Types
-   ============================================================================ */
+Import Source Types
+============================================================================ */
 
 /* Target type for on-chain ABI imports */
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default)]
@@ -42,9 +42,7 @@ impl RevisionSpec {
     /* Parse minimum value from ">=N" specifier */
     pub fn minimum_value(&self) -> Option<u64> {
         match self {
-            RevisionSpec::Specifier(s) if s.starts_with(">=") => {
-                s[2..].parse().ok()
-            }
+            RevisionSpec::Specifier(s) if s.starts_with(">=") => s[2..].parse().ok(),
             _ => None,
         }
     }
@@ -62,9 +60,10 @@ impl RevisionSpec {
         match self {
             RevisionSpec::Exact(v) => revision == *v,
             RevisionSpec::Specifier(s) if s == "latest" => true,
-            RevisionSpec::Specifier(s) if s.starts_with(">=") => {
-                s[2..].parse::<u64>().map(|min| revision >= min).unwrap_or(false)
-            }
+            RevisionSpec::Specifier(s) if s.starts_with(">=") => s[2..]
+                .parse::<u64>()
+                .map(|min| revision >= min)
+                .unwrap_or(false),
             _ => false,
         }
     }
@@ -145,7 +144,12 @@ impl ImportSource {
                 format!("git:{}@{}:{}", url, git_ref, path)
             }
             ImportSource::Http { url } => format!("http:{}", url),
-            ImportSource::Onchain { address, target, network, revision } => {
+            ImportSource::Onchain {
+                address,
+                target,
+                network,
+                revision,
+            } => {
                 let target_str = match target {
                     OnchainTarget::Program => "program",
                     OnchainTarget::AbiMeta => "abi-meta",
@@ -155,7 +159,10 @@ impl ImportSource {
                     RevisionSpec::Exact(v) => format!("{}", v),
                     RevisionSpec::Specifier(s) => s.clone(),
                 };
-                format!("onchain:{}:{}@{}?rev={}", network, target_str, address, rev_str)
+                format!(
+                    "onchain:{}:{}@{}?rev={}",
+                    network, target_str, address, rev_str
+                )
             }
         }
     }
@@ -307,17 +314,32 @@ impl AbiFile {
 
     /* Get the instruction root type name */
     pub fn instruction_root(&self) -> Option<&str> {
-        self.abi.options.program_metadata.root_types.instruction_root.as_deref()
+        self.abi
+            .options
+            .program_metadata
+            .root_types
+            .instruction_root
+            .as_deref()
     }
 
     /* Get the account root type name */
     pub fn account_root(&self) -> Option<&str> {
-        self.abi.options.program_metadata.root_types.account_root.as_deref()
+        self.abi
+            .options
+            .program_metadata
+            .root_types
+            .account_root
+            .as_deref()
     }
 
     /* Get the errors type name */
     pub fn errors_type(&self) -> Option<&str> {
-        self.abi.options.program_metadata.root_types.errors.as_deref()
+        self.abi
+            .options
+            .program_metadata
+            .root_types
+            .errors
+            .as_deref()
     }
 
     /* Get the options */
@@ -327,6 +349,11 @@ impl AbiFile {
 
     /* Get the events type name */
     pub fn events_type(&self) -> Option<&str> {
-        self.abi.options.program_metadata.root_types.events.as_deref()
+        self.abi
+            .options
+            .program_metadata
+            .root_types
+            .events
+            .as_deref()
     }
 }

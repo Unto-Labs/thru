@@ -9,23 +9,23 @@ use url::Url;
 /// Handle network subcommands
 pub async fn handle_network_command(
     _config: &Config,
-    subcommand: NetworkCommands,
+    subcommand: Option<NetworkCommands>,
     json_format: bool,
 ) -> Result<(), CliError> {
     match subcommand {
-        NetworkCommands::Add {
+        None => list_networks(json_format).await,
+        Some(NetworkCommands::Add {
             name,
             url,
             auth_token,
-        } => add_network(&name, &url, auth_token.as_deref(), json_format).await,
-        NetworkCommands::SetDefault { name } => set_default(&name, json_format).await,
-        NetworkCommands::Set {
+        }) => add_network(&name, &url, auth_token.as_deref(), json_format).await,
+        Some(NetworkCommands::Use { name }) => use_network(&name, json_format).await,
+        Some(NetworkCommands::Set {
             name,
             url,
             auth_token,
-        } => set_network(&name, url.as_deref(), auth_token.as_deref(), json_format).await,
-        NetworkCommands::List => list_networks(json_format).await,
-        NetworkCommands::Remove { name } => remove_network(&name, json_format).await,
+        }) => set_network(&name, url.as_deref(), auth_token.as_deref(), json_format).await,
+        Some(NetworkCommands::Remove { name }) => remove_network(&name, json_format).await,
     }
 }
 
@@ -67,8 +67,8 @@ async fn add_network(
     Ok(())
 }
 
-/// Set the default network profile
-async fn set_default(name: &str, json_format: bool) -> Result<(), CliError> {
+/// Mark a network profile as the active network
+async fn use_network(name: &str, json_format: bool) -> Result<(), CliError> {
     let normalized = name.to_lowercase();
     let mut config = Config::load().await?;
 
@@ -88,8 +88,7 @@ async fn set_default(name: &str, json_format: bool) -> Result<(), CliError> {
     config.default_network = Some(normalized.clone());
     config.save().await?;
 
-    let response =
-        output::create_network_operation_response("set-default", &normalized, "success", None);
+    let response = output::create_network_operation_response("use", &normalized, "success", None);
     output::print_output(response, json_format);
 
     Ok(())

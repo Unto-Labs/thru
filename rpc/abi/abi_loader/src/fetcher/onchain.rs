@@ -66,8 +66,8 @@ impl OnchainFetcher {
     /* Resolve TNS name to address via name service */
     fn resolve_tns_name(&self, name: &str, network: &str) -> Result<String, FetchError> {
         /* TODO: Implement TNS resolution via name service program.
-           Until then, fail loudly so the CLI behavior matches the
-           documented support surface. */
+        Until then, fail loudly so the CLI behavior matches the
+        documented support surface. */
         let _ = network;
         Err(FetchError::Onchain(format!(
             "TNS names are not supported yet for on-chain ABI imports ('{}'); use a ta-prefixed address instead",
@@ -149,7 +149,9 @@ impl OnchainFetcher {
         out[out_idx] = temp2;
         let incoming_checksum = (triple & 0xFF) as u8;
         if (checksum & 0xFF) as u8 != incoming_checksum {
-            return Err(FetchError::Onchain("Invalid Thru address checksum".to_string()));
+            return Err(FetchError::Onchain(
+                "Invalid Thru address checksum".to_string(),
+            ));
         }
 
         Ok(out)
@@ -160,7 +162,11 @@ impl OnchainFetcher {
             b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_";
 
         fn mask_for_bits(bits: u32) -> u32 {
-            if bits == 0 { 0 } else { (1 << bits) - 1 }
+            if bits == 0 {
+                0
+            } else {
+                (1 << bits) - 1
+            }
         }
 
         let mut output = String::with_capacity(46);
@@ -249,7 +255,11 @@ impl OnchainFetcher {
         out
     }
 
-    fn derive_abi_account_address(&self, kind: u8, body: &[u8; ABI_META_BODY_SIZE]) -> Result<String, FetchError> {
+    fn derive_abi_account_address(
+        &self,
+        kind: u8,
+        body: &[u8; ABI_META_BODY_SIZE],
+    ) -> Result<String, FetchError> {
         let owner = self.abi_manager_program_id()?;
         let seed = self.derive_abi_account_seed(kind, body);
         let address = self.create_program_defined_account_address(
@@ -285,7 +295,9 @@ impl OnchainFetcher {
         }
 
         let mut body = [0u8; ABI_META_BODY_SIZE];
-        body.copy_from_slice(&data[ABI_META_HEADER_SIZE..ABI_META_HEADER_SIZE + ABI_META_BODY_SIZE]);
+        body.copy_from_slice(
+            &data[ABI_META_HEADER_SIZE..ABI_META_HEADER_SIZE + ABI_META_BODY_SIZE],
+        );
 
         Ok(AbiMetaAccount { kind, body })
     }
@@ -304,14 +316,10 @@ impl OnchainFetcher {
         let base = endpoint.trim_end_matches('/');
         let url = format!("{}/v1/accounts/{}:raw", base, address);
 
-        let response = self
-            .client
-            .get(&url)
-            .send()
-            .map_err(|e| FetchError::Http {
-                status: 0,
-                message: format!("Request failed: {}", e),
-            })?;
+        let response = self.client.get(&url).send().map_err(|e| FetchError::Http {
+            status: 0,
+            message: format!("Request failed: {}", e),
+        })?;
 
         let status = response.status();
         if status == reqwest::StatusCode::NOT_FOUND {
@@ -327,13 +335,13 @@ impl OnchainFetcher {
             });
         }
 
-        let parsed: RawAccountResponse = response.json().map_err(|e| {
-            FetchError::Parse(format!("Failed to parse account response: {}", e))
-        })?;
+        let parsed: RawAccountResponse = response
+            .json()
+            .map_err(|e| FetchError::Parse(format!("Failed to parse account response: {}", e)))?;
 
-        let raw_data = parsed.raw_data.ok_or_else(|| {
-            FetchError::Onchain(format!("Account '{}' has no raw data", address))
-        })?;
+        let raw_data = parsed
+            .raw_data
+            .ok_or_else(|| FetchError::Onchain(format!("Account '{}' has no raw data", address)))?;
 
         let data = general_purpose::STANDARD
             .decode(raw_data.as_bytes())
@@ -388,8 +396,10 @@ impl OnchainFetcher {
             )));
         }
 
-        let content = std::str::from_utf8(&data[ABI_ACCOUNT_HEADER_SIZE..ABI_ACCOUNT_HEADER_SIZE + content_sz])
-            .map_err(|e| FetchError::Parse(format!("ABI content is not valid UTF-8: {}", e)))?;
+        let content = std::str::from_utf8(
+            &data[ABI_ACCOUNT_HEADER_SIZE..ABI_ACCOUNT_HEADER_SIZE + content_sz],
+        )
+        .map_err(|e| FetchError::Parse(format!("ABI content is not valid UTF-8: {}", e)))?;
 
         Ok((revision, state, content.to_string()))
     }
@@ -511,7 +521,9 @@ mod tests {
     fn test_is_tns_name() {
         assert!(OnchainFetcher::is_tns_name("mypackage.thru"));
         assert!(OnchainFetcher::is_tns_name("foo.bar.thru"));
-        assert!(!OnchainFetcher::is_tns_name("11111111111111111111111111111111"));
+        assert!(!OnchainFetcher::is_tns_name(
+            "11111111111111111111111111111111"
+        ));
         assert!(!OnchainFetcher::is_tns_name("mypackage.sol"));
     }
 
@@ -521,12 +533,8 @@ mod tests {
         let fetcher = OnchainFetcher::new(&config);
 
         /* Exact match */
-        assert!(fetcher
-            .check_revision(5, &RevisionSpec::Exact(5))
-            .is_ok());
-        assert!(fetcher
-            .check_revision(5, &RevisionSpec::Exact(6))
-            .is_err());
+        assert!(fetcher.check_revision(5, &RevisionSpec::Exact(5)).is_ok());
+        assert!(fetcher.check_revision(5, &RevisionSpec::Exact(6)).is_err());
 
         /* Minimum */
         assert!(fetcher

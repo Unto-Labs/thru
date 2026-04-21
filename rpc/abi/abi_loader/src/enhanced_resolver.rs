@@ -12,8 +12,8 @@ use crate::file::{AbiFile, ImportSource};
 use crate::package::{PackageId, ResolutionResult, ResolveError, ResolvedPackage};
 
 /* ============================================================================
-   Enhanced Import Resolver
-   ============================================================================ */
+Enhanced Import Resolver
+============================================================================ */
 
 /* Full-featured import resolver supporting all import types */
 pub struct EnhancedImportResolver {
@@ -30,8 +30,9 @@ pub struct EnhancedImportResolver {
 impl EnhancedImportResolver {
     /* Create a new enhanced import resolver with the given configuration */
     pub fn new(config: FetcherConfig, include_dirs: Vec<PathBuf>) -> Result<Self, ResolveError> {
-        let fetcher = CompositeFetcher::new(config)
-            .map_err(|e| ResolveError::InitError { message: e.to_string() })?;
+        let fetcher = CompositeFetcher::new(config).map_err(|e| ResolveError::InitError {
+            message: e.to_string(),
+        })?;
         Ok(Self {
             fetcher,
             include_dirs,
@@ -94,10 +95,11 @@ impl EnhancedImportResolver {
         canonical_location: &str,
     ) -> Result<ResolutionResult, ResolveError> {
         /* Parse the ABI file */
-        let abi_file: AbiFile = serde_yml::from_str(content).map_err(|e| ResolveError::ParseError {
-            location: canonical_location.to_string(),
-            message: e.to_string(),
-        })?;
+        let abi_file: AbiFile =
+            serde_yml::from_str(content).map_err(|e| ResolveError::ParseError {
+                location: canonical_location.to_string(),
+                message: e.to_string(),
+            })?;
 
         /* Create a synthetic import source */
         let root_source = ImportSource::Path {
@@ -134,8 +136,12 @@ impl EnhancedImportResolver {
         /* Mark as fully resolved */
         state.in_progress.remove(canonical_location);
         state.resolution_chain.pop();
-        state.resolved_packages.insert(pkg_id.clone(), resolved.clone());
-        state.versions.insert(pkg_id.package_name.clone(), pkg_id.version.clone());
+        state
+            .resolved_packages
+            .insert(pkg_id.clone(), resolved.clone());
+        state
+            .versions
+            .insert(pkg_id.package_name.clone(), pkg_id.version.clone());
 
         Ok(ResolutionResult {
             root: resolved,
@@ -192,7 +198,10 @@ impl EnhancedImportResolver {
         }
 
         /* Check if already fully resolved (by canonical location) */
-        if let Some(pkg_id) = state.location_to_package.get(&fetch_result.canonical_location) {
+        if let Some(pkg_id) = state
+            .location_to_package
+            .get(&fetch_result.canonical_location)
+        {
             if self.verbose {
                 println!("    [~] Already resolved: {}", pkg_id);
             }
@@ -216,13 +225,15 @@ impl EnhancedImportResolver {
         self.check_version_conflict(&pkg_id, state)?;
 
         /* Mark as being resolved */
-        state.in_progress.insert(fetch_result.canonical_location.clone());
+        state
+            .in_progress
+            .insert(fetch_result.canonical_location.clone());
         state.resolution_chain.push(pkg_id.clone());
 
         /* Create context for resolving this file's imports:
-           - base_path: current file's resolved path (for relative path resolution)
-           - parent_is_remote: whether this file came from a remote source
-           - include_dirs: inherited from root context */
+        - base_path: current file's resolved path (for relative path resolution)
+        - parent_is_remote: whether this file came from a remote source
+        - include_dirs: inherited from root context */
         let import_ctx = FetchContext {
             base_path: fetch_result.resolved_path.clone(),
             parent_is_remote: fetch_result.is_remote,
@@ -253,8 +264,12 @@ impl EnhancedImportResolver {
         state.in_progress.remove(&fetch_result.canonical_location);
         state.resolution_chain.pop();
         state.resolved_packages.insert(pkg_id.clone(), resolved);
-        state.location_to_package.insert(fetch_result.canonical_location, pkg_id.clone());
-        state.versions.insert(pkg_id.package_name.clone(), pkg_id.version.clone());
+        state
+            .location_to_package
+            .insert(fetch_result.canonical_location, pkg_id.clone());
+        state
+            .versions
+            .insert(pkg_id.package_name.clone(), pkg_id.version.clone());
 
         Ok(pkg_id)
     }
@@ -279,8 +294,8 @@ impl EnhancedImportResolver {
 }
 
 /* ============================================================================
-   Resolution State (internal)
-   ============================================================================ */
+Resolution State (internal)
+============================================================================ */
 
 /* Internal state tracked during resolution */
 struct ResolutionState {
@@ -313,8 +328,8 @@ impl ResolutionState {
 }
 
 /* ============================================================================
-   Tests
-   ============================================================================ */
+Tests
+============================================================================ */
 
 #[cfg(test)]
 mod tests {

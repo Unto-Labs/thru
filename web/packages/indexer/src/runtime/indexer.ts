@@ -89,7 +89,11 @@ export class Indexer {
         sql`SELECT 1 FROM indexer_checkpoints LIMIT 1`
       );
     } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
+      // drizzle-orm >= 0.44 wraps driver errors in DrizzleQueryError;
+      // the original DB message lives in .cause
+      const message = err instanceof Error
+        ? (err.cause instanceof Error ? err.cause.message : err.message)
+        : String(err);
       // Check if error is about missing table
       if (message.includes("does not exist") || message.includes("relation")) {
         console.warn(

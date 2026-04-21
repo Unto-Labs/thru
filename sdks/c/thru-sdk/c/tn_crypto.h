@@ -49,7 +49,17 @@ typedef uchar tn_bls_serialized_signature_t[TN_CRYPTO_G2_UNCOMPRESSED_SIZE];
 int tn_crypto_generate_keypair( tn_bls_pubkey_t * pubkey,
                                 tn_bls_private_key_t * private_key, ulong seed );
 
-/* tn_crypto_sign_message signs a message with a private key */
+/* tn_crypto_sign_message_with_dst signs a message with a private key
+   using a caller-specified domain separation tag (DST). */
+int tn_crypto_sign_message_with_dst( tn_bls_signature_t *         signature,
+                                     void const *                 message,
+                                     ulong                        message_len,
+                                     tn_bls_private_key_t const * private_key,
+                                     uchar const *                dst,
+                                     ulong                        dst_len );
+
+/* tn_crypto_sign_message signs a message with a private key
+   using the default consensus DST ("TN_CONSENSUS_V1"). */
 int tn_crypto_sign_message( tn_bls_signature_t * signature, void const * message,
                             ulong message_len,
                             tn_bls_private_key_t const * private_key );
@@ -77,7 +87,17 @@ int tn_crypto_subtract_signature( tn_bls_signature_t *       aggregate,
 int tn_crypto_subtract_pubkey( tn_bls_pubkey_t *       aggregate,
                                tn_bls_pubkey_t const * to_subtract );
 
-/* tn_crypto_verify_aggregate verifies an aggregate signature */
+/* tn_crypto_verify_aggregate_with_dst verifies an aggregate signature
+   using a caller-specified domain separation tag (DST). */
+int tn_crypto_verify_aggregate_with_dst( tn_bls_signature_t const * aggregate_sig,
+                                         tn_bls_pubkey_t const *    aggregate_pk,
+                                         void const *               message,
+                                         ulong                      message_len,
+                                         uchar const *              dst,
+                                         ulong                      dst_len );
+
+/* tn_crypto_verify_aggregate verifies an aggregate signature
+   using the default consensus DST ("TN_CONSENSUS_V1"). */
 int tn_crypto_verify_aggregate( tn_bls_signature_t const * aggregate_sig,
                                 tn_bls_pubkey_t const * aggregate_pk,
                                 void const * message, ulong message_len );

@@ -1,4 +1,4 @@
-use abi_loader::{flatten, AbiFile, flatten_to_yaml};
+use abi_loader::{flatten, flatten_to_yaml, AbiFile};
 use std::path::PathBuf;
 
 fn type_library_path() -> PathBuf {
@@ -22,20 +22,43 @@ fn flatten_token_program() {
     let type_names: Vec<&str> = result.types.iter().map(|t| t.name.as_str()).collect();
 
     // Types from thru_primitives.abi.yaml
-    assert!(type_names.contains(&"Hash"), "Should contain Hash from primitives");
-    assert!(type_names.contains(&"Pubkey"), "Should contain Pubkey from primitives");
-    assert!(type_names.contains(&"Signature"), "Should contain Signature from primitives");
+    assert!(
+        type_names.contains(&"Hash"),
+        "Should contain Hash from primitives"
+    );
+    assert!(
+        type_names.contains(&"Pubkey"),
+        "Should contain Pubkey from primitives"
+    );
+    assert!(
+        type_names.contains(&"Signature"),
+        "Should contain Signature from primitives"
+    );
 
     // Types from state_proof.abi.yaml
-    assert!(type_names.contains(&"StateProof"), "Should contain StateProof");
+    assert!(
+        type_names.contains(&"StateProof"),
+        "Should contain StateProof"
+    );
 
     // Types from root file (tn_token_program.abi.yaml)
-    assert!(type_names.contains(&"TokenInstruction"), "Should contain TokenInstruction");
-    assert!(type_names.contains(&"TokenProgramAccount"), "Should contain TokenProgramAccount");
+    assert!(
+        type_names.contains(&"TokenInstruction"),
+        "Should contain TokenInstruction"
+    );
+    assert!(
+        type_names.contains(&"TokenProgramAccount"),
+        "Should contain TokenProgramAccount"
+    );
 
     // Verify options are preserved from root file
     assert_eq!(
-        result.abi.options.program_metadata.root_types.instruction_root,
+        result
+            .abi
+            .options
+            .program_metadata
+            .root_types
+            .instruction_root,
         Some("TokenInstruction".to_string())
     );
     assert_eq!(
@@ -93,7 +116,8 @@ fn flatten_to_yaml_produces_valid_yaml() {
     let file = type_library_path().join("thru_primitives.abi.yaml");
     let include_dirs = vec![type_library_path()];
 
-    let yaml = abi_loader::flatten_to_yaml(&file, &include_dirs).expect("flatten_to_yaml should succeed");
+    let yaml =
+        abi_loader::flatten_to_yaml(&file, &include_dirs).expect("flatten_to_yaml should succeed");
 
     // Should be parseable back as AbiFile
     let parsed: AbiFile = serde_yml::from_str(&yaml).expect("Should parse as valid ABI YAML");
@@ -268,18 +292,42 @@ fn flatten_nft_market_program() {
     let type_names: Vec<&str> = result.types.iter().map(|t| t.name.as_str()).collect();
 
     // Types from thru_primitives (imported via onchain)
-    assert!(type_names.contains(&"Pubkey"), "Should contain Pubkey from primitives");
-    assert!(type_names.contains(&"Hash"), "Should contain Hash from primitives");
+    assert!(
+        type_names.contains(&"Pubkey"),
+        "Should contain Pubkey from primitives"
+    );
+    assert!(
+        type_names.contains(&"Hash"),
+        "Should contain Hash from primitives"
+    );
 
     // Types from state_proof (imported via onchain)
-    assert!(type_names.contains(&"StateProof"), "Should contain StateProof");
+    assert!(
+        type_names.contains(&"StateProof"),
+        "Should contain StateProof"
+    );
 
     // Types from root file
-    assert!(type_names.contains(&"NftMarketInstruction"), "Should contain NftMarketInstruction");
-    assert!(type_names.contains(&"NftMarketOrder"), "Should contain NftMarketOrder");
-    assert!(type_names.contains(&"NftMarketConfig"), "Should contain NftMarketConfig");
-    assert!(type_names.contains(&"NftMarketProgramAccount"), "Should contain NftMarketProgramAccount");
-    assert!(type_names.contains(&"NftMarketEvent"), "Should contain NftMarketEvent");
+    assert!(
+        type_names.contains(&"NftMarketInstruction"),
+        "Should contain NftMarketInstruction"
+    );
+    assert!(
+        type_names.contains(&"NftMarketOrder"),
+        "Should contain NftMarketOrder"
+    );
+    assert!(
+        type_names.contains(&"NftMarketConfig"),
+        "Should contain NftMarketConfig"
+    );
+    assert!(
+        type_names.contains(&"NftMarketProgramAccount"),
+        "Should contain NftMarketProgramAccount"
+    );
+    assert!(
+        type_names.contains(&"NftMarketEvent"),
+        "Should contain NftMarketEvent"
+    );
 
     // Verify no type-refs have a package field in flattened output
     fn assert_no_packages(kind: &abi_types::TypeKind) {

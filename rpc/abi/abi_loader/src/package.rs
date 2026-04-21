@@ -6,8 +6,8 @@
 use crate::file::{AbiFile, ImportSource};
 
 /* ============================================================================
-   Package Identity
-   ============================================================================ */
+Package Identity
+============================================================================ */
 
 /* Unique identifier for an ABI package, used for version conflict detection */
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -48,8 +48,8 @@ impl std::fmt::Display for PackageId {
 }
 
 /* ============================================================================
-   Resolved Package
-   ============================================================================ */
+Resolved Package
+============================================================================ */
 
 /* A fully resolved ABI package with its source and dependencies */
 #[derive(Debug, Clone)]
@@ -68,11 +68,7 @@ pub struct ResolvedPackage {
 
 impl ResolvedPackage {
     /* Create a new resolved package */
-    pub fn new(
-        source: ImportSource,
-        abi_file: AbiFile,
-        dependencies: Vec<PackageId>,
-    ) -> Self {
+    pub fn new(source: ImportSource, abi_file: AbiFile, dependencies: Vec<PackageId>) -> Self {
         let is_remote = source.is_remote();
         Self {
             id: PackageId::from_abi_file(&abi_file),
@@ -95,8 +91,8 @@ impl ResolvedPackage {
 }
 
 /* ============================================================================
-   Resolution Error Types
-   ============================================================================ */
+Resolution Error Types
+============================================================================ */
 
 /* Errors that can occur during import resolution */
 #[derive(Debug, Clone)]
@@ -171,7 +167,10 @@ pub enum ResolveError {
 impl std::fmt::Display for ResolveError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ResolveError::CyclicDependency { package_id, cycle_chain } => {
+            ResolveError::CyclicDependency {
+                package_id,
+                cycle_chain,
+            } => {
                 write!(
                     f,
                     "Circular dependency detected: {} (chain: {})",
@@ -234,8 +233,8 @@ impl std::fmt::Display for ResolveError {
 impl std::error::Error for ResolveError {}
 
 /* ============================================================================
-   Resolution Result Type
-   ============================================================================ */
+Resolution Result Type
+============================================================================ */
 
 /* Result of a full import resolution */
 #[derive(Debug, Clone)]

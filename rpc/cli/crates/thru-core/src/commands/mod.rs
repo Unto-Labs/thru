@@ -3,6 +3,7 @@
 pub mod abi;
 pub mod abi_toolchain;
 pub mod account;
+pub mod consensus_validator;
 pub mod debug;
 pub mod dev;
 pub mod faucet;

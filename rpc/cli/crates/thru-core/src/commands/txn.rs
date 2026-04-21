@@ -200,7 +200,7 @@ async fn execute_transaction(
     const MAX_NONCE_RETRIES: u32 = 3;
 
     /* Retry loop: on nonce-too-low errors the RPC may return a stale nonce;
-       rebuild and re-sign with a fresh nonce fetch on each attempt. */
+    rebuild and re-sign with a fresh nonce fetch on each attempt. */
     let mut transaction_details_opt = None;
     for attempt in 0..MAX_NONCE_RETRIES {
         if attempt > 0 {
@@ -1139,31 +1139,10 @@ mod tests {
         )
         .unwrap();
 
-        Config {
-            rpc_base_url: "http://localhost:8080".to_string(),
-            keys,
-            uploader_program_public_key: "ta1111111111111111111111111111111111111111111"
-                .to_string(),
-            manager_program_public_key: "ta1111111111111111111111111111111111111111111".to_string(),
-            abi_manager_program_public_key: "ta1111111111111111111111111111111111111111111"
-                .to_string(),
-            token_program_public_key: "ta1111111111111111111111111111111111111111111".to_string(),
-            name_service_program_public_key: "ta1111111111111111111111111111111111111111111"
-                .to_string(),
-            thru_registrar_program_public_key: "ta1111111111111111111111111111111111111111111"
-                .to_string(),
-            wthru_program_public_key: "ta1111111111111111111111111111111111111111111".to_string(),
-            timeout_seconds: 30,
-            max_retries: 3,
-            auth_token: None,
-            toolchain_path: None,
-            toolchain_version: None,
-            sdk_paths: None,
-            sdk_versions: None,
-            github_repo: None,
-            networks: std::collections::HashMap::new(),
-            default_network: None,
-        }
+        let mut config = Config::default();
+        config.rpc_base_url = "http://localhost:8080".to_string();
+        config.keys = keys;
+        config
     }
 
     #[test]

@@ -118,8 +118,8 @@ impl ImportResolver {
         }
 
         /* Reserve the package name before processing imports so that sibling
-           auto-discovery can detect packages already being loaded and skip
-           duplicate files (e.g. flat variants of the same ABI). */
+        auto-discovery can detect packages already being loaded and skip
+        duplicate files (e.g. flat variants of the same ABI). */
         let package_name = abi_file.package().to_string();
         self.package_types
             .entry(package_name.clone())
@@ -147,7 +147,7 @@ impl ImportResolver {
                         );
                     }
                     /* Remote imports are resolved after all imports are processed
-                       by discovering sibling ABI files that provide needed packages. */
+                    by discovering sibling ABI files that provide needed packages. */
                 }
             }
         }
@@ -168,10 +168,12 @@ impl ImportResolver {
             .extend(type_names);
 
         /* If the file had remote imports and we are not in skip_remote mode,
-           discover sibling ABI files that provide the packages referenced by
-           this file's type-refs. Only run for top-level loads, not for
-           auto-discovered siblings (which use skip_remote=true). */
-        let has_remote_imports = imports.iter().any(|i| !matches!(i, ImportSource::Path { .. }));
+        discover sibling ABI files that provide the packages referenced by
+        this file's type-refs. Only run for top-level loads, not for
+        auto-discovered siblings (which use skip_remote=true). */
+        let has_remote_imports = imports
+            .iter()
+            .any(|i| !matches!(i, ImportSource::Path { .. }));
         if has_remote_imports && !skip_remote {
             let needed_packages = Self::extract_referenced_packages(&contents, &package_name);
             if !needed_packages.is_empty() {
@@ -198,16 +200,15 @@ impl ImportResolver {
 
                     for dir in &scan_dirs {
                         if let Ok(entries) = std::fs::read_dir(dir) {
-                            let mut paths: Vec<_> = entries
-                                .flatten()
-                                .map(|e| e.path())
-                                .collect();
+                            let mut paths: Vec<_> = entries.flatten().map(|e| e.path()).collect();
                             paths.sort();
                             for path in paths {
                                 if path.extension().and_then(|e| e.to_str()) != Some("yaml") {
                                     continue;
                                 }
-                                if path.file_name().and_then(|n| n.to_str())
+                                if path
+                                    .file_name()
+                                    .and_then(|n| n.to_str())
                                     .map_or(true, |n| !n.ends_with(".abi.yaml"))
                                 {
                                     continue;
@@ -224,16 +225,15 @@ impl ImportResolver {
                                     Ok(c) => c,
                                     Err(_) => continue,
                                 };
-                                let sibling_package =
-                                    Self::extract_own_package(&sibling_contents);
+                                let sibling_package = Self::extract_own_package(&sibling_contents);
                                 let sibling_package = match sibling_package {
                                     Some(p) => p,
                                     None => continue,
                                 };
 
                                 /* Check against both the original unresolved set and the
-                                   live package_types (a sibling loaded earlier in this scan
-                                   may have already provided this package). */
+                                live package_types (a sibling loaded earlier in this scan
+                                may have already provided this package). */
                                 if !unresolved.contains(&sibling_package)
                                     || self.package_types.contains_key(&sibling_package)
                                 {
@@ -249,8 +249,7 @@ impl ImportResolver {
                                 }
 
                                 if let Err(e) = self.load_file_with_imports_internal(
-                                    &path,
-                                    verbose,
+                                    &path, verbose,
                                     true, /* skip_remote to prevent cascading */
                                 ) {
                                     if verbose {
@@ -269,8 +268,8 @@ impl ImportResolver {
         }
 
         /* Push this file last so that the root file (the one the caller
-           originally requested) ends up at the tail of all_files. The
-           flatten code relies on all_files.last() being the root. */
+        originally requested) ends up at the tail of all_files. The
+        flatten code relies on all_files.last() being the root. */
         self.all_files.push(abi_file);
 
         Ok(())
@@ -337,8 +336,8 @@ impl ImportResolver {
     }
 
     /* Extract packages referenced by type-refs in the raw YAML content.
-       Scans for `package:` lines (used in type-ref definitions) and returns
-       unique package names excluding the file's own package. */
+    Scans for `package:` lines (used in type-ref definitions) and returns
+    unique package names excluding the file's own package. */
     fn extract_referenced_packages(contents: &str, own_package: &str) -> Vec<String> {
         let mut packages = HashSet::new();
         for line in contents.lines() {
@@ -354,7 +353,7 @@ impl ImportResolver {
     }
 
     /* Extract the top-level package name from raw YAML content without
-       doing a full parse. Looks for the `package:` field in the abi header. */
+    doing a full parse. Looks for the `package:` field in the abi header. */
     fn extract_own_package(contents: &str) -> Option<String> {
         for line in contents.lines() {
             let trimmed = line.trim();

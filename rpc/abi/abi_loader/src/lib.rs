@@ -12,6 +12,7 @@ pub mod package;
 pub mod resolver;
 
 // Re-export commonly used types at the crate root
+pub use enhanced_resolver::EnhancedImportResolver;
 pub use file::{
     AbiFile, AbiMetadata, AbiOptions, ImportSource, OnchainTarget, ProgramMetadata, RevisionSpec,
     RootTypes,
@@ -19,7 +20,6 @@ pub use file::{
 pub use flatten::{flatten, flatten_to_yaml, flatten_with_options, normalize_type_refs};
 pub use package::{PackageId, ResolutionResult, ResolveError, ResolvedPackage};
 pub use resolver::ImportResolver;
-pub use enhanced_resolver::EnhancedImportResolver;
 
 // Re-export fetcher types
 pub use fetcher::{

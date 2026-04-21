@@ -45,14 +45,10 @@ impl ImportFetcher for HttpFetcher {
         };
 
         /* Perform the HTTP request */
-        let response = self
-            .client
-            .get(url)
-            .send()
-            .map_err(|e| FetchError::Http {
-                status: 0,
-                message: format!("Request failed: {}", e),
-            })?;
+        let response = self.client.get(url).send().map_err(|e| FetchError::Http {
+            status: 0,
+            message: format!("Request failed: {}", e),
+        })?;
 
         /* Check response status */
         let status = response.status();

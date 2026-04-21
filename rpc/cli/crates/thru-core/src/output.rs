@@ -166,11 +166,7 @@ fn print_account_info(data: &Value) {
         }
 
         if let Some(seq) = account_data.get("seq") {
-            println!(
-                "  {}: {}",
-                "Seq".cyan(),
-                format_value(seq)
-            );
+            println!("  {}: {}", "Seq".cyan(), format_value(seq));
         }
 
         if let Some(program) = account_data.get("program") {
@@ -198,7 +194,11 @@ fn print_account_info(data: &Value) {
             println!(
                 "  {}: {}",
                 "Is Ephemeral".cyan(),
-                if is_ephemeral { "Yes".green() } else { "No".red() }
+                if is_ephemeral {
+                    "Yes".green()
+                } else {
+                    "No".red()
+                }
             );
         }
         if let Some(is_deleted) = account_data.get("isDeleted") {
@@ -206,7 +206,11 @@ fn print_account_info(data: &Value) {
             println!(
                 "  {}: {}",
                 "Is Deleted".cyan(),
-                if is_deleted { "Yes".yellow() } else { "No".green() }
+                if is_deleted {
+                    "Yes".yellow()
+                } else {
+                    "No".green()
+                }
             );
         }
         if let Some(is_privileged) = account_data.get("isPrivileged") {
@@ -214,7 +218,11 @@ fn print_account_info(data: &Value) {
             println!(
                 "  {}: {}",
                 "Is Privileged".cyan(),
-                if is_privileged { "Yes".green() } else { "No".red() }
+                if is_privileged {
+                    "Yes".green()
+                } else {
+                    "No".red()
+                }
             );
         }
 
@@ -527,42 +535,31 @@ fn print_networks_info(data: &Value) {
                     return;
                 }
 
-                let default_name = net_data
-                    .get("default")
+                let active_name = net_data
+                    .get("active")
+                    .or_else(|| net_data.get("default"))
                     .and_then(|v| v.as_str())
                     .unwrap_or("");
 
                 println!("{}", "Networks".bold().green());
                 for entry in entries {
                     if let Value::Object(e) = entry {
-                        let name = e
-                            .get("name")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("?");
-                        let url = e
-                            .get("url")
-                            .and_then(|v| v.as_str())
-                            .unwrap_or("?");
+                        let name = e.get("name").and_then(|v| v.as_str()).unwrap_or("?");
+                        let url = e.get("url").and_then(|v| v.as_str()).unwrap_or("?");
                         let has_auth = e
                             .get("has_auth_token")
                             .and_then(|v| v.as_bool())
                             .unwrap_or(false);
 
-                        let marker = if name == default_name {
-                            " (default)".green().to_string()
+                        let marker = if name == active_name {
+                            " (active)".green().to_string()
                         } else {
                             String::new()
                         };
 
                         let auth_info = if has_auth { " [auth]" } else { "" };
 
-                        println!(
-                            "  {}{}: {}{}",
-                            name.cyan(),
-                            marker,
-                            url,
-                            auth_info
-                        );
+                        println!("  {}{}: {}{}", name.cyan(), marker, url, auth_info);
                     }
                 }
             }
@@ -584,8 +581,8 @@ fn print_networks_info(data: &Value) {
                             );
                         }
                     }
-                    "set-default" => println!(
-                        "{}: Default network set to '{}'",
+                    "use" => println!(
+                        "{}: Active network set to '{}'",
                         "Success".bold().green(),
                         name_str
                     ),
@@ -810,6 +807,7 @@ pub fn create_network_list_response(config: &crate::config::Config) -> Value {
                     "name": name,
                     "url": net.url,
                     "has_auth_token": net.auth_token.is_some(),
+                    "is_active": config.default_network.as_deref() == Some(name.as_str()),
                 })
             })
         })
@@ -821,14 +819,14 @@ pub fn create_network_list_response(config: &crate::config::Config) -> Value {
         }
     });
 
-    if let Some(ref default) = config.default_network {
-        response["networks"]["default"] = json!(default);
+    if let Some(ref active) = config.default_network {
+        response["networks"]["active"] = json!(active);
     }
 
     response
 }
 
-/// Create a JSON response for network operations (add, set-default, set, remove)
+/// Create a JSON response for network operations (add, use, set, remove)
 pub fn create_network_operation_response(
     operation: &str,
     name: &str,
@@ -848,4 +846,40 @@ pub fn create_network_operation_response(
     }
 
     response
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::config::{Config, NetworkConfig};
+
+    #[test]
+    fn create_network_list_response_marks_active_network() {
+        let mut config = Config::default();
+        config.networks.insert(
+            "1".to_string(),
+            NetworkConfig {
+                url: "https://rpc-1.example.com".to_string(),
+                auth_token: None,
+            },
+        );
+        config.networks.insert(
+            "2".to_string(),
+            NetworkConfig {
+                url: "https://rpc-2.example.com".to_string(),
+                auth_token: Some("secret".to_string()),
+            },
+        );
+        config.default_network = Some("1".to_string());
+
+        let response = create_network_list_response(&config);
+        let networks = &response["networks"];
+
+        assert_eq!(networks["active"], "1");
+        assert_eq!(networks["list"][0]["name"], "1");
+        assert_eq!(networks["list"][0]["is_active"], true);
+        assert_eq!(networks["list"][1]["name"], "2");
+        assert_eq!(networks["list"][1]["is_active"], false);
+        assert_eq!(networks["list"][1]["has_auth_token"], true);
+    }
 }

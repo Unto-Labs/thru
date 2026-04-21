@@ -15,8 +15,8 @@ use crate::file::ImportSource;
 use std::path::PathBuf;
 
 /* ============================================================================
-   Fetcher Configuration
-   ============================================================================ */
+Fetcher Configuration
+============================================================================ */
 
 /* Configuration for which import types are allowed */
 #[derive(Debug, Clone)]
@@ -153,7 +153,10 @@ pub struct OnchainFetcherConfig {
 impl Default for OnchainFetcherConfig {
     fn default() -> Self {
         let mut rpc_endpoints = std::collections::HashMap::new();
-        rpc_endpoints.insert("mainnet".to_string(), "https://rpc.thru.network".to_string());
+        rpc_endpoints.insert(
+            "mainnet".to_string(),
+            "https://rpc.thru.network".to_string(),
+        );
         rpc_endpoints.insert(
             "testnet".to_string(),
             "https://rpc-testnet.thru.network".to_string(),
@@ -236,8 +239,8 @@ impl CacheConfig {
 }
 
 /* ============================================================================
-   Fetch Context
-   ============================================================================ */
+Fetch Context
+============================================================================ */
 
 /* Context passed to fetchers during resolution */
 #[derive(Debug, Clone)]
@@ -271,8 +274,8 @@ impl FetchContext {
 }
 
 /* ============================================================================
-   Fetch Result
-   ============================================================================ */
+Fetch Result
+============================================================================ */
 
 /* Result of successfully fetching an ABI file */
 #[derive(Debug, Clone)]
@@ -288,8 +291,8 @@ pub struct FetchResult {
 }
 
 /* ============================================================================
-   Fetch Error
-   ============================================================================ */
+Fetch Error
+============================================================================ */
 
 /* Errors that can occur during fetching */
 #[derive(Debug)]
@@ -336,7 +339,11 @@ impl std::fmt::Display for FetchError {
             FetchError::Parse(s) => write!(f, "Parse error: {}", s),
             FetchError::UnknownNetwork(s) => write!(f, "Unknown network: {}", s),
             FetchError::RevisionMismatch { required, actual } => {
-                write!(f, "Revision mismatch: required {}, got {}", required, actual)
+                write!(
+                    f,
+                    "Revision mismatch: required {}, got {}",
+                    required, actual
+                )
             }
         }
     }
@@ -358,8 +365,8 @@ impl From<std::io::Error> for FetchError {
 }
 
 /* ============================================================================
-   Fetcher Trait
-   ============================================================================ */
+Fetcher Trait
+============================================================================ */
 
 /* Trait for import source fetchers */
 pub trait ImportFetcher: Send + Sync {
@@ -371,8 +378,8 @@ pub trait ImportFetcher: Send + Sync {
 }
 
 /* ============================================================================
-   Composite Fetcher
-   ============================================================================ */
+Composite Fetcher
+============================================================================ */
 
 /* Composite fetcher that delegates to the appropriate backend */
 pub struct CompositeFetcher {
@@ -398,7 +405,9 @@ impl CompositeFetcher {
         }
         #[cfg(not(target_arch = "wasm32"))]
         if config.allow_onchain {
-            fetchers.push(Box::new(onchain::OnchainFetcher::new(&config.onchain_config)));
+            fetchers.push(Box::new(onchain::OnchainFetcher::new(
+                &config.onchain_config,
+            )));
         }
 
         Ok(Self { fetchers, config })

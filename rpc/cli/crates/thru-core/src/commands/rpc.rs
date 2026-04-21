@@ -105,6 +105,43 @@ pub async fn get_health(config: &Config, json_format: bool) -> Result<(), CliErr
     Ok(())
 }
 
+pub async fn get_status(config: &Config, json_format: bool) -> Result<(), CliError> {
+    let client = create_rpc_client(config)?;
+    let status = client.get_node_status().await?;
+
+    if json_format {
+        let response = serde_json::json!({
+            "getstatus": {
+                "status": "success",
+                "ready": status.ready,
+                "consensus": {
+                    "active": status.consensus.active,
+                    "mode": status.consensus.mode.as_str(),
+                    "frontier": status.consensus.frontier,
+                },
+                "repair": {
+                    "active": status.repair.active,
+                },
+                "finalized_slot": status.finalized_slot,
+                "locally_executed_slot": status.locally_executed_slot,
+            }
+        });
+        output::print_output(response, true);
+    } else {
+        println!("Ready: {}", status.ready);
+        println!("Consensus:");
+        println!("  Active:   {}", status.consensus.active);
+        println!("  Mode:     {}", status.consensus.mode.as_str());
+        println!("  Frontier: {}", status.consensus.frontier);
+        println!("Repair:");
+        println!("  Active:   {}", status.repair.active);
+        println!("Finalized Slot:        {}", status.finalized_slot);
+        println!("Locally Executed Slot: {}", status.locally_executed_slot);
+    }
+
+    Ok(())
+}
+
 pub async fn get_height(config: &Config, json_format: bool) -> Result<(), CliError> {
     let client = create_rpc_client(config)?;
     let heights = client.get_block_height().await?;

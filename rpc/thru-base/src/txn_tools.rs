@@ -65,6 +65,55 @@ pub const CONVERTED_VAULT: [u8; 32] = {
     arr
 };
 
+/// Unclaimed vault at 0x0C05
+pub const UNCLAIMED_VAULT: [u8; 32] = {
+    let mut arr = [0u8; 32];
+    arr[30] = 0x0C;
+    arr[31] = 0x05;
+    arr
+};
+
+const CONSENSUS_VALIDATOR_DEFAULT_EXPIRY_AFTER: u32 = 100;
+const CONSENSUS_VALIDATOR_DEFAULT_COMPUTE_UNITS: u32 = 500_000_000;
+const CONSENSUS_VALIDATOR_DEFAULT_STATE_UNITS: u16 = 50_000;
+const CONSENSUS_VALIDATOR_DEFAULT_MEMORY_UNITS: u16 = 50_000;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ConsensusValidatorAccounts {
+    pub program: TnPubkey,
+    pub attestor_table: TnPubkey,
+    pub token_program: TnPubkey,
+    pub converted_vault: TnPubkey,
+    pub unclaimed_vault: TnPubkey,
+}
+
+impl Default for ConsensusValidatorAccounts {
+    fn default() -> Self {
+        Self {
+            program: CONSENSUS_VALIDATOR_PROGRAM,
+            attestor_table: ATTESTOR_TABLE,
+            token_program: TOKEN_PROGRAM,
+            converted_vault: CONVERTED_VAULT,
+            unclaimed_vault: UNCLAIMED_VAULT,
+        }
+    }
+}
+
+fn build_consensus_validator_tx(
+    fee_payer: TnPubkey,
+    program: TnPubkey,
+    fee: u64,
+    nonce: u64,
+    start_slot: u64,
+) -> Transaction {
+    Transaction::new(fee_payer, program, fee, nonce)
+        .with_start_slot(start_slot)
+        .with_expiry_after(CONSENSUS_VALIDATOR_DEFAULT_EXPIRY_AFTER)
+        .with_compute_units(CONSENSUS_VALIDATOR_DEFAULT_COMPUTE_UNITS)
+        .with_state_units(CONSENSUS_VALIDATOR_DEFAULT_STATE_UNITS)
+        .with_memory_units(CONSENSUS_VALIDATOR_DEFAULT_MEMORY_UNITS)
+}
+
 #[derive(Debug, Clone)]
 pub struct TransactionBuilder {
     // fee_payer: FdPubkey,
@@ -635,10 +684,18 @@ mod tests {
         assert_eq!(ro_accs[0], EOA_PROGRAM);
 
         let instruction = tx.instructions.expect("instruction bytes must exist");
-        assert_eq!(instruction.len(), 18, "Deposit instruction must be 18 bytes");
+        assert_eq!(
+            instruction.len(),
+            18,
+            "Deposit instruction must be 18 bytes"
+        );
 
-        let discriminant =
-            u32::from_le_bytes([instruction[0], instruction[1], instruction[2], instruction[3]]);
+        let discriminant = u32::from_le_bytes([
+            instruction[0],
+            instruction[1],
+            instruction[2],
+            instruction[3],
+        ]);
         assert_eq!(discriminant, 0, "Deposit discriminant should be 0");
 
         let faucet_idx = u16::from_le_bytes([instruction[4], instruction[5]]);
@@ -693,9 +750,15 @@ mod tests {
             100,  // start_slot
         );
 
-        assert!(result.is_ok(), "Should build valid transaction with freeze authority");
+        assert!(
+            result.is_ok(),
+            "Should build valid transaction with freeze authority"
+        );
         let tx = result.unwrap();
-        assert!(tx.instructions.is_some(), "Transaction should have instructions");
+        assert!(
+            tx.instructions.is_some(),
+            "Transaction should have instructions"
+        );
 
         // Test without freeze authority
         let result_no_freeze = TransactionBuilder::build_token_initialize_mint(
@@ -714,7 +777,10 @@ mod tests {
             100,
         );
 
-        assert!(result_no_freeze.is_ok(), "Should build valid transaction without freeze authority");
+        assert!(
+            result_no_freeze.is_ok(),
+            "Should build valid transaction without freeze authority"
+        );
     }
 
     #[test]
@@ -741,13 +807,16 @@ mod tests {
         .unwrap();
 
         // Verify instruction structure
-        // Tag (1) + mint_account_idx (2) + decimals (1) + creator (32) + mint_authority (32) + 
+        // Tag (1) + mint_account_idx (2) + decimals (1) + creator (32) + mint_authority (32) +
         // freeze_authority (32) + has_freeze_authority (1) + ticker_len (1) + ticker_bytes (8) + seed (32) + proof
         let expected_min_size = 1 + 2 + 1 + 32 + 32 + 32 + 1 + 1 + 8 + 32 + state_proof.len();
         assert_eq!(instruction.len(), expected_min_size);
 
         // Verify tag
-        assert_eq!(instruction[0], 0, "First byte should be InitializeMint tag (0)");
+        assert_eq!(
+            instruction[0], 0,
+            "First byte should be InitializeMint tag (0)"
+        );
 
         // Verify mint account index
         let parsed_idx = u16::from_le_bytes([instruction[1], instruction[2]]);
@@ -796,7 +865,10 @@ mod tests {
             100,
         );
 
-        assert!(result.is_ok(), "Should allow different creator and mint_authority");
+        assert!(
+            result.is_ok(),
+            "Should allow different creator and mint_authority"
+        );
 
         // Test that creator and mint_authority can be the same
         let result_same = TransactionBuilder::build_token_initialize_mint(
@@ -815,7 +887,209 @@ mod tests {
             100,
         );
 
-        assert!(result_same.is_ok(), "Should allow same creator and mint_authority");
+        assert!(
+            result_same.is_ok(),
+            "Should allow same creator and mint_authority"
+        );
+    }
+
+    #[test]
+    fn test_build_activate_with_custom_accounts_sorts_accounts_and_indices() {
+        let fee_payer = [0x10u8; 32];
+        let accounts = ConsensusValidatorAccounts {
+            program: [0xf0u8; 32],
+            attestor_table: [0x30u8; 32],
+            token_program: [0x90u8; 32],
+            converted_vault: [0x40u8; 32],
+            unclaimed_vault: [0x50u8; 32],
+        };
+        let source_token_account = [0x20u8; 32];
+        let claim_authority = [0x60u8; 32];
+        let bls_pk = [0x77u8; 96];
+
+        let tx = TransactionBuilder::build_activate_with_accounts(
+            fee_payer,
+            accounts,
+            source_token_account,
+            bls_pk,
+            claim_authority,
+            123,
+            0,
+            9,
+            44,
+        )
+        .expect("activate transaction should build");
+
+        assert_eq!(tx.program, accounts.program);
+        assert_eq!(
+            tx.rw_accs,
+            Some(vec![
+                source_token_account,
+                accounts.attestor_table,
+                accounts.converted_vault
+            ])
+        );
+        assert_eq!(tx.r_accs, Some(vec![accounts.token_program]));
+
+        let instruction = tx.instructions.expect("instruction bytes must exist");
+        assert_eq!(
+            u32::from_le_bytes(instruction[0..4].try_into().unwrap()),
+            1,
+            "activate discriminant should be 1"
+        );
+        assert_eq!(
+            u64::from_le_bytes(instruction[4..12].try_into().unwrap()),
+            3,
+            "attestor table should resolve to rw index 3"
+        );
+        assert_eq!(
+            u16::from_le_bytes(instruction[12..14].try_into().unwrap()),
+            5,
+            "token program should resolve to ro index 5"
+        );
+        assert_eq!(
+            u16::from_le_bytes(instruction[14..16].try_into().unwrap()),
+            2,
+            "source token account should resolve to rw index 2"
+        );
+        assert_eq!(
+            u16::from_le_bytes(instruction[16..18].try_into().unwrap()),
+            4,
+            "converted vault should resolve to rw index 4"
+        );
+        assert_eq!(
+            u16::from_le_bytes(instruction[18..20].try_into().unwrap()),
+            0,
+            "identity should remain fee payer index 0"
+        );
+    }
+
+    #[test]
+    fn test_build_deactivate_instruction_format() {
+        let instruction = build_deactivate_instruction(7, 8, 9, 10, 0).unwrap();
+
+        assert_eq!(instruction.len(), 20);
+        assert_eq!(
+            u32::from_le_bytes(instruction[0..4].try_into().unwrap()),
+            2,
+            "deactivate discriminant should be 2"
+        );
+        assert_eq!(
+            u64::from_le_bytes(instruction[4..12].try_into().unwrap()),
+            7
+        );
+        assert_eq!(
+            u16::from_le_bytes(instruction[12..14].try_into().unwrap()),
+            8
+        );
+        assert_eq!(
+            u16::from_le_bytes(instruction[14..16].try_into().unwrap()),
+            9
+        );
+        assert_eq!(
+            u16::from_le_bytes(instruction[16..18].try_into().unwrap()),
+            10
+        );
+        assert_eq!(
+            u16::from_le_bytes(instruction[18..20].try_into().unwrap()),
+            0
+        );
+    }
+
+    #[test]
+    fn test_build_convert_tokens_instruction_format() {
+        let instruction = build_convert_tokens_instruction(11, 12, 13, 14, 0, 500).unwrap();
+
+        assert_eq!(instruction.len(), 28);
+        assert_eq!(
+            u32::from_le_bytes(instruction[0..4].try_into().unwrap()),
+            3,
+            "convert-tokens discriminant should be 3"
+        );
+        assert_eq!(
+            u64::from_le_bytes(instruction[4..12].try_into().unwrap()),
+            11
+        );
+        assert_eq!(
+            u16::from_le_bytes(instruction[12..14].try_into().unwrap()),
+            12
+        );
+        assert_eq!(
+            u16::from_le_bytes(instruction[14..16].try_into().unwrap()),
+            13
+        );
+        assert_eq!(
+            u16::from_le_bytes(instruction[16..18].try_into().unwrap()),
+            14
+        );
+        assert_eq!(
+            u16::from_le_bytes(instruction[18..20].try_into().unwrap()),
+            0
+        );
+        assert_eq!(
+            u64::from_le_bytes(instruction[20..28].try_into().unwrap()),
+            500
+        );
+    }
+
+    #[test]
+    fn test_build_claim_instruction_format() {
+        let subject_attestor = [0xabu8; 32];
+        let instruction = build_claim_instruction(15, 16, 17, 18, 0, subject_attestor).unwrap();
+
+        assert_eq!(instruction.len(), 52);
+        assert_eq!(
+            u32::from_le_bytes(instruction[0..4].try_into().unwrap()),
+            4,
+            "claim discriminant should be 4"
+        );
+        assert_eq!(
+            u64::from_le_bytes(instruction[4..12].try_into().unwrap()),
+            15
+        );
+        assert_eq!(
+            u16::from_le_bytes(instruction[12..14].try_into().unwrap()),
+            16
+        );
+        assert_eq!(
+            u16::from_le_bytes(instruction[14..16].try_into().unwrap()),
+            17
+        );
+        assert_eq!(
+            u16::from_le_bytes(instruction[16..18].try_into().unwrap()),
+            18
+        );
+        assert_eq!(
+            u16::from_le_bytes(instruction[18..20].try_into().unwrap()),
+            0
+        );
+        assert_eq!(&instruction[20..52], &subject_attestor);
+    }
+
+    #[test]
+    fn test_build_set_claim_authority_instruction_format() {
+        let subject_attestor = [0x55u8; 32];
+        let new_claim_authority = [0x66u8; 32];
+        let instruction =
+            build_set_claim_authority_instruction(19, 0, subject_attestor, new_claim_authority)
+                .unwrap();
+
+        assert_eq!(instruction.len(), 78);
+        assert_eq!(
+            u32::from_le_bytes(instruction[0..4].try_into().unwrap()),
+            5,
+            "set-claim-authority discriminant should be 5"
+        );
+        assert_eq!(
+            u64::from_le_bytes(instruction[4..12].try_into().unwrap()),
+            19
+        );
+        assert_eq!(
+            u16::from_le_bytes(instruction[12..14].try_into().unwrap()),
+            0
+        );
+        assert_eq!(&instruction[14..46], &subject_attestor);
+        assert_eq!(&instruction[46..78], &new_claim_authority);
     }
 }
 
@@ -1940,7 +2214,10 @@ impl TransactionBuilder {
         let authority_is_fee_payer = authority_account == fee_payer;
 
         let mut rw_accounts = vec![(abi_account, "abi")];
-        let mut r_accounts = vec![(abi_meta_account, "abi_meta"), (program_meta_account, "program_meta")];
+        let mut r_accounts = vec![
+            (abi_meta_account, "abi_meta"),
+            (program_meta_account, "program_meta"),
+        ];
 
         if !authority_is_fee_payer {
             r_accounts.push((authority_account, "authority"));
@@ -2091,7 +2368,10 @@ impl TransactionBuilder {
         let authority_is_fee_payer = authority_account == fee_payer;
 
         let mut rw_accounts = vec![(abi_account, "abi")];
-        let mut r_accounts = vec![(abi_meta_account, "abi_meta"), (program_meta_account, "program_meta")];
+        let mut r_accounts = vec![
+            (abi_meta_account, "abi_meta"),
+            (program_meta_account, "program_meta"),
+        ];
 
         if !authority_is_fee_payer {
             r_accounts.push((authority_account, "authority"));
@@ -3293,9 +3573,9 @@ pub const TOKEN_INSTRUCTION_THAW_ACCOUNT: u8 = 0x07;
 pub const TN_WTHRU_INSTRUCTION_INITIALIZE_MINT: u32 = 0;
 pub const TN_WTHRU_INSTRUCTION_DEPOSIT: u32 = 1;
 pub const TN_WTHRU_INSTRUCTION_WITHDRAW: u32 = 2;
-// lease, resolve (lil library), show lease info, 
-// cost to lease, renew, record management, listing records for domain, 
-// subdomain management 
+// lease, resolve (lil library), show lease info,
+// cost to lease, renew, record management, listing records for domain,
+// subdomain management
 
 /* Name service instruction discriminants */
 pub const TN_NAME_SERVICE_INSTRUCTION_INITIALIZE_ROOT: u32 = 0;
@@ -3321,13 +3601,17 @@ pub const TN_THRU_REGISTRAR_INSTRUCTION_CLAIM_EXPIRED_DOMAIN: u32 = 3;
 /// Helper function to add sorted accounts and return their indices
 fn add_sorted_accounts(tx: Transaction, accounts: &[(TnPubkey, bool)]) -> (Transaction, Vec<u16>) {
     // Separate RW and RO accounts, sort each group separately
-    let mut rw_accounts: Vec<_> = accounts.iter().enumerate()
+    let mut rw_accounts: Vec<_> = accounts
+        .iter()
+        .enumerate()
         .filter(|(_, (_, writable))| *writable)
         .collect();
-    let mut ro_accounts: Vec<_> = accounts.iter().enumerate()
+    let mut ro_accounts: Vec<_> = accounts
+        .iter()
+        .enumerate()
         .filter(|(_, (_, writable))| !*writable)
         .collect();
-    
+
     // Sort each group by pubkey
     rw_accounts.sort_by(|a, b| a.1.0.cmp(&b.1.0));
     ro_accounts.sort_by(|a, b| a.1.0.cmp(&b.1.0));
@@ -4040,39 +4324,37 @@ impl TransactionBuilder {
         let recipient_is_fee_payer = recipient_account == fee_payer;
         let recipient_is_faucet = recipient_account == faucet_account;
 
-        let (faucet_account_idx, recipient_account_idx) = if faucet_is_fee_payer && recipient_is_fee_payer {
-            // Both are fee_payer (same account)
-            (0u16, 0u16)
-        } else if faucet_is_fee_payer {
-            // Faucet is fee_payer, recipient is different
-            tx = tx.add_rw_account(recipient_account);
-            (0u16, 2u16)
-        } else if recipient_is_fee_payer {
-            // Recipient is fee_payer, faucet is different
-            tx = tx.add_rw_account(faucet_account);
-            (2u16, 0u16)
-        } else if recipient_is_faucet {
-            // Both are same account (but not fee_payer)
-            tx = tx.add_rw_account(faucet_account);
-            (2u16, 2u16)
-        } else {
-            // Both are different accounts, add in sorted order
-            if faucet_account < recipient_account {
-                tx = tx.add_rw_account(faucet_account);
+        let (faucet_account_idx, recipient_account_idx) =
+            if faucet_is_fee_payer && recipient_is_fee_payer {
+                // Both are fee_payer (same account)
+                (0u16, 0u16)
+            } else if faucet_is_fee_payer {
+                // Faucet is fee_payer, recipient is different
                 tx = tx.add_rw_account(recipient_account);
-                (2u16, 3u16)
+                (0u16, 2u16)
+            } else if recipient_is_fee_payer {
+                // Recipient is fee_payer, faucet is different
+                tx = tx.add_rw_account(faucet_account);
+                (2u16, 0u16)
+            } else if recipient_is_faucet {
+                // Both are same account (but not fee_payer)
+                tx = tx.add_rw_account(faucet_account);
+                (2u16, 2u16)
             } else {
-                tx = tx.add_rw_account(recipient_account);
-                tx = tx.add_rw_account(faucet_account);
-                (3u16, 2u16)
-            }
-        };
+                // Both are different accounts, add in sorted order
+                if faucet_account < recipient_account {
+                    tx = tx.add_rw_account(faucet_account);
+                    tx = tx.add_rw_account(recipient_account);
+                    (2u16, 3u16)
+                } else {
+                    tx = tx.add_rw_account(recipient_account);
+                    tx = tx.add_rw_account(faucet_account);
+                    (3u16, 2u16)
+                }
+            };
 
-        let instruction_data = build_faucet_withdraw_instruction(
-            faucet_account_idx,
-            recipient_account_idx,
-            amount,
-        )?;
+        let instruction_data =
+            build_faucet_withdraw_instruction(faucet_account_idx, recipient_account_idx, amount)?;
 
         Ok(tx.with_instructions(instruction_data))
     }
@@ -4102,27 +4384,43 @@ impl TransactionBuilder {
         nonce: u64,
         start_slot: u64,
     ) -> Result<Transaction> {
-        let program: TnPubkey = CONSENSUS_VALIDATOR_PROGRAM;
-        let attestor_table: TnPubkey = ATTESTOR_TABLE;
-        let token_program: TnPubkey = TOKEN_PROGRAM;
-        let converted_vault: TnPubkey = CONVERTED_VAULT;
+        Self::build_activate_with_accounts(
+            fee_payer,
+            ConsensusValidatorAccounts::default(),
+            source_token_account,
+            bls_pk,
+            claim_authority,
+            token_amount,
+            fee,
+            nonce,
+            start_slot,
+        )
+    }
 
-        let tx = Transaction::new(fee_payer, program, fee, nonce)
-            .with_start_slot(start_slot)
-            .with_expiry_after(100)
-            .with_compute_units(500_000_000) /* BLS deserialization is expensive */
-            .with_state_units(50_000)
-            .with_memory_units(50_000);
+    /// Build consensus validator program ACTIVATE transaction using custom fixed
+    /// account addresses.
+    pub fn build_activate_with_accounts(
+        fee_payer: TnPubkey,
+        accounts: ConsensusValidatorAccounts,
+        source_token_account: TnPubkey,
+        bls_pk: [u8; 96],
+        claim_authority: TnPubkey,
+        token_amount: u64,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let tx = build_consensus_validator_tx(fee_payer, accounts.program, fee, nonce, start_slot);
 
         /* Add accounts - must be sorted by pubkey within RW and RO groups:
-           RW: attestor_table, source_token_account, converted_vault
-           RO: token_program
-           identity/fee_payer is already index 0 */
+        RW: attestor_table, source_token_account, converted_vault
+        RO: token_program
+        identity/fee_payer is already index 0 */
         let accounts = [
-            (attestor_table, true),        /* RW */
-            (source_token_account, true),  /* RW */
-            (converted_vault, true),       /* RW */
-            (token_program, false),        /* RO */
+            (accounts.attestor_table, true),  /* RW */
+            (source_token_account, true),     /* RW */
+            (accounts.converted_vault, true), /* RW */
+            (accounts.token_program, false),  /* RO */
         ];
         let (tx, indices) = add_sorted_accounts(tx, &accounts);
         let attestor_table_idx = indices[0];
@@ -4142,6 +4440,220 @@ impl TransactionBuilder {
             bls_pk,
             claim_authority,
             token_amount,
+        )?;
+
+        Ok(tx.with_instructions(instruction_data))
+    }
+
+    /// Build consensus validator program DEACTIVATE transaction.
+    pub fn build_deactivate(
+        fee_payer: TnPubkey,
+        dest_token_account: TnPubkey,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        Self::build_deactivate_with_accounts(
+            fee_payer,
+            ConsensusValidatorAccounts::default(),
+            dest_token_account,
+            fee,
+            nonce,
+            start_slot,
+        )
+    }
+
+    /// Build consensus validator program DEACTIVATE transaction using custom
+    /// fixed account addresses.
+    pub fn build_deactivate_with_accounts(
+        fee_payer: TnPubkey,
+        accounts: ConsensusValidatorAccounts,
+        dest_token_account: TnPubkey,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let tx = build_consensus_validator_tx(fee_payer, accounts.program, fee, nonce, start_slot);
+
+        let tx_accounts = [
+            (accounts.attestor_table, true),
+            (accounts.unclaimed_vault, true),
+            (dest_token_account, true),
+            (accounts.token_program, false),
+        ];
+        let (tx, indices) = add_sorted_accounts(tx, &tx_accounts);
+        let attestor_table_idx = indices[0];
+        let unclaimed_vault_idx = indices[1];
+        let dest_token_account_idx = indices[2];
+        let token_program_idx = indices[3];
+
+        let instruction_data = build_deactivate_instruction(
+            attestor_table_idx as u64,
+            token_program_idx,
+            unclaimed_vault_idx,
+            dest_token_account_idx,
+            0u16,
+        )?;
+
+        Ok(tx.with_instructions(instruction_data))
+    }
+
+    /// Build consensus validator program CONVERT_TOKENS transaction.
+    pub fn build_convert_tokens(
+        fee_payer: TnPubkey,
+        source_token_account: TnPubkey,
+        token_amount: u64,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        Self::build_convert_tokens_with_accounts(
+            fee_payer,
+            ConsensusValidatorAccounts::default(),
+            source_token_account,
+            token_amount,
+            fee,
+            nonce,
+            start_slot,
+        )
+    }
+
+    /// Build consensus validator program CONVERT_TOKENS transaction using
+    /// custom fixed account addresses.
+    pub fn build_convert_tokens_with_accounts(
+        fee_payer: TnPubkey,
+        accounts: ConsensusValidatorAccounts,
+        source_token_account: TnPubkey,
+        token_amount: u64,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let tx = build_consensus_validator_tx(fee_payer, accounts.program, fee, nonce, start_slot);
+
+        let tx_accounts = [
+            (accounts.attestor_table, true),
+            (source_token_account, true),
+            (accounts.converted_vault, true),
+            (accounts.token_program, false),
+        ];
+        let (tx, indices) = add_sorted_accounts(tx, &tx_accounts);
+        let attestor_table_idx = indices[0];
+        let source_token_account_idx = indices[1];
+        let converted_vault_idx = indices[2];
+        let token_program_idx = indices[3];
+
+        let instruction_data = build_convert_tokens_instruction(
+            attestor_table_idx as u64,
+            token_program_idx,
+            source_token_account_idx,
+            converted_vault_idx,
+            0u16,
+            token_amount,
+        )?;
+
+        Ok(tx.with_instructions(instruction_data))
+    }
+
+    /// Build consensus validator program CLAIM transaction.
+    pub fn build_claim(
+        fee_payer: TnPubkey,
+        subject_attestor: TnPubkey,
+        dest_token_account: TnPubkey,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        Self::build_claim_with_accounts(
+            fee_payer,
+            ConsensusValidatorAccounts::default(),
+            subject_attestor,
+            dest_token_account,
+            fee,
+            nonce,
+            start_slot,
+        )
+    }
+
+    /// Build consensus validator program CLAIM transaction using custom fixed
+    /// account addresses.
+    pub fn build_claim_with_accounts(
+        fee_payer: TnPubkey,
+        accounts: ConsensusValidatorAccounts,
+        subject_attestor: TnPubkey,
+        dest_token_account: TnPubkey,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let tx = build_consensus_validator_tx(fee_payer, accounts.program, fee, nonce, start_slot);
+
+        let tx_accounts = [
+            (accounts.attestor_table, true),
+            (accounts.unclaimed_vault, true),
+            (dest_token_account, true),
+            (accounts.token_program, false),
+        ];
+        let (tx, indices) = add_sorted_accounts(tx, &tx_accounts);
+        let attestor_table_idx = indices[0];
+        let unclaimed_vault_idx = indices[1];
+        let dest_token_account_idx = indices[2];
+        let token_program_idx = indices[3];
+
+        let instruction_data = build_claim_instruction(
+            attestor_table_idx as u64,
+            token_program_idx,
+            unclaimed_vault_idx,
+            dest_token_account_idx,
+            0u16,
+            subject_attestor,
+        )?;
+
+        Ok(tx.with_instructions(instruction_data))
+    }
+
+    /// Build consensus validator program SET_CLAIM_AUTH transaction.
+    pub fn build_set_claim_authority(
+        fee_payer: TnPubkey,
+        subject_attestor: TnPubkey,
+        new_claim_authority: TnPubkey,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        Self::build_set_claim_authority_with_accounts(
+            fee_payer,
+            ConsensusValidatorAccounts::default(),
+            subject_attestor,
+            new_claim_authority,
+            fee,
+            nonce,
+            start_slot,
+        )
+    }
+
+    /// Build consensus validator program SET_CLAIM_AUTH transaction using
+    /// custom fixed account addresses.
+    pub fn build_set_claim_authority_with_accounts(
+        fee_payer: TnPubkey,
+        accounts: ConsensusValidatorAccounts,
+        subject_attestor: TnPubkey,
+        new_claim_authority: TnPubkey,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let tx = build_consensus_validator_tx(fee_payer, accounts.program, fee, nonce, start_slot);
+
+        let tx_accounts = [(accounts.attestor_table, true)];
+        let (tx, indices) = add_sorted_accounts(tx, &tx_accounts);
+        let attestor_table_idx = indices[0];
+
+        let instruction_data = build_set_claim_authority_instruction(
+            attestor_table_idx as u64,
+            0u16,
+            subject_attestor,
+            new_claim_authority,
         )?;
 
         Ok(tx.with_instructions(instruction_data))
@@ -4462,11 +4974,7 @@ impl TransactionBuilder {
         ];
         rw_accounts.sort();
 
-        let mut ro_accounts = vec![
-            name_service_program,
-            token_mint_account,
-            token_program,
-        ];
+        let mut ro_accounts = vec![name_service_program, token_mint_account, token_program];
         ro_accounts.sort();
 
         // Add RW accounts
@@ -4566,11 +5074,7 @@ impl TransactionBuilder {
         let mut rw_accounts = vec![lease_account, treasurer_account, payer_token_account];
         rw_accounts.sort();
 
-        let mut ro_accounts = vec![
-            config_account,
-            token_mint_account,
-            token_program,
-        ];
+        let mut ro_accounts = vec![config_account, token_mint_account, token_program];
         ro_accounts.sort();
 
         // Add RW accounts
@@ -4647,11 +5151,7 @@ impl TransactionBuilder {
         let mut rw_accounts = vec![lease_account, treasurer_account, payer_token_account];
         rw_accounts.sort();
 
-        let mut ro_accounts = vec![
-            config_account,
-            token_mint_account,
-            token_program,
-        ];
+        let mut ro_accounts = vec![config_account, token_mint_account, token_program];
         ro_accounts.sort();
 
         // Add RW accounts
@@ -5099,6 +5599,92 @@ fn build_activate_instruction(
     Ok(instruction_data)
 }
 
+/// Build consensus validator DEACTIVATE instruction data.
+/// Matches tn_consensus_validator_deactivate_args_t structure.
+fn build_deactivate_instruction(
+    attestor_table_idx: u64,
+    token_program_idx: u16,
+    unclaimed_vault_idx: u16,
+    dest_token_account_idx: u16,
+    identity_idx: u16,
+) -> Result<Vec<u8>> {
+    let mut instruction_data = Vec::new();
+
+    instruction_data.extend_from_slice(&2u32.to_le_bytes());
+    instruction_data.extend_from_slice(&attestor_table_idx.to_le_bytes());
+    instruction_data.extend_from_slice(&token_program_idx.to_le_bytes());
+    instruction_data.extend_from_slice(&unclaimed_vault_idx.to_le_bytes());
+    instruction_data.extend_from_slice(&dest_token_account_idx.to_le_bytes());
+    instruction_data.extend_from_slice(&identity_idx.to_le_bytes());
+
+    Ok(instruction_data)
+}
+
+/// Build consensus validator CONVERT_TOKENS instruction data.
+/// Matches tn_consensus_validator_convert_args_t structure.
+fn build_convert_tokens_instruction(
+    attestor_table_idx: u64,
+    token_program_idx: u16,
+    source_token_account_idx: u16,
+    converted_vault_idx: u16,
+    identity_idx: u16,
+    token_amount: u64,
+) -> Result<Vec<u8>> {
+    let mut instruction_data = Vec::new();
+
+    instruction_data.extend_from_slice(&3u32.to_le_bytes());
+    instruction_data.extend_from_slice(&attestor_table_idx.to_le_bytes());
+    instruction_data.extend_from_slice(&token_program_idx.to_le_bytes());
+    instruction_data.extend_from_slice(&source_token_account_idx.to_le_bytes());
+    instruction_data.extend_from_slice(&converted_vault_idx.to_le_bytes());
+    instruction_data.extend_from_slice(&identity_idx.to_le_bytes());
+    instruction_data.extend_from_slice(&token_amount.to_le_bytes());
+
+    Ok(instruction_data)
+}
+
+/// Build consensus validator CLAIM instruction data.
+/// Matches tn_consensus_validator_claim_args_t structure.
+fn build_claim_instruction(
+    attestor_table_idx: u64,
+    token_program_idx: u16,
+    unclaimed_vault_idx: u16,
+    dest_token_account_idx: u16,
+    claim_authority_idx: u16,
+    subject_attestor: TnPubkey,
+) -> Result<Vec<u8>> {
+    let mut instruction_data = Vec::new();
+
+    instruction_data.extend_from_slice(&4u32.to_le_bytes());
+    instruction_data.extend_from_slice(&attestor_table_idx.to_le_bytes());
+    instruction_data.extend_from_slice(&token_program_idx.to_le_bytes());
+    instruction_data.extend_from_slice(&unclaimed_vault_idx.to_le_bytes());
+    instruction_data.extend_from_slice(&dest_token_account_idx.to_le_bytes());
+    instruction_data.extend_from_slice(&claim_authority_idx.to_le_bytes());
+    instruction_data.extend_from_slice(&subject_attestor);
+
+    Ok(instruction_data)
+}
+
+/// Build consensus validator SET_CLAIM_AUTH instruction data.
+/// Matches tn_consensus_validator_set_claim_auth_args_t structure.
+fn build_set_claim_authority_instruction(
+    attestor_table_idx: u64,
+    current_claim_auth_idx: u16,
+    subject_attestor: TnPubkey,
+    new_claim_authority: TnPubkey,
+) -> Result<Vec<u8>> {
+    let mut instruction_data = Vec::new();
+
+    instruction_data.extend_from_slice(&5u32.to_le_bytes());
+    instruction_data.extend_from_slice(&attestor_table_idx.to_le_bytes());
+    instruction_data.extend_from_slice(&current_claim_auth_idx.to_le_bytes());
+    instruction_data.extend_from_slice(&subject_attestor);
+    instruction_data.extend_from_slice(&new_claim_authority);
+
+    Ok(instruction_data)
+}
+
 #[repr(C, packed)]
 struct NameServiceInitializeRootArgs {
     registrar_account_idx: u16,
@@ -5149,9 +5735,7 @@ fn build_name_service_initialize_root_instruction(
     state_proof: Vec<u8>,
 ) -> Result<Vec<u8>> {
     let root_name_bytes = root_name.as_bytes();
-    if root_name_bytes.is_empty()
-        || root_name_bytes.len() > TN_NAME_SERVICE_MAX_DOMAIN_LENGTH
-    {
+    if root_name_bytes.is_empty() || root_name_bytes.len() > TN_NAME_SERVICE_MAX_DOMAIN_LENGTH {
         return Err(anyhow::anyhow!(
             "Root name length must be between 1 and {}",
             TN_NAME_SERVICE_MAX_DOMAIN_LENGTH
@@ -5193,9 +5777,7 @@ fn build_name_service_register_subdomain_instruction(
     state_proof: Vec<u8>,
 ) -> Result<Vec<u8>> {
     let domain_bytes = domain_name.as_bytes();
-    if domain_bytes.is_empty()
-        || domain_bytes.len() > TN_NAME_SERVICE_MAX_DOMAIN_LENGTH
-    {
+    if domain_bytes.is_empty() || domain_bytes.len() > TN_NAME_SERVICE_MAX_DOMAIN_LENGTH {
         return Err(anyhow::anyhow!(
             "Domain name length must be between 1 and {}",
             TN_NAME_SERVICE_MAX_DOMAIN_LENGTH
@@ -5213,7 +5795,8 @@ fn build_name_service_register_subdomain_instruction(
     args.name[..domain_bytes.len()].copy_from_slice(domain_bytes);
 
     let mut instruction_data = Vec::new();
-    instruction_data.extend_from_slice(&TN_NAME_SERVICE_INSTRUCTION_REGISTER_SUBDOMAIN.to_le_bytes());
+    instruction_data
+        .extend_from_slice(&TN_NAME_SERVICE_INSTRUCTION_REGISTER_SUBDOMAIN.to_le_bytes());
 
     let args_bytes = unsafe {
         std::slice::from_raw_parts(
@@ -5349,7 +5932,8 @@ fn build_thru_registrar_initialize_registry_instruction(
     let mut instruction_data = Vec::new();
 
     // Discriminant: TN_THRU_REGISTRAR_INSTRUCTION_INITIALIZE_REGISTRY = 0 (u32, 4 bytes little-endian)
-    instruction_data.extend_from_slice(&TN_THRU_REGISTRAR_INSTRUCTION_INITIALIZE_REGISTRY.to_le_bytes());
+    instruction_data
+        .extend_from_slice(&TN_THRU_REGISTRAR_INSTRUCTION_INITIALIZE_REGISTRY.to_le_bytes());
 
     // tn_thru_registrar_initialize_registry_args_t structure:
     // - config_account_idx (u16, 2 bytes little-endian)
@@ -5367,7 +5951,9 @@ fn build_thru_registrar_initialize_registry_instruction(
     // - root_domain_name (64 bytes, padded with zeros)
     let domain_bytes = root_domain_name.as_bytes();
     if domain_bytes.len() > 64 {
-        return Err(anyhow::anyhow!("Root domain name must be 64 characters or less"));
+        return Err(anyhow::anyhow!(
+            "Root domain name must be 64 characters or less"
+        ));
     }
     let mut domain_padded = [0u8; 64];
     domain_padded[..domain_bytes.len()].copy_from_slice(domain_bytes);
@@ -5405,7 +5991,8 @@ fn build_thru_registrar_purchase_domain_instruction(
     let mut instruction_data = Vec::new();
 
     // Discriminant: TN_THRU_REGISTRAR_INSTRUCTION_PURCHASE_DOMAIN = 1 (u32, 4 bytes little-endian)
-    instruction_data.extend_from_slice(&TN_THRU_REGISTRAR_INSTRUCTION_PURCHASE_DOMAIN.to_le_bytes());
+    instruction_data
+        .extend_from_slice(&TN_THRU_REGISTRAR_INSTRUCTION_PURCHASE_DOMAIN.to_le_bytes());
 
     // tn_thru_registrar_purchase_domain_args_t structure:
     // - config_account_idx (u16, 2 bytes little-endian)
@@ -5495,7 +6082,8 @@ fn build_thru_registrar_claim_expired_domain_instruction(
     let mut instruction_data = Vec::new();
 
     // Discriminant: TN_THRU_REGISTRAR_INSTRUCTION_CLAIM_EXPIRED_DOMAIN = 3 (u32, 4 bytes little-endian)
-    instruction_data.extend_from_slice(&TN_THRU_REGISTRAR_INSTRUCTION_CLAIM_EXPIRED_DOMAIN.to_le_bytes());
+    instruction_data
+        .extend_from_slice(&TN_THRU_REGISTRAR_INSTRUCTION_CLAIM_EXPIRED_DOMAIN.to_le_bytes());
 
     // tn_thru_registrar_claim_expired_domain_args_t structure:
     // - config_account_idx (u16, 2 bytes little-endian)
