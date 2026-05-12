@@ -15,7 +15,7 @@ import type {
 export async function submitPasskeyTransaction(opts: {
   client: ThruClient;
   adminPublicKey: Uint8Array;
-  adminPrivateKey: string;
+  adminPrivateKey: Uint8Array;
   walletAddress: string;
   accountCtx: AccountContext;
   invokeIx: Uint8Array;

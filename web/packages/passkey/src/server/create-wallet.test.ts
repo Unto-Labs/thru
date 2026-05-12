@@ -13,9 +13,14 @@ vi.mock('@thru/helpers', () => ({
 vi.mock('@thru/passkey-manager', () => ({
   PASSKEY_MANAGER_PROGRAM_ADDRESS: 'passkey-program',
   base64UrlToBytes: () => new Uint8Array([7]),
-  buildAccountContext: () => ({
-    walletAccountIdx: 0,
-    getAccountIndex: () => 1,
+  buildAccountContext: (params: { readWriteAccounts: Uint8Array[] }) => ({
+    walletAccountIdx: params.readWriteAccounts.length === 0 ? 2 : 3,
+    readWriteAddresses:
+      params.readWriteAccounts.length === 0
+        ? ['wallet-address']
+        : ['lookup-address', 'wallet-address'],
+    readOnlyAddresses: [],
+    getAccountIndex: () => 2,
   }),
   createCredentialLookupSeed: async () => new Uint8Array([8]),
   createWalletSeed: async () => new Uint8Array([1]),
@@ -130,7 +135,7 @@ describe('createPasskeyWallet', () => {
     const opts = {
       client,
       adminPublicKey: new Uint8Array([1, 2, 3]),
-      adminPrivateKey: 'admin-private-key',
+      adminPrivateKey: new Uint8Array([9, 9, 9]),
       adminAddress: 'admin-address',
       pubkeyX: new Uint8Array([4]),
       pubkeyY: new Uint8Array([5]),
@@ -164,6 +169,15 @@ describe('createPasskeyWallet', () => {
     expect(sentKinds).toEqual(['wallet', 'lookup']);
     expect(state.walletTrackCount).toBe(1);
     expect(state.lookupTrackCount).toBe(1);
+
+    expect(vi.mocked(client.transactions.build).mock.calls[0]?.[0].accounts).toEqual({
+      readWrite: ['wallet-address'],
+      readOnly: [],
+    });
+    expect(vi.mocked(client.transactions.build).mock.calls[1]?.[0].accounts).toEqual({
+      readWrite: ['lookup-address', 'wallet-address'],
+      readOnly: [],
+    });
 
     const accountChecks = vi.mocked(client.accounts.get).mock.calls.map(([address]) => address);
     expect(accountChecks.filter((address) => address === 'wallet-address')).toHaveLength(2);

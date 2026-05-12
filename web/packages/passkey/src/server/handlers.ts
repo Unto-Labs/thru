@@ -10,7 +10,7 @@ import type {
 export function createPasskeyHandlers<P>(opts: {
   buildContext: (params: P) => Promise<PasskeyContextResult>;
   adminPublicKey: Uint8Array;
-  adminPrivateKey: string;
+  adminPrivateKey: Uint8Array;
   client: ThruClient;
   challengeTtlMs?: number;
 }) {

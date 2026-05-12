@@ -32,4 +32,20 @@ describe('trackTransaction', () => {
       status: 'finalized_without_execution',
     });
   });
+
+  it('preserves finalized status if the tracking stream errors afterward', async () => {
+    const client = {
+      transactions: {
+        track: async function* () {
+          yield { statusCode: 3 };
+          throw new Error('stream closed');
+        },
+      },
+    } as ThruClient;
+
+    await expect(trackTransaction(client, 'sig-2')).resolves.toEqual({
+      signature: 'sig-2',
+      status: 'finalized_without_execution',
+    });
+  });
 });

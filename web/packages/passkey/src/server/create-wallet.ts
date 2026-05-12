@@ -20,7 +20,7 @@ import type { ThruClient } from './types';
 export async function createPasskeyWallet(opts: {
   client: ThruClient;
   adminPublicKey: Uint8Array;
-  adminPrivateKey: string;
+  adminPrivateKey: Uint8Array;
   adminAddress: string;
   pubkeyX: Uint8Array;
   pubkeyY: Uint8Array;
@@ -68,8 +68,8 @@ export async function createPasskeyWallet(opts: {
       program: PASSKEY_MANAGER_PROGRAM_ADDRESS,
       instructionData: createIx,
       accounts: {
-        readWrite: [walletAddress],
-        readOnly: [],
+        readWrite: accountCtx.readWriteAddresses,
+        readOnly: accountCtx.readOnlyAddresses,
       },
       header: { fee: 0n },
     });
@@ -132,8 +132,8 @@ export async function createPasskeyWallet(opts: {
           program: PASSKEY_MANAGER_PROGRAM_ADDRESS,
           instructionData: registerIx,
           accounts: {
-            readWrite: [walletAddress, lookupAddress],
-            readOnly: [],
+            readWrite: accountCtx.readWriteAddresses,
+            readOnly: accountCtx.readOnlyAddresses,
           },
           header: { fee: 0n },
         });

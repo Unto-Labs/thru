@@ -25,7 +25,7 @@ export interface ThruClient {
       };
       header: { fee: bigint };
     }) => Promise<{
-      sign: (privateKey: string) => Promise<unknown>;
+      sign: (privateKey: Uint8Array) => Promise<unknown>;
       toWire: () => Uint8Array;
     }>;
     send: (transaction: Uint8Array) => Promise<string>;

@@ -48,9 +48,9 @@ export async function trackTransaction(
   signature: string,
   timeoutMs: number = 5000
 ): Promise<TransactionResult> {
-  try {
-    let finalizedSeen = false;
+  let finalizedSeen = false;
 
+  try {
     for await (const update of client.transactions.track(signature, { timeoutMs })) {
       if (update.executionResult) {
         const vmError =
@@ -84,6 +84,13 @@ export async function trackTransaction(
       };
     }
   } catch {
+    if (finalizedSeen) {
+      return {
+        signature,
+        status: 'finalized_without_execution',
+      };
+    }
+
     return {
       signature,
       status: 'timeout',
