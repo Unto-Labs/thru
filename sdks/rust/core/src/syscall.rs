@@ -59,21 +59,40 @@ mod imp {
 
     // all constants already available in parent; macro riscv_asm already defined
 
+    /// Mark an account's data segment as writable.
+    ///
+    /// # Safety
+    ///
+    /// This syscall mutates the account's writable state in the VM. Any
+    /// existing `&AccountMeta` or `&[u8]` references to the affected
+    /// account must be dropped **before** this call. Holding an immutable
+    /// reference while the VM modifies the underlying memory is undefined
+    /// behavior under Rust's aliasing rules. Prefer using
+    /// [`AccountManager::set_account_data_writable`](crate::AccountManager)
+    /// which enforces borrow checks at runtime.
     #[inline(always)]
-    pub fn sys_set_account_data_writable(account_idx: u64) -> SyscallCode {
+    pub unsafe fn sys_set_account_data_writable(account_idx: u64) -> SyscallCode {
         let mut a0 = account_idx;
-        // SAFETY: If the account index is invalid, this will fail gracefully.
-        unsafe {
-            asm!(
-                "ecall",
-                inout("a0") a0,
-                in("a7") SET_ACCOUNT_DATA_WRITABLE,
-                options(nostack, preserves_flags),
-            );
-        }
+        asm!(
+            "ecall",
+            inout("a0") a0,
+            in("a7") SET_ACCOUNT_DATA_WRITABLE,
+            options(nostack, preserves_flags),
+        );
         SyscallCode::from_i64(a0 as i64)
     }
 
+    /// Transfer balance between two accounts.
+    ///
+    /// # Safety
+    ///
+    /// This syscall mutates the balance fields of both the source and
+    /// destination accounts in the VM. Any existing `&AccountMeta`
+    /// references to either account must be dropped **before** this call.
+    /// Holding an immutable reference while the VM modifies the underlying
+    /// memory is undefined behavior under Rust's aliasing rules. Prefer
+    /// using [`AccountManager::account_transfer`](crate::AccountManager)
+    /// which enforces borrow checks at runtime.
     #[inline(always)]
     pub unsafe fn sys_account_transfer(from_idx: u64, to_idx: u64, amount: u64) -> SyscallCode {
         let mut a0 = from_idx;
@@ -88,6 +107,14 @@ mod imp {
         SyscallCode::from_i64(a0 as i64)
     }
 
+    /// Set the size of an anonymous memory segment.
+    ///
+    /// # Safety
+    ///
+    /// This syscall modifies the VM's segment table. Pointers or
+    /// references derived from the affected segment may be invalidated.
+    /// Callers must ensure no references to the segment exist before
+    /// calling this function.
     #[inline(always)]
     pub unsafe fn sys_set_anonymous_segment_sz(addr: *mut u8) -> SyscallCode {
         let mut a0 = addr as u64;
@@ -100,6 +127,14 @@ mod imp {
         SyscallCode::from_i64(a0 as i64)
     }
 
+    /// Grow an anonymous memory segment by `delta` bytes.
+    ///
+    /// # Safety
+    ///
+    /// This syscall modifies the VM's segment table. Existing pointers
+    /// or references to the segment may be invalidated after the resize.
+    /// Callers must ensure no references to the segment exist before
+    /// calling this function.
     #[inline(always)]
     pub unsafe fn sys_increment_anonymous_segment_sz(
         ptr: *mut (),
@@ -117,6 +152,19 @@ mod imp {
         (SyscallCode::from_i64(a0 as i64), a1 as *mut u8)
     }
 
+    /// Create a new persistent account.
+    ///
+    /// # Safety
+    ///
+    /// This syscall creates an account and populates its metadata and
+    /// data segments in the VM. Any existing references to the account
+    /// at `account_idx` (even if it previously did not exist) must be
+    /// dropped **before** this call, as the VM will write to those
+    /// memory regions. Holding references while the VM modifies the
+    /// underlying memory is undefined behavior under Rust's aliasing
+    /// rules. Prefer using
+    /// [`AccountManager::account_create`](crate::AccountManager) which
+    /// enforces borrow checks at runtime.
     #[inline(always)]
     pub unsafe fn sys_account_create(
         account_idx: u64,
@@ -145,6 +193,18 @@ mod imp {
         SyscallCode::from_i64(a0 as i64)
     }
 
+    /// Create a new ephemeral account.
+    ///
+    /// # Safety
+    ///
+    /// This syscall creates an account and populates its metadata and
+    /// data segments in the VM. Any existing references to the account
+    /// at `account_idx` must be dropped **before** this call, as the VM
+    /// will write to those memory regions. Holding references while the
+    /// VM modifies the underlying memory is undefined behavior under
+    /// Rust's aliasing rules. Prefer using
+    /// [`AccountManager::account_create_ephemeral`](crate::AccountManager)
+    /// which enforces borrow checks at runtime.
     #[inline(always)]
     pub unsafe fn sys_account_create_ephemeral(
         account_idx: u64,
@@ -169,6 +229,17 @@ mod imp {
         SyscallCode::from_i64(a0 as i64)
     }
 
+    /// Delete an account.
+    ///
+    /// # Safety
+    ///
+    /// This syscall deletes the account and invalidates its metadata
+    /// and data segments in the VM. Any existing `&AccountMeta` or
+    /// `&[u8]` references to the affected account must be dropped
+    /// **before** this call. Accessing memory through a reference to a
+    /// deleted account is undefined behavior. Prefer using
+    /// [`AccountManager::account_delete`](crate::AccountManager) which
+    /// enforces borrow checks at runtime.
     #[inline(always)]
     pub unsafe fn sys_account_delete(account_idx: u64) -> SyscallCode {
         let mut a0 = account_idx;
@@ -181,6 +252,17 @@ mod imp {
         SyscallCode::from_i64(a0 as i64)
     }
 
+    /// Resize an account's data region.
+    ///
+    /// # Safety
+    ///
+    /// This syscall changes the size of the account's data segment and
+    /// updates its metadata. Any existing `&AccountMeta` or `&[u8]`
+    /// references to the affected account must be dropped **before**
+    /// this call. After a resize, previously held data slices may point
+    /// beyond the new bounds or reference freed memory. Prefer using
+    /// [`AccountManager::account_resize`](crate::AccountManager) which
+    /// enforces borrow checks at runtime.
     #[inline(always)]
     pub unsafe fn sys_account_resize(account_idx: u64, new_size: u64) -> SyscallCode {
         let mut a0 = account_idx;
@@ -194,6 +276,16 @@ mod imp {
         SyscallCode::from_i64(a0 as i64)
     }
 
+    /// Compress an account into the state tree.
+    ///
+    /// # Safety
+    ///
+    /// This syscall modifies the account's metadata (sets compressed
+    /// flag) and invalidates its data segment. Any existing
+    /// `&AccountMeta` or `&[u8]` references to the affected account
+    /// must be dropped **before** this call. Prefer using
+    /// [`AccountManager::account_compress`](crate::AccountManager)
+    /// which enforces borrow checks at runtime.
     #[inline(always)]
     pub unsafe fn sys_account_compress(
         account_idx: u64,
@@ -212,6 +304,18 @@ mod imp {
         SyscallCode::from_i64(a0 as i64)
     }
 
+    /// Decompress an account from the state tree.
+    ///
+    /// # Safety
+    ///
+    /// This syscall restores the account's metadata and data segments
+    /// from compressed state. Any existing references to the account at
+    /// `account_idx` must be dropped **before** this call, as the VM
+    /// will write to those memory regions. Holding references while the
+    /// VM modifies the underlying memory is undefined behavior under
+    /// Rust's aliasing rules. Prefer using
+    /// [`AccountManager::account_decompress`](crate::AccountManager)
+    /// which enforces borrow checks at runtime.
     #[inline(always)]
     pub unsafe fn sys_account_decompress(
         account_idx: u64,
@@ -234,6 +338,17 @@ mod imp {
         SyscallCode::from_i64(a0 as i64)
     }
 
+    /// Invoke another program (cross-program invocation).
+    ///
+    /// # Safety
+    ///
+    /// This syscall transfers execution to another program which may
+    /// mutate any writable account in the transaction. **All** existing
+    /// `&AccountMeta` or `&[u8]` references to any account must be
+    /// dropped **before** this call. The invoked program may modify
+    /// balances, data, and metadata of any account it has access to.
+    /// Prefer using [`AccountManager::invoke`](crate::AccountManager)
+    /// which enforces borrow checks at runtime.
     #[inline(always)]
     pub unsafe fn sys_invoke(
         instr_data: *const u8,
@@ -258,9 +373,12 @@ mod imp {
         )
     }
 
+    /// Exit the program with the given code and revert flag.
+    ///
+    /// This syscall terminates execution and does not return. It does
+    /// not modify any account state so there are no aliasing concerns.
     #[inline(always)]
     pub fn sys_exit(exit_code: u64, revert: u64) -> ! {
-        // SAFETY: Any values are valid for exit_code and revert.
         unsafe {
             asm!(
                 "ecall",
@@ -272,6 +390,7 @@ mod imp {
         }
     }
 
+    /// Log a message. This syscall does not modify account state.
     #[inline(always)]
     pub unsafe fn sys_log(data: *const u8, data_sz: u64) -> u64 {
         let mut a0 = data as u64;
@@ -285,6 +404,7 @@ mod imp {
         a0
     }
 
+    /// Emit an event. This syscall does not modify account state.
     #[inline(always)]
     pub unsafe fn sys_emit_event(data: *const u8, data_sz: u64) -> u64 {
         let mut a0 = data as u64;
@@ -298,8 +418,19 @@ mod imp {
         a0
     }
 
+    /// Set flags on an account.
+    ///
+    /// # Safety
+    ///
+    /// This syscall modifies the account's metadata flags in the VM.
+    /// Any existing `&AccountMeta` references to the affected account
+    /// must be dropped **before** this call. Holding an immutable
+    /// reference while the VM modifies the underlying memory is
+    /// undefined behavior under Rust's aliasing rules. Prefer using
+    /// [`AccountManager::account_set_flags`](crate::AccountManager)
+    /// which enforces borrow checks at runtime.
     #[inline(always)]
-    pub unsafe fn sys_account_set_flags(account_idx: u16, flags: u8) -> u64 {
+    pub unsafe fn sys_account_set_flags(account_idx: u16, flags: u8) -> SyscallCode {
         let mut a0 = account_idx as u64;
         asm!(
             "ecall",
@@ -308,9 +439,21 @@ mod imp {
             in("a7") ACCOUNT_SET_FLAGS,
             options(nostack, preserves_flags),
         );
-        a0
+        SyscallCode::from_i64(a0 as i64)
     }
 
+    /// Create a new externally-owned account (EOA).
+    ///
+    /// # Safety
+    ///
+    /// This syscall creates an account and populates its metadata and
+    /// data segments in the VM. Any existing references to the account
+    /// at `account_idx` must be dropped **before** this call, as the VM
+    /// will write to those memory regions. Holding references while the
+    /// VM modifies the underlying memory is undefined behavior under
+    /// Rust's aliasing rules. Prefer using
+    /// [`AccountManager::account_create_eoa`](crate::AccountManager)
+    /// which enforces borrow checks at runtime.
     #[inline(always)]
     pub unsafe fn sys_account_create_eoa(
         account_idx: u64,

@@ -119,18 +119,24 @@ types:
     struct:
       packed: true
       fields:
+      - name: discriminator
+        field-type:
+          primitive: u8
       - name: data
         field-type:
-          size-discriminated-union:
+          enum:
             packed: true
+            tag-ref:
+              field-ref:
+                path: [discriminator]
             variants:
             - name: root_registrar
-              expected-size: 108
+              tag-value: 1
               variant-type:
                 type-ref:
                   name: RootRegistrar
             - name: domain
-              expected-size: 144
+              tag-value: 2
               variant-type:
                 type-ref:
                   name: Domain

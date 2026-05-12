@@ -15,5 +15,5 @@ path = "src/main.rs"
 [dependencies]
 thru-core = { version = "0.1.0", path = "../thru-core" }
 anyhow = "1.0"
-tokio = { version = "1.47", features = ["full"] }
+tokio = { version = "1.52", features = ["full"] }
 tracing-subscriber = { version = "0.3.19", features = ["env-filter", "fmt"] }

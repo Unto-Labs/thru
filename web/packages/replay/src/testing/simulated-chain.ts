@@ -22,6 +22,11 @@ export interface SimulatedChainOptions {
   streamDelayMs?: number;
   streamErrorAfter?: number;
   streamErrorLimit?: number;
+  /* When true, streamBlocks yields all items in pure microtasks (no setTimeout),
+     so the LivePump buffer is fully populated before any subsequent macrotask
+     such as a listBlocks page delay fires. Use to remove timing nondeterminism
+     in tests that assert on backfill/live overlap behavior. */
+  liveYieldsSynchronously?: boolean;
 }
 
 interface BlockRecord {
@@ -39,6 +44,7 @@ export class SimulatedChain implements BlockSource {
   private readonly streamDelayMs: number;
   private readonly streamErrorAfter?: number;
   private readonly streamErrorLimit: number;
+  private readonly liveYieldsSynchronously: boolean;
   private streamErrorsEmitted = 0;
 
   constructor(options: SimulatedChainOptions) {
@@ -54,6 +60,7 @@ export class SimulatedChain implements BlockSource {
     this.streamDelayMs = options.streamDelayMs ?? DEFAULT_STREAM_DELAY;
     this.streamErrorAfter = options.streamErrorAfter;
     this.streamErrorLimit = options.streamErrorLimit ?? 1;
+    this.liveYieldsSynchronously = options.liveYieldsSynchronously ?? false;
   }
 
   async listBlocks(
@@ -88,19 +95,22 @@ export class SimulatedChain implements BlockSource {
     const shouldFail =
       this.streamErrorAfter !== undefined && this.streamErrorsEmitted < this.streamErrorLimit;
     const errorAfter = shouldFail ? this.streamErrorAfter : undefined;
+    const synchronous = this.liveYieldsSynchronously;
     return {
-      [Symbol.asyncIterator]: () => this.createStreamIterator(data, delayMs, errorAfter),
+      [Symbol.asyncIterator]: () =>
+        this.createStreamIterator(data, delayMs, errorAfter, synchronous),
     };
   }
 
   private async *createStreamIterator(
     entries: BlockRecord[],
     delayMs: number,
-    errorAfter?: number,
+    errorAfter: number | undefined,
+    synchronous: boolean,
   ): AsyncGenerator<StreamBlocksResponse> {
     let delivered = 0;
     for (const entry of entries) {
-      await delay(delayMs);
+      if (!synchronous) await delay(delayMs);
       if (errorAfter !== undefined && delivered >= errorAfter) {
         this.streamErrorsEmitted += 1;
         throw new Error("simulated stream failure");

@@ -2039,11 +2039,15 @@ struct ParsedRootRegistrar {
     total_subdomains: u64,
 }
 
+/// First byte of any name-service account is its kind. 0 reserved (must not be valid).
+const NS_KIND_ROOT_REGISTRAR: u8 = 1;
+const NS_KIND_DOMAIN: u8 = 2;
+
 const DOMAIN_BASE_SIZE: usize =
-    32 + 32 + TN_NAME_SERVICE_MAX_DOMAIN_LENGTH + 4 + 8 + 4;
+    1 + 32 + 32 + TN_NAME_SERVICE_MAX_DOMAIN_LENGTH + 4 + 8 + 4;
 const RECORD_SIZE: usize =
     4 + TN_NAME_SERVICE_MAX_KEY_LENGTH + 4 + TN_NAME_SERVICE_MAX_VALUE_LENGTH;
-const ROOT_BASE_SIZE: usize = 32 + TN_NAME_SERVICE_MAX_DOMAIN_LENGTH + 4 + 8;
+const ROOT_BASE_SIZE: usize = 1 + 32 + TN_NAME_SERVICE_MAX_DOMAIN_LENGTH + 4 + 8;
 
 fn parse_domain_account_data(data: &[u8]) -> Result<ParsedDomainAccount, CliError> {
     if data.len() < DOMAIN_BASE_SIZE {
@@ -2051,7 +2055,13 @@ fn parse_domain_account_data(data: &[u8]) -> Result<ParsedDomainAccount, CliErro
             "Account data too small to be a domain account".to_string(),
         ));
     }
-    let mut offset = 0usize;
+    if data[0] != NS_KIND_DOMAIN {
+        return Err(CliError::Validation(format!(
+            "Expected domain account (kind={}), got kind={}",
+            NS_KIND_DOMAIN, data[0]
+        )));
+    }
+    let mut offset = 1usize;  /* skip discriminator byte */
     let parent: [u8; 32] = data[offset..offset + 32]
         .try_into()
         .map_err(|_| CliError::Validation("Invalid parent pubkey length".to_string()))?;
@@ -2152,7 +2162,13 @@ fn parse_root_registrar_account_data(data: &[u8]) -> Result<ParsedRootRegistrar,
             "Account data too small to be a root registrar account".to_string(),
         ));
     }
-    let mut offset = 0usize;
+    if data[0] != NS_KIND_ROOT_REGISTRAR {
+        return Err(CliError::Validation(format!(
+            "Expected root registrar account (kind={}), got kind={}",
+            NS_KIND_ROOT_REGISTRAR, data[0]
+        )));
+    }
+    let mut offset = 1usize;  /* skip discriminator byte */
     let authority: [u8; 32] = data[offset..offset + 32]
         .try_into()
         .map_err(|_| CliError::Validation("Invalid authority pubkey length".to_string()))?;
@@ -2232,8 +2248,9 @@ async fn resolve_domain(
         .decode(data_b64)
         .map_err(|e| CliError::Validation(format!("Failed to decode account data: {}", e)))?;
 
-    // Determine if this is a domain or root registrar based on data length
-    if data.len() < DOMAIN_BASE_SIZE {
+    // Dispatch on the discriminator byte (first byte of every name-service account)
+    let kind = data.first().copied();
+    if kind == Some(NS_KIND_ROOT_REGISTRAR) {
         let registrar = parse_root_registrar_account_data(&data)?;
         let authority_address = tn_pubkey_to_address_string(&registrar.authority);
         if json_format {
@@ -2254,6 +2271,12 @@ async fn resolve_domain(
             println!("  Total subdomains: {}", registrar.total_subdomains);
         }
         return Ok(());
+    }
+    if kind != Some(NS_KIND_DOMAIN) {
+        return Err(CliError::Validation(format!(
+            "Account {} is not a recognized name service account",
+            domain_address
+        )));
     }
 
     let domain = parse_domain_account_data(&data)?;
@@ -2423,4 +2446,121 @@ async fn derive_registrar_account(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use thru_base::txn_tools::TN_NAME_SERVICE_MAX_KEY_LENGTH;
+
+    /// Build a wire-format buffer for a root registrar.
+    /// Layout: disc(1) | authority(32) | root_name(64) | root_name_length(4 LE) | total_subdomains(8 LE)
+    fn build_root_registrar(
+        discriminator: u8,
+        authority: [u8; 32],
+        root_name: &[u8],
+        total_subdomains: u64,
+    ) -> Vec<u8> {
+        let mut buf = vec![0u8; ROOT_BASE_SIZE];
+        buf[0] = discriminator;
+        buf[1..33].copy_from_slice(&authority);
+        buf[33..33 + root_name.len()].copy_from_slice(root_name);
+        let name_length = root_name.len() as u32;
+        buf[97..101].copy_from_slice(&name_length.to_le_bytes());
+        buf[101..109].copy_from_slice(&total_subdomains.to_le_bytes());
+        buf
+    }
+
+    /// Build a wire-format buffer for a domain (with optional records).
+    fn build_domain(
+        discriminator: u8,
+        parent: [u8; 32],
+        owner: [u8; 32],
+        name: &[u8],
+        registration_time: u64,
+        records: &[(Vec<u8>, Vec<u8>)],
+    ) -> Vec<u8> {
+        let total = DOMAIN_BASE_SIZE + (records.len() * RECORD_SIZE);
+        let mut buf = vec![0u8; total];
+        buf[0] = discriminator;
+        buf[1..33].copy_from_slice(&parent);
+        buf[33..65].copy_from_slice(&owner);
+        buf[65..65 + name.len()].copy_from_slice(name);
+        let name_length = name.len() as u32;
+        buf[129..133].copy_from_slice(&name_length.to_le_bytes());
+        buf[133..141].copy_from_slice(&registration_time.to_le_bytes());
+        let record_count = records.len() as u32;
+        buf[141..145].copy_from_slice(&record_count.to_le_bytes());
+        let mut offset = DOMAIN_BASE_SIZE;
+        for (key, value) in records {
+            let key_len = key.len() as u32;
+            buf[offset..offset + 4].copy_from_slice(&key_len.to_le_bytes());
+            buf[offset + 4..offset + 4 + key.len()].copy_from_slice(key);
+            let value_len_offset = offset + 4 + TN_NAME_SERVICE_MAX_KEY_LENGTH;
+            let value_len = value.len() as u32;
+            buf[value_len_offset..value_len_offset + 4].copy_from_slice(&value_len.to_le_bytes());
+            buf[value_len_offset + 4..value_len_offset + 4 + value.len()].copy_from_slice(value);
+            offset += RECORD_SIZE;
+        }
+        buf
+    }
+
+    #[test]
+    fn parse_root_registrar_happy() {
+        let authority = [0x42u8; 32];
+        let buf = build_root_registrar(NS_KIND_ROOT_REGISTRAR, authority, b"thru", 42);
+        let parsed = parse_root_registrar_account_data(&buf).expect("parse should succeed");
+        assert_eq!(parsed.authority, authority);
+        assert_eq!(parsed.root_name, "thru");
+        assert_eq!(parsed.total_subdomains, 42);
+    }
+
+    #[test]
+    fn parse_root_registrar_wrong_discriminator() {
+        let buf = build_root_registrar(NS_KIND_DOMAIN, [0u8; 32], b"thru", 0);
+        let err = parse_root_registrar_account_data(&buf).expect_err("should reject wrong discriminator");
+        assert!(matches!(err, CliError::Validation(_)));
+    }
+
+    #[test]
+    fn parse_root_registrar_too_small() {
+        let buf = vec![NS_KIND_ROOT_REGISTRAR];
+        let err = parse_root_registrar_account_data(&buf).expect_err("should reject buffer too small");
+        assert!(matches!(err, CliError::Validation(_)));
+    }
+
+    #[test]
+    fn parse_domain_happy() {
+        let parent = [0x11u8; 32];
+        let owner = [0x22u8; 32];
+        let buf = build_domain(NS_KIND_DOMAIN, parent, owner, b"alice", 1000, &[]);
+        let parsed = parse_domain_account_data(&buf).expect("parse should succeed");
+        assert_eq!(parsed.parent, parent);
+        assert_eq!(parsed.owner, owner);
+        assert_eq!(parsed.name, "alice");
+        assert_eq!(parsed.registration_time, 1000);
+        assert_eq!(parsed.records.len(), 0);
+    }
+
+    #[test]
+    fn parse_domain_with_records() {
+        let records = vec![
+            (b"twitter".to_vec(), b"@bob".to_vec()),
+            (b"github".to_vec(), b"bobgh".to_vec()),
+        ];
+        let buf = build_domain(NS_KIND_DOMAIN, [0u8; 32], [0u8; 32], b"bob", 2000, &records);
+        let parsed = parse_domain_account_data(&buf).expect("parse should succeed");
+        assert_eq!(parsed.records.len(), 2);
+        assert_eq!(parsed.records[0].key, b"twitter");
+        assert_eq!(parsed.records[0].value, b"@bob");
+        assert_eq!(parsed.records[1].key, b"github");
+        assert_eq!(parsed.records[1].value, b"bobgh");
+    }
+
+    #[test]
+    fn parse_domain_wrong_discriminator() {
+        let buf = build_domain(NS_KIND_ROOT_REGISTRAR, [0u8; 32], [0u8; 32], b"alice", 0, &[]);
+        let err = parse_domain_account_data(&buf).expect_err("should reject wrong discriminator");
+        assert!(matches!(err, CliError::Validation(_)));
+    }
 }

@@ -93,6 +93,7 @@ interface BoundSlots {
 }
 
 interface BoundNode {
+    getStatus: BoundFunction<typeof nodeModule.getNodeStatus>;
     getPubkey: BoundFunction<typeof nodeModule.getNodePubkey>;
     getRecords: BoundFunction<typeof nodeModule.getNodeRecords>;
     streamRecords: BoundFunction<typeof streamingModule.streamNodeRecords>;
@@ -193,6 +194,7 @@ export function createBoundThruClient(ctx: ThruClientContext): Thru {
             getStateRoots: bind(ctx, proofsModule.getStateRoots),
         },
         node: {
+            getStatus: bind(ctx, nodeModule.getNodeStatus),
             getPubkey: bind(ctx, nodeModule.getNodePubkey),
             getRecords: bind(ctx, nodeModule.getNodeRecords),
             streamRecords: bind(ctx, streamingModule.streamNodeRecords),

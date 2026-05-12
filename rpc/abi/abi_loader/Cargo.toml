@@ -13,13 +13,13 @@ serde = { version = "1.0", features = ["derive"] }
 serde_derive = "1.0"
 serde_yml = "0.0.12"
 anyhow = "1.0"
-clap = { version = "4.5", features = ["derive"] }
-sha2 = "0.10"
+clap = { version = "4.6", features = ["derive"] }
+sha2 = "0.11"
 hex = "0.4"
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-dirs = "5"
-git2 = { version = "0.19", default-features = false, features = ["vendored-openssl", "ssh"] }
+dirs = "6"
+git2 = { version = "0.20", default-features = false, features = ["vendored-openssl", "ssh"] }
 reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "charset", "http2", "rustls-tls"] }
 
 [dev-dependencies]

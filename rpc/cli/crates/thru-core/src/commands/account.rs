@@ -769,7 +769,7 @@ async fn decompress_with_uploader(
 
     // Generate a random seed for ephemeral accounts
     let mut seed_bytes = [3u8; 16];
-    rand::Rng::fill(&mut rand::rng(), &mut seed_bytes);
+    rand::RngExt::fill(&mut rand::rng(),&mut seed_bytes);
     let seed = hex::encode(seed_bytes);
 
     // Derive ephemeral accounts for the uploader
@@ -987,12 +987,12 @@ async fn decompress_with_uploader_huge(
 
     // Generate a random seed for ephemeral accounts
     let mut meta_seed_bytes = [1u8; 16];
-    rand::Rng::fill(&mut rand::rng(), &mut meta_seed_bytes);
+    rand::RngExt::fill(&mut rand::rng(),&mut meta_seed_bytes);
     let meta_seed = hex::encode(meta_seed_bytes);
 
     // Generate a different seed for buffer account
     let mut buffer_seed_bytes = [2u8; 16];
-    rand::Rng::fill(&mut rand::rng(), &mut buffer_seed_bytes);
+    rand::RngExt::fill(&mut rand::rng(),&mut buffer_seed_bytes);
     let buffer_seed = hex::encode(buffer_seed_bytes);
 
     // Derive ephemeral accounts for the uploader - meta account from first seed, buffer account from second seed

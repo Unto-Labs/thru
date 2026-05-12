@@ -9,7 +9,12 @@ import {
   encodeCreateInstruction,
   encodeRegisterCredentialInstruction,
 } from '@thru/passkey-manager';
-import { toThruAddress, getStateProof, trackTransaction } from './utils';
+import {
+  toThruAddress,
+  getStateProof,
+  trackTransaction,
+  withSerializedFeePayer,
+} from './utils';
 import type { ThruClient } from './types';
 
 export async function createPasskeyWallet(opts: {
@@ -27,15 +32,17 @@ export async function createPasskeyWallet(opts: {
   const walletBytes = await deriveWalletAddress(seed, PASSKEY_MANAGER_PROGRAM_ADDRESS);
   const walletAddress = toThruAddress(walletBytes);
 
-  let walletExists = false;
-  try {
-    await opts.client.accounts.get(walletAddress);
-    walletExists = true;
-  } catch {
-    walletExists = false;
-  }
+  await withSerializedFeePayer(opts.adminPublicKey, async () => {
+    let walletExists = false;
+    try {
+      await opts.client.accounts.get(walletAddress);
+      walletExists = true;
+    } catch {
+      walletExists = false;
+    }
 
-  if (!walletExists) {
+    if (walletExists) return;
+
     const stateProof = await getStateProof(opts.client, walletAddress);
     const accountCtx = buildAccountContext({
       walletAddress,
@@ -72,10 +79,12 @@ export async function createPasskeyWallet(opts: {
     const result = await trackTransaction(opts.client, signature, 60000);
     if (result.status !== 'finalized') {
       throw new Error(
-        `Wallet creation failed with error code: ${result.errorCode ?? 'unknown'}`
+        `Wallet creation failed with status: ${result.status}${
+          result.errorCode !== undefined ? ` (error code: ${result.errorCode})` : ''
+        }`
       );
     }
-  }
+  });
 
   let credentialLookupAddress: string | undefined;
   if (opts.credentialId) {
@@ -85,21 +94,24 @@ export async function createPasskeyWallet(opts: {
       walletName,
       PASSKEY_MANAGER_PROGRAM_ADDRESS
     );
+    const lookupAddress = toThruAddress(lookupAddressBytes);
 
-    credentialLookupAddress = toThruAddress(lookupAddressBytes);
+    credentialLookupAddress = lookupAddress;
 
-    let lookupExists = false;
     try {
-      await opts.client.accounts.get(credentialLookupAddress);
-      lookupExists = true;
-    } catch {
-      lookupExists = false;
-    }
+      await withSerializedFeePayer(opts.adminPublicKey, async () => {
+        let lookupExists = false;
+        try {
+          await opts.client.accounts.get(lookupAddress);
+          lookupExists = true;
+        } catch {
+          lookupExists = false;
+        }
 
-    if (!lookupExists) {
-      try {
+        if (lookupExists) return;
+
         const credSeed = await createCredentialLookupSeed(credentialIdBytes, walletName);
-        const stateProof = await getStateProof(opts.client, credentialLookupAddress);
+        const stateProof = await getStateProof(opts.client, lookupAddress);
         const accountCtx = buildAccountContext({
           walletAddress,
           readWriteAccounts: [lookupAddressBytes],
@@ -120,7 +132,7 @@ export async function createPasskeyWallet(opts: {
           program: PASSKEY_MANAGER_PROGRAM_ADDRESS,
           instructionData: registerIx,
           accounts: {
-            readWrite: [walletAddress, credentialLookupAddress],
+            readWrite: [walletAddress, lookupAddress],
             readOnly: [],
           },
           header: { fee: 0n },
@@ -136,9 +148,9 @@ export async function createPasskeyWallet(opts: {
             }`
           );
         }
-      } catch (error) {
-        console.warn('Credential registration failed (non-fatal):', error);
-      }
+      });
+    } catch (error) {
+      console.warn('Credential registration failed (non-fatal):', error);
     }
   }
 

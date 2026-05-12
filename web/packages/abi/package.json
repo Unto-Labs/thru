@@ -26,7 +26,7 @@
     "build:wasm": "pnpm run wasm:bundler && pnpm run wasm:node && pnpm run wasm:web && pnpm run wasm:sync"
   },
   "dependencies": {
-    "yaml": "^2.7.0"
+    "yaml": "^2.8.3"
   },
   "devDependencies": {
     "@thru/thru-sdk": "workspace:*",

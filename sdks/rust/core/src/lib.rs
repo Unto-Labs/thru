@@ -7,8 +7,7 @@ pub mod syscall;
 pub mod types;
 pub mod vmptr;
 
-pub use account_safe::AccountRef::*;
-pub use account_safe::{next_pow2, AccountError, AccountManager};
+pub use account_safe::{next_pow2, AccountError, AccountManager, AccountRef, AccountType};
 pub use mem::get_txn;
 pub use mem::MemoryError;
 pub use types::pubkey::Pubkey;
@@ -248,14 +247,20 @@ pub mod program_utils {
         false
     }
 
-    pub fn account_create(
+    /// Create an account via raw syscall.
+    ///
+    /// # Safety
+    ///
+    /// This function bypasses `AccountManager` borrow checks. Any
+    /// existing `&AccountMeta` or `&[u8]` references to the account at
+    /// `account_idx` must be dropped before this call. Prefer using
+    /// [`AccountManager::account_create`] which enforces borrow checks.
+    pub unsafe fn account_create(
         account_idx: u64,
         seed: &[u8; syscall::SEED_SIZE],
         proof: StateProof<'_>,
     ) -> syscall::SyscallCode {
-        unsafe {
-            syscall::sys_account_create(account_idx, seed, proof.as_ptr(), proof.footprint() as u64)
-        }
+        syscall::sys_account_create(account_idx, seed, proof.as_ptr(), proof.footprint() as u64)
     }
 }
 

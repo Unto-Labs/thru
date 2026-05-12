@@ -16,13 +16,15 @@ impl InvokeAuth {
 
     /// Get the authorization account indices (first auth_cnt entries after the struct)
     pub unsafe fn auth_idxs(&self) -> &[u16] {
-        let base = (self as *const InvokeAuth as *const u8).add(Self::ACC_IDXS_OFFSET) as *const u16;
+        let base =
+            (self as *const InvokeAuth as *const u8).add(Self::ACC_IDXS_OFFSET) as *const u16;
         core::slice::from_raw_parts(base, self.auth_cnt as usize)
     }
 
     /// Get the deauthorization account indices (after auth entries)
     pub unsafe fn deauth_idxs(&self) -> &[u16] {
-        let base = (self as *const InvokeAuth as *const u8).add(Self::ACC_IDXS_OFFSET) as *const u16;
+        let base =
+            (self as *const InvokeAuth as *const u8).add(Self::ACC_IDXS_OFFSET) as *const u16;
         let deauth_base = base.add(self.auth_cnt as usize);
         core::slice::from_raw_parts(deauth_base, self.deauth_cnt as usize)
     }

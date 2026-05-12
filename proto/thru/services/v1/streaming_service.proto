@@ -561,6 +561,11 @@ message TrackTransactionResponse {
       [(google.api.field_behavior) = OPTIONAL];
   thru.core.v1.TransactionExecutionResult execution_result = 3
       [(google.api.field_behavior) = OPTIONAL];
+  // Slot in which this transaction landed. Zero until the producing block
+  // has been observed by the ingestor; consumers waiting to anchor downstream
+  // ClickHouse reads (e.g. GetTransaction) should ignore zero slots and wait
+  // for the next response.
+  uint64 slot = 4 [(google.api.field_behavior) = OPTIONAL];
 }
 
 // StreamSlotMetricsRequest subscribes to per-slot metrics updates.

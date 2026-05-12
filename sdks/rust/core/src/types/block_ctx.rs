@@ -21,4 +21,17 @@ pub struct BlockCtx {
     pub cur_block_hash: Hash,
     /// Public key of the block producer
     pub block_producer: Pubkey,
+    /// Validator-weight slot from the block header
+    pub weight_slot: u64,
 }
+
+const _: () = {
+    assert!(core::mem::size_of::<BlockCtx>() == 128);
+    assert!(core::mem::offset_of!(BlockCtx, slot) == 0);
+    assert!(core::mem::offset_of!(BlockCtx, block_time) == 8);
+    assert!(core::mem::offset_of!(BlockCtx, block_price) == 16);
+    assert!(core::mem::offset_of!(BlockCtx, state_root) == 24);
+    assert!(core::mem::offset_of!(BlockCtx, cur_block_hash) == 56);
+    assert!(core::mem::offset_of!(BlockCtx, block_producer) == 88);
+    assert!(core::mem::offset_of!(BlockCtx, weight_slot) == 120);
+};

@@ -13,45 +13,47 @@ jobs:
   build-sdk-artifacts:
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      TAG_NAME: ${{ github.event.release.tag_name }}
     strategy:
       matrix:
         sdk: [c]
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       with:
         submodules: true
 
     - name: Create SDK artifact directory
       run: |
-        mkdir -p sdk-artifact/thru-program-sdk-${{ matrix.sdk }}-${{ github.event.release.tag_name }}
+        mkdir -p sdk-artifact/thru-program-sdk-${{ matrix.sdk }}-${TAG_NAME}
 
     - name: Copy SDK-specific files
       run: |
         # Copy the entire SDK directory
-        cp -rL sdks/${{ matrix.sdk }}/. sdk-artifact/thru-program-sdk-${{ matrix.sdk }}-${{ github.event.release.tag_name }}/
+        cp -rL sdks/${{ matrix.sdk }}/. sdk-artifact/thru-program-sdk-${{ matrix.sdk }}-${TAG_NAME}/
 
         # Ensure deps.sh and setup.sh are executable
-        chmod +x sdk-artifact/thru-program-sdk-${{ matrix.sdk }}-${{ github.event.release.tag_name }}/deps.sh
-        chmod +x sdk-artifact/thru-program-sdk-${{ matrix.sdk }}-${{ github.event.release.tag_name }}/setup.sh
+        chmod +x sdk-artifact/thru-program-sdk-${{ matrix.sdk }}-${TAG_NAME}/deps.sh
+        chmod +x sdk-artifact/thru-program-sdk-${{ matrix.sdk }}-${TAG_NAME}/setup.sh
 
     - name: Create tarball
       run: |
         cd sdk-artifact
-        tar -czf thru-program-sdk-${{ matrix.sdk }}-${{ github.event.release.tag_name }}.tar.gz thru-program-sdk-${{ matrix.sdk }}-${{ github.event.release.tag_name }}/
+        tar -czf thru-program-sdk-${{ matrix.sdk }}-${TAG_NAME}.tar.gz thru-program-sdk-${{ matrix.sdk }}-${TAG_NAME}/
         cd ..
-        mv sdk-artifact/thru-program-sdk-${{ matrix.sdk }}-${{ github.event.release.tag_name }}.tar.gz .
+        mv sdk-artifact/thru-program-sdk-${{ matrix.sdk }}-${TAG_NAME}.tar.gz .
 
     - name: Create zip archive
       run: |
         cd sdk-artifact
-        zip -r thru-program-sdk-${{ matrix.sdk }}-${{ github.event.release.tag_name }}.zip thru-program-sdk-${{ matrix.sdk }}-${{ github.event.release.tag_name }}/
+        zip -r thru-program-sdk-${{ matrix.sdk }}-${TAG_NAME}.zip thru-program-sdk-${{ matrix.sdk }}-${TAG_NAME}/
         cd ..
-        mv sdk-artifact/thru-program-sdk-${{ matrix.sdk }}-${{ github.event.release.tag_name }}.zip .
+        mv sdk-artifact/thru-program-sdk-${{ matrix.sdk }}-${TAG_NAME}.zip .
 
     - name: Upload SDK artifacts
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
       with:
         name: sdk-${{ matrix.sdk }}
         path: |
@@ -63,6 +65,8 @@ jobs:
   build-toolchain:
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
+    env:
+      TAG_NAME: ${{ github.event.release.tag_name }}
     strategy:
       fail-fast: false
       matrix:
@@ -75,13 +79,13 @@ jobs:
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
       with:
         submodules: true
 
     - name: Cache .thru toolchain
       id: cache-toolchain
-      uses: actions/cache@v5
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
       with:
         path: .thru/sdk/toolchain/
         key: thru-toolchain-c-${{ runner.os }}-${{ hashFiles('sdks/deps.sh') }}
@@ -115,13 +119,13 @@ jobs:
         ARCH_NAME=$(uname -m)
 
         # Create a minimal toolchain directory with the final archive name
-        mkdir -p thru-toolchain-${OS_NAME}-${ARCH_NAME}-${{ github.event.release.tag_name }}
+        mkdir -p thru-toolchain-${OS_NAME}-${ARCH_NAME}-${TAG_NAME}
 
         # Copy only the essential directories
         for dir in bin include lib libexec picolibc riscv64-unknown-elf share; do
           if [ -d "toolchain/$dir" ]; then
             echo "Copying toolchain/$dir..."
-            cp -r "toolchain/$dir" thru-toolchain-${OS_NAME}-${ARCH_NAME}-${{ github.event.release.tag_name }}/
+            cp -r "toolchain/$dir" thru-toolchain-${OS_NAME}-${ARCH_NAME}-${TAG_NAME}/
           else
             echo "Warning: toolchain/$dir not found, skipping"
           fi
@@ -129,25 +133,25 @@ jobs:
 
         # Display what we're packaging
         echo "Toolchain package contents:"
-        ls -la thru-toolchain-${OS_NAME}-${ARCH_NAME}-${{ github.event.release.tag_name }}/
+        ls -la thru-toolchain-${OS_NAME}-${ARCH_NAME}-${TAG_NAME}/
         echo "Total size:"
-        du -sh thru-toolchain-${OS_NAME}-${ARCH_NAME}-${{ github.event.release.tag_name }}/
+        du -sh thru-toolchain-${OS_NAME}-${ARCH_NAME}-${TAG_NAME}/
 
     - name: Package toolchain as tar.gz
       run: |
         cd ${GITHUB_WORKSPACE}/.thru/sdk/
         OS_NAME=$(uname -s)
         ARCH_NAME=$(uname -m)
-        tar -czf thru-toolchain-${OS_NAME}-${ARCH_NAME}-${{ github.event.release.tag_name }}.tar.gz thru-toolchain-${OS_NAME}-${ARCH_NAME}-${{ github.event.release.tag_name }}/
-        ls -la thru-toolchain-${OS_NAME}-${ARCH_NAME}-${{ github.event.release.tag_name }}.tar.gz
+        tar -czf thru-toolchain-${OS_NAME}-${ARCH_NAME}-${TAG_NAME}.tar.gz thru-toolchain-${OS_NAME}-${ARCH_NAME}-${TAG_NAME}/
+        ls -la thru-toolchain-${OS_NAME}-${ARCH_NAME}-${TAG_NAME}.tar.gz
 
     - name: Package toolchain as zip
       run: |
         cd ${GITHUB_WORKSPACE}/.thru/sdk/
         OS_NAME=$(uname -s)
         ARCH_NAME=$(uname -m)
-        zip -r thru-toolchain-${OS_NAME}-${ARCH_NAME}-${{ github.event.release.tag_name }}.zip thru-toolchain-${OS_NAME}-${ARCH_NAME}-${{ github.event.release.tag_name }}/
-        ls -la thru-toolchain-${OS_NAME}-${ARCH_NAME}-${{ github.event.release.tag_name }}.zip
+        zip -r thru-toolchain-${OS_NAME}-${ARCH_NAME}-${TAG_NAME}.zip thru-toolchain-${OS_NAME}-${ARCH_NAME}-${TAG_NAME}/
+        ls -la thru-toolchain-${OS_NAME}-${ARCH_NAME}-${TAG_NAME}.zip
 
     - name: Upload toolchain artifacts
       run: |
@@ -158,7 +162,7 @@ jobs:
       id: detect-platform
 
     - name: Upload toolchain artifacts to workflow
-      uses: actions/upload-artifact@v6
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
       with:
         name: toolchain-${{ steps.detect-platform.outputs.os_name }}-${{ steps.detect-platform.outputs.arch_name }}
         path: |
@@ -171,13 +175,15 @@ jobs:
     needs: [build-sdk-artifacts, build-toolchain]
     runs-on: ubuntu-latest
     timeout-minutes: 60
+    env:
+      TAG_NAME: ${{ github.event.release.tag_name }}
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v6
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
 
     - name: Download all artifacts
-      uses: actions/download-artifact@v7
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
       with:
         path: release-artifacts
 
@@ -187,7 +193,7 @@ jobs:
         find release-artifacts -type f
 
     - name: Upload C SDK tar.gz
-      uses: actions/upload-release-asset@v1
+      uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5 # v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
@@ -197,7 +203,7 @@ jobs:
         asset_content_type: application/gzip
 
     - name: Upload C SDK zip
-      uses: actions/upload-release-asset@v1
+      uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5 # v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
@@ -229,7 +235,7 @@ jobs:
                 fi
 
                 # Upload using GitHub CLI
-                gh release upload "${{ github.event.release.tag_name }}" "$file" --repo "${{ github.repository }}" --clobber
+                gh release upload "${TAG_NAME}" "$file" --repo "${{ github.repository }}" --clobber
               fi
             done
           fi
@@ -237,7 +243,7 @@ jobs:
 
     - name: Release Summary
       run: |
-        echo "✅ Successfully uploaded artifacts to release ${{ github.event.release.tag_name }}!"
+        echo "✅ Successfully uploaded artifacts to release ${TAG_NAME}!"
         echo ""
         echo "Uploaded artifacts:"
         echo "- C SDK (tar.gz, zip)"

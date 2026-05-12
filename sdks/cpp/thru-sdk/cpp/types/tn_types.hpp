@@ -2,6 +2,7 @@
 #define HEADER_sdks_cpp_types_tn_types_hpp
 
 #include <array>
+#include <cstddef>
 
 // Basic type definitions for compatibility
 using uchar = unsigned char;
@@ -199,10 +200,20 @@ struct __attribute__((packed)) tn_block_ctx {
   ulong slot;                 // Current block slot number
   ulong block_time;           // Block timestamp (Unix epoch in nanoseconds)
   ulong block_price;          // Block price
-  pubkey_t block_producer;    // Public key of the block producer
   pubkey_t state_root;        // Merkle root of the state tree
   pubkey_t cur_block_hash;    // Current block hash
+  pubkey_t block_producer;    // Public key of the block producer
+  ulong weight_slot;          // Validator-weight slot from the block header
 };
+
+static_assert(sizeof(tn_block_ctx) == 128UL, "tn_block_ctx_size");
+static_assert(offsetof(tn_block_ctx, slot) == 0UL, "tn_block_ctx_slot_offset");
+static_assert(offsetof(tn_block_ctx, block_time) == 8UL, "tn_block_ctx_block_time_offset");
+static_assert(offsetof(tn_block_ctx, block_price) == 16UL, "tn_block_ctx_block_price_offset");
+static_assert(offsetof(tn_block_ctx, state_root) == 24UL, "tn_block_ctx_state_root_offset");
+static_assert(offsetof(tn_block_ctx, cur_block_hash) == 56UL, "tn_block_ctx_cur_block_hash_offset");
+static_assert(offsetof(tn_block_ctx, block_producer) == 88UL, "tn_block_ctx_block_producer_offset");
+static_assert(offsetof(tn_block_ctx, weight_slot) == 120UL, "tn_block_ctx_weight_slot_offset");
 
 // Block context constants
 

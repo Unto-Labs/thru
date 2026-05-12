@@ -7,7 +7,9 @@
 #
 # Environment variables:
 #   TEST_SCOPE   - run a subset of scenarios (default: "all"). Supported scopes:
-#                  core, keys, accounts, transfers, txn, program, token, util.
+#                  all, all-no-debug, a single scenario, or comma-separated
+#                  scenarios from core, keys, accounts, transfers, txn, program,
+#                  program-upgrade, event, token, util, debug.
 #   SKIP_BUILD   - set to 1 to reuse an existing thru-cli binary.
 #   THRU_CLI_BIN - override path to the thru-cli binary.
 #   RPC_BASE_URL - override gRPC endpoint base URL (default: http://127.0.0.1:8472).
@@ -99,7 +101,23 @@ require_command() {
 
 should_run() {
   local scope="$1"
-  [[ "$SELECTED_SCENARIO" == "all" || "$SELECTED_SCENARIO" == "$scope" ]]
+  if [[ "$SELECTED_SCENARIO" == "all" ]]; then
+    return 0
+  fi
+  if [[ "$SELECTED_SCENARIO" == "all-no-debug" ]]; then
+    [[ "$scope" != "debug" ]]
+    return
+  fi
+
+  local selected
+  IFS=',' read -ra selected <<< "$SELECTED_SCENARIO"
+  for item in "${selected[@]}"; do
+    item="${item//[[:space:]]/}"
+    if [[ "$item" == "$scope" ]]; then
+      return 0
+    fi
+  done
+  return 1
 }
 
 with_cli_env() {
@@ -183,6 +201,34 @@ run_cli_expect_fail() {
     log "Expected failure observed (exit $status)"
     log "$out"
   fi
+}
+
+wait_for_consensus_ready() {
+  log_section "Waiting for node consensus readiness"
+
+  local timeout_secs="${CONSENSUS_READY_TIMEOUT_SECS:-180}"
+  local deadline=$(( $(date +%s) + timeout_secs ))
+  local status_json ready finalized locally_executed
+  local last_status="unavailable"
+
+  while (( $(date +%s) < deadline )); do
+    if status_json=$(run_cli_json "getstatus (consensus readiness)" getstatus 2>/dev/null); then
+      ready=$(printf '%s' "$status_json" | jq -r '.getstatus.ready')
+      finalized=$(printf '%s' "$status_json" | jq -r '.getstatus.finalized_slot')
+      locally_executed=$(printf '%s' "$status_json" | jq -r '.getstatus.locally_executed_slot')
+      last_status="ready=${ready} finalized=${finalized} locally_executed=${locally_executed}"
+      if [[ "$ready" == "true" ]]; then
+        log "Node consensus ready (${last_status})"
+        return 0
+      fi
+    else
+      last_status="getstatus unavailable"
+    fi
+
+    sleep 1
+  done
+
+  die "Node not consensus-ready after ${timeout_secs}s (${last_status})"
 }
 
 assert_jq_eq() {
@@ -305,6 +351,7 @@ Usage:
 
 Available scenarios:
   all
+  all-no-debug
   core
   keys
   accounts
@@ -335,11 +382,18 @@ parse_args() {
       all)
         SELECTED_SCENARIO="all"
         ;;
+      all-no-debug)
+        SELECTED_SCENARIO="all-no-debug"
+        ;;
       core|keys|accounts|transfers|txn|program|program-upgrade|event|token|util|debug)
         SELECTED_SCENARIO="$arg"
         ;;
       *)
-        die "Unknown option or scenario: $arg"
+        if [[ "$arg" == *","* ]]; then
+          SELECTED_SCENARIO="$arg"
+        else
+          die "Unknown option or scenario: $arg"
+        fi
         ;;
     esac
     shift
@@ -485,14 +539,13 @@ scenario_accounts() {
     local created=false
     for (( attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++ )); do
       log "CLI: account create (attempt $attempt/$RETRY_ATTEMPTS) -> thru-cli --json account create $GENERATED_ACCOUNT_KEY"
-      create_output=$(with_cli_env "$THRU_CLI_BIN" --json account create "$GENERATED_ACCOUNT_KEY" 2>&1)
-      create_status=$?
-      if (( create_status == 0 )); then
+      if create_output=$(with_cli_env "$THRU_CLI_BIN" --json account create "$GENERATED_ACCOUNT_KEY" 2>&1); then
         ACCOUNT_CREATE_SIGNATURE=$(printf '%s' "$create_output" | jq -er '.account_create.signature')
         GENERATED_ACCOUNT_PUBKEY=$(printf '%s' "$create_output" | jq -er '.account_create.public_key')
         created=true
         break
       fi
+      create_status=$?
 
       if grep -q "bintrie: key already exists" <<<"$create_output"; then
         log "Account already present according to state proof response; fetching existing account info."
@@ -1577,6 +1630,7 @@ main() {
   check_prerequisites
   seed_cli_config
   populate_genesis_addresses
+  wait_for_consensus_ready
 
   scenario_core_rpc
   scenario_keys

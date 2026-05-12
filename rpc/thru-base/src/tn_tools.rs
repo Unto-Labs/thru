@@ -4,8 +4,8 @@ use crate::{tn_public_address::tn_pubkey_to_address_string, tn_signature_encodin
 use anyhow::Result;
 use ed25519_dalek::SigningKey;
 use hex;
-use rand::TryRngCore;
-use rand::rngs::OsRng;
+use rand::TryRng;
+use rand::rngs::SysRng;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
@@ -13,7 +13,7 @@ use thiserror::Error;
 
 pub fn gen_key() -> Result<[u8; 32]> {
     let mut private_key = [0u8; 32];
-    let mut rng = OsRng;
+    let mut rng = SysRng;
     rng.try_fill_bytes(&mut private_key).unwrap();
     Ok(private_key)
 }
@@ -30,7 +30,7 @@ impl KeyPair {
     pub fn generate(name: &str) -> Result<Self> {
         // Generate new key
         let mut private_key = [0u8; 32];
-        let mut rng = OsRng;
+        let mut rng = SysRng;
         rng.try_fill_bytes(&mut private_key)?;
         // Derive public key
         let signing_key = SigningKey::from_bytes(&private_key);

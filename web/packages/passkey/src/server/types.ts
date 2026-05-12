@@ -35,6 +35,8 @@ export interface ThruClient {
     ) => AsyncIterable<{
       executionResult?: {
         userErrorCode: bigint;
+        vmError?: bigint | number | null;
+        executionResult?: bigint | number | null;
       };
       statusCode?: number;
     }>;
@@ -55,7 +57,7 @@ export interface PasskeyChallengeSubmitPayload extends PasskeySignaturePayload {
 
 export interface TransactionResult {
   signature: string;
-  status: 'finalized' | 'failed' | 'timeout';
+  status: 'finalized' | 'failed' | 'timeout' | 'finalized_without_execution';
   errorCode?: bigint;
 }
 

@@ -188,7 +188,7 @@ pub fn pack_seed(arg0: u64, arg1: u64, arg2: u64, arg3: u64) -> [u8; 32] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::RngCore;
+    use rand::Rng;
 
     #[test]
     fn test_public_address_encoder() {

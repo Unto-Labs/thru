@@ -4,6 +4,8 @@
 #include "tn_sdk_base.h"
 #include "tn_sdk_types.h"
 
+#include <stddef.h>
+
 /* Universal transaction header - minimal header present in all transaction
  * versions */
 struct tsdk_txn_hdr_universal {
@@ -126,8 +128,18 @@ struct tsdk_block_ctx {
   tn_hash_t   state_root;     /* Merkle root of the state tree */
   tn_hash_t   cur_block_hash; /* Current block hash */
   tn_pubkey_t block_producer; /* Public key of the block producer */
+  ulong       weight_slot;    /* Validator-weight slot from the block header */
 };
 typedef struct tsdk_block_ctx tsdk_block_ctx_t;
+
+FD_STATIC_ASSERT( sizeof( tsdk_block_ctx_t ) == 128UL, tsdk_block_ctx_size );
+FD_STATIC_ASSERT( offsetof( tsdk_block_ctx_t, slot ) == 0UL, tsdk_block_ctx_slot_offset );
+FD_STATIC_ASSERT( offsetof( tsdk_block_ctx_t, block_time ) == 8UL, tsdk_block_ctx_block_time_offset );
+FD_STATIC_ASSERT( offsetof( tsdk_block_ctx_t, block_price ) == 16UL, tsdk_block_ctx_block_price_offset );
+FD_STATIC_ASSERT( offsetof( tsdk_block_ctx_t, state_root ) == 24UL, tsdk_block_ctx_state_root_offset );
+FD_STATIC_ASSERT( offsetof( tsdk_block_ctx_t, cur_block_hash ) == 56UL, tsdk_block_ctx_cur_block_hash_offset );
+FD_STATIC_ASSERT( offsetof( tsdk_block_ctx_t, block_producer ) == 88UL, tsdk_block_ctx_block_producer_offset );
+FD_STATIC_ASSERT( offsetof( tsdk_block_ctx_t, weight_slot ) == 120UL, tsdk_block_ctx_weight_slot_offset );
 
 struct __attribute__(( packed )) tsdk_state_proof_hdr {
   ulong     type_slot; /* high bit is the proof type, low 62 bits are slot */
@@ -284,4 +296,3 @@ tsdk_txn_is_account_idx_writable( tsdk_txn_t const * txn,
 }
 
 #endif /* HEADER_tn_sdk_txn_h */
-

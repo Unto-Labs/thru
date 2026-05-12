@@ -120,7 +120,7 @@ pub fn tn_signature_to_string(signature: &[u8; 64]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::RngCore;
+    use rand::Rng;
 
     #[test]
     fn test_signature_encoder() {

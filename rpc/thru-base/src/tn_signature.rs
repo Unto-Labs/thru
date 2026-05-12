@@ -66,7 +66,7 @@ pub fn sign(
     h_r.update(&block);
     h_r.update(&expanded.hash_prefix);
     h_r.update(msg);
-    let r = Scalar::from_hash(h_r);
+    let r = Scalar::from_bytes_mod_order_wide(&h_r.finalize().into());
     let r_point = EdwardsPoint::mul_base(&r).compress();
 
     let mut h_k = Sha512::new();
@@ -74,7 +74,7 @@ pub fn sign(
     h_k.update(r_point.as_bytes());
     h_k.update(public_key);
     h_k.update(msg);
-    let k = Scalar::from_hash(h_k);
+    let k = Scalar::from_bytes_mod_order_wide(&h_k.finalize().into());
 
     let s = k * expanded.scalar + r;
 
@@ -118,7 +118,7 @@ pub fn verify(
     h_k.update(&r_bytes);
     h_k.update(public_key);
     h_k.update(msg);
-    let k = Scalar::from_hash(h_k);
+    let k = Scalar::from_bytes_mod_order_wide(&h_k.finalize().into());
 
     let minus_a = -a_point;
     let r_cmp =

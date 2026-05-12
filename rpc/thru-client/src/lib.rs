@@ -269,6 +269,7 @@ impl Client {
         let message = response.into_inner();
         Ok(ChainInfo {
             chain_id: message.chain_id as u16,
+            min_lock_time: message.min_lock_time,
         })
     }
 
@@ -699,6 +700,43 @@ impl Client {
             .collect();
 
         Ok(state_roots)
+    }
+
+    /// Get active state hashes for a range of slots.
+    ///
+    /// Returns active state hashes (SHA256 of accumulated LTHash and state root).
+    /// Unlike state roots (zero for the first 512 slots), active state hashes are
+    /// meaningful from slot 1.
+    pub async fn get_state_hashes(
+        &self,
+        start_slot: Option<u64>,
+        end_slot: Option<u64>,
+    ) -> Result<Vec<StateHashEntry>> {
+        let mut client = QueryServiceClient::new(self.channel.clone())
+            .max_decoding_message_size(128 * 1024 * 1024)
+            .max_encoding_message_size(128 * 1024 * 1024);
+
+        let request = servicesv1::GetActiveStateHashesRequest {
+            end_slot,
+            start_slot,
+        };
+
+        let mut grpc_request = Request::new(request);
+        self.apply_metadata(&mut grpc_request);
+        grpc_request.set_timeout(self.timeout);
+
+        let response = client.get_active_state_hashes(grpc_request).await?;
+        let hashes = response
+            .into_inner()
+            .active_state_hashes
+            .into_iter()
+            .map(|entry| StateHashEntry {
+                slot: entry.slot,
+                state_hash: entry.active_state_hash,
+            })
+            .collect();
+
+        Ok(hashes)
     }
 
     /// Get slot-level metrics for a specific slot.
@@ -1358,6 +1396,9 @@ pub struct ChainInfo {
     /// Chain identifier, unique per network (similar to Ethereum chain ID).
     /// Used to prevent transaction replay across different chains.
     pub chain_id: u16,
+    /// Minimum timestamp (nanoseconds since epoch) at which 4f+1 validator weight
+    /// has reported advancement. Zero if not yet available.
+    pub min_lock_time: u64,
 }
 
 /// State root entry for a specific slot.
@@ -1365,6 +1406,13 @@ pub struct ChainInfo {
 pub struct StateRootEntry {
     pub slot: u64,
     pub state_root: Vec<u8>,
+}
+
+/// Active state hash entry for a specific slot.
+#[derive(Debug, Clone)]
+pub struct StateHashEntry {
+    pub slot: u64,
+    pub state_hash: Vec<u8>,
 }
 
 /// Slot-level metrics including state counters and fees.

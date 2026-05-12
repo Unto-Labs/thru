@@ -10,6 +10,8 @@ OBJDIR:=$(BASEDIR)/$(BUILDDIR)
 
 CPPFLAGS+=-DTN_BUILD_INFO=\"$(OBJDIR)/info\"
 CPPFLAGS+=$(EXTRA_CPPFLAGS)
+THRU_PREPROCESS_ENABLED:=$(filter 1 true yes on,$(THRU_PREPROCESS) $(THRU_PREPROCESS_I))
+THRU_PREPROCESS_PREREQ=$(if $(THRU_PREPROCESS_ENABLED),$(OBJDIR)/obj/%.i)
 
 # Auxiliary rules that should not set up dependencies
 AUX_RULES:=clean distclean help show-deps run-unit-test
@@ -53,6 +55,7 @@ help:
 	# "make distclean" removes editor temp files and all platform builds
 	# "make asm" makes all source files into assembly language files
 	# "make ppp" run all source files through the preprocessor
+	# "make THRU_PREPROCESS=1 ..." also writes .i files before compiling C objects
 	# "make show-deps" shows all the dependencies
 
 info: $(OBJDIR)/info
@@ -205,7 +208,7 @@ $(CC) $(CPPFLAGS) $(CFLAGS) -M -MP $< -o $@.tmp && \
 $(SED) 's,\($(notdir $*)\)\.o[ :]*,$(OBJDIR)/obj/$*.o $(OBJDIR)/obj/$*.S $(OBJDIR)/obj/$*.i $@ : ,g' < $@.tmp > $@ && \
 $(RM) $@.tmp
 
-$(OBJDIR)/obj/%.o : %.c $(OBJDIR)/info
+$(OBJDIR)/obj/%.o : %.c $(THRU_PREPROCESS_PREREQ) $(OBJDIR)/info
 	#######################################################################
 	# Compiling C source $< to $@
 	#######################################################################
@@ -257,14 +260,19 @@ ifeq ($(filter $(MAKECMDGOALS),$(AUX_RULES)),)
 
 # Include all the make fragments
 define _include-mk
-MKPATH:=$(dir $(1))
-include $(1)
+$(eval __include_mk_path:=$(1))
+$(if $(filter /%,$(__include_mk_path)),$(eval __include_mk_path:=$(patsubst $(CURDIR)/%,%,$(__include_mk_path))))
+MKPATH:=$(dir $(__include_mk_path))
+include $(__include_mk_path)
 MKPATH:=
+$(eval __include_mk_path:=)
 endef
 
 # Include all Local.mk files from current directory and SDK directory
 $(foreach mk,$(shell $(FIND) . -type f -name Local.mk),$(eval $(call _include-mk,$(mk))))
+ifeq ($(strip $(THRU_C_SKIP_SDK_LOCAL_MK)),)
 $(foreach mk,$(shell $(FIND) $(THRU_C_SDK_DIR)/c -type f -name Local.mk 2>/dev/null),$(eval $(call _include-mk,$(mk))))
+endif
 
 # Include all the dependencies.  Must be after the make fragments
 # include so that DEPFILES is fully populated (similarly for the

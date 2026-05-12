@@ -58,7 +58,7 @@ AR := $(RISCV_TOOLCHAIN_PATH)/$(RISCV_PREFIX)ar
 RANLIB := $(RISCV_TOOLCHAIN_PATH)/$(RISCV_PREFIX)ranlib
 
 # Add sysroot and RISC-V specific flags
-CPPFLAGS += -isystem $(RISCV_SYSROOT)/include --sysroot=$(RISCV_SYSROOT)
+CPPFLAGS += -isystem $(RISCV_SYSROOT)/include --sysroot=$(RISCV_SYSROOT) -fno-working-directory
 CFLAGS += --sysroot=$(RISCV_SYSROOT)
 
 # Verify toolchain is working by checking compiler version
@@ -70,4 +70,4 @@ endif
 # Report what we found
 $(info Found RISC-V toolchain: $(RISCV_TOOLCHAIN_PATH))
 $(info Found RISC-V sysroot: $(RISCV_SYSROOT))
-$(info RISC-V compiler version: $(RISCV_CC_VERSION)) 
+$(info RISC-V compiler version: $(RISCV_CC_VERSION))

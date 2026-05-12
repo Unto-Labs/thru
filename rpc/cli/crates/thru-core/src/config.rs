@@ -1,8 +1,8 @@
 //! Configuration management for the Thru CLI
 
 use anyhow::Result;
-use rand::TryRngCore;
-use rand::rngs::OsRng;
+use rand::TryRng;
+use rand::rngs::SysRng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -43,7 +43,7 @@ impl KeyManager {
 
         // Generate a cryptographically secure random 32-byte private key for default
         let mut private_key_bytes = [0u8; 32];
-        let mut rng = OsRng;
+        let mut rng = SysRng;
         rng.try_fill_bytes(&mut private_key_bytes).unwrap();
         let private_key_hex = hex::encode(private_key_bytes);
 
@@ -108,7 +108,7 @@ impl KeyManager {
 
         // Generate new key
         let mut private_key_bytes = [0u8; 32];
-        let mut rng = OsRng;
+        let mut rng = SysRng;
         rng.try_fill_bytes(&mut private_key_bytes).unwrap();
         let private_key_hex = hex::encode(private_key_bytes);
 

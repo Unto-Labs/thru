@@ -118,60 +118,84 @@ impl AccountType {
 
 /// A safe borrow of an account with proper lifetime and mutability tracking.
 ///
-/// The mutability of the inner `AccountInfo` matches Solana's rules:
+/// The mutability of the inner `AccountInfo` matches the transaction rules:
 /// only the fee-payer (idx 0) and the *read-write* range are exposed mutably.
-pub enum AccountRef<'a> {
-    FeePayer {
+///
+/// Account data is accessed exclusively through accessor methods (`data()`,
+/// `data_mut()`, `owner()`, `balance()`, etc.) to prevent `'static`
+/// references from escaping the borrow guard. The inner fields are private
+/// to ensure references are invalidated when the `AccountRef` is dropped.
+pub struct AccountRef<'a> {
+    inner: AccountRefInner<'a>,
+}
+
+enum AccountRefInner<'a> {
+    Mutable {
         account: AccountInfoMut<'static>,
+        account_type: AccountType,
         _guard: RefMut<'a, ()>,
     },
-    Program {
+    Immutable {
         account: AccountInfo<'static>,
-        _guard: Ref<'a, ()>,
-    },
-    ReadWrite {
-        account: AccountInfoMut<'static>,
-        _guard: RefMut<'a, ()>,
-    },
-    ReadOnly {
-        account: AccountInfo<'static>,
+        account_type: AccountType,
         _guard: Ref<'a, ()>,
     },
 }
 
 impl<'a> AccountRef<'a> {
+    pub(crate) fn new_mutable(
+        account: AccountInfoMut<'static>,
+        account_type: AccountType,
+        guard: RefMut<'a, ()>,
+    ) -> Self {
+        Self {
+            inner: AccountRefInner::Mutable {
+                account,
+                account_type,
+                _guard: guard,
+            },
+        }
+    }
+
+    pub(crate) fn new_immutable(
+        account: AccountInfo<'static>,
+        account_type: AccountType,
+        guard: Ref<'a, ()>,
+    ) -> Self {
+        Self {
+            inner: AccountRefInner::Immutable {
+                account,
+                account_type,
+                _guard: guard,
+            },
+        }
+    }
+
     /// Get read-only access to the account data.
     pub fn data(&self) -> &[u8] {
-        match self {
-            AccountRef::FeePayer { account, .. } => account.data,
-            AccountRef::Program { account, .. } => account.data,
-            AccountRef::ReadWrite { account, .. } => account.data,
-            AccountRef::ReadOnly { account, .. } => account.data,
+        match &self.inner {
+            AccountRefInner::Mutable { account, .. } => account.data,
+            AccountRefInner::Immutable { account, .. } => account.data,
         }
     }
 
     /// Get mutable access to account data (only for FeePayer and ReadWrite accounts).
     pub fn data_mut(&mut self) -> Option<&mut [u8]> {
-        match self {
-            AccountRef::FeePayer { account, .. } => Some(account.data),
-            AccountRef::ReadWrite { account, .. } => Some(account.data),
-            AccountRef::Program { .. } | AccountRef::ReadOnly { .. } => None,
+        match &mut self.inner {
+            AccountRefInner::Mutable { account, .. } => Some(account.data),
+            AccountRefInner::Immutable { .. } => None,
         }
     }
 
     /// Get the account owner pubkey.
     pub fn owner(&self) -> &Pubkey {
-        match self {
-            AccountRef::FeePayer { account, .. } => &account.meta.owner,
-            AccountRef::Program { account, .. } => &account.meta.owner,
-            AccountRef::ReadWrite { account, .. } => &account.meta.owner,
-            AccountRef::ReadOnly { account, .. } => &account.meta.owner,
+        match &self.inner {
+            AccountRefInner::Mutable { account, .. } => &account.meta.owner,
+            AccountRefInner::Immutable { account, .. } => &account.meta.owner,
         }
     }
 
     /// Get the account owner as raw bytes.
-    ///
-    /// Note: This uses unsafe code to access the internal representation of Pubkey.
     pub fn owner_bytes(&self) -> &[u8; 32] {
         let pubkey = self.owner();
         /* SAFETY: Pubkey is #[repr(C)] and contains a single [u8; 32] field */
@@ -191,49 +215,38 @@ impl<'a> AccountRef<'a> {
 
     /// Get the account balance.
     pub fn balance(&self) -> u64 {
-        match self {
-            AccountRef::FeePayer { account, .. } => account.meta.balance,
-            AccountRef::Program { account, .. } => account.meta.balance,
-            AccountRef::ReadWrite { account, .. } => account.meta.balance,
-            AccountRef::ReadOnly { account, .. } => account.meta.balance,
+        match &self.inner {
+            AccountRefInner::Mutable { account, .. } => account.meta.balance,
+            AccountRefInner::Immutable { account, .. } => account.meta.balance,
         }
     }
 
     /// Get the account data size.
     pub fn data_size(&self) -> u32 {
-        match self {
-            AccountRef::FeePayer { account, .. } => account.meta.data_sz,
-            AccountRef::Program { account, .. } => account.meta.data_sz,
-            AccountRef::ReadWrite { account, .. } => account.meta.data_sz,
-            AccountRef::ReadOnly { account, .. } => account.meta.data_sz,
+        match &self.inner {
+            AccountRefInner::Mutable { account, .. } => account.meta.data_sz,
+            AccountRefInner::Immutable { account, .. } => account.meta.data_sz,
         }
     }
 
     /// Get the account nonce.
     pub fn nonce(&self) -> u64 {
-        match self {
-            AccountRef::FeePayer { account, .. } => account.meta.nonce,
-            AccountRef::Program { account, .. } => account.meta.nonce,
-            AccountRef::ReadWrite { account, .. } => account.meta.nonce,
-            AccountRef::ReadOnly { account, .. } => account.meta.nonce,
+        match &self.inner {
+            AccountRefInner::Mutable { account, .. } => account.meta.nonce,
+            AccountRefInner::Immutable { account, .. } => account.meta.nonce,
         }
     }
 
     /// Check if this account can be modified.
     pub fn is_mutable(&self) -> bool {
-        matches!(
-            self,
-            AccountRef::FeePayer { .. } | AccountRef::ReadWrite { .. }
-        )
+        matches!(self.inner, AccountRefInner::Mutable { .. })
     }
 
     /// Get the account type.
     pub fn account_type(&self) -> AccountType {
-        match self {
-            AccountRef::FeePayer { .. } => AccountType::FeePayer,
-            AccountRef::Program { .. } => AccountType::Program,
-            AccountRef::ReadWrite { .. } => AccountType::ReadWrite,
-            AccountRef::ReadOnly { .. } => AccountType::ReadOnly,
+        match &self.inner {
+            AccountRefInner::Mutable { account_type, .. } => *account_type,
+            AccountRefInner::Immutable { account_type, .. } => *account_type,
         }
     }
 }
@@ -356,17 +369,11 @@ impl<const NUM_ACCOUNTS: usize> AccountManager<NUM_ACCOUNTS> {
                     .map_err(|err| AccountError::InfoAccessFailed { index, err })?
             };
 
-            match account_type {
-                AccountType::FeePayer => Ok(AccountRef::FeePayer {
-                    account: account_info,
-                    _guard: borrow_guard,
-                }),
-                AccountType::ReadWrite => Ok(AccountRef::ReadWrite {
-                    account: account_info,
-                    _guard: borrow_guard,
-                }),
-                _ => unreachable!(),
-            }
+            Ok(AccountRef::new_mutable(
+                account_info,
+                account_type,
+                borrow_guard,
+            ))
         } else {
             let borrow_guard = borrow_cell
                 .try_borrow()
@@ -377,17 +384,11 @@ impl<const NUM_ACCOUNTS: usize> AccountManager<NUM_ACCOUNTS> {
                     .map_err(|err| AccountError::InfoAccessFailed { index, err })?
             };
 
-            match account_type {
-                AccountType::Program => Ok(AccountRef::Program {
-                    account: account_info,
-                    _guard: borrow_guard,
-                }),
-                AccountType::ReadOnly => Ok(AccountRef::ReadOnly {
-                    account: account_info,
-                    _guard: borrow_guard,
-                }),
-                _ => unreachable!(),
-            }
+            Ok(AccountRef::new_immutable(
+                account_info,
+                account_type,
+                borrow_guard,
+            ))
         }
     }
 
@@ -417,10 +418,11 @@ impl<const NUM_ACCOUNTS: usize> AccountManager<NUM_ACCOUNTS> {
                 .map_err(|err| AccountError::InfoAccessFailed { index, err })?
         };
 
-        Ok(AccountRef::ReadOnly {
-            account: account_info,
-            _guard: borrow_guard,
-        })
+        Ok(AccountRef::new_immutable(
+            account_info,
+            AccountType::ReadOnly,
+            borrow_guard,
+        ))
     }
 
     /// Iterator over **all** accounts, in on-wire order (fee-payer first).
@@ -430,25 +432,12 @@ impl<const NUM_ACCOUNTS: usize> AccountManager<NUM_ACCOUNTS> {
     ///
     /// # Example
     ///
-    /// ```rust
-    /// # use your_crate::{parse_txn, AccountManager, AccountRef};
-    /// # let raw_bytes: &[u8] = unimplemented!();
-    /// let txn = parse_txn(raw_bytes)?;
-    ///
+    /// ```rust,ignore
     /// let mgr = AccountManager::<8>::from_txn(&txn)
     ///     .expect("not V1 or size mismatch");
     ///
     /// for (i, acc) in mgr.accounts_iter() {
-    ///     match acc {
-    ///         AccountRef::FeePayer { account, .. }  =>
-    ///             println!("{i}: fee-payer, balance: {}", account.meta.balance),
-    ///         AccountRef::Program { account, .. }       =>
-    ///             println!("{i}: program, balance: {}", account.meta.balance),
-    ///         AccountRef::ReadWrite { account, .. } =>
-    ///             println!("{i}: rw, balance: {}", account.meta.balance),
-    ///         AccountRef::ReadOnly { account, .. }      =>
-    ///             println!("{i}: ro, balance: {}", account.meta.balance),
-    ///     }
+    ///     println!("{i}: {:?}, balance: {}", acc.account_type(), acc.balance());
     /// }
     /// ```
     #[inline]
@@ -492,6 +481,13 @@ impl<const NUM_ACCOUNTS: usize> AccountManager<NUM_ACCOUNTS> {
         self.account_role(index)
             .map(|role| role.is_mutable())
             .unwrap_or(false)
+    }
+
+    /// Panic if the account at `idx` is currently borrowed.
+    fn assert_not_borrowed(&self, idx: u16, operation: &str) {
+        if self.is_borrowed(idx) {
+            panic!("Cannot {} account {} while it is borrowed", operation, idx);
+        }
     }
 
     /// Check if any accounts are currently borrowed.
@@ -559,7 +555,6 @@ impl<const NUM_ACCOUNTS: usize> AccountManager<NUM_ACCOUNTS> {
                     crate::program_utils::revert(INVOKE_AUTH_ERR_INVALID_ACCOUNT_INDEX);
                 }
             }
-
         }
 
         let auth_ptr = match auth {
@@ -593,10 +588,172 @@ impl<const NUM_ACCOUNTS: usize> AccountManager<NUM_ACCOUNTS> {
     /// # Panics
     /// Panics if the account is currently borrowed.
     pub fn account_resize(&self, account_idx: u16, new_size: u64) -> crate::syscall::SyscallCode {
-        if self.is_borrowed(account_idx) {
-            panic!("Cannot resize account {} while it is borrowed", account_idx);
-        }
+        self.assert_not_borrowed(account_idx, "resize");
         unsafe { crate::syscall::sys_account_resize(account_idx as u64, new_size) }
+    }
+
+    /// Mark an account's data segment as writable.
+    ///
+    /// # Panics
+    /// Panics if the account is currently borrowed.
+    pub fn set_account_data_writable(&self, account_idx: u16) -> crate::syscall::SyscallCode {
+        self.assert_not_borrowed(account_idx, "set writable");
+        unsafe { crate::syscall::sys_set_account_data_writable(account_idx as u64) }
+    }
+
+    /// Transfer balance between two accounts.
+    ///
+    /// # Panics
+    /// Panics if either account is currently borrowed.
+    pub fn account_transfer(
+        &self,
+        from_idx: u16,
+        to_idx: u16,
+        amount: u64,
+    ) -> crate::syscall::SyscallCode {
+        self.assert_not_borrowed(from_idx, "transfer from");
+        self.assert_not_borrowed(to_idx, "transfer to");
+        unsafe { crate::syscall::sys_account_transfer(from_idx as u64, to_idx as u64, amount) }
+    }
+
+    /// Create a new persistent account, make it writable, resize it, and return
+    /// a mutable reference. Combines account_create + set_account_data_writable +
+    /// account_resize + get into a single call.
+    ///
+    /// # Panics
+    /// Panics if the account is currently borrowed.
+    pub fn create_and_init(
+        &self,
+        account_idx: u16,
+        seed: &[u8; crate::syscall::SEED_SIZE],
+        proof: &crate::types::state_proof::StateProof<'_>,
+        data_size: u64,
+    ) -> Result<AccountRef<'_>, crate::syscall::SyscallCode> {
+        let e = self.account_create(account_idx, seed, proof);
+        if e != crate::syscall::SyscallCode::Success { return Err(e); }
+
+        let e = self.set_account_data_writable(account_idx);
+        if e != crate::syscall::SyscallCode::Success { return Err(e); }
+
+        let e = self.account_resize(account_idx, data_size);
+        if e != crate::syscall::SyscallCode::Success { return Err(e); }
+
+        self.get(account_idx).map_err(|_| crate::syscall::SyscallCode::InvalidAccountIndex)
+    }
+
+    /// Create a new persistent account.
+    ///
+    /// # Panics
+    /// Panics if the account is currently borrowed.
+    pub fn account_create(
+        &self,
+        account_idx: u16,
+        seed: &[u8; crate::syscall::SEED_SIZE],
+        proof: &crate::types::state_proof::StateProof<'_>,
+    ) -> crate::syscall::SyscallCode {
+        self.assert_not_borrowed(account_idx, "create");
+        unsafe {
+            crate::syscall::sys_account_create(
+                account_idx as u64,
+                seed,
+                proof.as_ptr(),
+                proof.footprint() as u64,
+            )
+        }
+    }
+
+    /// Create a new ephemeral account.
+    ///
+    /// # Panics
+    /// Panics if the account is currently borrowed.
+    pub fn account_create_ephemeral(
+        &self,
+        account_idx: u16,
+        seed: &[u8; crate::syscall::SEED_SIZE],
+    ) -> crate::syscall::SyscallCode {
+        self.assert_not_borrowed(account_idx, "create ephemeral");
+        unsafe { crate::syscall::sys_account_create_ephemeral(account_idx as u64, seed) }
+    }
+
+    /// Delete an account.
+    ///
+    /// # Panics
+    /// Panics if the account is currently borrowed.
+    pub fn account_delete(&self, account_idx: u16) -> crate::syscall::SyscallCode {
+        self.assert_not_borrowed(account_idx, "delete");
+        unsafe { crate::syscall::sys_account_delete(account_idx as u64) }
+    }
+
+    /// Compress an account into the state tree.
+    ///
+    /// # Panics
+    /// Panics if the account is currently borrowed.
+    pub fn account_compress(
+        &self,
+        account_idx: u16,
+        proof: &crate::types::state_proof::StateProof<'_>,
+    ) -> crate::syscall::SyscallCode {
+        self.assert_not_borrowed(account_idx, "compress");
+        unsafe {
+            crate::syscall::sys_account_compress(
+                account_idx as u64,
+                proof.as_ptr(),
+                proof.footprint() as u64,
+            )
+        }
+    }
+
+    /// Decompress an account from the state tree.
+    ///
+    /// # Panics
+    /// Panics if the account is currently borrowed.
+    pub fn account_decompress(
+        &self,
+        account_idx: u16,
+        meta: *const u8,
+        data: *const u8,
+        proof: &crate::types::state_proof::StateProof<'_>,
+    ) -> crate::syscall::SyscallCode {
+        self.assert_not_borrowed(account_idx, "decompress");
+        unsafe {
+            crate::syscall::sys_account_decompress(
+                account_idx as u64,
+                meta,
+                data,
+                proof.as_ptr(),
+                proof.footprint() as u64,
+            )
+        }
+    }
+
+    /// Set flags on an account.
+    ///
+    /// # Panics
+    /// Panics if the account is currently borrowed.
+    pub fn account_set_flags(&self, account_idx: u16, flags: u8) -> crate::syscall::SyscallCode {
+        self.assert_not_borrowed(account_idx, "set flags on");
+        unsafe { crate::syscall::sys_account_set_flags(account_idx, flags) }
+    }
+
+    /// Create a new externally-owned account (EOA).
+    ///
+    /// # Panics
+    /// Panics if the account is currently borrowed.
+    pub fn account_create_eoa(
+        &self,
+        account_idx: u16,
+        signature: &crate::types::signature::Signature,
+        proof: &crate::types::state_proof::StateProof<'_>,
+    ) -> crate::syscall::SyscallCode {
+        self.assert_not_borrowed(account_idx, "create EOA");
+        unsafe {
+            crate::syscall::sys_account_create_eoa(
+                account_idx as u64,
+                signature,
+                proof.as_ptr(),
+                proof.footprint() as u64,
+            )
+        }
     }
 }
 

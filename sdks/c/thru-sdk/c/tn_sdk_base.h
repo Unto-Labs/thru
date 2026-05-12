@@ -44,6 +44,14 @@ typedef unsigned long ulong;
 
 #define TSDK_FN_UNUSED __attribute__((unused))
 
+#ifndef FD_STATIC_ASSERT
+#ifdef __cplusplus
+#define FD_STATIC_ASSERT(c,err) static_assert(c, #err)
+#else
+#define FD_STATIC_ASSERT(c,err) _Static_assert(c, #err)
+#endif
+#endif
+
 TSDK_FN_CONST static inline int tsdk_ulong_is_aligned(ulong x, ulong a) {
   a--;
   return !(x & a);

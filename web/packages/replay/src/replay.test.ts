@@ -45,11 +45,16 @@ describe("block replay", () => {
   });
 
   test("drops overlapping live slots during switch", async () => {
+    /* liveYieldsSynchronously guarantees the LivePump buffer is fully populated
+       before backfill's first paginated listBlocks call resolves. Without it,
+       streamDelayMs:0 was a setTimeout(0) macrotask that could interleave with
+       backfill's setTimeout pages, making the discardedDuplicates count flaky
+       under CI event-loop pressure. */
     const chain = new SimulatedChain({
       historySlots: slotRange(200, 240),
       liveSlots: slotRange(230, 255),
       pageDelayMs: 3,
-      streamDelayMs: 0,
+      liveYieldsSynchronously: true,
     });
 
     const replay = createBlockReplay({

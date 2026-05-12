@@ -79,7 +79,7 @@ fn unit_contains_pc<'data>(
     pc: u64,
 ) -> gimli::Result<bool> {
     let mut entries = unit.entries();
-    if let Some((_, entry)) = entries.next_dfs()? {
+    if let Some(entry) = entries.next_dfs()? {
         if let Ok(mut ranges) = dwarf.die_ranges(unit, entry) {
             while let Ok(Some(range)) = ranges.next() {
                 if range.begin <= pc && pc < range.end {
@@ -110,8 +110,13 @@ fn collect_variables<'data>(
     // Track scope depth: positive depth means we're inside a scope that contains PC.
     // We use a stack to track whether each scope level contains the PC.
     let mut scope_stack: Vec<bool> = Vec::new();
+    let mut prev_depth: isize = 0;
 
-    while let Ok(Some((delta_depth, entry))) = entries.next_dfs() {
+    while let Ok(Some(entry)) = entries.next_dfs() {
+        let cur_depth = entry.depth();
+        let delta_depth = cur_depth - prev_depth;
+        prev_depth = cur_depth;
+
         // Adjust scope stack for depth changes
         if delta_depth < 0 {
             let pop_count = (-delta_depth) as usize;
@@ -137,8 +142,6 @@ fn collect_variables<'data>(
 
                 let name = entry
                     .attr_value(gimli::DW_AT_name)
-                    .ok()
-                    .flatten()
                     .and_then(|v| dwarf.attr_string(unit, v).ok())
                     .map(|s| Some(s.to_string_lossy().into_owned()))
                     .flatten();
@@ -147,14 +150,12 @@ fn collect_variables<'data>(
 
                 let type_offset = entry
                     .attr_value(gimli::DW_AT_type)
-                    .ok()
-                    .flatten()
                     .and_then(|v| match v {
                         gimli::AttributeValue::UnitRef(offset) => Some(offset),
                         _ => None,
                     });
 
-                let loc_attr = entry.attr_value(gimli::DW_AT_location).ok().flatten();
+                let loc_attr = entry.attr_value(gimli::DW_AT_location);
                 let Some(loc_attr) = loc_attr else {
                     // No location = optimized out
                     result.push((name, type_offset, make_empty_loc()));
@@ -213,7 +214,7 @@ fn compute_frame_base<'data>(
 ) -> Option<u64> {
     // Walk to find the subprogram containing PC
     let mut entries = unit.entries();
-    while let Ok(Some((_, entry))) = entries.next_dfs() {
+    while let Ok(Some(entry)) = entries.next_dfs() {
         if entry.tag() != gimli::DW_TAG_subprogram {
             continue;
         }
@@ -221,10 +222,7 @@ fn compute_frame_base<'data>(
             continue;
         }
 
-        let fb_attr = entry
-            .attr_value(gimli::DW_AT_frame_base)
-            .ok()
-            .flatten()?;
+        let fb_attr = entry.attr_value(gimli::DW_AT_frame_base)?;
 
         return eval_frame_base(dwarf, unit, debug_frame, &fb_attr, pc, registers);
     }
@@ -512,8 +510,6 @@ fn resolve_type_inner<'data>(
         gimli::DW_TAG_base_type | gimli::DW_TAG_structure_type | gimli::DW_TAG_union_type | gimli::DW_TAG_enumeration_type => {
             let name = entry
                 .attr_value(gimli::DW_AT_name)
-                .ok()
-                .flatten()
                 .and_then(|v| dwarf.attr_string(unit, v).ok())
                 .and_then(|s| Some(s.to_string_lossy().into_owned()));
             name.or_else(|| {
@@ -529,16 +525,12 @@ fn resolve_type_inner<'data>(
         gimli::DW_TAG_typedef => {
             entry
                 .attr_value(gimli::DW_AT_name)
-                .ok()
-                .flatten()
                 .and_then(|v| dwarf.attr_string(unit, v).ok())
                 .and_then(|s| Some(s.to_string_lossy().into_owned()))
         }
         gimli::DW_TAG_pointer_type => {
             let inner = entry
                 .attr_value(gimli::DW_AT_type)
-                .ok()
-                .flatten()
                 .and_then(|v| match v {
                     gimli::AttributeValue::UnitRef(off) => {
                         resolve_type_inner(dwarf, unit, off, depth + 1)
@@ -551,8 +543,6 @@ fn resolve_type_inner<'data>(
         gimli::DW_TAG_const_type => {
             let inner = entry
                 .attr_value(gimli::DW_AT_type)
-                .ok()
-                .flatten()
                 .and_then(|v| match v {
                     gimli::AttributeValue::UnitRef(off) => {
                         resolve_type_inner(dwarf, unit, off, depth + 1)
@@ -565,8 +555,6 @@ fn resolve_type_inner<'data>(
         gimli::DW_TAG_volatile_type => {
             let inner = entry
                 .attr_value(gimli::DW_AT_type)
-                .ok()
-                .flatten()
                 .and_then(|v| match v {
                     gimli::AttributeValue::UnitRef(off) => {
                         resolve_type_inner(dwarf, unit, off, depth + 1)
@@ -579,8 +567,6 @@ fn resolve_type_inner<'data>(
         gimli::DW_TAG_array_type => {
             let inner = entry
                 .attr_value(gimli::DW_AT_type)
-                .ok()
-                .flatten()
                 .and_then(|v| match v {
                     gimli::AttributeValue::UnitRef(off) => {
                         resolve_type_inner(dwarf, unit, off, depth + 1)
