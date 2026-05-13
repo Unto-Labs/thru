@@ -28,7 +28,7 @@ import {
 } from "../domain/transactions";
 import { normalizeAccountList, parseInstructionData } from "../domain/transactions/utils";
 import {
-    type ConsensusStatus,
+    ConsensusStatus,
     type VersionContext,
     AccountView,
     RawTransaction,
@@ -50,9 +50,11 @@ import {
 
 import { encodeSignature } from "@thru/helpers";
 import { Pubkey, type PubkeyInput, Signature, type SignatureInput } from "../domain/primitives";
+import type { TrackTransactionUpdate, TransactionExecutionResultData } from "../domain/transactions";
 import { getAccount } from "./accounts";
 import { getChainId } from "./chain";
 import { getBlockHeight } from "./height";
+import { trackTransaction } from "./streaming";
 
 export interface TransactionFeePayerConfig {
     publicKey: PubkeyInput;
@@ -245,6 +247,28 @@ export interface BatchSendTransactionsOptions {
     numRetries?: number;
 }
 
+export type BatchTrackStatus =
+    | "executed"
+    | "finalized_without_execution"
+    | "timeout"
+    | "not_accepted"
+    | "cancelled"
+    | "track_error";
+
+export interface BatchSendAndTrackOptions extends BatchSendTransactionsOptions {
+    trackTimeoutMs?: number;
+    signal?: AbortSignal;
+}
+
+export interface BatchSendAndTrackResult {
+    signature: string;
+    accepted: boolean;
+    trackStatus: BatchTrackStatus;
+    update?: TrackTransactionUpdate;
+    executionResult?: TransactionExecutionResultData;
+    error?: unknown;
+}
+
 export async function batchSendTransactions(
     ctx: ThruClientContext,
     transactions: (LocalTransaction | Uint8Array)[],
@@ -258,6 +282,65 @@ export async function batchSendTransactions(
         numRetries: options.numRetries ?? 0,
     });
     return ctx.command.batchSendTransactions(request, withCallOptions(ctx));
+}
+
+export async function batchSendAndTrack(
+    ctx: ThruClientContext,
+    transactions: (LocalTransaction | Uint8Array)[],
+    options: BatchSendAndTrackOptions = {},
+): Promise<BatchSendAndTrackResult[]> {
+    const rawTransactions = transactions.map((tx) =>
+        tx instanceof Uint8Array ? tx : tx.toWire(),
+    );
+    const signatures = rawTransactions.map(extractSignature);
+    const trackControllers = rawTransactions.map(() => new AbortController());
+    const abortStatuses = rawTransactions.map<BatchTrackStatus | undefined>(() => undefined);
+    const trackPromises = signatures.map((signature, index) =>
+        trackUntilExecution(ctx, signature, {
+            timeoutMs: options.trackTimeoutMs,
+            signal: trackControllers[index].signal,
+            getAbortStatus: () => abortStatuses[index],
+        }),
+    );
+
+    options.signal?.addEventListener(
+        "abort",
+        () => {
+            for (let index = 0; index < trackControllers.length; index += 1) {
+                abortStatuses[index] ??= "cancelled";
+                trackControllers[index].abort();
+            }
+        },
+        { once: true },
+    );
+
+    let response: BatchSendTransactionsResponse;
+    try {
+        response = await batchSendTransactions(ctx, rawTransactions, {
+            numRetries: options.numRetries ?? 0,
+        });
+    } catch (error) {
+        for (const controller of trackControllers) {
+            controller.abort();
+        }
+        await Promise.allSettled(trackPromises);
+        throw error;
+    }
+
+    const accepted = signatures.map((_, index) => response.accepted[index] === true);
+    for (let index = 0; index < accepted.length; index += 1) {
+        if (!accepted[index]) {
+            abortStatuses[index] = "not_accepted";
+            trackControllers[index].abort();
+        }
+    }
+
+    const tracked = await Promise.all(trackPromises);
+    return signatures.map((signature, index) => ({
+        signature,
+        accepted: accepted[index],
+        ...tracked[index],
+    }));
 }
 
 export interface SendAndTrackTxnOptions {
@@ -325,6 +408,78 @@ async function sendRawTransaction(ctx: ThruClientContext, rawTransaction: Uint8A
         throw new Error("No signature returned from sendTransaction");
     }
     return encodeSignature(response.signature.value);
+}
+
+function extractSignature(rawTransaction: Uint8Array): string {
+    if (rawTransaction.length < 64) {
+        throw new Error(`Raw transaction too short to contain a signature: ${rawTransaction.length} bytes`);
+    }
+
+    const signatureBytes = rawTransaction.slice(rawTransaction.length - 64);
+    return Signature.from(signatureBytes).toThruFmt();
+}
+
+async function trackUntilExecution(
+    ctx: ThruClientContext,
+    signature: string,
+    options: {
+        timeoutMs?: number;
+        signal?: AbortSignal;
+        getAbortStatus?: () => BatchTrackStatus | undefined;
+    } = {},
+): Promise<Omit<BatchSendAndTrackResult, "signature" | "accepted">> {
+    let finalizedSeen = false;
+    let latestUpdate: TrackTransactionUpdate | undefined;
+
+    try {
+        for await (const update of trackTransaction(ctx, signature, options)) {
+            latestUpdate = update;
+            if (update.statusCode === ConsensusStatus.FINALIZED || update.status === "finalized") {
+                finalizedSeen = true;
+            }
+
+            if (update.executionResult) {
+                return {
+                    trackStatus: "executed",
+                    update,
+                    executionResult: update.executionResult,
+                };
+            }
+        }
+    } catch (error) {
+        if (options.signal?.aborted) {
+            return {
+                trackStatus: options.getAbortStatus?.() ?? "cancelled",
+                error,
+            };
+        }
+
+        if (finalizedSeen) {
+            return {
+                trackStatus: "finalized_without_execution",
+                update: latestUpdate,
+                error,
+            };
+        }
+
+        return {
+            trackStatus: "track_error",
+            update: latestUpdate,
+            error,
+        };
+    }
+
+    if (finalizedSeen) {
+        return {
+            trackStatus: "finalized_without_execution",
+            update: latestUpdate,
+        };
+    }
+
+    return {
+        trackStatus: "timeout",
+        update: latestUpdate,
+    };
 }
 
 function createTransactionBuilder(): TransactionBuilder {

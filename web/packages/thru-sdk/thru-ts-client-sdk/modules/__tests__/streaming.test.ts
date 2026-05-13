@@ -405,6 +405,36 @@ describe("streaming", () => {
 
       expect(updates[0].executionResult?.consumedComputeUnits).toBe(10);
     });
+
+    it("should expose non-zero landed slots and hide zero slot sentinels", async () => {
+      const ctx = createMockContext();
+      const responses = [
+        create(TrackTransactionResponseSchema, {
+          consensusStatus: ConsensusStatus.INCLUDED,
+          slot: 0n,
+        }),
+        create(TrackTransactionResponseSchema, {
+          consensusStatus: ConsensusStatus.FINALIZED,
+          slot: 123n,
+        }),
+      ];
+
+      vi.spyOn(ctx.streaming, "trackTransaction").mockReturnValue(
+        (async function* () {
+          for (const response of responses) {
+            yield response;
+          }
+        })()
+      );
+
+      const updates = [];
+      for await (const update of trackTransaction(ctx, generateTestSignature())) {
+        updates.push(update);
+      }
+
+      expect(updates[0].slot).toBeUndefined();
+      expect(updates[1].slot).toBe(123n);
+    });
   });
 
   describe("stream helpers", () => {
@@ -439,4 +469,3 @@ describe("streaming", () => {
     });
   });
 });
-

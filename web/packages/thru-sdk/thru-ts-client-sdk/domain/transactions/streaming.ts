@@ -41,6 +41,7 @@ export interface TrackTransactionUpdate {
     signature?: Uint8Array;
     status: string;
     statusCode: ConsensusStatus;
+    slot?: bigint;
     executionResult?: ReturnType<typeof Transaction.executionResultFromProto>;
     transaction?: Transaction;
 }
@@ -55,6 +56,7 @@ export function toTrackTransactionUpdate(response: TrackTransactionResponse): Tr
         signature: signatureBytes,
         status: consensusStatusToString(response.consensusStatus),
         statusCode: response.consensusStatus,
+        slot: response.slot !== 0n ? response.slot : undefined,
         executionResult,
         transaction: undefined,
     };

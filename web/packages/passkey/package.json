@@ -46,7 +46,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@thru/passkey-manager": "workspace:*"
+    "@thru/passkey-manager": "workspace:*",
+    "@thru/thru-sdk": "workspace:*"
   },
   "peerDependencies": {
     "expo-secure-store": "*",

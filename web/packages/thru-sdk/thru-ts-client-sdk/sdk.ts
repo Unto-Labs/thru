@@ -11,6 +11,7 @@ export * as events from "./modules/events";
 export * as height from "./modules/height";
 export * as keys from "./modules/keys";
 export * as node from "./modules/node";
+export * as nonce from "./modules/nonce";
 export * as proofs from "./modules/proofs";
 export * as slots from "./modules/slots";
 export * as streaming from "./modules/streaming";
@@ -106,6 +107,20 @@ export type { GeneratedKeyPair } from "./modules/keys";
 export type { ListSlotMetricsOptions } from "./modules/slots";
 
 // ============================================================================
+// Type Exports - Nonce Module
+// ============================================================================
+export {
+  AccountNonceObserver,
+  FeePayerNonceManager
+} from "./modules/nonce";
+export type {
+  AccountNonceObserverOptions,
+  FeePayerNonceAllocation,
+  FeePayerNonceManagerOptions,
+  WaitForNonceOptions
+} from "./modules/nonce";
+
+// ============================================================================
 // Type Exports - Streaming Module
 // ============================================================================
 export type { StreamAccountUpdate } from "./domain/accounts";
@@ -138,7 +153,10 @@ export type {
   InstructionContext
 } from "./domain/transactions/types";
 export type {
+  BatchSendAndTrackOptions,
+  BatchSendAndTrackResult,
   BatchSendTransactionsOptions,
+  BatchTrackStatus,
   BuildAndSignTransactionOptions,
   BuildTransactionOptions,
   InstructionData,

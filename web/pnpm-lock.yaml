@@ -437,6 +437,9 @@ importers:
       '@thru/passkey-manager':
         specifier: workspace:*
         version: link:../passkey-manager
+      '@thru/thru-sdk':
+        specifier: workspace:*
+        version: link:../thru-sdk
       expo-secure-store:
         specifier: '*'
         version: 55.0.9(expo@55.0.9)

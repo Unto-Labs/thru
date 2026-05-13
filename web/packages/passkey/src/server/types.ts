@@ -1,4 +1,15 @@
 import type { AccountContext } from '@thru/passkey-manager';
+import type { TransactionHeaderConfig } from '@thru/thru-sdk';
+
+export type PasskeyTransactionHeaderOverrides = TransactionHeaderConfig;
+
+export interface BuiltPasskeyTransaction {
+  transaction: {
+    sign: (privateKey: Uint8Array) => Promise<unknown>;
+    toWire: () => Uint8Array;
+  };
+  rawTransaction: Uint8Array;
+}
 
 export interface ThruClient {
   accounts: {
@@ -23,7 +34,7 @@ export interface ThruClient {
         readWrite: string[];
         readOnly: string[];
       };
-      header: { fee: bigint };
+      header?: TransactionHeaderConfig;
     }) => Promise<{
       sign: (privateKey: Uint8Array) => Promise<unknown>;
       toWire: () => Uint8Array;

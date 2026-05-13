@@ -17,6 +17,7 @@ import {
 import * as chainModule from "../modules/chain";
 import * as keysModule from "../modules/keys";
 import * as nodeModule from "../modules/node";
+import * as nonceModule from "../modules/nonce";
 import * as proofsModule from "../modules/proofs";
 import * as slotsModule from "../modules/slots";
 import * as streamingModule from "../modules/streaming";
@@ -62,8 +63,17 @@ interface BoundTransactions {
     buildAndSign: BoundFunction<typeof transactionsModule.buildAndSignTransaction>;
     send: BoundFunction<typeof transactionsModule.sendTransaction>;
     batchSend: BoundFunction<typeof transactionsModule.batchSendTransactions>;
+    batchSendAndTrack: BoundFunction<typeof transactionsModule.batchSendAndTrack>;
     sendAndTrack: BoundFunction<typeof transactionsModule.sendAndTrackTxn>;
     track: BoundFunction<typeof streamingModule.trackTransaction>;
+}
+
+interface BoundNonce {
+    createObserver(account: PubkeyInput, options?: nonceModule.AccountNonceObserverOptions): nonceModule.AccountNonceObserver;
+    createFeePayerManager(
+        feePayer: PubkeyInput,
+        options?: nonceModule.FeePayerNonceManagerOptions,
+    ): nonceModule.FeePayerNonceManager;
 }
 
 interface BoundEvents {
@@ -132,6 +142,7 @@ export interface Thru {
     keys: BoundKeys;
     version: BoundVersion;
     consensus: BoundConsensus;
+    nonce: BoundNonce;
     node: BoundNode;
     chain: BoundChain;
     helpers: Helpers;
@@ -166,8 +177,13 @@ export function createBoundThruClient(ctx: ThruClientContext): Thru {
             buildAndSign: bind(ctx, transactionsModule.buildAndSignTransaction),
             send: bind(ctx, transactionsModule.sendTransaction),
             batchSend: bind(ctx, transactionsModule.batchSendTransactions),
+            batchSendAndTrack: bind(ctx, transactionsModule.batchSendAndTrack),
             sendAndTrack: bind(ctx, transactionsModule.sendAndTrackTxn),
             track: bind(ctx, streamingModule.trackTransaction),
+        },
+        nonce: {
+            createObserver: (account, options) => new nonceModule.AccountNonceObserver(ctx, account, options),
+            createFeePayerManager: (feePayer, options) => new nonceModule.FeePayerNonceManager(ctx, feePayer, options),
         },
         helpers: {
             createSignature: Signature.from,

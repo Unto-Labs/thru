@@ -16,9 +16,10 @@ import { TransactionStatusSnapshot } from "../../domain/transactions";
 import { Transaction } from "../../domain/transactions/Transaction";
 import type { InstructionContext } from "../../domain/transactions/types";
 import { ConsensusStatus } from "@thru/proto";
-import { TransactionSchema, TransactionView } from "@thru/proto";
+import { TrackTransactionResponseSchema, TransactionExecutionResultSchema, TransactionSchema, TransactionView } from "@thru/proto";
 import { TransactionStatusSchema } from "@thru/proto";
 import {
+    batchSendAndTrack,
     batchSendTransactions,
     buildAndSignTransaction,
     buildTransaction,
@@ -776,5 +777,111 @@ describe("transactions", () => {
       expect(callArgs.numRetries).toBe(0);
     });
   });
-});
 
+  describe("batchSendAndTrack", () => {
+    it("subscribes to tracking before batch submission and returns ordered execution results", async () => {
+      const ctx = createMockContext();
+      const signature = generateTestSignature(0x77);
+      const rawTransaction = new Uint8Array(80);
+      rawTransaction.set(signature, rawTransaction.length - signature.length);
+      const events: string[] = [];
+
+      vi.spyOn(ctx.streaming, "trackTransaction").mockImplementation((request: any) => {
+        events.push("track");
+        return (async function* () {
+          yield create(TrackTransactionResponseSchema, {
+            signature: request.signature,
+            consensusStatus: ConsensusStatus.FINALIZED,
+            executionResult: create(TransactionExecutionResultSchema, {
+              vmError: 0,
+              executionResult: 0n,
+              userErrorCode: 0n,
+            }),
+          });
+        })() as AsyncIterable<any>;
+      });
+
+      vi.spyOn(ctx.command, "batchSendTransactions").mockImplementation(async () => {
+        events.push("send");
+        return {
+          signatures: [{ value: signature }],
+          accepted: [true],
+        } as any;
+      });
+
+      const [result] = await batchSendAndTrack(ctx, [rawTransaction]);
+
+      expect(events).toEqual(["track", "send"]);
+      expect(result.accepted).toBe(true);
+      expect(result.trackStatus).toBe("executed");
+      expect(result.executionResult?.userErrorCode).toBe(0n);
+    });
+
+    it("marks rejected batch items as not accepted", async () => {
+      const ctx = createMockContext();
+      const signature = generateTestSignature(0x88);
+      const rawTransaction = new Uint8Array(80);
+      rawTransaction.set(signature, rawTransaction.length - signature.length);
+
+      vi.spyOn(ctx.streaming, "trackTransaction").mockImplementation((_request: any, options: any) =>
+        (async function* () {
+          await new Promise((_resolve, reject) => {
+            options?.signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+          });
+        })() as AsyncIterable<any>
+      );
+      vi.spyOn(ctx.command, "batchSendTransactions").mockResolvedValue({
+        signatures: [{ value: signature }],
+        accepted: [false],
+      } as any);
+
+      const [result] = await batchSendAndTrack(ctx, [rawTransaction]);
+
+      expect(result.accepted).toBe(false);
+      expect(result.trackStatus).toBe("not_accepted");
+    });
+
+    it("reports caller cancellation distinctly from batch rejection", async () => {
+      const ctx = createMockContext();
+      const signature = generateTestSignature(0x99);
+      const rawTransaction = new Uint8Array(80);
+      rawTransaction.set(signature, rawTransaction.length - signature.length);
+      const abortController = new AbortController();
+
+      vi.spyOn(ctx.streaming, "trackTransaction").mockImplementation((_request: any, options: any) =>
+        (async function* () {
+          await new Promise((_resolve, reject) => {
+            options?.signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+          });
+        })() as AsyncIterable<any>
+      );
+      vi.spyOn(ctx.command, "batchSendTransactions").mockImplementation(async () => {
+        queueMicrotask(() => abortController.abort());
+        return {
+          signatures: [{ value: signature }],
+          accepted: [true],
+        } as any;
+      });
+
+      const [result] = await batchSendAndTrack(ctx, [rawTransaction], {
+        signal: abortController.signal,
+      });
+
+      expect(result.accepted).toBe(true);
+      expect(result.trackStatus).toBe("cancelled");
+    });
+
+    it("throws an early error for raw transactions too short to contain a signature", async () => {
+      const ctx = createMockContext();
+      const trackSpy = vi.spyOn(ctx.streaming, "trackTransaction");
+      const sendSpy = vi.spyOn(ctx.command, "batchSendTransactions");
+
+      await expect(batchSendAndTrack(ctx, [new Uint8Array(12)]))
+        .rejects
+        .toThrow(/too short to contain a signature/i);
+
+      expect(trackSpy).not.toHaveBeenCalled();
+      expect(sendSpy).not.toHaveBeenCalled();
+    });
+  });
+});
