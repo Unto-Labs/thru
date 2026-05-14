@@ -109,7 +109,7 @@ pub enum Commands {
         value: u64,
     },
 
-    /// Program upload and management commands
+    /// Uploader account commands for arbitrary file payloads
     #[command(name = "uploader")]
     Uploader {
         #[command(subcommand)]
@@ -746,7 +746,7 @@ pub enum AbiIrFormat {
 /// Uploader-related subcommands
 #[derive(Subcommand)]
 pub enum UploaderCommands {
-    /// Upload a program to the blockchain
+    /// Upload a file payload through uploader accounts
     Upload {
         /// Custom uploader program public key (optional)
         #[arg(long)]
@@ -759,11 +759,12 @@ pub enum UploaderCommands {
         /// Seed for account derivation
         seed: String,
 
-        /// Path to the program binary file
+        /// Path to the file payload to upload
+        #[arg(value_name = "FILE")]
         program_file: String,
     },
 
-    /// Clean up program accounts
+    /// Clean up uploader accounts
     Cleanup {
         /// Custom uploader program public key (optional)
         #[arg(long)]

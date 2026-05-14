@@ -185,7 +185,7 @@ describe("defineEventStream", () => {
         id: "event-123",
         slot: 1000n,
         data: "test data",
-      });
+      } as any);
 
       expect(result).toEqual({
         id: "event-123",
@@ -207,8 +207,8 @@ describe("defineEventStream", () => {
         parse: selectiveParse,
       });
 
-      expect(stream.parse({ id: "1", slot: 1n, skip: true })).toBeNull();
-      expect(stream.parse({ id: "2", slot: 2n })).not.toBeNull();
+      expect(stream.parse({ id: "1", slot: 1n, skip: true } as any)).toBeNull();
+      expect(stream.parse({ id: "2", slot: 2n } as any)).not.toBeNull();
     });
   });
 

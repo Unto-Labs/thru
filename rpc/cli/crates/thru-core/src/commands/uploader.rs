@@ -1,4 +1,4 @@
-//! Program upload and cleanup command implementations
+//! Uploader payload upload and cleanup command implementations
 
 use std::fs;
 use std::path::Path;
@@ -15,7 +15,7 @@ use crate::output;
 use crate::utils::format_vm_error;
 use thru_client::{Client as RpcClient, VersionContext};
 
-/// Handle program subcommands
+/// Handle uploader subcommands
 pub async fn handle_uploader_command(
     config: &Config,
     subcommand: UploaderCommands,
@@ -378,7 +378,7 @@ impl UploaderManager {
     ///
     /// # Arguments
     /// * `upload_state` - The existing upload state
-    /// * `file_hash` - The hash of the current program file
+    /// * `file_hash` - The hash of the current file payload
     ///
     /// # Returns
     /// - `Ok(true)` - If resume conditions are valid
@@ -412,7 +412,7 @@ impl UploaderManager {
     ///
     /// # Arguments
     /// * `buffer_data` - The buffer account data
-    /// * `program_data` - The program file data
+    /// * `program_data` - The file payload data
     /// * `chunk_size` - The chunk size used for upload
     ///
     /// # Returns
@@ -429,10 +429,10 @@ impl UploaderManager {
             return Ok(ResumeAction::StartFresh);
         }
 
-        // Handle case where buffer is larger than program (shouldn't happen)
+        // Handle case where buffer is larger than the current payload (shouldn't happen)
         if buffer_data.len() > program_data.len() {
             return Err(CliError::ResumeValidation(
-                "Buffer data is larger than program file".to_string(),
+                "Buffer data is larger than file payload".to_string(),
             ));
         }
 
@@ -450,7 +450,7 @@ impl UploaderManager {
 
         // Check if all uploaded bytes match
         if resume_byte_position == buffer_data.len() {
-            // All buffer data matches program file
+            // All buffer data matches the file payload
             if buffer_data.len() == program_data.len() {
                 // Complete file uploaded - check if finalization needed
                 return Ok(ResumeAction::FinalizeOnly);
@@ -810,7 +810,7 @@ impl UploaderManager {
         chunk_size: usize,
         json_format: bool,
     ) -> Result<UploadSession, CliError> {
-        // Calculate program hash
+        // Calculate payload hash
         let program_hash = crypto::calculate_sha256(program_data);
 
         // Derive account addresses
@@ -1089,7 +1089,7 @@ impl UploaderManager {
         let start_slot = self.get_current_slot().await?;
 
         if !json_format {
-            output::print_info("Cleaning up program accounts...");
+            output::print_info("Cleaning up uploader accounts...");
         }
 
         // Create DESTROY transaction
@@ -1126,7 +1126,7 @@ impl UploaderManager {
     }
 }
 
-/// Upload a program to the blockchain
+/// Upload a file payload through uploader accounts
 async fn upload_program(
     config: &Config,
     uploader_pubkey: Option<&str>,
@@ -1135,10 +1135,10 @@ async fn upload_program(
     chunk_size: usize,
     json_format: bool,
 ) -> Result<(), CliError> {
-    // Validate program file exists
+    // Validate upload file exists
     let program_path = Path::new(program_file);
     if !program_path.exists() {
-        let error_msg = format!("Program file not found: {}", program_file);
+        let error_msg = format!("Upload file not found: {}", program_file);
         if json_format {
             let error_response = serde_json::json!({
                 "error": error_msg
@@ -1150,23 +1150,23 @@ async fn upload_program(
         return Err(CliError::Generic { message: error_msg });
     }
 
-    // Read program data
+    // Read file payload
     let program_data = fs::read(program_path).map_err(|e| CliError::Io(e))?;
 
     if !json_format {
         output::print_info(&format!(
-            "Reading program file: {} ({} bytes)",
+            "Reading upload file: {} ({} bytes)",
             program_file,
             program_data.len()
         ));
     }
 
-    // Calculate program hash
+    // Calculate payload hash
     let program_hash = crypto::calculate_sha256(&program_data);
 
     if !json_format {
         output::print_info(&format!(
-            "Program hash: {}",
+            "Payload hash: {}",
             crypto::bytes_to_hex(&program_hash)
         ));
     }
@@ -1221,7 +1221,7 @@ async fn upload_program(
             output::print_output(response, json_format);
 
             if !json_format {
-                output::print_success("Program upload completed successfully");
+                output::print_success("Upload completed successfully");
             }
 
             Ok(())
@@ -1247,7 +1247,7 @@ async fn upload_program(
     }
 }
 
-/// Clean up program accounts
+/// Clean up uploader accounts
 async fn cleanup_program(
     config: &Config,
     uploader_pubkey: Option<&str>,
@@ -1281,13 +1281,13 @@ async fn cleanup_program(
         Ok(()) => {
             let response = output::create_program_cleanup_response(
                 "success",
-                "Program accounts cleaned up successfully",
+                "Uploader accounts cleaned up successfully",
             );
 
             output::print_output(response, json_format);
 
             if !json_format {
-                output::print_success("Program cleanup completed successfully");
+                output::print_success("Uploader cleanup completed successfully");
             }
 
             Ok(())
@@ -1523,7 +1523,7 @@ mod tests {
     // use std::io::Write;
 
     #[tokio::test]
-    async fn test_upload_program_file_not_found() {
+    async fn test_upload_file_not_found() {
         let config = Config::default();
         let result = upload_program(
             &config,

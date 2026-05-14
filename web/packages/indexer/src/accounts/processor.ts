@@ -135,7 +135,6 @@ export async function runAccountStreamProcessor(
           "info",
           `Backfill complete. Highest slot: ${highestSlot}, accounts processed: ${stats.accountsProcessed}`
         );
-        lastProcessedSlot = highestSlot;
       },
     });
 
@@ -170,6 +169,9 @@ export async function runAccountStreamProcessor(
             await db.delete(stream.table).where(eq(table[idField], idValue));
             stats.accountsDeleted++;
             log("info", `Deleted row for account ${account.addressHex}`);
+            if (account.slot > lastProcessedSlot) {
+              lastProcessedSlot = account.slot;
+            }
           } catch (err) {
             log("error", `Failed to delete account ${account.addressHex}: ${err}`);
           }
@@ -183,6 +185,9 @@ export async function runAccountStreamProcessor(
             "debug",
             `Skipped account ${account.addressHex} - parser returned null (dataLen=${account.data.length})`
           );
+          if (account.slot > lastProcessedSlot) {
+            lastProcessedSlot = account.slot;
+          }
           continue;
         }
 
@@ -197,19 +202,24 @@ export async function runAccountStreamProcessor(
 
         // Slot-aware upsert: only update if incoming slot >= existing slot
 
+        let upserted = false;
         try {
-          await db
+          const upsertedRows = await db
             .insert(stream.table)
             .values(parsed)
             .onConflictDoUpdate({
               target: table[idField],
               set: parsed,
               where: sql`${table.slot} <= ${(parsed as any).slot}`,
-            });
+            })
+            .returning();
 
-          stats.accountsUpdated++;
+          upserted = upsertedRows.length > 0;
+          if (upserted) {
+            stats.accountsUpdated++;
+          }
 
-          if (stats.accountsUpdated <= 3) {
+          if (upserted && stats.accountsUpdated <= 3) {
             log(
               "info",
               `Successfully inserted account ${stats.accountsUpdated}`
@@ -223,7 +233,7 @@ export async function runAccountStreamProcessor(
         }
 
         // Track highest slot for checkpoint
-        if (account.slot > lastProcessedSlot) {
+        if (upserted && account.slot > lastProcessedSlot) {
           lastProcessedSlot = account.slot;
         }
 
@@ -235,13 +245,21 @@ export async function runAccountStreamProcessor(
           );
         }
       } else if (event.type === "blockFinished") {
-        // Persist checkpoint at block boundaries
+        // Persist at block boundaries, but do not advance the checkpoint to
+        // the block slot unless an account update was actually handled.
         const slot = event.block.slot;
-        if (slot > lastProcessedSlot) {
-          lastProcessedSlot = slot;
+        if (lastProcessedSlot > 0n) {
+          await updateCheckpoint(db, checkpointName, lastProcessedSlot, null);
+          log(
+            "debug",
+            `Block finished: slot ${slot}, checkpoint saved at account slot ${lastProcessedSlot}`
+          );
+        } else {
+          log(
+            "debug",
+            `Block finished: slot ${slot}, no checkpoint yet (no accounts handled)`
+          );
         }
-        await updateCheckpoint(db, checkpointName, lastProcessedSlot, null);
-        log("debug", `Block finished: slot ${slot}, checkpoint saved`);
       }
     }
 

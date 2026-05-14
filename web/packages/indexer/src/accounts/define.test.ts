@@ -239,7 +239,7 @@ describe("defineAccountStream", () => {
         address: "abc123",
         slot: 1000n,
         data: "test data",
-      });
+      } as any);
 
       expect(result).toEqual({
         address: "abc123",
@@ -261,8 +261,8 @@ describe("defineAccountStream", () => {
         parse: selectiveParse,
       });
 
-      expect(stream.parse({ address: "1", slot: 1n, skip: true })).toBeNull();
-      expect(stream.parse({ address: "2", slot: 2n })).not.toBeNull();
+      expect(stream.parse({ address: "1", slot: 1n, skip: true } as any)).toBeNull();
+      expect(stream.parse({ address: "2", slot: 2n } as any)).not.toBeNull();
     });
   });
 

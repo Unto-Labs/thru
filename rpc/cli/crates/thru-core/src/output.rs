@@ -354,10 +354,10 @@ fn print_balance_info(data: &Value) {
     }
 }
 
-/// Print program upload information
+/// Print upload information
 fn print_program_upload_info(data: &Value) {
     if let Value::Object(upload_data) = data {
-        println!("{}", "Program Upload".bold().green());
+        println!("{}", "Upload".bold().green());
 
         if let Some(status) = upload_data.get("status") {
             let status_str = format_value(status);
@@ -385,7 +385,7 @@ fn print_program_upload_info(data: &Value) {
         if let Some(program_size) = upload_data.get("program_size") {
             println!(
                 "  {}: {} bytes",
-                "Program Size".cyan(),
+                "Payload Size".cyan(),
                 format_value(program_size)
             );
         }
@@ -408,10 +408,10 @@ fn print_program_upload_info(data: &Value) {
     }
 }
 
-/// Print program cleanup information
+/// Print uploader cleanup information
 fn print_program_cleanup_info(data: &Value) {
     if let Value::Object(cleanup_data) = data {
-        println!("{}", "Program Cleanup".bold().green());
+        println!("{}", "Uploader Cleanup".bold().green());
 
         if let Some(status) = cleanup_data.get("status") {
             let status_str = format_value(status);
@@ -690,7 +690,9 @@ pub fn create_balance_response(pubkey: &str, balance: u64) -> Value {
     })
 }
 
-/// Create a JSON response for program upload
+/// Create a JSON response for uploader upload.
+///
+/// The `program_upload` and `program_size` keys are kept for compatibility.
 pub fn create_program_upload_response(
     status: &str,
     total_transactions: usize,
@@ -719,7 +721,9 @@ pub fn create_program_upload_response(
     response
 }
 
-/// Create a JSON response for program cleanup
+/// Create a JSON response for uploader cleanup.
+///
+/// The `program_cleanup` key is kept for compatibility.
 pub fn create_program_cleanup_response(status: &str, message: &str) -> Value {
     json!({
         "program_cleanup": {

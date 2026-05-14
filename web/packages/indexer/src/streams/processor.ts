@@ -153,7 +153,11 @@ export async function runEventStreamProcessor(
 
   // Get checkpoint for this stream
   const checkpoint = await getCheckpoint(db, stream.name);
-  const startSlot = checkpoint ? checkpoint.slot + 1n : defaultStartSlot;
+  // Resume from the checkpoint slot rather than slot + 1. Checkpoints store
+  // lastEventId, but this processor only filters by slot; replaying the
+  // checkpoint slot and relying on idempotent inserts avoids skipping
+  // unprocessed events from the same slot after partial commits.
+  const startSlot = checkpoint ? checkpoint.slot : defaultStartSlot;
 
   log(
     "info",
@@ -194,6 +198,10 @@ export async function runEventStreamProcessor(
 
   // Commit a batch to the database
   const commitBatch = async (batch: StreamBatch): Promise<void> => {
+    const lastSeenEvent = (batch.events as Record<string, unknown>[])[
+      batch.events.length - 1
+    ] as { id?: string } | undefined;
+    const lastSeenEventId = lastSeenEvent?.id ?? null;
     let eventsToCommit = batch.events as Record<string, unknown>[];
 
     // Apply filterBatch hook if defined
@@ -208,6 +216,8 @@ export async function runEventStreamProcessor(
             "debug",
             `All ${batch.events.length} events filtered out at slot ${batch.slot}`
           );
+          await updateCheckpoint(db, stream.name, batch.slot, lastSeenEventId);
+          stats.lastSlot = batch.slot;
           return;
         }
         if (eventsToCommit.length < batch.events.length) {
@@ -226,22 +236,25 @@ export async function runEventStreamProcessor(
       }
     }
 
+    const lastEventToCommit = eventsToCommit[eventsToCommit.length - 1] as
+      | { id?: string }
+      | undefined;
+    const lastEventToCommitId = lastEventToCommit?.id ?? null;
+    let committedEvents = eventsToCommit;
     await db.transaction(async (tx) => {
       // Insert events (skip duplicates)
-      await tx
+      committedEvents = (await tx
         .insert(stream.table as PgTable)
         .values(eventsToCommit)
-        .onConflictDoNothing();
+        .onConflictDoNothing()
+        .returning()) as Record<string, unknown>[];
 
       // Update checkpoint
-      const lastEvent = eventsToCommit[eventsToCommit.length - 1] as {
-        id: string;
-      };
       await updateCheckpoint(
         tx as unknown as DatabaseClient,
         stream.name,
         batch.slot,
-        lastEvent.id
+        lastEventToCommitId
       );
     });
 
@@ -249,9 +262,9 @@ export async function runEventStreamProcessor(
     stats.lastSlot = batch.slot;
 
     // Call onCommit hook if defined
-    if (stream.onCommit) {
+    if (stream.onCommit && committedEvents.length > 0) {
       try {
-        await stream.onCommit({ ...batch, events: eventsToCommit }, { db });
+        await stream.onCommit({ ...batch, events: committedEvents }, { db });
       } catch (hookErr) {
         log(
           "error",

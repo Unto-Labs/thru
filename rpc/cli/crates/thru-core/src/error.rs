@@ -29,12 +29,12 @@ pub enum CliError {
     #[error("Crypto error: {0}")]
     Crypto(String),
 
-    /// Program upload errors
-    #[error("Program upload error: {0}")]
+    /// Upload errors
+    #[error("Upload error: {0}")]
     ProgramUpload(String),
 
-    /// Program cleanup errors
-    #[error("Program cleanup error: {0}")]
+    /// Uploader cleanup errors
+    #[error("Uploader cleanup error: {0}")]
     ProgramCleanup(String),
 
     /// Transaction submission errors
