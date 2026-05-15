@@ -203,6 +203,30 @@ run_cli_expect_fail() {
   fi
 }
 
+run_cli_expect_fail_capture() {
+  local desc="$1"
+  shift
+  log "CLI (expect fail): $desc -> thru-cli $*"
+  local tmp
+  tmp="$(mktemp)"
+  if with_cli_env "$THRU_CLI_BIN" "$@" >"$tmp" 2>&1; then
+    local out
+    out=$(<"$tmp")
+    rm -f "$tmp"
+    log "Unexpected success:"
+    log "$out"
+    return 1
+  else
+    local status=$?
+    local out
+    out=$(<"$tmp")
+    rm -f "$tmp"
+    log "Expected failure observed (exit $status)"
+    log "$out"
+    printf '%s' "$out"
+  fi
+}
+
 wait_for_consensus_ready() {
   log_section "Waiting for node consensus readiness"
 
@@ -514,6 +538,14 @@ scenario_keys() {
   run_cli_json "keys add with overwrite" keys add --overwrite cli-test "$overwrite_value" >/dev/null
 
   run_cli_json "keys remove cli-test" keys rm cli-test >/dev/null
+
+  local rm_default_output
+  rm_default_output=$(run_cli_expect_fail_capture "keys remove default without force" keys rm default)
+  assert_contains "$rm_default_output" "Cannot remove the 'default' key because the CLI requires it."
+
+  run_cli_json "keys force remove default" keys rm --force default >/dev/null
+  run_cli_json "keys list after forced default removal" keys list >/dev/null
+  run_cli_json "restore default key" keys add --overwrite default "0000000000000000000000000000000000000000000000000000000000000000" >/dev/null
 }
 
 scenario_accounts() {

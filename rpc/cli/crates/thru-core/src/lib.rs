@@ -35,7 +35,11 @@ pub async fn run() -> anyhow::Result<()> {
     }
 
     // Load configuration
-    let mut config = Config::load().await?;
+    let mut config = if matches!(&cli.command, Commands::Keys { .. }) {
+        Config::load_for_key_management().await?
+    } else {
+        Config::load().await?
+    };
 
     // Apply global network overrides
     if let Some(ref url) = cli.url {

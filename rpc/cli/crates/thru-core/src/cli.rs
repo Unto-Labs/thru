@@ -823,6 +823,10 @@ pub enum KeysCommands {
     /// Remove a key
     #[command(name = "rm")]
     Remove {
+        /// Allow removing the default key
+        #[arg(long)]
+        force: bool,
+
         /// Key name to remove
         name: String,
     },

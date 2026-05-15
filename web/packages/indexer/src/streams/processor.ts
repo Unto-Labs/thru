@@ -179,6 +179,9 @@ export async function runEventStreamProcessor(
   const replay = createEventReplay({
     clientFactory,
     startSlot,
+    resumeAfter: checkpoint?.eventId
+      ? { slot: checkpoint.slot, eventId: checkpoint.eventId }
+      : undefined,
     safetyMargin: BigInt(safetyMargin),
     pageSize,
     filter: stream.getFilter(),

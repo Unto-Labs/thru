@@ -68,7 +68,34 @@ describe("runEventStreamProcessor", () => {
     );
 
     expect(replayMocks.createEventReplay).toHaveBeenCalledWith(
-      expect.objectContaining({ startSlot: 42n })
+      expect.objectContaining({
+        startSlot: 42n,
+        resumeAfter: { slot: 42n, eventId: "event-1" },
+      })
+    );
+  });
+
+  it("falls back to replaying the checkpoint slot when no checkpoint event id exists", async () => {
+    checkpointMocks.getCheckpoint.mockResolvedValue({
+      slot: 42n,
+      eventId: null,
+    });
+
+    await runEventStreamProcessor(
+      createStream(),
+      {
+        clientFactory: vi.fn(),
+        db: { transaction: vi.fn() } as any,
+        defaultStartSlot: 0n,
+        logLevel: "error",
+      }
+    );
+
+    expect(replayMocks.createEventReplay).toHaveBeenCalledWith(
+      expect.objectContaining({
+        startSlot: 42n,
+        resumeAfter: undefined,
+      })
     );
   });
 

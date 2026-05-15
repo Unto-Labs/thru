@@ -1,6 +1,7 @@
 import { create } from "@bufbuild/protobuf";
 import {
   type Filter,
+  FilterSchema,
   type PageRequest,
   PageRequestSchema,
   type Event,
@@ -23,6 +24,11 @@ export interface EventReplayOptions {
   /** Factory to create fresh clients on reconnection. Enables robust reconnection. */
   clientFactory?: () => EventSource;
   startSlot: Slot;
+  /** Last fully processed event. Allows backfill to resume within a slot. */
+  resumeAfter?: {
+    slot: Slot;
+    eventId: string;
+  };
   safetyMargin?: bigint;
   pageSize?: number;
   filter?: Filter;
@@ -53,7 +59,7 @@ export function createEventReplay(options: EventReplayOptions): ReplayStream<Eve
       pageToken: cursor,
     });
 
-    const baseFilter = slotLiteralFilter("event.slot", startSlot);
+    const baseFilter = eventBackfillFilter(startSlot, options.resumeAfter);
     const mergedFilter = combineFilters(baseFilter, options.filter);
     const response = await client.listEvents(
       create(ListEventsRequestSchema, {
@@ -66,13 +72,19 @@ export function createEventReplay(options: EventReplayOptions): ReplayStream<Eve
   };
 
   const createSubscribeLive = (client: EventSource) => (startSlot: Slot): AsyncIterable<Event> => {
-    const mergedFilter = combineFilters(slotLiteralFilter("event.slot", startSlot), options.filter);
+    const mergedFilter = combineFilters(
+      slotLiteralFilter("event.slot", startSlot),
+      options.filter
+    );
     const request = create(StreamEventsRequestSchema, {
       filter: mergedFilter,
     });
     return mapAsyncIterable(
       client.streamEvents(request),
-      (resp: StreamEventsResponse) => streamResponseToEvent(resp),
+      (resp: StreamEventsResponse) => {
+        const event = streamResponseToEvent(resp);
+        return shouldEmitLiveEvent(event, startSlot, options.resumeAfter) ? event : null;
+      },
     );
   };
 
@@ -116,4 +128,80 @@ function eventKey(event: Event): string {
   if (event.eventId) return event.eventId;
   const slotPart = event.slot?.toString() ?? "0";
   return `${slotPart}:${event.callIdx ?? 0}`;
+}
+
+interface ParsedEventId {
+  slot: Slot;
+  blockOffset: bigint;
+  callIdx: bigint;
+}
+
+function eventBackfillFilter(
+  startSlot: Slot,
+  resumeAfter?: EventReplayOptions["resumeAfter"]
+): Filter {
+  const boundary = parseEventId(resumeAfter);
+  if (!boundary || startSlot > boundary.slot) {
+    return slotLiteralFilter("event.slot", startSlot);
+  }
+
+  return create(FilterSchema, {
+    expression:
+      `event.slot > uint(${boundary.slot.toString()}) || ` +
+      `(event.slot == uint(${boundary.slot.toString()}) && ` +
+      `(event.block_offset > uint(${boundary.blockOffset.toString()}) || ` +
+      `(event.block_offset == uint(${boundary.blockOffset.toString()}) && ` +
+      `event.call_idx > uint(${boundary.callIdx.toString()}))))`,
+  });
+}
+
+function parseEventId(
+  resumeAfter?: EventReplayOptions["resumeAfter"]
+): ParsedEventId | null {
+  if (!resumeAfter?.eventId) return null;
+  return parseCanonicalEventId(resumeAfter.eventId, resumeAfter.slot);
+}
+
+function parseCanonicalEventId(
+  eventId: string | undefined,
+  expectedSlot: Slot
+): ParsedEventId | null {
+  if (!eventId) return null;
+
+  const match = /^ts(\d+)_(\d+)_(\d+)$/.exec(eventId);
+  if (!match) return null;
+
+  const [slotPart, blockOffsetPart, callIdxPart] = match.slice(1);
+  const slot = BigInt(slotPart);
+  if (slot !== expectedSlot) return null;
+
+  return {
+    slot,
+    blockOffset: BigInt(blockOffsetPart),
+    callIdx: BigInt(callIdxPart),
+  };
+}
+
+function isAfterBoundary(event: ParsedEventId, boundary: ParsedEventId): boolean {
+  if (event.slot !== boundary.slot) return event.slot > boundary.slot;
+  if (event.blockOffset !== boundary.blockOffset) {
+    return event.blockOffset > boundary.blockOffset;
+  }
+  return event.callIdx > boundary.callIdx;
+}
+
+function shouldEmitLiveEvent(
+  event: Event,
+  startSlot: Slot,
+  resumeAfter?: EventReplayOptions["resumeAfter"]
+): boolean {
+  const boundary = parseEventId(resumeAfter);
+  if (!boundary || startSlot > boundary.slot) return true;
+
+  const eventSlot = event.slot ?? 0n;
+  if (eventSlot > boundary.slot) return true;
+  if (eventSlot < boundary.slot) return false;
+
+  const eventPosition = parseCanonicalEventId(event.eventId, boundary.slot);
+  return eventPosition ? isAfterBoundary(eventPosition, boundary) : false;
 }

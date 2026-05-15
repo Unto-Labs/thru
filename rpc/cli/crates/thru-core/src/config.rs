@@ -63,15 +63,7 @@ impl KeyManager {
     pub fn add_key(&mut self, name: &str, key: &str, overwrite: bool) -> Result<(), CliError> {
         let normalized_name = Self::normalize_key_name(name);
 
-        // Validate key format
-        if key.len() != 64 {
-            return Err(CliError::Validation(
-                "Key must be exactly 64 hexadecimal characters".to_string(),
-            ));
-        }
-
-        hex::decode(key)
-            .map_err(|_| CliError::Validation("Invalid hexadecimal key format".to_string()))?;
+        Self::validate_key_value(&normalized_name, key)?;
 
         // Check for existing key
         if self.keys.contains_key(&normalized_name) && !overwrite {
@@ -143,9 +135,43 @@ impl KeyManager {
         self.get_key("default")
     }
 
+    /// Check whether a key name resolves to the default key
+    pub fn is_default_key_name(name: &str) -> bool {
+        Self::normalize_key_name(name) == "default"
+    }
+
     /// Normalize key name to lowercase
     fn normalize_key_name(name: &str) -> String {
         name.to_lowercase()
+    }
+
+    fn validate_key_value(name: &str, key: &str) -> Result<(), CliError> {
+        if key.len() != 64 {
+            return Err(CliError::Validation(format!(
+                "Key '{}' must be exactly 64 hexadecimal characters",
+                name
+            )));
+        }
+
+        hex::decode(key).map_err(|_| {
+            CliError::Validation(format!("Key '{}' has invalid hexadecimal format", name))
+        })?;
+
+        Ok(())
+    }
+
+    fn validate_all_keys(&self, require_default_key: bool) -> Result<(), CliError> {
+        if require_default_key {
+            self.get_default_key()
+                .map_err(|e| ConfigError::InvalidPrivateKey(e.to_string()))?;
+        }
+
+        for (name, key) in &self.keys {
+            Self::validate_key_value(name, key)
+                .map_err(|e| ConfigError::InvalidPrivateKey(e.to_string()))?;
+        }
+
+        Ok(())
     }
 }
 
@@ -273,6 +299,25 @@ impl Default for Config {
 impl Config {
     /// Load configuration from the default location
     pub async fn load() -> Result<Self, CliError> {
+        let config = Self::load_unvalidated().await?;
+
+        // Validate the configuration
+        config.validate()?;
+
+        Ok(config)
+    }
+
+    /// Load configuration for key-management commands.
+    ///
+    /// This keeps normal validation strict, but lets `thru keys` recover a
+    /// configuration where the default key was removed with `--force`.
+    pub async fn load_for_key_management() -> Result<Self, CliError> {
+        let config = Self::load_unvalidated().await?;
+        config.validate_for_key_management()?;
+        Ok(config)
+    }
+
+    async fn load_unvalidated() -> Result<Self, CliError> {
         let config_path = Self::get_config_path()?;
 
         if !config_path.exists() {
@@ -296,9 +341,6 @@ impl Config {
                 }
             }
         };
-
-        // Validate the configuration
-        config.validate()?;
 
         Ok(config)
     }
@@ -361,6 +403,15 @@ impl Config {
 
     /// Validate the configuration
     pub fn validate(&self) -> Result<(), CliError> {
+        self.validate_with_options(true)
+    }
+
+    /// Validate key-management configuration without requiring `keys.default`.
+    pub fn validate_for_key_management(&self) -> Result<(), CliError> {
+        self.validate_with_options(false)
+    }
+
+    fn validate_with_options(&self, require_default_key: bool) -> Result<(), CliError> {
         // Validate URL
         Url::parse(&self.rpc_base_url).map_err(|e| ConfigError::InvalidUrl(e.to_string()))?;
 
@@ -370,10 +421,7 @@ impl Config {
                 .map_err(|e| ConfigError::InvalidUrl(format!("network '{}': {}", name, e)))?;
         }
 
-        // Validate default key exists
-        self.keys
-            .get_default_key()
-            .map_err(|e| ConfigError::InvalidPrivateKey(e.to_string()))?;
+        self.keys.validate_all_keys(require_default_key)?;
 
         // Validate uploader program public key
         Pubkey::new(self.uploader_program_public_key.clone())
@@ -614,6 +662,34 @@ mod tests {
         let config = Config::default();
         // Default config should be valid
         assert!(config.validate().is_ok());
+    }
+
+    #[test]
+    fn test_strict_config_validation_rejects_missing_default_key() {
+        let mut config = Config::default();
+        config.keys.remove_key("default").unwrap();
+
+        assert!(config.validate().is_err());
+    }
+
+    #[test]
+    fn test_key_management_validation_accepts_missing_default_key() {
+        let mut config = Config::default();
+        config.keys.remove_key("default").unwrap();
+
+        assert!(config.validate_for_key_management().is_ok());
+    }
+
+    #[test]
+    fn test_key_management_validation_rejects_malformed_key() {
+        let mut config = Config::default();
+        config
+            .keys
+            .keys
+            .insert("bad".to_string(), "invalid".to_string());
+
+        assert!(config.validate().is_err());
+        assert!(config.validate_for_key_management().is_err());
     }
 
     #[test]
