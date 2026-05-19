@@ -4,6 +4,8 @@ use std::{
     fs,
     path::{Path, PathBuf},
     process::Command,
+    thread,
+    time::Duration,
 };
 
 use prost::Message;
@@ -80,27 +82,39 @@ fn generate_descriptor(workspace_root: &Path, output: &Path) -> Result<(), Box<d
         fs::create_dir_all(parent)?;
     }
 
-    let status = Command::new("buf")
-        .current_dir(workspace_root)
-        .arg("build")
-        .arg("--output")
-        .arg(output)
-        .status();
+    let mut last_status = None;
+    for attempt in 1..=3 {
+        let status = Command::new("buf")
+            .current_dir(workspace_root)
+            .arg("build")
+            .arg("--output")
+            .arg(output)
+            .status();
 
-    match status {
-        Ok(status) if status.success() => Ok(()),
-        Ok(status) => Err(format!(
-            "buf build failed with status {status:?}. Ensure buf is installed and dependencies are fetched with `buf dep update`."
-        )
-        .into()),
-        Err(err) => {
-            if err.kind() == std::io::ErrorKind::NotFound {
-                Err(format!(
-                    "buf is not installed. Please install buf from https://buf.build/docs/cli/installation/"
-                ).into())
-            } else {
-                Err(format!("failed to execute buf build: {err}").into())
+        match status {
+            Ok(status) if status.success() => return Ok(()),
+            Ok(status) => {
+                last_status = Some(status);
+                if attempt < 3 {
+                    eprintln!("buf build failed with status {status:?}; retrying");
+                    thread::sleep(Duration::from_secs(2 * attempt));
+                }
+            }
+            Err(err) => {
+                if err.kind() == std::io::ErrorKind::NotFound {
+                    return Err(
+                        "buf is not installed. Please install buf from https://buf.build/docs/cli/installation/"
+                            .into(),
+                    );
+                }
+                return Err(format!("failed to execute buf build: {err}").into());
             }
         }
     }
+
+    Err(format!(
+        "buf build failed with status {:?}. Ensure buf is installed and dependencies are fetched with `buf dep update`.",
+        last_status.ok_or("buf build did not report an exit status")?
+    )
+    .into())
 }

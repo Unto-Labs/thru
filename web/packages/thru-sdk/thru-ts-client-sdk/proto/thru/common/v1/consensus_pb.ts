@@ -168,4 +168,3 @@ export enum ConsensusStatus {
  */
 export const ConsensusStatusSchema: GenEnum<ConsensusStatus> = /*@__PURE__*/
   enumDesc(file_thru_common_v1_consensus, 0);
-

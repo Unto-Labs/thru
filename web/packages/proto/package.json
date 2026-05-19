@@ -17,7 +17,7 @@
     }
   },
   "scripts": {
-    "generate": "buf dep update && buf generate --include-imports",
+    "generate": "buf generate --include-imports",
     "prebuild": "pnpm run generate",
     "build": "tsup",
     "clean": "rm -rf dist src/gen",

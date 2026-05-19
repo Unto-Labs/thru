@@ -76,4 +76,3 @@ export type PageResponse = Message<"thru.common.v1.PageResponse"> & {
  */
 export const PageResponseSchema: GenMessage<PageResponse> = /*@__PURE__*/
   messageDesc(file_thru_common_v1_pagination, 1);
-

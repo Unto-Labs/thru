@@ -21,13 +21,15 @@ import { file_thru_core_v1_block } from "../../core/v1/block_pb";
 import type { Transaction, TransactionExecutionResult } from "../../core/v1/transaction_pb";
 import { file_thru_core_v1_transaction } from "../../core/v1/transaction_pb";
 import { file_thru_core_v1_types } from "../../core/v1/types_pb";
+import type { NodeRecord } from "../../core/v1/node_pb";
+import { file_thru_core_v1_node } from "../../core/v1/node_pb";
 import type { Message } from "@bufbuild/protobuf";
 
 /**
  * Describes the file thru/services/v1/streaming_service.proto.
  */
 export const file_thru_services_v1_streaming_service: GenFile = /*@__PURE__*/
-  fileDesc("Cih0aHJ1L3NlcnZpY2VzL3YxL3N0cmVhbWluZ19zZXJ2aWNlLnByb3RvEhB0aHJ1LnNlcnZpY2VzLnYxIo0CChNTdHJlYW1CbG9ja3NSZXF1ZXN0EhwKCnN0YXJ0X3Nsb3QYASABKARCA+BBAUgAiAEBEjAKBmZpbHRlchgCIAEoCzIWLnRocnUuY29tbW9uLnYxLkZpbHRlckID4EEBSAGIAQESLwoEdmlldxgDIAEoDjIXLnRocnUuY29yZS52MS5CbG9ja1ZpZXdCA+BBAUgCiAEBEkAKDW1pbl9jb25zZW5zdXMYBCABKA4yHy50aHJ1LmNvbW1vbi52MS5Db25zZW5zdXNTdGF0dXNCA+BBAUgDiAEBQg0KC19zdGFydF9zbG90QgkKB19maWx0ZXJCBwoFX3ZpZXdCEAoOX21pbl9jb25zZW5zdXMiPwoUU3RyZWFtQmxvY2tzUmVzcG9uc2USJwoFYmxvY2sYASABKAsyEy50aHJ1LmNvcmUudjEuQmxvY2tCA+BBAiKcAQobU3RyZWFtQWNjb3VudFVwZGF0ZXNSZXF1ZXN0EjEKBHZpZXcYAiABKA4yGS50aHJ1LmNvcmUudjEuQWNjb3VudFZpZXdCA+BBAUgAiAEBEjAKBmZpbHRlchgEIAEoCzIWLnRocnUuY29tbW9uLnYxLkZpbHRlckID4EEBSAGIAQFCBwoFX3ZpZXdCCQoHX2ZpbHRlckoECAEQAiK/AQoNQWNjb3VudFVwZGF0ZRIRCgRzbG90GAEgASgEQgPgQQISMQoEcGFnZRgCIAEoCzIZLnRocnUuY29yZS52MS5BY2NvdW50UGFnZUID4EEBSACIAQESMQoEbWV0YRgDIAEoCzIZLnRocnUuY29yZS52MS5BY2NvdW50TWV0YUID4EEBSAGIAQESGAoGZGVsZXRlGAQgASgIQgPgQQFIAogBAUIHCgVfcGFnZUIHCgVfbWV0YUIJCgdfZGVsZXRlIiIKDUJsb2NrRmluaXNoZWQSEQoEc2xvdBgBIAEoBEID4EECIrwBChxTdHJlYW1BY2NvdW50VXBkYXRlc1Jlc3BvbnNlEikKCHNuYXBzaG90GAEgASgLMhUudGhydS5jb3JlLnYxLkFjY291bnRIABIxCgZ1cGRhdGUYAiABKAsyHy50aHJ1LnNlcnZpY2VzLnYxLkFjY291bnRVcGRhdGVIABIzCghmaW5pc2hlZBgDIAEoCzIfLnRocnUuc2VydmljZXMudjEuQmxvY2tGaW5pc2hlZEgAQgkKB21lc3NhZ2UirAEKGVN0cmVhbVRyYW5zYWN0aW9uc1JlcXVlc3QSMAoGZmlsdGVyGAEgASgLMhYudGhydS5jb21tb24udjEuRmlsdGVyQgPgQQFIAIgBARJACg1taW5fY29uc2Vuc3VzGAIgASgOMh8udGhydS5jb21tb24udjEuQ29uc2Vuc3VzU3RhdHVzQgPgQQFIAYgBAUIJCgdfZmlsdGVyQhAKDl9taW5fY29uc2Vuc3VzIlEKGlN0cmVhbVRyYW5zYWN0aW9uc1Jlc3BvbnNlEjMKC3RyYW5zYWN0aW9uGAEgASgLMhkudGhydS5jb3JlLnYxLlRyYW5zYWN0aW9uQgPgQQIiUgoTU3RyZWFtRXZlbnRzUmVxdWVzdBIwCgZmaWx0ZXIYASABKAsyFi50aHJ1LmNvbW1vbi52MS5GaWx0ZXJCA+BBAUgAiAEBQgkKB19maWx0ZXIipgIKFFN0cmVhbUV2ZW50c1Jlc3BvbnNlEhUKCGV2ZW50X2lkGAEgASgJQgPgQQISGQoHcGF5bG9hZBgCIAEoDEID4EEBSACIAQESNwoJdGltZXN0YW1wGAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEID4EEBSAGIAQESLAoHcHJvZ3JhbRgEIAEoCzIWLnRocnUuY29tbW9uLnYxLlB1YmtleUID4EECEhUKCGNhbGxfaWR4GAUgASgNQgPgQQISMQoJc2lnbmF0dXJlGAYgASgLMhkudGhydS5jb21tb24udjEuU2lnbmF0dXJlQgPgQQISEQoEc2xvdBgHIAEoBEID4EECQgoKCF9wYXlsb2FkQgwKCl90aW1lc3RhbXAijgEKF1RyYWNrVHJhbnNhY3Rpb25SZXF1ZXN0EjEKCXNpZ25hdHVyZRgBIAEoCzIZLnRocnUuY29tbW9uLnYxLlNpZ25hdHVyZUID4EECEjQKB3RpbWVvdXQYAiABKAsyGS5nb29nbGUucHJvdG9idWYuRHVyYXRpb25CA+BBAUgAiAEBQgoKCF90aW1lb3V0ItYBChhUcmFja1RyYW5zYWN0aW9uUmVzcG9uc2USMQoJc2lnbmF0dXJlGAEgASgLMhkudGhydS5jb21tb24udjEuU2lnbmF0dXJlQgPgQQISPgoQY29uc2Vuc3VzX3N0YXR1cxgCIAEoDjIfLnRocnUuY29tbW9uLnYxLkNvbnNlbnN1c1N0YXR1c0ID4EEBEkcKEGV4ZWN1dGlvbl9yZXN1bHQYAyABKAsyKC50aHJ1LmNvcmUudjEuVHJhbnNhY3Rpb25FeGVjdXRpb25SZXN1bHRCA+BBASIVChNTdHJlYW1IZWlnaHRSZXF1ZXN0ImwKFFN0cmVhbUhlaWdodFJlc3BvbnNlEhYKCWZpbmFsaXplZBgBIAEoBEID4EECEh0KEGxvY2FsbHlfZXhlY3V0ZWQYAiABKARCA+BBAhIdChBjbHVzdGVyX2V4ZWN1dGVkGAMgASgEQgPgQQIyjgUKEFN0cmVhbWluZ1NlcnZpY2USXwoMU3RyZWFtQmxvY2tzEiUudGhydS5zZXJ2aWNlcy52MS5TdHJlYW1CbG9ja3NSZXF1ZXN0GiYudGhydS5zZXJ2aWNlcy52MS5TdHJlYW1CbG9ja3NSZXNwb25zZTABEncKFFN0cmVhbUFjY291bnRVcGRhdGVzEi0udGhydS5zZXJ2aWNlcy52MS5TdHJlYW1BY2NvdW50VXBkYXRlc1JlcXVlc3QaLi50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbUFjY291bnRVcGRhdGVzUmVzcG9uc2UwARJxChJTdHJlYW1UcmFuc2FjdGlvbnMSKy50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbVRyYW5zYWN0aW9uc1JlcXVlc3QaLC50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbVRyYW5zYWN0aW9uc1Jlc3BvbnNlMAESXwoMU3RyZWFtRXZlbnRzEiUudGhydS5zZXJ2aWNlcy52MS5TdHJlYW1FdmVudHNSZXF1ZXN0GiYudGhydS5zZXJ2aWNlcy52MS5TdHJlYW1FdmVudHNSZXNwb25zZTABEmsKEFRyYWNrVHJhbnNhY3Rpb24SKS50aHJ1LnNlcnZpY2VzLnYxLlRyYWNrVHJhbnNhY3Rpb25SZXF1ZXN0GioudGhydS5zZXJ2aWNlcy52MS5UcmFja1RyYW5zYWN0aW9uUmVzcG9uc2UwARJfCgxTdHJlYW1IZWlnaHQSJS50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbUhlaWdodFJlcXVlc3QaJi50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbUhlaWdodFJlc3BvbnNlMAFC4AEKFGNvbS50aHJ1LnNlcnZpY2VzLnYxQhVTdHJlYW1pbmdTZXJ2aWNlUHJvdG9QAVpIZ2l0aHViLmNvbS9VbnRvLUxhYnMvdGhydS1uZXQvZ3JwYy9wa2cvcHJvdG8vdGhydS9zZXJ2aWNlcy92MTtzZXJ2aWNlc3YxogIDVFNYqgIQVGhydS5TZXJ2aWNlcy5WMboCBFRIVVPKAhBUaHJ1XFNlcnZpY2VzXFYx4gIcVGhydVxTZXJ2aWNlc1xWMVxHUEJNZXRhZGF0YeoCElRocnU6OlNlcnZpY2VzOjpWMWIGcHJvdG8z", [file_buf_validate_validate, file_google_api_field_behavior, file_thru_common_v1_primitives, file_google_protobuf_duration, file_google_protobuf_timestamp, file_thru_common_v1_consensus, file_thru_common_v1_filters, file_thru_core_v1_account, file_thru_core_v1_block, file_thru_core_v1_transaction, file_thru_core_v1_types]);
+  fileDesc("Cih0aHJ1L3NlcnZpY2VzL3YxL3N0cmVhbWluZ19zZXJ2aWNlLnByb3RvEhB0aHJ1LnNlcnZpY2VzLnYxIo0CChNTdHJlYW1CbG9ja3NSZXF1ZXN0EhwKCnN0YXJ0X3Nsb3QYASABKARCA+BBAUgAiAEBEjAKBmZpbHRlchgCIAEoCzIWLnRocnUuY29tbW9uLnYxLkZpbHRlckID4EEBSAGIAQESLwoEdmlldxgDIAEoDjIXLnRocnUuY29yZS52MS5CbG9ja1ZpZXdCA+BBAUgCiAEBEkAKDW1pbl9jb25zZW5zdXMYBCABKA4yHy50aHJ1LmNvbW1vbi52MS5Db25zZW5zdXNTdGF0dXNCA+BBAUgDiAEBQg0KC19zdGFydF9zbG90QgkKB19maWx0ZXJCBwoFX3ZpZXdCEAoOX21pbl9jb25zZW5zdXMiPwoUU3RyZWFtQmxvY2tzUmVzcG9uc2USJwoFYmxvY2sYASABKAsyEy50aHJ1LmNvcmUudjEuQmxvY2tCA+BBAiKcAQobU3RyZWFtQWNjb3VudFVwZGF0ZXNSZXF1ZXN0EjEKBHZpZXcYAiABKA4yGS50aHJ1LmNvcmUudjEuQWNjb3VudFZpZXdCA+BBAUgAiAEBEjAKBmZpbHRlchgEIAEoCzIWLnRocnUuY29tbW9uLnYxLkZpbHRlckID4EEBSAGIAQFCBwoFX3ZpZXdCCQoHX2ZpbHRlckoECAEQAiLtAQoNQWNjb3VudFVwZGF0ZRIRCgRzbG90GAEgASgEQgPgQQISMQoEcGFnZRgCIAEoCzIZLnRocnUuY29yZS52MS5BY2NvdW50UGFnZUID4EEBSACIAQESMQoEbWV0YRgDIAEoCzIZLnRocnUuY29yZS52MS5BY2NvdW50TWV0YUID4EEBSAGIAQESGAoGZGVsZXRlGAQgASgIQgPgQQFIAogBARIsCgdhZGRyZXNzGAUgASgLMhYudGhydS5jb21tb24udjEuUHVia2V5QgPgQQJCBwoFX3BhZ2VCBwoFX21ldGFCCQoHX2RlbGV0ZSKbAQoNQmxvY2tGaW5pc2hlZBIRCgRzbG90GAEgASgEQgPgQQISKwoeZ2xvYmFsX2FjdGl2YXRlZF9zdGF0ZV9jb3VudGVyGAIgASgEQgPgQQISLQogZ2xvYmFsX2RlYWN0aXZhdGVkX3N0YXRlX2NvdW50ZXIYAyABKARCA+BBAhIbCg5jb2xsZWN0ZWRfZmVlcxgEIAEoBEID4EECIrwBChxTdHJlYW1BY2NvdW50VXBkYXRlc1Jlc3BvbnNlEikKCHNuYXBzaG90GAEgASgLMhUudGhydS5jb3JlLnYxLkFjY291bnRIABIxCgZ1cGRhdGUYAiABKAsyHy50aHJ1LnNlcnZpY2VzLnYxLkFjY291bnRVcGRhdGVIABIzCghmaW5pc2hlZBgDIAEoCzIfLnRocnUuc2VydmljZXMudjEuQmxvY2tGaW5pc2hlZEgAQgkKB21lc3NhZ2UirAEKGVN0cmVhbVRyYW5zYWN0aW9uc1JlcXVlc3QSMAoGZmlsdGVyGAEgASgLMhYudGhydS5jb21tb24udjEuRmlsdGVyQgPgQQFIAIgBARJACg1taW5fY29uc2Vuc3VzGAIgASgOMh8udGhydS5jb21tb24udjEuQ29uc2Vuc3VzU3RhdHVzQgPgQQFIAYgBAUIJCgdfZmlsdGVyQhAKDl9taW5fY29uc2Vuc3VzIlEKGlN0cmVhbVRyYW5zYWN0aW9uc1Jlc3BvbnNlEjMKC3RyYW5zYWN0aW9uGAEgASgLMhkudGhydS5jb3JlLnYxLlRyYW5zYWN0aW9uQgPgQQIiUgoTU3RyZWFtRXZlbnRzUmVxdWVzdBIwCgZmaWx0ZXIYASABKAsyFi50aHJ1LmNvbW1vbi52MS5GaWx0ZXJCA+BBAUgAiAEBQgkKB19maWx0ZXIipgIKFFN0cmVhbUV2ZW50c1Jlc3BvbnNlEhUKCGV2ZW50X2lkGAEgASgJQgPgQQISGQoHcGF5bG9hZBgCIAEoDEID4EEBSACIAQESNwoJdGltZXN0YW1wGAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEID4EEBSAGIAQESLAoHcHJvZ3JhbRgEIAEoCzIWLnRocnUuY29tbW9uLnYxLlB1YmtleUID4EECEhUKCGNhbGxfaWR4GAUgASgNQgPgQQISMQoJc2lnbmF0dXJlGAYgASgLMhkudGhydS5jb21tb24udjEuU2lnbmF0dXJlQgPgQQISEQoEc2xvdBgHIAEoBEID4EECQgoKCF9wYXlsb2FkQgwKCl90aW1lc3RhbXAijgEKF1RyYWNrVHJhbnNhY3Rpb25SZXF1ZXN0EjEKCXNpZ25hdHVyZRgBIAEoCzIZLnRocnUuY29tbW9uLnYxLlNpZ25hdHVyZUID4EECEjQKB3RpbWVvdXQYAiABKAsyGS5nb29nbGUucHJvdG9idWYuRHVyYXRpb25CA+BBAUgAiAEBQgoKCF90aW1lb3V0IukBChhUcmFja1RyYW5zYWN0aW9uUmVzcG9uc2USMQoJc2lnbmF0dXJlGAEgASgLMhkudGhydS5jb21tb24udjEuU2lnbmF0dXJlQgPgQQISPgoQY29uc2Vuc3VzX3N0YXR1cxgCIAEoDjIfLnRocnUuY29tbW9uLnYxLkNvbnNlbnN1c1N0YXR1c0ID4EEBEkcKEGV4ZWN1dGlvbl9yZXN1bHQYAyABKAsyKC50aHJ1LmNvcmUudjEuVHJhbnNhY3Rpb25FeGVjdXRpb25SZXN1bHRCA+BBARIRCgRzbG90GAQgASgEQgPgQQEiRwoYU3RyZWFtU2xvdE1ldHJpY3NSZXF1ZXN0EhwKCnN0YXJ0X3Nsb3QYASABKARCA+BBAUgAiAEBQg0KC19zdGFydF9zbG90IuEBChlTdHJlYW1TbG90TWV0cmljc1Jlc3BvbnNlEhEKBHNsb3QYASABKARCA+BBAhIrCh5nbG9iYWxfYWN0aXZhdGVkX3N0YXRlX2NvdW50ZXIYAiABKARCA+BBAhItCiBnbG9iYWxfZGVhY3RpdmF0ZWRfc3RhdGVfY291bnRlchgDIAEoBEID4EECEhsKDmNvbGxlY3RlZF9mZWVzGAQgASgEQgPgQQISOAoPYmxvY2tfdGltZXN0YW1wGAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEID4EECIhUKE1N0cmVhbUhlaWdodFJlcXVlc3QibAoUU3RyZWFtSGVpZ2h0UmVzcG9uc2USFgoJZmluYWxpemVkGAEgASgEQgPgQQISHQoQbG9jYWxseV9leGVjdXRlZBgCIAEoBEID4EECEh0KEGNsdXN0ZXJfZXhlY3V0ZWQYAyABKARCA+BBAiIaChhTdHJlYW1Ob2RlUmVjb3Jkc1JlcXVlc3QiZgoZU3RyZWFtTm9kZVJlY29yZHNSZXNwb25zZRIqCgZyZWNvcmQYASABKAsyGC50aHJ1LmNvcmUudjEuTm9kZVJlY29yZEgAEhIKCGZpbmlzaGVkGAIgASgISABCCQoHbWVzc2FnZTLuBgoQU3RyZWFtaW5nU2VydmljZRJfCgxTdHJlYW1CbG9ja3MSJS50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbUJsb2Nrc1JlcXVlc3QaJi50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbUJsb2Nrc1Jlc3BvbnNlMAESdwoUU3RyZWFtQWNjb3VudFVwZGF0ZXMSLS50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbUFjY291bnRVcGRhdGVzUmVxdWVzdBouLnRocnUuc2VydmljZXMudjEuU3RyZWFtQWNjb3VudFVwZGF0ZXNSZXNwb25zZTABEnEKElN0cmVhbVRyYW5zYWN0aW9ucxIrLnRocnUuc2VydmljZXMudjEuU3RyZWFtVHJhbnNhY3Rpb25zUmVxdWVzdBosLnRocnUuc2VydmljZXMudjEuU3RyZWFtVHJhbnNhY3Rpb25zUmVzcG9uc2UwARJfCgxTdHJlYW1FdmVudHMSJS50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbUV2ZW50c1JlcXVlc3QaJi50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbUV2ZW50c1Jlc3BvbnNlMAESawoQVHJhY2tUcmFuc2FjdGlvbhIpLnRocnUuc2VydmljZXMudjEuVHJhY2tUcmFuc2FjdGlvblJlcXVlc3QaKi50aHJ1LnNlcnZpY2VzLnYxLlRyYWNrVHJhbnNhY3Rpb25SZXNwb25zZTABEl8KDFN0cmVhbUhlaWdodBIlLnRocnUuc2VydmljZXMudjEuU3RyZWFtSGVpZ2h0UmVxdWVzdBomLnRocnUuc2VydmljZXMudjEuU3RyZWFtSGVpZ2h0UmVzcG9uc2UwARJuChFTdHJlYW1TbG90TWV0cmljcxIqLnRocnUuc2VydmljZXMudjEuU3RyZWFtU2xvdE1ldHJpY3NSZXF1ZXN0GisudGhydS5zZXJ2aWNlcy52MS5TdHJlYW1TbG90TWV0cmljc1Jlc3BvbnNlMAESbgoRU3RyZWFtTm9kZVJlY29yZHMSKi50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbU5vZGVSZWNvcmRzUmVxdWVzdBorLnRocnUuc2VydmljZXMudjEuU3RyZWFtTm9kZVJlY29yZHNSZXNwb25zZTABQuABChRjb20udGhydS5zZXJ2aWNlcy52MUIVU3RyZWFtaW5nU2VydmljZVByb3RvUAFaSGdpdGh1Yi5jb20vVW50by1MYWJzL3RocnUtbmV0L2dycGMvcGtnL3Byb3RvL3RocnUvc2VydmljZXMvdjE7c2VydmljZXN2MaICA1RTWKoCEFRocnUuU2VydmljZXMuVjG6AgRUSFVTygIQVGhydVxTZXJ2aWNlc1xWMeICHFRocnVcU2VydmljZXNcVjFcR1BCTWV0YWRhdGHqAhJUaHJ1OjpTZXJ2aWNlczo6VjFiBnByb3RvMw", [file_buf_validate_validate, file_google_api_field_behavior, file_thru_common_v1_primitives, file_google_protobuf_duration, file_google_protobuf_timestamp, file_thru_common_v1_consensus, file_thru_common_v1_filters, file_thru_core_v1_account, file_thru_core_v1_block, file_thru_core_v1_transaction, file_thru_core_v1_types, file_thru_core_v1_node]);
 
 /**
  * StreamBlocksRequest subscribes to real-time block updates.
@@ -186,7 +188,12 @@ export const StreamBlocksResponseSchema: GenMessage<StreamBlocksResponse> = /*@_
  *     account_update.meta.owner.value == params.owner
  *
  * - params.address (bytes|Pubkey): Account address for filtering
- *   Example: snapshot.address.value == params.address
+ *   Example: account_address.value == params.address
+ *   Note: Use account_address for unified filtering across both snapshot and update messages
+ *
+ * - params.addresses (BytesList): List of addresses for multi-account filtering
+ *   Example: account_address.value in params.addresses
+ *   Note: Use the 'in' operator to filter by multiple addresses in a single subscription
  *
  * - params.min_nonce (uint64): Minimum nonce for filtering
  *   Example: snapshot.meta.nonce >= params.min_nonce
@@ -219,6 +226,9 @@ export const StreamBlocksResponseSchema: GenMessage<StreamBlocksResponse> = /*@_
  *   account_update.meta.flags.is_compressed (bool),
  *   account_update.meta.owner, account_update.meta.owner.value (bytes)
  *
+ * Available unified fields (work for both snapshot and update messages):
+ *   account_address, account_address.value (bytes) - extracted from whichever message type is present
+ *
  * Filter expression examples:
  *
  * 1. Filter by minimum balance (snapshot or update):
@@ -228,8 +238,8 @@ export const StreamBlocksResponseSchema: GenMessage<StreamBlocksResponse> = /*@_
  *    Expression: "(has(snapshot.meta) && has(snapshot.meta.owner) && snapshot.meta.owner.value == params.owner) || (has(account_update.meta) && has(account_update.meta.owner) && account_update.meta.owner.value == params.owner)"
  *    Params: {"owner": <32-byte pubkey>}
  *
- * 3. Filter by specific account address:
- *    Expression: "has(snapshot.address) && snapshot.address.value == params.address"
+ * 3. Filter by specific account address (works for both snapshot and update messages):
+ *    Expression: "account_address.value == params.address"
  *    Params: {"address": <32-byte pubkey>}
  *
  * 4. Filter by minimum slot for updates:
@@ -272,13 +282,18 @@ export const StreamBlocksResponseSchema: GenMessage<StreamBlocksResponse> = /*@_
  * or a BlockFinished message. Filters should handle both snapshot and update cases
  * using OR logic to match either message type.
  *
- * To filter by specific account address:
- *   Expression: "snapshot.address.value == params.address"
+ * To filter by specific account address (recommended - works for both message types):
+ *   Expression: "account_address.value == params.address"
  *   Params: {"address": <32-byte pubkey>}
  *
  * To filter by owner (program):
  *   Expression: "(has(snapshot.meta.owner) && snapshot.meta.owner.value == params.owner) || (has(account_update.meta.owner) && account_update.meta.owner.value == params.owner)"
  *   Params: {"owner": <32-byte program pubkey>}
+ *
+ * To filter by multiple account addresses (recommended for multi-account subscriptions):
+ *   Expression: "account_address.value in params.addresses"
+ *   Params: {"addresses": BytesList{values: [<pubkey1>, <pubkey2>, ...]}}
+ *   Note: Use BytesList parameter type with the 'in' operator for efficient multi-address filtering
  *
  * @generated from message thru.services.v1.StreamAccountUpdatesRequest
  */
@@ -326,6 +341,13 @@ export type AccountUpdate = Message<"thru.services.v1.AccountUpdate"> & {
    * @generated from field: optional bool delete = 4;
    */
   delete?: boolean;
+
+  /**
+   * Account address for identifying the account in multi-account streams.
+   *
+   * @generated from field: thru.common.v1.Pubkey address = 5;
+   */
+  address?: Pubkey;
 };
 
 /**
@@ -337,6 +359,7 @@ export const AccountUpdateSchema: GenMessage<AccountUpdate> = /*@__PURE__*/
 
 /**
  * BlockFinished is sent when block's execution is complete.
+ * Contains block accumulator metrics finalized after execution.
  *
  * @generated from message thru.services.v1.BlockFinished
  */
@@ -345,6 +368,29 @@ export type BlockFinished = Message<"thru.services.v1.BlockFinished"> & {
    * @generated from field: uint64 slot = 1;
    */
   slot: bigint;
+
+  /**
+   * Global counter tracking total activated state across all accounts.
+   * Increments when accounts are created or modified.
+   *
+   * @generated from field: uint64 global_activated_state_counter = 2;
+   */
+  globalActivatedStateCounter: bigint;
+
+  /**
+   * Global counter tracking total deactivated state across all accounts.
+   * Increments when accounts are deleted or compressed.
+   *
+   * @generated from field: uint64 global_deactivated_state_counter = 3;
+   */
+  globalDeactivatedStateCounter: bigint;
+
+  /**
+   * Total fees collected from all transactions in this block.
+   *
+   * @generated from field: uint64 collected_fees = 4;
+   */
+  collectedFees: bigint;
 };
 
 /**
@@ -775,6 +821,16 @@ export type TrackTransactionResponse = Message<"thru.services.v1.TrackTransactio
    * @generated from field: thru.core.v1.TransactionExecutionResult execution_result = 3;
    */
   executionResult?: TransactionExecutionResult;
+
+  /**
+   * Slot in which this transaction landed. Zero until the producing block
+   * has been observed by the ingestor; consumers waiting to anchor downstream
+   * ClickHouse reads (e.g. GetTransaction) should ignore zero slots and wait
+   * for the next response.
+   *
+   * @generated from field: uint64 slot = 4;
+   */
+  slot: bigint;
 };
 
 /**
@@ -783,6 +839,78 @@ export type TrackTransactionResponse = Message<"thru.services.v1.TrackTransactio
  */
 export const TrackTransactionResponseSchema: GenMessage<TrackTransactionResponse> = /*@__PURE__*/
   messageDesc(file_thru_services_v1_streaming_service, 11);
+
+/**
+ * StreamSlotMetricsRequest subscribes to per-slot metrics updates.
+ * Metrics are emitted after each block's execution completes.
+ *
+ * @generated from message thru.services.v1.StreamSlotMetricsRequest
+ */
+export type StreamSlotMetricsRequest = Message<"thru.services.v1.StreamSlotMetricsRequest"> & {
+  /**
+   * Optional starting slot. If specified, starts streaming from this slot.
+   * If not specified, starts from the next executed slot.
+   *
+   * @generated from field: optional uint64 start_slot = 1;
+   */
+  startSlot?: bigint;
+};
+
+/**
+ * Describes the message thru.services.v1.StreamSlotMetricsRequest.
+ * Use `create(StreamSlotMetricsRequestSchema)` to create a new message.
+ */
+export const StreamSlotMetricsRequestSchema: GenMessage<StreamSlotMetricsRequest> = /*@__PURE__*/
+  messageDesc(file_thru_services_v1_streaming_service, 12);
+
+/**
+ * StreamSlotMetricsResponse delivers slot metrics after execution completes.
+ *
+ * @generated from message thru.services.v1.StreamSlotMetricsResponse
+ */
+export type StreamSlotMetricsResponse = Message<"thru.services.v1.StreamSlotMetricsResponse"> & {
+  /**
+   * Block slot number.
+   *
+   * @generated from field: uint64 slot = 1;
+   */
+  slot: bigint;
+
+  /**
+   * Global counter tracking total activated state across all accounts.
+   *
+   * @generated from field: uint64 global_activated_state_counter = 2;
+   */
+  globalActivatedStateCounter: bigint;
+
+  /**
+   * Global counter tracking total deactivated state across all accounts.
+   *
+   * @generated from field: uint64 global_deactivated_state_counter = 3;
+   */
+  globalDeactivatedStateCounter: bigint;
+
+  /**
+   * Total fees collected from all transactions in this block.
+   *
+   * @generated from field: uint64 collected_fees = 4;
+   */
+  collectedFees: bigint;
+
+  /**
+   * Block timestamp.
+   *
+   * @generated from field: google.protobuf.Timestamp block_timestamp = 5;
+   */
+  blockTimestamp?: Timestamp;
+};
+
+/**
+ * Describes the message thru.services.v1.StreamSlotMetricsResponse.
+ * Use `create(StreamSlotMetricsResponseSchema)` to create a new message.
+ */
+export const StreamSlotMetricsResponseSchema: GenMessage<StreamSlotMetricsResponse> = /*@__PURE__*/
+  messageDesc(file_thru_services_v1_streaming_service, 13);
 
 /**
  * StreamHeightRequest subscribes to real-time height updates.
@@ -797,7 +925,7 @@ export type StreamHeightRequest = Message<"thru.services.v1.StreamHeightRequest"
  * Use `create(StreamHeightRequestSchema)` to create a new message.
  */
 export const StreamHeightRequestSchema: GenMessage<StreamHeightRequest> = /*@__PURE__*/
-  messageDesc(file_thru_services_v1_streaming_service, 12);
+  messageDesc(file_thru_services_v1_streaming_service, 14);
 
 /**
  * StreamHeightResponse delivers height update events.
@@ -826,7 +954,57 @@ export type StreamHeightResponse = Message<"thru.services.v1.StreamHeightRespons
  * Use `create(StreamHeightResponseSchema)` to create a new message.
  */
 export const StreamHeightResponseSchema: GenMessage<StreamHeightResponse> = /*@__PURE__*/
-  messageDesc(file_thru_services_v1_streaming_service, 13);
+  messageDesc(file_thru_services_v1_streaming_service, 15);
+
+/**
+ * StreamNodeRecordsRequest subscribes to node record updates from the gossip network.
+ *
+ * @generated from message thru.services.v1.StreamNodeRecordsRequest
+ */
+export type StreamNodeRecordsRequest = Message<"thru.services.v1.StreamNodeRecordsRequest"> & {
+};
+
+/**
+ * Describes the message thru.services.v1.StreamNodeRecordsRequest.
+ * Use `create(StreamNodeRecordsRequestSchema)` to create a new message.
+ */
+export const StreamNodeRecordsRequestSchema: GenMessage<StreamNodeRecordsRequest> = /*@__PURE__*/
+  messageDesc(file_thru_services_v1_streaming_service, 16);
+
+/**
+ * StreamNodeRecordsResponse delivers node record updates.
+ *
+ * @generated from message thru.services.v1.StreamNodeRecordsResponse
+ */
+export type StreamNodeRecordsResponse = Message<"thru.services.v1.StreamNodeRecordsResponse"> & {
+  /**
+   * @generated from oneof thru.services.v1.StreamNodeRecordsResponse.message
+   */
+  message: {
+    /**
+     * A node record (initial snapshot or update).
+     *
+     * @generated from field: thru.core.v1.NodeRecord record = 1;
+     */
+    value: NodeRecord;
+    case: "record";
+  } | {
+    /**
+     * Signals the initial batch of records is complete.
+     *
+     * @generated from field: bool finished = 2;
+     */
+    value: boolean;
+    case: "finished";
+  } | { case: undefined; value?: undefined };
+};
+
+/**
+ * Describes the message thru.services.v1.StreamNodeRecordsResponse.
+ * Use `create(StreamNodeRecordsResponseSchema)` to create a new message.
+ */
+export const StreamNodeRecordsResponseSchema: GenMessage<StreamNodeRecordsResponse> = /*@__PURE__*/
+  messageDesc(file_thru_services_v1_streaming_service, 17);
 
 /**
  * StreamingService serves server-streaming gRPC APIs for real-time data.
@@ -882,6 +1060,27 @@ export const StreamingService: GenService<{
     input: typeof StreamHeightRequestSchema;
     output: typeof StreamHeightResponseSchema;
   },
+  /**
+   * Stream per-slot metrics including state counters and collected fees.
+   * Metrics are emitted after each block's execution completes.
+   *
+   * @generated from rpc thru.services.v1.StreamingService.StreamSlotMetrics
+   */
+  streamSlotMetrics: {
+    methodKind: "server_streaming";
+    input: typeof StreamSlotMetricsRequestSchema;
+    output: typeof StreamSlotMetricsResponseSchema;
+  },
+  /**
+   * Stream node records from the gossip network.
+   * Returns an initial snapshot of all known records, followed by live updates.
+   *
+   * @generated from rpc thru.services.v1.StreamingService.StreamNodeRecords
+   */
+  streamNodeRecords: {
+    methodKind: "server_streaming";
+    input: typeof StreamNodeRecordsRequestSchema;
+    output: typeof StreamNodeRecordsResponseSchema;
+  },
 }> = /*@__PURE__*/
   serviceDesc(file_thru_services_v1_streaming_service, 0);
-

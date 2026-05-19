@@ -101,4 +101,3 @@ export enum StateProofType {
  */
 export const StateProofTypeSchema: GenEnum<StateProofType> = /*@__PURE__*/
   enumDesc(file_thru_core_v1_state, 0);
-

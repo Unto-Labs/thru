@@ -1,5 +1,6 @@
 import { create } from "@bufbuild/protobuf";
 import {
+  type Event,
   EventSchema,
   ListEventsResponseSchema,
   PageResponseSchema,
@@ -22,10 +23,10 @@ describe("event replay", () => {
         return create(ListEventsResponseSchema, {
           events: [
             create(EventSchema, {
-              eventId: "ts42_7_4",
+              eventId: "sig:42:7:3:1",
               slot: 42n,
               blockOffset: 7,
-              callIdx: 4,
+              callIdx: 3,
             }),
           ],
           page: create(PageResponseSchema, {}),
@@ -40,14 +41,14 @@ describe("event replay", () => {
     const replay = createEventReplay({
       client,
       startSlot: 42n,
-      resumeAfter: { slot: 42n, eventId: "ts42_7_3" },
+      resumeAfter: { slot: 42n, eventId: "sig:42:7:3:0" },
       resubscribeOnEnd: false,
     });
 
     const eventIds: string[] = [];
     for await (const event of replay) eventIds.push(event.eventId);
 
-    expect(eventIds).toEqual(["ts42_7_4"]);
+    expect(eventIds).toEqual(["sig:42:7:3:1"]);
     expect(listFilters[0]).toBe(checkpointBoundaryFilter);
     expect(streamFilters[0]).toBe("event.slot >= uint(42)");
   });
@@ -63,11 +64,10 @@ describe("event replay", () => {
       streamEvents(request: Partial<StreamEventsRequest>) {
         streamFilters.push(request.filter?.expression ?? "");
         return streamEvents(
-          "ts42_7_2",
-          "ts42_7_3",
-          "ts42_7_4",
-          "ts42_8_0",
-          "ts43_0_0"
+          "sig:42:7:3:0",
+          "sig:42:7:3:1",
+          "sig:42:8:0:0",
+          "sig:43:0:0:0"
         );
       },
     };
@@ -75,14 +75,14 @@ describe("event replay", () => {
     const replay = createEventReplay({
       client,
       startSlot: 42n,
-      resumeAfter: { slot: 42n, eventId: "ts42_7_3" },
+      resumeAfter: { slot: 42n, eventId: "sig:42:7:3:0" },
       resubscribeOnEnd: false,
     });
 
     const eventIds: string[] = [];
     for await (const event of replay) eventIds.push(event.eventId);
 
-    expect(eventIds).toEqual(["ts42_7_4", "ts42_8_0", "ts43_0_0"]);
+    expect(eventIds).toEqual(["sig:42:7:3:1", "sig:42:8:0:0", "sig:43:0:0:0"]);
     expect(streamFilters[0]).toBe("event.slot >= uint(42)");
   });
 
@@ -105,7 +105,7 @@ describe("event replay", () => {
     const replay = createEventReplay({
       client,
       startSlot: 42n,
-      resumeAfter: { slot: 42n, eventId: "legacy-event-id" },
+      resumeAfter: { slot: 42n, eventId: "malformed-event-id" },
       resubscribeOnEnd: false,
     });
 
@@ -116,6 +116,48 @@ describe("event replay", () => {
     expect(listFilters[0]).toBe("event.slot >= uint(42)");
     expect(streamFilters[0]).toBe("event.slot >= uint(42)");
   });
+
+  test("fails before emitting checkpoints when backfill pages regress", async () => {
+    const client = new DescendingEventSource([
+      makeEvent(4n, "D"),
+      makeEvent(3n, "C"),
+      makeEvent(2n, "B"),
+      makeEvent(1n, "A"),
+    ]);
+
+    const replay = createEventReplay({
+      client,
+      startSlot: 0n,
+      safetyMargin: 1n,
+      pageSize: 2,
+      resubscribeOnEnd: false,
+    });
+
+    await expect(collectEventIds(replay)).rejects.toThrow(
+      "backfill source returned a page that is not ordered by ascending slot"
+    );
+  });
+
+  test("fails before emitting checkpoints when backfill pages are cross-page regressive", async () => {
+    const client = new DescendingEventSource([
+      makeEvent(4n, "D"),
+      makeEvent(5n, "E"),
+      makeEvent(2n, "B"),
+      makeEvent(3n, "C"),
+    ]);
+
+    const replay = createEventReplay({
+      client,
+      startSlot: 0n,
+      safetyMargin: 1n,
+      pageSize: 2,
+      resubscribeOnEnd: false,
+    });
+
+    await expect(collectEventIds(replay)).rejects.toThrow(
+      "backfill source returned pages out of ascending slot order"
+    );
+  });
 });
 
 function emptyStream(): AsyncIterable<never> {
@@ -124,17 +166,48 @@ function emptyStream(): AsyncIterable<never> {
   };
 }
 
+class DescendingEventSource implements EventSource {
+  constructor(private readonly events: Event[]) {}
+
+  async listEvents(request: Partial<ListEventsRequest>) {
+    const startIdx = request.page?.pageToken ? Number(request.page.pageToken) : 0;
+    const pageSize = request.page?.pageSize ?? this.events.length;
+    const slice = this.events.slice(startIdx, startIdx + pageSize);
+    const nextIndex = startIdx + slice.length;
+    const nextPageToken = nextIndex < this.events.length ? String(nextIndex) : undefined;
+
+    return create(ListEventsResponseSchema, {
+      events: slice,
+      page: create(PageResponseSchema, { nextPageToken }),
+    });
+  }
+
+  streamEvents(_request: Partial<StreamEventsRequest>) {
+    return emptyStream();
+  }
+}
+
+function makeEvent(slot: bigint, id: string): Event {
+  return create(EventSchema, { slot, eventId: id });
+}
+
+async function collectEventIds(events: AsyncIterable<Event>): Promise<string[]> {
+  const eventIds: string[] = [];
+  for await (const event of events) eventIds.push(event.eventId);
+  return eventIds;
+}
+
 const checkpointBoundaryFilter =
   "event.slot > uint(42) || " +
   "(event.slot == uint(42) && " +
   "(event.block_offset > uint(7) || " +
-  "(event.block_offset == uint(7) && event.call_idx > uint(3))))";
+  "(event.block_offset == uint(7) && event.call_idx >= uint(3))))";
 
 function streamEvents(...eventIds: string[]): AsyncIterable<StreamEventsResponse> {
   return {
     [Symbol.asyncIterator]: async function* () {
       for (const eventId of eventIds) {
-        const match = /^ts(\d+)_(\d+)_(\d+)$/.exec(eventId);
+        const match = /^sig:(\d+):(\d+):(\d+):(\d+)$/.exec(eventId);
         if (!match) throw new Error(`invalid test event id: ${eventId}`);
         const [, slot, , callIdx] = match;
         yield create(StreamEventsResponseSchema, {

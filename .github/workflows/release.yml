@@ -97,7 +97,7 @@ jobs:
     - name: Update apt (Ubuntu only)
       if: ${{ matrix.os == 'ubuntu-large' }}
       run: |
-        sudo apt-get update -y
+        .github/scripts/apt-install-with-retry.sh --update-only
 
     - name: Build toolchain dependencies
       if: steps.cache-toolchain.outputs.cache-hit != 'true'

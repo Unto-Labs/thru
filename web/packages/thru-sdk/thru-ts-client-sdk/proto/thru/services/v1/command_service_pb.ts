@@ -266,4 +266,3 @@ export const CommandService: GenService<{
   },
 }> = /*@__PURE__*/
   serviceDesc(file_thru_services_v1_command_service, 0);
-

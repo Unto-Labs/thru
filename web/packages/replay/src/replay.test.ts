@@ -1,6 +1,10 @@
 import { create } from "@bufbuild/protobuf";
 import { describe, expect, test } from "vitest";
-import { type Transaction, TransactionSchema, SignatureSchema } from "@thru/proto";
+import {
+  type Transaction,
+  TransactionSchema,
+  SignatureSchema,
+} from "@thru/proto";
 import { createBlockReplay } from "./replay/block-replay";
 import { createTransactionReplay } from "./replay/transaction-replay";
 import { SimulatedChain } from "./testing/simulated-chain";

@@ -126,4 +126,3 @@ export enum ErrorType {
  */
 export const ErrorTypeSchema: GenEnum<ErrorType> = /*@__PURE__*/
   enumDesc(file_thru_common_v1_errors, 0);
-

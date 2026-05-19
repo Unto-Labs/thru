@@ -22,6 +22,34 @@ function compareBigint(a: Slot, b: Slot): number {
   return a < b ? -1 : 1;
 }
 
+function isNonDecreasing<T>(items: T[], extractSlot: (item: T) => Slot): boolean {
+  for (let idx = 1; idx < items.length; idx += 1) {
+    if (extractSlot(items[idx]) < extractSlot(items[idx - 1])) return false;
+  }
+  return true;
+}
+
+function assertBackfillPageOrder<T>(
+  previousPage: T[] | null,
+  currentPage: T[],
+  extractSlot: (item: T) => Slot,
+): void {
+  if (!isNonDecreasing(currentPage, extractSlot)) {
+    throw new Error(
+      "backfill source returned a page that is not ordered by ascending slot"
+    );
+  }
+  if (!previousPage?.length || !currentPage.length) return;
+
+  const previousMaxSlot = extractSlot(previousPage[previousPage.length - 1]);
+  const currentMinSlot = extractSlot(currentPage[0]);
+  if (currentMinSlot < previousMaxSlot) {
+    throw new Error(
+      `backfill source returned pages out of ascending slot order: page minimum slot ${currentMinSlot} is before previous page maximum slot ${previousMaxSlot}`
+    );
+  }
+}
+
 export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
   private readonly config: ReplayConfig<T, Cursor>;
   private readonly logger;
@@ -95,6 +123,36 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
       `replay entering BACKFILLING state (startSlot=${startSlot}, safetyMargin=${safetyMargin})`
     );
 
+    let pendingOrderedPage: T[] | null = null;
+
+    const emitBackfillItems = async function* (
+      self: ReplayStream<T, Cursor>,
+      items: T[],
+    ): AsyncGenerator<T> {
+      for (const item of items) {
+        const slot = extractSlot(item);
+        const key = keyOf(item);
+        if (slot < startSlot) continue;
+        if (seenItem(slot, key)) {
+          self.metrics.discardedDuplicates += 1;
+          continue;
+        }
+        currentSlot = slot;
+        recordEmission(slot, key);
+        self.metrics.emittedBackfill += 1;
+        yield item;
+      }
+    };
+    const flushPendingBackfill = async function* (
+      self: ReplayStream<T, Cursor>,
+    ): AsyncGenerator<T> {
+      if (!pendingOrderedPage) return;
+      for await (const item of emitBackfillItems(self, pendingOrderedPage)) {
+        yield item;
+      }
+      pendingOrderedPage = null;
+    };
+
     let emptyPageRetries = 0;
     const MAX_EMPTY_PAGE_RETRIES = 10;
 
@@ -106,6 +164,9 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
           this.logger.error(
             `backfill returned ${MAX_EMPTY_PAGE_RETRIES} consecutive empty pages; treating as done`
           );
+          for await (const item of flushPendingBackfill(this)) {
+            yield item;
+          }
           break;
         }
         const backoffMs = calculateBackoff(emptyPageRetries - 1, DEFAULT_RETRY_CONFIG);
@@ -117,22 +178,19 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
       }
       emptyPageRetries = 0;
 
-      const sorted = [...page.items].sort((a, b) =>
-        compareBigint(extractSlot(a), extractSlot(b)),
-      );
-
-      for (const item of sorted) {
-        const slot = extractSlot(item);
-        const key = keyOf(item);
-        if (slot < startSlot) continue;
-        if (seenItem(slot, key)) {
-          this.metrics.discardedDuplicates += 1;
-          continue;
+      assertBackfillPageOrder(pendingOrderedPage, page.items, extractSlot);
+      if (pendingOrderedPage !== null) {
+        for await (const item of flushPendingBackfill(this)) {
+          yield item;
         }
-        currentSlot = slot;
-        recordEmission(slot, key);
-        this.metrics.emittedBackfill += 1;
-        yield item;
+      }
+      pendingOrderedPage = [...page.items];
+
+      const reachedEnd = page.done || page.cursor === undefined;
+      if (reachedEnd) {
+        for await (const item of flushPendingBackfill(this)) {
+          yield item;
+        }
       }
 
       const duplicatesTrimmed = livePump.discardBufferedUpTo(currentSlot);
@@ -145,6 +203,9 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
         const catchUpSlot =
           maxStreamSlot > safetyMargin ? (maxStreamSlot - safetyMargin) : 0n;
         if (currentSlot >= catchUpSlot) {
+          for await (const item of flushPendingBackfill(this)) {
+            yield item;
+          }
           this.logger.info(
             `replay reached SWITCHING threshold (currentSlot=${currentSlot}, maxStreamSlot=${maxStreamSlot}, catchUpSlot=${catchUpSlot})`
           );
@@ -152,7 +213,7 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
         }
       }
 
-      if (page.done || cursor === undefined) backfillDone = true;
+      if (reachedEnd) backfillDone = true;
     }
 
     this.logger.info(`replay entering SWITCHING state (currentSlot=${currentSlot})`);

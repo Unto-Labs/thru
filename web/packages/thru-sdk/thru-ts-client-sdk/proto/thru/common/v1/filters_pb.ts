@@ -14,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file thru/common/v1/filters.proto.
  */
 export const file_thru_common_v1_filters: GenFile = /*@__PURE__*/
-  fileDesc("Chx0aHJ1L2NvbW1vbi92MS9maWx0ZXJzLnByb3RvEg50aHJ1LmNvbW1vbi52MSLHAQoGRmlsdGVyEiQKCmV4cHJlc3Npb24YASABKAlCC+BBAbpIBXIDGIAgSACIAQESNwoGcGFyYW1zGAIgAygLMiIudGhydS5jb21tb24udjEuRmlsdGVyLlBhcmFtc0VudHJ5QgPgQQEaTwoLUGFyYW1zRW50cnkSCwoDa2V5GAEgASgJEi8KBXZhbHVlGAIgASgLMiAudGhydS5jb21tb24udjEuRmlsdGVyUGFyYW1WYWx1ZToCOAFCDQoLX2V4cHJlc3Npb24iqgMKEEZpbHRlclBhcmFtVmFsdWUSGwoMc3RyaW5nX3ZhbHVlGAEgASgJQgPgQQFIABIaCgtieXRlc192YWx1ZRgCIAEoDEID4EEBSAASGQoKYm9vbF92YWx1ZRgDIAEoCEID4EEBSAASGAoJaW50X3ZhbHVlGAQgASgSQgPgQQFIABIZCgp1aW50X3ZhbHVlGAUgASgEQgPgQQFIABIbCgxkb3VibGVfdmFsdWUYBiABKAFCA+BBAUgAEjMKDHB1YmtleV92YWx1ZRgHIAEoCzIWLnRocnUuY29tbW9uLnYxLlB1YmtleUID4EEBSAASOQoPc2lnbmF0dXJlX3ZhbHVlGAggASgLMhkudGhydS5jb21tb24udjEuU2lnbmF0dXJlQgPgQQFIABI4Cg90YV9wdWJrZXlfdmFsdWUYCSABKAsyGC50aHJ1LmNvbW1vbi52MS5UYVB1YmtleUID4EEBSAASPgoSdHNfc2lnbmF0dXJlX3ZhbHVlGAogASgLMhsudGhydS5jb21tb24udjEuVHNTaWduYXR1cmVCA+BBAUgAQgYKBGtpbmQioQEKE0NlbEZpbHRlclZhbGlkYXRpb24SJwoRYWxsb3dlZF9mdW5jdGlvbnMYASADKAlCDOBBAbpIBpIBAxCAARIkCg5hbGxvd2VkX2ZpZWxkcxgCIAMoCUIM4EEBukgGkgEDEIACEigKDm1heF9jb21wbGV4aXR5GAMgASgNQgvgQQG6SAUqAxjoB0gAiAEBQhEKD19tYXhfY29tcGxleGl0eULIAQoSY29tLnRocnUuY29tbW9uLnYxQgxGaWx0ZXJzUHJvdG9QAVpEZ2l0aHViLmNvbS9VbnRvLUxhYnMvdGhydS1uZXQvZ3JwYy9wa2cvcHJvdG8vdGhydS9jb21tb24vdjE7Y29tbW9udjGiAgNUQ1iqAg5UaHJ1LkNvbW1vbi5WMboCA1RIVcoCDlRocnVcQ29tbW9uXFYx4gIaVGhydVxDb21tb25cVjFcR1BCTWV0YWRhdGHqAhBUaHJ1OjpDb21tb246OlYxYgZwcm90bzM", [file_buf_validate_validate, file_google_api_field_behavior, file_thru_common_v1_primitives]);
+  fileDesc("Chx0aHJ1L2NvbW1vbi92MS9maWx0ZXJzLnByb3RvEg50aHJ1LmNvbW1vbi52MSLHAQoGRmlsdGVyEiQKCmV4cHJlc3Npb24YASABKAlCC+BBAbpIBXIDGIAgSACIAQESNwoGcGFyYW1zGAIgAygLMiIudGhydS5jb21tb24udjEuRmlsdGVyLlBhcmFtc0VudHJ5QgPgQQEaTwoLUGFyYW1zRW50cnkSCwoDa2V5GAEgASgJEi8KBXZhbHVlGAIgASgLMiAudGhydS5jb21tb24udjEuRmlsdGVyUGFyYW1WYWx1ZToCOAFCDQoLX2V4cHJlc3Npb24ipAQKEEZpbHRlclBhcmFtVmFsdWUSGwoMc3RyaW5nX3ZhbHVlGAEgASgJQgPgQQFIABIaCgtieXRlc192YWx1ZRgCIAEoDEID4EEBSAASGQoKYm9vbF92YWx1ZRgDIAEoCEID4EEBSAASGAoJaW50X3ZhbHVlGAQgASgSQgPgQQFIABIZCgp1aW50X3ZhbHVlGAUgASgEQgPgQQFIABIbCgxkb3VibGVfdmFsdWUYBiABKAFCA+BBAUgAEjMKDHB1YmtleV92YWx1ZRgHIAEoCzIWLnRocnUuY29tbW9uLnYxLlB1YmtleUID4EEBSAASOQoPc2lnbmF0dXJlX3ZhbHVlGAggASgLMhkudGhydS5jb21tb24udjEuU2lnbmF0dXJlQgPgQQFIABI4Cg90YV9wdWJrZXlfdmFsdWUYCSABKAsyGC50aHJ1LmNvbW1vbi52MS5UYVB1YmtleUID4EEBSAASPgoSdHNfc2lnbmF0dXJlX3ZhbHVlGAogASgLMhsudGhydS5jb21tb24udjEuVHNTaWduYXR1cmVCA+BBAUgAEjoKEGJ5dGVzX2xpc3RfdmFsdWUYCyABKAsyGS50aHJ1LmNvbW1vbi52MS5CeXRlc0xpc3RCA+BBAUgAEjwKEXB1YmtleV9saXN0X3ZhbHVlGAwgASgLMhoudGhydS5jb21tb24udjEuUHVia2V5TGlzdEID4EEBSABCBgoEa2luZCIgCglCeXRlc0xpc3QSEwoGdmFsdWVzGAEgAygMQgPgQQEiOQoKUHVia2V5TGlzdBIrCgZ2YWx1ZXMYASADKAsyFi50aHJ1LmNvbW1vbi52MS5QdWJrZXlCA+BBASKhAQoTQ2VsRmlsdGVyVmFsaWRhdGlvbhInChFhbGxvd2VkX2Z1bmN0aW9ucxgBIAMoCUIM4EEBukgGkgEDEIABEiQKDmFsbG93ZWRfZmllbGRzGAIgAygJQgzgQQG6SAaSAQMQgAISKAoObWF4X2NvbXBsZXhpdHkYAyABKA1CC+BBAbpIBSoDGOgHSACIAQFCEQoPX21heF9jb21wbGV4aXR5QsgBChJjb20udGhydS5jb21tb24udjFCDEZpbHRlcnNQcm90b1ABWkRnaXRodWIuY29tL1VudG8tTGFicy90aHJ1LW5ldC9ncnBjL3BrZy9wcm90by90aHJ1L2NvbW1vbi92MTtjb21tb252MaICA1RDWKoCDlRocnUuQ29tbW9uLlYxugIDVEhVygIOVGhydVxDb21tb25cVjHiAhpUaHJ1XENvbW1vblxWMVxHUEJNZXRhZGF0YeoCEFRocnU6OkNvbW1vbjo6VjFiBnByb3RvMw", [file_buf_validate_validate, file_google_api_field_behavior, file_thru_common_v1_primitives]);
 
 /**
  * Filter represents a CEL-based expression applied to query or stream results.
@@ -113,6 +113,18 @@ export type FilterParamValue = Message<"thru.common.v1.FilterParamValue"> & {
      */
     value: TsSignature;
     case: "tsSignatureValue";
+  } | {
+    /**
+     * @generated from field: thru.common.v1.BytesList bytes_list_value = 11;
+     */
+    value: BytesList;
+    case: "bytesListValue";
+  } | {
+    /**
+     * @generated from field: thru.common.v1.PubkeyList pubkey_list_value = 12;
+     */
+    value: PubkeyList;
+    case: "pubkeyListValue";
   } | { case: undefined; value?: undefined };
 };
 
@@ -122,6 +134,44 @@ export type FilterParamValue = Message<"thru.common.v1.FilterParamValue"> & {
  */
 export const FilterParamValueSchema: GenMessage<FilterParamValue> = /*@__PURE__*/
   messageDesc(file_thru_common_v1_filters, 1);
+
+/**
+ * BytesList holds a list of byte arrays for multi-value CEL filtering.
+ *
+ * @generated from message thru.common.v1.BytesList
+ */
+export type BytesList = Message<"thru.common.v1.BytesList"> & {
+  /**
+   * @generated from field: repeated bytes values = 1;
+   */
+  values: Uint8Array[];
+};
+
+/**
+ * Describes the message thru.common.v1.BytesList.
+ * Use `create(BytesListSchema)` to create a new message.
+ */
+export const BytesListSchema: GenMessage<BytesList> = /*@__PURE__*/
+  messageDesc(file_thru_common_v1_filters, 2);
+
+/**
+ * PubkeyList holds a list of pubkeys for multi-value CEL filtering.
+ *
+ * @generated from message thru.common.v1.PubkeyList
+ */
+export type PubkeyList = Message<"thru.common.v1.PubkeyList"> & {
+  /**
+   * @generated from field: repeated thru.common.v1.Pubkey values = 1;
+   */
+  values: Pubkey[];
+};
+
+/**
+ * Describes the message thru.common.v1.PubkeyList.
+ * Use `create(PubkeyListSchema)` to create a new message.
+ */
+export const PubkeyListSchema: GenMessage<PubkeyList> = /*@__PURE__*/
+  messageDesc(file_thru_common_v1_filters, 3);
 
 /**
  * CelFilterValidation describes the validation configuration returned to
@@ -157,5 +207,4 @@ export type CelFilterValidation = Message<"thru.common.v1.CelFilterValidation"> 
  * Use `create(CelFilterValidationSchema)` to create a new message.
  */
 export const CelFilterValidationSchema: GenMessage<CelFilterValidation> = /*@__PURE__*/
-  messageDesc(file_thru_common_v1_filters, 2);
-
+  messageDesc(file_thru_common_v1_filters, 4);

@@ -56,4 +56,3 @@ export type BlockHash = Message<"thru.core.v1.BlockHash"> & {
  */
 export const BlockHashSchema: GenMessage<BlockHash> = /*@__PURE__*/
   messageDesc(file_thru_core_v1_types, 1);
-

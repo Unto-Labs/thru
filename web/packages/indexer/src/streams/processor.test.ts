@@ -99,6 +99,28 @@ describe("runEventStreamProcessor", () => {
     );
   });
 
+  it("does not checkpoint when replay fails before yielding events", async () => {
+    replayMocks.createEventReplay.mockImplementation(() => ({
+      [Symbol.asyncIterator]: async function* () {
+        throw new Error("backfill source returned pages out of ascending slot order");
+      },
+    }));
+
+    await expect(
+      runEventStreamProcessor(
+        createStream(),
+        {
+          clientFactory: vi.fn(),
+          db: { transaction: vi.fn() } as any,
+          defaultStartSlot: 0n,
+          logLevel: "error",
+        }
+      )
+    ).rejects.toThrow("backfill source returned pages out of ascending slot order");
+
+    expect(checkpointMocks.updateCheckpoint).not.toHaveBeenCalled();
+  });
+
   it("checkpoints filtered batches without trying to insert an empty values list", async () => {
     replayMocks.events = [
       { eventId: "event-1", slot: 7n },

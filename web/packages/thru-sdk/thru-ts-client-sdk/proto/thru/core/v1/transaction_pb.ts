@@ -541,4 +541,3 @@ export enum TransactionVmError {
  */
 export const TransactionVmErrorSchema: GenEnum<TransactionVmError> = /*@__PURE__*/
   enumDesc(file_thru_core_v1_transaction, 1);
-

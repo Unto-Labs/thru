@@ -97,4 +97,3 @@ export type TsSignature = Message<"thru.common.v1.TsSignature"> & {
  */
 export const TsSignatureSchema: GenMessage<TsSignature> = /*@__PURE__*/
   messageDesc(file_thru_common_v1_primitives, 3);
-

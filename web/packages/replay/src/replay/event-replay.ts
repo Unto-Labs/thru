@@ -134,6 +134,7 @@ interface ParsedEventId {
   slot: Slot;
   blockOffset: bigint;
   callIdx: bigint;
+  eventIdx: bigint;
 }
 
 function eventBackfillFilter(
@@ -151,7 +152,7 @@ function eventBackfillFilter(
       `(event.slot == uint(${boundary.slot.toString()}) && ` +
       `(event.block_offset > uint(${boundary.blockOffset.toString()}) || ` +
       `(event.block_offset == uint(${boundary.blockOffset.toString()}) && ` +
-      `event.call_idx > uint(${boundary.callIdx.toString()}))))`,
+      `event.call_idx >= uint(${boundary.callIdx.toString()}))))`,
   });
 }
 
@@ -168,18 +169,21 @@ function parseCanonicalEventId(
 ): ParsedEventId | null {
   if (!eventId) return null;
 
-  const match = /^ts(\d+)_(\d+)_(\d+)$/.exec(eventId);
-  if (!match) return null;
+  const parts = eventId.split(":");
+  if (parts.length === 5) {
+    const [, slotPart, blockOffsetPart, callIdxPart, eventIdxPart] = parts;
+    const slot = BigInt(slotPart);
+    if (slot !== expectedSlot) return null;
 
-  const [slotPart, blockOffsetPart, callIdxPart] = match.slice(1);
-  const slot = BigInt(slotPart);
-  if (slot !== expectedSlot) return null;
+    return {
+      slot,
+      blockOffset: BigInt(blockOffsetPart),
+      callIdx: BigInt(callIdxPart),
+      eventIdx: BigInt(eventIdxPart),
+    };
+  }
 
-  return {
-    slot,
-    blockOffset: BigInt(blockOffsetPart),
-    callIdx: BigInt(callIdxPart),
-  };
+  return null;
 }
 
 function isAfterBoundary(event: ParsedEventId, boundary: ParsedEventId): boolean {
@@ -187,7 +191,8 @@ function isAfterBoundary(event: ParsedEventId, boundary: ParsedEventId): boolean
   if (event.blockOffset !== boundary.blockOffset) {
     return event.blockOffset > boundary.blockOffset;
   }
-  return event.callIdx > boundary.callIdx;
+  if (event.callIdx !== boundary.callIdx) return event.callIdx > boundary.callIdx;
+  return event.eventIdx > boundary.eventIdx;
 }
 
 function shouldEmitLiveEvent(
