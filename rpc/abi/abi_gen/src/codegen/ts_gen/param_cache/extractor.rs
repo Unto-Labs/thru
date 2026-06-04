@@ -5,8 +5,9 @@ use crate::codegen::shared::ir::TypeIr;
 use crate::codegen::ts_gen::enum_utils::{enum_field_info_by_name, enum_field_infos};
 use crate::codegen::ts_gen::helpers::{
     collect_field_ref_paths, collect_field_value_refs, escape_ts_keyword,
-    expr_to_ts_bigint_with_resolver, expr_to_ts_with_resolver, needs_endianness_arg, primitive_size,
-    primitive_to_dataview_getter, sequential_size_expression, struct_field_const_offset,
+    expr_to_ts_bigint_with_resolver, expr_to_ts_with_resolver, needs_endianness_arg,
+    primitive_size, primitive_to_dataview_getter, sequential_size_expression,
+    struct_field_const_offset,
 };
 use crate::codegen::ts_gen::ir_helpers::{
     TsParamBinding, collect_dynamic_param_bindings, deduplicated_ts_parameter_bindings,
@@ -194,7 +195,7 @@ pub(crate) fn build_param_extractor_plan(
     type_lookup: &BTreeMap<String, ResolvedType>,
 ) -> Option<ParamExtractorPlan> {
     /* Use deduplicated bindings - the extractor outputs values for Params.fromValues()
-       which expects deduplicated field names */
+    which expects deduplicated field names */
     let bindings = deduplicated_ts_parameter_bindings(type_ir);
     let has_public_bindings = bindings.iter().any(|binding| !binding.derived);
     let derived_bindings = collect_derived_bindings(resolved_type, &bindings);
@@ -218,13 +219,13 @@ pub(crate) fn build_param_extractor_plan(
 
     for binding in bindings.iter().filter(|binding| !binding.derived) {
         /* Skip bindings for jagged array element fields - they're not in the binding table
-           because they require sequential access and can't have direct offsets */
+        because they require sequential access and can't have direct offsets */
         if binding.canonical.contains(".element.") {
             continue;
         }
 
         /* Try to resolve the binding - if it's not available, it might be from a jagged
-           array element type, so skip it rather than panicking */
+        array element type, so skip it rather than panicking */
         let matched_key = match resolve_param_binding(&binding.ts_name, &available) {
             Some(key) => key,
             None => {

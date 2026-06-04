@@ -1,10 +1,11 @@
 use super::builder::fam_field_infos;
 use super::enum_utils::{EnumFieldInfo, enum_field_info_by_name, enum_field_infos};
 use super::helpers::{
-    collect_enum_variant_fam_refs, collect_field_value_refs, escape_ts_keyword, generated_type_ident,
-    is_nested_complex_type, literal_to_string, needs_endianness_arg, primitive_size,
-    primitive_to_dataview_getter, primitive_to_dataview_setter, primitive_to_ts_return_type,
-    sequential_size_expression, struct_field_const_offset, to_camel_case, to_lower_camel_case,
+    collect_enum_variant_fam_refs, collect_field_value_refs, escape_ts_keyword,
+    generated_type_ident, is_nested_complex_type, literal_to_string, needs_endianness_arg,
+    primitive_size, primitive_to_dataview_getter, primitive_to_dataview_setter,
+    primitive_to_ts_return_type, sequential_size_expression, struct_field_const_offset,
+    to_camel_case, to_lower_camel_case,
 };
 use super::ir_helpers::{collect_dynamic_param_bindings, deduplicated_ts_parameter_bindings};
 use super::ir_serialization::{emit_ir_constant, ir_constant_name};
@@ -268,8 +269,8 @@ fn emit_params_namespace(
     }
 
     /* Get deduplicated bindings. Deduplication removes duplicate parameters
-       that differ only by struct name prefix (e.g., keeps `body_tag` and
-       removes `StructName__body_tag`). */
+    that differ only by struct name prefix (e.g., keeps `body_tag` and
+    removes `StructName__body_tag`). */
     let bindings: Vec<_> = deduplicated_ts_parameter_bindings(type_ir)
         .into_iter()
         .filter(|binding| !binding.derived)
@@ -630,7 +631,14 @@ fn emit_struct_class(
         let Some(payload_offset) = info.payload_offset else {
             continue;
         };
-        let helper = emit_enum_reader_helper(class_name, resolved_type, info, payload_offset, type_lookup, uses_field_ref_resolver);
+        let helper = emit_enum_reader_helper(
+            class_name,
+            resolved_type,
+            info,
+            payload_offset,
+            type_lookup,
+            uses_field_ref_resolver,
+        );
         enum_offset_consts.push_str(&helper.offset_const);
         enum_method_blocks.push(helper.method_block);
     }
@@ -1762,7 +1770,11 @@ fn emit_enum_class(
         "    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);\n"
     )
     .unwrap();
-    write!(output, "    this.__tnFieldContext = fieldContext ?? null;\n").unwrap();
+    write!(
+        output,
+        "    this.__tnFieldContext = fieldContext ?? null;\n"
+    )
+    .unwrap();
     write!(output, "  }}\n\n").unwrap();
 
     write!(
@@ -2010,15 +2022,17 @@ fn emit_enum_reader_helper(
 
     // Resolve each field ref to an offset and primitive type, generating read code
     struct FieldRefRead {
-        path_key: String,  // e.g., "hdr.path_bitset.bytes.0"
+        path_key: String, // e.g., "hdr.path_bitset.bytes.0"
         offset: u64,
-        getter: String,    // e.g., "getUint8"
+        getter: String, // e.g., "getUint8"
         needs_le: bool,
     }
     let mut field_ref_reads: Vec<FieldRefRead> = Vec::new();
     for path_segments in &variant_fam_refs {
         let segments_str: Vec<&str> = path_segments.iter().map(String::as_str).collect();
-        if let Some((offset, prim_type)) = resolve_field_read(parent_type, 0, &segments_str, type_lookup) {
+        if let Some((offset, prim_type)) =
+            resolve_field_read(parent_type, 0, &segments_str, type_lookup)
+        {
             let getter = super::helpers::primitive_to_dataview_getter(&prim_type);
             let needs_le = super::helpers::primitive_size(&prim_type) > 1;
             let path_key = path_segments.join(".");
@@ -2089,7 +2103,11 @@ fn emit_enum_reader_helper(
         }
     } else {
         // Build fieldContext with auto-populated values
-        writeln!(methods, "    const __tnAutoContext: Record<string, number | bigint> = {{").unwrap();
+        writeln!(
+            methods,
+            "    const __tnAutoContext: Record<string, number | bigint> = {{"
+        )
+        .unwrap();
         for read in &field_ref_reads {
             if read.needs_le {
                 writeln!(
@@ -2116,11 +2134,7 @@ fn emit_enum_reader_helper(
             )
             .unwrap();
         } else {
-            writeln!(
-                methods,
-                "    const __tnMergedContext = __tnAutoContext;"
-            )
-            .unwrap();
+            writeln!(methods, "    const __tnMergedContext = __tnAutoContext;").unwrap();
         }
         writeln!(
             methods,
@@ -2253,7 +2267,12 @@ fn emit_jagged_array_ts_accessors(
         field_name, element_type_name
     )
     .unwrap();
-    writeln!(output, "    const count = this.get_{}_length();", field_name).unwrap();
+    writeln!(
+        output,
+        "    const count = this.get_{}_length();",
+        field_name
+    )
+    .unwrap();
     writeln!(output, "    if (index < 0 || index >= count) {{").unwrap();
     writeln!(output, "      return null;").unwrap();
     writeln!(output, "    }}").unwrap();
@@ -2311,7 +2330,12 @@ fn emit_jagged_array_ts_accessors(
         field_name, element_type_name
     )
     .unwrap();
-    writeln!(output, "    const count = this.get_{}_length();", field_name).unwrap();
+    writeln!(
+        output,
+        "    const count = this.get_{}_length();",
+        field_name
+    )
+    .unwrap();
     write_ts_offset_binding(output, offset_expr);
     writeln!(output, "    let cursor = offset;").unwrap();
     writeln!(output, "    for (let i = 0; i < count; i++) {{").unwrap();
@@ -2344,7 +2368,12 @@ fn emit_jagged_array_ts_accessors(
     )
     .unwrap();
     writeln!(output, "  get_{}_size(): number {{", field_name).unwrap();
-    writeln!(output, "    const count = this.get_{}_length();", field_name).unwrap();
+    writeln!(
+        output,
+        "    const count = this.get_{}_length();",
+        field_name
+    )
+    .unwrap();
     write_ts_offset_binding(output, offset_expr);
     writeln!(output, "    let cursor = offset;").unwrap();
     writeln!(output, "    for (let i = 0; i < count; i++) {{").unwrap();

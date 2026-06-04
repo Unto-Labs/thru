@@ -11,11 +11,11 @@ import {
   type StreamEventsRequest,
   StreamEventsRequestSchema,
   type StreamEventsResponse,
-} from "@thru/proto";
+} from "@thru/sdk/proto";
 import type { EventSource } from "../chain-client";
 import { ReplayStream } from "../replay-stream";
 import type { ReplayLogger, Slot } from "../types";
-import { resolveClient } from "../types";
+import { closeIfCloseable, resolveClient } from "../types";
 import { backfillPage, combineFilters, mapAsyncIterable, slotLiteralFilter } from "./helpers";
 
 export interface EventReplayOptions {
@@ -34,6 +34,7 @@ export interface EventReplayOptions {
   filter?: Filter;
   logger?: ReplayLogger;
   resubscribeOnEnd?: boolean;
+  signal?: AbortSignal;
 }
 
 const DEFAULT_PAGE_SIZE = 512;
@@ -91,10 +92,12 @@ export function createEventReplay(options: EventReplayOptions): ReplayStream<Eve
   // Reconnection handler - creates fresh client and returns new data source functions
   const onReconnect = options.clientFactory
     ? () => {
-        currentClient = options.clientFactory!();
+        const newClient = options.clientFactory!();
+        currentClient = newClient;
         return {
           subscribeLive: createSubscribeLive(currentClient),
           fetchBackfill: createFetchBackfill(currentClient),
+          dispose: () => closeIfCloseable(newClient),
         };
       }
     : undefined;
@@ -108,7 +111,11 @@ export function createEventReplay(options: EventReplayOptions): ReplayStream<Eve
     extractKey: eventKey,
     logger: options.logger,
     resubscribeOnEnd: options.resubscribeOnEnd,
+    signal: options.signal,
     onReconnect,
+    dispose: options.clientFactory
+      ? () => closeIfCloseable(currentClient)
+      : undefined,
   });
 }
 

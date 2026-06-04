@@ -384,11 +384,17 @@ mod tests {
 
         let mut enum_param_refs = BTreeMap::new();
         let mut enum_refs = BTreeMap::new();
-        enum_refs.insert("event_type".into(), PrimitiveType::Integral(IntegralType::U8));
+        enum_refs.insert(
+            "event_type".into(),
+            PrimitiveType::Integral(IntegralType::U8),
+        );
         enum_param_refs.insert("Event::payload".into(), enum_refs.clone());
 
         let mut tag_status = HashMap::new();
-        tag_status.insert("event_type".into(), PrimitiveType::Integral(IntegralType::U8));
+        tag_status.insert(
+            "event_type".into(),
+            PrimitiveType::Integral(IntegralType::U8),
+        );
 
         let payload_enum = ResolvedType {
             name: "Event::payload".into(),
@@ -420,7 +426,10 @@ mod tests {
 
         let mut struct_dynamic = BTreeMap::new();
         let mut struct_refs = BTreeMap::new();
-        struct_refs.insert("event_type".into(), PrimitiveType::Integral(IntegralType::U8));
+        struct_refs.insert(
+            "event_type".into(),
+            PrimitiveType::Integral(IntegralType::U8),
+        );
         struct_dynamic.insert("payload".into(), struct_refs);
 
         let root_type = ResolvedType {
@@ -477,10 +486,114 @@ mod tests {
         let buffer = vec![1u8, 0xAB, 0xCD];
         let params = extractor.extract(&buffer).expect("params");
         assert_eq!(params.get("payload.event_type"), Some(&1u128));
-        assert_eq!(
-            params.get("Event::payload.event_type"),
-            Some(&1u128)
-        );
+        assert_eq!(params.get("Event::payload.event_type"), Some(&1u128));
+    }
+
+    #[test]
+    fn allows_negative_signed_fields_that_are_not_dynamic_params() {
+        let tag_field = primitive_type("tag", PrimitiveType::Integral(IntegralType::U8));
+        let exponent_field = primitive_type("exponent", PrimitiveType::Integral(IntegralType::I32));
+
+        let root_type = ResolvedType {
+            name: "Container".into(),
+            size: Size::Const(5),
+            alignment: 1,
+            comment: None,
+            dynamic_params: BTreeMap::new(),
+            kind: ResolvedTypeKind::Struct {
+                fields: vec![
+                    ResolvedField {
+                        name: "tag".into(),
+                        field_type: tag_field,
+                        offset: Some(0),
+                    },
+                    ResolvedField {
+                        name: "exponent".into(),
+                        field_type: exponent_field,
+                        offset: Some(1),
+                    },
+                ],
+                packed: true,
+                custom_alignment: None,
+            },
+        };
+
+        let mut resolver = TypeResolver::new();
+        resolver
+            .types
+            .insert(root_type.name.clone(), root_type.clone());
+
+        let type_ir = TypeIr {
+            type_name: root_type.name.clone(),
+            alignment: 1,
+            root: IrNode::Const(ConstNode {
+                value: 0,
+                meta: NodeMetadata::default(),
+            }),
+            parameters: vec![IrParameter {
+                name: "tag".into(),
+                description: None,
+                derived: false,
+            }],
+        };
+
+        let extractor = ParamExtractor::new(&resolver, &root_type, &type_ir).expect("extractor");
+        let buffer = vec![7u8, 0xFF, 0xFF, 0xFF, 0xFF];
+
+        let params = extractor.extract(&buffer).expect("params");
+        assert_eq!(params.get("tag"), Some(&7u128));
+    }
+
+    #[test]
+    fn rejects_negative_signed_field_bound_as_dynamic_param() {
+        let exponent_field = primitive_type("exponent", PrimitiveType::Integral(IntegralType::I32));
+
+        let root_type = ResolvedType {
+            name: "Container".into(),
+            size: Size::Const(4),
+            alignment: 1,
+            comment: None,
+            dynamic_params: BTreeMap::new(),
+            kind: ResolvedTypeKind::Struct {
+                fields: vec![ResolvedField {
+                    name: "exponent".into(),
+                    field_type: exponent_field,
+                    offset: Some(0),
+                }],
+                packed: true,
+                custom_alignment: None,
+            },
+        };
+
+        let mut resolver = TypeResolver::new();
+        resolver
+            .types
+            .insert(root_type.name.clone(), root_type.clone());
+
+        let type_ir = TypeIr {
+            type_name: root_type.name.clone(),
+            alignment: 1,
+            root: IrNode::Const(ConstNode {
+                value: 0,
+                meta: NodeMetadata::default(),
+            }),
+            parameters: vec![IrParameter {
+                name: "exponent".into(),
+                description: None,
+                derived: false,
+            }],
+        };
+
+        let extractor = ParamExtractor::new(&resolver, &root_type, &type_ir).expect("extractor");
+        let buffer = vec![0xFF, 0xFF, 0xFF, 0xFF];
+
+        let err = extractor
+            .extract(&buffer)
+            .expect_err("negative dynamic param");
+        assert!(matches!(
+            err,
+            ReflectError::NegativeDynamicParam { ref parameter, .. } if parameter == "exponent"
+        ));
     }
 }
 
@@ -489,7 +602,7 @@ struct StructWalker<'a> {
     resolver: &'a TypeResolver,
     field_params: &'a BTreeMap<String, Vec<&'a str>>,
     params: ParamMap,
-    value_lookup: HashMap<String, u128>,
+    value_lookup: HashMap<String, i128>,
     remaining_payload: BTreeMap<&'a str, String>,
     scope_stack: Vec<String>,
 }
@@ -668,18 +781,10 @@ impl<'a> StructWalker<'a> {
                 let element_data = &data[offset..offset + element_size];
                 path.push(i.to_string());
                 if let PrimitiveType::Integral(_) = prim_type {
-                    let value = read_primitive_value(
-                        element_data,
-                        prim_type,
-                        self.type_name,
-                        &path_key(path),
-                    )?;
+                    let key = path_key(path);
+                    let value = read_integral_value(element_data, prim_type, self.type_name, &key)?;
                     self.store_field_value(path, value);
-                    if let Some(param_names) = self.field_params.get(&path_key(path)) {
-                        for &name in param_names {
-                            self.params.insert(name.to_string(), value);
-                        }
-                    }
+                    self.insert_field_params(&key, value)?;
                 }
                 path.pop();
             }
@@ -774,7 +879,7 @@ impl<'a> StructWalker<'a> {
         if size > data.len() {
             return Err(self.buffer_error(size as u64));
         }
-        self.store_field_value(path, size as u128);
+        self.store_field_value(path, size as i128);
         if let Some(param_names) = self.field_params.get(&path_key(path)) {
             for &name in param_names {
                 self.params.insert(name.to_string(), size as u128);
@@ -817,6 +922,15 @@ impl<'a> StructWalker<'a> {
         }
     }
 
+    fn insert_field_params(&mut self, key: &str, value: i128) -> ReflectResult<()> {
+        let param_names = self.field_params.get(key).cloned().unwrap_or_default();
+        for name in param_names {
+            let param_value = nonnegative_integral(value, self.type_name, name)?;
+            self.params.insert(name.to_string(), param_value);
+        }
+        Ok(())
+    }
+
     fn read_primitive(
         &mut self,
         path: &mut Vec<String>,
@@ -829,20 +943,16 @@ impl<'a> StructWalker<'a> {
         }
 
         if let PrimitiveType::Integral(_) = prim_type {
-            let value =
-                read_primitive_value(&data[..size], prim_type, self.type_name, &path_key(path))?;
+            let key = path_key(path);
+            let value = read_integral_value(&data[..size], prim_type, self.type_name, &key)?;
             self.store_field_value(path, value);
-            if let Some(param_names) = self.field_params.get(&path_key(path)) {
-                for &name in param_names {
-                    self.params.insert(name.to_string(), value);
-                }
-            }
+            self.insert_field_params(&key, value)?;
         }
 
         Ok(())
     }
 
-    fn store_field_value(&mut self, path: &[String], value: u128) {
+    fn store_field_value(&mut self, path: &[String], value: i128) {
         if path.is_empty() {
             return;
         }
@@ -853,7 +963,7 @@ impl<'a> StructWalker<'a> {
         }
     }
 
-    fn lookup_field_value(&self, key: &str) -> Option<u128> {
+    fn lookup_field_value(&self, key: &str) -> Option<i128> {
         if let Some(val) = self.value_lookup.get(key) {
             return Some(*val);
         }
@@ -902,7 +1012,6 @@ impl<'a> StructWalker<'a> {
             ExprKind::FieldRef(field_ref) => {
                 let key = flatten_field_ref(field_ref);
                 self.lookup_field_value(&key)
-                    .map(|v| v as i128)
                     .ok_or_else(|| ReflectError::UnsupportedDynamicParam {
                         type_name: self.type_name.to_string(),
                         parameter: key,
@@ -1098,42 +1207,30 @@ fn expr_name(expr: &ExprKind) -> String {
     }
 }
 
-fn read_primitive_value(
+fn read_integral_value(
     data: &[u8],
     prim_type: &PrimitiveType,
     type_name: &str,
     parameter: &str,
-) -> ReflectResult<u128> {
+) -> ReflectResult<i128> {
     match prim_type {
         PrimitiveType::Integral(int_type) => match int_type {
-            IntegralType::U8 | IntegralType::Char => Ok(u8::from_le_bytes([data[0]]) as u128),
-            IntegralType::U16 => Ok(u16::from_le_bytes([data[0], data[1]]) as u128),
+            IntegralType::U8 | IntegralType::Char => Ok(u8::from_le_bytes([data[0]]) as i128),
+            IntegralType::U16 => Ok(u16::from_le_bytes([data[0], data[1]]) as i128),
             IntegralType::U32 => {
-                Ok(u32::from_le_bytes([data[0], data[1], data[2], data[3]]) as u128)
+                Ok(u32::from_le_bytes([data[0], data[1], data[2], data[3]]) as i128)
             }
             IntegralType::U64 => Ok(u64::from_le_bytes([
                 data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7],
-            ]) as u128),
-            IntegralType::I8 => {
-                positive_integral(i8::from_le_bytes([data[0]]) as i128, type_name, parameter)
+            ]) as i128),
+            IntegralType::I8 => Ok(i8::from_le_bytes([data[0]]) as i128),
+            IntegralType::I16 => Ok(i16::from_le_bytes([data[0], data[1]]) as i128),
+            IntegralType::I32 => {
+                Ok(i32::from_le_bytes([data[0], data[1], data[2], data[3]]) as i128)
             }
-            IntegralType::I16 => positive_integral(
-                i16::from_le_bytes([data[0], data[1]]) as i128,
-                type_name,
-                parameter,
-            ),
-            IntegralType::I32 => positive_integral(
-                i32::from_le_bytes([data[0], data[1], data[2], data[3]]) as i128,
-                type_name,
-                parameter,
-            ),
-            IntegralType::I64 => positive_integral(
-                i64::from_le_bytes([
-                    data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7],
-                ]) as i128,
-                type_name,
-                parameter,
-            ),
+            IntegralType::I64 => Ok(i64::from_le_bytes([
+                data[0], data[1], data[2], data[3], data[4], data[5], data[6], data[7],
+            ]) as i128),
         },
         PrimitiveType::FloatingPoint(_) => Err(ReflectError::UnsupportedDynamicParam {
             type_name: type_name.to_string(),
@@ -1143,7 +1240,7 @@ fn read_primitive_value(
     }
 }
 
-fn positive_integral(value: i128, type_name: &str, parameter: &str) -> ReflectResult<u128> {
+fn nonnegative_integral(value: i128, type_name: &str, parameter: &str) -> ReflectResult<u128> {
     if value < 0 {
         return Err(ReflectError::NegativeDynamicParam {
             type_name: type_name.to_string(),

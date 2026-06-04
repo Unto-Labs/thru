@@ -1,5 +1,5 @@
 import { create } from "@bufbuild/protobuf";
-import { type Filter, FilterSchema, type PageResponse } from "@thru/proto";
+import { type Filter, FilterSchema, type PageResponse } from "@thru/sdk/proto";
 import type { Slot } from "../types";
 
 export function combineFilters(base?: Filter, user?: Filter): Filter | undefined {

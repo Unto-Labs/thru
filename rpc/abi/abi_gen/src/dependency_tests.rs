@@ -39,14 +39,17 @@ mod dependency_tests {
         let typedefs = vec![
             TypeDef {
                 name: "BaseType".to_string(),
+                format: None,
                 kind: create_u32_primitive(),
             },
             TypeDef {
                 name: "DerivedType".to_string(),
+                format: None,
                 kind: TypeKind::Struct(StructType {
                     container_attributes: Default::default(),
                     fields: vec![StructField {
                         name: "base_field".to_string(),
+                        format: None,
                         field_type: create_type_ref("BaseType"),
                     }],
                 }),
@@ -72,20 +75,24 @@ mod dependency_tests {
         let typedefs = vec![
             TypeDef {
                 name: "TypeA".to_string(),
+                format: None,
                 kind: TypeKind::Struct(StructType {
                     container_attributes: Default::default(),
                     fields: vec![StructField {
                         name: "field_b".to_string(),
+                        format: None,
                         field_type: create_type_ref("TypeB"),
                     }],
                 }),
             },
             TypeDef {
                 name: "TypeB".to_string(),
+                format: None,
                 kind: TypeKind::Struct(StructType {
                     container_attributes: Default::default(),
                     fields: vec![StructField {
                         name: "field_a".to_string(),
+                        format: None,
                         field_type: create_type_ref("TypeA"),
                     }],
                 }),
@@ -108,6 +115,7 @@ mod dependency_tests {
 
         let typedefs = vec![TypeDef {
             name: "MyEnum".to_string(),
+            format: None,
             kind: TypeKind::Enum(EnumType {
                 container_attributes: Default::default(),
                 tag_ref: create_literal_expr(42), // Constant tag - valid
@@ -132,15 +140,18 @@ mod dependency_tests {
         let typedefs = vec![
             TypeDef {
                 name: "Container".to_string(),
+                format: None,
                 kind: TypeKind::Struct(StructType {
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {
                             name: "my_enum".to_string(),
+                            format: None,
                             field_type: create_type_ref("MyEnum"),
                         },
                         StructField {
                             name: "other_field".to_string(),
+                            format: None,
                             field_type: create_u32_primitive(),
                         },
                     ],
@@ -148,6 +159,7 @@ mod dependency_tests {
             },
             TypeDef {
                 name: "MyEnum".to_string(),
+                format: None,
                 kind: TypeKind::Enum(EnumType {
                     container_attributes: Default::default(),
                     // Invalid: tag references a field whose offset depends on this enum's size
@@ -186,6 +198,7 @@ mod dependency_tests {
 
         let typedefs = vec![TypeDef {
             name: "MyArray".to_string(),
+            format: None,
             kind: TypeKind::Array(ArrayType {
                 container_attributes: Default::default(),
                 size: create_literal_expr(10), // Constant size - valid
@@ -207,15 +220,18 @@ mod dependency_tests {
         let typedefs = vec![
             TypeDef {
                 name: "Container".to_string(),
+                format: None,
                 kind: TypeKind::Struct(StructType {
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {
                             name: "dynamic_array".to_string(),
+                            format: None,
                             field_type: create_type_ref("MyArray"),
                         },
                         StructField {
                             name: "size_field".to_string(),
+                            format: None,
                             field_type: create_u32_primitive(),
                         },
                     ],
@@ -223,6 +239,7 @@ mod dependency_tests {
             },
             TypeDef {
                 name: "MyArray".to_string(),
+                format: None,
                 kind: TypeKind::Array(ArrayType {
                     container_attributes: Default::default(),
                     // Invalid: size references a field whose offset depends on this array's size
@@ -254,19 +271,23 @@ mod dependency_tests {
         let typedefs = vec![
             TypeDef {
                 name: "BadStruct".to_string(),
+                format: None,
                 kind: TypeKind::Struct(StructType {
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {
                             name: "early_field".to_string(),
+                            format: None,
                             field_type: create_type_ref("ArrayWithForwardRef"),
                         },
                         StructField {
                             name: "middle_field".to_string(),
+                            format: None,
                             field_type: create_u32_primitive(),
                         },
                         StructField {
                             name: "late_field".to_string(),
+                            format: None,
                             field_type: create_u32_primitive(),
                         },
                     ],
@@ -274,6 +295,7 @@ mod dependency_tests {
             },
             TypeDef {
                 name: "ArrayWithForwardRef".to_string(),
+                format: None,
                 kind: TypeKind::Array(ArrayType {
                     container_attributes: Default::default(),
                     // Invalid: references a field that comes later in the same struct
@@ -299,6 +321,7 @@ mod dependency_tests {
         let typedefs = vec![
             TypeDef {
                 name: "ComplexEnum".to_string(),
+                format: None,
                 kind: TypeKind::Enum(EnumType {
                     container_attributes: Default::default(),
                     // Complex expression with multiple field references
@@ -318,15 +341,18 @@ mod dependency_tests {
             },
             TypeDef {
                 name: "SomeStruct".to_string(),
+                format: None,
                 kind: TypeKind::Struct(StructType {
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {
                             name: "field1".to_string(),
+                            format: None,
                             field_type: create_u32_primitive(),
                         },
                         StructField {
                             name: "field2".to_string(),
+                            format: None,
                             field_type: create_u32_primitive(),
                         },
                     ],
@@ -356,6 +382,7 @@ mod dependency_tests {
         let typedefs = vec![
             TypeDef {
                 name: "ArrayWithSizeof".to_string(),
+                format: None,
                 kind: TypeKind::Array(ArrayType {
                     container_attributes: Default::default(),
                     size: ExprKind::Sizeof(SizeofExpr {
@@ -367,6 +394,7 @@ mod dependency_tests {
             },
             TypeDef {
                 name: "SomeType".to_string(),
+                format: None,
                 kind: create_u32_primitive(),
             },
         ];
@@ -395,6 +423,7 @@ mod dependency_tests {
         let typedefs = vec![
             TypeDef {
                 name: "MyUnion".to_string(),
+                format: None,
                 kind: TypeKind::Union(UnionType {
                     container_attributes: Default::default(),
                     variants: vec![
@@ -411,10 +440,12 @@ mod dependency_tests {
             },
             TypeDef {
                 name: "TypeA".to_string(),
+                format: None,
                 kind: create_u32_primitive(),
             },
             TypeDef {
                 name: "TypeB".to_string(),
+                format: None,
                 kind: create_u8_primitive(),
             },
         ];
@@ -443,6 +474,7 @@ mod dependency_tests {
 
         let typedefs = vec![TypeDef {
             name: "PackedStruct".to_string(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: ContainerAttributes {
                     packed: true,
@@ -452,10 +484,12 @@ mod dependency_tests {
                 fields: vec![
                     StructField {
                         name: "field1".to_string(),
+                        format: None,
                         field_type: create_u8_primitive(),
                     },
                     StructField {
                         name: "field2".to_string(),
+                        format: None,
                         field_type: create_u32_primitive(),
                     },
                 ],
@@ -474,6 +508,7 @@ mod dependency_tests {
 
         let typedefs = vec![TypeDef {
             name: "AlignedStruct".to_string(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: ContainerAttributes {
                     packed: false,
@@ -482,6 +517,7 @@ mod dependency_tests {
                 },
                 fields: vec![StructField {
                     name: "field1".to_string(),
+                    format: None,
                     field_type: create_u32_primitive(),
                 }],
             }),
@@ -500,30 +536,36 @@ mod dependency_tests {
         let typedefs = vec![
             TypeDef {
                 name: "TypeA".to_string(),
+                format: None,
                 kind: TypeKind::Struct(StructType {
                     container_attributes: Default::default(),
                     fields: vec![StructField {
                         name: "field_b".to_string(),
+                        format: None,
                         field_type: create_type_ref("TypeB"),
                     }],
                 }),
             },
             TypeDef {
                 name: "TypeB".to_string(),
+                format: None,
                 kind: TypeKind::Struct(StructType {
                     container_attributes: Default::default(),
                     fields: vec![StructField {
                         name: "field_c".to_string(),
+                        format: None,
                         field_type: create_type_ref("TypeC"),
                     }],
                 }),
             },
             TypeDef {
                 name: "TypeC".to_string(),
+                format: None,
                 kind: TypeKind::Struct(StructType {
                     container_attributes: Default::default(),
                     fields: vec![StructField {
                         name: "field_a".to_string(),
+                        format: None,
                         field_type: create_type_ref("TypeA"), // Back to TypeA - creates cycle
                     }],
                 }),
@@ -554,19 +596,23 @@ mod dependency_tests {
             // Container holds TypeA and TypeB
             TypeDef {
                 name: "Container".to_string(),
+                format: None,
                 kind: TypeKind::Struct(StructType {
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {
                             name: "type_a".to_string(),
+                            format: None,
                             field_type: create_type_ref("TypeA"),
                         },
                         StructField {
                             name: "type_b".to_string(),
+                            format: None,
                             field_type: create_type_ref("TypeB"),
                         },
                         StructField {
                             name: "reference_field".to_string(),
+                            format: None,
                             field_type: create_u32_primitive(),
                         },
                     ],
@@ -575,10 +621,12 @@ mod dependency_tests {
             // TypeA contains an array whose size affects Container layout
             TypeDef {
                 name: "TypeA".to_string(),
+                format: None,
                 kind: TypeKind::Struct(StructType {
                     container_attributes: Default::default(),
                     fields: vec![StructField {
                         name: "dynamic_array".to_string(),
+                        format: None,
                         field_type: create_type_ref("DynamicArray"),
                     }],
                 }),
@@ -586,6 +634,7 @@ mod dependency_tests {
             // DynamicArray's size depends on a field in Container
             TypeDef {
                 name: "DynamicArray".to_string(),
+                format: None,
                 kind: TypeKind::Array(ArrayType {
                     container_attributes: Default::default(),
                     // This creates a transitive dependency: Container -> TypeA -> DynamicArray -> Container
@@ -597,6 +646,7 @@ mod dependency_tests {
             // TypeB is independent
             TypeDef {
                 name: "TypeB".to_string(),
+                format: None,
                 kind: create_u32_primitive(),
             },
         ];
@@ -623,6 +673,7 @@ mod dependency_tests {
         let typedefs = vec![
             TypeDef {
                 name: "ComplexArray".to_string(),
+                format: None,
                 kind: TypeKind::Array(ArrayType {
                     container_attributes: Default::default(),
                     // Expression references multiple fields
@@ -639,15 +690,18 @@ mod dependency_tests {
             },
             TypeDef {
                 name: "DataStruct".to_string(),
+                format: None,
                 kind: TypeKind::Struct(StructType {
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {
                             name: "size1".to_string(),
+                            format: None,
                             field_type: create_u32_primitive(),
                         },
                         StructField {
                             name: "size2".to_string(),
+                            format: None,
                             field_type: create_u32_primitive(),
                         },
                     ],
@@ -680,6 +734,7 @@ mod dependency_tests {
         let typedefs = vec![
             TypeDef {
                 name: "BadArray".to_string(),
+                format: None,
                 kind: TypeKind::Array(ArrayType {
                     container_attributes: Default::default(),
                     size: create_literal_expr(10), // Constant size
@@ -689,10 +744,12 @@ mod dependency_tests {
             },
             TypeDef {
                 name: "DynamicStruct".to_string(),
+                format: None,
                 kind: TypeKind::Struct(StructType {
                     container_attributes: Default::default(),
                     fields: vec![StructField {
                         name: "dynamic_array".to_string(),
+                        format: None,
                         field_type: TypeKind::Array(ArrayType {
                             container_attributes: Default::default(),
                             size: create_field_ref_expr(vec!["some_field"]), // Non-constant size
@@ -733,6 +790,7 @@ mod dependency_tests {
         let typedefs = vec![
             TypeDef {
                 name: "DeepArray".to_string(),
+                format: None,
                 kind: TypeKind::Array(ArrayType {
                     container_attributes: Default::default(),
                     size: create_literal_expr(5), // Constant size
@@ -742,15 +800,18 @@ mod dependency_tests {
             },
             TypeDef {
                 name: "WrapperStruct".to_string(),
+                format: None,
                 kind: TypeKind::Struct(StructType {
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {
                             name: "constant_field".to_string(),
+                            format: None,
                             field_type: create_u32_primitive(), // This field is constant
                         },
                         StructField {
                             name: "enum_field".to_string(),
+                            format: None,
                             field_type: create_type_ref("DynamicEnum"), // This makes the whole struct non-constant
                         },
                     ],
@@ -758,6 +819,7 @@ mod dependency_tests {
             },
             TypeDef {
                 name: "DynamicEnum".to_string(),
+                format: None,
                 kind: TypeKind::Enum(EnumType {
                     container_attributes: Default::default(),
                     // Non-constant tag makes this enum's size non-constant
@@ -802,6 +864,7 @@ mod dependency_tests {
         let typedefs = vec![
             TypeDef {
                 name: "ShiftArray".to_string(),
+                format: None,
                 kind: TypeKind::Array(ArrayType {
                     container_attributes: Default::default(),
                     // Array size using shift operations: (base_size << shift_amount) >> 1
@@ -824,15 +887,18 @@ mod dependency_tests {
             },
             TypeDef {
                 name: "ConfigStruct".to_string(),
+                format: None,
                 kind: TypeKind::Struct(StructType {
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {
                             name: "base_size".to_string(),
+                            format: None,
                             field_type: create_u32_primitive(),
                         },
                         StructField {
                             name: "shift_amount".to_string(),
+                            format: None,
                             field_type: create_u32_primitive(),
                         },
                     ],
@@ -885,6 +951,7 @@ mod dependency_tests {
 
         let typedefs = vec![TypeDef {
             name: "MyU32".to_string(),
+            format: None,
             kind: create_u32_primitive(),
         }];
 
@@ -958,10 +1025,12 @@ mod dependency_tests {
         let typedefs = vec![
             TypeDef {
                 name: "DuplicateName".to_string(),
+                format: None,
                 kind: create_u32_primitive(),
             },
             TypeDef {
                 name: "DuplicateName".to_string(), // Duplicate!
+                format: None,
                 kind: create_u8_primitive(),
             },
         ];
@@ -985,19 +1054,23 @@ mod dependency_tests {
 
         let typedefs = vec![TypeDef {
             name: "BadStruct".to_string(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
                         name: "duplicate_field".to_string(),
+                        format: None,
                         field_type: create_u32_primitive(),
                     },
                     StructField {
                         name: "duplicate_field".to_string(), // Duplicate!
+                        format: None,
                         field_type: create_u8_primitive(),
                     },
                     StructField {
                         name: "unique_field".to_string(),
+                        format: None,
                         field_type: create_u32_primitive(),
                     },
                 ],
@@ -1023,6 +1096,7 @@ mod dependency_tests {
 
         let typedefs = vec![TypeDef {
             name: "BadUnion".to_string(),
+            format: None,
             kind: TypeKind::Union(UnionType {
                 container_attributes: Default::default(),
                 variants: vec![
@@ -1057,6 +1131,7 @@ mod dependency_tests {
 
         let typedefs = vec![TypeDef {
             name: "BadEnum".to_string(),
+            format: None,
             kind: TypeKind::Enum(EnumType {
                 container_attributes: Default::default(),
                 tag_ref: create_literal_expr(0),
@@ -1094,6 +1169,7 @@ mod dependency_tests {
 
         let typedefs = vec![TypeDef {
             name: "BadEnum".to_string(),
+            format: None,
             kind: TypeKind::Enum(EnumType {
                 container_attributes: Default::default(),
                 tag_ref: create_literal_expr(0),
@@ -1133,24 +1209,29 @@ mod dependency_tests {
             // Duplicate type names
             TypeDef {
                 name: "DuplicateType".to_string(),
+                format: None,
                 kind: create_u32_primitive(),
             },
             TypeDef {
                 name: "DuplicateType".to_string(),
+                format: None,
                 kind: create_u8_primitive(),
             },
             // Struct with duplicate fields
             TypeDef {
                 name: "BadStruct".to_string(),
+                format: None,
                 kind: TypeKind::Struct(StructType {
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {
                             name: "bad_field".to_string(),
+                            format: None,
                             field_type: create_u32_primitive(),
                         },
                         StructField {
                             name: "bad_field".to_string(),
+                            format: None,
                             field_type: create_u8_primitive(),
                         },
                     ],
@@ -1159,6 +1240,7 @@ mod dependency_tests {
             // Enum with duplicate variants and tag values
             TypeDef {
                 name: "BadEnum".to_string(),
+                format: None,
                 kind: TypeKind::Enum(EnumType {
                     container_attributes: Default::default(),
                     tag_ref: create_literal_expr(0),
@@ -1203,15 +1285,18 @@ mod dependency_tests {
         let typedefs = vec![
             TypeDef {
                 name: "ValidStruct".to_string(),
+                format: None,
                 kind: TypeKind::Struct(StructType {
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {
                             name: "field1".to_string(),
+                            format: None,
                             field_type: create_u32_primitive(),
                         },
                         StructField {
                             name: "field2".to_string(),
+                            format: None,
                             field_type: create_u8_primitive(),
                         },
                     ],
@@ -1219,6 +1304,7 @@ mod dependency_tests {
             },
             TypeDef {
                 name: "ValidEnum".to_string(),
+                format: None,
                 kind: TypeKind::Enum(EnumType {
                     container_attributes: Default::default(),
                     tag_ref: create_literal_expr(0),
@@ -1238,6 +1324,7 @@ mod dependency_tests {
             },
             TypeDef {
                 name: "ValidUnion".to_string(),
+                format: None,
                 kind: TypeKind::Union(UnionType {
                     container_attributes: Default::default(),
                     variants: vec![
@@ -1268,15 +1355,18 @@ mod dependency_tests {
         let typedefs = vec![
             TypeDef {
                 name: "RootStruct".to_string(),
+                format: None,
                 kind: TypeKind::Struct(StructType {
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {
                             name: "intermediate".to_string(),
+                            format: None,
                             field_type: create_type_ref("IntermediateStruct"),
                         },
                         StructField {
                             name: "target_field".to_string(),
+                            format: None,
                             field_type: create_u32_primitive(),
                         },
                     ],
@@ -1284,16 +1374,19 @@ mod dependency_tests {
             },
             TypeDef {
                 name: "IntermediateStruct".to_string(),
+                format: None,
                 kind: TypeKind::Struct(StructType {
                     container_attributes: Default::default(),
                     fields: vec![StructField {
                         name: "problematic_array".to_string(),
+                        format: None,
                         field_type: create_type_ref("ProblematicArray"),
                     }],
                 }),
             },
             TypeDef {
                 name: "ProblematicArray".to_string(),
+                format: None,
                 kind: TypeKind::Array(ArrayType {
                     container_attributes: Default::default(),
                     // This creates a transitive dependency back to RootStruct
@@ -1328,19 +1421,23 @@ mod dependency_tests {
         let typedefs = vec![
             TypeDef {
                 name: "ValidStruct".to_string(),
+                format: None,
                 kind: TypeKind::Struct(StructType {
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {
                             name: "my_enum".to_string(),
+                            format: None,
                             field_type: create_type_ref("ConstantSizeEnum"),
                         },
                         StructField {
                             name: "tag_field".to_string(),
+                            format: None,
                             field_type: create_u32_primitive(),
                         },
                         StructField {
                             name: "other_data".to_string(),
+                            format: None,
                             field_type: create_u64_primitive(),
                         },
                     ],
@@ -1348,6 +1445,7 @@ mod dependency_tests {
             },
             TypeDef {
                 name: "ConstantSizeEnum".to_string(),
+                format: None,
                 kind: TypeKind::Enum(EnumType {
                     container_attributes: Default::default(),
                     // Tag references a field that comes after the enum field
@@ -1424,6 +1522,7 @@ mod dependency_tests {
         // Create a valid size-discriminated union as the top-level type
         let typedefs = vec![TypeDef {
             name: "TokenAccountUnion".to_string(),
+            format: None,
             kind: create_size_discriminated_union(
                 "TokenAccountUnion",
                 vec![
@@ -1447,6 +1546,7 @@ mod dependency_tests {
         // Size-discriminated union with duplicate sizes (should be a violation)
         let typedefs = vec![TypeDef {
             name: "BadUnion".to_string(),
+            format: None,
             kind: create_size_discriminated_union(
                 "BadUnion",
                 vec![
@@ -1471,6 +1571,7 @@ mod dependency_tests {
         // Size-discriminated union with only one variant
         let typedefs = vec![TypeDef {
             name: "SingleVariantUnion".to_string(),
+            format: None,
             kind: create_size_discriminated_union(
                 "SingleVariantUnion",
                 vec![("only_variant", 100, create_u32_primitive())],
@@ -1493,6 +1594,7 @@ mod dependency_tests {
         let typedefs = vec![
             TypeDef {
                 name: "TokenAccountUnion".to_string(),
+                format: None,
                 kind: create_size_discriminated_union(
                     "TokenAccountUnion",
                     vec![
@@ -1503,15 +1605,18 @@ mod dependency_tests {
             },
             TypeDef {
                 name: "ValidContainer".to_string(),
+                format: None,
                 kind: TypeKind::Struct(StructType {
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {
                             name: "fixed_header".to_string(),
+                            format: None,
                             field_type: create_u32_primitive(), // Fixed size
                         },
                         StructField {
                             name: "account_data".to_string(),
+                            format: None,
                             field_type: create_type_ref("TokenAccountUnion"), // Only variable factor
                         },
                     ],
@@ -1533,6 +1638,7 @@ mod dependency_tests {
         let typedefs = vec![
             TypeDef {
                 name: "TokenAccountUnion".to_string(),
+                format: None,
                 kind: create_size_discriminated_union(
                     "TokenAccountUnion",
                     vec![
@@ -1543,15 +1649,18 @@ mod dependency_tests {
             },
             TypeDef {
                 name: "InvalidContainer".to_string(),
+                format: None,
                 kind: TypeKind::Struct(StructType {
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {
                             name: "account_data".to_string(),
+                            format: None,
                             field_type: create_type_ref("TokenAccountUnion"),
                         },
                         StructField {
                             name: "dynamic_array".to_string(),
+                            format: None,
                             field_type: TypeKind::Array(ArrayType {
                                 container_attributes: Default::default(),
                                 size: create_field_ref_expr(vec!["some_field"]), // Non-constant size!
@@ -1583,6 +1692,7 @@ mod dependency_tests {
         let typedefs = vec![
             TypeDef {
                 name: "TokenAccountUnion".to_string(),
+                format: None,
                 kind: create_size_discriminated_union(
                     "TokenAccountUnion",
                     vec![
@@ -1593,6 +1703,7 @@ mod dependency_tests {
             },
             TypeDef {
                 name: "InvalidArray".to_string(),
+                format: None,
                 kind: TypeKind::Array(ArrayType {
                     container_attributes: Default::default(),
                     size: create_literal_expr(10),
@@ -1625,6 +1736,7 @@ mod dependency_tests {
         let typedefs = vec![
             TypeDef {
                 name: "TokenAccountUnion".to_string(),
+                format: None,
                 kind: create_size_discriminated_union(
                     "TokenAccountUnion",
                     vec![
@@ -1635,6 +1747,7 @@ mod dependency_tests {
             },
             TypeDef {
                 name: "InvalidRegularUnion".to_string(),
+                format: None,
                 kind: TypeKind::Union(UnionType {
                     container_attributes: Default::default(),
                     variants: vec![
@@ -1674,6 +1787,7 @@ mod dependency_tests {
         let typedefs = vec![
             TypeDef {
                 name: "TokenAccountUnion".to_string(),
+                format: None,
                 kind: create_size_discriminated_union(
                     "TokenAccountUnion",
                     vec![
@@ -1684,19 +1798,23 @@ mod dependency_tests {
             },
             TypeDef {
                 name: "WrapperType".to_string(),
+                format: None,
                 kind: create_type_ref("TokenAccountUnion"),
             },
             TypeDef {
                 name: "InvalidContainer".to_string(),
+                format: None,
                 kind: TypeKind::Struct(StructType {
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {
                             name: "wrapper".to_string(),
+                            format: None,
                             field_type: create_type_ref("WrapperType"), // Points to size-disc union via TypeRef
                         },
                         StructField {
                             name: "other_var".to_string(),
+                            format: None,
                             field_type: TypeKind::Array(ArrayType {
                                 container_attributes: Default::default(),
                                 size: create_field_ref_expr(vec!["field"]), // Other variable component
@@ -1727,6 +1845,7 @@ mod dependency_tests {
         // Test duplicate variant names validation
         let typedefs = vec![TypeDef {
             name: "BadNamesUnion".to_string(),
+            format: None,
             kind: TypeKind::SizeDiscriminatedUnion(SizeDiscriminatedUnionType {
                 container_attributes: Default::default(),
                 variants: vec![
@@ -1799,6 +1918,7 @@ mod resolved_tests {
 
         let typedef = TypeDef {
             name: "MyU32".to_string(),
+            format: None,
             kind: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
         };
 
@@ -1817,15 +1937,18 @@ mod resolved_tests {
 
         let typedefs = vec![TypeDef {
             name: "SimpleStruct".to_string(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
                         name: "field1".to_string(),
+                        format: None,
                         field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U8)),
                     },
                     StructField {
                         name: "field2".to_string(),
+                        format: None,
                         field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
                     },
                 ],
@@ -1856,6 +1979,7 @@ mod resolved_tests {
 
         let typedef = TypeDef {
             name: "PackedStruct".to_string(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: ContainerAttributes {
                     packed: true,
@@ -1865,10 +1989,12 @@ mod resolved_tests {
                 fields: vec![
                     StructField {
                         name: "field1".to_string(),
+                        format: None,
                         field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U8)),
                     },
                     StructField {
                         name: "field2".to_string(),
+                        format: None,
                         field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
                     },
                 ],
@@ -1896,6 +2022,7 @@ mod resolved_tests {
 
         let typedef = TypeDef {
             name: "ConstantArray".to_string(),
+            format: None,
             kind: TypeKind::Array(ArrayType {
                 container_attributes: Default::default(),
                 size: ExprKind::Literal(LiteralExpr::U64(10)),
@@ -1931,6 +2058,7 @@ mod resolved_tests {
 
         let typedef = TypeDef {
             name: "DynamicArray".to_string(),
+            format: None,
             kind: TypeKind::Array(ArrayType {
                 container_attributes: Default::default(),
                 size: ExprKind::FieldRef(FieldRefExpr {
@@ -1969,6 +2097,7 @@ mod resolved_tests {
 
         let typedef = TypeDef {
             name: "SimpleUnion".to_string(),
+            format: None,
             kind: TypeKind::Union(UnionType {
                 container_attributes: Default::default(),
                 variants: vec![
@@ -2011,6 +2140,7 @@ mod resolved_tests {
 
         let typedef = TypeDef {
             name: "SimpleEnum".to_string(),
+            format: None,
             kind: TypeKind::Enum(EnumType {
                 container_attributes: Default::default(),
                 tag_ref: ExprKind::Literal(LiteralExpr::U64(0)),
@@ -2065,10 +2195,12 @@ mod resolved_tests {
         let typedefs = vec![
             TypeDef {
                 name: "TypeA".to_string(),
+                format: None,
                 kind: TypeKind::Struct(StructType {
                     container_attributes: Default::default(),
                     fields: vec![StructField {
                         name: "field_b".to_string(),
+                        format: None,
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "TypeB".to_string(),
                             package: None,
@@ -2079,6 +2211,7 @@ mod resolved_tests {
             },
             TypeDef {
                 name: "TypeB".to_string(),
+                format: None,
                 kind: TypeKind::TypeRef(TypeRefType {
                     name: "TypeA".to_string(),
                     package: None,
@@ -2148,6 +2281,7 @@ mod resolved_tests {
 
         let typedef = TypeDef {
             name: "DependentArray".to_string(),
+            format: None,
             kind: TypeKind::Array(ArrayType {
                 container_attributes: Default::default(),
                 size: ExprKind::Add(AddExpr {
@@ -2194,6 +2328,7 @@ mod resolved_tests {
         // Test array with constant shift operations
         let typedef = TypeDef {
             name: "ShiftArray".to_string(),
+            format: None,
             kind: TypeKind::Array(ArrayType {
                 container_attributes: Default::default(),
                 // Size = (4 << 2) >> 1 = 16 >> 1 = 8
@@ -2236,6 +2371,7 @@ mod resolved_tests {
         // Test array with popcount-based size
         let typedef = TypeDef {
             name: "PopcountArray".to_string(),
+            format: None,
             kind: TypeKind::Array(ArrayType {
                 container_attributes: Default::default(),
                 // Size = popcount(0b1111) = 4
@@ -2273,6 +2409,7 @@ mod resolved_tests {
 
         let typedef = TypeDef {
             name: "TokenAccountUnion".to_string(),
+            format: None,
             kind: TypeKind::SizeDiscriminatedUnion(SizeDiscriminatedUnionType {
                 container_attributes: Default::default(),
                 variants: vec![

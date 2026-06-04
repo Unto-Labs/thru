@@ -5,9 +5,9 @@
  * Tests both ListEvents and StreamEvents with various filters.
  * Uses proto Filter directly (not thru-sdk).
  */
-import { decodeAddress, encodeAddress } from "@thru/helpers";
-import { Filter, FilterParamValue, PageRequest } from "@thru/proto";
-import { ListEventsRequest, StreamEventsRequest } from "@thru/proto";
+import { decodeAddress, encodeAddress } from "@thru/sdk/helpers";
+import { Filter, FilterParamValue, PageRequest } from "@thru/sdk/proto";
+import { ListEventsRequest, StreamEventsRequest } from "@thru/sdk/proto";
 import { ChainClient } from "../src";
 
 const BASE_URL = "https://grpc.alphanet.thruput.org";

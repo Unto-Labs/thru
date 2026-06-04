@@ -5,11 +5,17 @@ import {
   type Interceptor,
   type Transport,
 } from "@connectrpc/connect";
-import { createGrpcTransport } from "@connectrpc/connect-node";
+import {
+  createGrpcTransport,
+  Http2SessionManager,
+} from "@connectrpc/connect-node";
 import {
   QueryService,
   StreamingService,
+  type GetChainInfoResponse,
   type GetHeightRequest,
+  type GetChainInfoRequest,
+  GetChainInfoRequestSchema,
   GetHeightRequestSchema,
   type GetHeightResponse,
   type GetAccountRequest,
@@ -39,7 +45,7 @@ import {
   type StreamAccountUpdatesRequest,
   StreamAccountUpdatesRequestSchema,
   type StreamAccountUpdatesResponse,
-} from "@thru/proto";
+} from "@thru/sdk/proto";
 
 export interface ChainClientOptions {
   baseUrl?: string;
@@ -92,12 +98,41 @@ export class ChainClient implements ReplayDataSource {
   private readonly query: ReturnType<typeof createClient<typeof QueryService>>;
   private readonly streaming: ReturnType<typeof createClient<typeof StreamingService>>;
   private readonly callOptions?: CallOptions;
+  /**
+   * The HTTP/2 session manager owned by this client. Only set when the client
+   * created its own gRPC transport (i.e., `options.transport` was not provided).
+   * `close()` uses this to tear down the underlying persistent connection.
+   */
+  private readonly sessionManager: Http2SessionManager | null;
+  private closed = false;
 
   constructor(private readonly options: ChainClientOptions) {
-    const transport = options.transport ?? this.createTransport();
-    this.query = createClient(QueryService, transport);
-    this.streaming = createClient(StreamingService, transport);
+    if (options.transport) {
+      this.sessionManager = null;
+      this.query = createClient(QueryService, options.transport);
+      this.streaming = createClient(StreamingService, options.transport);
+    } else {
+      const { transport, sessionManager } = this.createOwnedTransport();
+      this.sessionManager = sessionManager;
+      this.query = createClient(QueryService, transport);
+      this.streaming = createClient(StreamingService, transport);
+    }
     this.callOptions = options.callOptions;
+  }
+
+  /**
+   * Close the underlying HTTP/2 session, if this client owns one. Idempotent.
+   *
+   * Callers are responsible for ensuring that no in-flight RPCs or streams
+   * are still being awaited on this client — pending requests will fail.
+   *
+   * If the client was constructed with an externally-supplied `transport`,
+   * `close()` is a no-op; the caller owns the transport's lifecycle.
+   */
+  close(): void {
+    if (this.closed) return;
+    this.closed = true;
+    this.sessionManager?.abort();
   }
 
   getAccount(request: Partial<GetAccountRequest>): Promise<Account> {
@@ -140,7 +175,10 @@ export class ChainClient implements ReplayDataSource {
     return this.streaming.streamEvents(create(StreamEventsRequestSchema, request), this.callOptions);
   }
 
-  private createTransport(): Transport {
+  private createOwnedTransport(): {
+    transport: Transport;
+    sessionManager: Http2SessionManager;
+  } {
     if (!this.options.baseUrl) {
       throw new Error("ChainClient requires baseUrl when no transport is provided");
     }
@@ -152,15 +190,25 @@ export class ChainClient implements ReplayDataSource {
       ...(headerInterceptor ? [headerInterceptor] : []),
     ];
 
-    return createGrpcTransport({
-      baseUrl: this.options.baseUrl,
-      useBinaryFormat: this.options.useBinaryFormat ?? true,
-      interceptors: mergedInterceptors.length ? mergedInterceptors : undefined,
+    /* Construct our own session manager so close() can tear the HTTP/2
+       session down. Ping / idle options are passed here; once a session
+       manager is supplied to createGrpcTransport, those options on the
+       transport itself would be ignored. */
+    const sessionManager = new Http2SessionManager(this.options.baseUrl, {
       pingIntervalMs: 30_000,
       pingIdleConnection: true,
       pingTimeoutMs: 10_000,
       idleConnectionTimeoutMs: 0,
     });
+
+    const transport = createGrpcTransport({
+      baseUrl: this.options.baseUrl,
+      useBinaryFormat: this.options.useBinaryFormat ?? true,
+      interceptors: mergedInterceptors.length ? mergedInterceptors : undefined,
+      sessionManager,
+    });
+
+    return { transport, sessionManager };
   }
 
   private createHeaderInterceptor(): Interceptor | null {
@@ -182,5 +230,11 @@ export class ChainClient implements ReplayDataSource {
 
   getHeight(): Promise<GetHeightResponse> {
     return this.query.getHeight(create(GetHeightRequestSchema, {}), this.callOptions);
+  }
+
+  getChainInfo(
+    request: Partial<GetChainInfoRequest> = {},
+  ): Promise<GetChainInfoResponse> {
+    return this.query.getChainInfo(create(GetChainInfoRequestSchema, request), this.callOptions);
   }
 }

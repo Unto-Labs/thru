@@ -26,7 +26,9 @@ impl WellKnownType for MoneyHandler {
             .and_then(|bytes| String::from_utf8(bytes).ok())
             .map(|s| s.trim_end_matches('\0').to_string());
         let units = get_field(fields, "units").and_then(extract_i64);
-        let nanos = get_field(fields, "nanos").and_then(extract_i32).unwrap_or(0);
+        let nanos = get_field(fields, "nanos")
+            .and_then(extract_i32)
+            .unwrap_or(0);
 
         if let (Some(code), Some(u)) = (currency_code, units) {
             /* Format as "USD 123.45" */
@@ -38,9 +40,7 @@ impl WellKnownType for MoneyHandler {
                 /* Convert nanos to decimal */
                 let decimal = abs_nanos as f64 / 1_000_000_000.0;
                 let decimal_str = format!("{:.9}", decimal);
-                let frac_part = decimal_str
-                    .trim_start_matches("0.")
-                    .trim_end_matches('0');
+                let frac_part = decimal_str.trim_start_matches("0.").trim_end_matches('0');
                 let sign = if is_negative { "-" } else { "" };
                 format!("{} {}{}.{}", code, sign, abs_units, frac_part)
             } else {

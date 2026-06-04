@@ -4,7 +4,7 @@ import {
   type Transaction,
   TransactionSchema,
   SignatureSchema,
-} from "@thru/proto";
+} from "@thru/sdk/proto";
 import { createBlockReplay } from "./replay/block-replay";
 import { createTransactionReplay } from "./replay/transaction-replay";
 import { SimulatedChain } from "./testing/simulated-chain";

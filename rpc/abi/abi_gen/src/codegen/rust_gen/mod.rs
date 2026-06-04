@@ -21,8 +21,8 @@ mod param_cache_tests;
 /* Re-export main public functions */
 pub use builder::emit_builder;
 pub use functions_opaque::emit_opaque_functions;
-pub use ir_footprint::{emit_ir_footprint_fn, IrFootprintEmitter, IrFootprintError};
-pub use ir_validate::{emit_ir_validate_fn, IrValidateEmitter, IrValidateError};
+pub use ir_footprint::{IrFootprintEmitter, IrFootprintError, emit_ir_footprint_fn};
+pub use ir_validate::{IrValidateEmitter, IrValidateError, emit_ir_validate_fn};
 pub use types::emit_type;
 
 /* Legacy re-exports - only for analyze command comparison */

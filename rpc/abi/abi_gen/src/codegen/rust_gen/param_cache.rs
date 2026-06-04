@@ -1,7 +1,7 @@
 /* Param cache utilities for Rust codegen.
-   Mirrors the TypeScript sequential extractor: walks a buffer with a mutable
-   cursor, records offsets for dynamic fields, evaluates tag/size expressions,
-   and emits derived params (computed tags). */
+Mirrors the TypeScript sequential extractor: walks a buffer with a mutable
+cursor, records offsets for dynamic fields, evaluates tag/size expressions,
+and emits derived params (computed tags). */
 
 use crate::abi::expr::{ExprKind, FieldRefExpr, LiteralExpr};
 use crate::abi::resolved::{
@@ -130,7 +130,10 @@ fn align_cursor(state: &mut ScanState<'_>, align: u64) -> Result<(), ParamEvalEr
 
 fn record_offset_if_requested(state: &mut ScanState<'_>, path: &str) {
     if state.record_offsets.contains(path) {
-        state.offsets.entry(path.to_string()).or_insert(state.cursor);
+        state
+            .offsets
+            .entry(path.to_string())
+            .or_insert(state.cursor);
     }
 }
 
@@ -353,7 +356,11 @@ fn scan_size_discriminated_union(
             continue;
         }
         let payload_start = state.cursor;
-        scan_type(state, &variant.variant_type, &format!("{}.{}", field_path, variant.name))?;
+        scan_type(
+            state,
+            &variant.variant_type,
+            &format!("{}.{}", field_path, variant.name),
+        )?;
         let target = payload_start
             .checked_add(variant.expected_size)
             .ok_or(ParamEvalError::Overflow)?;
@@ -361,9 +368,10 @@ fn scan_size_discriminated_union(
             return Err(ParamEvalError::BufferTooSmall);
         }
         state.cursor = target;
-        state
-            .ctx
-            .insert(format!("{}.payload_size", field_path), variant.expected_size);
+        state.ctx.insert(
+            format!("{}.payload_size", field_path),
+            variant.expected_size,
+        );
         return Ok(());
     }
     Err(ParamEvalError::MissingParam(format!(
@@ -427,9 +435,7 @@ fn scan_struct(
                 ..
             } => {
                 let tag = eval_expr_scoped(tag_expression, &state.ctx, base_path)?;
-                state
-                    .derived
-                    .insert(format!("{}.tag", field_path), tag);
+                state.derived.insert(format!("{}.tag", field_path), tag);
                 let mut matched = false;
                 for variant in variants {
                     if variant.tag_value == tag {
@@ -481,7 +487,11 @@ fn scan_struct(
                     &field_path,
                 )?;
             }
-            ResolvedTypeKind::Struct { fields: inner, packed, .. } => {
+            ResolvedTypeKind::Struct {
+                fields: inner,
+                packed,
+                ..
+            } => {
                 scan_struct(state, inner, *packed, &field_path)?;
             }
             ResolvedTypeKind::SizeDiscriminatedUnion { variants } => {
@@ -518,9 +528,7 @@ fn scan_type(
             ..
         } => {
             let tag = eval_expr_scoped(tag_expression, &state.ctx, parent_path(base_path))?;
-            state
-                .derived
-                .insert(format!("{}.tag", base_path), tag);
+            state.derived.insert(format!("{}.tag", base_path), tag);
             let mut matched = false;
             for variant in variants {
                 if variant.tag_value == tag {
@@ -601,10 +609,7 @@ pub fn extract_param_cache(
     })
 }
 
-pub fn extract_params(
-    ty: &ResolvedTypeKind,
-    buf: &[u8],
-) -> Result<ParamContext, ParamEvalError> {
+pub fn extract_params(ty: &ResolvedTypeKind, buf: &[u8]) -> Result<ParamContext, ParamEvalError> {
     let resolved = ResolvedType {
         name: "".into(),
         size: Size::Variable(HashMap::new()),
@@ -761,8 +766,7 @@ mod tests {
             },
         };
         let buf = [2u8, 0xaa, 0xbb];
-        let cache =
-            extract_param_cache(&top, &buf, &BTreeMap::new(), &["payload".into()]).unwrap();
+        let cache = extract_param_cache(&top, &buf, &BTreeMap::new(), &["payload".into()]).unwrap();
         assert_eq!(cache.params.get("len"), Some(2));
         assert_eq!(cache.params.get("payload.blob.0"), Some(0xaa));
         assert_eq!(cache.params.get("payload.blob.1"), Some(0xbb));
@@ -888,8 +892,7 @@ mod tests {
             },
         };
         let buf = [2u8, 9, 8];
-        let cache =
-            extract_param_cache(&top, &buf, &lookup, &["alias.items".into()]).unwrap();
+        let cache = extract_param_cache(&top, &buf, &lookup, &["alias.items".into()]).unwrap();
         assert_eq!(cache.params.get("alias.count"), Some(2));
         assert_eq!(cache.params.get("alias.items.0"), Some(9));
         assert_eq!(cache.params.get("alias.items.1"), Some(8));

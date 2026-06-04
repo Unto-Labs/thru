@@ -36,12 +36,12 @@ pub fn ts_parameter_bindings(type_ir: &TypeIr) -> Vec<TsParamBinding> {
 }
 
 /* Returns deduplicated parameter bindings for use in Params type generation.
-   When the IR has both `body.tag` and `StructName::body.tag`, they become
-   `body_tag` and `StructName__body_tag`. Both resolve to the same byte offset.
-   This function keeps only the shorter name (the canonical one without the struct prefix).
+When the IR has both `body.tag` and `StructName::body.tag`, they become
+`body_tag` and `StructName__body_tag`. Both resolve to the same byte offset.
+This function keeps only the shorter name (the canonical one without the struct prefix).
 
-   This is used for the TypeScript Params type and builders, while the full
-   list from ts_parameter_bindings is used for IR packing which needs all canonical names. */
+This is used for the TypeScript Params type and builders, while the full
+list from ts_parameter_bindings is used for IR packing which needs all canonical names. */
 pub fn deduplicated_ts_parameter_bindings(type_ir: &TypeIr) -> Vec<TsParamBinding> {
     let all_bindings = ts_parameter_bindings(type_ir);
 
@@ -73,17 +73,16 @@ pub fn deduplicated_ts_parameter_bindings(type_ir: &TypeIr) -> Vec<TsParamBindin
 }
 
 /* Returns a mapping from each ts_name to its deduplicated equivalent.
-   For ts_names that were kept, this maps to itself.
-   For ts_names that were removed (the longer ones with struct prefix),
-   this maps to the shorter deduplicated ts_name.
+For ts_names that were kept, this maps to itself.
+For ts_names that were removed (the longer ones with struct prefix),
+this maps to the shorter deduplicated ts_name.
 
-   This is used by __tnPackParams to map all canonical names to the correct
-   params field name in the deduplicated Params type. */
+This is used by __tnPackParams to map all canonical names to the correct
+params field name in the deduplicated Params type. */
 pub fn ts_name_dedup_map(type_ir: &TypeIr) -> BTreeMap<String, String> {
     let all_bindings = ts_parameter_bindings(type_ir);
     let deduplicated = deduplicated_ts_parameter_bindings(type_ir);
-    let dedup_ts_names: BTreeSet<String> =
-        deduplicated.iter().map(|b| b.ts_name.clone()).collect();
+    let dedup_ts_names: BTreeSet<String> = deduplicated.iter().map(|b| b.ts_name.clone()).collect();
 
     let mut map = BTreeMap::new();
     for binding in &all_bindings {

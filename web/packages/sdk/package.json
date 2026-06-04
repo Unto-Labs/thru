@@ -1,0 +1,88 @@
+{
+  "name": "@thru/sdk",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./dist/sdk.cjs",
+  "module": "./dist/sdk.js",
+  "types": "./dist/sdk.d.ts",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/sdk.d.ts",
+      "import": "./dist/sdk.js",
+      "require": "./dist/sdk.cjs"
+    },
+    "./client": {
+      "types": "./dist/client.d.ts",
+      "import": "./dist/client.js",
+      "require": "./dist/client.cjs"
+    },
+    "./proto": {
+      "types": "./dist/proto/index.d.ts",
+      "import": "./dist/proto/index.js",
+      "require": "./dist/proto/index.cjs"
+    },
+    "./helpers": {
+      "types": "./dist/helpers/index.d.ts",
+      "import": "./dist/helpers/index.js",
+      "require": "./dist/helpers/index.cjs"
+    },
+    "./crypto": {
+      "types": "./dist/crypto/index.d.ts",
+      "import": "./dist/crypto/index.js",
+      "require": "./dist/crypto/index.cjs"
+    },
+    "./abi": {
+      "types": "./dist/abi/index.d.ts",
+      "import": "./dist/abi/index.js",
+      "require": "./dist/abi/index.cjs"
+    }
+  },
+  "scripts": {
+    "get-height": "tsx --tsconfig tsconfig.json thru-ts-client-sdk/test-scripts/get-height.ts",
+    "counter": "tsx --tsconfig tsconfig.json thru-ts-client-sdk/test-scripts/counter.ts",
+    "counter-2": "tsx --tsconfig tsconfig.json thru-ts-client-sdk/test-scripts/counter-2.ts",
+    "create-account": "tsx --tsconfig tsconfig.json thru-ts-client-sdk/test-scripts/create-account.ts",
+    "smoketest": "tsx --tsconfig tsconfig.json thru-ts-client-sdk/test-scripts/smoketest.ts",
+    "test-token-events": "tsx --tsconfig tsconfig.json thru-ts-client-sdk/test-scripts/test-token-events.ts",
+    "generate": "buf dep update && buf generate --include-imports",
+    "protobufs:generate": "pnpm run generate",
+    "prebuild": "node ./scripts/proto/prebuild.mjs",
+    "build:wasm": "node ./scripts/abi/build-wasm.mjs",
+    "build": "tsup && node ./scripts/abi/copy-wasm.mjs",
+    "dev": "tsup --watch",
+    "lint": "eslint src/",
+    "test": "vitest",
+    "test:watch": "vitest --watch",
+    "test:coverage": "vitest --coverage",
+    "test:run": "vitest run",
+    "test:ui": "vitest --ui",
+    "test:transactions": "node --loader ts-node/esm --test \"thru-ts-client-sdk/transactions/__tests__/*.test.ts\"",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "^2.12.0",
+    "@connectrpc/connect": "^2.1.1",
+    "@connectrpc/connect-web": "^2.1.1",
+    "@noble/ed25519": "^3.1.0",
+    "@noble/hashes": "^2.2.0",
+    "@scure/bip39": "^2.2.0",
+    "micro-key-producer": "^0.8.6",
+    "yaml": "^2.9.0"
+  },
+  "devDependencies": {
+    "@bufbuild/buf": "latest",
+    "@bufbuild/protoc-gen-es": "^2.12.0",
+    "@types/node": "^25.9.1",
+    "@vitest/coverage-v8": "^4.1.7",
+    "jsdom": "^29.1.1",
+    "ts-node": "^10.9.2",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
+  }
+}

@@ -1,6 +1,6 @@
 /* IR runtime evaluator for Rust codegen.
-   Evaluates `TypeIr` trees with checked arithmetic, switch handling, and nested calls.
-   Intended to mirror the TypeScript runtime semantics (BigInt/checked math, missing switch detection). */
+Evaluates `TypeIr` trees with checked arithmetic, switch handling, and nested calls.
+Intended to mirror the TypeScript runtime semantics (BigInt/checked math, missing switch detection). */
 
 use crate::codegen::shared::ir::{
     AlignNode, BinaryOpNode, CallNestedNode, Endianness, IrNode, NodeMetadata, SwitchNode, TypeIr,
@@ -106,7 +106,7 @@ fn eval_node(
         IrNode::Switch(node) => switch_expr(node, params, nested),
         IrNode::SumOverArray(_node) => {
             /* Jagged arrays are not supported in runtime IR evaluation.
-               Size calculation requires iteration over actual data. */
+            Size calculation requires iteration over actual data. */
             Err(IrError::unsupported_operation(
                 "SumOverArray requires iteration over actual data",
             ))

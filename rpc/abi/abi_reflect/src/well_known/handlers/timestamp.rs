@@ -20,7 +20,9 @@ impl WellKnownType for TimestampHandler {
 
         /* Try to extract seconds and nanos fields */
         let seconds = get_field(fields, "seconds").and_then(extract_i64);
-        let nanos = get_field(fields, "nanos").and_then(extract_i32).unwrap_or(0);
+        let nanos = get_field(fields, "nanos")
+            .and_then(extract_i32)
+            .unwrap_or(0);
 
         if let Some(secs) = seconds {
             let dt: DateTime<Utc> = match Utc.timestamp_opt(secs, nanos as u32) {

@@ -1,6 +1,7 @@
 import type { PasskeyClientCapabilities } from './types';
 
-const DEBUG = typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_PASSKEY_DEBUG === '1';
+const globalProcess = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
+const DEBUG = globalProcess?.env?.NEXT_PUBLIC_PASSKEY_DEBUG === '1';
 
 let cachedClientCapabilities: PasskeyClientCapabilities | null | undefined;
 let clientCapabilitiesPromise: Promise<PasskeyClientCapabilities | null> | null = null;

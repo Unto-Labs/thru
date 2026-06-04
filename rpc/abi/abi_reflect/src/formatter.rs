@@ -1,7 +1,9 @@
 use crate::types::ReflectedTypeKind;
 use crate::value::{PrimitiveValue, ReflectedValue, Value};
 use crate::well_known::{WellKnownContext, WellKnownRegistry, WellKnownResult};
-use abi_gen::abi::types::{IntegralType, PrimitiveType};
+use abi_gen::abi::types::{IntegralType, PrimitiveType, ValueFormat};
+use base64::engine::general_purpose::{STANDARD as BASE64_STANDARD, URL_SAFE_NO_PAD};
+use base64::Engine as _;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Map, Value as JsonValue};
 
@@ -107,7 +109,14 @@ fn format_node_with_options(
                 options,
             )
         }
-        Value::Array { elements } => format_array_with_options(elements, base_offset, options),
+        Value::Array { elements } => {
+            if let Some(format) = &node.type_info.format {
+                if let Some(bytes) = extract_byte_elements(elements) {
+                    return format_bytes_with_format(&bytes, format, base_offset, options);
+                }
+            }
+            format_array_with_options(elements, base_offset, options)
+        }
         Value::Enum {
             variant_name,
             variant_value,
@@ -187,7 +196,7 @@ fn format_struct_with_options(
         };
         map.insert(
             name.clone(),
-            format_node_with_options(value, None, field_offset, options),
+            format_field_with_options(name, value, fields, field_offset, options),
         );
     }
 
@@ -200,11 +209,13 @@ fn format_struct_with_options(
                 fields: Some(fields),
             };
 
-            match registry.process(&ctx) {
+            let well_known_result = registry.process(&ctx);
+            match well_known_result {
                 WellKnownResult::EnrichFields(enrichment) => {
                     for (key, value) in enrichment {
                         map.insert(key, value);
                     }
+                    return JsonValue::Object(map);
                 }
                 WellKnownResult::Replace(replacement) => {
                     return replacement;
@@ -214,7 +225,40 @@ fn format_struct_with_options(
         }
     }
 
+    if let Some(format) = &node.type_info.format {
+        if let Some(bytes) = extract_struct_format_bytes(fields) {
+            let formatted = format_bytes_with_format(&bytes, format, base_offset, options);
+            if let JsonValue::Object(enrichment) = formatted {
+                for (key, value) in enrichment {
+                    if key == "bytes" && map.contains_key("bytes") {
+                        continue;
+                    }
+                    map.insert(key, value);
+                }
+            }
+        }
+    }
+
     JsonValue::Object(map)
+}
+
+fn format_field_with_options(
+    name: &str,
+    value: &ReflectedValue,
+    siblings: &[(String, ReflectedValue)],
+    field_offset: u64,
+    options: &FormatOptions,
+) -> JsonValue {
+    let Some(format) = &value.type_info.format else {
+        return format_node_with_options(value, None, field_offset, options);
+    };
+
+    if let Some(bytes) = extract_value_bytes(value) {
+        let bytes = limit_bytes_by_sibling_length(name, siblings, bytes);
+        return format_bytes_with_format(&bytes, format, field_offset, options);
+    }
+
+    format_node_with_options(value, None, field_offset, options)
 }
 
 fn get_struct_field_offsets(kind: &ReflectedTypeKind) -> std::collections::HashMap<&str, u64> {
@@ -239,6 +283,163 @@ fn get_struct_field_sizes(
         }
     }
     sizes
+}
+
+fn extract_value_bytes(value: &ReflectedValue) -> Option<Vec<u8>> {
+    match value.get_value() {
+        Value::Array { elements } => extract_byte_elements(elements),
+        Value::TypeRef { value, .. } => extract_value_bytes(value),
+        _ => None,
+    }
+}
+
+fn extract_byte_elements(elements: &[ReflectedValue]) -> Option<Vec<u8>> {
+    if elements.iter().all(is_u8_element) {
+        return Some(elements.iter().filter_map(extract_u8).collect());
+    }
+    if elements.iter().all(is_char_element) {
+        return Some(elements.iter().filter_map(extract_char).collect());
+    }
+    None
+}
+
+fn extract_struct_format_bytes(fields: &[(String, ReflectedValue)]) -> Option<Vec<u8>> {
+    let bytes = get_field(fields, "bytes")
+        .or_else(|| get_field(fields, "value"))
+        .and_then(extract_value_bytes)?;
+    let len = get_field(fields, "length")
+        .or_else(|| get_field(fields, "len"))
+        .or_else(|| get_field(fields, "value_len"))
+        .and_then(extract_integral_usize);
+    Some(limit_bytes(bytes, len))
+}
+
+fn limit_bytes_by_sibling_length(
+    field_name: &str,
+    siblings: &[(String, ReflectedValue)],
+    bytes: Vec<u8>,
+) -> Vec<u8> {
+    let candidates = [
+        format!("{field_name}_length"),
+        format!("{field_name}_len"),
+        format!("{}_length", field_name.trim_end_matches("_bytes")),
+        format!("{}_len", field_name.trim_end_matches("_bytes")),
+    ];
+    let len = candidates
+        .iter()
+        .find_map(|candidate| get_field(siblings, candidate).and_then(extract_integral_usize));
+    limit_bytes(bytes, len)
+}
+
+fn limit_bytes(bytes: Vec<u8>, len: Option<usize>) -> Vec<u8> {
+    let Some(len) = len else {
+        return bytes;
+    };
+    bytes.into_iter().take(len).collect()
+}
+
+fn get_field<'a>(fields: &'a [(String, ReflectedValue)], name: &str) -> Option<&'a ReflectedValue> {
+    fields.iter().find(|(n, _)| n == name).map(|(_, v)| v)
+}
+
+fn extract_integral_usize(value: &ReflectedValue) -> Option<usize> {
+    match value.get_value() {
+        Value::Primitive(PrimitiveValue::U8(v)) => Some(v.value as usize),
+        Value::Primitive(PrimitiveValue::U16(v)) => Some(v.value as usize),
+        Value::Primitive(PrimitiveValue::U32(v)) => Some(v.value as usize),
+        Value::Primitive(PrimitiveValue::U64(v)) => usize::try_from(v.value).ok(),
+        Value::Primitive(PrimitiveValue::I8(v)) => usize::try_from(v.value).ok(),
+        Value::Primitive(PrimitiveValue::I16(v)) => usize::try_from(v.value).ok(),
+        Value::Primitive(PrimitiveValue::I32(v)) => usize::try_from(v.value).ok(),
+        Value::Primitive(PrimitiveValue::I64(v)) => usize::try_from(v.value).ok(),
+        Value::TypeRef { value, .. } => extract_integral_usize(value),
+        _ => None,
+    }
+}
+
+fn format_bytes_with_format(
+    bytes: &[u8],
+    format: &ValueFormat,
+    base_offset: u64,
+    options: &FormatOptions,
+) -> JsonValue {
+    match format {
+        ValueFormat::Hex => JsonValue::String(format_hex(bytes)),
+        ValueFormat::Base64 => JsonValue::String(BASE64_STANDARD.encode(bytes)),
+        ValueFormat::Base64url => JsonValue::String(URL_SAFE_NO_PAD.encode(bytes)),
+        ValueFormat::Text => format_text_bytes(bytes, base_offset, options),
+        ValueFormat::Json => format_json_bytes(bytes, base_offset, options),
+    }
+}
+
+fn format_text_bytes(bytes: &[u8], base_offset: u64, options: &FormatOptions) -> JsonValue {
+    let mut map = formatted_bytes_base(bytes, base_offset, options);
+    match std::str::from_utf8(bytes) {
+        Ok(text) => {
+            let text = text.trim_end_matches('\0').to_string();
+            map.insert("text".to_string(), JsonValue::String(text.clone()));
+            map.insert("formatted".to_string(), JsonValue::String(text));
+        }
+        Err(err) => {
+            map.insert(
+                "formatError".to_string(),
+                JsonValue::String(format!("invalid utf-8: {err}")),
+            );
+        }
+    }
+    JsonValue::Object(map)
+}
+
+fn format_json_bytes(bytes: &[u8], base_offset: u64, options: &FormatOptions) -> JsonValue {
+    let mut map = formatted_bytes_base(bytes, base_offset, options);
+    match std::str::from_utf8(bytes) {
+        Ok(text) => {
+            let text = text.trim_end_matches('\0').to_string();
+            map.insert("text".to_string(), JsonValue::String(text.clone()));
+            match serde_json::from_str::<JsonValue>(&text) {
+                Ok(json) => {
+                    map.insert("json".to_string(), json);
+                }
+                Err(err) => {
+                    map.insert(
+                        "formatError".to_string(),
+                        JsonValue::String(format!("invalid json: {err}")),
+                    );
+                }
+            }
+        }
+        Err(err) => {
+            map.insert(
+                "formatError".to_string(),
+                JsonValue::String(format!("invalid utf-8: {err}")),
+            );
+        }
+    }
+    JsonValue::Object(map)
+}
+
+fn formatted_bytes_base(
+    bytes: &[u8],
+    base_offset: u64,
+    options: &FormatOptions,
+) -> Map<String, JsonValue> {
+    let mut map = Map::new();
+    map.insert("bytes".to_string(), JsonValue::String(format_hex(bytes)));
+    if options.include_byte_offsets {
+        map.insert(
+            "_byteRange".to_string(),
+            json!({
+                "offset": base_offset,
+                "size": bytes.len() as u64
+            }),
+        );
+    }
+    map
+}
+
+fn format_hex(bytes: &[u8]) -> String {
+    let hex = bytes.iter().map(|b| format!("{b:02x}")).collect::<String>();
+    format!("0x{hex}")
 }
 
 fn format_array_with_options(

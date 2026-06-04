@@ -29,6 +29,19 @@ export function resolveClient<T>(
   return opts.client;
 }
 
+export function closeIfCloseable(value: unknown): void {
+  if (
+    value &&
+    typeof (value as { close?: unknown }).close === "function"
+  ) {
+    try {
+      (value as { close: () => void }).close();
+    } catch {
+      /* best-effort */
+    }
+  }
+}
+
 export interface BackfillPage<T, Cursor = unknown> {
   items: T[];
   cursor?: Cursor;
@@ -64,6 +77,7 @@ export interface ReplayMetrics {
 export interface ReconnectSources<T, Cursor = unknown> {
   subscribeLive: LiveSubscriber<T>;
   fetchBackfill?: BackfillFetcher<T, Cursor>;
+  dispose?: () => void;
 }
 
 export interface ReplayConfig<T, Cursor = unknown> {
@@ -75,6 +89,8 @@ export interface ReplayConfig<T, Cursor = unknown> {
   extractKey?: (item: T) => string;
   logger?: ReplayLogger;
   resubscribeOnEnd?: boolean;
+  signal?: AbortSignal;
+  dispose?: () => void;
   /**
    * Called on reconnection to get fresh data sources.
    * When provided, creates new client/transport for each reconnection attempt.

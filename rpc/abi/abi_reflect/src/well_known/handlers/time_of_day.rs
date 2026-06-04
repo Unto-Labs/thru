@@ -20,7 +20,9 @@ impl WellKnownType for TimeOfDayHandler {
         let hours = get_field(fields, "hours").and_then(extract_u8_field);
         let minutes = get_field(fields, "minutes").and_then(extract_u8_field);
         let seconds = get_field(fields, "seconds").and_then(extract_u8_field);
-        let nanos = get_field(fields, "nanos").and_then(extract_i32).unwrap_or(0);
+        let nanos = get_field(fields, "nanos")
+            .and_then(extract_i32)
+            .unwrap_or(0);
 
         if let (Some(h), Some(m), Some(s)) = (hours, minutes, seconds) {
             let formatted = if nanos > 0 {

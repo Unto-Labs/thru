@@ -2,5 +2,5 @@
 pub use abi_types::{
     ArrayType, ContainerAttributes, EnumType, EnumVariant, FloatingPointType, IntegralType,
     PrimitiveType, SizeDiscriminatedUnionType, SizeDiscriminatedVariant, StructField, StructType,
-    TypeDef, TypeKind, TypeRefType, UnionType, UnionVariant,
+    TypeDef, TypeKind, TypeRefType, UnionType, UnionVariant, ValueFormat,
 };

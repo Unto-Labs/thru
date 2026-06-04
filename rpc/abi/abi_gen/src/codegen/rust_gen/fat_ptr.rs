@@ -1,6 +1,6 @@
 /* Lightweight FAT pointer views for zero-copy Rust codegen.
-   These mirror the intent of TypeScript's DataView usage by pairing slices
-   with bounds/offset helpers and little-endian primitive reads/writes. */
+These mirror the intent of TypeScript's DataView usage by pairing slices
+with bounds/offset helpers and little-endian primitive reads/writes. */
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TnViewError {
@@ -40,9 +40,7 @@ impl<'a> TnView<'a> {
             .offset
             .checked_add(rel_offset)
             .ok_or(TnViewError::OutOfBounds)?;
-        let end = start
-            .checked_add(len)
-            .ok_or(TnViewError::OutOfBounds)?;
+        let end = start.checked_add(len).ok_or(TnViewError::OutOfBounds)?;
         if end > self.offset + self.len {
             return Err(TnViewError::OutOfBounds);
         }
@@ -73,7 +71,10 @@ impl<'a> TnView<'a> {
 
     pub fn read_u16_le(&self, rel_offset: usize) -> Result<u16, TnViewError> {
         let view = self.slice(rel_offset, 2)?;
-        Ok(u16::from_le_bytes([view.buf[view.offset], view.buf[view.offset + 1]]))
+        Ok(u16::from_le_bytes([
+            view.buf[view.offset],
+            view.buf[view.offset + 1],
+        ]))
     }
 
     pub fn read_u32_le(&self, rel_offset: usize) -> Result<u32, TnViewError> {
@@ -111,14 +112,14 @@ pub struct TnViewMut<'a> {
 impl<'a> TnViewMut<'a> {
     pub fn new(buf: &'a mut [u8]) -> Self {
         let len = buf.len();
-        Self { buf, offset: 0, len }
+        Self {
+            buf,
+            offset: 0,
+            len,
+        }
     }
 
-    pub fn with_range(
-        buf: &'a mut [u8],
-        offset: usize,
-        len: usize,
-    ) -> Result<Self, TnViewError> {
+    pub fn with_range(buf: &'a mut [u8], offset: usize, len: usize) -> Result<Self, TnViewError> {
         if offset.checked_add(len).map_or(true, |end| end > buf.len()) {
             return Err(TnViewError::OutOfBounds);
         }
@@ -152,9 +153,7 @@ impl<'a> TnViewMut<'a> {
             .offset
             .checked_add(rel_offset)
             .ok_or(TnViewError::OutOfBounds)?;
-        let end = start
-            .checked_add(len)
-            .ok_or(TnViewError::OutOfBounds)?;
+        let end = start.checked_add(len).ok_or(TnViewError::OutOfBounds)?;
         if end > self.offset + self.len {
             return Err(TnViewError::OutOfBounds);
         }
@@ -187,7 +186,7 @@ mod tests {
     #[test]
     fn tnview_align_up_bounds_check() {
         /* Test case from bug report: offset=10, len=5 means view covers buf[10..15]
-           Aligning to 8 would give aligned=16, which is outside the view bounds */
+        Aligning to 8 would give aligned=16, which is outside the view bounds */
         let data = [0u8; 32];
         let view = TnView::with_range(&data, 10, 5).unwrap();
         /* View covers bytes 10-14. Align to 8 would give 16, which is out of bounds */

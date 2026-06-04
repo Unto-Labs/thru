@@ -11,7 +11,7 @@ use std::collections::BTreeMap;
 use std::fmt::Write;
 
 /* Emit the static footprint() method for a type.
-   Requires IR metadata - legacy fallback has been removed. */
+Requires IR metadata - legacy fallback has been removed. */
 pub fn emit_footprint_method(resolved_type: &ResolvedType, type_ir: Option<&TypeIr>) -> String {
     let ir = type_ir.unwrap_or_else(|| {
         panic!(
@@ -167,7 +167,7 @@ fn emit_ir_footprint(
     )
     .unwrap();
     /* Use all bindings for record keys (IR needs all canonical names),
-       but map ts_names to deduplicated equivalents for params access */
+    but map ts_names to deduplicated equivalents for params access */
     for binding in bindings.iter().filter(|binding| !binding.derived) {
         let params_field = dedup_map
             .get(&binding.ts_name)

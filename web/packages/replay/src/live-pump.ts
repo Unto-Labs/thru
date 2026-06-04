@@ -10,13 +10,14 @@ export class LivePump<T> {
   private readonly buffer: DedupBuffer<T>;
   private readonly slotOf: (item: T) => Slot;
   private readonly keyOf: (item: T) => string;
-  private readonly source: AsyncIterable<T>;
+  private readonly sourceIterator: AsyncIterator<T>;
   private readonly logger: ReplayLogger;
   private mode: PumpMode;
   private minSlotSeen: Slot | null = null;
   private maxSlotSeen: Slot | null = null;
   private minEmitSlot: Slot | null = null;
   private pumpPromise: Promise<void>;
+  private closing = false;
 
   constructor(options: {
     source: AsyncIterable<T>;
@@ -26,7 +27,7 @@ export class LivePump<T> {
     startInStreamingMode?: boolean;
     initialEmitFloor?: Slot;
   }) {
-    this.source = options.source;
+    this.sourceIterator = options.source[Symbol.asyncIterator]();
     this.slotOf = options.slotOf;
     this.keyOf = options.keyOf ?? ((item) => options.slotOf(item).toString());
     this.logger = options.logger ?? NOOP_LOGGER;
@@ -78,13 +79,21 @@ export class LivePump<T> {
   }
 
   async close(): Promise<void> {
+    this.closing = true;
     this.queue.close();
-    await this.pumpPromise;
+    await Promise.allSettled([
+      this.closeSourceIterator(),
+      this.pumpPromise,
+    ]);
   }
 
   private async start(): Promise<void> {
     try {
-      for await (const item of this.source) {
+      while (!this.closing) {
+        const next = await this.sourceIterator.next();
+        if (next.done || this.closing) break;
+
+        const item = next.value;
         const slot = this.slotOf(item);
         if (this.minSlotSeen === null || slot < this.minSlotSeen) this.minSlotSeen = slot;
         if (this.maxSlotSeen === null || slot > this.maxSlotSeen) this.maxSlotSeen = slot;
@@ -94,11 +103,26 @@ export class LivePump<T> {
           this.queue.push(item);
         }
       }
-      this.queue.close();
     } catch (err) {
       // Don't log here - let the consumer (ReplayStream) handle logging
       // since it knows whether a retry will happen
-      this.queue.fail(err);
+      if (!this.closing) {
+        this.queue.fail(err);
+      }
+    } finally {
+      this.queue.close();
+    }
+  }
+
+  private async closeSourceIterator(): Promise<void> {
+    if (typeof this.sourceIterator.return !== "function") {
+      return;
+    }
+
+    try {
+      await this.sourceIterator.return();
+    } catch {
+      /* best-effort */
     }
   }
 }

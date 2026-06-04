@@ -98,7 +98,7 @@ impl<'a> IrValidateEmitter<'a> {
         _indent_lv: usize,
     ) -> Result<String, IrValidateError> {
         /* Jagged arrays require instance data for validation.
-           C IR helpers are free functions without a self pointer. */
+        C IR helpers are free functions without a self pointer. */
         Err(IrValidateError::UnsupportedNode)
     }
 

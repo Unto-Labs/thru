@@ -469,7 +469,12 @@ pub fn emit_type_params(resolved_type: &ResolvedType, type_ir: &TypeIr) -> Optio
         .join(", ");
 
     writeln!(output, "impl {}Params {{", resolved_type.name).unwrap();
-    writeln!(output, "    pub fn from_values({}) -> Self {{", params_signature).unwrap();
+    writeln!(
+        output,
+        "    pub fn from_values({}) -> Self {{",
+        params_signature
+    )
+    .unwrap();
     writeln!(output, "        Self {{").unwrap();
     for (_, rust_name, _) in &bindings {
         writeln!(output, "            {},", rust_name).unwrap();
@@ -478,8 +483,16 @@ pub fn emit_type_params(resolved_type: &ResolvedType, type_ir: &TypeIr) -> Optio
     writeln!(output, "    }}\n").unwrap();
 
     // Generate from_map method that takes a generic parameter map
-    writeln!(output, "    /// Create params from a map of parameter names to values.").unwrap();
-    writeln!(output, "    /// Returns None if any required parameter is missing.").unwrap();
+    writeln!(
+        output,
+        "    /// Create params from a map of parameter names to values."
+    )
+    .unwrap();
+    writeln!(
+        output,
+        "    /// Returns None if any required parameter is missing."
+    )
+    .unwrap();
     writeln!(output, "    pub fn from_map<S: ::std::borrow::Borrow<str>>(map: &::std::collections::BTreeMap<S, u64>) -> Option<Self> {{").unwrap();
     writeln!(output, "        Some(Self {{").unwrap();
     for (canonical, rust_name, _) in &bindings {

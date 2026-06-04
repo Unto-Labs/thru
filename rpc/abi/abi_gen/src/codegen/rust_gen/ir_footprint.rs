@@ -63,8 +63,8 @@ impl<'a> IrFootprintEmitter<'a> {
         _node: &crate::codegen::shared::ir::SumOverArrayNode,
     ) -> Result<String, IrFootprintError> {
         /* Jagged arrays require iteration over actual data for size calculation.
-           IR helper functions are free functions without access to instance data,
-           so we can't generate footprint IR for types containing jagged arrays. */
+        IR helper functions are free functions without access to instance data,
+        so we can't generate footprint IR for types containing jagged arrays. */
         Err(IrFootprintError::UnsupportedNode)
     }
 

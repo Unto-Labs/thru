@@ -7,7 +7,7 @@ import type {
 import {
   PASSKEY_POPUP_RESPONSE_EVENT,
 } from './popup';
-import { bytesToBase64Url, base64UrlToBytes } from '@thru/passkey-manager';
+import { bytesToBase64Url, base64UrlToBytes } from '@thru/programs/passkey-manager';
 export function toPopupSigningResult(result: PasskeySigningResult): PasskeyPopupSigningResult {
   return {
     signatureBase64Url: bytesToBase64Url(result.signature),
@@ -15,6 +15,7 @@ export function toPopupSigningResult(result: PasskeySigningResult): PasskeyPopup
     clientDataJSONBase64Url: bytesToBase64Url(result.clientDataJSON),
     signatureRBase64Url: bytesToBase64Url(result.signatureR),
     signatureSBase64Url: bytesToBase64Url(result.signatureS),
+    authenticatorAttachment: result.authenticatorAttachment ?? null,
   };
 }
 

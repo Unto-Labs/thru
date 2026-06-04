@@ -98,10 +98,11 @@ tsys_account_create_ephemeral( ulong account_idx, const unsigned char seed[TN_SE
 }
 
 ulong
-tsys_account_delete( ulong account_idx ) {
+tsys_account_delete( ulong account_idx, const signature_t * signature ) {
   register ulong a0 __asm__ ( "a0" ) = account_idx;
+  register ulong a1 __asm__ ( "a1" ) = (ulong)signature;
   register ulong a7 __asm__ ( "a7" ) = TN_SYSCALL_CODE_ACCOUNT_DELETE;
-  __asm__ ( "ecall" : "+r" ( a0 ) : "0" ( a0 ), "r" ( a7 ) : "memory" );
+  __asm__ ( "ecall" : "+r" ( a0 ) : "0" ( a0 ), "r" ( a1 ), "r" ( a7 ) : "memory" );
   return a0;
 }
 

@@ -11,7 +11,7 @@ import {
   type StreamBlocksRequest,
   StreamBlocksRequestSchema,
   type StreamBlocksResponse,
-} from "@thru/proto";
+} from "@thru/sdk/proto";
 import type { BlockSource } from "../chain-client";
 import { ReplayStream } from "../replay-stream";
 import { NOOP_LOGGER } from "../logger";
@@ -28,6 +28,7 @@ export interface BlockReplayOptions {
   minConsensus?: ConsensusStatus;
   logger?: ReplayLogger;
   resubscribeOnEnd?: boolean;
+  signal?: AbortSignal;
 }
 
 const DEFAULT_PAGE_SIZE = 128;
@@ -101,5 +102,6 @@ export function createBlockReplay(options: BlockReplayOptions): ReplayStream<Blo
     extractSlot: (block) => block.header?.slot ?? 0n,
     logger: options.logger,
     resubscribeOnEnd: options.resubscribeOnEnd,
+    signal: options.signal,
   });
 }

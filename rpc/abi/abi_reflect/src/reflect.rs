@@ -122,9 +122,12 @@ impl Reflector {
 
     /* Get type information for a type by name */
     pub fn get_type_info(&self, type_name: &str) -> Option<ReflectedType> {
-        self.resolver
-            .get_type_info(type_name)
-            .map(ReflectedType::from_resolved)
+        self.resolver.get_type_info(type_name).map(|resolved| {
+            ReflectedType::from_resolved_with_format(
+                resolved,
+                self.resolver.format_for_type(&resolved.name).cloned(),
+            )
+        })
     }
 
     /* Reflect binary data according to a type name */
@@ -266,6 +269,7 @@ mod tests {
         let mut resolver = TypeResolver::new();
         resolver.add_typedef(TypeDef {
             name: "MyU32".into(),
+            format: None,
             kind: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
         });
         resolver.resolve_all().expect("resolver succeeds");
@@ -280,6 +284,7 @@ mod tests {
         let mut resolver = TypeResolver::new();
         resolver.add_typedef(TypeDef {
             name: "MyU64".into(),
+            format: None,
             kind: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U64)),
         });
         resolver.resolve_all().expect("resolver succeeds");
@@ -298,6 +303,7 @@ mod tests {
         let mut resolver = TypeResolver::new();
         resolver.add_typedef(TypeDef {
             name: "DynStruct".into(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: ContainerAttributes {
                     packed: true,
@@ -307,10 +313,12 @@ mod tests {
                 fields: vec![
                     StructField {
                         name: "len".into(),
+                        format: None,
                         field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
                     },
                     StructField {
                         name: "data".into(),
+                        format: None,
                         field_type: TypeKind::Array(ArrayType {
                             container_attributes: ContainerAttributes::default(),
                             size: ExprKind::FieldRef(FieldRefExpr {
@@ -383,6 +391,7 @@ mod tests {
         let mut resolver = TypeResolver::new();
         resolver.add_typedef(TypeDef {
             name: "MyInstruction".into(),
+            format: None,
             kind: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
         });
         resolver.resolve_all().expect("resolver succeeds");
@@ -409,6 +418,7 @@ mod tests {
         let mut resolver = TypeResolver::new();
         resolver.add_typedef(TypeDef {
             name: "SomeType".into(),
+            format: None,
             kind: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
         });
         resolver.resolve_all().expect("resolver succeeds");
@@ -431,6 +441,7 @@ mod tests {
         let mut resolver = TypeResolver::new();
         resolver.add_typedef(TypeDef {
             name: "MyAccount".into(),
+            format: None,
             kind: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U64)),
         });
         resolver.resolve_all().expect("resolver succeeds");
@@ -457,6 +468,7 @@ mod tests {
         let mut resolver = TypeResolver::new();
         resolver.add_typedef(TypeDef {
             name: "MyEvent".into(),
+            format: None,
             kind: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U16)),
         });
         resolver.resolve_all().expect("resolver succeeds");

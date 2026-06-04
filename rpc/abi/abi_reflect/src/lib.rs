@@ -17,7 +17,10 @@ pub mod well_known;
 
 pub use abi_gen::abi::file::RootTypes;
 pub use errors::{ReflectError, ReflectResult};
-pub use formatter::{format_reflection, format_reflection_with_options, FormatOptions, FormattedReflection, ByteRange};
+pub use formatter::{
+    format_reflection, format_reflection_with_options, ByteRange, FormatOptions,
+    FormattedReflection,
+};
 pub use ir::{IrInterpreter, IrValidationResult, ParamMap};
 pub use parser::Parser;
 pub use reflect::{Reflector, ReflectorConfig};

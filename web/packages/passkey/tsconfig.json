@@ -4,9 +4,10 @@
     "outDir": "./dist",
     "rootDir": "..",
     "baseUrl": ".",
+    "ignoreDeprecations": "6.0",
     "paths": {
-      "@thru/helpers": ["../helpers/src/index.ts"],
-      "@thru/passkey-manager": ["../passkey-manager/src/index.ts"]
+      "@thru/sdk/helpers": ["../sdk/src/helpers/index.ts"],
+      "@thru/programs/passkey-manager": ["../programs/src/passkey-manager/index.ts"]
     }
   },
   "include": ["src/**/*"],

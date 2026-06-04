@@ -14,6 +14,7 @@ fn test_state_proof_encoding() {
         // Basic hash type (32 bytes)
         TypeDef {
             name: "Hash".to_string(),
+            format: None,
             kind: TypeKind::Array(ArrayType {
                 container_attributes: Default::default(),
                 size: ExprKind::Literal(LiteralExpr::U64(32)),
@@ -26,6 +27,7 @@ fn test_state_proof_encoding() {
         // Public key type (32 bytes, same as hash but semantically different)
         TypeDef {
             name: "Pubkey".to_string(),
+            format: None,
             kind: TypeKind::Array(ArrayType {
                 container_attributes: Default::default(),
                 size: ExprKind::Literal(LiteralExpr::U64(32)),
@@ -38,6 +40,7 @@ fn test_state_proof_encoding() {
         // State proof header
         TypeDef {
             name: "StateProofHeader".to_string(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: ContainerAttributes {
                     packed: true,
@@ -47,10 +50,12 @@ fn test_state_proof_encoding() {
                 fields: vec![
                     StructField {
                         name: "type_slot".to_string(),
+                        format: None,
                         field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U64)),
                     },
                     StructField {
                         name: "path_bitset".to_string(),
+                        format: None,
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "Hash".to_string(),
                             package: None,
@@ -63,6 +68,7 @@ fn test_state_proof_encoding() {
         // Creation proof body
         TypeDef {
             name: "CreationProofBody".to_string(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: ContainerAttributes {
                     packed: true,
@@ -72,6 +78,7 @@ fn test_state_proof_encoding() {
                 fields: vec![
                     StructField {
                         name: "existing_leaf_pubkey".to_string(),
+                        format: None,
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "Pubkey".to_string(),
                             package: None,
@@ -80,6 +87,7 @@ fn test_state_proof_encoding() {
                     },
                     StructField {
                         name: "existing_leaf_hash".to_string(),
+                        format: None,
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "Hash".to_string(),
                             package: None,
@@ -88,6 +96,7 @@ fn test_state_proof_encoding() {
                     },
                     StructField {
                         name: "sibling_hashes".to_string(),
+                        format: None,
                         field_type: TypeKind::Array(ArrayType {
                             container_attributes: Default::default(),
                             // Dynamic size based on popcount of path_bitset in header
@@ -111,6 +120,7 @@ fn test_state_proof_encoding() {
         // Existing proof body
         TypeDef {
             name: "ExistingProofBody".to_string(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: ContainerAttributes {
                     packed: true,
@@ -119,6 +129,7 @@ fn test_state_proof_encoding() {
                 },
                 fields: vec![StructField {
                     name: "sibling_hashes".to_string(),
+                    format: None,
                     field_type: TypeKind::Array(ArrayType {
                         container_attributes: Default::default(),
                         size: ExprKind::Popcount(PopcountExpr {
@@ -139,6 +150,7 @@ fn test_state_proof_encoding() {
         // Updating proof body
         TypeDef {
             name: "UpdatingProofBody".to_string(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: ContainerAttributes {
                     packed: true,
@@ -148,6 +160,7 @@ fn test_state_proof_encoding() {
                 fields: vec![
                     StructField {
                         name: "existing_leaf_hash".to_string(),
+                        format: None,
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "Hash".to_string(),
                             package: None,
@@ -156,6 +169,7 @@ fn test_state_proof_encoding() {
                     },
                     StructField {
                         name: "sibling_hashes".to_string(),
+                        format: None,
                         field_type: TypeKind::Array(ArrayType {
                             container_attributes: Default::default(),
                             size: ExprKind::Popcount(PopcountExpr {
@@ -177,6 +191,7 @@ fn test_state_proof_encoding() {
         // Enum of proof bodies - the tag comes from the header's type_slot field
         TypeDef {
             name: "ProofBodyEnum".to_string(),
+            format: None,
             kind: TypeKind::Enum(EnumType {
                 container_attributes: Default::default(),
                 // Tag extracts the type from the high 2 bits of type_slot (type_slot >> 62)
@@ -220,6 +235,7 @@ fn test_state_proof_encoding() {
         // Main state proof structure
         TypeDef {
             name: "StateProof".to_string(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: ContainerAttributes {
                     packed: true,
@@ -229,6 +245,7 @@ fn test_state_proof_encoding() {
                 fields: vec![
                     StructField {
                         name: "hdr".to_string(),
+                        format: None,
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "StateProofHeader".to_string(),
                             package: None,
@@ -237,6 +254,7 @@ fn test_state_proof_encoding() {
                     },
                     StructField {
                         name: "proof_body".to_string(),
+                        format: None,
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "ProofBodyEnum".to_string(),
                             package: None,
@@ -363,15 +381,18 @@ fn test_popcount_expression_in_state_proof_context() {
         // Simple test case with a known popcount value
         TypeDef {
             name: "TestStruct".to_string(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
                         name: "bitset".to_string(),
+                        format: None,
                         field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U64)),
                     },
                     StructField {
                         name: "dynamic_array".to_string(),
+                        format: None,
                         field_type: TypeKind::Array(ArrayType {
                             container_attributes: Default::default(),
                             // Array size = popcount of a constant value (0b1111 = 15, popcount = 4)

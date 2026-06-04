@@ -28,24 +28,15 @@ impl WellKnownType for InstructionDataHandler {
         let mut enrichment = Map::new();
 
         if let Some(idx) = program_idx {
-            enrichment.insert(
-                "programIndex".to_string(),
-                JsonValue::Number(idx.into()),
-            );
+            enrichment.insert("programIndex".to_string(), JsonValue::Number(idx.into()));
         }
 
         if let Some(size) = data_size {
-            enrichment.insert(
-                "dataSize".to_string(),
-                JsonValue::Number(size.into()),
-            );
+            enrichment.insert("dataSize".to_string(), JsonValue::Number(size.into()));
         }
 
         if let Some(bytes) = &data {
-            let hex = bytes
-                .iter()
-                .map(|b| format!("{b:02x}"))
-                .collect::<String>();
+            let hex = bytes.iter().map(|b| format!("{b:02x}")).collect::<String>();
             enrichment.insert("dataHex".to_string(), JsonValue::String(format!("0x{hex}")));
 
             /* Mark as pending recursive resolution - actual resolution happens at API layer */

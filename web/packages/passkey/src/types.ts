@@ -1,4 +1,4 @@
-import type { PasskeySigningResult, PasskeyMetadata } from '@thru/passkey-manager';
+import type { PasskeySigningResult, PasskeyMetadata } from '@thru/programs/passkey-manager';
 
 // Re-export platform-agnostic types for backward compatibility
 export type {
@@ -6,7 +6,7 @@ export type {
   PasskeySigningResult,
   PasskeyDiscoverableSigningResult,
   PasskeyMetadata,
-} from '@thru/passkey-manager';
+} from '@thru/programs/passkey-manager';
 
 /**
  * Signing result with stored passkey metadata attached.
@@ -42,6 +42,25 @@ export interface PasskeyPopupContext {
   appUrl?: string;
   origin?: string;
   imageUrl?: string;
+}
+
+/**
+ * Options for stored passkey signing in embedded contexts.
+ */
+export interface PasskeyStoredSigningOptions {
+  allowPopupFallback?: boolean;
+  /** Prefer an RP-scoped discoverable credential prompt over a stored
+   * credential-id lookup. Native WebViews can show misleading
+   * app-level "no passkey" UI when allowCredentials is stale, while a
+   * discoverable prompt correctly lets the wallet/RP choose the passkey. */
+  preferDiscoverable?: boolean;
+}
+
+/**
+ * Options for passkey registration in embedded contexts.
+ */
+export interface PasskeyRegistrationOptions {
+  allowPopupFallback?: boolean;
 }
 
 /**
@@ -95,6 +114,7 @@ export interface PasskeyPopupSigningResult {
   clientDataJSONBase64Url: string;
   signatureRBase64Url: string;
   signatureSBase64Url: string;
+  authenticatorAttachment?: 'platform' | 'cross-platform' | null;
 }
 
 export interface PasskeyPopupStoredPasskey {
@@ -103,6 +123,10 @@ export interface PasskeyPopupStoredPasskey {
   publicKeyY: string;
   rpId: string;
   label?: string;
+  deviceName?: string;
+  devicePlatform?: string;
+  browserName?: string;
+  authenticatorAttachment?: 'platform' | 'cross-platform' | null;
   createdAt: string;
   lastUsedAt: string;
 }
@@ -117,6 +141,7 @@ export interface PasskeyPopupRegistrationResult {
   publicKeyX: string;
   publicKeyY: string;
   rpId: string;
+  authenticatorAttachment?: 'platform' | 'cross-platform' | null;
 }
 
 export type PasskeyPopupResponse =

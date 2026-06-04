@@ -31,6 +31,11 @@
       "import": "./dist/auth.js",
       "require": "./dist/auth.cjs"
     },
+    "./auth/add-device": {
+      "types": "./dist/auth/add-device.d.ts",
+      "import": "./dist/auth/add-device.js",
+      "require": "./dist/auth/add-device.cjs"
+    },
     "./server": {
       "types": "./dist/server.d.ts",
       "import": "./dist/server.js",
@@ -46,8 +51,8 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@thru/passkey-manager": "workspace:*",
-    "@thru/thru-sdk": "workspace:*"
+    "@thru/sdk": "workspace:*",
+    "@thru/programs": "workspace:*"
   },
   "peerDependencies": {
     "expo-secure-store": "*",
@@ -70,8 +75,8 @@
     }
   },
   "devDependencies": {
-    "tsup": "^8.5.0",
-    "typescript": "^5.9.3",
-    "vitest": "^3.2.4"
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
   }
 }

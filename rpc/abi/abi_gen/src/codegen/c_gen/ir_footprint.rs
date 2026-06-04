@@ -52,7 +52,7 @@ impl<'a> IrFootprintEmitter<'a> {
         _node: &crate::codegen::shared::ir::SumOverArrayNode,
     ) -> Result<String, IrFootprintError> {
         /* Jagged arrays require instance data for iteration-based size calculation.
-           C IR helpers are free functions without a self pointer. */
+        C IR helpers are free functions without a self pointer. */
         Err(IrFootprintError::UnsupportedNode)
     }
 

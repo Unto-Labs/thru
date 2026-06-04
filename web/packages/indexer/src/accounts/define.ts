@@ -8,7 +8,7 @@
  * @example
  * ```ts
  * import { defineAccountStream, t } from "@thru/indexer";
- * import { decodeAddress } from "@thru/helpers";
+ * import { decodeAddress } from "@thru/sdk/helpers";
  * import type { AccountState } from "@thru/replay";
  *
  * export const tokenAccounts = defineAccountStream({

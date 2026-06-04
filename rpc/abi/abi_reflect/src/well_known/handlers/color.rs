@@ -24,7 +24,9 @@ impl WellKnownType for ColorHandler {
         let red = get_field(fields, "red").and_then(extract_f32);
         let green = get_field(fields, "green").and_then(extract_f32);
         let blue = get_field(fields, "blue").and_then(extract_f32);
-        let alpha = get_field(fields, "alpha").and_then(extract_f32).unwrap_or(1.0);
+        let alpha = get_field(fields, "alpha")
+            .and_then(extract_f32)
+            .unwrap_or(1.0);
 
         if let (Some(r), Some(g), Some(b)) = (red, green, blue) {
             /* Convert to 0-255 range and format as hex */

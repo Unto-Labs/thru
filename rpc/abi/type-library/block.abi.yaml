@@ -13,7 +13,7 @@ types:
   - name: "BlockHeaderBody"
     kind:
       struct:
-        packed: false
+        packed: true
         fields:
           # Block format version (currently only 0x01 is valid)
           - name: "block_version"
@@ -85,7 +85,7 @@ types:
   - name: "BlockHeader"
     kind:
       struct:
-        packed: false
+        packed: true
         fields:
           # Block header signature (different signing domain than block signature)
           # Signs the header body fields
@@ -104,7 +104,7 @@ types:
   - name: "BlockFooterBody"
     kind:
       struct:
-        packed: false
+        packed: true
         fields:
           # Payment amount to the attestor
           - name: "attestor_payment"
@@ -116,7 +116,7 @@ types:
   - name: "BlockFooter"
     kind:
       struct:
-        packed: false
+        packed: true
         fields:
           # Footer body containing attestor payment
           - name: "body"
@@ -138,4 +138,3 @@ types:
               type-ref:
                 name: "Signature"
                 package: "thru.common.primitives"
-

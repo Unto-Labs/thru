@@ -13,16 +13,19 @@ fn test_complete_abi_analysis_pipeline() {
         // Simple base type
         TypeDef {
             name: "BaseType".to_string(),
+            format: None,
             kind: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
         },
         // Struct with valid constant array
         TypeDef {
             name: "ValidStruct".to_string(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
                         name: "header".to_string(),
+                        format: None,
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "BaseType".to_string(),
                             package: None,
@@ -31,6 +34,7 @@ fn test_complete_abi_analysis_pipeline() {
                     },
                     StructField {
                         name: "data".to_string(),
+                        format: None,
                         field_type: TypeKind::Array(ArrayType {
                             container_attributes: Default::default(),
                             size: ExprKind::Literal(LiteralExpr::U64(16)),
@@ -46,6 +50,7 @@ fn test_complete_abi_analysis_pipeline() {
         // Enum with constant tag
         TypeDef {
             name: "ValidEnum".to_string(),
+            format: None,
             kind: TypeKind::Enum(EnumType {
                 container_attributes: Default::default(),
                 tag_ref: ExprKind::Sizeof(SizeofExpr {
@@ -133,11 +138,13 @@ fn test_invalid_enum_tag_layout_cycle_detection() {
         // Container struct
         TypeDef {
             name: "Container".to_string(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
                         name: "problematic_enum".to_string(),
+                        format: None,
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "ProblematicEnum".to_string(),
                             package: None,
@@ -146,6 +153,7 @@ fn test_invalid_enum_tag_layout_cycle_detection() {
                     },
                     StructField {
                         name: "referenced_field".to_string(),
+                        format: None,
                         field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
                     },
                 ],
@@ -154,6 +162,7 @@ fn test_invalid_enum_tag_layout_cycle_detection() {
         // Enum that creates a layout cycle
         TypeDef {
             name: "ProblematicEnum".to_string(),
+            format: None,
             kind: TypeKind::Enum(EnumType {
                 container_attributes: Default::default(),
                 // This tag references a field whose offset depends on this enum's size
@@ -197,11 +206,13 @@ fn test_forward_field_reference_detection() {
     let typedefs = vec![
         TypeDef {
             name: "ForwardRefStruct".to_string(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
                         name: "early_array".to_string(),
+                        format: None,
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "ForwardRefArray".to_string(),
                             package: None,
@@ -210,10 +221,12 @@ fn test_forward_field_reference_detection() {
                     },
                     StructField {
                         name: "middle_field".to_string(),
+                        format: None,
                         field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
                     },
                     StructField {
                         name: "late_field".to_string(),
+                        format: None,
                         field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
                     },
                 ],
@@ -221,6 +234,7 @@ fn test_forward_field_reference_detection() {
         },
         TypeDef {
             name: "ForwardRefArray".to_string(),
+            format: None,
             kind: TypeKind::Array(ArrayType {
                 container_attributes: Default::default(),
                 // Invalid: references a field that comes later in the parent struct
@@ -256,11 +270,13 @@ fn test_struct_field_forward_reference_rejected() {
 
     let typedef = TypeDef {
         name: "BadStruct".to_string(),
+        format: None,
         kind: TypeKind::Struct(StructType {
             container_attributes: Default::default(),
             fields: vec![
                 StructField {
                     name: "payload".to_string(),
+                    format: None,
                     field_type: TypeKind::Array(ArrayType {
                         container_attributes: Default::default(),
                         size: ExprKind::FieldRef(FieldRefExpr {
@@ -274,6 +290,7 @@ fn test_struct_field_forward_reference_rejected() {
                 },
                 StructField {
                     name: "len".to_string(),
+                    format: None,
                     field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U16)),
                 },
             ],
@@ -302,11 +319,13 @@ fn test_complex_transitive_dependency_chain() {
         // Root container
         TypeDef {
             name: "RootContainer".to_string(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
                         name: "level1".to_string(),
+                        format: None,
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "Level1".to_string(),
                             package: None,
@@ -315,6 +334,7 @@ fn test_complex_transitive_dependency_chain() {
                     },
                     StructField {
                         name: "target_field".to_string(),
+                        format: None,
                         field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
                     },
                 ],
@@ -323,10 +343,12 @@ fn test_complex_transitive_dependency_chain() {
         // Level 1 nesting
         TypeDef {
             name: "Level1".to_string(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: Default::default(),
                 fields: vec![StructField {
                     name: "level2".to_string(),
+                    format: None,
                     field_type: TypeKind::TypeRef(TypeRefType {
                         name: "Level2".to_string(),
                         package: None,
@@ -338,10 +360,12 @@ fn test_complex_transitive_dependency_chain() {
         // Level 2 nesting with problematic array
         TypeDef {
             name: "Level2".to_string(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: Default::default(),
                 fields: vec![StructField {
                     name: "problematic_array".to_string(),
+                    format: None,
                     field_type: TypeKind::TypeRef(TypeRefType {
                         name: "TransitiveArray".to_string(),
                         package: None,
@@ -353,6 +377,7 @@ fn test_complex_transitive_dependency_chain() {
         // Array that creates transitive dependency back to root
         TypeDef {
             name: "TransitiveArray".to_string(),
+            format: None,
             kind: TypeKind::Array(ArrayType {
                 container_attributes: Default::default(),
                 // This creates: RootContainer -> Level1 -> Level2 -> TransitiveArray -> RootContainer
@@ -389,15 +414,18 @@ fn test_packed_vs_aligned_struct_analysis() {
         // Regular struct
         TypeDef {
             name: "RegularStruct".to_string(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
                         name: "byte_field".to_string(),
+                        format: None,
                         field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U8)),
                     },
                     StructField {
                         name: "int_field".to_string(),
+                        format: None,
                         field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
                     },
                 ],
@@ -406,6 +434,7 @@ fn test_packed_vs_aligned_struct_analysis() {
         // Packed struct
         TypeDef {
             name: "PackedStruct".to_string(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: ContainerAttributes {
                     packed: true,
@@ -415,10 +444,12 @@ fn test_packed_vs_aligned_struct_analysis() {
                 fields: vec![
                     StructField {
                         name: "byte_field".to_string(),
+                        format: None,
                         field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U8)),
                     },
                     StructField {
                         name: "int_field".to_string(),
+                        format: None,
                         field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
                     },
                 ],
@@ -427,6 +458,7 @@ fn test_packed_vs_aligned_struct_analysis() {
         // Aligned struct
         TypeDef {
             name: "AlignedStruct".to_string(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: ContainerAttributes {
                     packed: false,
@@ -435,6 +467,7 @@ fn test_packed_vs_aligned_struct_analysis() {
                 },
                 fields: vec![StructField {
                     name: "byte_field".to_string(),
+                    format: None,
                     field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U8)),
                 }],
             }),
@@ -478,6 +511,7 @@ fn test_constant_expression_analysis_integration() {
         // Array with constant size
         TypeDef {
             name: "ConstantArray".to_string(),
+            format: None,
             kind: TypeKind::Array(ArrayType {
                 container_attributes: Default::default(),
                 size: ExprKind::Mul(MulExpr {
@@ -495,6 +529,7 @@ fn test_constant_expression_analysis_integration() {
         // Array with non-constant size
         TypeDef {
             name: "DynamicArray".to_string(),
+            format: None,
             kind: TypeKind::Array(ArrayType {
                 container_attributes: Default::default(),
                 size: ExprKind::Add(AddExpr {
@@ -556,11 +591,13 @@ fn test_comprehensive_error_reporting() {
         // Multiple violations in one analysis
         TypeDef {
             name: "MultiViolationStruct".to_string(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
                         name: "problematic_enum".to_string(),
+                        format: None,
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "BadEnum".to_string(),
                             package: None,
@@ -569,6 +606,7 @@ fn test_comprehensive_error_reporting() {
                     },
                     StructField {
                         name: "problematic_array".to_string(),
+                        format: None,
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "BadArray".to_string(),
                             package: None,
@@ -577,6 +615,7 @@ fn test_comprehensive_error_reporting() {
                     },
                     StructField {
                         name: "reference_field".to_string(),
+                        format: None,
                         field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
                     },
                 ],
@@ -585,6 +624,7 @@ fn test_comprehensive_error_reporting() {
         // Enum with layout cycle
         TypeDef {
             name: "BadEnum".to_string(),
+            format: None,
             kind: TypeKind::Enum(EnumType {
                 container_attributes: Default::default(),
                 tag_ref: ExprKind::FieldRef(FieldRefExpr {
@@ -603,6 +643,7 @@ fn test_comprehensive_error_reporting() {
         // Array with layout cycle
         TypeDef {
             name: "BadArray".to_string(),
+            format: None,
             kind: TypeKind::Array(ArrayType {
                 container_attributes: Default::default(),
                 size: ExprKind::FieldRef(FieldRefExpr {
@@ -659,6 +700,7 @@ fn test_real_world_scenario_token_account() {
     // Simulates a real-world token account structure similar to the example in in.yaml
     let typedefs = vec![TypeDef {
         name: "TokenAccount".to_string(),
+        format: None,
         kind: TypeKind::Struct(StructType {
             container_attributes: ContainerAttributes {
                 packed: true,
@@ -668,14 +710,17 @@ fn test_real_world_scenario_token_account() {
             fields: vec![
                 StructField {
                     name: "is_initialized".to_string(),
+                    format: None,
                     field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U8)),
                 },
                 StructField {
                     name: "is_frozen".to_string(),
+                    format: None,
                     field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U8)),
                 },
                 StructField {
                     name: "mint".to_string(),
+                    format: None,
                     field_type: TypeKind::Array(ArrayType {
                         container_attributes: Default::default(),
                         size: ExprKind::Literal(LiteralExpr::U64(32)),
@@ -687,6 +732,7 @@ fn test_real_world_scenario_token_account() {
                 },
                 StructField {
                     name: "owner".to_string(),
+                    format: None,
                     field_type: TypeKind::Array(ArrayType {
                         container_attributes: Default::default(),
                         size: ExprKind::Literal(LiteralExpr::U64(32)),
@@ -698,6 +744,7 @@ fn test_real_world_scenario_token_account() {
                 },
                 StructField {
                     name: "amount".to_string(),
+                    format: None,
                     field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U64)),
                 },
             ],
@@ -738,25 +785,30 @@ fn test_comprehensive_validation_integration() {
         // Valid base type
         TypeDef {
             name: "BaseType".to_string(),
+            format: None,
             kind: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
         },
         // Duplicate type name (validation error)
         TypeDef {
             name: "BaseType".to_string(), // Duplicate!
+            format: None,
             kind: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U8)),
         },
         // Struct with duplicate field names (validation error)
         TypeDef {
             name: "BadStruct".to_string(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
                         name: "duplicate_field".to_string(),
+                        format: None,
                         field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
                     },
                     StructField {
                         name: "duplicate_field".to_string(), // Duplicate field!
+                        format: None,
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "ProblematicArray".to_string(),
                             package: None,
@@ -765,6 +817,7 @@ fn test_comprehensive_validation_integration() {
                     },
                     StructField {
                         name: "problematic_enum".to_string(),
+                        format: None,
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "ProblematicEnum".to_string(),
                             package: None,
@@ -773,6 +826,7 @@ fn test_comprehensive_validation_integration() {
                     },
                     StructField {
                         name: "reference_field".to_string(),
+                        format: None,
                         field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
                     },
                 ],
@@ -781,6 +835,7 @@ fn test_comprehensive_validation_integration() {
         // Array with layout cycle (layout violation)
         TypeDef {
             name: "ProblematicArray".to_string(),
+            format: None,
             kind: TypeKind::Array(ArrayType {
                 container_attributes: Default::default(),
                 // Layout cycle: references field in struct that contains this array
@@ -796,6 +851,7 @@ fn test_comprehensive_validation_integration() {
         // Enum with duplicate variants and layout cycle
         TypeDef {
             name: "ProblematicEnum".to_string(),
+            format: None,
             kind: TypeKind::Enum(EnumType {
                 container_attributes: Default::default(),
                 // Layout cycle: references field in struct affected by this enum
@@ -823,11 +879,13 @@ fn test_comprehensive_validation_integration() {
         // Valid struct (should pass all checks)
         TypeDef {
             name: "ValidStruct".to_string(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
                         name: "field1".to_string(),
+                        format: None,
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "BaseType".to_string(),
                             package: None,
@@ -836,6 +894,7 @@ fn test_comprehensive_validation_integration() {
                     },
                     StructField {
                         name: "field2".to_string(),
+                        format: None,
                         field_type: TypeKind::Array(ArrayType {
                             container_attributes: Default::default(),
                             size: ExprKind::Literal(LiteralExpr::U64(10)), // Constant size - valid

@@ -810,7 +810,9 @@ console.log("dual arrays ok");
 #[test]
 fn test_ts_enum_builder_supports_variant_selectors() {
     let test_dir = setup_test_dir("token_builder");
-    let abi_path = PathBuf::from("..").join("type-library").join("tn_token_program.abi.yaml");
+    let abi_path = PathBuf::from("..")
+        .join("type-library")
+        .join("tn_token_program.abi.yaml");
 
     generate_ts_code(
         abi_path.to_str().expect("token_program.abi.yaml path utf8"),
@@ -901,7 +903,9 @@ fn test_ts_enum_builder_supports_variant_selectors() {
 #[test]
 fn test_ts_tail_typeref_struct_builders() {
     let test_dir = setup_test_dir("token_tail_typeref_builder");
-    let abi_path = PathBuf::from("..").join("type-library").join("tn_token_program.abi.yaml");
+    let abi_path = PathBuf::from("..")
+        .join("type-library")
+        .join("tn_token_program.abi.yaml");
 
     generate_ts_code(
         abi_path.to_str().expect("token_program.abi.yaml path utf8"),
@@ -945,7 +949,9 @@ fn test_ts_tail_typeref_struct_builders() {
 #[test]
 fn test_ts_generated_code_has_no_todo_placeholders() {
     let test_dir = setup_test_dir("token_no_todo");
-    let abi_path = PathBuf::from("..").join("type-library").join("tn_token_program.abi.yaml");
+    let abi_path = PathBuf::from("..")
+        .join("type-library")
+        .join("tn_token_program.abi.yaml");
 
     generate_ts_code(
         abi_path.to_str().expect("token_program.abi.yaml path utf8"),
@@ -1107,13 +1113,13 @@ fn test_ts_enums_fixture_compiles() {
 #[test]
 fn test_ts_parent_tag_ref_enum_no_duplicate_params() {
     /* Regression test for bug: when a tagged union's tag-ref points to a field in the
-       parent struct, the codegen was generating duplicate parameters with different names
-       (e.g., "payload_event_type" and "EventEnvelope__payload_event_type") that both
-       resolve to the same byte offset. This caused TypeScript compilation errors because
-       the Params type required both parameters but __tnComputeParams only provided one.
+    parent struct, the codegen was generating duplicate parameters with different names
+    (e.g., "payload_event_type" and "EventEnvelope__payload_event_type") that both
+    resolve to the same byte offset. This caused TypeScript compilation errors because
+    the Params type required both parameters but __tnComputeParams only provided one.
 
-       The fix deduplicates parameters by their resolved byte offset, keeping the shorter
-       parameter name. */
+    The fix deduplicates parameters by their resolved byte offset, keeping the shorter
+    parameter name. */
     let test_dir = setup_test_dir("parent_tag_ref_enum");
     let abi_file = "tests/compliance_data/parent_tag_ref_enum.abi.yaml";
 
@@ -1125,10 +1131,10 @@ fn test_ts_parent_tag_ref_enum_no_duplicate_params() {
     let content = fs::read_to_string(&ts_file).expect("Failed to read types.ts");
 
     /* Verify no duplicate parameters exist.
-       Before the fix, we would see both:
-       - payload_event_type (shorter, canonical)
-       - EventEnvelope__payload_event_type (longer, qualified)
-       After the fix, only the shorter one should exist. */
+    Before the fix, we would see both:
+    - payload_event_type (shorter, canonical)
+    - EventEnvelope__payload_event_type (longer, qualified)
+    After the fix, only the shorter one should exist. */
     let param_count = content.matches("payload_event_type").count();
     let qualified_count = content.matches("EventEnvelope__payload_event_type").count();
 
@@ -1154,8 +1160,8 @@ fn test_ts_parent_tag_ref_enum_no_duplicate_params() {
     );
 
     /* Most importantly: verify TypeScript compilation succeeds.
-       Before the fix, this would fail with:
-       "Property 'EventEnvelope__payload_event_type' is missing" */
+    Before the fix, this would fail with:
+    "Property 'EventEnvelope__payload_event_type' is missing" */
     check_typescript_compilation(&ts_file)
         .expect("TypeScript compilation failed - likely duplicate parameter mismatch between Params type and __tnComputeParams");
 

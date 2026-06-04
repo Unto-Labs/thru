@@ -14,7 +14,7 @@
  * - Stream updates "win" - addresses seen from stream are skipped in GetAccount
  * - onBackfillComplete fires when the GetAccount queue is drained
  */
-import { decodeAddress, encodeAddress } from "@thru/helpers";
+import { decodeAddress, encodeAddress } from "@thru/sdk/helpers";
 import { AccountView, ChainClient, createAccountsByOwnerReplay } from "../src";
 
 const BASE_URL = process.env.GRPC_URL || "https://grpc.alphanet.thruput.org";

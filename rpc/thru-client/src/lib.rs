@@ -46,8 +46,8 @@ use thru_grpc_client::thru::{
     core::v1 as corev1,
     services::v1::{
         self as servicesv1, command_service_client::CommandServiceClient,
-        debug_service_client::DebugServiceClient,
-        query_service_client::QueryServiceClient, streaming_service_client::StreamingServiceClient,
+        debug_service_client::DebugServiceClient, query_service_client::QueryServiceClient,
+        streaming_service_client::StreamingServiceClient,
     },
 };
 
@@ -71,8 +71,7 @@ impl ClientBuilder {
     /// Create a new builder with default settings.
     pub fn new() -> Self {
         let default_endpoint =
-            Endpoint::from_static("http://127.0.0.1:8472")
-                .timeout(Duration::from_secs(30));
+            Endpoint::from_static("http://127.0.0.1:8472").timeout(Duration::from_secs(30));
         Self {
             endpoint: default_endpoint,
             timeout: Duration::from_secs(30),
@@ -85,15 +84,15 @@ impl ClientBuilder {
         let mut endpoint = Endpoint::from_shared(url.to_string())
             .expect("invalid gRPC endpoint URL provided to ClientBuilder");
         endpoint = endpoint.timeout(self.timeout);
-        
+
         // Enable TLS for HTTPS URLs
         if url.scheme() == "https" {
-            let tls_config = ClientTlsConfig::new()
-                .with_enabled_roots();
-            endpoint = endpoint.tls_config(tls_config)
+            let tls_config = ClientTlsConfig::new().with_enabled_roots();
+            endpoint = endpoint
+                .tls_config(tls_config)
                 .expect("failed to configure TLS for HTTPS endpoint");
         }
-        
+
         self.endpoint = endpoint;
         self
     }
@@ -209,11 +208,7 @@ impl Client {
     ///
     /// This queries historical account state from the ClickHouse database.
     /// Returns the account state as it was at the beginning of the specified slot.
-    pub async fn get_account_at_slot(
-        &self,
-        pubkey: &Pubkey,
-        slot: u64,
-    ) -> Result<Option<Account>> {
+    pub async fn get_account_at_slot(&self, pubkey: &Pubkey, slot: u64) -> Result<Option<Account>> {
         let mut client = QueryServiceClient::new(self.channel.clone())
             .max_decoding_message_size(128 * 1024 * 1024)
             .max_encoding_message_size(128 * 1024 * 1024);
@@ -357,9 +352,9 @@ impl Client {
             }
         }
 
-        let next_page_token = message.page.and_then(|page| {
-            page.next_page_token.filter(|token| !token.is_empty())
-        });
+        let next_page_token = message
+            .page
+            .and_then(|page| page.next_page_token.filter(|token| !token.is_empty()));
 
         Ok(AccountTransactionsPage {
             signatures,
@@ -393,31 +388,42 @@ impl Client {
         transaction_proto: corev1::Transaction,
         signature: &Signature,
     ) -> Result<Option<TransactionDetails>> {
-        let header = transaction_proto.header.as_ref()
+        let header = transaction_proto
+            .header
+            .as_ref()
             .ok_or_else(|| ClientError::Rpc("transaction missing header".into()))?;
 
-        let fee_payer_sig_bytes = header.fee_payer_signature.as_ref()
+        let fee_payer_sig_bytes = header
+            .fee_payer_signature
+            .as_ref()
             .ok_or_else(|| ClientError::Rpc("header missing fee_payer_signature".into()))?
-            .value.clone();
+            .value
+            .clone();
         let fee_payer_signature = signature_from_bytes(
             &array_from_vec::<64>(fee_payer_sig_bytes, "fee_payer_signature")
-                .map_err(ClientError::Validation)?
+                .map_err(ClientError::Validation)?,
         )?;
 
-        let fee_payer_pubkey_bytes = header.fee_payer_pubkey.as_ref()
+        let fee_payer_pubkey_bytes = header
+            .fee_payer_pubkey
+            .as_ref()
             .ok_or_else(|| ClientError::Rpc("header missing fee_payer_pubkey".into()))?
-            .value.clone();
+            .value
+            .clone();
         let fee_payer_pubkey = Pubkey::from_bytes(
             &array_from_vec::<32>(fee_payer_pubkey_bytes, "fee_payer_pubkey")
-                .map_err(ClientError::Validation)?
+                .map_err(ClientError::Validation)?,
         );
 
-        let program_pubkey_bytes = header.program_pubkey.as_ref()
+        let program_pubkey_bytes = header
+            .program_pubkey
+            .as_ref()
             .ok_or_else(|| ClientError::Rpc("header missing program_pubkey".into()))?
-            .value.clone();
+            .value
+            .clone();
         let program_pubkey = Pubkey::from_bytes(
             &array_from_vec::<32>(program_pubkey_bytes, "program_pubkey")
-                .map_err(ClientError::Validation)?
+                .map_err(ClientError::Validation)?,
         );
 
         let transaction_slot = transaction_proto.slot.unwrap_or(0);
@@ -550,7 +556,9 @@ impl Client {
                 Ok(response) => {
                     let transaction_proto = response.into_inner();
                     if transaction_proto.slot.unwrap_or(0) != 0 {
-                        return self.transaction_proto_to_details(transaction_proto, signature).await;
+                        return self
+                            .transaction_proto_to_details(transaction_proto, signature)
+                            .await;
                     }
                 }
                 Err(status) => {
@@ -574,11 +582,22 @@ impl Client {
         transaction: &[u8],
         timeout: Duration,
     ) -> Result<TransactionDetails> {
+        let start = Instant::now();
         let signature_bytes = self.send_transaction(transaction).await?;
-        let track_resp = self.track_transaction(&signature_bytes, timeout).await?;
+        let track_resp = match self.track_transaction(&signature_bytes, timeout).await {
+            Ok(track_resp) => track_resp,
+            Err(err) if is_track_transaction_timeout(&err) => {
+                let fallback_budget =
+                    Duration::from_secs(60).max(timeout.saturating_sub(start.elapsed()));
+                return self
+                    .track_transaction_polling(&signature_bytes, fallback_budget)
+                    .await;
+            }
+            Err(err) => return Err(err),
+        };
 
         /* If the stream returned an execution error, propagate it early so
-           callers that only check Result don't miss it. */
+        callers that only check Result don't miss it. */
         if let Some(ref exec) = track_resp.execution_result {
             if exec.execution_result != 0 || exec.vm_error != 0 {
                 /* Still need full details for the caller to inspect */
@@ -586,10 +605,16 @@ impl Client {
         }
 
         /* Fetch the full Transaction proto (header, body, slot, etc.) */
-        let remaining = timeout.saturating_sub(Duration::from_millis(100));
-        match self.fetch_transaction_details(&signature_bytes, remaining, 3).await? {
+        let remaining = timeout
+            .saturating_sub(start.elapsed())
+            .saturating_sub(Duration::from_millis(100));
+        match self
+            .fetch_transaction_details(&signature_bytes, remaining, 3)
+            .await?
+        {
             Some(transaction_proto) => {
-                self.transaction_proto_to_details(transaction_proto, &signature_bytes).await
+                self.transaction_proto_to_details(transaction_proto, &signature_bytes)
+                    .await
             }
             None => Err(ClientError::TransactionVerification(
                 "Transaction confirmed via stream but not found in query".to_string(),
@@ -964,31 +989,42 @@ impl Client {
         let signature = signature_from_bytes(signature_bytes)?;
 
         /* Extract header fields */
-        let header = transaction_proto.header.as_ref()
+        let header = transaction_proto
+            .header
+            .as_ref()
             .ok_or_else(|| ClientError::Rpc("transaction missing header".into()))?;
 
-        let fee_payer_sig_bytes = header.fee_payer_signature.as_ref()
+        let fee_payer_sig_bytes = header
+            .fee_payer_signature
+            .as_ref()
             .ok_or_else(|| ClientError::Rpc("header missing fee_payer_signature".into()))?
-            .value.clone();
+            .value
+            .clone();
         let fee_payer_signature = signature_from_bytes(
             &array_from_vec::<64>(fee_payer_sig_bytes, "fee_payer_signature")
-                .map_err(ClientError::Validation)?
+                .map_err(ClientError::Validation)?,
         )?;
 
-        let fee_payer_pubkey_bytes = header.fee_payer_pubkey.as_ref()
+        let fee_payer_pubkey_bytes = header
+            .fee_payer_pubkey
+            .as_ref()
             .ok_or_else(|| ClientError::Rpc("header missing fee_payer_pubkey".into()))?
-            .value.clone();
+            .value
+            .clone();
         let fee_payer_pubkey = Pubkey::from_bytes(
             &array_from_vec::<32>(fee_payer_pubkey_bytes, "fee_payer_pubkey")
-                .map_err(ClientError::Validation)?
+                .map_err(ClientError::Validation)?,
         );
 
-        let program_pubkey_bytes = header.program_pubkey.as_ref()
+        let program_pubkey_bytes = header
+            .program_pubkey
+            .as_ref()
             .ok_or_else(|| ClientError::Rpc("header missing program_pubkey".into()))?
-            .value.clone();
+            .value
+            .clone();
         let program_pubkey = Pubkey::from_bytes(
             &array_from_vec::<32>(program_pubkey_bytes, "program_pubkey")
-                .map_err(ClientError::Validation)?
+                .map_err(ClientError::Validation)?,
         );
 
         /* Extract execution result fields */
@@ -1206,6 +1242,16 @@ fn is_confirmed(consensus_status: i32) -> bool {
     }
 }
 
+fn is_track_transaction_timeout(err: &ClientError) -> bool {
+    match err {
+        ClientError::Rpc(msg) => msg.contains("track transaction timeout"),
+        ClientError::TransactionVerification(msg) => {
+            msg.contains("Transaction confirmation timed out")
+        }
+        _ => false,
+    }
+}
+
 fn pubkey_bytes(pubkey: &Pubkey) -> Result<[u8; 32]> {
     pubkey
         .to_bytes()
@@ -1266,9 +1312,15 @@ impl Account {
 
         let program = meta.flags.as_ref().map_or(false, |flags| flags.is_program);
         let is_new = meta.flags.as_ref().map_or(false, |flags| flags.is_new);
-        let is_ephemeral = meta.flags.as_ref().map_or(false, |flags| flags.is_ephemeral);
+        let is_ephemeral = meta
+            .flags
+            .as_ref()
+            .map_or(false, |flags| flags.is_ephemeral);
         let is_deleted = meta.flags.as_ref().map_or(false, |flags| flags.is_deleted);
-        let is_privileged = meta.flags.as_ref().map_or(false, |flags| flags.is_privileged);
+        let is_privileged = meta
+            .flags
+            .as_ref()
+            .map_or(false, |flags| flags.is_privileged);
 
         let data = account.data.and_then(|data| {
             data.data.and_then(|d| {

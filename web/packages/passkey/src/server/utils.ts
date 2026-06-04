@@ -1,4 +1,4 @@
-import { encodeAddress } from '@thru/helpers';
+import { encodeAddress } from '@thru/sdk/helpers';
 import type { ThruClient, TransactionResult } from './types';
 
 const feePayerQueueSymbol = Symbol.for('thru.sharedFeePayerQueues');

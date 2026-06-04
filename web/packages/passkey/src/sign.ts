@@ -6,6 +6,7 @@ import type {
   PasskeyPopupContext,
   PasskeyPopupSigningResult,
   PasskeyPopupStoredSigningResult,
+  PasskeyStoredSigningOptions,
 } from './types';
 import {
   arrayBufferToBase64Url,
@@ -14,7 +15,7 @@ import {
   base64UrlToBytes,
   parseDerSignature,
   normalizeLowS,
-} from '@thru/passkey-manager';
+} from '@thru/programs/passkey-manager';
 import {
   isWebAuthnSupported,
   getPasskeyPromptMode,
@@ -23,7 +24,11 @@ import {
   shouldFallbackToPopup,
   type PasskeyPromptAction,
 } from './capabilities';
-import { requestPasskeyPopup, openPasskeyPopupWindow, closePopup } from './popup';
+import {
+  requestPasskeyPopup,
+  openPasskeyPopupWindow,
+  closePopup,
+} from './popup';
 
 /**
  * Sign a challenge with an existing passkey (by credential ID).
@@ -40,7 +45,8 @@ export async function signWithPasskey(
   return runWithPromptMode(
     'get',
     () => signWithPasskeyInline(credentialId, challenge, rpId),
-    (preopenedPopup) => signWithPasskeyViaPopup(credentialId, challenge, rpId, preopenedPopup)
+    (preopenedPopup) =>
+      signWithPasskeyViaPopup(credentialId, challenge, rpId, preopenedPopup)
   );
 }
 
@@ -52,16 +58,31 @@ export async function signWithStoredPasskey(
   rpId: string,
   preferredPasskey: PasskeyMetadata | null,
   allPasskeys: PasskeyMetadata[],
-  context?: PasskeyPopupContext
+  context?: PasskeyPopupContext,
+  options: PasskeyStoredSigningOptions = {}
 ): Promise<PasskeyStoredSigningResult> {
   if (!isWebAuthnSupported()) {
     throw new Error('WebAuthn is not supported in this browser');
   }
 
-  const preopenedPopup = maybePreopenPopup('get', openPasskeyPopupWindow);
-  const promptMode = await getPasskeyPromptMode('get');
+  const allowPopupFallback = options.allowPopupFallback ?? true;
+  const preopenedPopup = allowPopupFallback
+    ? maybePreopenPopup('get', openPasskeyPopupWindow)
+    : null;
+  const promptMode = allowPopupFallback
+    ? await getPasskeyPromptMode('get')
+    : 'inline';
   const storedPasskey = preferredPasskey;
-  const canUsePopup = isInIframe();
+  const canUsePopup = allowPopupFallback && isInIframe();
+
+  if (options.preferDiscoverable) {
+    closePopup(preopenedPopup);
+    return signWithDiscoverableStoredPasskey(
+      challenge,
+      storedPasskey?.rpId ?? rpId,
+      allPasskeys
+    );
+  }
 
   if (promptMode === 'popup' || (canUsePopup && !storedPasskey)) {
     return requestStoredPasskeyPopup(challenge, preopenedPopup, context);
@@ -71,37 +92,29 @@ export async function signWithStoredPasskey(
 
   try {
     if (storedPasskey) {
-      const result = await signWithPasskeyInline(
-        storedPasskey.credentialId,
-        challenge,
-        storedPasskey.rpId
-      );
-      return {
-        ...result,
-        passkey: storedPasskey,
-      };
+      try {
+        const result = await signWithPasskeyInline(
+          storedPasskey.credentialId,
+          challenge,
+          storedPasskey.rpId
+        );
+        return {
+          ...result,
+          passkey: storedPasskey,
+        };
+      } catch (error) {
+        if (!shouldFallbackToDiscoverable(error)) {
+          throw error;
+        }
+        return signWithDiscoverableStoredPasskey(
+          challenge,
+          storedPasskey.rpId,
+          allPasskeys
+        );
+      }
     }
 
-    const discoverable = await signWithDiscoverablePasskey(challenge, rpId);
-    const matchingPasskey = allPasskeys.find(p => p.credentialId === discoverable.credentialId) ?? null;
-    const now = new Date().toISOString();
-    const passkey = matchingPasskey ?? {
-      credentialId: discoverable.credentialId,
-      publicKeyX: '',
-      publicKeyY: '',
-      rpId: discoverable.rpId,
-      createdAt: now,
-      lastUsedAt: now,
-    };
-
-    return {
-      signature: discoverable.signature,
-      authenticatorData: discoverable.authenticatorData,
-      clientDataJSON: discoverable.clientDataJSON,
-      signatureR: discoverable.signatureR,
-      signatureS: discoverable.signatureS,
-      passkey,
-    };
+    return signWithDiscoverableStoredPasskey(challenge, rpId, allPasskeys);
   } catch (error) {
     if (canUsePopup && shouldFallbackToPopup(error)) {
       return requestStoredPasskeyPopup(challenge, undefined, context);
@@ -109,6 +122,66 @@ export async function signWithStoredPasskey(
 
     throw error;
   }
+}
+
+async function signWithDiscoverableStoredPasskey(
+  challenge: Uint8Array,
+  rpId: string,
+  allPasskeys: PasskeyMetadata[]
+): Promise<PasskeyStoredSigningResult> {
+  const discoverable = await signWithDiscoverablePasskey(challenge, rpId);
+  const matchingPasskey =
+    allPasskeys.find((p) => p.credentialId === discoverable.credentialId) ??
+    null;
+  const now = new Date().toISOString();
+  const passkey = matchingPasskey ?? {
+    credentialId: discoverable.credentialId,
+    publicKeyX: '',
+    publicKeyY: '',
+    rpId: discoverable.rpId,
+    createdAt: now,
+    lastUsedAt: now,
+  };
+
+  return {
+    signature: discoverable.signature,
+    authenticatorData: discoverable.authenticatorData,
+    clientDataJSON: discoverable.clientDataJSON,
+    signatureR: discoverable.signatureR,
+    signatureS: discoverable.signatureS,
+    authenticatorAttachment: discoverable.authenticatorAttachment,
+    passkey,
+  };
+}
+
+function shouldFallbackToDiscoverable(error: unknown): boolean {
+  const name =
+    error && typeof error === 'object' && 'name' in error
+      ? String((error as { name?: unknown }).name)
+      : '';
+  const message =
+    error && typeof error === 'object' && 'message' in error
+      ? String((error as { message?: unknown }).message)
+      : '';
+  const normalized = `${name} ${message}`.toLowerCase();
+
+  if (
+    normalized.includes('user rejected') ||
+    normalized.includes('user canceled') ||
+    normalized.includes('user cancelled')
+  ) {
+    return false;
+  }
+
+  return (
+    normalized.includes('notallowederror') ||
+    normalized.includes('invalidstateerror') ||
+    normalized.includes('notfounderror') ||
+    normalized.includes('not found') ||
+    normalized.includes('no passkey') ||
+    normalized.includes('no credential') ||
+    normalized.includes('saved for this app')
+  );
 }
 
 /**
@@ -133,6 +206,7 @@ export async function signWithDiscoverablePasskey(
     signatureS: result.signatureS,
     credentialId: result.credentialId,
     rpId: resolvedRpId,
+    authenticatorAttachment: result.authenticatorAttachment,
   };
 }
 
@@ -173,6 +247,7 @@ async function signWithPasskeyInline(
     clientDataJSON: result.clientDataJSON,
     signatureR: result.signatureR,
     signatureS: result.signatureS,
+    authenticatorAttachment: result.authenticatorAttachment,
   };
 }
 
@@ -214,6 +289,17 @@ async function signWithPasskeyAssertion(
   let { r, s } = parseDerSignature(signature);
   s = normalizeLowS(s);
 
+  /* `authenticatorAttachment` distinguishes a same-device passkey
+     ('platform') from a cross-device one signed via QR / hybrid
+     transport ('cross-platform'). Drives the wallet's add-device
+     prompt. Browsers may report null. */
+  const rawAttachment =
+    (
+      assertion as PublicKeyCredential & {
+        authenticatorAttachment?: AuthenticatorAttachment | null;
+      }
+    ).authenticatorAttachment ?? null;
+
   return {
     signature: new Uint8Array([...r, ...s]),
     authenticatorData: new Uint8Array(response.authenticatorData),
@@ -221,6 +307,7 @@ async function signWithPasskeyAssertion(
     signatureR: r,
     signatureS: s,
     credentialId: arrayBufferToBase64Url(assertion.rawId),
+    authenticatorAttachment: rawAttachment,
   };
 }
 
@@ -259,13 +346,16 @@ async function requestStoredPasskeyPopup(
   return decodePopupStoredSigningResult(result);
 }
 
-function decodePopupSigningResult(result: PasskeyPopupSigningResult): PasskeySigningResult {
+function decodePopupSigningResult(
+  result: PasskeyPopupSigningResult
+): PasskeySigningResult {
   return {
     signature: base64UrlToBytes(result.signatureBase64Url),
     authenticatorData: base64UrlToBytes(result.authenticatorDataBase64Url),
     clientDataJSON: base64UrlToBytes(result.clientDataJSONBase64Url),
     signatureR: base64UrlToBytes(result.signatureRBase64Url),
     signatureS: base64UrlToBytes(result.signatureSBase64Url),
+    authenticatorAttachment: result.authenticatorAttachment ?? null,
   };
 }
 

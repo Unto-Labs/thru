@@ -1,5 +1,5 @@
-import type { AccountContext } from '@thru/passkey-manager';
-import type { TransactionHeaderConfig } from '@thru/thru-sdk';
+import type { AccountContext } from '@thru/programs/passkey-manager';
+import type { TransactionHeaderConfig } from '@thru/sdk';
 
 export type PasskeyTransactionHeaderOverrides = TransactionHeaderConfig;
 

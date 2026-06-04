@@ -1,5 +1,5 @@
 import * as SecureStore from 'expo-secure-store';
-import type { PasskeyMetadata } from '@thru/passkey-manager';
+import type { PasskeyMetadata } from '@thru/programs/passkey-manager';
 
 const SECURE_STORE_OPTS = {
   keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY,

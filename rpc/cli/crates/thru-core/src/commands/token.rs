@@ -10,13 +10,17 @@ use crate::commands::state_proof::make_state_proof;
 use crate::config::Config;
 use crate::error::CliError;
 use crate::utils::{format_vm_error, parse_seed_bytes, validate_address_or_hex};
+use abi_gen::abi::resolved::TypeResolver;
+use abi_loader::AbiFile;
+use abi_reflect::{ReflectedValue, Reflector, Value};
+use std::sync::OnceLock;
 use std::time::Duration;
 use thru_base::crypto_utils::derive_program_address;
 use thru_base::rpc_types::ProofType;
 use thru_base::tn_public_address::tn_pubkey_to_address_string;
 use thru_base::tn_tools::{KeyPair, Pubkey};
 use thru_base::txn_tools::TransactionBuilder;
-use thru_client::{Client, ClientBuilder, TransactionDetails};
+use thru_client::{Client, ClientBuilder, TransactionDetails, VersionContext};
 
 /// Helper function to resolve fee payer keypair from configuration
 fn resolve_fee_payer_keypair(
@@ -429,6 +433,18 @@ pub async fn handle_token_command(
                 config,
                 &creator,
                 &seed,
+                token_program.as_deref(),
+                json_format,
+            )
+            .await
+        }
+        TokenCommands::Balance {
+            token_account,
+            token_program,
+        } => {
+            token_balance(
+                config,
+                &token_account,
                 token_program.as_deref(),
                 json_format,
             )
@@ -1392,6 +1408,292 @@ async fn thaw_account(
     Ok(())
 }
 
+/// Embedded ABI for the Thru token program. The byte layout of token-program
+/// accounts is derived from this at runtime via reflection rather than being
+/// hardcoded here, so the ABI is the single source of truth for the wire
+/// format. Keep this vendored copy inside `thru-core` so crates.io package
+/// verification can build the crate without the surrounding monorepo.
+static TOKEN_ABI_YAML: &str =
+    include_str!("../../abi/tn_token_program_flat.abi.yaml");
+
+/// Account-root type in the token ABI: a size-discriminated union whose
+/// variants are `token_account` (the holder) and `mint_account`.
+const TOKEN_PROGRAM_ACCOUNT_TYPE: &str = "TokenProgramAccount";
+const TOKEN_ACCOUNT_VARIANT: &str = "token_account";
+
+/// Lazily-built, process-wide reflector over the embedded token ABI.
+fn token_reflector() -> Result<&'static Reflector, String> {
+    static REFLECTOR: OnceLock<Result<Reflector, String>> = OnceLock::new();
+    REFLECTOR
+        .get_or_init(|| {
+            let abi: AbiFile = serde_yml::from_str(TOKEN_ABI_YAML)
+                .map_err(|e| format!("Failed to parse embedded token ABI: {}", e))?;
+            let mut resolver = TypeResolver::new();
+            for typedef in &abi.types {
+                resolver.add_typedef(typedef.clone());
+            }
+            resolver
+                .resolve_all()
+                .map_err(|e| format!("Failed to resolve token ABI types: {:?}", e))?;
+            Reflector::new(resolver)
+                .map_err(|e| format!("Failed to build token reflector: {}", e))
+        })
+        .as_ref()
+        .map_err(|e| e.clone())
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct DecodedTokenAccount {
+    mint: [u8; 32],
+    owner: [u8; 32],
+    amount: u64,
+    is_frozen: bool,
+    /// `close_account` zeroes the body in place
+    /// (programs/rust/examples/token_program/process.rs:621-626).
+    /// All-zero mint+owner+amount with !is_frozen is the unambiguous sentinel.
+    is_closed: bool,
+}
+
+/// Strip TypeRef / union wrappers to reach the underlying value.
+fn unwrap_reflected(v: &ReflectedValue) -> &ReflectedValue {
+    match &v.value {
+        Value::TypeRef { value, .. } => unwrap_reflected(value),
+        Value::Union { variant_value, .. } => unwrap_reflected(variant_value),
+        Value::SizeDiscriminatedUnion { variant_value, .. } => unwrap_reflected(variant_value),
+        _ => v,
+    }
+}
+
+/// Read a primitive (possibly behind a TypeRef) as u64.
+fn reflected_u64(v: &ReflectedValue) -> Option<u64> {
+    match &v.value {
+        Value::Primitive(p) => p.to_u64(),
+        Value::TypeRef { value, .. } => reflected_u64(value),
+        _ => None,
+    }
+}
+
+/// A `Pubkey` reflects as a struct with a single 32-byte `bytes` array.
+fn reflected_pubkey(v: &ReflectedValue) -> Option<[u8; 32]> {
+    let s = unwrap_reflected(v);
+    let bytes = s.get_struct_field("bytes")?;
+    let elements = match &bytes.value {
+        Value::Array { elements } => elements,
+        _ => return None,
+    };
+    if elements.len() != 32 {
+        return None;
+    }
+    let mut out = [0u8; 32];
+    for (i, e) in elements.iter().enumerate() {
+        out[i] = u8::try_from(reflected_u64(e)?).ok()?;
+    }
+    Some(out)
+}
+
+fn decode_token_account_blob(data: &[u8]) -> Result<DecodedTokenAccount, String> {
+    let reflector = token_reflector()?;
+
+    /* Reflect against the account-root union so the 73-vs-115 byte size
+     * discriminates token vs. mint accounts purely from the ABI; no hardcoded
+     * length or field offsets live here. */
+    let reflected = reflector
+        .reflect(data, TOKEN_PROGRAM_ACCOUNT_TYPE)
+        .map_err(|e| format!("Failed to decode token account: {}", e))?;
+
+    let data_field = reflected
+        .get_struct_field("data")
+        .ok_or_else(|| "token ABI: missing 'data' field".to_string())?;
+
+    let (variant, body) = match &data_field.value {
+        Value::SizeDiscriminatedUnion {
+            variant_name,
+            variant_value,
+        } => (variant_name.as_str(), variant_value.as_ref()),
+        _ => return Err("token ABI: 'data' is not a size-discriminated union".to_string()),
+    };
+
+    if variant != TOKEN_ACCOUNT_VARIANT {
+        return Err(format!(
+            "account is not a token account (ABI variant: {})",
+            variant
+        ));
+    }
+
+    let token = unwrap_reflected(body);
+    let mint = token
+        .get_struct_field("mint")
+        .and_then(reflected_pubkey)
+        .ok_or_else(|| "token ABI: missing/invalid 'mint'".to_string())?;
+    let owner = token
+        .get_struct_field("owner")
+        .and_then(reflected_pubkey)
+        .ok_or_else(|| "token ABI: missing/invalid 'owner'".to_string())?;
+    let amount = token
+        .get_struct_field("amount")
+        .and_then(reflected_u64)
+        .ok_or_else(|| "token ABI: missing/invalid 'amount'".to_string())?;
+    let is_frozen = token
+        .get_struct_field("is_frozen")
+        .and_then(reflected_u64)
+        .ok_or_else(|| "token ABI: missing/invalid 'is_frozen'".to_string())?
+        != 0;
+
+    let is_closed = mint == [0u8; 32] && owner == [0u8; 32] && amount == 0 && !is_frozen;
+
+    Ok(DecodedTokenAccount {
+        mint,
+        owner,
+        amount,
+        is_frozen,
+        is_closed,
+    })
+}
+
+fn emit_token_balance_failure(addr: &str, msg: &str, json_format: bool) -> CliError {
+    if json_format {
+        let resp = serde_json::json!({
+            "token_balance": {
+                "status": "failed",
+                "token_account": addr,
+                "error": msg,
+            }
+        });
+        crate::output::print_output(resp, true);
+    } else {
+        crate::output::print_error(msg);
+    }
+    CliError::Reported
+}
+
+fn emit_token_balance_not_found(addr: &str, json_format: bool) -> CliError {
+    if json_format {
+        let resp = serde_json::json!({
+            "token_balance": {
+                "status": "not_found",
+                "token_account": addr,
+                "error": "Account not found",
+            }
+        });
+        crate::output::print_output(resp, true);
+    } else {
+        crate::output::print_error(&format!("Account not found: {}", addr));
+    }
+    CliError::Reported
+}
+
+/// Query a token account and emit its decoded balance + metadata.
+async fn token_balance(
+    config: &Config,
+    token_account: &str,
+    token_program: Option<&str>,
+    json_format: bool,
+) -> Result<(), CliError> {
+    let token_account_bytes = validate_address_or_hex(token_account)?;
+    let token_account_pubkey = Pubkey::from_bytes(&token_account_bytes);
+    let token_account_address = tn_pubkey_to_address_string(&token_account_bytes);
+
+    let expected_program_bytes = if token_program.is_some() {
+        Some(resolve_token_program(config, token_program)?.1)
+    } else {
+        None
+    };
+
+    let client = create_rpc_client(config)?;
+
+    let account = client
+        .get_account_info(&token_account_pubkey, None, Some(VersionContext::Current))
+        .await
+        .map_err(|e| {
+            emit_token_balance_failure(
+                &token_account_address,
+                &format!("Failed to get account info: {}", e),
+                json_format,
+            )
+        })?;
+
+    let Some(account) = account else {
+        return Err(emit_token_balance_not_found(
+            &token_account_address,
+            json_format,
+        ));
+    };
+
+    let data_b64 = account.data.unwrap_or_default();
+    let data_bytes =
+        base64::Engine::decode(&base64::engine::general_purpose::STANDARD, &data_b64).map_err(
+            |e| {
+                emit_token_balance_failure(
+                    &token_account_address,
+                    &format!("Failed to decode account data: {}", e),
+                    json_format,
+                )
+            },
+        )?;
+
+    let decoded = decode_token_account_blob(&data_bytes).map_err(|msg| {
+        emit_token_balance_failure(&token_account_address, &msg, json_format)
+    })?;
+
+    let owning_program_bytes = account.owner.to_bytes().map_err(|e| {
+        emit_token_balance_failure(
+            &token_account_address,
+            &format!("Failed to decode account owner pubkey: {}", e),
+            json_format,
+        )
+    })?;
+
+    if let Some(expected) = expected_program_bytes {
+        if expected != owning_program_bytes {
+            return Err(emit_token_balance_failure(
+                &token_account_address,
+                &format!(
+                    "Token account is owned by {}, not the expected token program {}",
+                    tn_pubkey_to_address_string(&owning_program_bytes),
+                    tn_pubkey_to_address_string(&expected),
+                ),
+                json_format,
+            ));
+        }
+    }
+
+    let mint_address = tn_pubkey_to_address_string(&decoded.mint);
+    let owner_address = tn_pubkey_to_address_string(&decoded.owner);
+    let owning_program_address = tn_pubkey_to_address_string(&owning_program_bytes);
+
+    let status = if decoded.is_closed { "closed" } else { "success" };
+
+    if json_format {
+        let resp = serde_json::json!({
+            "token_balance": {
+                "status": status,
+                "token_account": token_account_address,
+                "mint": mint_address,
+                "owner": owner_address,
+                "amount": decoded.amount,
+                "is_frozen": decoded.is_frozen,
+                "owning_program": owning_program_address,
+            }
+        });
+        crate::output::print_output(resp, true);
+    } else if decoded.is_closed {
+        println!(
+            "Token account: {} (closed - body zeroed)",
+            token_account_address
+        );
+        println!("  Program: {}", owning_program_address);
+    } else {
+        println!("Token account: {}", token_account_address);
+        println!("  Mint:    {}", mint_address);
+        println!("  Owner:   {}", owner_address);
+        println!("  Amount:  {}", decoded.amount);
+        println!("  Frozen:  {}", decoded.is_frozen);
+        println!("  Program: {}", owning_program_address);
+    }
+
+    Ok(())
+}
+
 /// Derive token account address from mint, owner, and seed
 async fn derive_token_account(
     config: &Config,
@@ -1540,6 +1842,70 @@ async fn derive_mint_account(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /* On-the-wire size of a token account body (mint+owner+amount+is_frozen).
+     * Declared locally in the tests as the fixture contract; production code
+     * derives the size from the ABI via reflection, not this constant. */
+    const TOKEN_ACCOUNT_WIRE_LEN: usize = 32 + 32 + 8 + 1;
+
+    fn build_token_account_blob(
+        mint: [u8; 32],
+        owner: [u8; 32],
+        amount: u64,
+        is_frozen: bool,
+    ) -> Vec<u8> {
+        let mut buf = Vec::with_capacity(TOKEN_ACCOUNT_WIRE_LEN);
+        buf.extend_from_slice(&mint);
+        buf.extend_from_slice(&owner);
+        buf.extend_from_slice(&amount.to_le_bytes());
+        buf.push(if is_frozen { 1 } else { 0 });
+        assert_eq!(buf.len(), TOKEN_ACCOUNT_WIRE_LEN);
+        buf
+    }
+
+    #[test]
+    fn token_account_decode_happy_path() {
+        let blob = build_token_account_blob([7u8; 32], [9u8; 32], 1_234_567, false);
+        let decoded = decode_token_account_blob(&blob).expect("decode");
+        assert_eq!(decoded.mint, [7u8; 32]);
+        assert_eq!(decoded.owner, [9u8; 32]);
+        assert_eq!(decoded.amount, 1_234_567);
+        assert!(!decoded.is_frozen);
+        assert!(!decoded.is_closed);
+    }
+
+    #[test]
+    fn token_account_decode_frozen_flag() {
+        let blob = build_token_account_blob([1u8; 32], [2u8; 32], 5, true);
+        let decoded = decode_token_account_blob(&blob).expect("decode");
+        assert!(decoded.is_frozen);
+        assert!(!decoded.is_closed);
+    }
+
+    #[test]
+    fn token_account_decode_little_endian_amount() {
+        let mut blob = build_token_account_blob([1u8; 32], [2u8; 32], 0, false);
+        blob[64..72].copy_from_slice(&0x0102_0304_0506_0708u64.to_le_bytes());
+        let decoded = decode_token_account_blob(&blob).expect("decode");
+        assert_eq!(decoded.amount, 0x0102_0304_0506_0708);
+    }
+
+    #[test]
+    fn token_account_decode_closed_sentinel() {
+        let blob = build_token_account_blob([0u8; 32], [0u8; 32], 0, false);
+        let decoded = decode_token_account_blob(&blob).expect("decode");
+        assert!(decoded.is_closed);
+        assert_eq!(decoded.amount, 0);
+        assert!(!decoded.is_frozen);
+    }
+
+    #[test]
+    fn token_account_decode_wrong_length() {
+        let short = vec![0u8; TOKEN_ACCOUNT_WIRE_LEN - 1];
+        assert!(decode_token_account_blob(&short).is_err());
+        let long = vec![0u8; TOKEN_ACCOUNT_WIRE_LEN + 1];
+        assert!(decode_token_account_blob(&long).is_err());
+    }
 
     #[test]
     fn test_resolve_fee_payer_keypair_with_nonexistent_key() {

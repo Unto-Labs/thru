@@ -231,6 +231,15 @@ mod imp {
 
     /// Delete an account.
     ///
+    /// `signature` is an OPTIONAL Ed25519 signature over the canonical
+    /// domain-separated delete message `"tn_eoa_delete_v1" || chain_id ||
+    /// fee_payer_pubkey || account_pubkey`. When `Some`, the runtime verifies
+    /// it against the account's own pubkey before deleting; when `None` no
+    /// signature is required (ordinary program-owned accounts). The EOA
+    /// program passes a signature so a permissionless caller cannot delete an
+    /// EOA without the keyholder's consent. This is additive to the owner
+    /// check, never a bypass.
+    ///
     /// # Safety
     ///
     /// This syscall deletes the account and invalidates its metadata
@@ -241,11 +250,19 @@ mod imp {
     /// [`AccountManager::account_delete`](crate::AccountManager) which
     /// enforces borrow checks at runtime.
     #[inline(always)]
-    pub unsafe fn sys_account_delete(account_idx: u64) -> SyscallCode {
+    pub unsafe fn sys_account_delete(
+        account_idx: u64,
+        signature: Option<&Signature>,
+    ) -> SyscallCode {
         let mut a0 = account_idx;
+        let a1 = match signature {
+            Some(sig) => sig.0.as_ptr() as u64,
+            None => 0u64,
+        };
         asm!(
             "ecall",
             inout("a0") a0,
+            in("a1") a1,
             in("a7") ACCOUNT_DELETE,
             options(nostack, preserves_flags),
         );

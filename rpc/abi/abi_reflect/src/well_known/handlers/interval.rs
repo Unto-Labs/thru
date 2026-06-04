@@ -43,7 +43,10 @@ impl WellKnownType for IntervalHandler {
             let mut enrichment = Map::new();
             enrichment.insert("formatted".to_string(), JsonValue::String(formatted));
             if let Some(s) = start_dt {
-                enrichment.insert("startIso8601".to_string(), JsonValue::String(s.to_rfc3339()));
+                enrichment.insert(
+                    "startIso8601".to_string(),
+                    JsonValue::String(s.to_rfc3339()),
+                );
             }
             if let Some(e) = end_dt {
                 enrichment.insert("endIso8601".to_string(), JsonValue::String(e.to_rfc3339()));

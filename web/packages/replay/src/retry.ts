@@ -46,6 +46,7 @@ export function withTimeout<T>(
     const timer = setTimeout(() => {
       reject(new TimeoutError(`Operation timed out after ${timeoutMs}ms`));
     }, timeoutMs);
+    timer.unref?.();
 
     promise
       .then((value) => {
@@ -74,4 +75,58 @@ export class TimeoutError extends Error {
  */
 export function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
+  if (ms <= 0 || signal?.aborted) {
+    return Promise.resolve();
+  }
+
+  const abortSignal = signal;
+
+  return new Promise((resolve) => {
+    if (!abortSignal) {
+      const timer = setTimeout(resolve, ms);
+      timer.unref?.();
+      return;
+    }
+
+    const onAbort = () => {
+      clearTimeout(timer);
+      abortSignal.removeEventListener("abort", onAbort);
+      resolve();
+    }
+
+    const timer = setTimeout(() => {
+      abortSignal.removeEventListener("abort", onAbort);
+      resolve();
+    }, ms)
+    timer.unref?.();
+
+    abortSignal.addEventListener("abort", onAbort, { once: true })
+  });
+}
+
+export function isAbortError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false;
+
+  const name =
+    typeof (err as { name?: unknown }).name === "string"
+      ? (err as { name: string }).name.toLowerCase()
+      : "";
+  const message =
+    typeof (err as { message?: unknown }).message === "string"
+      ? (err as { message: string }).message.toLowerCase()
+      : "";
+  const code = String((err as { code?: unknown }).code ?? "").toLowerCase();
+
+  return (
+    name.includes("abort") ||
+    name.includes("cancel") ||
+    code === "canceled" ||
+    code === "cancelled" ||
+    message.includes("aborted") ||
+    message.includes("canceled") ||
+    message.includes("cancelled")
+  );
 }

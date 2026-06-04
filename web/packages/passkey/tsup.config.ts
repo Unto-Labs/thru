@@ -8,6 +8,7 @@ export default defineConfig({
     popup: 'src/popup-entry.ts',
     mobile: 'src/mobile/index.ts',
     auth: 'src/auth/index.ts',
+    'auth/add-device': 'src/auth/add-device.ts',
     server: 'src/server/index.ts',
   },
   external: ['expo-secure-store', 'react-native', 'react-native-passkeys', 'zustand'],

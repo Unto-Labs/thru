@@ -2,10 +2,10 @@ import { LivePump } from "./live-pump";
 import { NOOP_LOGGER } from "./logger";
 import {
   DEFAULT_RETRY_CONFIG,
+  abortableDelay,
   calculateBackoff,
+  isAbortError,
   withTimeout,
-  delay,
-  type RetryConfig,
 } from "./retry";
 import type { BackfillFetcher, LiveSubscriber, ReplayConfig, ReplayMetrics, Slot } from "./types";
 
@@ -78,13 +78,17 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
       safetyMargin,
       resubscribeOnEnd,
       onReconnect,
+      signal,
+      dispose,
     } = this.config;
     const shouldResubscribeOnEnd = resubscribeOnEnd ?? true;
     const keyOf = extractKey ?? ((item: T) => extractSlot(item).toString());
+    const shouldStop = (err?: unknown): boolean => signal?.aborted === true || isAbortError(err);
 
     // Mutable data sources - may be replaced on reconnection with fresh client
     let currentSubscribeLive: LiveSubscriber<T> = subscribeLive;
     let currentFetchBackfill: BackfillFetcher<T, Cursor> = fetchBackfill;
+    let currentDispose = dispose ?? (() => {});
 
     const createLivePump = (slot: Slot, startStreaming = false, emitFloor?: Slot) =>
       new LivePump<T>({
@@ -156,104 +160,92 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
     let emptyPageRetries = 0;
     const MAX_EMPTY_PAGE_RETRIES = 10;
 
-    while (!backfillDone) {
-      const page = await currentFetchBackfill({ startSlot, cursor });
-      if (!page.items.length && !page.cursor && !page.done) {
-        emptyPageRetries++;
-        if (emptyPageRetries > MAX_EMPTY_PAGE_RETRIES) {
-          this.logger.error(
-            `backfill returned ${MAX_EMPTY_PAGE_RETRIES} consecutive empty pages; treating as done`
+    try {
+      while (!backfillDone) {
+        if (shouldStop()) return;
+
+        let page;
+        try {
+          page = await currentFetchBackfill({ startSlot, cursor });
+        } catch (err) {
+          if (shouldStop(err)) return;
+          throw err;
+        }
+
+        if (!page.items.length && !page.cursor && !page.done) {
+          emptyPageRetries++;
+          if (emptyPageRetries > MAX_EMPTY_PAGE_RETRIES) {
+            this.logger.error(
+              `backfill returned ${MAX_EMPTY_PAGE_RETRIES} consecutive empty pages; treating as done`
+            );
+            for await (const item of flushPendingBackfill(this)) {
+              yield item;
+            }
+            break;
+          }
+          const backoffMs = calculateBackoff(emptyPageRetries - 1, DEFAULT_RETRY_CONFIG);
+          this.logger.warn(
+            `empty backfill page without cursor; retrying in ${backoffMs}ms (${emptyPageRetries}/${MAX_EMPTY_PAGE_RETRIES})`
           );
+          await abortableDelay(backoffMs, signal);
+          continue;
+        }
+        emptyPageRetries = 0;
+
+        assertBackfillPageOrder(pendingOrderedPage, page.items, extractSlot);
+        if (pendingOrderedPage !== null) {
           for await (const item of flushPendingBackfill(this)) {
+            if (shouldStop()) return;
             yield item;
           }
-          break;
         }
-        const backoffMs = calculateBackoff(emptyPageRetries - 1, DEFAULT_RETRY_CONFIG);
-        this.logger.warn(
-          `empty backfill page without cursor; retrying in ${backoffMs}ms (${emptyPageRetries}/${MAX_EMPTY_PAGE_RETRIES})`
-        );
-        await delay(backoffMs);
-        continue;
-      }
-      emptyPageRetries = 0;
+        pendingOrderedPage = [...page.items];
 
-      assertBackfillPageOrder(pendingOrderedPage, page.items, extractSlot);
-      if (pendingOrderedPage !== null) {
-        for await (const item of flushPendingBackfill(this)) {
-          yield item;
-        }
-      }
-      pendingOrderedPage = [...page.items];
-
-      const reachedEnd = page.done || page.cursor === undefined;
-      if (reachedEnd) {
-        for await (const item of flushPendingBackfill(this)) {
-          yield item;
-        }
-      }
-
-      const duplicatesTrimmed = livePump.discardBufferedUpTo(currentSlot);
-      this.metrics.discardedDuplicates += duplicatesTrimmed;
-
-      cursor = page.cursor;
-
-      const maxStreamSlot = livePump.maxSlot();
-      if (maxStreamSlot !== null) {
-        const catchUpSlot =
-          maxStreamSlot > safetyMargin ? (maxStreamSlot - safetyMargin) : 0n;
-        if (currentSlot >= catchUpSlot) {
+        const reachedEnd = page.done || page.cursor === undefined;
+        if (reachedEnd) {
           for await (const item of flushPendingBackfill(this)) {
+            if (shouldStop()) return;
             yield item;
           }
-          this.logger.info(
-            `replay reached SWITCHING threshold (currentSlot=${currentSlot}, maxStreamSlot=${maxStreamSlot}, catchUpSlot=${catchUpSlot})`
-          );
-          backfillDone = true;
         }
+
+        const duplicatesTrimmed = livePump.discardBufferedUpTo(currentSlot);
+        this.metrics.discardedDuplicates += duplicatesTrimmed;
+
+        cursor = page.cursor;
+
+        const maxStreamSlot = livePump.maxSlot();
+        if (maxStreamSlot !== null) {
+          const catchUpSlot =
+            maxStreamSlot > safetyMargin ? (maxStreamSlot - safetyMargin) : 0n;
+          if (currentSlot >= catchUpSlot) {
+            for await (const item of flushPendingBackfill(this)) {
+              if (shouldStop()) return;
+              yield item;
+            }
+            this.logger.info(
+              `replay reached SWITCHING threshold (currentSlot=${currentSlot}, maxStreamSlot=${maxStreamSlot}, catchUpSlot=${catchUpSlot})`
+            );
+            backfillDone = true;
+          }
+        }
+
+        if (reachedEnd) backfillDone = true;
       }
 
-      if (reachedEnd) backfillDone = true;
-    }
+      if (shouldStop()) return;
 
-    this.logger.info(`replay entering SWITCHING state (currentSlot=${currentSlot})`);
+      this.logger.info(`replay entering SWITCHING state (currentSlot=${currentSlot})`);
 
-    const { drained, discarded } = livePump.enableStreaming(currentSlot);
-    this.metrics.bufferedItems = drained.length;
-    this.metrics.discardedDuplicates += discarded;
+      const { drained, discarded } = livePump.enableStreaming(currentSlot);
+      this.metrics.bufferedItems = drained.length;
+      this.metrics.discardedDuplicates += discarded;
 
-    for (const item of drained) {
-      const slot = extractSlot(item);
-      const key = keyOf(item);
-      if (seenItem(slot, key)) {
-        this.metrics.discardedDuplicates += 1;
-        continue;
-      }
-      currentSlot = slot;
-      recordEmission(slot, key);
-      this.metrics.emittedLive += 1;
-      yield item;
-      livePump.updateEmitFloor(currentSlot);
-    }
-    if (!drained.length) livePump.updateEmitFloor(currentSlot);
+      for (const item of drained) {
+        if (shouldStop()) return;
 
-    this.logger.info("replay entering STREAMING state");
-    const retryConfig = DEFAULT_RETRY_CONFIG;
-    let retryAttempt = 0;
-    while (true) {
-      try {
-        // Add timeout to detect hung streams
-        const next = await withTimeout(
-          livePump.next(),
-          retryConfig.connectionTimeoutMs
-        );
-        retryAttempt = 0; // Reset on successful message
-        if (next.done) {
-          if (!shouldResubscribeOnEnd) break;
-          throw new Error("stream ended");
-        }
-        const slot = extractSlot(next.value);
-        const key = keyOf(next.value);
+        const slot = extractSlot(item);
+        const key = keyOf(item);
         if (seenItem(slot, key)) {
           this.metrics.discardedDuplicates += 1;
           continue;
@@ -261,56 +253,97 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
         currentSlot = slot;
         recordEmission(slot, key);
         this.metrics.emittedLive += 1;
-        yield next.value;
+        yield item;
         livePump.updateEmitFloor(currentSlot);
-      } catch (err) {
-        const errMsg = err instanceof Error ? err.message : String(err);
-        const backoffMs = calculateBackoff(retryAttempt, retryConfig);
-        this.logger.warn(
-          `live stream disconnected (${errMsg}); reconnecting in ${backoffMs}ms from slot ${currentSlot} (attempt ${retryAttempt + 1})`
-        );
-        await delay(backoffMs);
-        await safeClose(livePump);
-        retryAttempt++;
-
-        // Get fresh data sources from new client if factory provided
-        if (onReconnect) {
-          try {
-            const fresh = onReconnect();
-            currentSubscribeLive = fresh.subscribeLive;
-            if (fresh.fetchBackfill) {
-              currentFetchBackfill = fresh.fetchBackfill;
-            }
-            this.logger.info("created fresh client for reconnection");
-          } catch (factoryErr) {
-            this.logger.error(
-              `failed to create fresh client: ${factoryErr instanceof Error ? factoryErr.message : String(factoryErr)}; using existing`
-            );
-          }
-        }
-
-        // Mini-backfill to catch any missed events during disconnection
-        if (onReconnect && currentSlot > 0n) {
-          for await (const item of this.miniBackfill(
-            currentSlot,
-            currentFetchBackfill,
-            extractSlot,
-            keyOf,
-            seenItem,
-            recordEmission
-          )) {
-            // Update currentSlot as we yield items to prevent gaps
-            const itemSlot = extractSlot(item);
-            if (itemSlot > currentSlot) {
-              currentSlot = itemSlot;
-            }
-            yield item;
-          }
-        }
-
-        const resumeSlot = currentSlot > 0n ? currentSlot : 0n;
-        livePump = createLivePump(resumeSlot, true, currentSlot);
       }
+      if (!drained.length) livePump.updateEmitFloor(currentSlot);
+
+      this.logger.info("replay entering STREAMING state");
+      const retryConfig = DEFAULT_RETRY_CONFIG;
+      let retryAttempt = 0;
+      while (true) {
+        if (shouldStop()) return;
+
+        try {
+          const next = await withTimeout(
+            livePump.next(),
+            retryConfig.connectionTimeoutMs
+          );
+          retryAttempt = 0;
+          if (next.done) {
+            if (shouldStop()) return;
+            if (!shouldResubscribeOnEnd) break;
+            throw new Error("stream ended");
+          }
+          const slot = extractSlot(next.value);
+          const key = keyOf(next.value);
+          if (seenItem(slot, key)) {
+            this.metrics.discardedDuplicates += 1;
+            continue;
+          }
+          currentSlot = slot;
+          recordEmission(slot, key);
+          this.metrics.emittedLive += 1;
+          yield next.value;
+          livePump.updateEmitFloor(currentSlot);
+        } catch (err) {
+          if (shouldStop(err)) return;
+
+          const errMsg = err instanceof Error ? err.message : String(err);
+          const backoffMs = calculateBackoff(retryAttempt, retryConfig);
+          this.logger.warn(
+            `live stream disconnected (${errMsg}); reconnecting in ${backoffMs}ms from slot ${currentSlot} (attempt ${retryAttempt + 1})`
+          );
+          await abortableDelay(backoffMs, signal);
+          if (shouldStop()) return;
+
+          currentDispose();
+          await safeClose(livePump);
+          retryAttempt++;
+
+          if (onReconnect) {
+            try {
+              const fresh = onReconnect();
+              currentSubscribeLive = fresh.subscribeLive;
+              if (fresh.fetchBackfill) {
+                currentFetchBackfill = fresh.fetchBackfill;
+              }
+              currentDispose = fresh.dispose ?? (() => {});
+              this.logger.info("created fresh client for reconnection");
+            } catch (factoryErr) {
+              this.logger.error(
+                `failed to create fresh client: ${factoryErr instanceof Error ? factoryErr.message : String(factoryErr)}; using existing`
+              );
+            }
+          }
+
+          if (onReconnect && currentSlot > 0n) {
+            for await (const item of this.miniBackfill(
+              currentSlot,
+              currentFetchBackfill,
+              extractSlot,
+              keyOf,
+              seenItem,
+              recordEmission,
+              signal,
+            )) {
+              if (shouldStop()) return;
+
+              const itemSlot = extractSlot(item);
+              if (itemSlot > currentSlot) {
+                currentSlot = itemSlot;
+              }
+              yield item;
+            }
+          }
+
+          const resumeSlot = currentSlot > 0n ? currentSlot : 0n;
+          livePump = createLivePump(resumeSlot, true, currentSlot);
+        }
+      }
+    } finally {
+      currentDispose();
+      await safeClose(livePump);
     }
   }
 
@@ -324,7 +357,8 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
     extractSlot: (item: T) => Slot,
     keyOf: (item: T) => string,
     seenItem: (slot: Slot, key: string) => boolean,
-    recordEmission: (slot: Slot, key: string) => void
+    recordEmission: (slot: Slot, key: string) => void,
+    signal?: AbortSignal,
   ): AsyncGenerator<T> {
     this.logger.info(`mini-backfill starting from slot ${fromSlot}`);
     const MINI_BACKFILL_TIMEOUT = 30000; // 30 seconds max
@@ -335,6 +369,7 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
 
     try {
       while (true) {
+        if (signal?.aborted) return;
         if (Date.now() - lastProgressTime > MINI_BACKFILL_TIMEOUT) {
           this.logger.warn(`mini-backfill timed out after ${MINI_BACKFILL_TIMEOUT}ms with no progress`);
           break;
@@ -348,6 +383,7 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
 
         let pageYielded = 0;
         for (const item of sorted) {
+          if (signal?.aborted) return;
           const slot = extractSlot(item);
           const key = keyOf(item);
           if (seenItem(slot, key)) {
@@ -368,6 +404,9 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
 
       this.logger.info(`mini-backfill complete: ${itemsYielded} items yielded`);
     } catch (err) {
+      if (signal?.aborted || isAbortError(err)) {
+        return;
+      }
       this.logger.warn(
         `mini-backfill failed: ${err instanceof Error ? err.message : String(err)}; proceeding with live stream`
       );
@@ -376,10 +415,15 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
 }
 
 async function safeClose<T>(pump: LivePump<T>): Promise<void> {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
   try {
+    const timeout = new Promise<"timeout">((resolve) => {
+      timeoutId = setTimeout(() => resolve("timeout"), 5000);
+    });
+
     const result = await Promise.race([
       pump.close().then(() => "closed" as const),
-      new Promise<"timeout">((resolve) => setTimeout(() => resolve("timeout"), 5000)),
+      timeout,
     ]);
     if (result === "timeout") {
       // pump.close() is still pending — the underlying gRPC stream may leak
@@ -387,5 +431,9 @@ async function safeClose<T>(pump: LivePump<T>): Promise<void> {
     }
   } catch {
     /* ignore close errors */
+  } finally {
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
   }
 }

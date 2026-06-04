@@ -25,6 +25,16 @@ pub enum FloatingPointType {
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
 #[serde(rename_all = "kebab-case")]
+pub enum ValueFormat {
+    Text,
+    Json,
+    Hex,
+    Base64,
+    Base64url,
+}
+
+#[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]
+#[serde(rename_all = "kebab-case")]
 #[serde(untagged)]
 #[serde(expecting = "expected integral or floating point type")]
 pub enum PrimitiveType {
@@ -127,6 +137,8 @@ pub struct SizeDiscriminatedUnionType {
 #[serde(rename_all = "kebab-case")]
 pub struct StructField {
     pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub format: Option<ValueFormat>,
     pub field_type: TypeKind,
 }
 
@@ -154,6 +166,8 @@ pub enum TypeKind {
 #[serde(rename_all = "kebab-case")]
 pub struct TypeDef {
     pub name: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub format: Option<ValueFormat>,
     #[serde(with = "serde_yml::with::singleton_map_recursive")]
     pub kind: TypeKind,
 }

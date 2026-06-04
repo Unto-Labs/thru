@@ -1,7 +1,7 @@
 /* Reflection types that represent ABI type information */
 
 use abi_gen::abi::resolved::{ResolvedType, ResolvedTypeKind};
-use abi_gen::abi::types::PrimitiveType;
+use abi_gen::abi::types::{PrimitiveType, ValueFormat};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -22,6 +22,10 @@ pub struct ReflectedType {
 
     /* Optional comment */
     pub comment: Option<String>,
+
+    /* Optional display/serialization format hint */
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub format: Option<ValueFormat>,
 
     /* Fully-qualified dynamic parameter references (owner -> path -> primitive) */
     pub dynamic_params: BTreeMap<String, BTreeMap<String, PrimitiveType>>,
@@ -106,6 +110,10 @@ pub struct ReflectedSizeDiscriminatedVariant {
 impl ReflectedType {
     /* Convert a ResolvedType to a ReflectedType */
     pub fn from_resolved(resolved: &ResolvedType) -> Self {
+        Self::from_resolved_with_format(resolved, None)
+    }
+
+    pub fn from_resolved_with_format(resolved: &ResolvedType, format: Option<ValueFormat>) -> Self {
         let size = match &resolved.size {
             abi_gen::abi::resolved::Size::Const(s) => Some(*s),
             abi_gen::abi::resolved::Size::Variable(_) => None,
@@ -178,6 +186,7 @@ impl ReflectedType {
             size,
             alignment: resolved.alignment,
             comment: resolved.comment.clone(),
+            format,
             dynamic_params: resolved.dynamic_params.clone(),
         }
     }

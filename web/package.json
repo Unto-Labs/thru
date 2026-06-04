@@ -8,13 +8,13 @@
     "test": "pnpm -r --filter './packages/*' --filter './packages-private/*' test:run",
     "test:watch": "pnpm -r --filter './packages/*' --filter './packages-private/*' test:watch",
     "test:coverage": "pnpm -r --filter './packages/*' --filter './packages-private/*' test:coverage",
-    "test:thru-sdk": "pnpm --filter @thru/thru-sdk test",
-    "test:wallet": "pnpm --filter thru-wallet test"
+    "test:wallet": "pnpm --filter thru-wallet test",
+    "test:sdk": "pnpm --filter @thru/sdk test"
   },
   "devDependencies": {
-    "tsup": "^8.5.0",
-    "vitest": "^3.2.4",
-    "@vitest/coverage-v8": "^3.2.4"
+    "@vitest/coverage-v8": "^4.1.7",
+    "tsup": "^8.5.1",
+    "vitest": "^4.1.7"
   },
   "pnpm": {
     "onlyBuiltDependencies": [

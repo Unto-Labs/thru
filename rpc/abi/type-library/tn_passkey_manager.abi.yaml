@@ -129,6 +129,7 @@ types:
             element-type:
               primitive: u8
       - name: client_data
+        format: json
         field-type:
           array:
             size:

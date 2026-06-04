@@ -124,10 +124,129 @@ fn token_instruction_fixture_formats() {
         variant_value.get("typeName").and_then(JsonValue::as_str),
         Some("InitializeMintInstruction")
     );
-
     let raw_len = serde_json::to_string(&reflected).unwrap().len();
     let formatted_len = serde_json::to_string(&formatted).unwrap().len();
     assert!(formatted_len < raw_len / 5);
+}
+
+#[test]
+fn token_ticker_field_formats_as_text() {
+    let reflector = load_reflector_with_imports("../type-library/tn_token_program.abi.yaml");
+    let bytes = hex_to_bytes("04 54 45 53 54 00 00 00 00");
+    let reflected = reflector
+        .reflect(&bytes, "TickerField")
+        .expect("ticker reflection succeeds");
+    let formatted = format_reflection(&reflected);
+    let ticker = formatted.value.as_object().expect("ticker object");
+
+    assert_eq!(ticker.get("text").and_then(JsonValue::as_str), Some("TEST"));
+    assert_eq!(
+        ticker.get("bytes").and_then(JsonValue::as_str),
+        Some("0x5445535400000000")
+    );
+}
+
+#[test]
+fn text_format_field_uses_sibling_length() {
+    let reflector = reflector_from_yaml(
+        r#"
+abi:
+  package: test.format
+  abi-version: 1
+  package-version: "0.1.0"
+  description: "format test"
+  imports: []
+types:
+- name: Domain
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: name
+        format: text
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 8
+            element-type:
+              primitive: u8
+      - name: name_length
+        field-type:
+          primitive: u8
+"#,
+    );
+    let bytes = b"thru\0\0\0\0\x04";
+    let reflected = reflector
+        .reflect(bytes, "Domain")
+        .expect("reflection succeeds");
+    let formatted = format_reflection(&reflected);
+    let obj = formatted.value.as_object().expect("domain object");
+    let name = obj
+        .get("name")
+        .and_then(JsonValue::as_object)
+        .expect("name formatted object");
+
+    assert_eq!(name.get("text").and_then(JsonValue::as_str), Some("thru"));
+    assert_eq!(
+        name.get("bytes").and_then(JsonValue::as_str),
+        Some("0x74687275")
+    );
+    assert_eq!(obj.get("name_length").and_then(JsonValue::as_u64), Some(4));
+}
+
+#[test]
+fn json_format_decodes_dynamic_bytes() {
+    let reflector = reflector_from_yaml(
+        r#"
+abi:
+  package: test.format
+  abi-version: 1
+  package-version: "0.1.0"
+  description: "format test"
+  imports: []
+types:
+- name: JsonBlob
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: payload_len
+        field-type:
+          primitive: u8
+      - name: payload
+        format: json
+        field-type:
+          array:
+            size:
+              field-ref:
+                path: ["payload_len"]
+            element-type:
+              primitive: u8
+"#,
+    );
+    let bytes = br#"{"ok":true}"#;
+    let mut data = vec![bytes.len() as u8];
+    data.extend_from_slice(bytes);
+
+    let reflected = reflector
+        .reflect(&data, "JsonBlob")
+        .expect("reflection succeeds");
+    let formatted = format_reflection(&reflected);
+    let obj = formatted.value.as_object().expect("blob object");
+    let payload = obj
+        .get("payload")
+        .and_then(JsonValue::as_object)
+        .expect("payload formatted object");
+
+    assert_eq!(
+        payload
+            .get("json")
+            .and_then(JsonValue::as_object)
+            .and_then(|json| json.get("ok"))
+            .and_then(JsonValue::as_bool),
+        Some(true)
+    );
 }
 
 #[test]

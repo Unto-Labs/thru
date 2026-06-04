@@ -2,8 +2,8 @@ import {
   bytesToBase64Url,
   createValidateChallenge,
   fetchWalletNonce,
-} from '@thru/passkey-manager';
-import type { AccountContext } from '@thru/passkey-manager';
+} from '@thru/programs/passkey-manager';
+import type { AccountContext } from '@thru/programs/passkey-manager';
 import type { PasskeyChallengeResult, ThruClient } from './types';
 
 export async function createPasskeyChallenge(opts: {

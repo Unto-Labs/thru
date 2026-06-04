@@ -9,14 +9,14 @@
  */
 
 import { create } from "@bufbuild/protobuf";
-import type { Account, AccountMeta, GetAccountRequest } from "@thru/proto";
+import type { Account, AccountMeta, GetAccountRequest } from "@thru/sdk/proto";
 import {
   AccountView,
   FilterSchema,
   FilterParamValueSchema,
   PageRequestSchema,
   PubkeySchema,
-} from "@thru/proto";
+} from "@thru/sdk/proto";
 import type {
   StreamAccountUpdatesRequest,
   StreamAccountUpdatesResponse,
@@ -24,18 +24,30 @@ import type {
   BlockFinished,
   Filter,
   FilterParamValue,
-} from "@thru/proto";
+} from "@thru/sdk/proto";
 import type { AccountSource } from "./chain-client";
 import { PageAssembler, type AssembledAccount } from "./page-assembler";
 import {
+  abortableDelay,
   DEFAULT_RETRY_CONFIG,
   calculateBackoff,
-  delay,
-  type RetryConfig,
+  isAbortError,
 } from "./retry";
 import type { ReplayLogger } from "./types";
-import { resolveClient } from "./types";
+import { closeIfCloseable, resolveClient } from "./types";
 import { NOOP_LOGGER } from "./logger";
+
+async function closeAsyncIterator<T>(iterator: AsyncIterator<T> | null): Promise<void> {
+  if (!iterator || typeof iterator.return !== "function") {
+    return;
+  }
+
+  try {
+    await iterator.return();
+  } catch {
+    /* best-effort */
+  }
+}
 
 /**
  * Represents a complete account state ready for processing
@@ -145,6 +157,9 @@ export interface AccountsByOwnerReplayOptions {
 
   /** Logger for debug/info/warn/error messages (default: NOOP_LOGGER) */
   logger?: ReplayLogger;
+
+  /** Optional signal to stop backfill/streaming without reconnecting. */
+  signal?: AbortSignal;
 }
 
 /**
@@ -295,10 +310,13 @@ export async function* createAccountsByOwnerReplay(
     onBackfillComplete,
     clientFactory,
     logger = NOOP_LOGGER,
+    signal,
   } = options;
+  const shouldStop = (err?: unknown): boolean => signal?.aborted === true || isAbortError(err);
 
   // Resolve initial client - either from options or from factory
   let client = resolveClient(options, "AccountsByOwnerReplayOptions");
+  const ownsClient = Boolean(clientFactory);
 
   // Track addresses seen from stream (these win - skip GetAccount)
   const seenFromStream = new Set<string>();
@@ -318,21 +336,32 @@ export async function* createAccountsByOwnerReplay(
   let streamDone = false;
   let streamError: Error | null = null;
   let lastActivityTime = Date.now();
+  let activeStreamIterator: AsyncIterator<StreamAccountUpdatesResponse> | null = null;
+  let activeStreamProcessor: Promise<void> | null = null;
 
   try {
+    if (shouldStop()) return;
+
     // Set up periodic cleanup for page assembler
     cleanupTimer = setInterval(() => {
       assembler.cleanup();
     }, cleanupInterval);
+    cleanupTimer.unref?.();
 
     // Start streaming FIRST (concurrent with backfill)
     const streamFilter = buildOwnerFilterWithMinSlot(owner, dataSizes, minUpdatedSlot);
     const stream = client.streamAccountUpdates({ view, filter: streamFilter });
+    const streamIterator = stream[Symbol.asyncIterator]();
+    activeStreamIterator = streamIterator;
 
     // Process stream in background, buffering events
-    const streamProcessor = (async () => {
+    activeStreamProcessor = (async () => {
       try {
-        for await (const response of stream) {
+        while (true) {
+          const next = await streamIterator.next();
+          if (next.done) break;
+
+          const response = next.value;
           lastActivityTime = Date.now();
           const event = processResponseMulti(response, assembler);
           if (event) {
@@ -370,6 +399,8 @@ export async function* createAccountsByOwnerReplay(
     let pageToken: string | undefined;
 
     do {
+      if (shouldStop()) return;
+
       const request: Partial<ListAccountsRequest> = {
         view: AccountView.META_ONLY, // Address + metadata only, no data
         filter: backfillFilter,
@@ -379,7 +410,13 @@ export async function* createAccountsByOwnerReplay(
         }),
       };
 
-      const response = await client.listAccounts(request);
+      let response;
+      try {
+        response = await client.listAccounts(request);
+      } catch (err) {
+        if (shouldStop(err)) return;
+        throw err;
+      }
 
       // Queue addresses for GetAccount
       for (const account of response.accounts) {
@@ -396,6 +433,8 @@ export async function* createAccountsByOwnerReplay(
 
     // Process fetch queue with GetAccount (sequential)
     for (const address of fetchQueue) {
+      if (shouldStop()) return;
+
       const addressHex = bytesToHex(address);
 
       // Skip if already seen from stream
@@ -421,11 +460,12 @@ export async function* createAccountsByOwnerReplay(
           });
           break;
         } catch (err) {
+          if (shouldStop(err)) return;
           if (attempt === maxRetries - 1) {
             logger.error(`[backfill] failed to fetch account ${addressHex} after ${maxRetries} attempts`, { error: err });
           } else {
             // Brief delay before retry
-            await new Promise(resolve => setTimeout(resolve, 100 * (attempt + 1)));
+            await abortableDelay(100 * (attempt + 1), signal);
           }
         }
       }
@@ -449,8 +489,6 @@ export async function* createAccountsByOwnerReplay(
     // Streaming phase with reconnection
     const retryConfig = DEFAULT_RETRY_CONFIG;
     let retryAttempt = 0;
-    let currentStream = stream;
-    let currentStreamProcessor = streamProcessor;
     lastActivityTime = Date.now();
 
     // Helper to create a new stream and processor with fresh client
@@ -458,7 +496,14 @@ export async function* createAccountsByOwnerReplay(
       // Get fresh client if factory available (key fix for reconnection)
       if (clientFactory) {
         try {
-          client = clientFactory();
+          const newClient = clientFactory();
+          /* Close the previous client before dropping the reference, so
+             its underlying HTTP/2 session does not linger. We duck-type
+             on `close` because `AccountSource` does not mandate it —
+             callers that supply a factory returning closeable clients
+             (e.g. ChainClient) get automatic cleanup on reconnect. */
+          closeIfCloseable(client);
+          client = newClient;
           logger.info("[account-stream] created fresh client for reconnection");
         } catch (err) {
           logger.error("[account-stream] failed to create fresh client", { error: err });
@@ -468,9 +513,15 @@ export async function* createAccountsByOwnerReplay(
 
       const newStreamFilter = buildOwnerFilterWithMinSlot(owner, dataSizes, highestSlotSeen > 0n ? highestSlotSeen : minUpdatedSlot);
       const newStream = client.streamAccountUpdates({ view, filter: newStreamFilter });
+      const newStreamIterator = newStream[Symbol.asyncIterator]();
+      activeStreamIterator = newStreamIterator;
       const newProcessor = (async () => {
         try {
-          for await (const response of newStream) {
+          while (true) {
+            const next = await newStreamIterator.next();
+            if (next.done) break;
+
+            const response = next.value;
             retryAttempt = 0; // Reset on successful message
             lastActivityTime = Date.now();
             const event = processResponseMulti(response, assembler);
@@ -490,11 +541,13 @@ export async function* createAccountsByOwnerReplay(
           streamDone = true;
         }
       })();
-      return { stream: newStream, processor: newProcessor };
+      return { iterator: newStreamIterator, processor: newProcessor };
     };
 
     // Continue yielding stream events with reconnection on error
     while (true) {
+      if (shouldStop()) return;
+
       // Yield any buffered events
       const hadEvents = streamBuffer.length > 0;
       yield* yieldStreamBuffer();
@@ -514,12 +567,15 @@ export async function* createAccountsByOwnerReplay(
       // Check if stream finished (normally or with error)
       if (streamDone) {
         if (streamError) {
+          if (shouldStop(streamError)) return;
+
           // Stream error - reconnect with backoff
           const backoffMs = calculateBackoff(retryAttempt, retryConfig);
           logger.warn(
             `[account-stream] disconnected (${streamError.message}); reconnecting in ${backoffMs}ms (attempt ${retryAttempt + 1})`
           );
-          await delay(backoffMs);
+          await abortableDelay(backoffMs, signal);
+          if (shouldStop()) return;
           retryAttempt++;
 
           // Reset state
@@ -528,30 +584,50 @@ export async function* createAccountsByOwnerReplay(
           streamBuffer.length = 0;
           lastActivityTime = Date.now();
 
+          await closeAsyncIterator(activeStreamIterator);
+          if (activeStreamProcessor) {
+            await Promise.allSettled([activeStreamProcessor]);
+          }
+
           // Create new stream
-          const { stream: newStream, processor: newProcessor } = createStreamProcessor();
-          currentStream = newStream;
-          currentStreamProcessor = newProcessor;
+          const { iterator: newIterator, processor: newProcessor } = createStreamProcessor();
+          activeStreamIterator = newIterator;
+          activeStreamProcessor = newProcessor;
           continue;
         } else {
+          if (shouldStop()) return;
+
           // Stream ended normally (no error) - this shouldn't happen in practice
           // but if it does, reconnect to maintain live updates
           logger.warn("[account-stream] stream ended unexpectedly; reconnecting...");
           streamDone = false;
           lastActivityTime = Date.now();
-          const { stream: newStream, processor: newProcessor } = createStreamProcessor();
-          currentStream = newStream;
-          currentStreamProcessor = newProcessor;
+          await closeAsyncIterator(activeStreamIterator);
+          if (activeStreamProcessor) {
+            await Promise.allSettled([activeStreamProcessor]);
+          }
+          const { iterator: newIterator, processor: newProcessor } = createStreamProcessor();
+          activeStreamIterator = newIterator;
+          activeStreamProcessor = newProcessor;
           continue;
         }
       }
 
       // Wait a bit for more stream events
-      await delay(10);
+      await abortableDelay(10, signal);
     }
   } finally {
     if (cleanupTimer) {
       clearInterval(cleanupTimer);
+    }
+    const closeIteratorPromise = closeAsyncIterator(activeStreamIterator);
+    if (ownsClient) {
+      closeIfCloseable(client);
+    }
+    if (activeStreamProcessor) {
+      await Promise.allSettled([closeIteratorPromise, activeStreamProcessor]);
+    } else {
+      await closeIteratorPromise;
     }
     assembler.clear();
   }
@@ -645,6 +721,7 @@ export async function* createAccountReplay(
     cleanupTimer = setInterval(() => {
       assembler.cleanup();
     }, cleanupInterval);
+    cleanupTimer.unref?.();
 
     // Build request with address filter
     const filterParams: { [key: string]: FilterParamValue } = {

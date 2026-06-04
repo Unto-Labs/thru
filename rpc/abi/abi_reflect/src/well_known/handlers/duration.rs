@@ -18,7 +18,9 @@ impl WellKnownType for DurationHandler {
         };
 
         let seconds = get_field(fields, "seconds").and_then(extract_i64);
-        let nanos = get_field(fields, "nanos").and_then(extract_i32).unwrap_or(0);
+        let nanos = get_field(fields, "nanos")
+            .and_then(extract_i32)
+            .unwrap_or(0);
 
         if let Some(secs) = seconds {
             let iso8601 = format_iso8601_duration(secs, nanos);

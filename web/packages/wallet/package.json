@@ -1,0 +1,92 @@
+{
+  "name": "@thru/wallet",
+  "version": "0.0.1",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./react": {
+      "import": "./dist/react.js",
+      "types": "./dist/react.d.ts"
+    },
+    "./react-ui": {
+      "import": "./dist/react-ui.js",
+      "types": "./dist/react-ui.d.ts"
+    },
+    "./native": {
+      "types": "./dist/native.d.ts",
+      "react-native": "./src/native/index.ts",
+      "import": "./dist/native.js",
+      "default": "./dist/native.js"
+    },
+    "./native/react": {
+      "types": "./dist/native/react.d.ts",
+      "react-native": "./src/native/react/index.ts",
+      "import": "./dist/native/react.js",
+      "default": "./dist/native/react.js"
+    },
+    "./native/plugin": "./app.plugin.cjs"
+  },
+  "files": [
+    "android",
+    "app.plugin.cjs",
+    "dist",
+    "expo-module.config.json",
+    "src",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsup && node ./scripts/restore-use-client.mjs",
+    "dev": "tsup --watch",
+    "lint": "eslint src/",
+    "test": "vitest run",
+    "test:run": "vitest run",
+    "test:watch": "vitest watch",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@thru/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@svgr/core": "^8.1.0",
+    "@types/node": "^24.7.0",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "esbuild-plugin-svgr": "^3.1.1",
+    "expo-brightness": "~55.0.13",
+    "react-native-qrcode-styled": "^0.4.0",
+    "react-native-svg": "^15.15.5"
+  },
+  "peerDependencies": {
+    "@gorhom/bottom-sheet": ">=5",
+    "expo": "*",
+    "expo-brightness": "*",
+    "expo-modules-core": "*",
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0",
+    "react-native": "*",
+    "react-native-gesture-handler": "*",
+    "react-native-qrcode-styled": "*",
+    "react-native-reanimated": "*",
+    "react-native-safe-area-context": "*",
+    "react-native-svg": "*",
+    "react-native-webview": ">=13"
+  },
+  "peerDependenciesMeta": {
+    "@gorhom/bottom-sheet": { "optional": true },
+    "expo": { "optional": true },
+    "expo-brightness": { "optional": true },
+    "expo-modules-core": { "optional": true },
+    "react-native": { "optional": true },
+    "react-native-gesture-handler": { "optional": true },
+    "react-native-qrcode-styled": { "optional": true },
+    "react-native-reanimated": { "optional": true },
+    "react-native-safe-area-context": { "optional": true },
+    "react-native-svg": { "optional": true },
+    "react-native-webview": { "optional": true }
+  }
+}

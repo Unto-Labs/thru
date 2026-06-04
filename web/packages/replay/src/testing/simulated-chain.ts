@@ -1,4 +1,4 @@
-import { create, type PartialMessage } from "@bufbuild/protobuf";
+import { create } from "@bufbuild/protobuf";
 import {
   type Block,
   BlockSchema,
@@ -11,7 +11,7 @@ import {
   type StreamBlocksRequest,
   type StreamBlocksResponse,
   StreamBlocksResponseSchema,
-} from "@thru/proto";
+} from "@thru/sdk/proto";
 import type { BlockSource } from "../chain-client";
 import type { Slot } from "../types";
 
@@ -64,7 +64,7 @@ export class SimulatedChain implements BlockSource {
   }
 
   async listBlocks(
-    request: PartialMessage<ListBlocksRequest>,
+    request: Partial<ListBlocksRequest>,
   ): Promise<ListBlocksResponse> {
     await delay(this.pageDelayMs);
     const minSlot = extractStartSlot(request.filter);
@@ -87,7 +87,7 @@ export class SimulatedChain implements BlockSource {
   }
 
   streamBlocks(
-    request: PartialMessage<StreamBlocksRequest>,
+    request: Partial<StreamBlocksRequest>,
   ): AsyncIterable<StreamBlocksResponse> {
     const startSlot = (request.startSlot ?? 0n) as Slot;
     const data = this.live.filter((entry) => entry.slot >= startSlot);
@@ -127,7 +127,7 @@ function makeBlock(slot: Slot): Block {
   });
 }
 
-function extractStartSlot(filter?: PartialMessage<Filter>): Slot {
+function extractStartSlot(filter?: Partial<Filter>): Slot {
   const param = filter?.params?.start_slot;
   if (param?.kind?.case === "uintValue") return param.kind.value;
   return 0n;

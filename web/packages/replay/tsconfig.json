@@ -4,11 +4,13 @@
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "lib": ["ESNext"],
+    "types": ["node"],
     "outDir": "./dist",
     "rootDir": "./src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
+    "ignoreDeprecations": "6.0",
     "forceConsistentCasingInFileNames": true
   },
   "include": ["src/**/*", "gen/**/*"]

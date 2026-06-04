@@ -4,7 +4,7 @@ use crate::abi::resolved::{
     ResolvedType, ResolvedTypeKind, Size,
 };
 use crate::abi::types::IntegralType;
-use crate::codegen::rust_gen::param_cache::{extract_param_cache, ParamEvalError};
+use crate::codegen::rust_gen::param_cache::{ParamEvalError, extract_param_cache};
 use std::collections::{BTreeMap, HashMap};
 
 fn primitive(name: &str, int: IntegralType) -> ResolvedType {
@@ -48,7 +48,7 @@ fn state_proof_style_computed_tag_and_payload() -> Result<(), ParamEvalError> {
                     path: vec!["version".into()],
                 }),
                 size_constant_status: ConstantStatus::NonConstant(HashMap::new()),
-                    jagged: false,
+                jagged: false,
             },
         },
         requires_payload_size: true,
@@ -180,7 +180,7 @@ fn typeref_binding_smoke() -> Result<(), ParamEvalError> {
                                 path: vec!["len".into()],
                             }),
                             size_constant_status: ConstantStatus::NonConstant(HashMap::new()),
-                    jagged: false,
+                            jagged: false,
                         },
                     },
                     offset: None,
@@ -256,7 +256,7 @@ fn enum_tail_variant_uses_inner_count() -> Result<(), ParamEvalError> {
                                 path: vec!["count".into()],
                             }),
                             size_constant_status: ConstantStatus::NonConstant(HashMap::new()),
-                    jagged: false,
+                            jagged: false,
                         },
                     },
                     offset: None,

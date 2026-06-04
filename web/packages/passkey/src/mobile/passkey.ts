@@ -5,7 +5,7 @@ import {
   normalizeLowS,
   parseDerSignature,
   type PasskeySigningResult,
-} from '@thru/passkey-manager';
+} from '@thru/programs/passkey-manager';
 import type {
   DiscoverablePasskeyResult,
   PasskeyMobileConfig,

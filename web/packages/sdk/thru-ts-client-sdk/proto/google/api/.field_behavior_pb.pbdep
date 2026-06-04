@@ -1,0 +1,11 @@
+libprotoc 33.4
+web/package.json EqHQQRbJac2wNLK9pRFWbddpCA0ZMGeGd/2BoY/UVV8=
+web/pnpm-lock.yaml 11zIdVjuDZqifzJOQd/p96w9pZbTc680PPUwg3XATpM=
+web/packages/sdk/package.json KbLix4gyi2MbMweZSRkdFfrKRP3Dqm3KPmcdxmVFKO8=
+web/packages/sdk/buf.yaml SNRjMoMqNnzqEDMgSvyHDHxiAmkhAqb1hs2HzSbDNs8=
+web/packages/sdk/buf.gen.yaml PTN1wmrbpm9sJLB5JKB0tgryonAhTrgnKAp3SIa64SE=
+web/packages/sdk/buf.lock f9wohyxBxN3G611uIgIM81HU2tq08GqWwX5380RMg2Y=
+scripts/gen-web-proto.sh 938YzF2NIA4rUoFKQKZ7J/IRYQkbWv5YcNSYzOKRE5E=
+scripts/sync-thru-sdk-protos.py MvTwq2hqRPPc4vB678N5nBdWxYs2JS+i/WLrU5ZtQa4=
+scripts/gen-pbdeps.py I34fWaeZ7cWGFQP9QDDMj4m5laQ/IVl6nk5DU1G/3mM=
+web/packages/sdk/thru-ts-client-sdk/proto/google/api/field_behavior_pb.ts KVLIhr8ihL7+ADu7Pyhc6PGWlkzmUD0wVx4W7HdceyA=

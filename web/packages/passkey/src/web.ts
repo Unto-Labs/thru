@@ -7,9 +7,13 @@ export type {
   PasskeyClientCapabilities,
   PasskeyPopupContext,
   PasskeyPopupAccount,
+  PasskeyStoredSigningOptions,
+  PasskeyRegistrationOptions,
 } from './types';
 
 export { registerPasskey } from './register';
+export { createDistinctPasskeyLabel } from './label';
+export type { DistinctPasskeyLabelOptions } from './label';
 
 export {
   signWithPasskey,
@@ -25,7 +29,7 @@ export {
   P256_HALF_N,
   bytesToBigIntBE,
   bigIntToBytesBE,
-} from '@thru/passkey-manager';
+} from '@thru/programs/passkey-manager';
 
 export {
   isWebAuthnSupported,
@@ -48,4 +52,4 @@ export {
   bytesEqual,
   compareBytes,
   uniqueAccounts,
-} from '@thru/passkey-manager';
+} from '@thru/programs/passkey-manager';

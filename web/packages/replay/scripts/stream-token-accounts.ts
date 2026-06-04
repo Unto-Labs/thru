@@ -9,7 +9,7 @@
  *
  * All accounts owned by the token program.
  */
-import { decodeAddress, encodeAddress } from "@thru/helpers";
+import { decodeAddress, encodeAddress } from "@thru/sdk/helpers";
 import { AccountView, ChainClient, createAccountsByOwnerReplay } from "../src";
 
 const BASE_URL = "https://grpc.alphanet.thruput.org";

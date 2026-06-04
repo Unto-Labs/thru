@@ -1553,9 +1553,7 @@ impl DependencyAnalyzer {
                             reason: format!(
                                 "Jagged array '{}' element type '{}' must be a struct (not {:?}). \
                                  Elements must be self-describing with a computable footprint.",
-                                array_name,
-                                type_ref.name,
-                                typedef.kind
+                                array_name, type_ref.name, typedef.kind
                             ),
                         });
                     }

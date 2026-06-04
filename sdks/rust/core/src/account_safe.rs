@@ -675,13 +675,32 @@ impl<const NUM_ACCOUNTS: usize> AccountManager<NUM_ACCOUNTS> {
         unsafe { crate::syscall::sys_account_create_ephemeral(account_idx as u64, seed) }
     }
 
-    /// Delete an account.
+    /// Delete an unused account owned by the calling program (no extra
+    /// authorization signature).
     ///
     /// # Panics
     /// Panics if the account is currently borrowed.
     pub fn account_delete(&self, account_idx: u16) -> crate::syscall::SyscallCode {
         self.assert_not_borrowed(account_idx, "delete");
-        unsafe { crate::syscall::sys_account_delete(account_idx as u64) }
+        unsafe { crate::syscall::sys_account_delete(account_idx as u64, None) }
+    }
+
+    /// Delete an unused account, supplying an Ed25519 `signature` that the
+    /// runtime verifies against the account's own pubkey over the canonical
+    /// domain-separated delete message `"tn_eoa_delete_v1" || chain_id ||
+    /// fee_payer_pubkey || account_pubkey`. Used by the EOA program to require
+    /// the keyholder's authorization; the signature is additive to the owner
+    /// check, never a bypass.
+    ///
+    /// # Panics
+    /// Panics if the account is currently borrowed.
+    pub fn account_delete_signed(
+        &self,
+        account_idx: u16,
+        signature: &crate::types::signature::Signature,
+    ) -> crate::syscall::SyscallCode {
+        self.assert_not_borrowed(account_idx, "delete signed");
+        unsafe { crate::syscall::sys_account_delete(account_idx as u64, Some(signature)) }
     }
 
     /// Compress an account into the state tree.

@@ -1,12 +1,8 @@
 use abi_gen::abi::file::AbiFile;
 use abi_gen::abi::resolved::TypeResolver;
 use abi_reflect::{
-    format_reflection as format_value,
+    FormatOptions, ReflectError, Reflector, ReflectorConfig, format_reflection as format_value,
     format_reflection_with_options as format_value_with_options,
-    FormatOptions,
-    ReflectError,
-    ReflectorConfig,
-    Reflector,
 };
 use console_error_panic_hook::set_once as set_panic_hook_once;
 use js_sys::Uint8Array;
@@ -58,9 +54,7 @@ pub fn reflect_account(abi_yaml: &str, buffer: Uint8Array) -> Result<JsValue, Js
 pub fn reflect_event(abi_yaml: &str, buffer: Uint8Array) -> Result<JsValue, JsValue> {
     let reflector = build_reflector(abi_yaml)?;
     let bytes = buffer.to_vec();
-    let reflected = reflector
-        .reflect_event(&bytes)
-        .map_err(map_reflect_error)?;
+    let reflected = reflector.reflect_event(&bytes).map_err(map_reflect_error)?;
     Ok(js_string(
         serde_json::to_string(&reflected).map_err(map_serde_error)?,
     ))
@@ -85,11 +79,13 @@ pub fn format_reflection(raw_json: &str) -> Result<JsValue, JsValue> {
 }
 
 #[wasm_bindgen]
-pub fn format_reflection_with_options(raw_json: &str, options_json: &str) -> Result<JsValue, JsValue> {
+pub fn format_reflection_with_options(
+    raw_json: &str,
+    options_json: &str,
+) -> Result<JsValue, JsValue> {
     let value: abi_reflect::ReflectedValue =
         serde_json::from_str(raw_json).map_err(map_serde_error)?;
-    let options: FormatOptions =
-        serde_json::from_str(options_json).map_err(map_serde_error)?;
+    let options: FormatOptions = serde_json::from_str(options_json).map_err(map_serde_error)?;
     let formatted = format_value_with_options(&value, &options);
     Ok(js_string(
         serde_json::to_string(&formatted).map_err(map_serde_error)?,
@@ -138,11 +134,11 @@ fn js_string(value: String) -> JsValue {
 }
 
 /* ============================================================================
-   Manifest-based Functions
+Manifest-based Functions
 
-   These functions accept a pre-resolved manifest (JSON map of package name to
-   ABI YAML content) enabling reflection on ABIs with imports in the WASM runtime.
-   ============================================================================ */
+These functions accept a pre-resolved manifest (JSON map of package name to
+ABI YAML content) enabling reflection on ABIs with imports in the WASM runtime.
+============================================================================ */
 
 /// Reflect a binary buffer using a pre-resolved manifest.
 ///
@@ -217,9 +213,7 @@ pub fn reflect_event_with_manifest(
 ) -> Result<JsValue, JsValue> {
     let reflector = build_reflector_from_manifest(manifest_json, root_package)?;
     let bytes = buffer.to_vec();
-    let reflected = reflector
-        .reflect_event(&bytes)
-        .map_err(map_reflect_error)?;
+    let reflected = reflector.reflect_event(&bytes).map_err(map_reflect_error)?;
     Ok(js_string(
         serde_json::to_string(&reflected).map_err(map_serde_error)?,
     ))
@@ -276,7 +270,10 @@ pub fn validate_manifest(manifest_json: &str) -> Result<JsValue, JsValue> {
     ))
 }
 
-fn build_reflector_from_manifest(manifest_json: &str, root_package: &str) -> Result<Reflector, JsValue> {
+fn build_reflector_from_manifest(
+    manifest_json: &str,
+    root_package: &str,
+) -> Result<Reflector, JsValue> {
     let manifest: HashMap<String, String> = serde_json::from_str(manifest_json)
         .map_err(|err| js_error(format!("Invalid manifest JSON: {err}")))?;
 
@@ -285,11 +282,19 @@ fn build_reflector_from_manifest(manifest_json: &str, root_package: &str) -> Res
     }
 
     /* Find the root package to get root types configuration */
-    let root_yaml = manifest.get(root_package)
-        .ok_or_else(|| js_error(format!("Root package '{}' not found in manifest", root_package)))?;
+    let root_yaml = manifest.get(root_package).ok_or_else(|| {
+        js_error(format!(
+            "Root package '{}' not found in manifest",
+            root_package
+        ))
+    })?;
 
-    let root_abi: AbiFile = serde_yml::from_str(root_yaml)
-        .map_err(|err| js_error(format!("Invalid ABI YAML for root package '{}': {}", root_package, err)))?;
+    let root_abi: AbiFile = serde_yml::from_str(root_yaml).map_err(|err| {
+        js_error(format!(
+            "Invalid ABI YAML for root package '{}': {}",
+            root_package, err
+        ))
+    })?;
 
     let root_types = root_abi.root_types().clone();
 

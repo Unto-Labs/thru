@@ -1,0 +1,29 @@
+{
+  "name": "@thru/programs",
+  "version": "0.0.1",
+  "type": "module",
+  "exports": {
+    "./token": {
+      "types": "./dist/token/index.d.ts",
+      "import": "./dist/token/index.js",
+      "require": "./dist/token/index.cjs"
+    },
+    "./passkey-manager": {
+      "types": "./dist/passkey-manager/index.d.ts",
+      "import": "./dist/passkey-manager/index.js",
+      "require": "./dist/passkey-manager/index.cjs"
+    }
+  },
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@thru/sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "tsup": "^8.5.1",
+    "typescript": "^6.0.3"
+  }
+}

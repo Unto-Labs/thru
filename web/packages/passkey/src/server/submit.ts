@@ -3,8 +3,8 @@ import {
   concatenateInstructions,
   encodeValidateInstruction,
   hexToBytes,
-} from '@thru/passkey-manager';
-import type { AccountContext } from '@thru/passkey-manager';
+} from '@thru/programs/passkey-manager';
+import type { AccountContext } from '@thru/programs/passkey-manager';
 import { trackTransaction, withSerializedFeePayer } from './utils';
 import type {
   BuiltPasskeyTransaction,
@@ -13,6 +13,27 @@ import type {
   ThruClient,
   TransactionResult,
 } from './types';
+
+function base64ToBytes(base64: string): Uint8Array {
+  type BufferLike = {
+    from(value: string, encoding: 'base64'): Uint8Array;
+  };
+  const globalBuffer = (globalThis as { Buffer?: BufferLike }).Buffer;
+  if (globalBuffer) {
+    return globalBuffer.from(base64, 'base64');
+  }
+
+  if (typeof atob === 'function') {
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) {
+      bytes[i] = binary.charCodeAt(i);
+    }
+    return bytes;
+  }
+
+  throw new Error('Base64 decoding is not supported in this environment');
+}
 
 /**
  * Builds and signs a passkey-manager transaction without submitting it.
@@ -35,8 +56,8 @@ export async function buildPasskeyTransaction(opts: {
     authIdx: 0,
     signatureR: hexToBytes(opts.signatureR),
     signatureS: hexToBytes(opts.signatureS),
-    authenticatorData: Buffer.from(opts.authenticatorData, 'base64'),
-    clientDataJSON: Buffer.from(opts.clientDataJSON, 'base64'),
+    authenticatorData: base64ToBytes(opts.authenticatorData),
+    clientDataJSON: base64ToBytes(opts.clientDataJSON),
   });
 
   const instructionData = concatenateInstructions([validateIx, opts.invokeIx]);

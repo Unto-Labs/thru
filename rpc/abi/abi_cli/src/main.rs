@@ -3,7 +3,9 @@ use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(name = "abi")]
-#[command(about = "ABI toolchain for thru-net - code generation, analysis, reflection, and flattening")]
+#[command(
+    about = "ABI toolchain for thru-net - code generation, analysis, reflection, and flattening"
+)]
 #[command(version)]
 struct Cli {
     #[command(subcommand)]
@@ -414,9 +416,7 @@ fn run_prep_for_publish(
     output: PathBuf,
     verbose: bool,
 ) -> anyhow::Result<()> {
-    use abi_loader::{
-        normalize_type_refs, AbiFile, AbiMetadata, ImportResolver, ImportSource,
-    };
+    use abi_loader::{normalize_type_refs, AbiFile, AbiMetadata, ImportResolver, ImportSource};
 
     if verbose {
         println!("Preparing for publish: {}", file.display());
@@ -433,10 +433,7 @@ fn run_prep_for_publish(
     }
 
     if verbose {
-        println!(
-            "  Resolved {} local packages",
-            resolver.loaded_file_count()
-        );
+        println!("  Resolved {} local packages", resolver.loaded_file_count());
     }
 
     /* Enforce that local dependencies do not contain remote imports */
@@ -524,10 +521,7 @@ fn run_prep_for_publish(
 
     if verbose {
         println!("  Written to: {}", output.display());
-        println!(
-            "  Total types: {}",
-            output_abi.get_types().len()
-        );
+        println!("  Total types: {}", output_abi.get_types().len());
     }
 
     Ok(())
@@ -549,7 +543,9 @@ fn run_bundle(
     let resolver = EnhancedImportResolver::new(FetcherConfig::cli_default(), include_dirs)?
         .with_verbose(verbose);
 
-    let resolution = resolver.resolve_file(&file).map_err(|e| anyhow::anyhow!("{}", e))?;
+    let resolution = resolver
+        .resolve_file(&file)
+        .map_err(|e| anyhow::anyhow!("{}", e))?;
 
     if verbose {
         println!("  Resolved {} packages", resolution.package_count());

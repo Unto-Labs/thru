@@ -152,14 +152,17 @@ mod tests {
         let typedefs = vec![
             TypeDef {
                 name: "B".to_string(),
+                format: None,
                 kind: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
             },
             TypeDef {
                 name: "A".to_string(),
+                format: None,
                 kind: TypeKind::Struct(StructType {
                     container_attributes: Default::default(),
                     fields: vec![StructField {
                         name: "field_b".to_string(),
+                        format: None,
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "B".to_string(),
                             package: None,
@@ -180,10 +183,12 @@ mod tests {
         let typedefs = vec![
             TypeDef {
                 name: "X".to_string(),
+                format: None,
                 kind: TypeKind::Struct(StructType {
                     container_attributes: Default::default(),
                     fields: vec![StructField {
                         name: "y".to_string(),
+                        format: None,
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "Y".to_string(),
                             package: None,
@@ -194,10 +199,12 @@ mod tests {
             },
             TypeDef {
                 name: "Y".to_string(),
+                format: None,
                 kind: TypeKind::Struct(StructType {
                     container_attributes: Default::default(),
                     fields: vec![StructField {
                         name: "x".to_string(),
+                        format: None,
                         field_type: TypeKind::TypeRef(TypeRefType {
                             name: "X".to_string(),
                             package: None,
@@ -218,10 +225,12 @@ mod tests {
         let typedefs = vec![
             TypeDef {
                 name: "Leaf".to_string(),
+                format: None,
                 kind: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U8)),
             },
             TypeDef {
                 name: "Node".to_string(),
+                format: None,
                 kind: TypeKind::Enum(EnumType {
                     container_attributes: Default::default(),
                     tag_ref: ExprKind::FieldRef(crate::abi::expr::FieldRefExpr {
@@ -238,7 +247,7 @@ mod tests {
                                 package: None,
                                 comment: None,
                             })),
-                        jagged: false,
+                            jagged: false,
                         }),
                     }],
                 }),
@@ -255,14 +264,17 @@ mod tests {
         let typedefs = vec![
             TypeDef {
                 name: "C".to_string(),
+                format: None,
                 kind: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U8)),
             },
             TypeDef {
                 name: "A".to_string(),
+                format: None,
                 kind: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U8)),
             },
             TypeDef {
                 name: "B".to_string(),
+                format: None,
                 kind: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U8)),
             },
         ];
@@ -279,19 +291,23 @@ mod tests {
     fn allows_recursive_reference_via_nested_struct() {
         let typedefs = vec![TypeDef {
             name: "Node".to_string(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
                         name: "value".to_string(),
+                        format: None,
                         field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U8)),
                     },
                     StructField {
                         name: "child".to_string(),
+                        format: None,
                         field_type: TypeKind::Struct(StructType {
                             container_attributes: Default::default(),
                             fields: vec![StructField {
                                 name: "parent_link".to_string(),
+                                format: None,
                                 field_type: TypeKind::TypeRef(TypeRefType {
                                     name: "Node".to_string(),
                                     package: None,
@@ -314,17 +330,20 @@ mod tests {
         let typedefs = vec![
             TypeDef {
                 name: "Parent".to_string(),
+                format: None,
                 kind: TypeKind::Struct(StructType {
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {
                             name: "header".to_string(),
+                            format: None,
                             field_type: TypeKind::Primitive(PrimitiveType::Integral(
                                 IntegralType::U8,
                             )),
                         },
                         StructField {
                             name: "child".to_string(),
+                            format: None,
                             field_type: TypeKind::TypeRef(TypeRefType {
                                 name: "Child".to_string(),
                                 package: None,
@@ -336,17 +355,20 @@ mod tests {
             },
             TypeDef {
                 name: "Child".to_string(),
+                format: None,
                 kind: TypeKind::Struct(StructType {
                     container_attributes: Default::default(),
                     fields: vec![
                         StructField {
                             name: "tag".to_string(),
+                            format: None,
                             field_type: TypeKind::Primitive(PrimitiveType::Integral(
                                 IntegralType::U8,
                             )),
                         },
                         StructField {
                             name: "payload".to_string(),
+                            format: None,
                             field_type: TypeKind::TypeRef(TypeRefType {
                                 name: "Parent".to_string(),
                                 package: None,

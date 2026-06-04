@@ -10,14 +10,18 @@ import {
   type StreamTransactionsRequest,
   StreamTransactionsRequestSchema,
   type StreamTransactionsResponse,
-} from "@thru/proto";
+} from "@thru/sdk/proto";
 import type { TransactionSource } from "../chain-client";
 import { ReplayStream } from "../replay-stream";
 import type { ReplayLogger, Slot } from "../types";
+import { closeIfCloseable, resolveClient } from "../types";
 import { backfillPage, combineFilters, mapAsyncIterable, slotLiteralFilter } from "./helpers";
 
 export interface TransactionReplayOptions {
-  client: TransactionSource;
+  /** Client instance for initial connection. Optional if clientFactory provided. */
+  client?: TransactionSource;
+  /** Factory to create fresh clients on reconnection. Enables robust reconnection. */
+  clientFactory?: () => TransactionSource;
   startSlot: Slot;
   safetyMargin?: bigint;
   pageSize?: number;
@@ -26,6 +30,7 @@ export interface TransactionReplayOptions {
   returnEvents?: boolean;
   logger?: ReplayLogger;
   resubscribeOnEnd?: boolean;
+  signal?: AbortSignal;
 }
 
 const DEFAULT_PAGE_SIZE = 256;
@@ -36,8 +41,9 @@ export function createTransactionReplay(
   options: TransactionReplayOptions,
 ): ReplayStream<Transaction, string> {
   const safetyMargin = options.safetyMargin ?? DEFAULT_SAFETY_MARGIN;
+  let currentClient = resolveClient(options, "TransactionReplayOptions");
 
-  const fetchBackfill = async ({
+  const createFetchBackfill = (client: TransactionSource) => async ({
     startSlot,
     cursor,
   }: {
@@ -51,7 +57,7 @@ export function createTransactionReplay(
     });
 
     const mergedFilter = combineFilters(slotLiteralFilter("transaction.slot", startSlot), options.filter);
-    const response = await options.client.listTransactions(
+    const response = await client.listTransactions(
       create(ListTransactionsRequestSchema, {
         filter: mergedFilter,
         page,
@@ -63,27 +69,44 @@ export function createTransactionReplay(
     return backfillPage(response.transactions, response.page);
   };
 
-  const subscribeLive = (startSlot: Slot): AsyncIterable<Transaction> => {
+  const createSubscribeLive = (client: TransactionSource) => (startSlot: Slot): AsyncIterable<Transaction> => {
     const mergedFilter = combineFilters(slotLiteralFilter("transaction.slot", startSlot), options.filter);
     const request = create(StreamTransactionsRequestSchema, {
       filter: mergedFilter,
       minConsensus: options.minConsensus,
     });
     return mapAsyncIterable(
-      options.client.streamTransactions(request),
+      client.streamTransactions(request),
       (resp: StreamTransactionsResponse) => resp.transaction,
     );
   };
 
+  const onReconnect = options.clientFactory
+    ? () => {
+        const newClient = options.clientFactory!();
+        currentClient = newClient;
+        return {
+          subscribeLive: createSubscribeLive(currentClient),
+          fetchBackfill: createFetchBackfill(currentClient),
+          dispose: () => closeIfCloseable(newClient),
+        };
+      }
+    : undefined;
+
   return new ReplayStream<Transaction, string>({
     startSlot: options.startSlot,
     safetyMargin,
-    fetchBackfill,
-    subscribeLive,
+    fetchBackfill: createFetchBackfill(currentClient),
+    subscribeLive: createSubscribeLive(currentClient),
     extractSlot: (tx) => tx.slot ?? 0n,
     extractKey: transactionKey,
     logger: options.logger,
     resubscribeOnEnd: options.resubscribeOnEnd,
+    signal: options.signal,
+    onReconnect,
+    dispose: options.clientFactory
+      ? () => closeIfCloseable(currentClient)
+      : undefined,
   });
 }
 

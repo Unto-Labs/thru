@@ -34,6 +34,7 @@ types:
         field-type:
           primitive: u32
       - name: key
+        format: text
         field-type:
           array:
             size:
@@ -45,6 +46,7 @@ types:
         field-type:
           primitive: u32
       - name: value
+        format: text
         field-type:
           array:
             size:
@@ -62,6 +64,7 @@ types:
           type-ref:
             name: Pubkey
       - name: root_name
+        format: text
         field-type:
           array:
             size:
@@ -89,6 +92,7 @@ types:
           type-ref:
             name: Pubkey
       - name: name
+        format: text
         field-type:
           array:
             size:
@@ -152,6 +156,7 @@ types:
         field-type:
           primitive: u16
       - name: root_name
+        format: text
         field-type:
           array:
             size:
@@ -180,6 +185,7 @@ types:
         field-type:
           primitive: u16
       - name: name
+        format: text
         field-type:
           array:
             size:
@@ -205,6 +211,7 @@ types:
         field-type:
           primitive: u32
       - name: key
+        format: text
         field-type:
           array:
             size:
@@ -216,6 +223,7 @@ types:
         field-type:
           primitive: u32
       - name: value
+        format: text
         field-type:
           array:
             size:
@@ -238,6 +246,7 @@ types:
         field-type:
           primitive: u32
       - name: key
+        format: text
         field-type:
           array:
             size:

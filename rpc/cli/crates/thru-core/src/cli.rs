@@ -1364,6 +1364,17 @@ pub enum TokenCommands {
         #[arg(long = "token-program")]
         token_program: Option<String>,
     },
+
+    /// Get the balance and metadata of a token account
+    Balance {
+        /// Token account address (ta... or hex)
+        token_account: String,
+
+        /// Override token program address (ta... or hex); when set, the account's
+        /// owner program is asserted to match.
+        #[arg(long = "token-program")]
+        token_program: Option<String>,
+    },
 }
 
 /// Faucet program subcommands

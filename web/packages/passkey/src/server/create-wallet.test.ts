@@ -1,7 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ThruClient } from './types';
 
-vi.mock('@thru/helpers', () => ({
+vi.mock('@thru/sdk/helpers', () => ({
   encodeAddress: (bytes: Uint8Array) => {
     const first = bytes[0];
     if (first === 11) return 'wallet-address';
@@ -10,7 +10,7 @@ vi.mock('@thru/helpers', () => ({
   },
 }));
 
-vi.mock('@thru/passkey-manager', () => ({
+vi.mock('@thru/programs/passkey-manager', () => ({
   PASSKEY_MANAGER_PROGRAM_ADDRESS: 'passkey-program',
   base64UrlToBytes: () => new Uint8Array([7]),
   buildAccountContext: (params: { readWriteAccounts: Uint8Array[] }) => ({

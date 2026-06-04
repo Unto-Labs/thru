@@ -50,14 +50,14 @@ export { ConsoleSink } from "./sinks/console";
 export type { ReplaySink, ReplaySinkContext, ReplaySinkMeta } from "./sinks/replay-sink";
 
 // Proto types for event filtering and processing
-export type { Event } from "@thru/proto";
-export type { Filter, FilterParamValue } from "@thru/proto";
-export { FilterSchema, FilterParamValueSchema } from "@thru/proto";
-export type { Pubkey as ProtoPubkey, Signature as ProtoSignature } from "@thru/proto";
+export type { Event } from "@thru/sdk/proto";
+export type { Filter, FilterParamValue } from "@thru/sdk/proto";
+export { FilterSchema, FilterParamValueSchema } from "@thru/sdk/proto";
+export type { Pubkey as ProtoPubkey, Signature as ProtoSignature } from "@thru/sdk/proto";
 
 // Account proto types - AccountView is an enum (value), others are types
-export { AccountView } from "@thru/proto";
-export type { Account, AccountMeta, AccountPage, AccountFlags } from "@thru/proto";
+export { AccountView } from "@thru/sdk/proto";
+export type { Account, AccountMeta, AccountPage, AccountFlags } from "@thru/sdk/proto";
 export type {
   GetAccountRequest,
   ListAccountsRequest,
@@ -66,5 +66,5 @@ export type {
   StreamAccountUpdatesResponse,
   AccountUpdate,
   BlockFinished,
-} from "@thru/proto";
+} from "@thru/sdk/proto";
 

@@ -14,7 +14,7 @@ A reusable blockchain indexing framework for building backends that index Thru c
 ## Installation
 
 ```bash
-pnpm add @thru/indexer @thru/replay @thru/helpers postgres drizzle-orm hono @hono/zod-openapi
+pnpm add @thru/indexer @thru/replay @thru/sdk/helpers postgres drizzle-orm hono @hono/zod-openapi
 pnpm add -D drizzle-kit tsx typescript
 ```
 
@@ -25,7 +25,7 @@ pnpm add -D drizzle-kit tsx typescript
 ```typescript
 // src/streams/transfers.ts
 import { create } from "@bufbuild/protobuf";
-import { decodeAddress, encodeAddress, encodeSignature } from "@thru/helpers";
+import { decodeAddress, encodeAddress, encodeSignature } from "@thru/sdk/helpers";
 import { defineEventStream, t } from "@thru/indexer";
 import { FilterSchema, FilterParamValueSchema, type Event } from "@thru/replay";
 import { TokenEvent } from "../abi/token";
@@ -91,7 +91,7 @@ export default transfers;
 
 ```typescript
 // src/account-streams/token-accounts.ts
-import { decodeAddress, encodeAddress } from "@thru/helpers";
+import { decodeAddress, encodeAddress } from "@thru/sdk/helpers";
 import { defineAccountStream, t } from "@thru/indexer";
 import { TokenAccount } from "../abi/token";
 

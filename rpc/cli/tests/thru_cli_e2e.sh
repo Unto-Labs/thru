@@ -309,7 +309,11 @@ transfer_with_retry() {
 emit_slot_advancement_transfers() {
   local label="$1"
   log_section "Advancing slots: $label"
-  local transfers=256
+  # Must be >= TN_RUNTIME_CTX_COMPRESSION_TIMEOUT (= STATE_HASH_DELAY +
+  # ACCEPTS_PROOF_BLOCK_SPAN = 384) so the per-account decompress cooldown
+  # clears for any compress that ran in the previous block. Compression-warmup
+  # callers only need >= STATE_HASH_DELAY (256) which 384 also satisfies.
+  local transfers=384
   local half=$((transfers / 2))
   local output
   for ((i = 0; i < half; i++)); do
@@ -443,8 +447,8 @@ check_prerequisites() {
   require_command git
 
   if [[ "$SKIP_BUILD" != "1" ]]; then
-    log "Building thru-cli via cargo (workspace root: $REPO_ROOT/rpc)"
-    (cd "$REPO_ROOT/rpc" && cargo build -p thru-cli)
+    log "Building thru CLI via cargo (workspace root: $REPO_ROOT/rpc/cli)"
+    (cd "$REPO_ROOT/rpc/cli" && cargo build -p thru)
   else
     log "Skipping build (SKIP_BUILD=1)"
   fi
@@ -889,6 +893,39 @@ scenario_token() {
   local token_program_id
   token_program_id=$(printf '%s' "$token_program_json" | jq -er '.program_create.program_account')
 
+  # Poll `token balance` until <jq-expr> renders to <expected>, then return.
+  # run_cli_json_retry only retries hard CLI failures; a successful-but-stale
+  # read (account indexed but the latest txn not yet applied) returns exit 0
+  # with the old value and would never retry. This polls on the value itself,
+  # so it tolerates post-submission propagation lag. Booleans are compared via
+  # `tostring` since they render as `true`/`false`.
+  # Usage: assert_token_balance "<addr>" "<jq-expr>" "<expected>" "<ctx>"
+  assert_token_balance() {
+    local addr="$1"; local expr="$2"; local expected="$3"; local ctx="$4"
+    local attempts="${RETRY_ATTEMPTS:-5}"
+    local delay="${RETRY_DELAY_SECS:-2}"
+    local out="" actual=""
+    for (( attempt = 1; attempt <= attempts; attempt++ )); do
+      if out=$(run_cli_json "token balance ${ctx} (attempt ${attempt}/${attempts})" token balance "$addr" --token-program "$token_program_id"); then
+        actual=$(printf '%s' "$out" | jq -r "$expr") || actual=""
+        [[ "$actual" == "$expected" ]] && return 0
+      fi
+      if (( attempt < attempts )); then
+        log "token balance ${ctx}: ${expr} => '${actual}', want '${expected}'; retrying in ${delay}s..."
+        sleep "$delay"
+      fi
+    done
+    log "Assertion failed: token balance ${ctx}: ${expr} => '${actual}', expected '${expected}'"
+    log "Payload: $out"
+    return 1
+  }
+
+  # Convenience wrapper for the common amount check.
+  assert_token_amount() {
+    local addr="$1"; local expected="$2"; local ctx="$3"
+    assert_token_balance "$addr" '.token_balance.amount' "$expected" "$ctx"
+  }
+
   local derive_mint_json
   derive_mint_json=$(run_cli_json "token derive mint account" token derive-mint-account "$ACC_2_ADDRESS" "$mint_seed" --token-program "$token_program_id")
   TOKEN_MINT_ADDRESS=$(printf '%s' "$derive_mint_json" | jq -er '.derive_mint_account.mint_account_address')
@@ -921,26 +958,45 @@ scenario_token() {
   local mint_to_json
   mint_to_json=$(run_cli_json "token mint-to acc_2" token mint-to "$TOKEN_MINT_ADDRESS" "$acc_2_token_account" "$ACC_2_ADDRESS" 1000 --fee-payer acc_2 --token-program "$token_program_id")
   assert_jq_eq "$mint_to_json" '.token_mint_to.status' 'success'
+  assert_token_amount "$acc_2_token_account" 1000 "after mint-to"
 
   local transfer_json
   transfer_json=$(run_cli_json "token transfer acc_2->acc_3" token transfer "$acc_2_token_account" "$acc_3_token_account" 200 --fee-payer acc_2 --token-program "$token_program_id")
   assert_jq_eq "$transfer_json" '.token_transfer.status' 'success'
+  assert_token_amount "$acc_2_token_account" 800 "after transfer src"
+  assert_token_amount "$acc_3_token_account" 200 "after transfer dst"
 
   local freeze_json
   freeze_json=$(run_cli_json "token freeze acc_3" token freeze-account "$acc_3_token_account" "$TOKEN_MINT_ADDRESS" "$ACC_2_ADDRESS" --fee-payer acc_2 --token-program "$token_program_id")
   assert_jq_eq "$freeze_json" '.token_freeze_account.status' 'success'
+  assert_token_balance "$acc_3_token_account" '.token_balance.is_frozen | tostring' 'true' "after freeze"
+  assert_token_balance "$acc_3_token_account" '.token_balance.amount' '200' "after freeze (amount)"
 
   local thaw_json
   thaw_json=$(run_cli_json "token thaw acc_3" token thaw-account "$acc_3_token_account" "$TOKEN_MINT_ADDRESS" "$ACC_2_ADDRESS" --fee-payer acc_2 --token-program "$token_program_id")
   assert_jq_eq "$thaw_json" '.token_thaw_account.status' 'success'
+  assert_token_balance "$acc_3_token_account" '.token_balance.is_frozen | tostring' 'false' "after thaw"
+  assert_token_balance "$acc_3_token_account" '.token_balance.amount' '200' "after thaw (amount)"
 
   local burn_json
   burn_json=$(run_cli_json "token burn acc_3 balance" token burn "$acc_3_token_account" "$TOKEN_MINT_ADDRESS" "$ACC_3_ADDRESS" 200 --fee-payer acc_3 --token-program "$token_program_id")
   assert_jq_eq "$burn_json" '.token_burn.status' 'success'
+  assert_token_amount "$acc_3_token_account" 0 "after burn"
+
+  # Pre-close: confirm acc_3 amount is already 0 so the post-close
+  # status:"closed" assertion is unambiguous (a non-zero amount before close
+  # would mean burn never propagated). Intentionally kept as a distinct
+  # checkpoint even though it reads the same state as "after burn".
+  assert_token_amount "$acc_3_token_account" 0 "pre-close confirmation"
 
   local close_json
   close_json=$(run_cli_json "token close acc_3 account" token close-account "$acc_3_token_account" "$ACC_3_ADDRESS" "$ACC_3_ADDRESS" --fee-payer acc_3 --token-program "$token_program_id")
   assert_jq_eq "$close_json" '.token_close_account.status' 'success'
+
+  # close-account zeroes the 73-byte body in place (process.rs:621-626), so
+  # the account record persists and `token balance` returns status:"closed".
+  assert_token_balance "$acc_3_token_account" '.token_balance.status' 'closed' "after close"
+  assert_token_balance "$acc_3_token_account" '.token_balance.amount' '0' "after close (amount)"
 
   run_cli_json "token derive-token-account (verify)" token derive-token-account "$TOKEN_MINT_ADDRESS" "$ACC_2_ADDRESS" --seed "$acc_2_token_seed" --token-program "$token_program_id" >/dev/null
   run_cli_json "token derive-mint-account (verify)" token derive-mint-account "$ACC_2_ADDRESS" "$mint_seed" --token-program "$token_program_id" >/dev/null

@@ -1,5 +1,7 @@
 use crate::abi::expr::{ConstantExpression, ExprKind, LiteralExpr};
-use crate::abi::types::{FloatingPointType, IntegralType, PrimitiveType, TypeDef, TypeKind};
+use crate::abi::types::{
+    FloatingPointType, IntegralType, PrimitiveType, TypeDef, TypeKind, ValueFormat,
+};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 type FieldRefMap = HashMap<String, HashMap<String, PrimitiveType>>;
@@ -151,6 +153,7 @@ impl<'a> FieldOrderTracker<'a> {
 pub struct TypeResolver {
     pub types: HashMap<String, ResolvedType>,
     pub typedefs: HashMap<String, TypeDef>,
+    pub formats: HashMap<String, ValueFormat>,
     pub resolution_order: Vec<String>,
 }
 
@@ -175,12 +178,70 @@ impl TypeResolver {
         Self {
             types: HashMap::new(),
             typedefs: HashMap::new(),
+            formats: HashMap::new(),
             resolution_order: Vec::new(),
         }
     }
 
     pub fn add_typedef(&mut self, typedef: TypeDef) {
+        self.register_formats(&typedef.name, &typedef);
         self.typedefs.insert(typedef.name.clone(), typedef);
+    }
+
+    pub fn format_for_type(&self, type_name: &str) -> Option<&ValueFormat> {
+        self.formats.get(type_name)
+    }
+
+    fn register_formats(&mut self, type_name: &str, typedef: &TypeDef) {
+        if let Some(format) = &typedef.format {
+            self.formats.insert(type_name.to_string(), format.clone());
+        }
+        self.register_kind_formats(type_name, &typedef.kind);
+    }
+
+    fn register_kind_formats(&mut self, prefix: &str, kind: &TypeKind) {
+        match kind {
+            TypeKind::Struct(struct_type) => {
+                for field in &struct_type.fields {
+                    let field_name = format!("{}::{}", prefix, field.name);
+                    if let Some(format) = &field.format {
+                        self.formats.insert(field_name.clone(), format.clone());
+                    }
+                    self.register_kind_formats(&field_name, &field.field_type);
+                }
+            }
+            TypeKind::Union(union_type) => {
+                for variant in &union_type.variants {
+                    self.register_kind_formats(
+                        &format!("{}::{}", prefix, variant.name),
+                        &variant.variant_type,
+                    );
+                }
+            }
+            TypeKind::Enum(enum_type) => {
+                for variant in &enum_type.variants {
+                    self.register_kind_formats(
+                        &format!("{}::{}", prefix, variant.name),
+                        &variant.variant_type,
+                    );
+                }
+            }
+            TypeKind::Array(array_type) => {
+                self.register_kind_formats(
+                    &format!("{}::element", prefix),
+                    &array_type.element_type,
+                );
+            }
+            TypeKind::SizeDiscriminatedUnion(size_disc_union) => {
+                for variant in &size_disc_union.variants {
+                    self.register_kind_formats(
+                        &format!("{}::{}", prefix, variant.name),
+                        &variant.variant_type,
+                    );
+                }
+            }
+            TypeKind::Primitive(_) | TypeKind::TypeRef(_) => {}
+        }
     }
 
     pub fn resolve_all(&mut self) -> Result<(), ResolutionError> {
@@ -807,21 +868,32 @@ impl TypeResolver {
                             // Check if target type is a struct containing SDU fields
                             if let ResolvedTypeKind::Struct { fields, .. } = &target_type.kind {
                                 for field in fields {
-                                    if matches!(field.field_type.kind, ResolvedTypeKind::SizeDiscriminatedUnion { .. }) {
-                                        return Err(ResolutionError::NonConstantTypeReference(format!(
-                                            "Jagged array '{}' element type '{}' contains size-discriminated union field '{}'. SDUs are not allowed in jagged array elements.",
-                                            type_name, type_ref.name, field.name
-                                        )));
+                                    if matches!(
+                                        field.field_type.kind,
+                                        ResolvedTypeKind::SizeDiscriminatedUnion { .. }
+                                    ) {
+                                        return Err(ResolutionError::NonConstantTypeReference(
+                                            format!(
+                                                "Jagged array '{}' element type '{}' contains size-discriminated union field '{}'. SDUs are not allowed in jagged array elements.",
+                                                type_name, type_ref.name, field.name
+                                            ),
+                                        ));
                                     }
                                 }
-                            } else if matches!(target_type.kind, ResolvedTypeKind::SizeDiscriminatedUnion { .. }) {
+                            } else if matches!(
+                                target_type.kind,
+                                ResolvedTypeKind::SizeDiscriminatedUnion { .. }
+                            ) {
                                 return Err(ResolutionError::NonConstantTypeReference(format!(
                                     "Jagged array '{}' element type '{}' is a size-discriminated union. SDUs are not allowed as jagged array elements.",
                                     type_name, type_ref.name
                                 )));
                             }
                         }
-                    } else if matches!(*array_type.element_type, TypeKind::SizeDiscriminatedUnion(_)) {
+                    } else if matches!(
+                        *array_type.element_type,
+                        TypeKind::SizeDiscriminatedUnion(_)
+                    ) {
                         return Err(ResolutionError::NonConstantTypeReference(format!(
                             "Jagged array '{}' has inline size-discriminated union element. SDUs are not allowed as jagged array elements.",
                             type_name
@@ -1934,6 +2006,7 @@ mod tests {
 
         let typedef = TypeDef {
             name: "test_type".to_string(),
+            format: None,
             kind: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
         };
 
@@ -2021,11 +2094,13 @@ mod tests {
 
         let typedef = TypeDef {
             name: "ForwardRef".to_string(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
                         name: "data".to_string(),
+                        format: None,
                         field_type: TypeKind::Array(ArrayType {
                             container_attributes: Default::default(),
                             size: ExprKind::FieldRef(FieldRefExpr {
@@ -2039,6 +2114,7 @@ mod tests {
                     },
                     StructField {
                         name: "len".to_string(),
+                        format: None,
                         field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U16)),
                     },
                 ],
@@ -2067,26 +2143,31 @@ mod tests {
 
         let typedef = TypeDef {
             name: "ParentStruct".to_string(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
                         name: "count".to_string(),
+                        format: None,
                         field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
                     },
                     StructField {
                         name: "child".to_string(),
+                        format: None,
                         field_type: TypeKind::Struct(StructType {
                             container_attributes: Default::default(),
                             fields: vec![
                                 StructField {
                                     name: "value".to_string(),
+                                    format: None,
                                     field_type: TypeKind::Primitive(PrimitiveType::Integral(
                                         IntegralType::U8,
                                     )),
                                 },
                                 StructField {
                                     name: "payload".to_string(),
+                                    format: None,
                                     field_type: TypeKind::Array(ArrayType {
                                         container_attributes: Default::default(),
                                         size: ExprKind::FieldRef(FieldRefExpr {
@@ -2135,15 +2216,18 @@ mod tests {
 
         let typedef = TypeDef {
             name: "EnumStruct".to_string(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
                         name: "payload".to_string(),
+                        format: None,
                         field_type: enum_type,
                     },
                     StructField {
                         name: "tag_value".to_string(),
+                        format: None,
                         field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U8)),
                     },
                 ],
@@ -2190,15 +2274,18 @@ mod tests {
 
         let typedef = TypeDef {
             name: "EnumStructOk".to_string(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
                         name: "tag_bits".to_string(),
+                        format: None,
                         field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U8)),
                     },
                     StructField {
                         name: "payload".to_string(),
+                        format: None,
                         field_type: enum_type,
                     },
                 ],
@@ -2215,15 +2302,18 @@ mod tests {
 
         resolver.add_typedef(TypeDef {
             name: "DynStruct".to_string(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
                         name: "length".to_string(),
+                        format: None,
                         field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U8)),
                     },
                     StructField {
                         name: "bytes".to_string(),
+                        format: None,
                         field_type: TypeKind::Array(ArrayType {
                             container_attributes: Default::default(),
                             size: ExprKind::FieldRef(FieldRefExpr {
@@ -2241,6 +2331,7 @@ mod tests {
 
         resolver.add_typedef(TypeDef {
             name: "DynAlias".to_string(),
+            format: None,
             kind: TypeKind::TypeRef(TypeRefType {
                 name: "DynStruct".to_string(),
                 package: None,
@@ -2265,15 +2356,18 @@ mod tests {
 
         let typedef = TypeDef {
             name: "DynStruct".to_string(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
                         name: "len".to_string(),
+                        format: None,
                         field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
                     },
                     StructField {
                         name: "data".to_string(),
+                        format: None,
                         field_type: TypeKind::Array(ArrayType {
                             container_attributes: Default::default(),
                             size: ExprKind::FieldRef(FieldRefExpr {

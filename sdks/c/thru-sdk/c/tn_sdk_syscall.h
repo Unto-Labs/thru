@@ -42,7 +42,12 @@ ulong tsys_account_create( ulong account_idx, uchar const seed[TN_SEED_SIZE],
 ulong tsys_account_create_ephemeral( ulong       account_idx,
                                      uchar const seed[TN_SEED_SIZE] );
 
-ulong tsys_account_delete( ulong account_idx );
+/* tsys_account_delete deletes an unused account (balance==0, nonce==0) owned
+   by the calling program.  signature is an OPTIONAL Ed25519 signature over the
+   canonical delete message; pass NULL when no signature is required (ordinary
+   program-owned accounts).  The EOA program passes a signature so a
+   permissionless caller cannot delete an EOA without the keyholder's consent. */
+ulong tsys_account_delete( ulong account_idx, tn_signature_t const * signature );
 
 ulong tsys_account_resize( ulong account_idx, ulong new_size );
 

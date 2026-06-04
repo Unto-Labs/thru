@@ -18,6 +18,116 @@ use crate::utils::format_vm_error;
 use thru_client::{Client as RpcClient, VersionContext};
 
 const PROGRAM_SEED_MAX_LEN: usize = 32;
+const PROGRAM_IMAGE_HEADER_SZ: usize = 8;
+const PROGRAM_IMAGE_TRAILER_SZ: usize = 8;
+const PROGRAM_IMAGE_MIN_TEXT_SZ: usize = 4;
+const PROGRAM_IMAGE_VERSION_OFFSET: usize = 0;
+const PROGRAM_IMAGE_V1: u8 = 0x01;
+const ELF_MAGIC: &[u8; 4] = b"\x7fELF";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ProgramImageValidationError {
+    ElfFile,
+    TooSmall { actual: usize, minimum: usize },
+    InvalidVersion { actual: u8 },
+    InvalidTrailer { offset: usize, actual: u8 },
+}
+
+impl std::fmt::Display for ProgramImageValidationError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ProgramImageValidationError::ElfFile => {
+                write!(
+                    f,
+                    "ELF file detected; upload the ThruVM .bin program image instead"
+                )
+            }
+            ProgramImageValidationError::TooSmall { actual, minimum } => {
+                write!(
+                    f,
+                    "program image is {} bytes; expected at least {} bytes",
+                    actual, minimum
+                )
+            }
+            ProgramImageValidationError::InvalidVersion { actual } => {
+                write!(
+                    f,
+                    "invalid program image version byte 0x{:02x}; expected 0x{:02x}",
+                    actual, PROGRAM_IMAGE_V1
+                )
+            }
+            ProgramImageValidationError::InvalidTrailer { offset, actual } => {
+                write!(
+                    f,
+                    "program image trailer byte at offset {} is 0x{:02x}; expected 0x00",
+                    offset, actual
+                )
+            }
+        }
+    }
+}
+
+fn validate_program_image(program_data: &[u8]) -> Result<(), ProgramImageValidationError> {
+    if program_data.len() >= ELF_MAGIC.len() && &program_data[..ELF_MAGIC.len()] == ELF_MAGIC {
+        return Err(ProgramImageValidationError::ElfFile);
+    }
+
+    let min_size = PROGRAM_IMAGE_HEADER_SZ + PROGRAM_IMAGE_MIN_TEXT_SZ + PROGRAM_IMAGE_TRAILER_SZ;
+    if program_data.len() < min_size {
+        return Err(ProgramImageValidationError::TooSmall {
+            actual: program_data.len(),
+            minimum: min_size,
+        });
+    }
+
+    if program_data[PROGRAM_IMAGE_VERSION_OFFSET] != PROGRAM_IMAGE_V1 {
+        return Err(ProgramImageValidationError::InvalidVersion {
+            actual: program_data[PROGRAM_IMAGE_VERSION_OFFSET],
+        });
+    }
+
+    let trailer_offset = program_data.len() - PROGRAM_IMAGE_TRAILER_SZ;
+    for (idx, byte) in program_data[trailer_offset..].iter().enumerate() {
+        if *byte != 0 {
+            return Err(ProgramImageValidationError::InvalidTrailer {
+                offset: trailer_offset + idx,
+                actual: *byte,
+            });
+        }
+    }
+
+    Ok(())
+}
+
+fn validate_program_file_or_report(
+    program_file: &str,
+    program_data: &[u8],
+    json_format: bool,
+) -> Result<(), CliError> {
+    let Err(err) = validate_program_image(program_data) else {
+        return Ok(());
+    };
+
+    let reason = err.to_string();
+    let message = format!("Invalid program file: {}", program_file);
+
+    if json_format {
+        let error_response = serde_json::json!({
+            "error": {
+                "type": "invalid_program_file",
+                "message": message,
+                "path": program_file,
+                "reason": reason
+            }
+        });
+        output::print_output(error_response, true);
+    } else {
+        output::print_error(&message);
+        output::print_error(&format!("Reason: {}", reason));
+    }
+
+    Err(CliError::Reported)
+}
 
 fn seed_with_suffix(base_seed: &str, suffix: &str) -> (String, bool) {
     let combined = format!("{}_{}", base_seed, suffix);
@@ -270,6 +380,7 @@ impl ProgramManager {
         const ERR_RELATIONSHIP_ERROR: u64 = 0x0600;
         const ERR_STATE_ERROR: u64 = 0x0700;
         const ERR_NOT_WRITABLE_ERROR: u64 = 0x0800;
+        const ERR_INVALID_PROGRAM: u64 = 0x0900;
 
         // Error object constants
         const ERR_INSTRUCTION: u64 = 0x01;
@@ -294,6 +405,7 @@ impl ProgramManager {
             ERR_RELATIONSHIP_ERROR => "Account relationship error",
             ERR_STATE_ERROR => "State error",
             ERR_NOT_WRITABLE_ERROR => "Not writable error",
+            ERR_INVALID_PROGRAM => "Invalid program image",
             _ => "Unknown error type",
         };
 
@@ -517,6 +629,7 @@ async fn create_program(
 
     // Read program data
     let program_data = fs::read(program_path).map_err(|e| CliError::Io(e))?;
+    validate_program_file_or_report(program_file, &program_data, json_format)?;
 
     if !json_format {
         output::print_info(&format!(
@@ -777,6 +890,7 @@ async fn upgrade_program(
 
     // Read program data
     let program_data = fs::read(program_path).map_err(|e| CliError::Io(e))?;
+    validate_program_file_or_report(program_file, &program_data, json_format)?;
 
     if !json_format {
         output::print_info(&format!(
@@ -1989,5 +2103,80 @@ fn print_account_status(label: &str, address: &str, status: &AccountStatus) {
     } else {
         println!("{}: {}", label, address);
         println!("    Status: NOT FOUND");
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn valid_program_image_bytes() -> Vec<u8> {
+        let mut data =
+            vec![
+                0u8;
+                PROGRAM_IMAGE_HEADER_SZ + PROGRAM_IMAGE_MIN_TEXT_SZ + PROGRAM_IMAGE_TRAILER_SZ
+            ];
+        data[PROGRAM_IMAGE_VERSION_OFFSET] = PROGRAM_IMAGE_V1;
+        data[PROGRAM_IMAGE_HEADER_SZ..PROGRAM_IMAGE_HEADER_SZ + PROGRAM_IMAGE_MIN_TEXT_SZ]
+            .copy_from_slice(&[0x13, 0x00, 0x00, 0x00]);
+        data
+    }
+
+    #[test]
+    fn test_validate_program_image_accepts_valid_image() {
+        let data = valid_program_image_bytes();
+        assert_eq!(validate_program_image(&data), Ok(()));
+    }
+
+    #[test]
+    fn test_validate_program_image_rejects_elf_file() {
+        let mut data = valid_program_image_bytes();
+        data[..ELF_MAGIC.len()].copy_from_slice(ELF_MAGIC);
+
+        assert_eq!(
+            validate_program_image(&data),
+            Err(ProgramImageValidationError::ElfFile)
+        );
+    }
+
+    #[test]
+    fn test_validate_program_image_rejects_too_small_file() {
+        let data = vec![PROGRAM_IMAGE_V1; PROGRAM_IMAGE_HEADER_SZ];
+
+        assert_eq!(
+            validate_program_image(&data),
+            Err(ProgramImageValidationError::TooSmall {
+                actual: PROGRAM_IMAGE_HEADER_SZ,
+                minimum: PROGRAM_IMAGE_HEADER_SZ
+                    + PROGRAM_IMAGE_MIN_TEXT_SZ
+                    + PROGRAM_IMAGE_TRAILER_SZ,
+            })
+        );
+    }
+
+    #[test]
+    fn test_validate_program_image_rejects_invalid_version() {
+        let mut data = valid_program_image_bytes();
+        data[PROGRAM_IMAGE_VERSION_OFFSET] = 0x02;
+
+        assert_eq!(
+            validate_program_image(&data),
+            Err(ProgramImageValidationError::InvalidVersion { actual: 0x02 })
+        );
+    }
+
+    #[test]
+    fn test_validate_program_image_rejects_nonzero_trailer() {
+        let mut data = valid_program_image_bytes();
+        let trailer_offset = data.len() - PROGRAM_IMAGE_TRAILER_SZ;
+        data[trailer_offset + 3] = 0xff;
+
+        assert_eq!(
+            validate_program_image(&data),
+            Err(ProgramImageValidationError::InvalidTrailer {
+                offset: trailer_offset + 3,
+                actual: 0xff,
+            })
+        );
     }
 }

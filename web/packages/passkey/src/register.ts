@@ -1,5 +1,9 @@
-import type { PasskeyRegistrationResult, PasskeyPopupRegistrationResult } from './types';
-import { arrayBufferToBase64Url, bytesToHex } from '@thru/passkey-manager';
+import type {
+  PasskeyRegistrationOptions,
+  PasskeyRegistrationResult,
+  PasskeyPopupRegistrationResult,
+} from './types';
+import { arrayBufferToBase64Url, bytesToHex } from '@thru/programs/passkey-manager';
 import {
   isWebAuthnSupported,
   getPasskeyPromptMode,
@@ -15,7 +19,8 @@ import { requestPasskeyPopup, openPasskeyPopupWindow, closePopup } from './popup
 export async function registerPasskey(
   alias: string,
   userId: string,
-  rpId: string
+  rpId: string,
+  options: PasskeyRegistrationOptions = {}
 ): Promise<PasskeyRegistrationResult> {
   if (!isWebAuthnSupported()) {
     throw new Error('WebAuthn is not supported in this browser');
@@ -24,17 +29,20 @@ export async function registerPasskey(
   return runWithPromptMode(
     'create',
     () => registerPasskeyInline(alias, userId, rpId),
-    (preopenedPopup) => registerPasskeyViaPopup(alias, userId, rpId, preopenedPopup)
+    (preopenedPopup) => registerPasskeyViaPopup(alias, userId, rpId, preopenedPopup),
+    options
   );
 }
 
 async function runWithPromptMode<T>(
   action: PasskeyPromptAction,
   inlineFn: () => Promise<T>,
-  popupFn: (preopenedPopup?: Window | null) => Promise<T>
+  popupFn: (preopenedPopup?: Window | null) => Promise<T>,
+  options: PasskeyRegistrationOptions = {}
 ): Promise<T> {
-  const preopenedPopup = maybePreopenPopup(action, openPasskeyPopupWindow);
-  const promptMode = await getPasskeyPromptMode(action);
+  const allowPopupFallback = options.allowPopupFallback ?? true;
+  const preopenedPopup = allowPopupFallback ? maybePreopenPopup(action, openPasskeyPopupWindow) : null;
+  const promptMode = allowPopupFallback ? await getPasskeyPromptMode(action) : 'inline';
   if (promptMode === 'popup') {
     return popupFn(preopenedPopup);
   }
@@ -44,7 +52,7 @@ async function runWithPromptMode<T>(
   try {
     return await inlineFn();
   } catch (error) {
-    if (shouldFallbackToPopup(error)) {
+    if (allowPopupFallback && shouldFallbackToPopup(error)) {
       return popupFn();
     }
     throw error;
@@ -97,12 +105,19 @@ async function registerPasskeyInline(
 
   const response = credential.response as AuthenticatorAttestationResponse;
   const { x, y } = extractP256PublicKey(response);
+  const authenticatorAttachment =
+    (
+      credential as PublicKeyCredential & {
+        authenticatorAttachment?: AuthenticatorAttachment | null;
+      }
+    ).authenticatorAttachment ?? null;
 
   return {
     credentialId: arrayBufferToBase64Url(credential.rawId),
     publicKeyX: bytesToHex(x),
     publicKeyY: bytesToHex(y),
     rpId,
+    authenticatorAttachment,
   };
 }
 

@@ -8,7 +8,7 @@ import {
   type StreamEventsRequest,
   type StreamEventsResponse,
   StreamEventsResponseSchema,
-} from "@thru/proto";
+} from "@thru/sdk/proto";
 import { describe, expect, test } from "vitest";
 import type { EventSource } from "../chain-client";
 import { createEventReplay } from "./event-replay";

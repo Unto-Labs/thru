@@ -51,6 +51,7 @@ types:
           type-ref:
             name: Pubkey
       - name: root_domain_name
+        format: text
         field-type:
           array:
             size:
@@ -81,6 +82,7 @@ types:
           type-ref:
             name: Pubkey
       - name: domain_name
+        format: text
         field-type:
           array:
             size:
@@ -141,6 +143,7 @@ types:
         field-type:
           primitive: u16
       - name: root_domain_name
+        format: text
         field-type:
           array:
             size:
@@ -187,6 +190,7 @@ types:
         field-type:
           primitive: u16
       - name: domain_name
+        format: text
         field-type:
           array:
             size:

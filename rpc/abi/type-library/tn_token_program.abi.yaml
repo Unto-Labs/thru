@@ -36,6 +36,7 @@ types:
       element-type:
         primitive: u8
 - name: TickerField
+  format: text
   kind:
     struct:
       packed: true

@@ -8,14 +8,14 @@ import {
   deriveWalletAddress,
   encodeCreateInstruction,
   encodeRegisterCredentialInstruction,
-} from '@thru/passkey-manager';
+} from '@thru/programs/passkey-manager';
 import {
   toThruAddress,
   getStateProof,
   trackTransaction,
   withSerializedFeePayer,
-} from './utils';
-import type { ThruClient } from './types';
+} from "./utils";
+import type { ThruClient } from "./types";
 
 export async function createPasskeyWallet(opts: {
   client: ThruClient;
@@ -27,9 +27,12 @@ export async function createPasskeyWallet(opts: {
   credentialId?: string;
   walletName?: string;
 }): Promise<{ walletAddress: string; credentialLookupAddress?: string }> {
-  const walletName = opts.walletName ?? 'default';
+  const walletName = opts.walletName ?? "default";
   const seed = await createWalletSeed(walletName, opts.pubkeyX, opts.pubkeyY);
-  const walletBytes = await deriveWalletAddress(seed, PASSKEY_MANAGER_PROGRAM_ADDRESS);
+  const walletBytes = await deriveWalletAddress(
+    seed,
+    PASSKEY_MANAGER_PROGRAM_ADDRESS,
+  );
   const walletAddress = toThruAddress(walletBytes);
 
   await withSerializedFeePayer(opts.adminPublicKey, async () => {
@@ -77,11 +80,13 @@ export async function createPasskeyWallet(opts: {
     await transaction.sign(opts.adminPrivateKey);
     const signature = await opts.client.transactions.send(transaction.toWire());
     const result = await trackTransaction(opts.client, signature, 60000);
-    if (result.status !== 'finalized') {
+    if (result.status !== "finalized") {
       throw new Error(
         `Wallet creation failed with status: ${result.status}${
-          result.errorCode !== undefined ? ` (error code: ${result.errorCode})` : ''
-        }`
+          result.errorCode !== undefined
+            ? ` (error code: ${result.errorCode})`
+            : ""
+        }`,
       );
     }
   });
@@ -91,8 +96,7 @@ export async function createPasskeyWallet(opts: {
     const credentialIdBytes = base64UrlToBytes(opts.credentialId);
     const lookupAddressBytes = await deriveCredentialLookupAddress(
       credentialIdBytes,
-      walletName,
-      PASSKEY_MANAGER_PROGRAM_ADDRESS
+      PASSKEY_MANAGER_PROGRAM_ADDRESS,
     );
     const lookupAddress = toThruAddress(lookupAddressBytes);
 
@@ -110,7 +114,7 @@ export async function createPasskeyWallet(opts: {
 
         if (lookupExists) return;
 
-        const credSeed = await createCredentialLookupSeed(credentialIdBytes, walletName);
+        const credSeed = await createCredentialLookupSeed(credentialIdBytes);
         const stateProof = await getStateProof(opts.client, lookupAddress);
         const accountCtx = buildAccountContext({
           walletAddress,
@@ -139,18 +143,22 @@ export async function createPasskeyWallet(opts: {
         });
 
         await transaction.sign(opts.adminPrivateKey);
-        const signature = await opts.client.transactions.send(transaction.toWire());
+        const signature = await opts.client.transactions.send(
+          transaction.toWire(),
+        );
         const result = await trackTransaction(opts.client, signature, 60000);
-        if (result.status !== 'finalized') {
+        if (result.status !== "finalized") {
           throw new Error(
             `Credential registration failed with status: ${result.status}${
-              result.errorCode !== undefined ? ` (error code: ${result.errorCode})` : ''
-            }`
+              result.errorCode !== undefined
+                ? ` (error code: ${result.errorCode})`
+                : ""
+            }`,
           );
         }
       });
     } catch (error) {
-      console.warn('Credential registration failed (non-fatal):', error);
+      console.warn("Credential registration failed (non-fatal):", error);
     }
   }
 

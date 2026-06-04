@@ -1,4 +1,4 @@
-import { bytesToHex } from '@thru/passkey-manager';
+import { bytesToHex } from '@thru/programs/passkey-manager';
 import { create } from 'zustand';
 import { classifyPasskeyError } from '../mobile/errors';
 import {
@@ -152,8 +152,9 @@ export function createPasskeyAuthStore<TExtra = Record<string, never>>(
 
       try {
         const tempId = `user-${Date.now()}`;
+        const passkeyLabel = resolvedAlias.trim() || 'Thru Wallet';
         const { credentialId, publicKeyX, publicKeyY, rpId } =
-          await registerPasskey(resolvedAlias, tempId, {
+          await registerPasskey(passkeyLabel, tempId, {
             rpId: config.rpId,
             rpName: config.rpName,
           });
@@ -167,6 +168,7 @@ export function createPasskeyAuthStore<TExtra = Record<string, never>>(
           publicKeyX: pubkeyXHex,
           publicKeyY: pubkeyYHex,
           rpId,
+          label: passkeyLabel,
           createdAt: now,
           lastUsedAt: now,
         });

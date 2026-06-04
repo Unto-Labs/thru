@@ -79,9 +79,16 @@ impl<'a> Parser<'a> {
         self.root_buffer = data.to_vec();
         self.root_type_name = resolved_type.name.clone();
 
-        let type_info = ReflectedType::from_resolved(resolved_type);
+        let type_info = self.reflected_type(resolved_type);
         let value = self.parse_value(data, resolved_type, &resolved_type.name)?;
         Ok(ReflectedValue::new(type_info, value))
+    }
+
+    fn reflected_type(&self, resolved_type: &ResolvedType) -> ReflectedType {
+        ReflectedType::from_resolved_with_format(
+            resolved_type,
+            self.resolver.format_for_type(&resolved_type.name).cloned(),
+        )
     }
 
     /* Parse a value from binary data */
@@ -155,10 +162,7 @@ impl<'a> Parser<'a> {
                 let value = result?;
                 Ok(Value::TypeRef {
                     target_name: target_name.clone(),
-                    value: Box::new(ReflectedValue::new(
-                        ReflectedType::from_resolved(target_type),
-                        value,
-                    )),
+                    value: Box::new(ReflectedValue::new(self.reflected_type(target_type), value)),
                 })
             }
         }
@@ -355,7 +359,7 @@ impl<'a> Parser<'a> {
                         let variant_data = &data[field_offset..field_offset + variant_size];
                         let variant_value =
                             self.parse_value(variant_data, &variant.variant_type, owner_name)?;
-                        let variant_type_info = ReflectedType::from_resolved(&variant.variant_type);
+                        let variant_type_info = self.reflected_type(&variant.variant_type);
                         let enum_value = Value::Enum {
                             variant_name: variant.name.clone(),
                             tag_value,
@@ -364,7 +368,7 @@ impl<'a> Parser<'a> {
                                 variant_value,
                             )),
                         };
-                        let enum_type_info = ReflectedType::from_resolved(&field.field_type);
+                        let enum_type_info = self.reflected_type(&field.field_type);
                         let enum_reflected = ReflectedValue::new(enum_type_info, enum_value);
                         parsed_fields.push((field.name.clone(), enum_reflected.clone()));
                         parsed_field_map.insert(field.name.clone(), enum_reflected);
@@ -466,7 +470,7 @@ impl<'a> Parser<'a> {
                 }
             };
 
-            let field_type_info = ReflectedType::from_resolved(&field.field_type);
+            let field_type_info = self.reflected_type(&field.field_type);
             let child_owner = match &field.field_type.kind {
                 ResolvedTypeKind::Struct { .. } => field.field_type.name.as_str(),
                 _ => owner_name,
@@ -521,7 +525,7 @@ impl<'a> Parser<'a> {
         let variant_data = &data[..variant_size];
         let variant_value =
             self.parse_value(variant_data, &variant.field_type, &variant.field_type.name)?;
-        let variant_type_info = ReflectedType::from_resolved(&variant.field_type);
+        let variant_type_info = self.reflected_type(&variant.field_type);
 
         Ok(Value::Union {
             variant_name: variant.name.clone(),
@@ -573,7 +577,7 @@ impl<'a> Parser<'a> {
             &variant.variant_type,
             &variant.variant_type.name,
         )?;
-        let variant_type_info = ReflectedType::from_resolved(&variant.variant_type);
+        let variant_type_info = self.reflected_type(&variant.variant_type);
 
         Ok(Value::Enum {
             variant_name: variant.name.clone(),
@@ -633,7 +637,7 @@ impl<'a> Parser<'a> {
         }
 
         let mut elements = Vec::new();
-        let element_type_info = ReflectedType::from_resolved(element_type);
+        let element_type_info = self.reflected_type(element_type);
 
         for i in 0..array_size {
             let element_offset = i * element_size;
@@ -667,7 +671,7 @@ impl<'a> Parser<'a> {
 
         let variant_value =
             self.parse_value(data, &variant.variant_type, &variant.variant_type.name)?;
-        let variant_type_info = ReflectedType::from_resolved(&variant.variant_type);
+        let variant_type_info = self.reflected_type(&variant.variant_type);
 
         Ok(Value::SizeDiscriminatedUnion {
             variant_name: variant.name.clone(),

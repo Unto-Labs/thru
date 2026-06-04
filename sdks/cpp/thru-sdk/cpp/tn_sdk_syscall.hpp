@@ -66,7 +66,7 @@ ulong tsys_account_create( ulong account_idx, const unsigned char seed[TN_SEED_S
 
 ulong tsys_account_create_ephemeral( ulong account_idx, const unsigned char seed[TN_SEED_SIZE] );
 
-ulong tsys_account_delete( ulong account_idx );
+ulong tsys_account_delete( ulong account_idx, const signature_t * signature = nullptr );
 
 ulong tsys_account_resize( ulong account_idx, ulong new_size );
 

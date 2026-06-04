@@ -31,18 +31,17 @@
     "lint": "eslint src/"
   },
   "dependencies": {
-    "@bufbuild/protobuf": "^2.9.0",
-    "@connectrpc/connect": "^2.1.0",
-    "@connectrpc/connect-node": "^2.1.0",
-    "@thru/proto": "workspace:*",
-    "ts-node": "^10.9.1"
+    "@bufbuild/protobuf": "^2.12.0",
+    "@connectrpc/connect": "^2.1.1",
+    "@connectrpc/connect-node": "^2.1.1",
+    "ts-node": "^10.9.2",
+    "@thru/sdk": "workspace:*"
   },
   "devDependencies": {
-    "@thru/helpers": "workspace:*",
-    "@types/node": "^20.11.0",
-    "tsup": "^8.1.0",
-    "tsx": "^4.7.0",
-    "typescript": "^5.3.3",
-    "vitest": "^1.2.0"
+    "@types/node": "^25.9.1",
+    "tsup": "^8.5.1",
+    "tsx": "^4.22.3",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.7"
   }
 }

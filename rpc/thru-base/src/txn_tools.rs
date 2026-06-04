@@ -180,6 +180,45 @@ impl TransactionBuilder {
         Ok(tx)
     }
 
+    /// Build EOA delete transaction for the EOA program (tn_eoa_program.c)
+    ///
+    /// Calls the DELETE_ACCOUNT instruction, which deletes an unused EOA
+    /// (balance == 0, nonce == 0) after the runtime verifies `signature` over
+    /// the canonical delete message. The signature must be produced by signing
+    /// [`build_eoa_delete_message`] (with the same `chain_id`, fee payer, and
+    /// EOA pubkey) using the EOA's private key.
+    ///
+    /// Account layout: `[0: fee_payer, 1: program, 2: eoa_account]`. The EOA
+    /// being deleted cannot be the fee payer, since paying a fee bumps the
+    /// nonce and deletion requires `nonce == 0`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn build_delete_account(
+        fee_payer: TnPubkey,
+        program: TnPubkey,
+        eoa_account: TnPubkey,
+        signature: &[u8; 64],
+        chain_id: u16,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        // Account layout: [0: fee_payer, 1: program, 2: eoa_account]
+        let eoa_account_idx = 2u16; // eoa_account added via add_rw_account
+        let instruction_data = build_delete_account_instruction(eoa_account_idx, signature)?;
+
+        let tx = Transaction::new(fee_payer, program, fee, nonce)
+            .with_start_slot(start_slot)
+            .with_chain_id(chain_id)
+            .add_rw_account(eoa_account)
+            .with_instructions(instruction_data)
+            .with_expiry_after(100)
+            .with_compute_units(10_000)
+            .with_memory_units(10_000)
+            .with_state_units(10_000);
+
+        Ok(tx)
+    }
+
     /// Build regular account creation transaction (with optional state proof)
     pub fn build_create_account(
         fee_payer: TnPubkey,
@@ -373,6 +412,60 @@ fn build_transfer_instruction(
 
     // - to_account_idx (u16, 2 bytes little-endian)
     instruction.extend_from_slice(&to_account_idx.to_le_bytes());
+
+    Ok(instruction)
+}
+
+/// ASCII domain-separation tag for the EOA delete authorization message.
+pub const EOA_DELETE_MSG_TAG: &[u8; 16] = b"tn_eoa_delete_v1";
+
+/// Total size of the EOA delete authorization message: tag(16) + chain_id(2)
+/// + fee_payer(32) + eoa(32).
+pub const EOA_DELETE_MSG_SZ: usize = 16 + 2 + 32 + 32;
+
+/// Build the canonical domain-separated EOA delete authorization message:
+/// `"tn_eoa_delete_v1" || chain_id || fee_payer_pubkey || eoa_pubkey`.
+///
+/// `chain_id` is encoded little-endian. The returned bytes must be
+/// byte-identical to what the runtime constructs in
+/// `tn_vm_syscall_account_delete` and to the Go/TS builders. The EOA's
+/// private key signs this message; the resulting signature is passed to
+/// [`TransactionBuilder::build_delete_account`].
+pub fn build_eoa_delete_message(
+    chain_id: u16,
+    fee_payer: &TnPubkey,
+    eoa: &TnPubkey,
+) -> [u8; EOA_DELETE_MSG_SZ] {
+    let mut msg = [0u8; EOA_DELETE_MSG_SZ];
+    msg[0..16].copy_from_slice(EOA_DELETE_MSG_TAG);
+    msg[16..18].copy_from_slice(&chain_id.to_le_bytes());
+    msg[18..50].copy_from_slice(fee_payer);
+    msg[50..82].copy_from_slice(eoa);
+    msg
+}
+
+/// Build delete-account instruction for the EOA program (tn_eoa_program.c)
+///
+/// Instruction format (matching tn_eoa_instruction_t and tn_eoa_delete_account_args_t):
+/// - Discriminant: u32 (4 bytes) = TN_EOA_INSTRUCTION_DELETE_ACCOUNT (2)
+/// - EOA account index: u16 (2 bytes)
+/// - Signature: 64 bytes
+/// Total: 70 bytes
+fn build_delete_account_instruction(
+    eoa_account_idx: u16,
+    signature: &[u8; 64],
+) -> Result<Vec<u8>> {
+    let mut instruction = Vec::with_capacity(4 + 2 + 64);
+
+    // TN_EOA_INSTRUCTION_DELETE_ACCOUNT = 2 (u32, 4 bytes little-endian)
+    instruction.extend_from_slice(&2u32.to_le_bytes());
+
+    // tn_eoa_delete_account_args_t structure:
+    // - eoa_account_idx (u16, 2 bytes little-endian)
+    instruction.extend_from_slice(&eoa_account_idx.to_le_bytes());
+
+    // - signature (64 bytes)
+    instruction.extend_from_slice(signature);
 
     Ok(instruction)
 }
@@ -652,6 +745,57 @@ mod tests {
         // Check to_account_idx
         let parsed_to = u16::from_le_bytes([instruction[14], instruction[15]]);
         assert_eq!(parsed_to, to_idx, "To index should match input");
+    }
+
+    #[test]
+    fn test_eoa_delete_instruction_format() {
+        // Test that the delete instruction matches the EOA program's expected format
+        let eoa_idx = 2u16;
+        let signature = [7u8; 64];
+
+        let instruction = build_delete_account_instruction(eoa_idx, &signature).unwrap();
+
+        // Expected format (matching tn_eoa_program.c):
+        // - Discriminant: u32 (4 bytes) = 2
+        // - EOA account index: u16 (2 bytes)
+        // - Signature: 64 bytes
+        // Total: 70 bytes
+        assert_eq!(instruction.len(), 70, "Instruction should be 70 bytes");
+
+        // Check discriminant (TN_EOA_INSTRUCTION_DELETE_ACCOUNT = 2)
+        let discriminant = u32::from_le_bytes([
+            instruction[0],
+            instruction[1],
+            instruction[2],
+            instruction[3],
+        ]);
+        assert_eq!(discriminant, 2, "Discriminant should be 2 for DELETE_ACCOUNT");
+
+        // Check eoa_account_idx
+        let parsed_idx = u16::from_le_bytes([instruction[4], instruction[5]]);
+        assert_eq!(parsed_idx, eoa_idx, "EOA index should match input");
+
+        // Check signature
+        assert_eq!(&instruction[6..70], &signature, "Signature should match input");
+    }
+
+    #[test]
+    fn test_eoa_delete_message_layout() {
+        // The canonical delete message must be byte-identical to the runtime:
+        // "tn_eoa_delete_v1" || chain_id(LE) || fee_payer || eoa  (82 bytes).
+        let chain_id = 0x0102u16;
+        let fee_payer = [0xAAu8; 32];
+        let eoa = [0xBBu8; 32];
+
+        let msg = build_eoa_delete_message(chain_id, &fee_payer, &eoa);
+
+        assert_eq!(msg.len(), 82, "Message should be 82 bytes");
+        assert_eq!(&msg[0..16], b"tn_eoa_delete_v1", "Tag mismatch");
+        // chain_id little-endian: 0x0102 -> [0x02, 0x01]
+        assert_eq!(msg[16], 0x02, "chain_id low byte");
+        assert_eq!(msg[17], 0x01, "chain_id high byte");
+        assert_eq!(&msg[18..50], &fee_payer, "Fee payer mismatch");
+        assert_eq!(&msg[50..82], &eoa, "EOA pubkey mismatch");
     }
 
     #[test]

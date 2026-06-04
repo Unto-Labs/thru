@@ -2,8 +2,8 @@
 
 use super::helpers::{escape_rust_keyword, format_expr_to_rust};
 use super::ir_helpers::{
-    collect_dynamic_param_bindings, extract_payload_field_name, normalize_accessor_path,
-    payload_field_offset, resolve_param_binding, sanitize_param_name, DynamicBinding,
+    DynamicBinding, collect_dynamic_param_bindings, extract_payload_field_name,
+    normalize_accessor_path, payload_field_offset, resolve_param_binding, sanitize_param_name,
 };
 use crate::abi::expr::ExprKind;
 use crate::abi::resolved::{ResolvedField, ResolvedType, ResolvedTypeKind};

@@ -24,7 +24,9 @@ impl WellKnownType for DateTimeHandler {
         let hours = get_field(fields, "hours").and_then(extract_u8_field);
         let minutes = get_field(fields, "minutes").and_then(extract_u8_field);
         let seconds = get_field(fields, "seconds").and_then(extract_u8_field);
-        let nanos = get_field(fields, "nanos").and_then(extract_i32).unwrap_or(0);
+        let nanos = get_field(fields, "nanos")
+            .and_then(extract_i32)
+            .unwrap_or(0);
         let utc_offset_seconds = get_field(fields, "utc_offset_seconds")
             .and_then(extract_i32)
             .unwrap_or(0);
@@ -38,17 +40,20 @@ impl WellKnownType for DateTimeHandler {
                 None => return WellKnownResult::None,
             };
 
-            let dt = match offset.with_ymd_and_hms(y, mo as u32, d as u32, h as u32, mi as u32, s as u32) {
+            let dt = match offset
+                .with_ymd_and_hms(y, mo as u32, d as u32, h as u32, mi as u32, s as u32)
+            {
                 chrono::LocalResult::Single(dt) => dt,
                 _ => return WellKnownResult::None,
             };
 
-            let dt_with_nanos = dt
-                .with_nanosecond(nanos as u32)
-                .unwrap_or(dt);
+            let dt_with_nanos = dt.with_nanosecond(nanos as u32).unwrap_or(dt);
 
             let mut enrichment = Map::new();
-            enrichment.insert("iso8601".to_string(), JsonValue::String(dt_with_nanos.to_rfc3339()));
+            enrichment.insert(
+                "iso8601".to_string(),
+                JsonValue::String(dt_with_nanos.to_rfc3339()),
+            );
             return WellKnownResult::EnrichFields(enrichment);
         }
 

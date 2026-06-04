@@ -1,4 +1,4 @@
-import { create, type PartialMessage } from "@bufbuild/protobuf";
+import { create } from "@bufbuild/protobuf";
 import {
   type Filter,
   type ListTransactionsRequest,
@@ -9,7 +9,7 @@ import {
   type StreamTransactionsResponse,
   StreamTransactionsResponseSchema,
   type Transaction,
-} from "@thru/proto";
+} from "@thru/sdk/proto";
 import type { TransactionSource } from "../chain-client";
 import type { Slot } from "../types";
 
@@ -57,7 +57,7 @@ export class SimulatedTransactionSource implements TransactionSource {
   }
 
   async listTransactions(
-    request: PartialMessage<ListTransactionsRequest>,
+    request: Partial<ListTransactionsRequest>,
   ): Promise<ListTransactionsResponse> {
     await delay(this.pageDelayMs);
     const minSlot = extractMinSlot(request.filter);
@@ -78,7 +78,7 @@ export class SimulatedTransactionSource implements TransactionSource {
   }
 
   streamTransactions(
-    request: PartialMessage<StreamTransactionsRequest>,
+    request: Partial<StreamTransactionsRequest>,
   ): AsyncIterable<StreamTransactionsResponse> {
     const minSlot = extractMinSlot(request.filter);
     this.streamStartSlots.push(minSlot);
@@ -114,7 +114,7 @@ function extractSlot(tx: Transaction): Slot {
   return tx.slot ?? 0n;
 }
 
-function extractMinSlot(filter?: PartialMessage<Filter>): Slot {
+function extractMinSlot(filter?: Partial<Filter>): Slot {
   const param = filter?.params?.start_slot;
   if (param?.kind?.case === "uintValue") return param.kind.value;
   const expr = filter?.expression ?? "";

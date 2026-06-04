@@ -67,7 +67,7 @@ export function validateParsedData<TSchema extends SchemaDefinition>(
     return { success: true, data: result.data };
   }
 
-  const errorMessages = result.error.errors
+  const errorMessages = result.error.issues
     .map((e) => `  - ${e.path.join(".")}: ${e.message}`)
     .join("\n");
 

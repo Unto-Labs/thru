@@ -1,0 +1,18 @@
+{
+  "extends": "../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": ".",
+    "baseUrl": ".",
+    "paths": {
+      "@thru/sdk": ["./thru-ts-client-sdk/sdk.ts"],
+      "@thru/sdk/client": ["./thru-ts-client-sdk/client.ts"],
+      "@thru/sdk/proto": ["./src/proto/index.ts"],
+      "@thru/sdk/helpers": ["./src/helpers/index.ts"],
+      "@thru/sdk/crypto": ["./src/crypto/index.ts"],
+      "@thru/sdk/abi": ["./src/abi/index.ts"]
+    }
+  },
+  "include": ["thru-ts-client-sdk/**/*", "src/**/*"],
+  "exclude": ["node_modules", "dist", "thru-ts-client-sdk/**/__tests__/**", "src/**/*.test.ts"]
+}

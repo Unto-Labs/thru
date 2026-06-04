@@ -8,7 +8,7 @@
 import { eq, sql } from "drizzle-orm";
 import type { ChainClientFactory } from "@thru/replay";
 import { createAccountsByOwnerReplay, AccountView } from "@thru/replay";
-import { encodeAddress } from "@thru/helpers";
+import { encodeAddress } from "@thru/sdk/helpers";
 import type { DatabaseClient } from "../schema/types";
 import { validateParsedData } from "../schema/validation";
 import { getCheckpoint, updateCheckpoint } from "../checkpoint";

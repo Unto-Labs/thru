@@ -12,6 +12,8 @@ export type {
   PasskeyClientCapabilities,
   PasskeyPopupContext,
   PasskeyPopupAccount,
+  PasskeyStoredSigningOptions,
+  PasskeyRegistrationOptions,
 } from './web';
 
 /**
@@ -19,6 +21,7 @@ export type {
  */
 export {
   registerPasskey,
+  createDistinctPasskeyLabel,
   signWithPasskey,
   signWithStoredPasskey,
   signWithDiscoverablePasskey,
@@ -45,6 +48,7 @@ export {
   bytesEqual,
   compareBytes,
   uniqueAccounts,
+  type DistinctPasskeyLabelOptions,
   type PasskeyPromptAction,
 } from './web';
 

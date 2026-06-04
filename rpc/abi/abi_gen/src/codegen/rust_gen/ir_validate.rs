@@ -98,8 +98,8 @@ impl<'a> IrValidateEmitter<'a> {
         _indent: usize,
     ) -> Result<String, IrValidateError> {
         /* Jagged arrays require iteration over actual data for validation.
-           IR helper functions are free functions without access to instance data,
-           so we can't generate validation IR for types containing jagged arrays. */
+        IR helper functions are free functions without access to instance data,
+        so we can't generate validation IR for types containing jagged arrays. */
         Err(IrValidateError::UnsupportedNode)
     }
 

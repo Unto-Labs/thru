@@ -112,18 +112,16 @@ mod tests {
 
     #[test]
     fn encode_thru_address_mint_bytes() {
-        let bytes = hex_to_bytes(
-            "906b582852c5940dfe2664bc77717eb62e05e9c5b5b5c8d59cd4756d5c3dd771",
-        );
+        let bytes =
+            hex_to_bytes("906b582852c5940dfe2664bc77717eb62e05e9c5b5b5c8d59cd4756d5c3dd771");
         let address = encode_thru_address(&bytes).expect("should encode");
         assert_eq!(address, "takGtYKFLFlA3-JmS8d3F-ti4F6cW1tcjVnNR1bVw913Gu");
     }
 
     #[test]
     fn encode_thru_address_owner_bytes() {
-        let bytes = hex_to_bytes(
-            "ace7124bd312557a711a15c92d38a2d7e0d2fbf6ede3092df4a543d0a00122ae",
-        );
+        let bytes =
+            hex_to_bytes("ace7124bd312557a711a15c92d38a2d7e0d2fbf6ede3092df4a543d0a00122ae");
         let address = encode_thru_address(&bytes).expect("should encode");
         assert_eq!(address, "tarOcSS9MSVXpxGhXJLTii1-DS-_bt4wkt9KVD0KABIq6x");
     }

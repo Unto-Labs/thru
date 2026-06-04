@@ -964,6 +964,7 @@ mod tests {
         let mut resolver = TypeResolver::new();
         resolver.add_typedef(TypeDef {
             name: "U32".into(),
+            format: None,
             kind: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
         });
         resolver.resolve_all().unwrap();
@@ -985,10 +986,12 @@ mod tests {
         let mut resolver = TypeResolver::new();
         resolver.add_typedef(TypeDef {
             name: "BaseType".into(),
+            format: None,
             kind: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U16)),
         });
         resolver.add_typedef(TypeDef {
             name: "Ptr".into(),
+            format: None,
             kind: TypeKind::TypeRef(crate::abi::types::TypeRefType {
                 name: "BaseType".into(),
                 package: None,
@@ -1011,15 +1014,18 @@ mod tests {
         let mut resolver = TypeResolver::new();
         resolver.add_typedef(TypeDef {
             name: "VarStruct".into(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
                         name: "len".into(),
+                        format: None,
                         field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
                     },
                     StructField {
                         name: "data".into(),
+                        format: None,
                         field_type: TypeKind::Array(ArrayType {
                             container_attributes: Default::default(),
                             size: ExprKind::FieldRef(FieldRefExpr {
@@ -1085,10 +1091,12 @@ mod tests {
         let mut resolver = TypeResolver::new();
         resolver.add_typedef(TypeDef {
             name: "VariantPayload".into(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: Default::default(),
                 fields: vec![StructField {
                     name: "value".into(),
+                    format: None,
                     field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U16)),
                 }],
             }),
@@ -1096,15 +1104,18 @@ mod tests {
 
         resolver.add_typedef(TypeDef {
             name: "EnumParent".into(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: Default::default(),
                 fields: vec![
                     StructField {
                         name: "tag".into(),
+                        format: None,
                         field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U8)),
                     },
                     StructField {
                         name: "payload".into(),
+                        format: None,
                         field_type: TypeKind::Enum(EnumType {
                             container_attributes: Default::default(),
                             tag_ref: ExprKind::FieldRef(FieldRefExpr {
@@ -1145,6 +1156,7 @@ mod tests {
         let mut resolver = TypeResolver::new();
         resolver.add_typedef(TypeDef {
             name: "SimpleEnum".into(),
+            format: None,
             kind: TypeKind::Enum(EnumType {
                 container_attributes: Default::default(),
                 tag_ref: ExprKind::FieldRef(FieldRefExpr {
@@ -1202,6 +1214,7 @@ mod tests {
         let mut resolver = TypeResolver::new();
         resolver.add_typedef(TypeDef {
             name: "FamEnum".into(),
+            format: None,
             kind: TypeKind::Enum(EnumType {
                 container_attributes: Default::default(),
                 tag_ref: ExprKind::FieldRef(FieldRefExpr {
@@ -1216,12 +1229,14 @@ mod tests {
                             fields: vec![
                                 StructField {
                                     name: "len".into(),
+                                    format: None,
                                     field_type: TypeKind::Primitive(PrimitiveType::Integral(
                                         IntegralType::U32,
                                     )),
                                 },
                                 StructField {
                                     name: "payload".into(),
+                                    format: None,
                                     field_type: TypeKind::Array(ArrayType {
                                         container_attributes: Default::default(),
                                         size: ExprKind::FieldRef(FieldRefExpr {
@@ -1275,6 +1290,7 @@ mod tests {
         let mut resolver = TypeResolver::new();
         resolver.add_typedef(TypeDef {
             name: "PayloadUnion".into(),
+            format: None,
             kind: TypeKind::Union(UnionType {
                 container_attributes: Default::default(),
                 variants: vec![
@@ -1285,12 +1301,14 @@ mod tests {
                             fields: vec![
                                 StructField {
                                     name: "len".into(),
+                                    format: None,
                                     field_type: TypeKind::Primitive(PrimitiveType::Integral(
                                         IntegralType::U32,
                                     )),
                                 },
                                 StructField {
                                     name: "data".into(),
+                                    format: None,
                                     field_type: TypeKind::Array(ArrayType {
                                         container_attributes: Default::default(),
                                         size: ExprKind::FieldRef(FieldRefExpr {
@@ -1336,6 +1354,7 @@ mod tests {
         let mut resolver = TypeResolver::new();
         resolver.add_typedef(TypeDef {
             name: "DynArray".into(),
+            format: None,
             kind: TypeKind::Array(ArrayType {
                 container_attributes: Default::default(),
                 size: ExprKind::FieldRef(FieldRefExpr {
@@ -1366,6 +1385,7 @@ mod tests {
         let mut resolver = TypeResolver::new();
         resolver.add_typedef(TypeDef {
             name: "Matrix".into(),
+            format: None,
             kind: TypeKind::Array(ArrayType {
                 container_attributes: Default::default(),
                 size: ExprKind::FieldRef(FieldRefExpr {
@@ -1443,10 +1463,12 @@ mod tests {
         let mut resolver = TypeResolver::new();
         resolver.add_typedef(TypeDef {
             name: "A".into(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: Default::default(),
                 fields: vec![StructField {
                     name: "b".into(),
+                    format: None,
                     field_type: TypeKind::TypeRef(TypeRefType {
                         name: "B".into(),
                         package: None,
@@ -1457,10 +1479,12 @@ mod tests {
         });
         resolver.add_typedef(TypeDef {
             name: "B".into(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: Default::default(),
                 fields: vec![StructField {
                     name: "a".into(),
+                    format: None,
                     field_type: TypeKind::TypeRef(TypeRefType {
                         name: "A".into(),
                         package: None,
@@ -1486,16 +1510,19 @@ mod tests {
         let mut resolver = TypeResolver::new();
         resolver.add_typedef(TypeDef {
             name: "Inner".into(),
+            format: None,
             kind: TypeKind::Struct(StructType {
                 container_attributes: Default::default(),
                 fields: vec![StructField {
                     name: "value".into(),
+                    format: None,
                     field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U32)),
                 }],
             }),
         });
         resolver.add_typedef(TypeDef {
             name: "InnerAlias".into(),
+            format: None,
             kind: TypeKind::TypeRef(crate::abi::types::TypeRefType {
                 name: "Inner".into(),
                 package: None,
@@ -1527,21 +1554,25 @@ mod tests {
             match name {
                 "Leaf" => resolver.add_typedef(TypeDef {
                     name: "Leaf".into(),
+                    format: None,
                     kind: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U16)),
                 }),
                 "Node" => resolver.add_typedef(TypeDef {
                     name: "Node".into(),
+                    format: None,
                     kind: TypeKind::Struct(StructType {
                         container_attributes: Default::default(),
                         fields: vec![
                             StructField {
                                 name: "len".into(),
+                                format: None,
                                 field_type: TypeKind::Primitive(PrimitiveType::Integral(
                                     IntegralType::U8,
                                 )),
                             },
                             StructField {
                                 name: "payload".into(),
+                                format: None,
                                 field_type: TypeKind::Array(ArrayType {
                                     container_attributes: Default::default(),
                                     size: ExprKind::FieldRef(FieldRefExpr {
@@ -1588,6 +1619,7 @@ mod tests {
         let mut resolver = TypeResolver::new();
         resolver.add_typedef(TypeDef {
             name: "Payload".into(),
+            format: None,
             kind: TypeKind::SizeDiscriminatedUnion(SizeDiscriminatedUnionType {
                 container_attributes: Default::default(),
                 variants: vec![

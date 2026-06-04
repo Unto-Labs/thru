@@ -6,7 +6,9 @@
 
 use abi_gen::abi::file::AbiFile;
 use abi_gen::abi::resolved::{ResolvedType, TypeResolver};
-use abi_gen::codegen::rust::{RustCodeGenerator, RustCodeGeneratorOptions, get_runtime_module_content};
+use abi_gen::codegen::rust::{
+    RustCodeGenerator, RustCodeGeneratorOptions, get_runtime_module_content,
+};
 use std::fs;
 use std::path::Path;
 use std::process::Command;
@@ -1140,7 +1142,7 @@ types:
 #[test]
 fn test_rust_generated_code_has_no_todo_placeholders() {
     /* Test that generated code does not contain TODO placeholders
-       This mirrors TypeScript's test_ts_generated_code_has_no_todo_placeholders */
+    This mirrors TypeScript's test_ts_generated_code_has_no_todo_placeholders */
     let temp_dir = std::env::temp_dir().join("abi_rust_no_todo_test");
     let _ = fs::create_dir_all(&temp_dir);
 
@@ -1447,7 +1449,7 @@ fn test_rust_fam_builder_generation() {
     let _ = fs::create_dir_all(&temp_dir);
 
     /* Note: Field name 'length' used instead of 'payload_len' to avoid
-       naming conflict with the generated payload_len() accessor method */
+    naming conflict with the generated payload_len() accessor method */
     let abi_content = r#"
 abi:
   package: "test.fam_builder"
@@ -1747,8 +1749,13 @@ fn test_builder_build_into() {
 }
 "#;
 
-    compile_and_run_rust_tests(&types_code, &functions_code, test_code, "roundtrip_const_struct")
-        .expect("Const struct builder roundtrip tests should pass");
+    compile_and_run_rust_tests(
+        &types_code,
+        &functions_code,
+        test_code,
+        "roundtrip_const_struct",
+    )
+    .expect("Const struct builder roundtrip tests should pass");
 
     /* Clean up */
     let _ = fs::remove_dir_all(&temp_dir);
@@ -1761,7 +1768,8 @@ fn test_rust_size_discriminated_union_compiles() {
     fs::create_dir_all(&temp_dir).expect("Failed to create temp dir");
 
     /* Use the compliance test SDU ABI */
-    let abi_path = Path::new("tests/compliance_tests/abi_definitions/size_discriminated_unions.abi.yaml");
+    let abi_path =
+        Path::new("tests/compliance_tests/abi_definitions/size_discriminated_unions.abi.yaml");
 
     if !abi_path.exists() {
         eprintln!("Warning: size_discriminated_unions.abi.yaml not found, skipping test");

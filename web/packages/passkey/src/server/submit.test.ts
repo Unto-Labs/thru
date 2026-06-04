@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AccountContext } from '@thru/passkey-manager';
+import type { AccountContext } from '@thru/programs/passkey-manager';
 import type { ThruClient } from './types';
 
-vi.mock('@thru/passkey-manager', () => ({
+vi.mock('@thru/programs/passkey-manager', () => ({
   PASSKEY_MANAGER_PROGRAM_ADDRESS: 'passkey-program',
   concatenateInstructions: (instructions: Uint8Array[]) => new Uint8Array(instructions.flatMap((ix) => Array.from(ix))),
   encodeValidateInstruction: () => new Uint8Array([1, 2]),

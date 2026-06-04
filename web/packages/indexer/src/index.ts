@@ -10,7 +10,6 @@
  *   defineAccountStream,
  *   t,
  *   Indexer,
- *   mountStreamRoutes,
  *   checkpointTable,
  * } from "@thru/indexer";
  * ```
@@ -60,26 +59,6 @@ export {
   getAllCheckpoints,
   getSchemaExports,
 } from "./checkpoint";
-
-// ============================================================
-// API Generation
-// ============================================================
-
-export { mountStreamRoutes, type MountRoutesOptions } from "./api";
-export { generateSchemas, type GeneratedSchemas } from "./api";
-export {
-  paginationQuerySchema,
-  paginationResponseSchema,
-  dataResponse,
-  listResponse,
-  errorSchema,
-  paginate,
-  parseCursor,
-  type PaginationQuery,
-  type PaginationResponse,
-  type PaginationResult,
-  type ErrorResponse,
-} from "./api";
 
 // ============================================================
 // Runtime

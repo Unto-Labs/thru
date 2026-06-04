@@ -8,13 +8,13 @@
  * 2. FULL view - should return address + metadata + data
  * 3. Filter by last_updated_slot - for resumable backfill
  */
-import { decodeAddress, encodeAddress } from "@thru/helpers";
+import { decodeAddress, encodeAddress } from "@thru/sdk/helpers";
 import {
   AccountView,
   FilterSchema,
   FilterParamValueSchema,
   PageRequestSchema,
-} from "@thru/proto";
+} from "@thru/sdk/proto";
 import { create } from "@bufbuild/protobuf";
 import { ChainClient } from "../src";
 
