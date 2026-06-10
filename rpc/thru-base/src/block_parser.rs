@@ -49,7 +49,8 @@ pub struct TnBlockHeader {
 #[derive(Clone, Copy, Debug)]
 pub struct TnBlockHeaderBody {
     pub block_version: u8,
-    pub padding: [u8; 7],
+    pub padding: [u8; 5],
+    pub chain_id: u16,
     pub block_producer: FdPubkey,
     pub bond_amount_lock_up: u64,
     pub expiry_timestamp: u64,
@@ -539,10 +540,13 @@ impl BlockParser {
         let signature_size = txn_lib::TN_TXN_SIGNATURE_SZ;
         let min_txn_size = header_size + signature_size;
         if tx_data.len() < min_txn_size {
-            return Err(BlockParseError::AccountExtractionFailed(
-                format!("Transaction too small: {} bytes, need at least {} (header={}, signature={})",
-                    tx_data.len(), min_txn_size, header_size, signature_size),
-            ));
+            return Err(BlockParseError::AccountExtractionFailed(format!(
+                "Transaction too small: {} bytes, need at least {} (header={}, signature={})",
+                tx_data.len(),
+                min_txn_size,
+                header_size,
+                signature_size
+            )));
         }
 
         debug!(
@@ -633,6 +637,32 @@ impl BlockParser {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_block_header_body_chain_id_layout() {
+        let body = TnBlockHeaderBody {
+            block_version: 1,
+            padding: [0; 5],
+            chain_id: 0x1234,
+            block_producer: [0; 32],
+            bond_amount_lock_up: 0,
+            expiry_timestamp: 0,
+            start_slot: 0,
+            expiry_after: 0,
+            max_block_size: 0,
+            max_compute_units: 0,
+            max_state_units: 0,
+            reserved: [0; 4],
+            weight_slot: 0,
+            block_time_ns: 0,
+        };
+
+        let base = &body as *const _ as usize;
+        let chain_id = &body.chain_id as *const _ as usize;
+        assert_eq!(chain_id - base, 6);
+        assert_eq!(body.chain_id, 0x1234);
+        assert_eq!(std::mem::size_of::<TnBlockHeaderBody>(), 104);
+    }
 
     #[test]
     fn test_extract_transaction_signature() {

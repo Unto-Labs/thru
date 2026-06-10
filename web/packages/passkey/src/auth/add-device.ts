@@ -4,7 +4,8 @@
    step can reuse the exact same flow.
 
    Builds the on-chain transaction:
-     VALIDATE(existingAuthority) + ADD_AUTHORITY(newPasskey) [+ REGISTER_CREDENTIAL]
+     VALIDATE(existingAuthority -> ADD_AUTHORITY(newPasskey))
+     or VALIDATE(existingAuthority -> multicall[ADD_AUTHORITY, REGISTER_CREDENTIAL])
    asks the caller's existing passkey to sign the challenge, then asks
    the caller's wallet signer to sign the assembled transaction, sends
    it, and returns the result. */
@@ -12,9 +13,9 @@
 import {
   type Authority,
   buildAccountContext,
-  concatenateInstructions,
   createValidateChallenge,
   createCredentialLookupSeed,
+  decodeAddress,
   deriveWalletAddress,
   encodeAddAuthorityInstruction,
   encodeRegisterCredentialInstruction,
@@ -23,6 +24,10 @@ import {
   type ParsedAuthority,
   type WalletSigner,
 } from "@thru/programs/passkey-manager";
+import {
+  MULTICALL_PROGRAM_PUBKEY,
+  buildMulticallInstruction,
+} from "@thru/programs/multicall";
 
 /** Minimal shape required from a passkey signer. Both web's
     `signWithDiscoverablePasskey`/`signWithPasskey` and mobile's
@@ -125,17 +130,14 @@ export async function addDeviceToAccount(
   /* The new authority will land at the next free slot. */
   const newAuthorityIdx = parsed.authorities.length;
 
-  /* Build the instruction sequence after the VALIDATE. */
-  const addAuthorityInstruction = encodeAddAuthorityInstruction({
-    authority: params.newAuthority,
-  });
-
-  let trailingInstructionData = addAuthorityInstruction;
   let readWriteAccounts: Uint8Array[] = [];
+  let lookupSeed: Uint8Array | undefined;
+  let lookupAddressBytes: Uint8Array | undefined;
+  let lookupProof: Uint8Array | undefined;
 
   if (params.credentialId) {
-    const lookupSeed = await createCredentialLookupSeed(params.credentialId);
-    const lookupAddressBytes = await deriveWalletAddress(
+    lookupSeed = await createCredentialLookupSeed(params.credentialId);
+    lookupAddressBytes = await deriveWalletAddress(
       lookupSeed,
       params.programAddress,
     );
@@ -145,39 +147,61 @@ export async function addDeviceToAccount(
       proofType: 1 /* StateProofType.CREATING */,
       address: lookupAddressBytes,
     });
+    lookupProof = proofResult.proof;
+    readWriteAccounts = [lookupAddressBytes];
+  }
 
-    const ctx = buildAccountContext({
-      walletAddress: params.walletAddress,
-      readWriteAccounts: [lookupAddressBytes],
-      readOnlyAccounts: [],
-    });
+  const ctx = buildAccountContext({
+    walletAddress: params.walletAddress,
+    readWriteAccounts,
+    readOnlyAccounts: params.credentialId ? [MULTICALL_PROGRAM_PUBKEY] : [],
+    programAddress: params.programAddress,
+  });
+
+  const passkeyProgramPubkey = decodeAddress(params.programAddress);
+  const addAuthorityInstruction = encodeAddAuthorityInstruction({
+    walletAccountIdx: ctx.walletAccountIdx,
+    authority: params.newAuthority,
+  });
+
+  let targetProgramIdx = ctx.getAccountIndex(passkeyProgramPubkey);
+  let targetInstructionData = addAuthorityInstruction;
+
+  if (params.credentialId) {
+    if (!lookupSeed || !lookupAddressBytes || !lookupProof) {
+      throw new Error("Credential lookup proof data missing");
+    }
 
     const registerCredentialInstruction = encodeRegisterCredentialInstruction({
       walletAccountIdx: ctx.walletAccountIdx,
       lookupAccountIdx: ctx.getAccountIndex(lookupAddressBytes),
       seed: lookupSeed,
-      stateProof: proofResult.proof,
+      stateProof: lookupProof,
     });
 
-    trailingInstructionData = concatenateInstructions([
-      addAuthorityInstruction,
-      registerCredentialInstruction,
+    targetProgramIdx = ctx.getAccountIndex(MULTICALL_PROGRAM_PUBKEY);
+    targetInstructionData = buildMulticallInstruction([
+      {
+        programIdx: ctx.getAccountIndex(passkeyProgramPubkey),
+        instructionData: addAuthorityInstruction,
+      },
+      {
+        programIdx: ctx.getAccountIndex(passkeyProgramPubkey),
+        instructionData: registerCredentialInstruction,
+      },
     ]);
-    readWriteAccounts = [lookupAddressBytes];
   }
 
-  /* Build the VALIDATE challenge over (nonce, account_addresses,
-     trailing_instruction_data) and ask the caller's passkey to sign. */
-  const ctx = buildAccountContext({
-    walletAddress: params.walletAddress,
-    readWriteAccounts,
-    readOnlyAccounts: [],
-  });
-
+  /* Build the VALIDATE challenge over the target CPI and ask the caller's passkey to sign. */
   const challenge = await createValidateChallenge(
     parsed.nonce,
     ctx.accountAddresses,
-    trailingInstructionData,
+    ctx.walletAccountIdx,
+    params.authIdx,
+    {
+      programIdx: targetProgramIdx,
+      instructionData: targetInstructionData,
+    },
   );
 
   status("Waiting for passkey approval...");
@@ -186,27 +210,26 @@ export async function addDeviceToAccount(
   const validateInstruction = encodeValidateInstruction({
     walletAccountIdx: ctx.walletAccountIdx,
     authIdx: params.authIdx,
+    targetInstruction: {
+      programIdx: targetProgramIdx,
+      instructionData: targetInstructionData,
+    },
     signatureR: signature.signatureR,
     signatureS: signature.signatureS,
     authenticatorData: signature.authenticatorData,
     clientDataJSON: signature.clientDataJSON,
   });
 
-  const instructionData = concatenateInstructions([
-    validateInstruction,
-    trailingInstructionData,
-  ]);
-
   status("Sending transaction...");
   const result = await params.executor({
     thru: params.thru,
     walletSigner: params.walletSigner,
-    instructionData,
+    instructionData: validateInstruction,
     readWriteAddresses: ctx.readWriteAddresses,
     readOnlyAddresses: ctx.readOnlyAddresses,
     label: params.credentialId
-      ? "VALIDATE + ADD_AUTHORITY + REGISTER_CREDENTIAL"
-      : "VALIDATE + ADD_AUTHORITY",
+      ? "VALIDATE -> MULTICALL(ADD_AUTHORITY, REGISTER_CREDENTIAL)"
+      : "VALIDATE -> ADD_AUTHORITY",
   });
 
   return { ...result, newAuthorityIdx };

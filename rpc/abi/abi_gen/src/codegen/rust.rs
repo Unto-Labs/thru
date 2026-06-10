@@ -5,6 +5,7 @@ use crate::codegen::rust_gen::{
 };
 use crate::codegen::shared::builder::IrBuilder;
 use crate::codegen::shared::ir::TypeIr;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fs;
 
 /* Generate the runtime module content (emitted as runtime.rs) */
@@ -100,18 +101,33 @@ impl<'a> RustCodeGenerator<'a> {
             types_output.push_str("\n");
 
             if self.options.emit_accessors {
-                if type_ir.is_some() {
+                let mut helper_support_cache = BTreeMap::new();
+                let helper_type_ir = type_ir.as_ref().filter(|ir| {
+                    static_ir_helpers_supported(
+                        &self.ir_builder,
+                        &ir.type_name,
+                        &mut helper_support_cache,
+                        &mut BTreeSet::new(),
+                    )
+                });
+                let helper_ir_error = if type_ir.is_some() && helper_type_ir.is_none() {
+                    Some("jagged array sizes require instance data")
+                } else {
+                    ir_error.as_deref()
+                };
+
+                if helper_type_ir.is_some() {
                     include_ir_runtime = true;
                 }
 
                 functions_output.push_str(&emit_opaque_functions(
                     resolved_type,
-                    type_ir.as_ref(),
-                    ir_error.as_deref(),
+                    helper_type_ir,
+                    helper_ir_error,
                 ));
                 functions_output.push_str("\n");
 
-                if let Some(ir) = type_ir.as_ref() {
+                if let Some(ir) = helper_type_ir {
                     match emit_ir_footprint_fn(ir) {
                         Ok(ir_fn) => functions_output.push_str(&ir_fn),
                         Err(err) => functions_output.push_str(&format!(
@@ -126,7 +142,7 @@ impl<'a> RustCodeGenerator<'a> {
                             resolved_type.name, err
                         )),
                     }
-                } else if let Some(msg) = ir_error.as_ref() {
+                } else if let Some(msg) = helper_ir_error {
                     functions_output.push_str(&format!(
                         "/* IR helpers unavailable for {}: {} */\n",
                         resolved_type.name, msg
@@ -300,6 +316,41 @@ impl<'a> RustCodeGenerator<'a> {
 
         path_parts.join("::")
     }
+}
+
+fn static_ir_helpers_supported(
+    ir_builder: &IrBuilder<'_>,
+    type_name: &str,
+    cache: &mut BTreeMap<String, bool>,
+    visiting: &mut BTreeSet<String>,
+) -> bool {
+    if let Some(supported) = cache.get(type_name) {
+        return *supported;
+    }
+
+    if !visiting.insert(type_name.to_string()) {
+        cache.insert(type_name.to_string(), false);
+        return false;
+    }
+
+    let supported = ir_builder
+        .build_type_name(type_name)
+        .map(|ir| {
+            if ir.contains_sum_over_array() {
+                return false;
+            }
+
+            let mut nested = Vec::new();
+            ir.collect_call_nested_type_names(&mut nested);
+            nested.into_iter().all(|nested_type| {
+                static_ir_helpers_supported(ir_builder, &nested_type, cache, visiting)
+            })
+        })
+        .unwrap_or(false);
+
+    visiting.remove(type_name);
+    cache.insert(type_name.to_string(), supported);
+    supported
 }
 
 /* Content emitted to runtime.rs - provides FAT pointer types and validation helpers */

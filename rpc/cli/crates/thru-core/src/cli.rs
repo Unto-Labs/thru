@@ -245,9 +245,17 @@ pub enum ProgramCommands {
         /// Program file to upload and create managed program from
         program_file: String,
 
+        /// Skip local program image validation before upload
+        #[arg(long)]
+        skip_program_image_validation: bool,
+
         /// Chunk size for upload (1024-31000 bytes, default: 30720)
         #[arg(long, value_parser = parse_chunk_size, default_value = "30720")]
         chunk_size: usize,
+
+        /// Skip the ELF magic check for offset-zero uploader writes
+        #[arg(long)]
+        skip_elf_check: bool,
     },
 
     /// Upgrade an existing managed program
@@ -266,9 +274,17 @@ pub enum ProgramCommands {
         /// Program file to upload and upgrade managed program with
         program_file: String,
 
+        /// Skip local program image validation before upload
+        #[arg(long)]
+        skip_program_image_validation: bool,
+
         /// Chunk size for upload (1024-31000 bytes, default: 30720)
         #[arg(long, value_parser = parse_chunk_size, default_value = "30720")]
         chunk_size: usize,
+
+        /// Skip the ELF magic check for offset-zero uploader writes
+        #[arg(long)]
+        skip_elf_check: bool,
     },
 
     /// Pause or unpause a managed program
@@ -755,6 +771,10 @@ pub enum UploaderCommands {
         /// Chunk size for upload transactions (1024-31000 bytes)
         #[arg(long, value_parser = parse_chunk_size, default_value = "30720")]
         chunk_size: usize,
+
+        /// Skip the ELF magic check for offset-zero uploader writes
+        #[arg(long)]
+        skip_elf_check: bool,
 
         /// Seed for account derivation
         seed: String,
@@ -2185,6 +2205,156 @@ pub enum DebugCommands {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn parses_uploader_upload_skip_elf_check_flag() {
+        let cli = Cli::try_parse_from([
+            "thru",
+            "uploader",
+            "upload",
+            "--skip-elf-check",
+            "my-seed",
+            "program.elf",
+        ])
+        .expect("uploader upload skip-elf-check should parse");
+
+        match cli.command {
+            Commands::Uploader {
+                subcommand:
+                    UploaderCommands::Upload {
+                        seed,
+                        program_file,
+                        skip_elf_check,
+                        ..
+                    },
+            } => {
+                assert_eq!(seed, "my-seed");
+                assert_eq!(program_file, "program.elf");
+                assert!(skip_elf_check);
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn parses_program_create_skip_elf_check_flag() {
+        let cli = Cli::try_parse_from([
+            "thru",
+            "program",
+            "create",
+            "--skip-elf-check",
+            "my-seed",
+            "program.elf",
+        ])
+        .expect("program create skip-elf-check should parse");
+
+        match cli.command {
+            Commands::Program {
+                subcommand:
+                    ProgramCommands::Create {
+                        seed,
+                        program_file,
+                        skip_elf_check,
+                        ..
+                    },
+            } => {
+                assert_eq!(seed, "my-seed");
+                assert_eq!(program_file, "program.elf");
+                assert!(skip_elf_check);
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn parses_program_create_skip_program_image_validation_flag() {
+        let cli = Cli::try_parse_from([
+            "thru",
+            "program",
+            "create",
+            "--skip-program-image-validation",
+            "my-seed",
+            "empty.bin",
+        ])
+        .expect("program create skip-program-image-validation should parse");
+
+        match cli.command {
+            Commands::Program {
+                subcommand:
+                    ProgramCommands::Create {
+                        seed,
+                        program_file,
+                        skip_program_image_validation,
+                        ..
+                    },
+            } => {
+                assert_eq!(seed, "my-seed");
+                assert_eq!(program_file, "empty.bin");
+                assert!(skip_program_image_validation);
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn parses_program_upgrade_skip_elf_check_flag() {
+        let cli = Cli::try_parse_from([
+            "thru",
+            "program",
+            "upgrade",
+            "--skip-elf-check",
+            "my-seed",
+            "program.elf",
+        ])
+        .expect("program upgrade skip-elf-check should parse");
+
+        match cli.command {
+            Commands::Program {
+                subcommand:
+                    ProgramCommands::Upgrade {
+                        seed,
+                        program_file,
+                        skip_elf_check,
+                        ..
+                    },
+            } => {
+                assert_eq!(seed, "my-seed");
+                assert_eq!(program_file, "program.elf");
+                assert!(skip_elf_check);
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn parses_program_upgrade_skip_program_image_validation_flag() {
+        let cli = Cli::try_parse_from([
+            "thru",
+            "program",
+            "upgrade",
+            "--skip-program-image-validation",
+            "my-seed",
+            "empty.bin",
+        ])
+        .expect("program upgrade skip-program-image-validation should parse");
+
+        match cli.command {
+            Commands::Program {
+                subcommand:
+                    ProgramCommands::Upgrade {
+                        seed,
+                        program_file,
+                        skip_program_image_validation,
+                        ..
+                    },
+            } => {
+                assert_eq!(seed, "my-seed");
+                assert_eq!(program_file, "empty.bin");
+                assert!(skip_program_image_validation);
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
 
     #[test]
     fn parses_abi_codegen_command() {

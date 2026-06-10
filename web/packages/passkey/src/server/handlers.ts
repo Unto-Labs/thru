@@ -45,7 +45,9 @@ export function createPasskeyHandlers<P>(opts: {
         client: opts.client,
         walletAddress,
         accountCtx: context.accountCtx,
-        invokeIx: context.invokeIx,
+        targetProgramAddress: context.targetProgramAddress,
+        instructionData: context.instructionData,
+        authIdx: context.authIdx,
       });
 
       pendingContexts.set(
@@ -85,7 +87,9 @@ export function createPasskeyHandlers<P>(opts: {
         adminPrivateKey: opts.adminPrivateKey,
         walletAddress,
         accountCtx: pending.context.accountCtx,
-        invokeIx: pending.context.invokeIx,
+        targetProgramAddress: pending.context.targetProgramAddress,
+        instructionData: pending.context.instructionData,
+        authIdx: pending.context.authIdx,
         ...signaturePayload,
       });
     },

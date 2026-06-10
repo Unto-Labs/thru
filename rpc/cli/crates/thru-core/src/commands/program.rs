@@ -67,7 +67,14 @@ impl std::fmt::Display for ProgramImageValidationError {
     }
 }
 
-fn validate_program_image(program_data: &[u8]) -> Result<(), ProgramImageValidationError> {
+fn validate_program_image(
+    program_data: &[u8],
+    skip_program_image_validation: bool,
+) -> Result<(), ProgramImageValidationError> {
+    if skip_program_image_validation {
+        return Ok(());
+    }
+
     if program_data.len() >= ELF_MAGIC.len() && &program_data[..ELF_MAGIC.len()] == ELF_MAGIC {
         return Err(ProgramImageValidationError::ElfFile);
     }
@@ -102,9 +109,10 @@ fn validate_program_image(program_data: &[u8]) -> Result<(), ProgramImageValidat
 fn validate_program_file_or_report(
     program_file: &str,
     program_data: &[u8],
+    skip_program_image_validation: bool,
     json_format: bool,
 ) -> Result<(), CliError> {
-    let Err(err) = validate_program_image(program_data) else {
+    let Err(err) = validate_program_image(program_data, skip_program_image_validation) else {
         return Ok(());
     };
 
@@ -153,7 +161,9 @@ pub async fn handle_program_command(
             seed,
             authority,
             program_file,
+            skip_program_image_validation,
             chunk_size,
+            skip_elf_check,
         } => {
             create_program(
                 config,
@@ -162,7 +172,9 @@ pub async fn handle_program_command(
                 &seed,
                 authority.as_deref(),
                 &program_file,
+                skip_program_image_validation,
                 chunk_size,
+                skip_elf_check,
                 json_format,
             )
             .await
@@ -172,7 +184,9 @@ pub async fn handle_program_command(
             ephemeral,
             seed,
             program_file,
+            skip_program_image_validation,
             chunk_size,
+            skip_elf_check,
         } => {
             upgrade_program(
                 config,
@@ -180,7 +194,9 @@ pub async fn handle_program_command(
                 &seed,
                 ephemeral,
                 &program_file,
+                skip_program_image_validation,
                 chunk_size,
+                skip_elf_check,
                 json_format,
             )
             .await
@@ -601,7 +617,9 @@ async fn create_program(
     seed: &str,
     authority: Option<&str>,
     program_file: &str,
+    skip_program_image_validation: bool,
     chunk_size: usize,
+    skip_elf_check: bool,
     json_format: bool,
 ) -> Result<(), CliError> {
     // Validate program file exists
@@ -629,7 +647,7 @@ async fn create_program(
 
     // Read program data
     let program_data = fs::read(program_path).map_err(|e| CliError::Io(e))?;
-    validate_program_file_or_report(program_file, &program_data, json_format)?;
+    validate_program_file_or_report(program_file, &program_data, skip_program_image_validation, json_format)?;
 
     if !json_format {
         output::print_info(&format!(
@@ -676,7 +694,13 @@ async fn create_program(
     // Create uploader manager and upload the program
     let uploader_manager = UploaderManager::new(config).await?;
     let upload_session = uploader_manager
-        .upload_program(&temp_seed, &program_data, chunk_size, json_format)
+        .upload_program_with_options(
+            &temp_seed,
+            &program_data,
+            chunk_size,
+            skip_elf_check,
+            json_format,
+        )
         .await?;
 
     if !json_format {
@@ -862,7 +886,9 @@ async fn upgrade_program(
     seed: &str,
     ephemeral: bool,
     program_file: &str,
+    skip_program_image_validation: bool,
     chunk_size: usize,
+    skip_elf_check: bool,
     json_format: bool,
 ) -> Result<(), CliError> {
     // Validate program file exists
@@ -890,7 +916,7 @@ async fn upgrade_program(
 
     // Read program data
     let program_data = fs::read(program_path).map_err(|e| CliError::Io(e))?;
-    validate_program_file_or_report(program_file, &program_data, json_format)?;
+    validate_program_file_or_report(program_file, &program_data, skip_program_image_validation, json_format)?;
 
     if !json_format {
         output::print_info(&format!(
@@ -925,7 +951,13 @@ async fn upgrade_program(
     // Create uploader manager and upload the program
     let uploader_manager = UploaderManager::new(config).await?;
     let upload_session = uploader_manager
-        .upload_program(&temp_seed, &program_data, chunk_size, json_format)
+        .upload_program_with_options(
+            &temp_seed,
+            &program_data,
+            chunk_size,
+            skip_elf_check,
+            json_format,
+        )
         .await?;
 
     if !json_format {
@@ -2125,7 +2157,7 @@ mod tests {
     #[test]
     fn test_validate_program_image_accepts_valid_image() {
         let data = valid_program_image_bytes();
-        assert_eq!(validate_program_image(&data), Ok(()));
+        assert_eq!(validate_program_image(&data, false), Ok(()));
     }
 
     #[test]
@@ -2134,7 +2166,7 @@ mod tests {
         data[..ELF_MAGIC.len()].copy_from_slice(ELF_MAGIC);
 
         assert_eq!(
-            validate_program_image(&data),
+            validate_program_image(&data, false),
             Err(ProgramImageValidationError::ElfFile)
         );
     }
@@ -2144,7 +2176,7 @@ mod tests {
         let data = vec![PROGRAM_IMAGE_V1; PROGRAM_IMAGE_HEADER_SZ];
 
         assert_eq!(
-            validate_program_image(&data),
+            validate_program_image(&data, false),
             Err(ProgramImageValidationError::TooSmall {
                 actual: PROGRAM_IMAGE_HEADER_SZ,
                 minimum: PROGRAM_IMAGE_HEADER_SZ
@@ -2155,12 +2187,36 @@ mod tests {
     }
 
     #[test]
+    fn test_validate_program_image_rejects_empty_image_without_override() {
+        let mut data = vec![0u8; 12];
+        data[PROGRAM_IMAGE_VERSION_OFFSET] = PROGRAM_IMAGE_V1;
+
+        assert_eq!(
+            validate_program_image(&data, false),
+            Err(ProgramImageValidationError::TooSmall {
+                actual: 12,
+                minimum: PROGRAM_IMAGE_HEADER_SZ
+                    + PROGRAM_IMAGE_MIN_TEXT_SZ
+                    + PROGRAM_IMAGE_TRAILER_SZ,
+            })
+        );
+    }
+
+    #[test]
+    fn test_validate_program_image_allows_empty_image_with_override() {
+        let mut data = vec![0u8; 12];
+        data[PROGRAM_IMAGE_VERSION_OFFSET] = PROGRAM_IMAGE_V1;
+
+        assert_eq!(validate_program_image(&data, true), Ok(()));
+    }
+
+    #[test]
     fn test_validate_program_image_rejects_invalid_version() {
         let mut data = valid_program_image_bytes();
         data[PROGRAM_IMAGE_VERSION_OFFSET] = 0x02;
 
         assert_eq!(
-            validate_program_image(&data),
+            validate_program_image(&data, false),
             Err(ProgramImageValidationError::InvalidVersion { actual: 0x02 })
         );
     }
@@ -2172,7 +2228,7 @@ mod tests {
         data[trailer_offset + 3] = 0xff;
 
         assert_eq!(
-            validate_program_image(&data),
+            validate_program_image(&data, false),
             Err(ProgramImageValidationError::InvalidTrailer {
                 offset: trailer_offset + 3,
                 actual: 0xff,

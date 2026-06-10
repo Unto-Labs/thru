@@ -116,6 +116,102 @@ mod uploader_tests {
     }
 
     #[test]
+    fn test_uploader_write_rejects_elf_magic_at_start() {
+        // Create test keypair
+        let private_key_hex = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let fee_payer = KeyPair::from_hex_private_key("test", private_key_hex).unwrap();
+
+        // Create test program pubkey
+        let uploader_program = Pubkey::from_bytes(&[1u8; 32]);
+
+        // Create test accounts
+        let meta_account = Pubkey::from_bytes(&[2u8; 32]);
+        let buffer_account = Pubkey::from_bytes(&[3u8; 32]);
+
+        let err = match TransactionBuilder::build_uploader_write(
+            fee_payer.public_key,
+            uploader_program.to_bytes().unwrap(),
+            meta_account.to_bytes().unwrap(),
+            buffer_account.to_bytes().unwrap(),
+            &[0x7f, b'E', b'L', b'F', 0x02],
+            0,    // offset
+            1000, // fee
+            2,    // nonce
+            100,  // start_slot
+        ) {
+            Ok(_) => panic!("WRITE transaction should reject ELF input at offset 0"),
+            Err(err) => err,
+        };
+
+        assert!(
+            err.to_string().contains("ELF magic"),
+            "WRITE transaction should reject ELF input at offset 0"
+        );
+    }
+
+    #[test]
+    fn test_uploader_write_can_skip_elf_magic_check() {
+        let private_key_hex = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let fee_payer = KeyPair::from_hex_private_key("test", private_key_hex).unwrap();
+        let uploader_program = Pubkey::from_bytes(&[1u8; 32]);
+        let meta_account = Pubkey::from_bytes(&[2u8; 32]);
+        let buffer_account = Pubkey::from_bytes(&[3u8; 32]);
+
+        let write_tx = TransactionBuilder::build_uploader_write_with_options(
+            fee_payer.public_key,
+            uploader_program.to_bytes().unwrap(),
+            meta_account.to_bytes().unwrap(),
+            buffer_account.to_bytes().unwrap(),
+            &[0x7f, 0x45, 0x4c, 0x46, 0x02],
+            0,
+            1000,
+            2,
+            100,
+            UploaderWriteOptions {
+                skip_elf_check: true,
+            },
+        )
+        .unwrap();
+
+        assert!(
+            write_tx.instructions.is_some(),
+            "WRITE transaction should allow ELF bytes when skip_elf_check is set"
+        );
+    }
+
+    #[test]
+    fn test_uploader_write_allows_elf_magic_after_start() {
+        // Create test keypair
+        let private_key_hex = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+        let fee_payer = KeyPair::from_hex_private_key("test", private_key_hex).unwrap();
+
+        // Create test program pubkey
+        let uploader_program = Pubkey::from_bytes(&[1u8; 32]);
+
+        // Create test accounts
+        let meta_account = Pubkey::from_bytes(&[2u8; 32]);
+        let buffer_account = Pubkey::from_bytes(&[3u8; 32]);
+
+        let write_tx = TransactionBuilder::build_uploader_write(
+            fee_payer.public_key,
+            uploader_program.to_bytes().unwrap(),
+            meta_account.to_bytes().unwrap(),
+            buffer_account.to_bytes().unwrap(),
+            &[0x7f, b'E', b'L', b'F', 0x02],
+            4,    // offset
+            1000, // fee
+            2,    // nonce
+            100,  // start_slot
+        )
+        .unwrap();
+
+        assert!(
+            write_tx.instructions.is_some(),
+            "WRITE transaction should allow ELF bytes after offset 0"
+        );
+    }
+
+    #[test]
     fn test_uploader_finalize_transaction() {
         // Create test keypair
         let private_key_hex = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";

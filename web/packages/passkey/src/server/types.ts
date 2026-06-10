@@ -79,5 +79,7 @@ export interface PasskeyChallengeResult {
 
 export interface PasskeyContextResult {
   accountCtx: AccountContext;
-  invokeIx: Uint8Array;
+  targetProgramAddress: string;
+  instructionData: Uint8Array;
+  authIdx?: number;
 }

@@ -1,6 +1,6 @@
 use abi_gen::abi::file::{AbiFile, ImportResolver};
 use abi_gen::abi::resolved::TypeResolver;
-use abi_reflect::{format_reflection, Reflector};
+use abi_reflect::{format_reflection, format_reflection_with_options, FormatOptions, Reflector};
 use serde_json::Value as JsonValue;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -246,6 +246,105 @@ types:
             .and_then(|json| json.get("ok"))
             .and_then(JsonValue::as_bool),
         Some(true)
+    );
+}
+
+#[test]
+fn byte_offsets_advance_across_variable_arrays() {
+    let reflector = reflector_from_yaml(
+        r#"
+abi:
+  package: test.format
+  abi-version: 1
+  package-version: "0.1.0"
+  description: "format test"
+  imports: []
+types:
+- name: DynamicTail
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: first_len
+        field-type:
+          primitive: u8
+      - name: second_len
+        field-type:
+          primitive: u8
+      - name: first
+        field-type:
+          array:
+            size:
+              field-ref:
+                path: ["first_len"]
+            element-type:
+              primitive: u8
+      - name: second
+        field-type:
+          array:
+            size:
+              field-ref:
+                path: ["second_len"]
+            element-type:
+              primitive: u8
+      - name: marker
+        field-type:
+          primitive: u16
+"#,
+    );
+    let bytes = [1u8, 2, 0xaa, 0xbb, 0xcc, 0x34, 0x12];
+    let reflected = reflector
+        .reflect(&bytes, "DynamicTail")
+        .expect("reflection succeeds");
+    let formatted = format_reflection_with_options(
+        &reflected,
+        &FormatOptions {
+            include_byte_offsets: true,
+            ..FormatOptions::default()
+        },
+    );
+    let obj = formatted.value.as_object().expect("struct value");
+
+    let first_range = obj
+        .get("first")
+        .and_then(JsonValue::as_object)
+        .and_then(|field| field.get("_byteRange"))
+        .and_then(JsonValue::as_object)
+        .expect("first byte range");
+    assert_eq!(
+        first_range.get("offset").and_then(JsonValue::as_u64),
+        Some(2)
+    );
+    assert_eq!(first_range.get("size").and_then(JsonValue::as_u64), Some(1));
+
+    let second_range = obj
+        .get("second")
+        .and_then(JsonValue::as_object)
+        .and_then(|field| field.get("_byteRange"))
+        .and_then(JsonValue::as_object)
+        .expect("second byte range");
+    assert_eq!(
+        second_range.get("offset").and_then(JsonValue::as_u64),
+        Some(3)
+    );
+    assert_eq!(
+        second_range.get("size").and_then(JsonValue::as_u64),
+        Some(2)
+    );
+
+    let marker_range = obj
+        .get("marker")
+        .and_then(JsonValue::as_object)
+        .and_then(|field| field.get("_byteRange"))
+        .and_then(JsonValue::as_object)
+        .expect("marker byte range");
+    assert_eq!(
+        marker_range.get("offset").and_then(JsonValue::as_u64),
+        Some(5)
+    );
+    assert_eq!(
+        marker_range.get("size").and_then(JsonValue::as_u64),
+        Some(2)
     );
 }
 

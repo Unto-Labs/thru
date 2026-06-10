@@ -64,10 +64,14 @@ jobs:
 
   # Build toolchain for Linux and macOS
   build-toolchain:
+    permissions:
+      contents: read
+      actions: read
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
     env:
       TAG_NAME: ${{ github.event.release.tag_name }}
+      TN_SDK_BINARY_CACHE_DIR: ${{ github.workspace }}/.cache/thru-sdk-binary-cache
     strategy:
       fail-fast: false
       matrix:
@@ -85,32 +89,51 @@ jobs:
         submodules: true
         fetch-depth: 0
 
+    - name: Compute SDK compiler cache key
+      id: sdk-compiler-cache-key
+      run: |
+        export TN_SDK_DEPS_NO_MAIN=1
+        source ./sdks/deps.sh
+        echo "hash=$(host_compiler_cache_hash)" >> "$GITHUB_OUTPUT"
+
+    - name: Cache local SDK binary cache
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+      with:
+        path: .cache/thru-sdk-binary-cache/
+        key: thru-sdk-binary-${{ runner.os }}-${{ runner.arch }}-${{ steps.sdk-compiler-cache-key.outputs.hash }}-${{ hashFiles('sdks/deps.sh') }}
+        restore-keys: |
+          thru-sdk-binary-${{ runner.os }}-${{ runner.arch }}-${{ steps.sdk-compiler-cache-key.outputs.hash }}-
+
     - name: Cache .thru toolchain
       id: cache-toolchain
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
       with:
         path: .thru/sdk/toolchain/
-        key: thru-toolchain-c-${{ runner.os }}-${{ hashFiles('sdks/deps.sh') }}
+        key: thru-toolchain-c-${{ runner.os }}-${{ runner.arch }}-${{ steps.sdk-compiler-cache-key.outputs.hash }}-${{ hashFiles('sdks/deps.sh') }}
         restore-keys: |
-          thru-toolchain-c-${{ runner.os }}-
+          thru-toolchain-c-${{ runner.os }}-${{ runner.arch }}-${{ steps.sdk-compiler-cache-key.outputs.hash }}-
 
     - name: Update apt (Ubuntu only)
       if: ${{ matrix.os == 'ubuntu-large' }}
       run: |
         .github/scripts/apt-install-with-retry.sh --update-only
 
-    - name: Build toolchain dependencies
-      if: steps.cache-toolchain.outputs.cache-hit != 'true'
+    - name: Ensure toolchain dependencies
       run: |
-        TN_AUTO_INSTALL_PACKAGES=1 ./sdks/deps.sh --thru-dir ${GITHUB_WORKSPACE} fetch check install-c
-        rm -rf ${GITHUB_WORKSPACE}/.thru/sdk/toolchain/git
+        if [[ ! -x "${GITHUB_WORKSPACE}/.thru/sdk/toolchain/bin/riscv64-unknown-elf-gcc" ]] ||
+           [[ ! -x "${GITHUB_WORKSPACE}/.thru/sdk/toolchain/bin/riscv64-unknown-elf-g++" ]]; then
+          TN_AUTO_INSTALL_PACKAGES=1 ./sdks/deps.sh --thru-dir "${GITHUB_WORKSPACE}" fetch check install-c
+        fi
+        rm -rf "${GITHUB_WORKSPACE}/.thru/sdk/toolchain/git"
 
     - name: Verify toolchain installation
       run: |
+        export PATH="${GITHUB_WORKSPACE}/.thru/sdk/toolchain/bin:${PATH}"
         echo "${GITHUB_WORKSPACE}/.thru/sdk/toolchain/bin" >> $GITHUB_PATH
-        which riscv64-unknown-elf-gcc || echo "Toolchain not in PATH"
-        riscv64-unknown-elf-gcc --version || echo "Failed to run gcc"
-        riscv64-unknown-elf-g++ --version || echo "Failed to run g++"
+        command -v riscv64-unknown-elf-gcc
+        command -v riscv64-unknown-elf-g++
+        riscv64-unknown-elf-gcc --version
+        riscv64-unknown-elf-g++ --version
 
     - name: Create minimal toolchain package
       run: |

@@ -194,12 +194,24 @@ impl<'a> IrBuilder<'a> {
     pub fn build_type(&self, ty: &ResolvedType) -> Result<TypeIr, IrBuildError> {
         let mut params = ParameterRegistry::from_dynamic(&ty.dynamic_params);
         let root = self.node_from_resolved(ty, &mut params)?;
+        let parameters = filter_jagged_element_parameters(ty, params.into_parameters());
         Ok(TypeIr {
             type_name: ty.name.clone(),
             alignment: ty.alignment,
             root,
-            parameters: params.into_parameters(),
+            parameters,
         })
+    }
+
+    /// Builds IR for a resolved type by name.
+    pub fn build_type_name(&self, type_name: &str) -> Result<TypeIr, IrBuildError> {
+        let ty =
+            self.resolver
+                .get_type_info(type_name)
+                .ok_or_else(|| IrBuildError::MissingType {
+                    type_name: type_name.to_string(),
+                })?;
+        self.build_type(ty)
     }
 
     fn node_from_resolved(
@@ -394,7 +406,6 @@ impl<'a> IrBuilder<'a> {
         };
 
         let count = self.build_expr_ir(size_expr, owner, params, type_name, path_prefix)?;
-        params.extend_with(&element_type.dynamic_params);
 
         /* For jagged arrays with variable-size elements, use SumOverArray node */
         if jagged && matches!(element_type.size, Size::Variable(_)) {
@@ -416,6 +427,8 @@ impl<'a> IrBuilder<'a> {
 
             return Ok(Self::align_node(node, ty.alignment));
         }
+
+        params.extend_with(&element_type.dynamic_params);
 
         let elem = match element_type.size {
             Size::Const(value) => IrNode::Const(ConstNode {
@@ -922,6 +935,39 @@ fn literal_to_u64(literal: &LiteralExpr) -> Option<u64> {
         LiteralExpr::I8(v) if *v >= 0 => Some(*v as u64),
         _ => None,
     }
+}
+
+fn filter_jagged_element_parameters(
+    root_type: &ResolvedType,
+    parameters: Vec<IrParameter>,
+) -> Vec<IrParameter> {
+    parameters
+        .into_iter()
+        .filter(|param| !is_jagged_element_parameter(root_type, &param.name))
+        .collect()
+}
+
+fn is_jagged_element_parameter(root_type: &ResolvedType, parameter: &str) -> bool {
+    let normalized = parameter.replace("::", ".");
+    let segments: Vec<&str> = normalized.split('.').collect();
+    let Some(element_idx) = segments.iter().position(|segment| *segment == "element") else {
+        return false;
+    };
+    if element_idx == 0 {
+        return false;
+    }
+
+    let array_field_name = segments[element_idx - 1];
+    let ResolvedTypeKind::Struct { fields, .. } = &root_type.kind else {
+        return false;
+    };
+    fields.iter().any(|field| {
+        field.name == array_field_name
+            && matches!(
+                field.field_type.kind,
+                ResolvedTypeKind::Array { jagged: true, .. }
+            )
+    })
 }
 
 #[derive(Debug, Error)]

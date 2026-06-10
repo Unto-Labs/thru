@@ -1,0 +1,438 @@
+name: Thru CLI Artifacts
+
+# Builds the thru CLI binaries, attaches them to the GitHub release, and
+# publishes the CLI npm packages. This is deliberately separate from
+# release.yml: npm publishing only needs the CLI binaries + checksums, so it
+# must not be gated on (or poll for) the slower SDK/toolchain artifact jobs.
+# Within this workflow `needs:` replaces polling entirely — publish-npm
+# consumes the artifacts built in the same run.
+#
+# This workflow also runs in the public mirror repo (Unto-Labs/thru), so the
+# same assets are publicly downloadable from its releases without
+# authentication. Only the thru-net run publishes npm (NPM_TOKEN lives there);
+# the mirror run stops at the repository guard.
+
+on:
+  release:
+    types: [published]
+  # Manual runs rebuild the thru CLI binaries for an existing release tag
+  # (e.g. to retry a failed platform leg, reproduce a binary, or re-run a
+  # failed npm publish — the publish steps are idempotent).
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build thru CLI artifacts for (e.g. v1.2.3)"
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  # Build thru CLI binaries for the npm platform packages and for direct
+  # download. Asset platform names must match SUPPORTED_PLATFORMS in
+  # web/packages/cli/scripts/platform.mjs.
+  build-cli-artifacts:
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
+    # Windows support is best-effort for now: a failed Windows build must not
+    # block the release or the npm publish of the other platforms.
+    continue-on-error: ${{ matrix.best_effort || false }}
+    env:
+      TAG_NAME: ${{ github.event.release.tag_name || inputs.tag }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-large
+            target: x86_64-unknown-linux-gnu
+            asset_platform: Linux-x86_64
+          - os: ubuntu-large
+            target: aarch64-unknown-linux-gnu
+            asset_platform: Linux-aarch64
+          - os: macos-latest-xlarge
+            target: aarch64-apple-darwin
+            asset_platform: Darwin-arm64
+          - os: macos-latest-xlarge
+            target: x86_64-apple-darwin
+            asset_platform: Darwin-x86_64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            asset_platform: Windows-x86_64
+            best_effort: true
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      with:
+        # On release events this resolves to the tagged commit anyway; on
+        # workflow_dispatch it pins the build to the requested release tag.
+        ref: ${{ github.event.release.tag_name || inputs.tag }}
+        # The CLI workspace only needs rpc/; skipping submodules keeps this
+        # job fast and Windows-safe, and matches the public mirror layout
+        # (which has no submodules at all).
+        submodules: false
+        fetch-depth: 0
+
+    - name: Set up Rust toolchain
+      uses: dtolnay/rust-toolchain@98e1b82157cd469e843cb7f524c1313b4ad9492c # 1.88.0
+      with:
+        targets: ${{ matrix.target }}
+
+    - name: Set up Buf CLI
+      # thru-grpc-client's build.rs shells out to `buf build` to generate the
+      # proto descriptor set; without buf on PATH the cargo build fails on
+      # every target with "buf is not installed".
+      uses: bufbuild/buf-action@fd21066df7214747548607aaa45548ba2b9bc1ff # v1
+      with:
+        setup_only: true
+
+    - name: Install build dependencies
+      if: ${{ runner.os == 'Linux' }}
+      run: |
+        .github/scripts/apt-install-with-retry.sh build-essential pkg-config libssl-dev libclang-dev
+
+    - name: Install aarch64 cross toolchain
+      if: ${{ matrix.target == 'aarch64-unknown-linux-gnu' }}
+      run: |
+        .github/scripts/apt-install-with-retry.sh gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+
+    - name: Cache cargo registry
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+      with:
+        path: ~/.cargo/registry
+        key: ${{ runner.os }}-${{ matrix.target }}-cli-cargo-registry-rust-1.88-${{ hashFiles('rpc/cli/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.target }}-cli-cargo-registry-rust-1.88-
+
+    - name: Cache cargo index
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+      with:
+        path: ~/.cargo/git
+        key: ${{ runner.os }}-${{ matrix.target }}-cli-cargo-index-rust-1.88-${{ hashFiles('rpc/cli/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.target }}-cli-cargo-index-rust-1.88-
+
+    - name: Cache target directory
+      uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+      with:
+        path: rpc/cli/target
+        key: ${{ runner.os }}-${{ matrix.target }}-cli-cargo-target-rust-1.88-${{ hashFiles('rpc/cli/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-${{ matrix.target }}-cli-cargo-target-rust-1.88-
+
+    - name: Build thru CLI binary
+      shell: bash
+      env:
+        CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+        CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
+        CXX_aarch64_unknown_linux_gnu: aarch64-linux-gnu-g++
+        AR_aarch64_unknown_linux_gnu: aarch64-linux-gnu-ar
+      run: |
+        cargo build --release --locked --target "${{ matrix.target }}" --manifest-path rpc/cli/Cargo.toml --bin thru
+
+    - name: Smoke test thru CLI binary
+      # aarch64-linux is cross-compiled and cannot execute on the x86_64
+      # runner; every other target runs natively (Darwin-x86_64 via Rosetta
+      # on the arm64 macOS runners).
+      if: ${{ matrix.target != 'aarch64-unknown-linux-gnu' }}
+      shell: bash
+      run: |
+        BIN_NAME="thru"
+        if [ "${{ runner.os }}" = "Windows" ]; then
+          BIN_NAME="thru.exe"
+        fi
+        "rpc/cli/target/${{ matrix.target }}/release/${BIN_NAME}" --version
+
+    - name: Package thru CLI binary
+      id: package-cli
+      shell: bash
+      run: |
+        ASSET_NAME="thru-cli-${{ matrix.asset_platform }}-${TAG_NAME}"
+        BIN_NAME="thru"
+        if [ "${{ runner.os }}" = "Windows" ]; then
+          BIN_NAME="thru.exe"
+        fi
+
+        mkdir -p "cli-artifacts/${ASSET_NAME}"
+        cp "rpc/cli/target/${{ matrix.target }}/release/${BIN_NAME}" "cli-artifacts/${ASSET_NAME}/${BIN_NAME}"
+        chmod 0755 "cli-artifacts/${ASSET_NAME}/${BIN_NAME}"
+        tar -czf "cli-artifacts/${ASSET_NAME}.tar.gz" -C "cli-artifacts/${ASSET_NAME}" "${BIN_NAME}"
+
+        echo "asset_name=${ASSET_NAME}" >> "$GITHUB_OUTPUT"
+
+    - name: Upload thru CLI artifacts to workflow
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      with:
+        name: cli-${{ matrix.asset_platform }}
+        path: cli-artifacts/${{ steps.package-cli.outputs.asset_name }}.tar.gz
+        retention-days: 90
+
+  # Attach the CLI artifacts and checksums to the GitHub release.
+  upload-cli-release-artifacts:
+    needs: [build-cli-artifacts]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    outputs:
+      release_exists: ${{ steps.release-check.outputs.exists }}
+    env:
+      TAG_NAME: ${{ github.event.release.tag_name || inputs.tag }}
+
+    steps:
+    - name: Download thru CLI artifacts
+      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+      with:
+        path: cli-release-artifacts
+        pattern: cli-*
+
+    # The checksums file is scoped with a thru-cli- prefix because the
+    # release hosts assets from several workflows; a bare SHA256SUMS that
+    # only covers the CLI tarballs would be misleading next to them.
+    - name: Create thru CLI checksums
+      run: |
+        set -euo pipefail
+
+        : > cli-release-artifacts/thru-cli-SHA256SUMS
+        while IFS= read -r file; do
+          hash=$(sha256sum "$file" | awk '{print $1}')
+          filename=$(basename "$file")
+          printf '%s  %s\n' "$hash" "$filename" >> cli-release-artifacts/thru-cli-SHA256SUMS
+        done < <(find cli-release-artifacts/cli-* -type f -name 'thru-cli-*.tar.gz' | sort)
+
+        cat cli-release-artifacts/thru-cli-SHA256SUMS
+
+    # Also keep the checksums as a workflow artifact so publish-npm can
+    # verify the binaries it consumes from this same run.
+    - name: Upload thru CLI checksums to workflow
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      with:
+        name: cli-SHA256SUMS
+        path: cli-release-artifacts/thru-cli-SHA256SUMS
+        retention-days: 90
+
+    # On workflow_dispatch the requested tag may not have a release (e.g. a
+    # dry-run build); keep the artifacts on the workflow run instead of
+    # failing the upload. publish-npm also keys off this so dry-runs never
+    # publish to npm.
+    - name: Check release exists
+      id: release-check
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        if gh release view "${TAG_NAME}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
+          echo "exists=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "exists=false" >> "$GITHUB_OUTPUT"
+          echo "::warning::No release found for ${TAG_NAME}; CLI artifacts remain on this workflow run only."
+        fi
+
+    - name: Upload thru CLI artifacts
+      if: ${{ steps.release-check.outputs.exists == 'true' }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        for artifact_dir in cli-release-artifacts/cli-*; do
+          if [ -d "$artifact_dir" ]; then
+            echo "Processing $artifact_dir"
+            for file in "$artifact_dir"/*; do
+              if [ -f "$file" ]; then
+                filename=$(basename "$file")
+                echo "Uploading $filename"
+                gh release upload "${TAG_NAME}" "$file" --repo "${{ github.repository }}" --clobber
+              fi
+            done
+          fi
+        done
+
+        gh release upload "${TAG_NAME}" cli-release-artifacts/thru-cli-SHA256SUMS --repo "${{ github.repository }}" --clobber
+
+    - name: CLI Release Summary
+      if: ${{ steps.release-check.outputs.exists == 'true' }}
+      run: |
+        echo "✅ Successfully uploaded thru CLI artifacts to release ${TAG_NAME}!"
+        echo ""
+        echo "thru CLI artifacts:"
+        find cli-release-artifacts/cli-* -type f -exec basename {} \; 2>/dev/null | sort || echo "  No CLI artifacts found"
+        echo ""
+        echo "Checksums:"
+        cat cli-release-artifacts/thru-cli-SHA256SUMS
+
+  # Publish the CLI npm packages: the platform packages carry the binaries
+  # built in this run (npm selects the right one through os/cpu +
+  # optionalDependencies — no postinstall, no network access at install time
+  # beyond the npm registry), then `thru` itself. Guards:
+  # - repository: only thru-net has NPM_TOKEN (the secrets context is not
+  #   available in job-level `if`, so the repository name stands in for it);
+  # - prerelease: never published to npm (release flag on release events, a
+  #   `-` suffix in the tag on dispatch);
+  # - release_exists: a dispatch dry-run for a tag without a release builds
+  #   artifacts but must not publish.
+  publish-npm:
+    needs: [upload-cli-release-artifacts]
+    if: >-
+      ${{ github.repository == 'Unto-Labs/thru-net' &&
+          needs.upload-cli-release-artifacts.outputs.release_exists == 'true' &&
+          (github.event_name != 'release' || github.event.release.prerelease != true) &&
+          (github.event_name != 'workflow_dispatch' || !contains(inputs.tag, '-')) }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      TAG_NAME: ${{ github.event.release.tag_name || inputs.tag }}
+
+    steps:
+      - name: Determine release version
+        id: meta
+        run: |
+          set -euo pipefail
+
+          VERSION="${TAG_NAME#v}"
+          if [ -z "$VERSION" ]; then
+            echo "Unable to derive version from tag '$TAG_NAME'" >&2
+            exit 1
+          fi
+          case "$VERSION" in
+            *-*)
+              echo "Refusing to publish prerelease version $VERSION to npm." >&2
+              exit 1
+              ;;
+          esac
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout release tag
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ github.event.release.tag_name || inputs.tag }}
+          # The CLI npm package is self-contained JS; no submodules needed.
+          submodules: false
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org/
+
+      - name: Download thru CLI artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          path: cli-release-artifacts
+          pattern: cli-*
+
+      - name: Verify and extract thru CLI binaries
+        run: |
+          set -euo pipefail
+
+          mkdir -p cli-assets
+          find cli-release-artifacts -type f \
+            \( -name 'thru-cli-*.tar.gz' -o -name 'thru-cli-SHA256SUMS' \) \
+            -exec mv {} cli-assets/ \;
+
+          cd cli-assets
+          sha256sum -c thru-cli-SHA256SUMS
+
+          mkdir -p ../cli-binaries
+          for archive in thru-cli-*.tar.gz; do
+            base="${archive%.tar.gz}"
+            asset_platform="${base#thru-cli-}"
+            asset_platform="${asset_platform%-${TAG_NAME}}"
+            mkdir -p "../cli-binaries/${asset_platform}"
+            tar -xzf "$archive" -C "../cli-binaries/${asset_platform}"
+          done
+
+          echo "Extracted thru CLI binaries:"
+          find ../cli-binaries -type f
+
+      - name: Sync thru package version
+        env:
+          RELEASE_VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          tmp=$(mktemp)
+          jq --arg v "$RELEASE_VERSION" '.version = $v' web/packages/cli/package.json > "$tmp"
+          mv "$tmp" web/packages/cli/package.json
+          echo "Set thru version to $RELEASE_VERSION"
+
+      - name: Run thru package tests
+        working-directory: web/packages/cli
+        run: node --test
+
+      - name: Generate thru platform packages
+        env:
+          RELEASE_VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          node web/packages/cli/scripts/make-platform-packages.mjs \
+            --version "$RELEASE_VERSION" \
+            --binaries-dir "$PWD/cli-binaries" \
+            --out-dir web/packages/cli/npm \
+            --optional win32-x64
+
+      - name: Check packaging invariants
+        working-directory: web/packages/cli
+        run: node scripts/check-package.mjs
+
+      # Platform packages must be live before `thru` itself is published so
+      # that its optionalDependencies are resolvable the moment it appears.
+      # Both publish steps are idempotent, so a dispatch re-run fills in
+      # whatever a previous attempt missed.
+      - name: Publish thru platform packages to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "$NODE_AUTH_TOKEN" ]; then
+            echo "NPM_TOKEN secret is not configured." >&2
+            exit 1
+          fi
+
+          for pkg_dir in web/packages/cli/npm/*/; do
+            name=$(jq -r '.name' "${pkg_dir}package.json")
+            version=$(jq -r '.version' "${pkg_dir}package.json")
+            if npm view "${name}@${version}" version >/dev/null 2>&1; then
+              echo "Skipping ${name}@${version}: already published"
+              continue
+            fi
+            echo "Publishing ${name}@${version}"
+            npm publish "$pkg_dir" --access public
+          done
+
+      - name: Publish thru to npm
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          RELEASE_VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          if npm view "thru@${RELEASE_VERSION}" version >/dev/null 2>&1; then
+            echo "Skipping thru@${RELEASE_VERSION}: already published"
+            exit 0
+          fi
+          npm publish web/packages/cli --access public
+
+      # End-to-end check of what consumers actually get: a fresh `npm exec`
+      # must resolve thru@VERSION plus its linux-x64 platform package from
+      # the public registry and run the native binary. The retry loop covers
+      # registry propagation lag right after publish. Failures here cannot
+      # unpublish anything, but they turn a broken release red immediately.
+      - name: Verify published thru CLI
+        env:
+          RELEASE_VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+
+          for attempt in $(seq 1 10); do
+            if npm view "thru@${RELEASE_VERSION}" version >/dev/null 2>&1; then
+              break
+            fi
+            if [ "$attempt" -eq 10 ]; then
+              echo "thru@${RELEASE_VERSION} is not visible on the registry." >&2
+              exit 1
+            fi
+            echo "Waiting for thru@${RELEASE_VERSION} on the registry (attempt ${attempt}/10)"
+            sleep 30
+          done
+
+          cd "$(mktemp -d)"
+          npm exec --yes --package "thru@${RELEASE_VERSION}" -- thru --version

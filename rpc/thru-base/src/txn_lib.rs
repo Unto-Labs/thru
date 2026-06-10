@@ -6,9 +6,9 @@ pub type TnHash = [u8; 32];
 pub type TnSignature = [u8; 64];
 
 use crate::{
+    StateProofType,
     tn_signature::{sign_transaction, verify_transaction},
     tn_state_proof::StateProof,
-    StateProofType,
 };
 use bytemuck::{Pod, Zeroable, bytes_of, from_bytes};
 
@@ -897,7 +897,10 @@ pub fn validate_wire_transaction(bytes: &[u8]) -> Result<(), RpcError> {
 
     // 9. Check for exact size match (offset should be at signature start)
     if offset != sig_start {
-        return Err(RpcError::trailing_bytes(offset + TN_TXN_SIGNATURE_SZ, bytes.len()));
+        return Err(RpcError::trailing_bytes(
+            offset + TN_TXN_SIGNATURE_SZ,
+            bytes.len(),
+        ));
     }
 
     // 10. Signature check
@@ -1080,7 +1083,8 @@ mod tests {
         let mut bytes = make_valid_txn_bytes();
 
         /* Modify chain_id field to 0 (chain_id is at offset 108-109 in WireTxnHdrV1) */
-        let hdr: &mut WireTxnHdrV1 = bytemuck::from_bytes_mut(&mut bytes[0..core::mem::size_of::<WireTxnHdrV1>()]);
+        let hdr: &mut WireTxnHdrV1 =
+            bytemuck::from_bytes_mut(&mut bytes[0..core::mem::size_of::<WireTxnHdrV1>()]);
         hdr.chain_id = 0;
 
         let err = validate_wire_transaction(&bytes).unwrap_err();

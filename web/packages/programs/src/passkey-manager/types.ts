@@ -77,13 +77,29 @@ export interface TransferInstructionParams {
   amount: bigint;
 }
 
+export interface TargetInstructionParams {
+  programIdx: number;
+  instructionData: Uint8Array;
+}
+
 export interface ValidateInstructionParams {
   walletAccountIdx: number;
   authIdx: number;
+  targetInstruction: TargetInstructionParams;
   signatureR: Uint8Array;
   signatureS: Uint8Array;
   authenticatorData: Uint8Array;
   clientDataJSON: Uint8Array;
+}
+
+export interface AddAuthorityInstructionParams {
+  walletAccountIdx: number;
+  authority: Authority;
+}
+
+export interface RemoveAuthorityInstructionParams {
+  walletAccountIdx: number;
+  authIdx: number;
 }
 
 export interface AccountContext {

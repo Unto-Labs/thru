@@ -736,18 +736,39 @@ impl<'a> StructWalker<'a> {
         path: &mut Vec<String>,
         data: &[u8],
     ) -> ReflectResult<usize> {
-        let (element_type, size_expression) = match &ty.kind {
+        let (element_type, size_expression, jagged) = match &ty.kind {
             ResolvedTypeKind::Array {
                 element_type,
                 size_expression,
+                jagged,
                 ..
-            } => (element_type.as_ref(), size_expression),
+            } => (element_type.as_ref(), size_expression, *jagged),
             _ => unreachable!(),
         };
 
         let count = self.eval_expr(size_expression)? as usize;
         if element_type.size == Size::Const(0) || count == 0 {
             return Ok(0);
+        }
+
+        if jagged && matches!(element_type.size, Size::Variable(_)) {
+            let mut cursor = 0usize;
+            for i in 0..count {
+                if cursor > data.len() {
+                    return Err(self.buffer_error(cursor as u64));
+                }
+                path.push(i.to_string());
+                let consumed = self.process_field(element_type, path, &data[cursor..], false)?;
+                path.pop();
+                cursor = cursor.checked_add(consumed).ok_or_else(|| {
+                    ReflectError::UnsupportedDynamicParam {
+                        type_name: self.type_name.to_string(),
+                        parameter: path_key(path),
+                        reason: "jagged array size overflowed".into(),
+                    }
+                })?;
+            }
+            return Ok(cursor);
         }
 
         let element_size = match element_type.size {

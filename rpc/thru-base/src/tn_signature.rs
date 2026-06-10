@@ -2,7 +2,7 @@ use curve25519_dalek::{
     edwards::{CompressedEdwardsY, EdwardsPoint},
     scalar::Scalar,
 };
-use ed25519_dalek::{hazmat::ExpandedSecretKey, SigningKey, VerifyingKey};
+use ed25519_dalek::{SigningKey, VerifyingKey, hazmat::ExpandedSecretKey};
 use sha2::{Digest, Sha512};
 use std::{convert::TryInto, fmt};
 
@@ -90,7 +90,9 @@ pub fn verify(
     sig: &[u8; 64],
     public_key: &[u8; 32],
 ) -> Result<(), TnSignatureError> {
-    let r_bytes: [u8; 32] = sig[..32].try_into().map_err(|_| TnSignatureError::InvalidSignature)?;
+    let r_bytes: [u8; 32] = sig[..32]
+        .try_into()
+        .map_err(|_| TnSignatureError::InvalidSignature)?;
     let s_bytes: [u8; 32] = sig[32..]
         .try_into()
         .map_err(|_| TnSignatureError::InvalidSignature)?;

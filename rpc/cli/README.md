@@ -29,6 +29,13 @@
 - **Version alignment**: All three crates (`thru-core`, `thru-cli`, `thru`) stay on
   `0.1.0` in the repo and should be versioned together.
 
+- **Preferred install path**: End users should install the CLI with `npm i -g thru`.
+  The npm package ships prebuilt binaries through per-platform packages
+  (`thru-linux-x64`, `thru-darwin-arm64`, ...) selected via `optionalDependencies` —
+  no postinstall script, no GitHub download at install time (see
+  `web/packages/cli/README.md`). The Cargo packages continue to publish for
+  compatibility and source-based installs.
+
 ---
 
 ## Publish plan
@@ -57,7 +64,7 @@ verification and install.
    ```
    cd crates/thru && cargo publish
    ```
-   New canonical package. `cargo install thru` now works.
+   New canonical Cargo package. `cargo install thru` remains available for source-based installs.
 
 3. **`thru-cli` (0.1.0)**
    ```
@@ -68,7 +75,8 @@ verification and install.
 
 ### Post-publish validation
 
-- [ ] `cargo install thru` — confirm binary works
+- [ ] `npm i -g thru` — confirm the platform package binary works (also check `npx thru` from a local, non-global install)
+- [ ] `cargo install thru` — confirm source-based install still works
 - [ ] `cargo install thru-cli` — confirm binary works and shows deprecation warning
 - [ ] `thru --version` and `thru-cli --version` show same version
 
@@ -80,7 +88,7 @@ verification and install.
 
 - `thru-cli` prints a yellow warning to stderr on every interactive run:
   > Warning: `thru-cli` is being moved to `thru`, and will soon be deprecated.
-  > Install it with: cargo install thru
+  > Install it with: npm i -g thru
 - `thru-cli` remains fully functional — identical behavior to `thru`
 - All new docs reference `thru` only
 - Duration: keep for at least 2-3 release cycles so users see the warning
@@ -96,6 +104,6 @@ verification and install.
 ### Stage 3: Retire
 
 - Publish a final `thru-cli` version that prints an error and exits:
-  > Error: `thru-cli` has been retired. Install `thru` instead: cargo install thru
+  > Error: `thru-cli` has been retired. Install `thru` instead: npm i -g thru
 - Mark the crate as deprecated on crates.io
 - Remove `crates/thru-cli/` from the workspace

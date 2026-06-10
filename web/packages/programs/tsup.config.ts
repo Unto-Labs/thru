@@ -4,6 +4,7 @@ export default defineConfig({
   entry: {
     'token/index': 'src/token/index.ts',
     'passkey-manager/index': 'src/passkey-manager/index.ts',
+    'multicall/index': 'src/multicall/index.ts',
   },
   format: ['cjs', 'esm'],
   dts: true,

@@ -1,7 +1,7 @@
 /* Binary parser for ABI types */
 
 use crate::ir::ParamMap;
-use crate::types::ReflectedType;
+use crate::types::{ReflectedType, ReflectedTypeKind};
 use crate::value::{
     PrimitiveValue, PrimitiveValueChar, PrimitiveValueF16, PrimitiveValueF32, PrimitiveValueF64,
     PrimitiveValueI16, PrimitiveValueI32, PrimitiveValueI64, PrimitiveValueI8, PrimitiveValueU16,
@@ -118,11 +118,13 @@ impl<'a> Parser<'a> {
             ResolvedTypeKind::Array {
                 element_type,
                 size_expression,
+                jagged,
                 ..
             } => self.parse_array(
                 data,
                 element_type,
                 size_expression,
+                *jagged,
                 resolved_type,
                 owner_name,
             ),
@@ -403,17 +405,10 @@ impl<'a> Parser<'a> {
                     } else if let ResolvedTypeKind::Array {
                         element_type,
                         size_expression,
+                        jagged,
                         ..
                     } = &field.field_type.kind
                     {
-                        let element_size = match element_type.size {
-                            abi_gen::abi::resolved::Size::Const(sz) => sz as usize,
-                            _ => {
-                                return Err(ParseError::ExpressionEvaluationFailed(
-                                    "Variable-size array elements not supported".to_string(),
-                                ))
-                            }
-                        };
                         let count = self.evaluate_tag_expression_with_context(
                             size_expression,
                             data,
@@ -421,6 +416,30 @@ impl<'a> Parser<'a> {
                             &parsed_field_map,
                             owner_name,
                         )? as usize;
+                        if *jagged {
+                            let (elements, total_size) = self.parse_jagged_array_elements(
+                                &data[field_offset..],
+                                count,
+                                element_type,
+                            )?;
+                            let reflected_field = ReflectedValue::new(
+                                self.reflected_type(&field.field_type),
+                                Value::Array { elements },
+                            );
+                            parsed_field_map.insert(field.name.clone(), reflected_field.clone());
+                            parsed_fields.push((field.name.clone(), reflected_field));
+                            offset = field_offset + total_size;
+                            continue;
+                        }
+
+                        let element_size = match element_type.size {
+                            abi_gen::abi::resolved::Size::Const(sz) => sz as usize,
+                            _ => {
+                                return Err(ParseError::ExpressionEvaluationFailed(
+                                    "Variable-size array elements require jagged: true".to_string(),
+                                ))
+                            }
+                        };
                         let total_size = element_size.checked_mul(count).ok_or_else(|| {
                             ParseError::ExpressionEvaluationFailed(
                                 "Array size overflow".to_string(),
@@ -592,6 +611,7 @@ impl<'a> Parser<'a> {
         data: &[u8],
         element_type: &ResolvedType,
         size_expression: &ExprKind,
+        jagged: bool,
         resolved_type: &ResolvedType,
         owner_name: &str,
     ) -> Result<Value, ParseError> {
@@ -619,11 +639,17 @@ impl<'a> Parser<'a> {
                 )))
             })?;
 
+        if jagged {
+            let (elements, _total_size) =
+                self.parse_jagged_array_elements(data, array_size, element_type)?;
+            return Ok(Value::Array { elements });
+        }
+
         let element_size = match &element_type.size {
             abi_gen::abi::resolved::Size::Const(size) => *size as usize,
             abi_gen::abi::resolved::Size::Variable(_) => {
                 return Err(ParseError::ExpressionEvaluationFailed(
-                    "Variable-size array elements not supported".to_string(),
+                    "Variable-size array elements require jagged: true".to_string(),
                 ));
             }
         };
@@ -650,6 +676,51 @@ impl<'a> Parser<'a> {
         }
 
         Ok(Value::Array { elements })
+    }
+
+    fn parse_jagged_array_elements(
+        &mut self,
+        data: &[u8],
+        count: usize,
+        element_type: &ResolvedType,
+    ) -> Result<(Vec<ReflectedValue>, usize), ParseError> {
+        let mut elements = Vec::with_capacity(count);
+        let element_type_info = self.reflected_type(element_type);
+        let mut cursor = 0usize;
+
+        for i in 0..count {
+            if cursor > data.len() {
+                return Err(ParseError::InsufficientData {
+                    needed: cursor,
+                    available: data.len(),
+                });
+            }
+            let element_value =
+                self.parse_value(&data[cursor..], element_type, &element_type.name)?;
+            let reflected = ReflectedValue::new(element_type_info.clone(), element_value);
+            let consumed = reflected_runtime_size(&reflected).ok_or_else(|| {
+                ParseError::ExpressionEvaluationFailed(format!(
+                    "Unable to determine runtime size for jagged array element {i}"
+                ))
+            })?;
+            if consumed == 0 {
+                return Err(ParseError::ExpressionEvaluationFailed(format!(
+                    "Jagged array element {i} consumed zero bytes"
+                )));
+            }
+            cursor = cursor.checked_add(consumed).ok_or_else(|| {
+                ParseError::ExpressionEvaluationFailed("Jagged array size overflow".to_string())
+            })?;
+            if cursor > data.len() {
+                return Err(ParseError::InsufficientData {
+                    needed: cursor,
+                    available: data.len(),
+                });
+            }
+            elements.push(reflected);
+        }
+
+        Ok((elements, cursor))
     }
 
     /* Parse a size-discriminated union */
@@ -1484,6 +1555,46 @@ fn normalize_param_alias(value: &str) -> String {
         .filter(|seg| !seg.is_empty())
         .collect::<Vec<_>>()
         .join(".")
+}
+
+fn reflected_runtime_size(value: &ReflectedValue) -> Option<usize> {
+    if let Some(size) = value.type_info.size {
+        return usize::try_from(size).ok();
+    }
+
+    match value.get_value() {
+        Value::Array { elements } => elements.iter().try_fold(0usize, |acc, element| {
+            reflected_runtime_size(element).and_then(|size| acc.checked_add(size))
+        }),
+        Value::Struct { fields } => {
+            let ReflectedTypeKind::Struct {
+                fields: type_fields,
+                ..
+            } = &value.type_info.kind
+            else {
+                return None;
+            };
+
+            let mut running_offset = 0usize;
+            for (idx, (_, field)) in fields.iter().enumerate() {
+                let field_offset = type_fields
+                    .get(idx)
+                    .and_then(|field| field.offset)
+                    .and_then(|offset| usize::try_from(offset).ok())
+                    .unwrap_or(running_offset);
+                let field_size = reflected_runtime_size(field)?;
+                running_offset = running_offset.max(field_offset.checked_add(field_size)?);
+            }
+            Some(running_offset)
+        }
+        Value::Union { variant_value, .. } => reflected_runtime_size(variant_value),
+        Value::Enum { variant_value, .. } => reflected_runtime_size(variant_value),
+        Value::SizeDiscriminatedUnion { variant_value, .. } => {
+            reflected_runtime_size(variant_value)
+        }
+        Value::TypeRef { value, .. } => reflected_runtime_size(value),
+        _ => None,
+    }
 }
 
 #[cfg(test)]

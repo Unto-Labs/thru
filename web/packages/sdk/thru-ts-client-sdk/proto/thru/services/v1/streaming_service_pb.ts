@@ -299,6 +299,16 @@ export const StreamBlocksResponseSchema: GenMessage<StreamBlocksResponse> = /*@_
  */
 export type StreamAccountUpdatesRequest = Message<"thru.services.v1.StreamAccountUpdatesRequest"> & {
   /**
+   * Projects delivered snapshots and updates to the requested fields. The
+   * server strips fields the view excludes before sending: META_ONLY omits
+   * Account.data and AccountUpdate.page; DATA_ONLY omits the meta; PUBKEY_ONLY
+   * delivers only the address. On AccountUpdate deltas the slot and the
+   * AccountUpdate.delete flag are always preserved regardless of view, so every
+   * view can detect account deletion; without delete a deletion would be
+   * indistinguishable from a page-less update.
+   * ACCOUNT_VIEW_UNSPECIFIED defaults to ACCOUNT_VIEW_FULL, matching the unary
+   * GetAccount RPC.
+   *
    * @generated from field: optional thru.core.v1.AccountView view = 2;
    */
   view?: AccountView | undefined;

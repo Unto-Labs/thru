@@ -16,8 +16,16 @@ export {
   getManifestPackages,
   validateManifest,
 } from "./wasmBridge";
-export type { FormatOptions, Manifest, ManifestPackageInfo } from "./wasmBridge";
+export type { FormatOptions, Manifest, ManifestPackageInfo, WasmConfig } from "./wasmBridge";
 export type { FormattedReflection, FormattedValue, FormattedValueWithByteRange, ByteRange } from "./types";
+export {
+  MAX_NESTED_INSTRUCTION_DEPTH,
+  resolveNestedInstructionData,
+} from "./nestedInstructionData";
+export type {
+  NestedInstructionDecoder,
+  NestedInstructionDecodeOptions,
+} from "./nestedInstructionData";
 
 /* Import resolver module */
 export * from "./imports";

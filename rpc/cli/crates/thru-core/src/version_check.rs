@@ -128,7 +128,7 @@ fn print_update_notification(new_version: &str) {
     eprintln!("{}", "│  Update with:                                   │".bright_yellow());
     eprintln!("{}{}{}", 
         "│".bright_yellow(),
-        "    cargo install thru                            ".bold(),
+        format!("{:<49}", "    npm i -g thru").bold(),
         "│".bright_yellow()
     );
     eprintln!("{}", "╰─────────────────────────────────────────────────╯".bright_yellow());

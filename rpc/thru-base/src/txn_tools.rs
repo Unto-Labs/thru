@@ -3,7 +3,7 @@ use crate::{
     tn_public_address::tn_pubkey_to_address_string,
     txn_lib::{TnPubkey, Transaction},
 };
-use anyhow::Result;
+use anyhow::{Result, bail};
 use hex;
 use std::collections::HashMap;
 
@@ -112,6 +112,11 @@ fn build_consensus_validator_tx(
         .with_compute_units(CONSENSUS_VALIDATOR_DEFAULT_COMPUTE_UNITS)
         .with_state_units(CONSENSUS_VALIDATOR_DEFAULT_STATE_UNITS)
         .with_memory_units(CONSENSUS_VALIDATOR_DEFAULT_MEMORY_UNITS)
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct UploaderWriteOptions {
+    pub skip_elf_check: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -451,10 +456,7 @@ pub fn build_eoa_delete_message(
 /// - EOA account index: u16 (2 bytes)
 /// - Signature: 64 bytes
 /// Total: 70 bytes
-fn build_delete_account_instruction(
-    eoa_account_idx: u16,
-    signature: &[u8; 64],
-) -> Result<Vec<u8>> {
+fn build_delete_account_instruction(eoa_account_idx: u16, signature: &[u8; 64]) -> Result<Vec<u8>> {
     let mut instruction = Vec::with_capacity(4 + 2 + 64);
 
     // TN_EOA_INSTRUCTION_DELETE_ACCOUNT = 2 (u32, 4 bytes little-endian)
@@ -769,14 +771,21 @@ mod tests {
             instruction[2],
             instruction[3],
         ]);
-        assert_eq!(discriminant, 2, "Discriminant should be 2 for DELETE_ACCOUNT");
+        assert_eq!(
+            discriminant, 2,
+            "Discriminant should be 2 for DELETE_ACCOUNT"
+        );
 
         // Check eoa_account_idx
         let parsed_idx = u16::from_le_bytes([instruction[4], instruction[5]]);
         assert_eq!(parsed_idx, eoa_idx, "EOA index should match input");
 
         // Check signature
-        assert_eq!(&instruction[6..70], &signature, "Signature should match input");
+        assert_eq!(
+            &instruction[6..70],
+            &signature,
+            "Signature should match input"
+        );
     }
 
     #[test]
@@ -1507,6 +1516,11 @@ pub struct SystemProgramDecompress2Args {
     pub data_offset: u32,
 }
 
+fn uploader_data_has_elf_magic(data: &[u8]) -> bool {
+    let elf_magic = [0x7f, b'E', b'L', b'F'];
+    data.starts_with(&elf_magic)
+}
+
 impl TransactionBuilder {
     /// Build uploader program CREATE transaction
     pub fn build_uploader_create(
@@ -1571,6 +1585,39 @@ impl TransactionBuilder {
         nonce: u64,
         start_slot: u64,
     ) -> Result<Transaction> {
+        Self::build_uploader_write_with_options(
+            fee_payer,
+            uploader_program,
+            meta_account,
+            buffer_account,
+            data,
+            offset,
+            fee,
+            nonce,
+            start_slot,
+            UploaderWriteOptions::default(),
+        )
+    }
+
+    /// Build uploader program WRITE transaction with caller-selected validation options.
+    pub fn build_uploader_write_with_options(
+        fee_payer: TnPubkey,
+        uploader_program: TnPubkey,
+        meta_account: TnPubkey,
+        buffer_account: TnPubkey,
+        data: &[u8],
+        offset: u32,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+        options: UploaderWriteOptions,
+    ) -> Result<Transaction> {
+        if !options.skip_elf_check && offset == 0 && uploader_data_has_elf_magic(data) {
+            bail!(
+                "uploader data begins with ELF magic; upload a Thru program binary, not an ELF executable"
+            );
+        }
+
         // Account layout: [0: fee_payer, 1: uploader_program, 2: meta_account, 3: buffer_account]
         let mut tx = Transaction::new(fee_payer, uploader_program, fee, nonce)
             .with_start_slot(start_slot)
@@ -4512,7 +4559,7 @@ impl TransactionBuilder {
     /// # Arguments
     /// * `fee_payer` - The validator identity (also the signer)
     /// * `source_token_account` - The validator's token account with staking tokens
-    /// * `bls_pk` - BLS public key for the validator (96 bytes, uncompressed)
+    /// * `bls_pk` - BLS public key for the validator as tn_bls_pubkey_t bytes
     /// * `claim_authority` - Pubkey that can claim rewards for this validator
     /// * `token_amount` - Amount of tokens to stake
     /// * `fee` - Transaction fee
@@ -5731,7 +5778,7 @@ fn build_activate_instruction(
     /* - identity_idx (u16, 2 bytes LE) */
     instruction_data.extend_from_slice(&identity_idx.to_le_bytes());
 
-    /* - bls_pk (96 bytes, blst_p1_affine uncompressed) */
+    /* - bls_pk (96 bytes, tn_bls_pubkey_t / blst_p1_affine) */
     instruction_data.extend_from_slice(&bls_pk);
 
     /* - claim_authority (32 bytes, pubkey) */

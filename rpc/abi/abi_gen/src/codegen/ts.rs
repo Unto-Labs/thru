@@ -69,6 +69,7 @@ impl TypeScriptCodeGenerator {
 
         output.push_str(runtime::emit_runtime_helpers());
         output.push_str("\n");
+        output.push_str(&self.emit_imported_type_registrations(resolved_types));
 
         // Build type_lookup from all types (including imports) if available,
         // otherwise fall back to just the types in this package
@@ -123,6 +124,8 @@ impl TypeScriptCodeGenerator {
                 if let Some(builder_code) = builder_snippets.get(&resolved_type.name) {
                     output.push_str(builder_code);
                 }
+
+                output.push_str(&emit_type_registrations(resolved_type, type_ir.as_ref()));
             }
         }
 
@@ -177,6 +180,55 @@ impl TypeScriptCodeGenerator {
 
         Some(imports)
     }
+
+    fn emit_imported_type_registrations(
+        &self,
+        resolved_types: &[(&ResolvedType, Option<TypeIr>)],
+    ) -> String {
+        let Some(current_package) = self.options.package_name.as_deref() else {
+            return String::new();
+        };
+        let Some(type_package) = self.options.type_package_map.as_ref() else {
+            return String::new();
+        };
+
+        let mut imported_types = BTreeSet::new();
+        for (resolved_type, _) in resolved_types {
+            collect_typeref_dependencies(resolved_type, &mut |type_name: &str| {
+                if matches!(type_package.get(type_name), Some(package) if package != current_package)
+                {
+                    imported_types.insert(type_name.to_string());
+                }
+            });
+        }
+
+        if imported_types.is_empty() {
+            return String::new();
+        }
+
+        let mut output = String::new();
+        for type_name in imported_types {
+            output.push_str(&emit_type_registration_by_name(&type_name));
+        }
+        output
+    }
+}
+
+fn emit_type_registrations(resolved_type: &ResolvedType, type_ir: Option<&TypeIr>) -> String {
+    if type_ir.is_none() {
+        return String::new();
+    }
+
+    emit_type_registration_by_name(&resolved_type.name)
+}
+
+fn emit_type_registration_by_name(name: &str) -> String {
+    format!(
+        "__tnRegisterFootprint(\"{name}\", (params) => {name}.__tnInvokeFootprint(params));\n\
+__tnRegisterValidate(\"{name}\", (buffer, params) => {name}.__tnInvokeValidate(buffer, params));\n\
+__tnRegisterDynamicValidate(\"{name}\", (buffer) => {{ const result = {name}.validate(buffer); return {{ ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }}; }});\n\n",
+        name = name
+    )
 }
 
 fn collect_typeref_dependencies<F>(ty: &ResolvedType, visitor: &mut F)

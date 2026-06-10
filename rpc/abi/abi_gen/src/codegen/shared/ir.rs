@@ -64,6 +64,19 @@ pub struct TypeIr {
     pub parameters: Vec<IrParameter>,
 }
 
+impl TypeIr {
+    /// Returns true when this type's root expression contains jagged-array
+    /// iteration.
+    pub fn contains_sum_over_array(&self) -> bool {
+        self.root.contains_sum_over_array()
+    }
+
+    /// Collects nested type names referenced by call nodes in this type's root.
+    pub fn collect_call_nested_type_names(&self, out: &mut Vec<String>) {
+        self.root.collect_call_nested_type_names(out);
+    }
+}
+
 /// Fully-qualified parameter descriptor shared across backends.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct IrParameter {
@@ -149,6 +162,57 @@ pub enum IrNode {
     MulChecked(BinaryOpNode),
     /// Sum of footprints over variable-size array elements (jagged arrays).
     SumOverArray(SumOverArrayNode),
+}
+
+impl IrNode {
+    /// Returns true if this node or any child node requires jagged-array
+    /// iteration.
+    pub fn contains_sum_over_array(&self) -> bool {
+        match self {
+            IrNode::ZeroSize { .. } | IrNode::Const(_) | IrNode::FieldRef(_) => false,
+            IrNode::AlignUp(node) => node.node.contains_sum_over_array(),
+            IrNode::Switch(node) => {
+                node.cases
+                    .iter()
+                    .any(|case| case.node.contains_sum_over_array())
+                    || node
+                        .default
+                        .as_ref()
+                        .map(|default| default.contains_sum_over_array())
+                        .unwrap_or(false)
+            }
+            IrNode::CallNested(_) => false,
+            IrNode::AddChecked(node) | IrNode::MulChecked(node) => {
+                node.left.contains_sum_over_array() || node.right.contains_sum_over_array()
+            }
+            IrNode::SumOverArray(_) => true,
+        }
+    }
+
+    /// Collects nested type names referenced by this node tree.
+    pub fn collect_call_nested_type_names(&self, out: &mut Vec<String>) {
+        match self {
+            IrNode::ZeroSize { .. } | IrNode::Const(_) | IrNode::FieldRef(_) => {}
+            IrNode::AlignUp(node) => node.node.collect_call_nested_type_names(out),
+            IrNode::Switch(node) => {
+                for case in &node.cases {
+                    case.node.collect_call_nested_type_names(out);
+                }
+                if let Some(default) = &node.default {
+                    default.collect_call_nested_type_names(out);
+                }
+            }
+            IrNode::CallNested(node) => out.push(node.type_name.clone()),
+            IrNode::AddChecked(node) | IrNode::MulChecked(node) => {
+                node.left.collect_call_nested_type_names(out);
+                node.right.collect_call_nested_type_names(out);
+            }
+            IrNode::SumOverArray(node) => {
+                node.count.collect_call_nested_type_names(out);
+                out.push(node.element_type_name.clone());
+            }
+        }
+    }
 }
 
 /// Represents a compile-time constant footprint contribution.

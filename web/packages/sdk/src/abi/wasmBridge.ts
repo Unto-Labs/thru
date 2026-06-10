@@ -24,8 +24,25 @@ type WasmReflectBindings = {
 type JsonValue = unknown;
 declare const require: ((specifier: string) => unknown) | undefined;
 
+export interface WasmConfig {
+  /**
+   * Public URL for the generated wasm-pack JS glue module.
+   *
+   * Browser apps that bundle @thru/sdk can use this to load ABI
+   * reflection from a stable static asset path instead of relying on a
+   * package-relative dynamic import.
+   */
+  moduleUrl?: string;
+
+  /**
+   * Public URL for abi_reflect_wasm_bg.wasm.
+   */
+  wasmUrl: string;
+}
+
 // Configuration for WASM loading
 let configuredWasmUrl: string | undefined;
+let configuredWasmModuleUrl: string | undefined;
 
 /**
  * Configure the URL from which to load the WASM file.
@@ -40,14 +57,34 @@ let configuredWasmUrl: string | undefined;
  * configureWasm("/wasm/abi_reflect_wasm_bg.wasm");
  * ```
  *
- * @param url - URL or path to the WASM file (e.g., "/wasm/abi_reflect_wasm_bg.wasm")
+ * Browser apps that serve both the generated wasm-pack JS glue and the
+ * `.wasm` binary from public assets should pass both URLs:
+ *
+ * @example
+ * ```ts
+ * configureWasm({
+ *   moduleUrl: "/wasm/abi/web/abi_reflect_wasm.js",
+ *   wasmUrl: "/wasm/abi/web/abi_reflect_wasm_bg.wasm",
+ * });
+ * ```
+ *
+ * Passing a string preserves the legacy behavior and only configures
+ * the `.wasm` binary URL.
+ *
+ * @param config - WASM URL or full browser asset configuration.
  */
-export function configureWasm(url: string): void {
+export function configureWasm(config: string | WasmConfig): void {
   if (cachedBindings) {
     console.warn("configureWasm called after WASM was already loaded. Configuration ignored.");
     return;
   }
-  configuredWasmUrl = url;
+  if (typeof config === "string") {
+    configuredWasmUrl = config;
+    configuredWasmModuleUrl = undefined;
+    return;
+  }
+  configuredWasmUrl = config.wasmUrl;
+  configuredWasmModuleUrl = config.moduleUrl;
 }
 
 const wasmDir = resolveWasmDir();
@@ -118,6 +155,23 @@ async function importModule(specifier: string): Promise<unknown> {
   return dynamicImport(specifier);
 }
 
+function resolveRuntimeUrl(url: string): string {
+  if (/^(?:[a-zA-Z][a-zA-Z\d+.-]*:|\/\/)/.test(url)) {
+    return url;
+  }
+
+  const location =
+    typeof globalThis.location === "object" && globalThis.location
+      ? globalThis.location
+      : undefined;
+  const base =
+    typeof location?.href === "string" && location.href.length > 0
+      ? location.href
+      : resolveImportMetaUrl();
+
+  return resolveModuleUrl(url, base);
+}
+
 function requireModule(moduleUrl: string): unknown | undefined {
   try {
     const requireFn = typeof require === "function" ? require : undefined;
@@ -139,6 +193,27 @@ function resolveWasmDir(): string {
   return "./wasm";
 }
 
+function resolveConfiguredWasmModuleUrl(wasmUrl: string): string {
+  const base =
+    typeof globalThis.location === "object" &&
+    typeof globalThis.location?.href === "string"
+      ? globalThis.location.href
+      : resolveImportMetaUrl();
+  const resolved = new URL(wasmUrl, base);
+  if (resolved.pathname.endsWith("_bg.wasm")) {
+    resolved.pathname = resolved.pathname.slice(0, -"_bg.wasm".length) + ".js";
+  } else if (resolved.pathname.endsWith(".wasm")) {
+    resolved.pathname = resolved.pathname.slice(0, -".wasm".length) + ".js";
+  } else {
+    throw new Error(
+      `Configured WASM URL must end in .wasm (received ${wasmUrl})`,
+    );
+  }
+  resolved.search = "";
+  resolved.hash = "";
+  return resolved.href;
+}
+
 async function loadBindings(): Promise<WasmReflectBindings> {
   if (cachedBindings) {
     return cachedBindings;
@@ -148,7 +223,7 @@ async function loadBindings(): Promise<WasmReflectBindings> {
     if (isNodeRuntime()) {
       loader = loadNodeBindings();
     } else if (configuredWasmUrl) {
-      loader = loadWebBindings(configuredWasmUrl);
+      loader = loadWebBindings(configuredWasmUrl, configuredWasmModuleUrl);
     } else {
       loader = loadBundlerBindings();
     }
@@ -166,14 +241,22 @@ async function loadBindings(): Promise<WasmReflectBindings> {
   return bindingsPromise;
 }
 
-async function loadWebBindings(wasmUrl: string): Promise<WasmReflectBindings> {
-  const moduleUrl = resolveModuleUrl(`${wasmDir}/web/abi_reflect_wasm.js`, resolveImportMetaUrl());
-  const mod = (await importModule(moduleUrl)) as WasmReflectBindings & {
-    default: (url: string) => Promise<void>;
-  };
+async function loadWebBindings(
+  wasmUrl: string,
+  moduleUrlOverride?: string,
+): Promise<WasmReflectBindings> {
+  const moduleUrl = moduleUrlOverride
+    ? resolveRuntimeUrl(moduleUrlOverride)
+    : resolveConfiguredWasmModuleUrl(wasmUrl);
+  const imported = await importModule(moduleUrl);
+  const mod = unwrapImportedBindings(imported, moduleUrl);
+  const initializer = isObjectLike(imported) ? imported.default : undefined;
+  if (typeof initializer !== "function") {
+    throw new Error(`WASM web module is missing default initializer for ${moduleUrl}`);
+  }
 
   // Initialize with the configured WASM URL
-  await mod.default(wasmUrl);
+  await initializer({ module_or_path: resolveRuntimeUrl(wasmUrl) });
 
   return mod;
 }

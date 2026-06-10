@@ -8,8 +8,8 @@ use crate::types::ReflectedType;
 use crate::value::ReflectedValue;
 use abi_gen::abi::file::RootTypes;
 use abi_gen::abi::resolved::{ResolvedType, ResolvedTypeKind, TypeResolver};
-use abi_gen::codegen::shared::ir::{LayoutIr, TypeIr};
-use std::collections::BTreeMap;
+use abi_gen::codegen::shared::ir::{IrNode, LayoutIr, TypeIr};
+use std::collections::{BTreeMap, BTreeSet};
 
 /* Configuration toggles for the reflector */
 #[derive(Clone, Debug, Default)]
@@ -102,6 +102,23 @@ impl Reflector {
     ) -> ReflectResult<IrValidationResult> {
         let resolved_type = self.get_resolved_type(type_name)?;
         let type_ir = self.type_ir(type_name)?;
+        if self.requires_byte_backed_validation(type_ir) {
+            let params = if Self::supports_param_extraction(resolved_type) {
+                self.extract_params(resolved_type, type_ir, buffer)?
+            } else {
+                ParamMap::new()
+            };
+            let mut parser = Parser::new(&self.resolver, params);
+            parser
+                .parse(buffer, resolved_type)
+                .map_err(|source| ReflectError::Parse {
+                    type_name: resolved_type.name.clone(),
+                    source,
+                })?;
+            return Ok(IrValidationResult {
+                bytes_consumed: buffer.len() as u128,
+            });
+        }
         if Self::supports_param_extraction(resolved_type) {
             let params = self.extract_params(resolved_type, type_ir, buffer)?;
             self.validate_with_params(type_ir, buffer, &params)
@@ -142,11 +159,15 @@ impl Reflector {
         resolved_type: &ResolvedType,
     ) -> ReflectResult<ReflectedValue> {
         let type_ir = self.type_ir(&resolved_type.name)?;
+        let requires_byte_backed_validation = self.requires_byte_backed_validation(type_ir);
         let (params, should_validate) = if Self::supports_param_extraction(resolved_type) {
             let params = self.extract_params(resolved_type, type_ir, data)?;
-            (params, true)
+            (params, !requires_byte_backed_validation)
         } else {
-            (ParamMap::new(), type_ir.parameters.is_empty())
+            (
+                ParamMap::new(),
+                type_ir.parameters.is_empty() && !requires_byte_backed_validation,
+            )
         };
         if should_validate {
             self.validate_with_params(type_ir, data, &params)?;
@@ -250,6 +271,53 @@ impl Reflector {
 
     fn supports_param_extraction(resolved_type: &ResolvedType) -> bool {
         matches!(resolved_type.kind, ResolvedTypeKind::Struct { .. })
+    }
+
+    fn requires_byte_backed_validation(&self, type_ir: &TypeIr) -> bool {
+        let mut visited = BTreeSet::new();
+        self.node_requires_byte_backed_validation(&type_ir.root, &mut visited)
+    }
+
+    fn node_requires_byte_backed_validation(
+        &self,
+        node: &IrNode,
+        visited: &mut BTreeSet<String>,
+    ) -> bool {
+        match node {
+            IrNode::ZeroSize { .. } | IrNode::Const(_) | IrNode::FieldRef(_) => false,
+            IrNode::AlignUp(node) => self.node_requires_byte_backed_validation(&node.node, visited),
+            IrNode::AddChecked(node) | IrNode::MulChecked(node) => {
+                self.node_requires_byte_backed_validation(&node.left, visited)
+                    || self.node_requires_byte_backed_validation(&node.right, visited)
+            }
+            IrNode::Switch(node) => {
+                node.cases
+                    .iter()
+                    .any(|case| self.node_requires_byte_backed_validation(&case.node, visited))
+                    || match node.default.as_ref() {
+                        Some(default) => {
+                            self.node_requires_byte_backed_validation(default, visited)
+                        }
+                        None => false,
+                    }
+            }
+            IrNode::CallNested(node) => {
+                if !visited.insert(node.type_name.clone()) {
+                    return false;
+                }
+                match self
+                    .ir_index
+                    .get(&node.type_name)
+                    .and_then(|idx| self.layout_ir.types.get(*idx))
+                {
+                    Some(type_ir) => {
+                        self.node_requires_byte_backed_validation(&type_ir.root, visited)
+                    }
+                    None => false,
+                }
+            }
+            IrNode::SumOverArray(_) => true,
+        }
     }
 }
 

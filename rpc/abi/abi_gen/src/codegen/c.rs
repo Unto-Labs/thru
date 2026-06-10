@@ -6,6 +6,7 @@ use crate::codegen::c_gen::{
 };
 use crate::codegen::shared::builder::IrBuilder;
 use crate::codegen::shared::ir::TypeIr;
+use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write;
 use std::fs;
 
@@ -63,11 +64,27 @@ impl<'a> CCodeGenerator<'a> {
                         ir_error = Some(err.to_string());
                     }
                 }
-                forward_decls.push_str(&emit_forward_declarations(resolved_type, type_ir.as_ref()));
+
+                let mut helper_support_cache = BTreeMap::new();
+                let helper_type_ir = type_ir.as_ref().filter(|ir| {
+                    static_ir_helpers_supported(
+                        &self.ir_builder,
+                        &ir.type_name,
+                        &mut helper_support_cache,
+                        &mut BTreeSet::new(),
+                    )
+                });
+                let helper_ir_error = if type_ir.is_some() && helper_type_ir.is_none() {
+                    Some("jagged array sizes require instance data")
+                } else {
+                    ir_error.as_deref()
+                };
+
+                forward_decls.push_str(&emit_forward_declarations(resolved_type, helper_type_ir));
                 functions_output.push_str(&self.emit_functions_for_type(
                     resolved_type,
-                    type_ir.as_ref(),
-                    ir_error.as_deref(),
+                    helper_type_ir,
+                    helper_ir_error,
                 ));
             }
         }
@@ -340,4 +357,39 @@ impl<'a> CCodeGenerator<'a> {
 
         path_parts.join("/")
     }
+}
+
+fn static_ir_helpers_supported(
+    ir_builder: &IrBuilder<'_>,
+    type_name: &str,
+    cache: &mut BTreeMap<String, bool>,
+    visiting: &mut BTreeSet<String>,
+) -> bool {
+    if let Some(supported) = cache.get(type_name) {
+        return *supported;
+    }
+
+    if !visiting.insert(type_name.to_string()) {
+        cache.insert(type_name.to_string(), false);
+        return false;
+    }
+
+    let supported = ir_builder
+        .build_type_name(type_name)
+        .map(|ir| {
+            if ir.contains_sum_over_array() {
+                return false;
+            }
+
+            let mut nested = Vec::new();
+            ir.collect_call_nested_type_names(&mut nested);
+            nested.into_iter().all(|nested_type| {
+                static_ir_helpers_supported(ir_builder, &nested_type, cache, visiting)
+            })
+        })
+        .unwrap_or(false);
+
+    visiting.remove(type_name);
+    cache.insert(type_name.to_string(), supported);
+    supported
 }

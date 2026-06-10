@@ -30,7 +30,7 @@ pub fn emit_builder(resolved_type: &ResolvedType, type_ir: Option<&TypeIr>) -> O
     }
     if let Some(ir) = type_ir {
         let fam_infos = fam_field_infos(resolved_type);
-        if supports_fam_struct(Some(ir), &fam_infos) {
+        if supports_fam_struct(resolved_type, Some(ir), &fam_infos) {
             return Some(emit_fam_struct_builder(resolved_type, ir, fam_infos));
         }
         if supports_enum_struct(resolved_type, Some(ir)) {
@@ -236,11 +236,35 @@ fn supports_enum_struct(resolved_type: &ResolvedType, type_ir: Option<&TypeIr>) 
     }
 }
 
-fn supports_fam_struct<'a>(type_ir: Option<&TypeIr>, fam_infos: &[FamFieldInfo<'a>]) -> bool {
+fn supports_fam_struct<'a>(
+    resolved_type: &ResolvedType,
+    type_ir: Option<&TypeIr>,
+    fam_infos: &[FamFieldInfo<'a>],
+) -> bool {
     let Some(ir) = type_ir else {
         return false;
     };
     if fam_infos.is_empty() {
+        return false;
+    }
+    let ResolvedTypeKind::Struct { fields, .. } = &resolved_type.kind else {
+        return false;
+    };
+    let first_fam_index = fam_infos
+        .iter()
+        .filter_map(|info| {
+            fields
+                .iter()
+                .position(|candidate| candidate.name == info.field.name)
+        })
+        .min()
+        .unwrap_or(fields.len());
+    if fields[first_fam_index..].iter().any(|field| {
+        !fam_infos.iter().any(|info| {
+            info.field.name == field.name
+                || (info.size_field.name == field.name && info.size_field_index >= first_fam_index)
+        })
+    }) {
         return false;
     }
     /* Use deduplicated bindings - only unique param names need to match FAM fields */

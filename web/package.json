@@ -5,15 +5,19 @@
   "packageManager": "pnpm@10.33.4",
   "scripts": {
     "build": "pnpm -r build",
-    "test": "pnpm -r --filter './packages/*' --filter './packages-private/*' test:run",
-    "test:watch": "pnpm -r --filter './packages/*' --filter './packages-private/*' test:watch",
-    "test:coverage": "pnpm -r --filter './packages/*' --filter './packages-private/*' test:coverage",
+    "test": "pnpm -r --if-present --filter './packages/*' --filter './packages-private/*' --filter './wallet/frontend/packages/*' --filter './wallet/packages/*' test:run",
+    "test:watch": "pnpm -r --if-present --filter './packages/*' --filter './packages-private/*' --filter './wallet/frontend/packages/*' --filter './wallet/packages/*' test:watch",
+    "test:coverage": "pnpm -r --if-present --filter './packages/*' --filter './packages-private/*' --filter './wallet/frontend/packages/*' --filter './wallet/packages/*' test:coverage",
     "test:wallet": "pnpm --filter thru-wallet test",
     "test:sdk": "pnpm --filter @thru/sdk test"
   },
   "devDependencies": {
+    "@babel/generator": "^7.29.7",
+    "@babel/traverse": "^7.29.7",
+    "@babel/types": "^7.29.7",
     "@vitest/coverage-v8": "^4.1.7",
     "tsup": "^8.5.1",
+    "typescript": "^6.0.3",
     "vitest": "^4.1.7"
   },
   "pnpm": {

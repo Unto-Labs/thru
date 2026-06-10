@@ -947,6 +947,32 @@ fn test_ts_tail_typeref_struct_builders() {
 }
 
 #[test]
+fn test_ts_fam_struct_with_trailing_typeref_skips_builder() {
+    let test_dir = setup_test_dir("passkey_validate_trailing_instruction_data");
+    generate_ts_code_with_includes(
+        "rpc/abi/type-library/tn_passkey_manager.abi.yaml",
+        &["rpc/abi/type-library"],
+        &test_dir,
+    )
+    .expect("Code generation failed");
+
+    let ts_file = test_dir.join("thru/program/passkey_manager/types.ts");
+    let content = fs::read_to_string(&ts_file).expect("Failed to read passkey types.ts");
+    assert!(
+        content.contains("get_target_instruction(): InstructionData"),
+        "ValidateArgs should expose the trailing InstructionData field"
+    );
+    assert!(
+        !content.contains("class ValidateArgsBuilder"),
+        "ValidateArgsBuilder should not be emitted for FAM plus trailing type-ref layouts"
+    );
+    assert!(
+        content.contains("createPayloadBuilder: () => null"),
+        "Variant descriptors should safely return null when ValidateArgs has no builder"
+    );
+}
+
+#[test]
 fn test_ts_generated_code_has_no_todo_placeholders() {
     let test_dir = setup_test_dir("token_no_todo");
     let abi_path = PathBuf::from("..")

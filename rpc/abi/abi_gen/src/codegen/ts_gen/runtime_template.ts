@@ -27,6 +27,12 @@ type __TnIrNode =
       readonly op: "call";
       readonly typeName: string;
       readonly args: readonly { readonly name: string; readonly source: string }[];
+    }
+  | {
+      readonly op: "sumOverArray";
+      readonly count: __TnIrNode;
+      readonly elementTypeName: string;
+      readonly fieldName: string;
     };
 
 type __TnIrContext = {
@@ -512,6 +518,10 @@ const __tnValidateRegistry: Record<
   string,
   (buffer: Uint8Array, params: Record<string, bigint>) => __TnValidateResult
 > = {};
+const __tnDynamicValidateRegistry: Record<
+  string,
+  (buffer: Uint8Array) => __TnValidateResult
+> = {};
 
 function __tnRegisterFootprint(
   typeName: string,
@@ -525,6 +535,13 @@ function __tnRegisterValidate(
   fn: (buffer: Uint8Array, params: Record<string, bigint>) => __TnValidateResult
 ): void {
   __tnValidateRegistry[typeName] = fn;
+}
+
+function __tnRegisterDynamicValidate(
+  typeName: string,
+  fn: (buffer: Uint8Array) => __TnValidateResult
+): void {
+  __tnDynamicValidateRegistry[typeName] = fn;
 }
 
 function __tnInvokeFootprint(
@@ -546,8 +563,17 @@ function __tnInvokeValidate(
   return fn(buffer, params);
 }
 
+function __tnInvokeDynamicValidate(
+  typeName: string,
+  buffer: Uint8Array
+): __TnValidateResult {
+  const fn = __tnDynamicValidateRegistry[typeName];
+  if (!fn) throw new Error(`IR runtime missing dynamic validate helper for ${typeName}`);
+  return fn(buffer);
+}
+
 function __tnEvalFootprint(node: __TnIrNode, ctx: __TnIrContext): bigint {
-  return __tnEvalIrNode(node, ctx);
+  return __tnEvalIrNode(node, ctx, __tnToBigInt(0));
 }
 
 function __tnTryEvalFootprint(
@@ -562,7 +588,7 @@ function __tnTryEvalIr(
   ctx: __TnIrContext
 ): __TnEvalResult {
   try {
-    return { ok: true, value: __tnEvalIrNode(node, ctx) };
+    return { ok: true, value: __tnEvalIrNode(node, ctx, __tnToBigInt(0)) };
   } catch (err) {
     return { ok: false, code: __tnNormalizeIrError(err) };
   }
@@ -593,7 +619,11 @@ function __tnValidateIrTree(
   return { ok: true, consumed: required };
 }
 
-function __tnEvalIrNode(node: __TnIrNode, ctx: __TnIrContext): bigint {
+function __tnEvalIrNode(
+  node: __TnIrNode,
+  ctx: __TnIrContext,
+  baseOffset: bigint
+): bigint {
   switch (node.op) {
     case "zero":
       return __tnToBigInt(0);
@@ -611,17 +641,22 @@ function __tnEvalIrNode(node: __TnIrNode, ctx: __TnIrContext): bigint {
       return val;
     }
     case "add":
-      return __tnCheckedAdd(
-        __tnEvalIrNode(node.left, ctx),
-        __tnEvalIrNode(node.right, ctx)
-      );
+      {
+        const left = __tnEvalIrNode(node.left, ctx, baseOffset);
+        const right = __tnEvalIrNode(
+          node.right,
+          ctx,
+          __tnCheckedAdd(baseOffset, left)
+        );
+        return __tnCheckedAdd(left, right);
+      }
     case "mul":
       return __tnCheckedMul(
-        __tnEvalIrNode(node.left, ctx),
-        __tnEvalIrNode(node.right, ctx)
+        __tnEvalIrNode(node.left, ctx, baseOffset),
+        __tnEvalIrNode(node.right, ctx, baseOffset)
       );
     case "align":
-      return __tnAlign(__tnEvalIrNode(node.node, ctx), node.alignment);
+      return __tnAlign(__tnEvalIrNode(node.node, ctx, baseOffset), node.alignment);
     case "switch": {
       const tagVal = ctx.params[node.tag];
       if (tagVal === undefined) {
@@ -634,10 +669,10 @@ function __tnEvalIrNode(node: __TnIrNode, ctx: __TnIrContext): bigint {
       const tagNumber = Number(tagVal);
       for (const caseNode of node.cases) {
         if (caseNode.value === tagNumber) {
-          return __tnEvalIrNode(caseNode.node, ctx);
+          return __tnEvalIrNode(caseNode.node, ctx, baseOffset);
         }
       }
-      if (node.default) return __tnEvalIrNode(node.default, ctx);
+      if (node.default) return __tnEvalIrNode(node.default, ctx, baseOffset);
       __tnRaiseIrError(
         "tn.ir.invalid_tag",
         `Unhandled IR switch value ${tagNumber} for '${node.tag}'`
@@ -657,9 +692,10 @@ function __tnEvalIrNode(node: __TnIrNode, ctx: __TnIrContext): bigint {
         nestedParams[arg.name] = val;
       }
       if (ctx.buffer) {
+        const nestedOffset = __tnBigIntToNumber(baseOffset, "IR nested offset");
         const nestedResult = __tnInvokeValidate(
           node.typeName,
-          ctx.buffer,
+          ctx.buffer.subarray(nestedOffset),
           nestedParams
         );
         if (!nestedResult.ok) {
@@ -678,6 +714,36 @@ function __tnEvalIrNode(node: __TnIrNode, ctx: __TnIrContext): bigint {
         }
       }
       return __tnInvokeFootprint(node.typeName, nestedParams);
+    }
+    case "sumOverArray": {
+      if (!ctx.buffer) {
+        __tnRaiseIrError(
+          "tn.ir.missing_buffer",
+          `Jagged array '${node.fieldName}' requires buffer-backed validation`
+        );
+      }
+      const count = __tnBigIntToNumber(
+        __tnEvalIrNode(node.count, ctx, baseOffset),
+        `Jagged array '${node.fieldName}' count`
+      );
+      let cursor = __tnBigIntToNumber(baseOffset, "IR jagged array offset");
+      let total = __tnToBigInt(0);
+      for (let i = 0; i < count; i++) {
+        const result = __tnInvokeDynamicValidate(
+          node.elementTypeName,
+          ctx.buffer.subarray(cursor)
+        );
+        if (!result.ok || result.consumed === undefined) {
+          const code = result.code ?? "tn.ir.runtime_error";
+          __tnRaiseIrError(
+            code,
+            `Jagged array '${node.fieldName}' element ${i} failed validation`
+          );
+        }
+        cursor += __tnBigIntToNumber(result.consumed, "IR jagged element size");
+        total = __tnCheckedAdd(total, result.consumed);
+      }
+      return total;
     }
     default:
       __tnRaiseIrError(

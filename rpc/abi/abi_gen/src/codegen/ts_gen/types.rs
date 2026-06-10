@@ -168,21 +168,6 @@ pub fn emit_type(
         output.push_str(&namespace);
     }
 
-    if type_ir.is_some() {
-        writeln!(
-            output,
-            "__tnRegisterFootprint(\"{}\", (params) => {}.__tnInvokeFootprint(params));",
-            resolved_type.name, resolved_type.name
-        )
-        .unwrap();
-        writeln!(
-            output,
-            "__tnRegisterValidate(\"{}\", (buffer, params) => {}.__tnInvokeValidate(buffer, params));\n",
-            resolved_type.name, resolved_type.name
-        )
-        .unwrap();
-    }
-
     output
 }
 
@@ -2293,8 +2278,17 @@ fn emit_jagged_array_ts_accessors(
     )
     .unwrap();
     writeln!(output, "      }}").unwrap();
-    writeln!(output, "      const fp = elem.footprint();").unwrap();
-    writeln!(output, "      if (!fp.ok || fp.consumed === undefined) {{").unwrap();
+    writeln!(
+        output,
+        "      const validation = {}.validate(this.buffer.subarray(cursor));",
+        element_type_name
+    )
+    .unwrap();
+    writeln!(
+        output,
+        "      if (!validation.ok || validation.consumed === undefined) {{"
+    )
+    .unwrap();
     writeln!(
         output,
         "        throw new Error(\"{}: failed to get footprint for element at index \" + i);",
@@ -2302,7 +2296,7 @@ fn emit_jagged_array_ts_accessors(
     )
     .unwrap();
     writeln!(output, "      }}").unwrap();
-    writeln!(output, "      cursor += fp.consumed;").unwrap();
+    writeln!(output, "      cursor += validation.consumed;").unwrap();
     writeln!(output, "    }}").unwrap();
     writeln!(
         output,
@@ -2354,11 +2348,46 @@ fn emit_jagged_array_ts_accessors(
     .unwrap();
     writeln!(output, "      }}").unwrap();
     writeln!(output, "      yield elem;").unwrap();
-    writeln!(output, "      const fp = elem.footprint();").unwrap();
-    writeln!(output, "      if (fp.ok && fp.consumed !== undefined) {{").unwrap();
-    writeln!(output, "        cursor += fp.consumed;").unwrap();
+    writeln!(
+        output,
+        "      const validation = {}.validate(this.buffer.subarray(cursor));",
+        element_type_name
+    )
+    .unwrap();
+    writeln!(
+        output,
+        "      if (!validation.ok || validation.consumed === undefined) {{"
+    )
+    .unwrap();
+    writeln!(
+        output,
+        "        throw new Error(\"{}: failed to get footprint for element at index \" + i);",
+        struct_name
+    )
+    .unwrap();
     writeln!(output, "      }}").unwrap();
+    writeln!(output, "      cursor += validation.consumed;").unwrap();
     writeln!(output, "    }}").unwrap();
+    writeln!(output, "  }}\n").unwrap();
+
+    // Array getter
+    writeln!(output, "  get_{}(): {}[] {{", field_name, element_type_name).unwrap();
+    writeln!(output, "    return Array.from(this.{}Iter());", field_name).unwrap();
+    writeln!(output, "  }}\n").unwrap();
+
+    // Jagged arrays are variable-width views; callers should rebuild the payload.
+    writeln!(
+        output,
+        "  set_{}(_value: {}[]): void {{",
+        field_name, element_type_name
+    )
+    .unwrap();
+    writeln!(
+        output,
+        "    throw new Error(\"{}: jagged array '{}' cannot be set in-place\");",
+        struct_name, field_name
+    )
+    .unwrap();
     writeln!(output, "  }}\n").unwrap();
 
     // Size getter - total byte size
@@ -2391,8 +2420,17 @@ fn emit_jagged_array_ts_accessors(
     )
     .unwrap();
     writeln!(output, "      }}").unwrap();
-    writeln!(output, "      const fp = elem.footprint();").unwrap();
-    writeln!(output, "      if (!fp.ok || fp.consumed === undefined) {{").unwrap();
+    writeln!(
+        output,
+        "      const validation = {}.validate(this.buffer.subarray(cursor));",
+        element_type_name
+    )
+    .unwrap();
+    writeln!(
+        output,
+        "      if (!validation.ok || validation.consumed === undefined) {{"
+    )
+    .unwrap();
     writeln!(
         output,
         "        throw new Error(\"{}: failed to get footprint for element at index \" + i);",
@@ -2400,7 +2438,7 @@ fn emit_jagged_array_ts_accessors(
     )
     .unwrap();
     writeln!(output, "      }}").unwrap();
-    writeln!(output, "      cursor += fp.consumed;").unwrap();
+    writeln!(output, "      cursor += validation.consumed;").unwrap();
     writeln!(output, "    }}").unwrap();
     writeln!(output, "    return cursor - offset;").unwrap();
     writeln!(output, "  }}\n").unwrap();

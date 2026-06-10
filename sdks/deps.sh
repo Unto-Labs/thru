@@ -61,6 +61,207 @@ fi
 # Install prefix - will be set after parsing arguments
 PREFIX=""
 
+RISCV_GNU_TOOLCHAIN_VERSION="2026.01.23"
+RISCV_GNU_TOOLCHAIN_REVISION="311e70f6c55953a624ca670de7c85af38c2b23c2"
+PICOLIBC_VERSION="1.8.9"
+PICOLIBC_REVISION="db4d0fe5952d5ecd714781e3212d4086d970735a"
+BLST_VERSION="v0.3.15"
+BLST_REVISION="6d960cd05d6fe2b5bc9ba161edf0c1a131b87c4c"
+RISCV_GNU_TOOLCHAIN_SUBMODULES=( binutils gdb gcc newlib )
+
+BINARY_CACHE_DIR="${TN_SDK_BINARY_CACHE_DIR:-}"
+
+sdk_warning () {
+  local message="$1"
+  echo "[!] $message" >&2
+  if [[ "${GITHUB_ACTIONS:-}" == "true" ]]; then
+    echo "::warning title=SDK dependency cache::$message" >&2
+  fi
+}
+
+sha256_file () {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | awk '{print $1}'
+  else
+    shasum -a 256 "$1" | awk '{print $1}'
+  fi
+}
+
+set_riscv_submodule_urls () {
+  git submodule set-url binutils https://gnu.googlesource.com/binutils-gdb.git
+  git submodule set-url gdb https://gnu.googlesource.com/binutils-gdb.git
+  git submodule set-url gcc https://github.com/gcc-mirror/gcc.git
+  git submodule set-url newlib https://cygwin.com/git/newlib-cygwin.git
+}
+
+riscv_submodules_ready () {
+  local module
+  for module in "${RISCV_GNU_TOOLCHAIN_SUBMODULES[@]}"; do
+    [[ -e "$module/.git" ]] || return 1
+    git -C "$module" rev-parse HEAD >/dev/null 2>&1 || return 1
+  done
+}
+
+prepare_riscv_source () {
+  echo "[+] Preparing riscv-gnu-toolchain submodules"
+  set_riscv_submodule_urls
+
+  if riscv_submodules_ready; then
+    echo "[~] riscv-gnu-toolchain submodules already initialized"
+    return
+  fi
+
+  if git submodule update --depth 1 --init --recursive "${RISCV_GNU_TOOLCHAIN_SUBMODULES[@]}"; then
+    return
+  fi
+
+  sdk_warning "Failed to fetch riscv-gnu-toolchain submodules from upstream"
+  exit 1
+}
+
+default_binary_cache_dir () {
+  if [[ -n "$BINARY_CACHE_DIR" ]]; then
+    echo "$BINARY_CACHE_DIR"
+    return
+  fi
+
+  if [[ -d /dev/shm && -w /dev/shm ]]; then
+    local avail_kb
+    avail_kb="$(df -Pk /dev/shm | awk 'NR == 2 {print $4}')"
+    if [[ "$avail_kb" =~ ^[0-9]+$ ]] && (( avail_kb > 4194304 )); then
+      echo "/dev/shm/thru-sdk-toolchain-cache"
+      return
+    fi
+  fi
+
+  echo "/tmp/thru-sdk-toolchain-cache"
+}
+
+compiler_identity () {
+  local tool="$1"
+  local path version dumpmachine dumpversion
+
+  if ! path="$(command -v "$tool" 2>/dev/null)"; then
+    printf '%s=missing\n' "$tool"
+    return
+  fi
+
+  version="$("$tool" --version 2>/dev/null | head -n 1 || true)"
+  dumpmachine="$("$tool" -dumpmachine 2>/dev/null || true)"
+  dumpversion="$("$tool" -dumpfullversion -dumpversion 2>/dev/null || "$tool" -dumpversion 2>/dev/null || true)"
+
+  printf '%s=%s|%s|%s|%s\n' "$tool" "$path" "$version" "$dumpmachine" "$dumpversion"
+}
+
+host_compiler_cache_material () {
+  local cc="${CC:-cc}"
+  local cxx="${CXX:-c++}"
+
+  compiler_identity "$cc"
+  compiler_identity "$cxx"
+  compiler_identity gcc
+  compiler_identity g++
+}
+
+host_compiler_cache_hash () {
+  host_compiler_cache_material | sha256_file /dev/stdin
+}
+
+binary_cache_key () {
+  local script_hash compiler_hash
+  script_hash="$(sha256_file "$SCRIPT_DIR/deps.sh" | cut -c1-16)"
+  compiler_hash="$(host_compiler_cache_hash)"
+  printf '%s\n' \
+    "os=$OS" \
+    "arch=$(uname -m)" \
+    "target=riscv64-unknown-elf" \
+    "compiler_hash=$compiler_hash" \
+    "riscv=$RISCV_GNU_TOOLCHAIN_VERSION" \
+    "riscv_rev=$RISCV_GNU_TOOLCHAIN_REVISION" \
+    "picolibc=$PICOLIBC_VERSION" \
+    "picolibc_rev=$PICOLIBC_REVISION" \
+    "blst=$BLST_VERSION" \
+    "blst_rev=$BLST_REVISION" \
+    "script=$script_hash" |
+    sha256_file /dev/stdin
+}
+
+restore_binary_cache () {
+  local cache_dir key archive meta
+  cache_dir="$(default_binary_cache_dir)"
+  key="$(binary_cache_key)"
+  archive="$cache_dir/$key/toolchain.tar.gz"
+  meta="$cache_dir/$key/toolchain.meta"
+
+  [[ -f "$archive" && -f "$meta" ]] || return 1
+  grep -qx "key=$key" "$meta" || return 1
+  grep -qx "os=$OS" "$meta" || return 1
+  grep -qx "arch=$(uname -m)" "$meta" || return 1
+  grep -qx "target=riscv64-unknown-elf" "$meta" || return 1
+  grep -qx "compiler_hash=$(host_compiler_cache_hash)" "$meta" || return 1
+
+  echo "[+] Restoring C/C++ SDK toolchain from local binary cache $cache_dir/$key"
+  rm -rf "$PREFIX/bin" "$PREFIX/include" "$PREFIX/lib" "$PREFIX/lib64" \
+         "$PREFIX/libexec" "$PREFIX/picolibc" "$PREFIX/riscv64-unknown-elf" \
+         "$PREFIX/share"
+  mkdir -p "$PREFIX"
+  tar -xzf "$archive" -C "$PREFIX"
+  return 0
+}
+
+binary_cache_available () {
+  local cache_dir key archive meta
+  cache_dir="$(default_binary_cache_dir)"
+  key="$(binary_cache_key)"
+  archive="$cache_dir/$key/toolchain.tar.gz"
+  meta="$cache_dir/$key/toolchain.meta"
+
+  [[ -f "$archive" && -f "$meta" ]] || return 1
+  grep -qx "key=$key" "$meta" || return 1
+  grep -qx "os=$OS" "$meta" || return 1
+  grep -qx "arch=$(uname -m)" "$meta" || return 1
+  grep -qx "target=riscv64-unknown-elf" "$meta" || return 1
+  grep -qx "compiler_hash=$(host_compiler_cache_hash)" "$meta" || return 1
+}
+
+save_binary_cache () {
+  local cache_dir key out_dir archive meta tmp_dir meta_tmp
+  cache_dir="$(default_binary_cache_dir)"
+  key="$(binary_cache_key)"
+  out_dir="$cache_dir/$key"
+  archive="$out_dir/toolchain.tar.gz"
+  meta="$out_dir/toolchain.meta"
+  tmp_dir="$(mktemp -d)"
+  meta_tmp="$tmp_dir/toolchain.meta"
+
+  mkdir -p "$out_dir"
+
+  local paths=()
+  for path in bin include lib lib64 libexec picolibc riscv64-unknown-elf share; do
+    [[ -e "$PREFIX/$path" ]] && paths+=( "$path" )
+  done
+
+  if [[ ${#paths[@]} -eq 0 ]]; then
+    rm -rf "$tmp_dir"
+    return 0
+  fi
+
+  {
+    echo "key=$key"
+    echo "os=$OS"
+    echo "arch=$(uname -m)"
+    echo "target=riscv64-unknown-elf"
+    echo "compiler_hash=$(host_compiler_cache_hash)"
+    echo "created_at=$(date +%s)"
+  } > "$meta_tmp"
+
+  tar -C "$PREFIX" -czf "$tmp_dir/toolchain.tar.gz" "${paths[@]}"
+  mv "$tmp_dir/toolchain.tar.gz" "$archive"
+  mv "$meta_tmp" "$meta"
+  rm -rf "$tmp_dir"
+  echo "[+] Saved C/C++ SDK toolchain binary cache $out_dir"
+}
+
 # Function to run a command quietly, only showing output on failure
 run_quiet () {
   local output_file=$(mktemp)
@@ -145,32 +346,71 @@ nuke () {
 }
 
 checkout_repo () {
+  local name="$1"
+  local repo_url="$2"
+  local version="$3"
+  local revision="${4:-}"
+
   # Skip if dir already exists
-  if [[ -d "$PREFIX/git/$1" ]]; then
-    echo "[~] Skipping $1 fetch as \"$PREFIX/git/$1\" already exists"
-  elif [[ -z "$3" ]]; then
-    echo "[+] Cloning $1 from $2"
-    git -c advice.detachedHead=false clone "$2" "$PREFIX/git/$1" && cd "$PREFIX/git/$1" && git reset --hard "$4"
+  if [[ -d "$PREFIX/git/$name" ]]; then
+    echo "[~] Skipping $name fetch as \"$PREFIX/git/$name\" already exists"
+  elif [[ -z "$version" ]]; then
+    echo "[+] Cloning $name from $repo_url"
+    git -c advice.detachedHead=false clone "$repo_url" "$PREFIX/git/$name" && cd "$PREFIX/git/$name" && git reset --hard "$revision"
     echo
   else
-    echo "[+] Cloning $1 from $2"
-    git -c advice.detachedHead=false clone "$2" "$PREFIX/git/$1" --branch "$3" --depth=1
+    echo "[+] Cloning $name from $repo_url"
+    if ! git -c advice.detachedHead=false clone "$repo_url" "$PREFIX/git/$name" --branch "$version" --depth=1; then
+      sdk_warning "Upstream fetch failed for $name $version from $repo_url"
+      exit 1
+    fi
     echo
   fi
 
-  if [[ ! -z "$3" ]]; then
+  if [[ ! -z "$version" ]]; then
     # Skip if tag already correct
-    if [[ "$(git -C "$PREFIX/git/$1" describe --tags --abbrev=0)" == "$3" ]]; then
-      return
+    if [[ "$(git -C "$PREFIX/git/$name" describe --tags --abbrev=0)" != "$version" ]]; then
+      echo "[~] Checking out $name $version"
+      (
+        cd "$PREFIX/git/$name"
+        git fetch origin "$version" --tags --depth=1
+        git -c advice.detachedHead=false checkout "$version"
+      )
+      echo
+    fi
+  fi
+
+  if [[ -n "$revision" && "$(git -C "$PREFIX/git/$name" rev-parse HEAD)" != "$revision" ]]; then
+    local actual_revision
+    actual_revision="$(git -C "$PREFIX/git/$name" rev-parse HEAD)"
+    sdk_warning "Refusing $name $version from $repo_url: expected revision $revision, got $actual_revision"
+    rm -rf "$PREFIX/git/$name"
+
+    echo "[+] Re-cloning $name from $repo_url after revision mismatch"
+    if [[ -z "$version" ]]; then
+      git -c advice.detachedHead=false clone "$repo_url" "$PREFIX/git/$name" && cd "$PREFIX/git/$name" && git reset --hard "$revision"
+    else
+      if ! git -c advice.detachedHead=false clone "$repo_url" "$PREFIX/git/$name" --branch "$version" --depth=1; then
+        sdk_warning "Upstream re-fetch failed for $name $version from $repo_url"
+        exit 1
+      fi
     fi
 
-    echo "[~] Checking out $1 $3"
-    (
-      cd "$PREFIX/git/$1"
-      git fetch origin "$3" --tags --depth=1
-      git -c advice.detachedHead=false checkout "$3"
-    )
-    echo
+    if [[ ! -z "$version" && "$(git -C "$PREFIX/git/$name" describe --tags --abbrev=0)" != "$version" ]]; then
+      echo "[~] Checking out $name $version"
+      (
+        cd "$PREFIX/git/$name"
+        git fetch origin "$version" --tags --depth=1
+        git -c advice.detachedHead=false checkout "$version"
+      )
+      echo
+    fi
+
+    if [[ "$(git -C "$PREFIX/git/$name" rev-parse HEAD)" != "$revision" ]]; then
+      sdk_warning "Refusing $name $version from $repo_url after retry: expected revision $revision, got $(git -C "$PREFIX/git/$name" rev-parse HEAD)"
+      rm -rf "$PREFIX/git/$name"
+      exit 1
+    fi
   fi
 }
 
@@ -324,26 +564,26 @@ check () {
 }
 
 fetch () {
+  if binary_cache_available; then
+    echo "[~] Skipping source fetch because exact C/C++ SDK binary cache is available"
+    return
+  fi
+
   mkdir -pv "$PREFIX/git"
 
-  checkout_repo riscv-gnu-toolchain https://github.com/riscv/riscv-gnu-toolchain "2026.01.23"
-  checkout_repo picolibc https://github.com/picolibc/picolibc "1.8.9"
-  checkout_repo blst https://github.com/supranational/blst.git "v0.3.15"
+  checkout_repo riscv-gnu-toolchain https://github.com/riscv/riscv-gnu-toolchain "$RISCV_GNU_TOOLCHAIN_VERSION" "$RISCV_GNU_TOOLCHAIN_REVISION"
+  checkout_repo picolibc https://github.com/picolibc/picolibc "$PICOLIBC_VERSION" "$PICOLIBC_REVISION"
+  checkout_repo blst https://github.com/supranational/blst.git "$BLST_VERSION" "$BLST_REVISION"
 }
 
 install_riscv () {
   unset MACHINE
   cd "$PREFIX/git/riscv-gnu-toolchain"
   echo "[+] Configuring riscv-gnu-toolchain"
-  
-  run_quiet git submodule set-url binutils https://gnu.googlesource.com/binutils-gdb.git
-  run_quiet git submodule set-url gdb https://gnu.googlesource.com/binutils-gdb.git
-  run_quiet git submodule set-url gcc https://github.com/gcc-mirror/gcc.git
+  prepare_riscv_source
 
   # Apply zlib fix patch for RISC-V toolchain (both binutils and gdb have their own zlib copies)
   echo "[+] Applying zlib fix patches"
-  run_quiet git submodule update --depth 1 --init --recursive binutils
-  run_quiet git submodule update --depth 1 --init --recursive gdb
 
   # Fix zlib in binutils and gdb - the fdopen macro conflicts with macOS SDK headers
   # Simply comment out the problematic #define fdopen line
@@ -490,6 +730,12 @@ install_blst () {
 
 install_c () {
   echo "[+] Installing C/C++ SDK dependencies"
+  if restore_binary_cache; then
+    echo "[~] Done! C/C++ SDK dependencies restored from binary cache."
+    echo "[~] The RISC-V toolchain (riscv64-unknown-elf-gcc) is now available in $PREFIX/bin."
+    return
+  fi
+
   mkdir -p "$PREFIX/include" "$PREFIX/lib" "$PREFIX/bin"
 
   ( install_riscv     )
@@ -501,6 +747,8 @@ install_c () {
     find "$PREFIX/lib64/" -mindepth 1 -exec mv -t "$PREFIX/lib/" {} +
     rm -rf "$PREFIX/lib64"
   fi
+
+  save_binary_cache
 
   echo "[~] Done! C/C++ SDK dependencies installed."
   echo "[~] The RISC-V toolchain (riscv64-unknown-elf-gcc) is now available in $PREFIX/bin."
@@ -572,6 +820,10 @@ set_prefix () {
   fi
   PREFIX="$THRU_DIR/.thru/sdk/toolchain"
 }
+
+if [[ "${TN_SDK_DEPS_NO_MAIN:-}" == "1" ]]; then
+  return 0 2>/dev/null || exit 0
+fi
 
 THRU_DIR="$DEFAULT_THRU_DIR"
 set_prefix

@@ -1,6 +1,6 @@
 import {
   PASSKEY_MANAGER_PROGRAM_ADDRESS,
-  concatenateInstructions,
+  decodeAddress,
   encodeValidateInstruction,
   hexToBytes,
 } from '@thru/programs/passkey-manager';
@@ -48,23 +48,31 @@ export async function buildPasskeyTransaction(opts: {
   adminPrivateKey: Uint8Array;
   walletAddress: string;
   accountCtx: AccountContext;
-  invokeIx: Uint8Array;
+  targetProgramAddress: string;
+  instructionData: Uint8Array;
+  authIdx?: number;
   header?: PasskeyTransactionHeaderOverrides;
 } & PasskeySignaturePayload): Promise<BuiltPasskeyTransaction> {
+  const targetProgramIdx = opts.accountCtx.getAccountIndex(
+    decodeAddress(opts.targetProgramAddress)
+  );
   const validateIx = encodeValidateInstruction({
     walletAccountIdx: opts.accountCtx.walletAccountIdx,
-    authIdx: 0,
+    authIdx: opts.authIdx ?? 0,
+    targetInstruction: {
+      programIdx: targetProgramIdx,
+      instructionData: opts.instructionData,
+    },
     signatureR: hexToBytes(opts.signatureR),
     signatureS: hexToBytes(opts.signatureS),
     authenticatorData: base64ToBytes(opts.authenticatorData),
     clientDataJSON: base64ToBytes(opts.clientDataJSON),
   });
 
-  const instructionData = concatenateInstructions([validateIx, opts.invokeIx]);
   const transaction = await opts.client.transactions.build({
     feePayer: { publicKey: opts.adminPublicKey },
     program: PASSKEY_MANAGER_PROGRAM_ADDRESS,
-    instructionData,
+    instructionData: validateIx,
     accounts: {
       readWrite: opts.accountCtx.readWriteAddresses,
       readOnly: opts.accountCtx.readOnlyAddresses,
@@ -88,7 +96,9 @@ export async function submitPasskeyTransaction(opts: {
   adminPrivateKey: Uint8Array;
   walletAddress: string;
   accountCtx: AccountContext;
-  invokeIx: Uint8Array;
+  targetProgramAddress: string;
+  instructionData: Uint8Array;
+  authIdx?: number;
   header?: PasskeyTransactionHeaderOverrides;
 } & PasskeySignaturePayload): Promise<TransactionResult> {
   return withSerializedFeePayer(opts.adminPublicKey, async () => {

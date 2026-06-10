@@ -5,7 +5,7 @@ use std::path::Path;
 use std::time::Duration;
 use thru_base::tn_tools::{KeyPair, Pubkey};
 use thru_base::txn_lib::Transaction;
-use thru_base::txn_tools::TransactionBuilder;
+use thru_base::txn_tools::{TransactionBuilder, UploaderWriteOptions};
 
 use crate::cli::UploaderCommands;
 use crate::config::Config;
@@ -25,6 +25,7 @@ pub async fn handle_uploader_command(
         UploaderCommands::Upload {
             uploader,
             chunk_size,
+            skip_elf_check,
             seed,
             program_file,
         } => {
@@ -34,6 +35,7 @@ pub async fn handle_uploader_command(
                 &seed,
                 &program_file,
                 chunk_size,
+                skip_elf_check,
                 json_format,
             )
             .await
@@ -610,6 +612,7 @@ impl UploaderManager {
         program_data: &[u8],
         mut nonce: u64,
         start_slot: u64,
+        skip_elf_check: bool,
         json_format: bool,
     ) -> Result<(), CliError> {
         let total_chunks = (program_data.len() + session.chunk_size - 1) / session.chunk_size;
@@ -632,7 +635,7 @@ impl UploaderManager {
                 ));
             }
 
-            let transaction = TransactionBuilder::build_uploader_write(
+            let transaction = TransactionBuilder::build_uploader_write_with_options(
                 self.fee_payer_keypair.public_key,
                 self.uploader_program_pubkey
                     .to_bytes()
@@ -650,6 +653,7 @@ impl UploaderManager {
                 0, // fee
                 nonce,
                 start_slot,
+                UploaderWriteOptions { skip_elf_check },
             )
             .map_err(|e| CliError::ProgramUpload(e.to_string()))?;
 
@@ -681,6 +685,7 @@ impl UploaderManager {
         start_chunk_index: usize,
         mut nonce: u64,
         start_slot: u64,
+        skip_elf_check: bool,
         json_format: bool,
     ) -> Result<(), CliError> {
         let total_chunks = (program_data.len() + session.chunk_size - 1) / session.chunk_size;
@@ -707,7 +712,7 @@ impl UploaderManager {
                 ));
             }
 
-            let transaction = TransactionBuilder::build_uploader_write(
+            let transaction = TransactionBuilder::build_uploader_write_with_options(
                 self.fee_payer_keypair.public_key,
                 self.uploader_program_pubkey
                     .to_bytes()
@@ -725,6 +730,7 @@ impl UploaderManager {
                 0, // fee
                 nonce,
                 start_slot,
+                UploaderWriteOptions { skip_elf_check },
             )
             .map_err(|e| CliError::ProgramUpload(e.to_string()))?;
 
@@ -808,6 +814,19 @@ impl UploaderManager {
         seed: &str,
         program_data: &[u8],
         chunk_size: usize,
+        json_format: bool,
+    ) -> Result<UploadSession, CliError> {
+        self.upload_program_with_options(seed, program_data, chunk_size, false, json_format)
+            .await
+    }
+
+    /// Execute complete upload workflow with upload options
+    pub async fn upload_program_with_options(
+        &self,
+        seed: &str,
+        program_data: &[u8],
+        chunk_size: usize,
+        skip_elf_check: bool,
         json_format: bool,
     ) -> Result<UploadSession, CliError> {
         // Calculate payload hash
@@ -991,6 +1010,7 @@ impl UploaderManager {
                     program_data,
                     nonce,
                     start_slot,
+                    skip_elf_check,
                     json_format,
                 )
                 .await?;
@@ -1038,6 +1058,7 @@ impl UploaderManager {
                     calc.resume_chunk_index,
                     nonce,
                     start_slot,
+                    skip_elf_check,
                     json_format,
                 )
                 .await?;
@@ -1133,6 +1154,7 @@ async fn upload_program(
     seed: &str,
     program_file: &str,
     chunk_size: usize,
+    skip_elf_check: bool,
     json_format: bool,
 ) -> Result<(), CliError> {
     // Validate upload file exists
@@ -1205,7 +1227,7 @@ async fn upload_program(
     let uploader = UploaderManager::new(&cfg).await?;
 
     match uploader
-        .upload_program(seed, &program_data, chunk_size, json_format)
+        .upload_program_with_options(seed, &program_data, chunk_size, skip_elf_check, json_format)
         .await
     {
         Ok(session) => {
@@ -1531,6 +1553,7 @@ mod tests {
             "test_seed",
             "nonexistent_file.bin",
             30720,
+            false,
             false,
         )
         .await;

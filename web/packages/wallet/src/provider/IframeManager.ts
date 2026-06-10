@@ -20,6 +20,7 @@ const PRODUCTION_IFRAME_ORIGINS = ['https://wallet.thru.org'];
 
 const SLOW_REQUEST_TIMEOUT_MS = 5 * 60 * 1000;
 const FAST_REQUEST_TIMEOUT_MS = 30 * 1000;
+const PARENT_ORIGIN_SEARCH_PARAM = 'tn_parent_origin';
 
 const SLOW_REQUEST_TYPES: ReadonlySet<string> = new Set([
   POST_MESSAGE_REQUEST_TYPES.CONNECT,
@@ -96,6 +97,19 @@ function validateIframeOrigin(iframeUrl: string): void {
   }
 }
 
+function getCurrentWindowOrigin(): string | null {
+  if (typeof window === 'undefined') {
+    return null;
+  }
+
+  const origin = window.location.origin;
+  if (!origin || origin === 'null') {
+    return null;
+  }
+
+  return origin;
+}
+
 /**
  * Manages iframe lifecycle and postMessage communication
  * Handles creating, showing/hiding iframe, and message passing
@@ -131,6 +145,10 @@ export class IframeManager {
   private getIframeSrc(): string {
     const url = new URL(this.iframeUrl);
     url.searchParams.set('tn_frame_id', this.frameId);
+    const parentOrigin = getCurrentWindowOrigin();
+    if (parentOrigin) {
+      url.searchParams.set(PARENT_ORIGIN_SEARCH_PARAM, parentOrigin);
+    }
     return url.toString();
   }
 

@@ -2,19 +2,23 @@ import { describe, expect, it, vi } from 'vitest';
 import type { AccountContext } from '@thru/programs/passkey-manager';
 import type { ThruClient } from './types';
 
-vi.mock('@thru/programs/passkey-manager', () => ({
+const passkeyManagerMocks = vi.hoisted(() => ({
   PASSKEY_MANAGER_PROGRAM_ADDRESS: 'passkey-program',
-  concatenateInstructions: (instructions: Uint8Array[]) => new Uint8Array(instructions.flatMap((ix) => Array.from(ix))),
-  encodeValidateInstruction: () => new Uint8Array([1, 2]),
+  decodeAddress: vi.fn(() => new Uint8Array(32).fill(7)),
+  encodeValidateInstruction: vi.fn(() => new Uint8Array([1, 2])),
   hexToBytes: (value: string) => new Uint8Array(Buffer.from(value, 'hex')),
 }));
+
+vi.mock('@thru/programs/passkey-manager', () => passkeyManagerMocks);
 
 import { buildPasskeyTransaction, submitPasskeyTransaction } from './submit';
 
 const accountCtx = {
   walletAccountIdx: 3,
+  accountAddresses: ['fee-payer', 'passkey-program', 'wallet-address', 'readonly-address'],
   readWriteAddresses: ['lookup-address', 'wallet-address'],
   readOnlyAddresses: ['readonly-address'],
+  getAccountIndex: vi.fn(() => 4),
 } as AccountContext;
 
 const signaturePayload = {
@@ -58,7 +62,8 @@ describe('passkey submit', () => {
       adminPrivateKey: new Uint8Array(32).fill(2),
       walletAddress: 'wallet-address',
       accountCtx,
-      invokeIx: new Uint8Array([3, 4]),
+      targetProgramAddress: 'target-program',
+      instructionData: new Uint8Array([3, 4]),
       header: {
         fee: 0n,
         nonce: 42n,
@@ -76,7 +81,19 @@ describe('passkey submit', () => {
         fee: 0n,
         nonce: 42n,
       },
+      instructionData: new Uint8Array([1, 2]),
     }));
+    expect(passkeyManagerMocks.decodeAddress).toHaveBeenCalledWith('target-program');
+    expect(passkeyManagerMocks.encodeValidateInstruction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        walletAccountIdx: 3,
+        authIdx: 0,
+        targetInstruction: {
+          programIdx: 4,
+          instructionData: new Uint8Array([3, 4]),
+        },
+      })
+    );
     expect(transaction.sign).toHaveBeenCalledWith(new Uint8Array(32).fill(2));
     expect(result.rawTransaction).toEqual(new Uint8Array([9, 9, 9]));
   });
@@ -90,7 +107,8 @@ describe('passkey submit', () => {
       adminPrivateKey: new Uint8Array(32).fill(2),
       walletAddress: 'wallet-address',
       accountCtx,
-      invokeIx: new Uint8Array([3, 4]),
+      targetProgramAddress: 'target-program',
+      instructionData: new Uint8Array([3, 4]),
       ...signaturePayload,
     })).resolves.toEqual({
       signature: 'tx-signature',

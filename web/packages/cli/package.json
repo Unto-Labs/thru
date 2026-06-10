@@ -1,0 +1,33 @@
+{
+  "name": "thru",
+  "version": "0.0.1",
+  "description": "Thru command-line interface",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Unto-Labs/thru.git",
+    "directory": "web/packages/cli"
+  },
+  "type": "module",
+  "bin": {
+    "thru": "./bin/thru.js"
+  },
+  "files": [
+    "bin",
+    "scripts/run.mjs",
+    "scripts/platform.mjs",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "node ./scripts/check-package.mjs",
+    "test": "node --test",
+    "test:run": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

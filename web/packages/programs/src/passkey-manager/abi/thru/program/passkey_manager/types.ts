@@ -2,7 +2,7 @@
 /* WARNING: Do not modify this file directly. It is generated from ABI definitions. */
 
 import { StateProof } from "../../blockchain/state_proof/types";
-import { Pubkey } from "../../common/primitives/types";
+import { InstructionData, Pubkey } from "../../common/primitives/types";
 
 type __TnIrNode =
   | { readonly op: "zero" }
@@ -33,6 +33,12 @@ type __TnIrNode =
       readonly op: "call";
       readonly typeName: string;
       readonly args: readonly { readonly name: string; readonly source: string }[];
+    }
+  | {
+      readonly op: "sumOverArray";
+      readonly count: __TnIrNode;
+      readonly elementTypeName: string;
+      readonly fieldName: string;
     };
 
 type __TnIrContext = {
@@ -518,6 +524,10 @@ const __tnValidateRegistry: Record<
   string,
   (buffer: Uint8Array, params: Record<string, bigint>) => __TnValidateResult
 > = {};
+const __tnDynamicValidateRegistry: Record<
+  string,
+  (buffer: Uint8Array) => __TnValidateResult
+> = {};
 
 function __tnRegisterFootprint(
   typeName: string,
@@ -531,6 +541,13 @@ function __tnRegisterValidate(
   fn: (buffer: Uint8Array, params: Record<string, bigint>) => __TnValidateResult
 ): void {
   __tnValidateRegistry[typeName] = fn;
+}
+
+function __tnRegisterDynamicValidate(
+  typeName: string,
+  fn: (buffer: Uint8Array) => __TnValidateResult
+): void {
+  __tnDynamicValidateRegistry[typeName] = fn;
 }
 
 function __tnInvokeFootprint(
@@ -552,8 +569,17 @@ function __tnInvokeValidate(
   return fn(buffer, params);
 }
 
+function __tnInvokeDynamicValidate(
+  typeName: string,
+  buffer: Uint8Array
+): __TnValidateResult {
+  const fn = __tnDynamicValidateRegistry[typeName];
+  if (!fn) throw new Error(`IR runtime missing dynamic validate helper for ${typeName}`);
+  return fn(buffer);
+}
+
 function __tnEvalFootprint(node: __TnIrNode, ctx: __TnIrContext): bigint {
-  return __tnEvalIrNode(node, ctx);
+  return __tnEvalIrNode(node, ctx, __tnToBigInt(0));
 }
 
 function __tnTryEvalFootprint(
@@ -568,7 +594,7 @@ function __tnTryEvalIr(
   ctx: __TnIrContext
 ): __TnEvalResult {
   try {
-    return { ok: true, value: __tnEvalIrNode(node, ctx) };
+    return { ok: true, value: __tnEvalIrNode(node, ctx, __tnToBigInt(0)) };
   } catch (err) {
     return { ok: false, code: __tnNormalizeIrError(err) };
   }
@@ -599,7 +625,11 @@ function __tnValidateIrTree(
   return { ok: true, consumed: required };
 }
 
-function __tnEvalIrNode(node: __TnIrNode, ctx: __TnIrContext): bigint {
+function __tnEvalIrNode(
+  node: __TnIrNode,
+  ctx: __TnIrContext,
+  baseOffset: bigint
+): bigint {
   switch (node.op) {
     case "zero":
       return __tnToBigInt(0);
@@ -617,17 +647,22 @@ function __tnEvalIrNode(node: __TnIrNode, ctx: __TnIrContext): bigint {
       return val;
     }
     case "add":
-      return __tnCheckedAdd(
-        __tnEvalIrNode(node.left, ctx),
-        __tnEvalIrNode(node.right, ctx)
-      );
+      {
+        const left = __tnEvalIrNode(node.left, ctx, baseOffset);
+        const right = __tnEvalIrNode(
+          node.right,
+          ctx,
+          __tnCheckedAdd(baseOffset, left)
+        );
+        return __tnCheckedAdd(left, right);
+      }
     case "mul":
       return __tnCheckedMul(
-        __tnEvalIrNode(node.left, ctx),
-        __tnEvalIrNode(node.right, ctx)
+        __tnEvalIrNode(node.left, ctx, baseOffset),
+        __tnEvalIrNode(node.right, ctx, baseOffset)
       );
     case "align":
-      return __tnAlign(__tnEvalIrNode(node.node, ctx), node.alignment);
+      return __tnAlign(__tnEvalIrNode(node.node, ctx, baseOffset), node.alignment);
     case "switch": {
       const tagVal = ctx.params[node.tag];
       if (tagVal === undefined) {
@@ -640,10 +675,10 @@ function __tnEvalIrNode(node: __TnIrNode, ctx: __TnIrContext): bigint {
       const tagNumber = Number(tagVal);
       for (const caseNode of node.cases) {
         if (caseNode.value === tagNumber) {
-          return __tnEvalIrNode(caseNode.node, ctx);
+          return __tnEvalIrNode(caseNode.node, ctx, baseOffset);
         }
       }
-      if (node.default) return __tnEvalIrNode(node.default, ctx);
+      if (node.default) return __tnEvalIrNode(node.default, ctx, baseOffset);
       __tnRaiseIrError(
         "tn.ir.invalid_tag",
         `Unhandled IR switch value ${tagNumber} for '${node.tag}'`
@@ -663,9 +698,10 @@ function __tnEvalIrNode(node: __TnIrNode, ctx: __TnIrContext): bigint {
         nestedParams[arg.name] = val;
       }
       if (ctx.buffer) {
+        const nestedOffset = __tnBigIntToNumber(baseOffset, "IR nested offset");
         const nestedResult = __tnInvokeValidate(
           node.typeName,
-          ctx.buffer,
+          ctx.buffer.subarray(nestedOffset),
           nestedParams
         );
         if (!nestedResult.ok) {
@@ -684,6 +720,36 @@ function __tnEvalIrNode(node: __TnIrNode, ctx: __TnIrContext): bigint {
         }
       }
       return __tnInvokeFootprint(node.typeName, nestedParams);
+    }
+    case "sumOverArray": {
+      if (!ctx.buffer) {
+        __tnRaiseIrError(
+          "tn.ir.missing_buffer",
+          `Jagged array '${node.fieldName}' requires buffer-backed validation`
+        );
+      }
+      const count = __tnBigIntToNumber(
+        __tnEvalIrNode(node.count, ctx, baseOffset),
+        `Jagged array '${node.fieldName}' count`
+      );
+      let cursor = __tnBigIntToNumber(baseOffset, "IR jagged array offset");
+      let total = __tnToBigInt(0);
+      for (let i = 0; i < count; i++) {
+        const result = __tnInvokeDynamicValidate(
+          node.elementTypeName,
+          ctx.buffer.subarray(cursor)
+        );
+        if (!result.ok || result.consumed === undefined) {
+          const code = result.code ?? "tn.ir.runtime_error";
+          __tnRaiseIrError(
+            code,
+            `Jagged array '${node.fieldName}' element ${i} failed validation`
+          );
+        }
+        cursor += __tnBigIntToNumber(result.consumed, "IR jagged element size");
+        total = __tnCheckedAdd(total, result.consumed);
+      }
+      return total;
     }
     default:
       __tnRaiseIrError(
@@ -718,6 +784,18 @@ function __tnNormalizeIrError(err: unknown): string {
   if (message.length > 0) return `tn.ir.runtime_error: ${message}`;
   return "tn.ir.runtime_error";
 }
+
+__tnRegisterFootprint("InstructionData", (params) => InstructionData.__tnInvokeFootprint(params));
+__tnRegisterValidate("InstructionData", (buffer, params) => InstructionData.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("InstructionData", (buffer) => { const result = InstructionData.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+
+__tnRegisterFootprint("Pubkey", (params) => Pubkey.__tnInvokeFootprint(params));
+__tnRegisterValidate("Pubkey", (buffer, params) => Pubkey.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("Pubkey", (buffer) => { const result = Pubkey.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+
+__tnRegisterFootprint("StateProof", (params) => StateProof.__tnInvokeFootprint(params));
+__tnRegisterValidate("StateProof", (buffer, params) => StateProof.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("StateProof", (buffer) => { const result = StateProof.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
 
 /* ----- TYPE DEFINITION FOR Authority ----- */
 
@@ -840,9 +918,6 @@ export class Authority {
 
 }
 
-__tnRegisterFootprint("Authority", (params) => Authority.__tnInvokeFootprint(params));
-__tnRegisterValidate("Authority", (buffer, params) => Authority.__tnInvokeValidate(buffer, params));
-
 export class AuthorityBuilder {
   private buffer: Uint8Array;
   private view: DataView;
@@ -882,6 +957,10 @@ export class AuthorityBuilder {
     return view;
   }
 }
+
+__tnRegisterFootprint("Authority", (params) => Authority.__tnInvokeFootprint(params));
+__tnRegisterValidate("Authority", (buffer, params) => Authority.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("Authority", (buffer) => { const result = Authority.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
 
 /* ----- TYPE DEFINITION FOR P256Point ----- */
 
@@ -980,12 +1059,13 @@ export class P256Point {
 
 __tnRegisterFootprint("P256Point", (params) => P256Point.__tnInvokeFootprint(params));
 __tnRegisterValidate("P256Point", (buffer, params) => P256Point.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("P256Point", (buffer) => { const result = P256Point.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
 
 /* ----- TYPE DEFINITION FOR RemoveAuthorityArgs ----- */
 
 const __tn_ir_RemoveAuthorityArgs = {
   typeName: "RemoveAuthorityArgs",
-  root: { op: "const", value: 1n }
+  root: { op: "const", value: 3n }
 } as const;
 
 export class RemoveAuthorityArgs {
@@ -1009,13 +1089,31 @@ export class RemoveAuthorityArgs {
     return RemoveAuthorityArgs.from_array(buffer);
   }
 
-  get_auth_idx(): number {
+  get_wallet_account_idx(): number {
     const offset = 0;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_wallet_account_idx(value: number): void {
+    const offset = 0;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get wallet_account_idx(): number {
+    return this.get_wallet_account_idx();
+  }
+
+  set wallet_account_idx(value: number) {
+    this.set_wallet_account_idx(value);
+  }
+
+  get_auth_idx(): number {
+    const offset = 2;
     return this.view.getUint8(offset);
   }
 
   set_auth_idx(value: number): void {
-    const offset = 0;
+    const offset = 2;
     this.view.setUint8(offset, value);
   }
 
@@ -1057,16 +1155,17 @@ export class RemoveAuthorityArgs {
   }
 
   static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
-    if (buffer.length < 1) return { ok: false, code: "tn.buffer_too_small", consumed: 1 };
-    return { ok: true, consumed: 1 };
+    if (buffer.length < 3) return { ok: false, code: "tn.buffer_too_small", consumed: 3 };
+    return { ok: true, consumed: 3 };
   }
 
-  static new(auth_idx: number): RemoveAuthorityArgs {
-    const buffer = new Uint8Array(1);
+  static new(wallet_account_idx: number, auth_idx: number): RemoveAuthorityArgs {
+    const buffer = new Uint8Array(3);
     const view = new DataView(buffer.buffer);
 
     let offset = 0;
-    view.setUint8(0, auth_idx); /* auth_idx */
+    view.setUint16(0, wallet_account_idx, true); /* wallet_account_idx (little-endian) */
+    view.setUint8(2, auth_idx); /* auth_idx */
 
     return new RemoveAuthorityArgs(buffer);
   }
@@ -1085,20 +1184,22 @@ export class RemoveAuthorityArgs {
 
 }
 
-__tnRegisterFootprint("RemoveAuthorityArgs", (params) => RemoveAuthorityArgs.__tnInvokeFootprint(params));
-__tnRegisterValidate("RemoveAuthorityArgs", (buffer, params) => RemoveAuthorityArgs.__tnInvokeValidate(buffer, params));
-
 export class RemoveAuthorityArgsBuilder {
   private buffer: Uint8Array;
   private view: DataView;
 
   constructor() {
-    this.buffer = new Uint8Array(1);
+    this.buffer = new Uint8Array(3);
     this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
   }
 
+  set_wallet_account_idx(value: number): this {
+    this.view.setUint16(0, value, true);
+    return this;
+  }
+
   set_auth_idx(value: number): this {
-    this.view.setUint8(0, value);
+    this.view.setUint8(2, value);
     return this;
   }
 
@@ -1118,6 +1219,10 @@ export class RemoveAuthorityArgsBuilder {
     return view;
   }
 }
+
+__tnRegisterFootprint("RemoveAuthorityArgs", (params) => RemoveAuthorityArgs.__tnInvokeFootprint(params));
+__tnRegisterValidate("RemoveAuthorityArgs", (buffer, params) => RemoveAuthorityArgs.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("RemoveAuthorityArgs", (buffer) => { const result = RemoveAuthorityArgs.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
 
 /* ----- TYPE DEFINITION FOR Seed32 ----- */
 
@@ -1216,6 +1321,7 @@ export class Seed32 {
 
 __tnRegisterFootprint("Seed32", (params) => Seed32.__tnInvokeFootprint(params));
 __tnRegisterValidate("Seed32", (buffer, params) => Seed32.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("Seed32", (buffer) => { const result = Seed32.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
 
 /* ----- TYPE DEFINITION FOR TransferArgs ----- */
 
@@ -1359,9 +1465,6 @@ export class TransferArgs {
 
 }
 
-__tnRegisterFootprint("TransferArgs", (params) => TransferArgs.__tnInvokeFootprint(params));
-__tnRegisterValidate("TransferArgs", (buffer, params) => TransferArgs.__tnInvokeValidate(buffer, params));
-
 export class TransferArgsBuilder {
   private buffer: Uint8Array;
   private view: DataView;
@@ -1404,11 +1507,15 @@ export class TransferArgsBuilder {
   }
 }
 
+__tnRegisterFootprint("TransferArgs", (params) => TransferArgs.__tnInvokeFootprint(params));
+__tnRegisterValidate("TransferArgs", (buffer, params) => TransferArgs.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("TransferArgs", (buffer) => { const result = TransferArgs.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+
 /* ----- TYPE DEFINITION FOR ValidateArgs ----- */
 
 const __tn_ir_ValidateArgs = {
   typeName: "ValidateArgs",
-  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "align", alignment: 2, node: { op: "const", value: 2n } }, right: { op: "align", alignment: 1, node: { op: "const", value: 1n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 32n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 32n } } }, right: { op: "align", alignment: 2, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 2, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 1, node: { op: "mul", left: { op: "field", param: "authenticator_data.authenticator_data_len" }, right: { op: "const", value: 1n } } } }, right: { op: "align", alignment: 1, node: { op: "mul", left: { op: "field", param: "client_data.client_data_len" }, right: { op: "const", value: 1n } } } } }
+  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "align", alignment: 2, node: { op: "const", value: 2n } }, right: { op: "align", alignment: 1, node: { op: "const", value: 1n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 32n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 32n } } }, right: { op: "align", alignment: 2, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 2, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 1, node: { op: "mul", left: { op: "field", param: "authenticator_data.authenticator_data_len" }, right: { op: "const", value: 1n } } } }, right: { op: "align", alignment: 1, node: { op: "mul", left: { op: "field", param: "client_data.client_data_len" }, right: { op: "const", value: 1n } } } }, right: { op: "align", alignment: 1, node: { op: "call", typeName: "InstructionData", args: [{ name: "data.data_size", source: "data.data_size" }] } } } }
 } as const;
 
 export class ValidateArgs {
@@ -1466,16 +1573,6 @@ export class ValidateArgs {
     throw new Error("ValidateArgs: field reference '" + path + "' is not available; provide fieldContext when creating this view");
   }
 
-  static builder(): ValidateArgsBuilder {
-    return new ValidateArgsBuilder();
-  }
-
-  static fromBuilder(builder: ValidateArgsBuilder): ValidateArgs | null {
-    const buffer = builder.build();
-    const params = builder.dynamicParams();
-    return ValidateArgs.from_array(buffer, { params });
-  }
-
   static readonly flexibleArrayWriters = Object.freeze([
     { field: "authenticator_data", method: "authenticator_data", sizeField: "authenticator_data_len", paramKey: "authenticator_data_len", elementSize: 1 },
     { field: "client_data", method: "client_data", sizeField: "client_data_len", paramKey: "client_data_len", elementSize: 1 },
@@ -1522,6 +1619,7 @@ export class ValidateArgs {
     offsets["client_data"] = __tnCursorMutable;
     if (__tnCursorMutable + __tnArrayBytes_client_data > __tnLength) return null;
     __tnCursorMutable += __tnArrayBytes_client_data;
+    return null;
     return { params: null, offsets: offsets, derived: null };
   }
 
@@ -1751,6 +1849,34 @@ export class ValidateArgs {
   set client_data(value: number[]) {
     this.set_client_data(value);
   }
+
+  get_target_instruction(): InstructionData {
+    const offset = this.__tnGetDynamicOffset("target_instruction");
+    const tail = this.buffer.subarray(offset);
+    const validation = InstructionData.validate(tail);
+    if (!validation.ok || validation.consumed === undefined) {
+      throw new Error("ValidateArgs: failed to read field 'target_instruction' (invalid nested payload)");
+    }
+    const length = validation.consumed;
+    const slice = tail.subarray(0, length);
+    const opts = validation.params ? { params: validation.params } : undefined;
+    return InstructionData.from_array(slice, opts)!;
+  }
+
+  set_target_instruction(value: InstructionData): void {
+    /* Copy bytes from source struct to this field */
+    const sourceBytes = (value as any).buffer as Uint8Array;
+    const offset = this.__tnGetDynamicOffset("target_instruction");
+    this.buffer.set(sourceBytes, offset);
+  }
+
+  get target_instruction(): InstructionData {
+    return this.get_target_instruction();
+  }
+
+  set target_instruction(value: InstructionData) {
+    this.set_target_instruction(value);
+  }
   private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
     return __tnEvalFootprint(__tn_ir_ValidateArgs.root, { params: __tnParams });
   }
@@ -1884,164 +2010,7 @@ export namespace ValidateArgs {
 
 __tnRegisterFootprint("ValidateArgs", (params) => ValidateArgs.__tnInvokeFootprint(params));
 __tnRegisterValidate("ValidateArgs", (buffer, params) => ValidateArgs.__tnInvokeValidate(buffer, params));
-
-export class ValidateArgsBuilder {
-  private buffer: Uint8Array;
-  private view: DataView;
-  private __tnCachedParams: ValidateArgs.Params | null = null;
-  private __tnLastBuffer: Uint8Array | null = null;
-  private __tnLastParams: ValidateArgs.Params | null = null;
-  private __tnFam_authenticator_data: Uint8Array | null = null;
-  private __tnFam_authenticator_dataCount: number | null = null;
-  private __tnFamWriter_authenticator_data?: __TnFamWriterResult<ValidateArgsBuilder>;
-  private __tnFam_client_data: Uint8Array | null = null;
-  private __tnFam_client_dataCount: number | null = null;
-  private __tnFamWriter_client_data?: __TnFamWriterResult<ValidateArgsBuilder>;
-
-  constructor() {
-    this.buffer = new Uint8Array(71);
-    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
-  }
-
-  private __tnInvalidate(): void {
-    this.__tnCachedParams = null;
-    this.__tnLastBuffer = null;
-    this.__tnLastParams = null;
-  }
-
-  set_wallet_account_idx(value: number): this {
-    this.view.setUint16(0, value, true);
-    this.__tnInvalidate();
-    return this;
-  }
-
-  set_auth_idx(value: number): this {
-    this.view.setUint8(2, value);
-    this.__tnInvalidate();
-    return this;
-  }
-
-  set_signature_r(value: Uint8Array): this {
-    if (value.length !== 32) throw new Error("signature_r expects 32 bytes");
-    this.buffer.set(value, 3);
-    this.__tnInvalidate();
-    return this;
-  }
-
-  set_signature_s(value: Uint8Array): this {
-    if (value.length !== 32) throw new Error("signature_s expects 32 bytes");
-    this.buffer.set(value, 35);
-    this.__tnInvalidate();
-    return this;
-  }
-
-  set_authenticator_data_len(value: number): this {
-    this.view.setUint16(67, value, true);
-    this.__tnInvalidate();
-    return this;
-  }
-
-  set_client_data_len(value: number): this {
-    this.view.setUint16(69, value, true);
-    this.__tnInvalidate();
-    return this;
-  }
-
-  authenticator_data(): __TnFamWriterResult<ValidateArgsBuilder> {
-    if (!this.__tnFamWriter_authenticator_data) {
-      this.__tnFamWriter_authenticator_data = __tnCreateFamWriter(this, "authenticator_data", (payload) => {
-        const bytes = new Uint8Array(payload);
-        const elementCount = bytes.length;
-        this.__tnFam_authenticator_data = bytes;
-        this.__tnFam_authenticator_dataCount = elementCount;
-        this.set_authenticator_data_len(elementCount);
-        this.__tnInvalidate();
-      });
-    }
-    return this.__tnFamWriter_authenticator_data!;
-  }
-
-  client_data(): __TnFamWriterResult<ValidateArgsBuilder> {
-    if (!this.__tnFamWriter_client_data) {
-      this.__tnFamWriter_client_data = __tnCreateFamWriter(this, "client_data", (payload) => {
-        const bytes = new Uint8Array(payload);
-        const elementCount = bytes.length;
-        this.__tnFam_client_data = bytes;
-        this.__tnFam_client_dataCount = elementCount;
-        this.set_client_data_len(elementCount);
-        this.__tnInvalidate();
-      });
-    }
-    return this.__tnFamWriter_client_data!;
-  }
-
-  build(): Uint8Array {
-    const params = this.__tnComputeParams();
-    const size = ValidateArgs.footprintFromParams(params);
-    const buffer = new Uint8Array(size);
-    this.__tnWriteInto(buffer);
-    this.__tnValidateOrThrow(buffer, params);
-    return buffer;
-  }
-
-  buildInto(target: Uint8Array, offset = 0): Uint8Array {
-    const params = this.__tnComputeParams();
-    const size = ValidateArgs.footprintFromParams(params);
-    if (target.length - offset < size) throw new Error("ValidateArgsBuilder: target buffer too small");
-    const slice = target.subarray(offset, offset + size);
-    this.__tnWriteInto(slice);
-    this.__tnValidateOrThrow(slice, params);
-    return target;
-  }
-
-  finish(): ValidateArgs {
-    const buffer = this.build();
-    const params = this.__tnLastParams ?? this.__tnComputeParams();
-    const view = ValidateArgs.from_array(buffer, { params });
-    if (!view) throw new Error("ValidateArgsBuilder: failed to finalize view");
-    return view;
-  }
-
-  finishView(): ValidateArgs {
-    return this.finish();
-  }
-
-  dynamicParams(): ValidateArgs.Params {
-    return this.__tnComputeParams();
-  }
-
-  private __tnComputeParams(): ValidateArgs.Params {
-    if (this.__tnCachedParams) return this.__tnCachedParams;
-    const params = ValidateArgs.Params.fromValues({
-      authenticator_data_authenticator_data_len: (() => { if (this.__tnFam_authenticator_dataCount === null) throw new Error("ValidateArgsBuilder: field 'authenticator_data' must be written before computing params"); return __tnToBigInt(this.__tnFam_authenticator_dataCount); })(),
-      client_data_client_data_len: (() => { if (this.__tnFam_client_dataCount === null) throw new Error("ValidateArgsBuilder: field 'client_data' must be written before computing params"); return __tnToBigInt(this.__tnFam_client_dataCount); })(),
-    });
-    this.__tnCachedParams = params;
-    return params;
-  }
-
-  private __tnWriteInto(target: Uint8Array): void {
-    target.set(this.buffer, 0);
-    let cursor = this.buffer.length;
-    const __tnLocal_authenticator_data_bytes = this.__tnFam_authenticator_data;
-    if (!__tnLocal_authenticator_data_bytes) throw new Error("ValidateArgsBuilder: field 'authenticator_data' must be written before build");
-    target.set(__tnLocal_authenticator_data_bytes, cursor);
-    cursor += __tnLocal_authenticator_data_bytes.length;
-    const __tnLocal_client_data_bytes = this.__tnFam_client_data;
-    if (!__tnLocal_client_data_bytes) throw new Error("ValidateArgsBuilder: field 'client_data' must be written before build");
-    target.set(__tnLocal_client_data_bytes, cursor);
-    cursor += __tnLocal_client_data_bytes.length;
-  }
-
-  private __tnValidateOrThrow(buffer: Uint8Array, params: ValidateArgs.Params): void {
-    const result = ValidateArgs.validate(buffer, { params });
-    if (!result.ok) {
-      throw new Error(`${ ValidateArgs }Builder: builder produced invalid buffer (code=${result.code ?? "unknown"})`);
-    }
-    this.__tnLastParams = result.params ?? params;
-    this.__tnLastBuffer = buffer;
-  }
-}
+__tnRegisterDynamicValidate("ValidateArgs", (buffer) => { const result = ValidateArgs.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
 
 /* ----- TYPE DEFINITION FOR WalletAccount ----- */
 
@@ -2166,9 +2135,6 @@ export class WalletAccount {
 
 }
 
-__tnRegisterFootprint("WalletAccount", (params) => WalletAccount.__tnInvokeFootprint(params));
-__tnRegisterValidate("WalletAccount", (buffer, params) => WalletAccount.__tnInvokeValidate(buffer, params));
-
 export class WalletAccountBuilder {
   private buffer: Uint8Array;
   private view: DataView;
@@ -2205,6 +2171,10 @@ export class WalletAccountBuilder {
     return view;
   }
 }
+
+__tnRegisterFootprint("WalletAccount", (params) => WalletAccount.__tnInvokeFootprint(params));
+__tnRegisterValidate("WalletAccount", (buffer, params) => WalletAccount.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("WalletAccount", (buffer) => { const result = WalletAccount.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
 
 /* ----- TYPE DEFINITION FOR WalletCreatedEventData ----- */
 
@@ -2324,9 +2294,6 @@ export class WalletCreatedEventData {
 
 }
 
-__tnRegisterFootprint("WalletCreatedEventData", (params) => WalletCreatedEventData.__tnInvokeFootprint(params));
-__tnRegisterValidate("WalletCreatedEventData", (buffer, params) => WalletCreatedEventData.__tnInvokeValidate(buffer, params));
-
 export class WalletCreatedEventDataBuilder {
   private buffer: Uint8Array;
   private view: DataView;
@@ -2364,6 +2331,10 @@ export class WalletCreatedEventDataBuilder {
     return view;
   }
 }
+
+__tnRegisterFootprint("WalletCreatedEventData", (params) => WalletCreatedEventData.__tnInvokeFootprint(params));
+__tnRegisterValidate("WalletCreatedEventData", (buffer, params) => WalletCreatedEventData.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("WalletCreatedEventData", (buffer) => { const result = WalletCreatedEventData.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
 
 /* ----- TYPE DEFINITION FOR WalletTransferEventData ----- */
 
@@ -2501,9 +2472,6 @@ export class WalletTransferEventData {
 
 }
 
-__tnRegisterFootprint("WalletTransferEventData", (params) => WalletTransferEventData.__tnInvokeFootprint(params));
-__tnRegisterValidate("WalletTransferEventData", (buffer, params) => WalletTransferEventData.__tnInvokeValidate(buffer, params));
-
 export class WalletTransferEventDataBuilder {
   private buffer: Uint8Array;
   private view: DataView;
@@ -2547,6 +2515,10 @@ export class WalletTransferEventDataBuilder {
     return view;
   }
 }
+
+__tnRegisterFootprint("WalletTransferEventData", (params) => WalletTransferEventData.__tnInvokeFootprint(params));
+__tnRegisterValidate("WalletTransferEventData", (buffer, params) => WalletTransferEventData.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("WalletTransferEventData", (buffer) => { const result = WalletTransferEventData.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
 
 /* ----- TYPE DEFINITION FOR WalletValidatedEventData ----- */
 
@@ -2663,9 +2635,6 @@ export class WalletValidatedEventData {
 
 }
 
-__tnRegisterFootprint("WalletValidatedEventData", (params) => WalletValidatedEventData.__tnInvokeFootprint(params));
-__tnRegisterValidate("WalletValidatedEventData", (buffer, params) => WalletValidatedEventData.__tnInvokeValidate(buffer, params));
-
 export class WalletValidatedEventDataBuilder {
   private buffer: Uint8Array;
   private view: DataView;
@@ -2704,11 +2673,15 @@ export class WalletValidatedEventDataBuilder {
   }
 }
 
+__tnRegisterFootprint("WalletValidatedEventData", (params) => WalletValidatedEventData.__tnInvokeFootprint(params));
+__tnRegisterValidate("WalletValidatedEventData", (buffer, params) => WalletValidatedEventData.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("WalletValidatedEventData", (buffer) => { const result = WalletValidatedEventData.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+
 /* ----- TYPE DEFINITION FOR AddAuthorityArgs ----- */
 
 const __tn_ir_AddAuthorityArgs = {
   typeName: "AddAuthorityArgs",
-  root: { op: "const", value: 65n }
+  root: { op: "const", value: 67n }
 } as const;
 
 export class AddAuthorityArgs {
@@ -2732,8 +2705,26 @@ export class AddAuthorityArgs {
     return AddAuthorityArgs.from_array(buffer);
   }
 
-  get_authority(): Authority {
+  get_wallet_account_idx(): number {
     const offset = 0;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_wallet_account_idx(value: number): void {
+    const offset = 0;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get wallet_account_idx(): number {
+    return this.get_wallet_account_idx();
+  }
+
+  set wallet_account_idx(value: number) {
+    this.set_wallet_account_idx(value);
+  }
+
+  get_authority(): Authority {
+    const offset = 2;
     const slice = this.buffer.subarray(offset, offset + 65);
     return Authority.from_array(slice)!;
   }
@@ -2741,7 +2732,7 @@ export class AddAuthorityArgs {
   set_authority(value: Authority): void {
     /* Copy bytes from source struct to this field */
     const sourceBytes = (value as any).buffer as Uint8Array;
-    const offset = 0;
+    const offset = 2;
     this.buffer.set(sourceBytes, offset);
   }
 
@@ -2783,8 +2774,8 @@ export class AddAuthorityArgs {
   }
 
   static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
-    if (buffer.length < 65) return { ok: false, code: "tn.buffer_too_small", consumed: 65 };
-    return { ok: true, consumed: 65 };
+    if (buffer.length < 67) return { ok: false, code: "tn.buffer_too_small", consumed: 67 };
+    return { ok: true, consumed: 67 };
   }
 
   static from_array(buffer: Uint8Array): AddAuthorityArgs | null {
@@ -2801,21 +2792,23 @@ export class AddAuthorityArgs {
 
 }
 
-__tnRegisterFootprint("AddAuthorityArgs", (params) => AddAuthorityArgs.__tnInvokeFootprint(params));
-__tnRegisterValidate("AddAuthorityArgs", (buffer, params) => AddAuthorityArgs.__tnInvokeValidate(buffer, params));
-
 export class AddAuthorityArgsBuilder {
   private buffer: Uint8Array;
   private view: DataView;
 
   constructor() {
-    this.buffer = new Uint8Array(65);
+    this.buffer = new Uint8Array(67);
     this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  set_wallet_account_idx(value: number): this {
+    this.view.setUint16(0, value, true);
+    return this;
   }
 
   set_authority(value: Uint8Array): this {
     if (value.length !== 65) throw new Error("authority expects 65 bytes");
-    this.buffer.set(value, 0);
+    this.buffer.set(value, 2);
     return this;
   }
 
@@ -2835,6 +2828,10 @@ export class AddAuthorityArgsBuilder {
     return view;
   }
 }
+
+__tnRegisterFootprint("AddAuthorityArgs", (params) => AddAuthorityArgs.__tnInvokeFootprint(params));
+__tnRegisterValidate("AddAuthorityArgs", (buffer, params) => AddAuthorityArgs.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("AddAuthorityArgs", (buffer) => { const result = AddAuthorityArgs.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
 
 /* ----- TYPE DEFINITION FOR CredentialLookup ----- */
 
@@ -2933,9 +2930,6 @@ export class CredentialLookup {
 
 }
 
-__tnRegisterFootprint("CredentialLookup", (params) => CredentialLookup.__tnInvokeFootprint(params));
-__tnRegisterValidate("CredentialLookup", (buffer, params) => CredentialLookup.__tnInvokeValidate(buffer, params));
-
 export class CredentialLookupBuilder {
   private buffer: Uint8Array;
   private view: DataView;
@@ -2967,6 +2961,10 @@ export class CredentialLookupBuilder {
     return view;
   }
 }
+
+__tnRegisterFootprint("CredentialLookup", (params) => CredentialLookup.__tnInvokeFootprint(params));
+__tnRegisterValidate("CredentialLookup", (buffer, params) => CredentialLookup.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("CredentialLookup", (buffer) => { const result = CredentialLookup.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
 
 /* ----- TYPE DEFINITION FOR CredentialRegisteredEventData ----- */
 
@@ -3086,9 +3084,6 @@ export class CredentialRegisteredEventData {
 
 }
 
-__tnRegisterFootprint("CredentialRegisteredEventData", (params) => CredentialRegisteredEventData.__tnInvokeFootprint(params));
-__tnRegisterValidate("CredentialRegisteredEventData", (buffer, params) => CredentialRegisteredEventData.__tnInvokeValidate(buffer, params));
-
 export class CredentialRegisteredEventDataBuilder {
   private buffer: Uint8Array;
   private view: DataView;
@@ -3127,407 +3122,9 @@ export class CredentialRegisteredEventDataBuilder {
   }
 }
 
-/* ----- TYPE DEFINITION FOR InvokeArgs ----- */
-
-const __tn_ir_InvokeArgs = {
-  typeName: "InvokeArgs",
-  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "add", left: { op: "align", alignment: 1, node: { op: "const", value: 32n } }, right: { op: "align", alignment: 2, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 1, node: { op: "mul", left: { op: "field", param: "instr.instr_len" }, right: { op: "const", value: 1n } } } } }
-} as const;
-
-export class InvokeArgs {
-  private view: DataView;
-  private __tnFieldContext: Record<string, number | bigint> | null = null;
-  private __tnParams: InvokeArgs.Params;
-
-  private constructor(private buffer: Uint8Array, params?: InvokeArgs.Params, fieldContext?: Record<string, number | bigint>) {
-    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-    this.__tnFieldContext = fieldContext ?? null;
-    if (params) {
-      this.__tnParams = params;
-    } else {
-      const derived = InvokeArgs.__tnExtractParams(this.view, buffer);
-      if (!derived) {
-        throw new Error("InvokeArgs: failed to derive dynamic parameters");
-      }
-      this.__tnParams = derived.params;
-    }
-  }
-
-  static __tnCreateView(buffer: Uint8Array, opts?: { params?: InvokeArgs.Params, fieldContext?: Record<string, number | bigint> }): InvokeArgs {
-    if (!buffer || buffer.length === undefined) throw new Error("InvokeArgs.__tnCreateView requires a Uint8Array");
-    let params = opts?.params ?? null;
-    if (!params) {
-      const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-      const derived = InvokeArgs.__tnExtractParams(view, buffer);
-      if (!derived) throw new Error("InvokeArgs.__tnCreateView: failed to derive params");
-      params = derived.params;
-    }
-    const instance = new InvokeArgs(new Uint8Array(buffer), params, opts?.fieldContext);
-    return instance;
-  }
-
-  dynamicParams(): InvokeArgs.Params {
-    return this.__tnParams;
-  }
-
-  withFieldContext(context: Record<string, number | bigint>): this {
-    this.__tnFieldContext = context;
-    return this;
-  }
-
-  private __tnResolveFieldRef(path: string): number {
-    const getterName = `get_${path.replace(/[.]/g, '_')}`;
-    const getter = (this as any)[getterName];
-    if (typeof getter === "function") {
-      const value = getter.call(this);
-      return typeof value === "bigint" ? __tnBigIntToNumber(value, "InvokeArgs::__tnResolveFieldRef") : value;
-    }
-    if (this.__tnFieldContext && Object.prototype.hasOwnProperty.call(this.__tnFieldContext, path)) {
-      const contextValue = this.__tnFieldContext[path];
-      return typeof contextValue === "bigint" ? __tnBigIntToNumber(contextValue, "InvokeArgs::__tnResolveFieldRef") : contextValue;
-    }
-    throw new Error("InvokeArgs: field reference '" + path + "' is not available; provide fieldContext when creating this view");
-  }
-
-  static builder(): InvokeArgsBuilder {
-    return new InvokeArgsBuilder();
-  }
-
-  static fromBuilder(builder: InvokeArgsBuilder): InvokeArgs | null {
-    const buffer = builder.build();
-    const params = builder.dynamicParams();
-    return InvokeArgs.from_array(buffer, { params });
-  }
-
-  static readonly flexibleArrayWriters = Object.freeze([
-    { field: "instr", method: "instr", sizeField: "instr_len", paramKey: "instr_len", elementSize: 1 },
-  ] as const);
-
-  private static __tnExtractParams(view: DataView, buffer: Uint8Array): { params: InvokeArgs.Params; derived: Record<string, bigint> | null } | null {
-    if (buffer.length < 34) {
-      return null;
-    }
-    const __tnParam_instr_instr_len = __tnToBigInt(view.getUint16(32, true));
-    const __tnExtractedParams = InvokeArgs.Params.fromValues({
-      instr_instr_len: __tnParam_instr_instr_len,
-    });
-    return { params: __tnExtractedParams, derived: null };
-  }
-
-  get_program_pubkey(): Pubkey {
-    const offset = 0;
-    const slice = this.buffer.subarray(offset, offset + 32);
-    return Pubkey.from_array(slice)!;
-  }
-
-  set_program_pubkey(value: Pubkey): void {
-    /* Copy bytes from source struct to this field */
-    const sourceBytes = (value as any).buffer as Uint8Array;
-    const offset = 0;
-    this.buffer.set(sourceBytes, offset);
-  }
-
-  get program_pubkey(): Pubkey {
-    return this.get_program_pubkey();
-  }
-
-  set program_pubkey(value: Pubkey) {
-    this.set_program_pubkey(value);
-  }
-
-  get_instr_len(): number {
-    const offset = 32;
-    return this.view.getUint16(offset, true); /* little-endian */
-  }
-
-  set_instr_len(value: number): void {
-    const offset = 32;
-    this.view.setUint16(offset, value, true); /* little-endian */
-  }
-
-  get instr_len(): number {
-    return this.get_instr_len();
-  }
-
-  set instr_len(value: number) {
-    this.set_instr_len(value);
-  }
-
-  get_instr_length(): number {
-    return this.__tnResolveFieldRef("instr_len");
-  }
-
-  get_instr_at(index: number): number {
-    const offset = 34;
-    return this.view.getUint8(offset + index * 1);
-  }
-
-  get_instr(): number[] {
-    const len = this.get_instr_length();
-    const result: number[] = [];
-    for (let i = 0; i < len; i++) {
-      result.push(this.get_instr_at(i));
-    }
-    return result;
-  }
-
-  set_instr_at(index: number, value: number): void {
-    const offset = 34;
-    this.view.setUint8((offset + index * 1), value);
-  }
-
-  set_instr(value: number[]): void {
-    const len = Math.min(this.get_instr_length(), value.length);
-    for (let i = 0; i < len; i++) {
-      this.set_instr_at(i, value[i]);
-    }
-  }
-
-  get instr(): number[] {
-    return this.get_instr();
-  }
-
-  set instr(value: number[]) {
-    this.set_instr(value);
-  }
-  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
-    return __tnEvalFootprint(__tn_ir_InvokeArgs.root, { params: __tnParams });
-  }
-
-  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
-    return __tnValidateIrTree(__tn_ir_InvokeArgs, buffer, __tnParams);
-  }
-
-  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
-    return this.__tnFootprintInternal(__tnParams);
-  }
-
-  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
-    return this.__tnValidateInternal(buffer, __tnParams);
-  }
-
-  static footprintIr(instr_instr_len: number | bigint): bigint {
-    const params = InvokeArgs.Params.fromValues({
-      instr_instr_len: instr_instr_len,
-    });
-    return this.footprintIrFromParams(params);
-  }
-
-  private static __tnPackParams(params: InvokeArgs.Params): Record<string, bigint> {
-    const record: Record<string, bigint> = Object.create(null);
-    record["instr.instr_len"] = params.instr_instr_len;
-    return record;
-  }
-
-  static footprintIrFromParams(params: InvokeArgs.Params): bigint {
-    const __tnParams = this.__tnPackParams(params);
-    return this.__tnFootprintInternal(__tnParams);
-  }
-
-  static footprintFromParams(params: InvokeArgs.Params): number {
-    const irResult = this.footprintIrFromParams(params);
-    const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
-    if (__tnBigIntGreaterThan(irResult, maxSafe)) throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for InvokeArgs');
-    return __tnBigIntToNumber(irResult, 'InvokeArgs::footprintFromParams');
-  }
-
-  static footprintFromValues(input: { instr_instr_len: number | bigint }): number {
-    const params = InvokeArgs.params(input);
-    return this.footprintFromParams(params);
-  }
-
-  static footprint(params: InvokeArgs.Params): number {
-    return this.footprintFromParams(params);
-  }
-
-  static validate(buffer: Uint8Array, opts?: { params?: InvokeArgs.Params }): { ok: boolean; code?: string; consumed?: number; params?: InvokeArgs.Params } {
-    if (!buffer || buffer.length === undefined) {
-      return { ok: false, code: "tn.invalid_buffer" };
-    }
-    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-    let params = opts?.params ?? null;
-    if (!params) {
-      const extracted = this.__tnExtractParams(view, buffer);
-      if (!extracted) return { ok: false, code: "tn.param_extraction_failed" };
-      params = extracted.params;
-    }
-    const __tnParamsRec = this.__tnPackParams(params);
-    const irResult = this.__tnValidateInternal(buffer, __tnParamsRec);
-    if (!irResult.ok) {
-      return { ok: false, code: irResult.code, consumed: irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'InvokeArgs::validate') : undefined, params };
-    }
-    const consumed = irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'InvokeArgs::validate') : undefined;
-    return { ok: true, consumed, params };
-  }
-
-  static from_array(buffer: Uint8Array, opts?: { params?: InvokeArgs.Params }): InvokeArgs | null {
-    if (!buffer || buffer.length === undefined) {
-      return null;
-    }
-    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-    let params = opts?.params ?? null;
-    if (!params) {
-      const derived = this.__tnExtractParams(view, buffer);
-      if (!derived) return null;
-      params = derived.params;
-    }
-    const validation = this.validate(buffer, { params });
-    if (!validation.ok) {
-      return null;
-    }
-    const cached = validation.params ?? params;
-    const state = new InvokeArgs(buffer, cached);
-    return state;
-  }
-
-
-}
-
-export namespace InvokeArgs {
-  export type Params = {
-    /** ABI path: instr.instr_len */
-    readonly instr_instr_len: bigint;
-  };
-
-  export const ParamKeys = Object.freeze({
-    instr_instr_len: "instr.instr_len",
-  } as const);
-
-  export const Params = {
-    fromValues(input: { instr_instr_len: number | bigint }): Params {
-      return {
-        instr_instr_len: __tnToBigInt(input.instr_instr_len),
-      };
-    },
-    fromBuilder(source: { dynamicParams(): Params } | { params: Params } | Params): Params {
-      if ((source as { dynamicParams?: () => Params }).dynamicParams) {
-        return (source as { dynamicParams(): Params }).dynamicParams();
-      }
-      if ((source as { params?: Params }).params) {
-        return (source as { params: Params }).params;
-      }
-      return source as Params;
-    }
-  };
-
-  export function params(input: { instr_instr_len: number | bigint }): Params {
-    return Params.fromValues(input);
-  }
-}
-
-__tnRegisterFootprint("InvokeArgs", (params) => InvokeArgs.__tnInvokeFootprint(params));
-__tnRegisterValidate("InvokeArgs", (buffer, params) => InvokeArgs.__tnInvokeValidate(buffer, params));
-
-export class InvokeArgsBuilder {
-  private buffer: Uint8Array;
-  private view: DataView;
-  private __tnCachedParams: InvokeArgs.Params | null = null;
-  private __tnLastBuffer: Uint8Array | null = null;
-  private __tnLastParams: InvokeArgs.Params | null = null;
-  private __tnFam_instr: Uint8Array | null = null;
-  private __tnFam_instrCount: number | null = null;
-  private __tnFamWriter_instr?: __TnFamWriterResult<InvokeArgsBuilder>;
-
-  constructor() {
-    this.buffer = new Uint8Array(34);
-    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
-  }
-
-  private __tnInvalidate(): void {
-    this.__tnCachedParams = null;
-    this.__tnLastBuffer = null;
-    this.__tnLastParams = null;
-  }
-
-  set_program_pubkey(value: Uint8Array): this {
-    if (value.length !== 32) throw new Error("program_pubkey expects 32 bytes");
-    this.buffer.set(value, 0);
-    this.__tnInvalidate();
-    return this;
-  }
-
-  set_instr_len(value: number): this {
-    this.view.setUint16(32, value, true);
-    this.__tnInvalidate();
-    return this;
-  }
-
-  instr(): __TnFamWriterResult<InvokeArgsBuilder> {
-    if (!this.__tnFamWriter_instr) {
-      this.__tnFamWriter_instr = __tnCreateFamWriter(this, "instr", (payload) => {
-        const bytes = new Uint8Array(payload);
-        const elementCount = bytes.length;
-        this.__tnFam_instr = bytes;
-        this.__tnFam_instrCount = elementCount;
-        this.set_instr_len(elementCount);
-        this.__tnInvalidate();
-      });
-    }
-    return this.__tnFamWriter_instr!;
-  }
-
-  build(): Uint8Array {
-    const params = this.__tnComputeParams();
-    const size = InvokeArgs.footprintFromParams(params);
-    const buffer = new Uint8Array(size);
-    this.__tnWriteInto(buffer);
-    this.__tnValidateOrThrow(buffer, params);
-    return buffer;
-  }
-
-  buildInto(target: Uint8Array, offset = 0): Uint8Array {
-    const params = this.__tnComputeParams();
-    const size = InvokeArgs.footprintFromParams(params);
-    if (target.length - offset < size) throw new Error("InvokeArgsBuilder: target buffer too small");
-    const slice = target.subarray(offset, offset + size);
-    this.__tnWriteInto(slice);
-    this.__tnValidateOrThrow(slice, params);
-    return target;
-  }
-
-  finish(): InvokeArgs {
-    const buffer = this.build();
-    const params = this.__tnLastParams ?? this.__tnComputeParams();
-    const view = InvokeArgs.from_array(buffer, { params });
-    if (!view) throw new Error("InvokeArgsBuilder: failed to finalize view");
-    return view;
-  }
-
-  finishView(): InvokeArgs {
-    return this.finish();
-  }
-
-  dynamicParams(): InvokeArgs.Params {
-    return this.__tnComputeParams();
-  }
-
-  private __tnComputeParams(): InvokeArgs.Params {
-    if (this.__tnCachedParams) return this.__tnCachedParams;
-    const params = InvokeArgs.Params.fromValues({
-      instr_instr_len: (() => { if (this.__tnFam_instrCount === null) throw new Error("InvokeArgsBuilder: field 'instr' must be written before computing params"); return __tnToBigInt(this.__tnFam_instrCount); })(),
-    });
-    this.__tnCachedParams = params;
-    return params;
-  }
-
-  private __tnWriteInto(target: Uint8Array): void {
-    target.set(this.buffer, 0);
-    let cursor = this.buffer.length;
-    const __tnLocal_instr_bytes = this.__tnFam_instr;
-    if (!__tnLocal_instr_bytes) throw new Error("InvokeArgsBuilder: field 'instr' must be written before build");
-    target.set(__tnLocal_instr_bytes, cursor);
-    cursor += __tnLocal_instr_bytes.length;
-  }
-
-  private __tnValidateOrThrow(buffer: Uint8Array, params: InvokeArgs.Params): void {
-    const result = InvokeArgs.validate(buffer, { params });
-    if (!result.ok) {
-      throw new Error(`${ InvokeArgs }Builder: builder produced invalid buffer (code=${result.code ?? "unknown"})`);
-    }
-    this.__tnLastParams = result.params ?? params;
-    this.__tnLastBuffer = buffer;
-  }
-}
+__tnRegisterFootprint("CredentialRegisteredEventData", (params) => CredentialRegisteredEventData.__tnInvokeFootprint(params));
+__tnRegisterValidate("CredentialRegisteredEventData", (buffer, params) => CredentialRegisteredEventData.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("CredentialRegisteredEventData", (buffer) => { const result = CredentialRegisteredEventData.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
 
 /* ----- TYPE DEFINITION FOR PasskeyEvent ----- */
 
@@ -3824,9 +3421,6 @@ export namespace PasskeyEvent {
   }
 }
 
-__tnRegisterFootprint("PasskeyEvent", (params) => PasskeyEvent.__tnInvokeFootprint(params));
-__tnRegisterValidate("PasskeyEvent", (buffer, params) => PasskeyEvent.__tnInvokeValidate(buffer, params));
-
 export class PasskeyEventBuilder {
   private __tnPrefixBuffer: Uint8Array;
   private __tnPrefixView: DataView;
@@ -3940,6 +3534,10 @@ export class PasskeyEventBuilder {
     this.__tnLastBuffer = buffer;
   }
 }
+
+__tnRegisterFootprint("PasskeyEvent", (params) => PasskeyEvent.__tnInvokeFootprint(params));
+__tnRegisterValidate("PasskeyEvent", (buffer, params) => PasskeyEvent.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("PasskeyEvent", (buffer) => { const result = PasskeyEvent.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
 
 /* ----- TYPE DEFINITION FOR CreateArgs ----- */
 
@@ -4105,9 +3703,6 @@ export class CreateArgs {
 
 }
 
-__tnRegisterFootprint("CreateArgs", (params) => CreateArgs.__tnInvokeFootprint(params));
-__tnRegisterValidate("CreateArgs", (buffer, params) => CreateArgs.__tnInvokeValidate(buffer, params));
-
 export class CreateArgsBuilder {
   private buffer: Uint8Array;
   private view: DataView;
@@ -4213,6 +3808,10 @@ export class CreateArgsBuilder {
     }
   }
 }
+
+__tnRegisterFootprint("CreateArgs", (params) => CreateArgs.__tnInvokeFootprint(params));
+__tnRegisterValidate("CreateArgs", (buffer, params) => CreateArgs.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("CreateArgs", (buffer) => { const result = CreateArgs.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
 
 /* ----- TYPE DEFINITION FOR RegisterCredentialArgs ----- */
 
@@ -4375,9 +3974,6 @@ export class RegisterCredentialArgs {
 
 }
 
-__tnRegisterFootprint("RegisterCredentialArgs", (params) => RegisterCredentialArgs.__tnInvokeFootprint(params));
-__tnRegisterValidate("RegisterCredentialArgs", (buffer, params) => RegisterCredentialArgs.__tnInvokeValidate(buffer, params));
-
 export class RegisterCredentialArgsBuilder {
   private buffer: Uint8Array;
   private view: DataView;
@@ -4483,6 +4079,10 @@ export class RegisterCredentialArgsBuilder {
   }
 }
 
+__tnRegisterFootprint("RegisterCredentialArgs", (params) => RegisterCredentialArgs.__tnInvokeFootprint(params));
+__tnRegisterValidate("RegisterCredentialArgs", (buffer, params) => RegisterCredentialArgs.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("RegisterCredentialArgs", (buffer) => { const result = RegisterCredentialArgs.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+
 /* ----- TYPE DEFINITION FOR PasskeyInstruction ----- */
 
 const __tn_ir_PasskeyInstruction = {
@@ -4523,11 +4123,6 @@ export class PasskeyInstruction_payload_Inner {
   asTransfer(): TransferArgs | null {
     if (!this.descriptor || this.descriptor.tag !== 2) return null;
     return TransferArgs.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
-  }
-
-  asInvoke(): InvokeArgs | null {
-    if (!this.descriptor || this.descriptor.tag !== 3) return null;
-    return InvokeArgs.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
   asAddAuthority(): AddAuthorityArgs | null {
@@ -4605,7 +4200,7 @@ export class PasskeyInstruction {
       tag: 1,
       payloadSize: null,
       payloadType: "PasskeyInstruction::payload::validate",
-      createPayloadBuilder: () => __tnMaybeCallBuilder(ValidateArgs),
+      createPayloadBuilder: () => null,
     },
     {
       name: "transfer",
@@ -4615,23 +4210,16 @@ export class PasskeyInstruction {
       createPayloadBuilder: () => __tnMaybeCallBuilder(TransferArgs),
     },
     {
-      name: "invoke",
-      tag: 3,
-      payloadSize: null,
-      payloadType: "PasskeyInstruction::payload::invoke",
-      createPayloadBuilder: () => __tnMaybeCallBuilder(InvokeArgs),
-    },
-    {
       name: "add_authority",
       tag: 4,
-      payloadSize: 65,
+      payloadSize: 67,
       payloadType: "PasskeyInstruction::payload::add_authority",
       createPayloadBuilder: () => __tnMaybeCallBuilder(AddAuthorityArgs),
     },
     {
       name: "remove_authority",
       tag: 5,
-      payloadSize: 1,
+      payloadSize: 3,
       payloadType: "PasskeyInstruction::payload::remove_authority",
       createPayloadBuilder: () => __tnMaybeCallBuilder(RemoveAuthorityArgs),
     },
@@ -4660,7 +4248,6 @@ export class PasskeyInstruction {
       case 0: break;
       case 1: break;
       case 2: break;
-      case 3: break;
       case 4: break;
       case 5: break;
       case 6: break;
@@ -4857,9 +4444,6 @@ export namespace PasskeyInstruction {
   }
 }
 
-__tnRegisterFootprint("PasskeyInstruction", (params) => PasskeyInstruction.__tnInvokeFootprint(params));
-__tnRegisterValidate("PasskeyInstruction", (buffer, params) => PasskeyInstruction.__tnInvokeValidate(buffer, params));
-
 export class PasskeyInstructionBuilder {
   private __tnPrefixBuffer: Uint8Array;
   private __tnPrefixView: DataView;
@@ -4974,4 +4558,8 @@ export class PasskeyInstructionBuilder {
     this.__tnLastBuffer = buffer;
   }
 }
+
+__tnRegisterFootprint("PasskeyInstruction", (params) => PasskeyInstruction.__tnInvokeFootprint(params));
+__tnRegisterValidate("PasskeyInstruction", (buffer, params) => PasskeyInstruction.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("PasskeyInstruction", (buffer) => { const result = PasskeyInstruction.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
 

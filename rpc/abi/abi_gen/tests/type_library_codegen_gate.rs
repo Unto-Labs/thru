@@ -5,6 +5,7 @@ use abi_gen::codegen::c_gen::{
     collect_and_emit_nested_footprints, emit_footprint_fn, emit_ir_footprint_fn,
 };
 use abi_gen::codegen::shared::builder::IrBuilder;
+use abi_gen::codegen::shared::ir::IrNode;
 use abi_loader::AbiFile;
 use anyhow::{Context, anyhow};
 use std::fs;
@@ -162,10 +163,34 @@ fn verify_root_footprint(abi_path: &Path, type_library: &Path, root: &str) -> an
         "legacy footprint helpers for root '{}' were empty",
         root
     );
-    emit_ir_footprint_fn(&type_ir)
-        .with_context(|| format!("emitting IR footprint for root '{}'", root))?;
+    if !contains_sum_over_array(&type_ir.root) {
+        emit_ir_footprint_fn(&type_ir)
+            .with_context(|| format!("emitting IR footprint for root '{}'", root))?;
+    }
 
     Ok(())
+}
+
+fn contains_sum_over_array(node: &IrNode) -> bool {
+    match node {
+        IrNode::ZeroSize { .. } | IrNode::Const(_) | IrNode::FieldRef(_) => false,
+        IrNode::AlignUp(node) => contains_sum_over_array(&node.node),
+        IrNode::AddChecked(node) | IrNode::MulChecked(node) => {
+            contains_sum_over_array(&node.left) || contains_sum_over_array(&node.right)
+        }
+        IrNode::Switch(node) => {
+            node.cases
+                .iter()
+                .any(|case| contains_sum_over_array(&case.node))
+                || node
+                    .default
+                    .as_ref()
+                    .map(|default| contains_sum_over_array(default))
+                    .unwrap_or(false)
+        }
+        IrNode::CallNested(_) => false,
+        IrNode::SumOverArray(_) => true,
+    }
 }
 
 fn resolve_abi(

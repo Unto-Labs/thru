@@ -94,7 +94,7 @@ types:
             name: StateProof
             package: "thru.blockchain.state_proof"
 
-# VALIDATE (tag 0x01): 71 bytes fixed + variable data
+# VALIDATE (tag 0x01): 71 bytes fixed + variable data + InstructionData
 - name: ValidateArgs
   kind:
     struct:
@@ -137,6 +137,11 @@ types:
                 path: ["client_data_len"]
             element-type:
               primitive: u8
+      - name: target_instruction
+        field-type:
+          type-ref:
+            name: InstructionData
+            package: "thru.common.primitives"
 
 # TRANSFER (tag 0x02): 12 bytes fixed
 - name: TransferArgs
@@ -154,46 +159,29 @@ types:
         field-type:
           primitive: u64
 
-# INVOKE (tag 0x03): 34 bytes fixed + instruction data
-- name: InvokeArgs
-  kind:
-    struct:
-      packed: true
-      fields:
-      - name: program_pubkey
-        field-type:
-          type-ref:
-            name: Pubkey
-            package: "thru.common.primitives"
-      - name: instr_len
-        field-type:
-          primitive: u16
-      - name: instr
-        field-type:
-          array:
-            size:
-              field-ref:
-                path: ["instr_len"]
-            element-type:
-              primitive: u8
-
-# ADD_AUTHORITY (tag 0x04): 65 bytes
+# ADD_AUTHORITY (tag 0x04): 67 bytes
 - name: AddAuthorityArgs
   kind:
     struct:
       packed: true
       fields:
+      - name: wallet_account_idx
+        field-type:
+          primitive: u16
       - name: authority
         field-type:
           type-ref:
             name: Authority
 
-# REMOVE_AUTHORITY (tag 0x05): 1 byte
+# REMOVE_AUTHORITY (tag 0x05): 3 bytes
 - name: RemoveAuthorityArgs
   kind:
     struct:
       packed: true
       fields:
+      - name: wallet_account_idx
+        field-type:
+          primitive: u16
       - name: auth_idx
         field-type:
           primitive: u8
@@ -254,11 +242,6 @@ types:
               variant-type:
                 type-ref:
                   name: TransferArgs
-            - name: invoke
-              tag-value: 3
-              variant-type:
-                type-ref:
-                  name: InvokeArgs
             - name: add_authority
               tag-value: 4
               variant-type:

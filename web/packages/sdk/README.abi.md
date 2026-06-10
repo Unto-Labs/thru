@@ -72,6 +72,16 @@ That script runs `wasm-pack build` three times (bundler + node + web targets) in
 `tsup` and copies those WASM folders into `dist/abi/wasm` so published packages
 resolve the dynamic imports automatically.
 
+Browser apps that cannot serve package-relative dynamic imports can publish the
+web target as static assets and configure both URLs before calling reflection:
+
+```ts
+configureWasm({
+  moduleUrl: "/wasm/abi/web/abi_reflect_wasm.js",
+  wasmUrl: "/wasm/abi/web/abi_reflect_wasm_bg.wasm",
+});
+```
+
 When developing inside the monorepo, Vitest loads the TypeScript sources
 directly. The runtime detects when it is executing from `src/` and reaches for
 `../wasm`, so make sure the synced artifacts exist before running the tests.

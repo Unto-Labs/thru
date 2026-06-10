@@ -12,6 +12,11 @@
       "types": "./dist/passkey-manager/index.d.ts",
       "import": "./dist/passkey-manager/index.js",
       "require": "./dist/passkey-manager/index.cjs"
+    },
+    "./multicall": {
+      "types": "./dist/multicall/index.d.ts",
+      "import": "./dist/multicall/index.js",
+      "require": "./dist/multicall/index.cjs"
     }
   },
   "scripts": {

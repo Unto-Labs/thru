@@ -186,7 +186,7 @@ fn format_struct_with_options(
                 /* Variable-size field - use running offset */
                 let abs_offset = base_offset + running_offset;
                 /* Update running offset based on the value's size */
-                if let Some(size) = value.type_info.size {
+                if let Some(size) = reflected_runtime_size(value) {
                     running_offset += size;
                 }
                 abs_offset
@@ -283,6 +283,45 @@ fn get_struct_field_sizes(
         }
     }
     sizes
+}
+
+fn reflected_runtime_size(value: &ReflectedValue) -> Option<u64> {
+    if let Some(size) = value.type_info.size {
+        return Some(size);
+    }
+
+    match value.get_value() {
+        Value::Array { elements } => elements.iter().try_fold(0u64, |acc, element| {
+            reflected_runtime_size(element).and_then(|size| acc.checked_add(size))
+        }),
+        Value::Struct { fields } => {
+            let ReflectedTypeKind::Struct {
+                fields: type_fields,
+                ..
+            } = &value.type_info.kind
+            else {
+                return None;
+            };
+
+            let mut running_offset = 0u64;
+            for (idx, (_, field)) in fields.iter().enumerate() {
+                let field_offset = type_fields
+                    .get(idx)
+                    .and_then(|field| field.offset)
+                    .unwrap_or(running_offset);
+                let field_size = reflected_runtime_size(field)?;
+                running_offset = running_offset.max(field_offset.checked_add(field_size)?);
+            }
+            Some(running_offset)
+        }
+        Value::Union { variant_value, .. } => reflected_runtime_size(variant_value),
+        Value::Enum { variant_value, .. } => reflected_runtime_size(variant_value),
+        Value::SizeDiscriminatedUnion { variant_value, .. } => {
+            reflected_runtime_size(variant_value)
+        }
+        Value::TypeRef { value, .. } => reflected_runtime_size(value),
+        _ => None,
+    }
 }
 
 fn extract_value_bytes(value: &ReflectedValue) -> Option<Vec<u8>> {

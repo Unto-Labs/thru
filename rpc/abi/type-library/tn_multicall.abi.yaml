@@ -1,0 +1,48 @@
+abi:
+  package: thru.program.multicall
+  name: "Multicall"
+  abi-version: 1
+  package-version: 1.0.0
+  description: ABI for the Thru multicall program instruction payload
+  imports:
+    # thru_primitives
+    - type: onchain
+      address: ta1blxgaYR0dei5aldWJe1vbUtt-LkVEBOzNJtSRhHQcTG
+      target: abi
+      network: mainnet
+      revision: latest
+  options:
+    program-metadata:
+      root-types:
+        instruction-root: "MulticallArgs"
+        errors: "MulticallError"
+
+types:
+- name: MulticallArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: calls_count
+        field-type:
+          primitive: u16
+      - name: calls
+        field-type:
+          array:
+            jagged: true
+            size:
+              field-ref:
+                path: ["calls_count"]
+            element-type:
+              type-ref:
+                name: InstructionData
+                package: "thru.common.primitives"
+
+- name: MulticallError
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: code
+        field-type:
+          primitive: u64
