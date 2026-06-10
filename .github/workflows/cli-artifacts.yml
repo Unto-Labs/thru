@@ -121,6 +121,30 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-${{ matrix.target }}-cli-cargo-target-rust-1.88-
 
+    # Same convention as crates-publish.yml: the workspace crates stay at
+    # 0.1.0 in the repo, so release builds must sync the manifests with the
+    # release tag. This keeps CARGO_PKG_VERSION (used by version_check.rs
+    # for update notifications and the user agent) aligned with the
+    # published version. The intra-workspace thru-core requirement has to
+    # move in lockstep or the path-dependency version check fails.
+    - name: Sync crate versions with release
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        VERSION="${TAG_NAME#v}"
+        for manifest in rpc/cli/crates/*/Cargo.toml; do
+          tmp="${manifest}.tmp"
+          sed -E "s|^version = \"[^\"]+\"|version = \"${VERSION}\"|" "$manifest" > "$tmp" && mv "$tmp" "$manifest"
+          sed -E "s|^thru-core = \{ version = \"[^\"]+\"|thru-core = { version = \"${VERSION}\"|" "$manifest" > "$tmp" && mv "$tmp" "$manifest"
+        done
+
+        # Materialize the version bump in Cargo.lock so the --locked build
+        # below sees a consistent lockfile.
+        cargo metadata --format-version 1 --manifest-path rpc/cli/Cargo.toml >/dev/null
+
+        grep -H '^version = ' rpc/cli/crates/*/Cargo.toml
+
     - name: Build thru CLI binary
       shell: bash
       env:
@@ -129,12 +153,22 @@ jobs:
         CXX_aarch64_unknown_linux_gnu: aarch64-linux-gnu-g++
         AR_aarch64_unknown_linux_gnu: aarch64-linux-gnu-ar
       run: |
+        # Stamp the release identity (same convention as crates-publish.yml).
+        # Without this the get_version! macro falls back to inference, and
+        # a mismatch would make released binaries report a -local version
+        # like "0.1.0-local+75e7c6d0".
+        export THRU_BUILD_VERSION="${TAG_NAME#v}+$(git rev-parse --short=8 HEAD)"
+        export THRU_BUILD_CHANNEL=release
+        echo "THRU_BUILD_VERSION=${THRU_BUILD_VERSION}"
+
         cargo build --release --locked --target "${{ matrix.target }}" --manifest-path rpc/cli/Cargo.toml --bin thru
 
     - name: Smoke test thru CLI binary
       # aarch64-linux is cross-compiled and cannot execute on the x86_64
       # runner; every other target runs natively (Darwin-x86_64 via Rosetta
-      # on the arm64 macOS runners).
+      # on the arm64 macOS runners). The version assertion guards the
+      # THRU_BUILD_VERSION stamping above: a binary that reports the
+      # crate-default "0.1.0-local+..." must not ship.
       if: ${{ matrix.target != 'aarch64-unknown-linux-gnu' }}
       shell: bash
       run: |
@@ -142,7 +176,16 @@ jobs:
         if [ "${{ runner.os }}" = "Windows" ]; then
           BIN_NAME="thru.exe"
         fi
-        "rpc/cli/target/${{ matrix.target }}/release/${BIN_NAME}" --version
+
+        VERSION_OUTPUT="$("rpc/cli/target/${{ matrix.target }}/release/${BIN_NAME}" --version)"
+        echo "$VERSION_OUTPUT"
+        case "$VERSION_OUTPUT" in
+          *"${TAG_NAME#v}+"*) ;;
+          *)
+            echo "Binary reports '${VERSION_OUTPUT}', expected the release version ${TAG_NAME#v}." >&2
+            exit 1
+            ;;
+        esac
 
     - name: Package thru CLI binary
       id: package-cli
