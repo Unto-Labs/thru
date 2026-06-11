@@ -221,6 +221,20 @@ tsdk_get_current_program_acc_idx( void ) {
   return shadow_stack->stack_frames[shadow_stack->call_depth].program_acc_idx;
 }
 
+ushort
+tsdk_get_caller_program_acc_idx( void ) {
+  tsdk_shadow_stack_t const * shadow_stack = tsdk_get_shadow_stack( );
+
+  /* call_depth 1 is the top-level (root) frame; its caller is the dummy
+     frame -1 at index 0, which is not a real program.  Anything below 2
+     therefore has no caller program. */
+  if( shadow_stack->call_depth < 2U ) {
+    return TSDK_CALLER_PROGRAM_NONE;
+  }
+
+  return shadow_stack->stack_frames[shadow_stack->call_depth - 1U].program_acc_idx;
+}
+
 tn_pubkey_t const *
 tsdk_get_current_program_acc_addr( void ) {
   return &tsdk_txn_get_acct_addrs( tsdk_get_txn( ))[tsdk_get_current_program_acc_idx( )];

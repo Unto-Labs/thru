@@ -141,6 +141,21 @@ int tsdk_is_account_authorized_by_pubkey( tn_pubkey_t const * pubkey );
 
 ushort tsdk_get_current_program_acc_idx( void );
 
+/* Sentinel returned by tsdk_get_caller_program_acc_idx when there is no
+   caller frame (the program was invoked at the top level). */
+#define TSDK_CALLER_PROGRAM_NONE ((ushort)0xFFFFU)
+
+/* tsdk_get_caller_program_acc_idx returns the program account index of
+   the immediate caller's frame (call_depth - 1) — i.e. the program that
+   issued the cross-program invocation into the currently executing
+   program.  Returns TSDK_CALLER_PROGRAM_NONE when invoked at the top
+   level (call_depth < 2), where there is no caller program.  Unlike
+   tsdk_is_account_authorized_by_pubkey (which walks every parent frame),
+   this inspects ONLY the immediate caller — the right primitive for an
+   "only X may call me directly" check. */
+
+ushort tsdk_get_caller_program_acc_idx( void );
+
 tn_pubkey_t const * tsdk_get_current_program_acc_addr( void );
 
 int tsdk_is_account_idx_valid( ushort account_idx );

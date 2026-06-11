@@ -25,6 +25,31 @@ npx thru --help   # or node_modules/.bin/thru
 | macOS    | arm64 | `thru-darwin-arm64` |
 | Windows  | x64   | `thru-win32-x64`    |
 
+The Linux binaries require glibc >= 2.17, which every mainstream distro
+since CentOS 7 satisfies (Ubuntu, Debian, RHEL/Rocky/Alma, Amazon Linux,
+Fedora, SUSE). Alpine/musl is not supported.
+
+## Install without npm (Linux packages)
+
+Each release also ships `.deb` and `.rpm` packages (x86_64 and aarch64)
+built from the same binaries, for machines without npm — e.g. cloud VMs.
+Grab the file for your platform from the [releases
+page](https://github.com/Unto-Labs/thru/releases) and install it directly;
+no package repository setup is needed:
+
+```bash
+# Debian / Ubuntu
+curl -fsSLO https://github.com/Unto-Labs/thru/releases/download/v0.3.0/thru_0.3.0_amd64.deb
+sudo apt install ./thru_0.3.0_amd64.deb
+
+# RHEL / Rocky / Alma / Fedora / Amazon Linux (dnf accepts URLs directly)
+sudo dnf install https://github.com/Unto-Labs/thru/releases/download/v0.3.0/thru-0.3.0.x86_64.rpm
+```
+
+Packages installed this way are not picked up by `apt upgrade` /
+`dnf upgrade` (there is no hosted repository); to update, install the
+newer release's package the same way.
+
 ## How it works
 
 The `thru` package contains a small Node.js launcher plus one
@@ -39,9 +64,10 @@ package:
 - nothing is downloaded from GitHub at install time.
 
 The same binaries are also published as release assets at
-<https://github.com/Unto-Labs/thru/releases> (e.g.
-`thru-cli-Linux-x86_64-<tag>.tar.gz`, verified by `thru-cli-SHA256SUMS`) if
-you prefer not to use npm.
+<https://github.com/Unto-Labs/thru/releases> — as plain tarballs (e.g.
+`thru-cli-Linux-x86_64-<tag>.tar.gz`) and as the `.deb`/`.rpm` packages
+above, all verified by `thru-cli-SHA256SUMS` — if you prefer not to use
+npm.
 
 ## Troubleshooting
 

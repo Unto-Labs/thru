@@ -33,8 +33,10 @@
   The npm package ships prebuilt binaries through per-platform packages
   (`thru-linux-x64`, `thru-darwin-arm64`, ...) selected via `optionalDependencies` —
   no postinstall script, no GitHub download at install time (see
-  `web/packages/cli/README.md`). The Cargo packages continue to publish for
-  compatibility and source-based installs.
+  `web/packages/cli/README.md`). Linux machines without npm can install the
+  `.deb`/`.rpm` packages attached to each GitHub release (built by
+  `cli-artifacts.yml` from the same binaries). The Cargo packages continue to
+  publish for compatibility and source-based installs.
 
 ---
 

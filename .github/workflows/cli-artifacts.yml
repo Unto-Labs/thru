@@ -40,15 +40,29 @@ jobs:
     continue-on-error: ${{ matrix.best_effort || false }}
     env:
       TAG_NAME: ${{ github.event.release.tag_name || inputs.tag }}
+      # Linux portability toolchain pins (see cli-cloud-vm-portability-plan.md).
+      # zig sha256 is for the x86_64-linux tarball, from
+      # https://ziglang.org/download/index.json — update it when bumping
+      # ZIG_VERSION.
+      ZIG_VERSION: "0.16.0"
+      ZIG_SHA256: "70e49664a74374b48b51e6f3fdfbf437f6395d42509050588bd49abe52ba3d00"
+      CARGO_ZIGBUILD_VERSION: "0.22.3"
     strategy:
       fail-fast: false
       matrix:
+        # glibc_floor: Linux binaries are linked against this glibc version
+        # via cargo-zigbuild so they run on older cloud distros (Ubuntu 22.04
+        # = 2.35, RHEL/Rocky 9 and Amazon Linux 2023 = 2.34, CentOS 7 = 2.17).
+        # Building plain gnu targets on the Ubuntu 24.04 runner stamps a
+        # glibc 2.39 floor, which fails to launch on all of the above.
         include:
           - os: ubuntu-large
             target: x86_64-unknown-linux-gnu
+            glibc_floor: "2.17"
             asset_platform: Linux-x86_64
           - os: ubuntu-large
             target: aarch64-unknown-linux-gnu
+            glibc_floor: "2.17"
             asset_platform: Linux-aarch64
           - os: macos-latest-xlarge
             target: aarch64-apple-darwin
@@ -92,10 +106,26 @@ jobs:
       run: |
         .github/scripts/apt-install-with-retry.sh build-essential pkg-config libssl-dev libclang-dev
 
-    - name: Install aarch64 cross toolchain
-      if: ${{ matrix.target == 'aarch64-unknown-linux-gnu' }}
+    # zig provides the linker and glibc stubs for both Linux targets, so no
+    # distro cross toolchain (gcc-aarch64-linux-gnu) is needed. zig is
+    # downloaded straight from ziglang.org and checksum-verified instead of
+    # going through a third-party setup action.
+    - name: Set up Zig and cargo-zigbuild
+      if: ${{ matrix.glibc_floor != '' }}
       run: |
-        .github/scripts/apt-install-with-retry.sh gcc-aarch64-linux-gnu g++-aarch64-linux-gnu
+        set -euo pipefail
+
+        ZIG_DIR="zig-x86_64-linux-${ZIG_VERSION}"
+        curl -fsSL --retry 5 --retry-delay 5 -O "https://ziglang.org/download/${ZIG_VERSION}/${ZIG_DIR}.tar.xz"
+        echo "${ZIG_SHA256}  ${ZIG_DIR}.tar.xz" | sha256sum -c -
+        sudo tar -xJf "${ZIG_DIR}.tar.xz" -C /opt
+        rm "${ZIG_DIR}.tar.xz"
+        echo "/opt/${ZIG_DIR}" >> "$GITHUB_PATH"
+
+        # --locked pins cargo-zigbuild's own dependency tree; crates.io
+        # checksums cover the source. A couple of minutes per leg is
+        # acceptable for a release build.
+        cargo install cargo-zigbuild --locked --version "${CARGO_ZIGBUILD_VERSION}"
 
     - name: Cache cargo registry
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
@@ -113,13 +143,15 @@ jobs:
         restore-keys: |
           ${{ runner.os }}-${{ matrix.target }}-cli-cargo-index-rust-1.88-
 
+    # The zig segment keeps zig-linked and gcc-linked object files from
+    # sharing a cache; bumping ZIG_VERSION rolls the key over.
     - name: Cache target directory
       uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
       with:
         path: rpc/cli/target
-        key: ${{ runner.os }}-${{ matrix.target }}-cli-cargo-target-rust-1.88-${{ hashFiles('rpc/cli/Cargo.lock') }}
+        key: ${{ runner.os }}-${{ matrix.target }}-cli-cargo-target-rust-1.88-${{ matrix.glibc_floor && format('zig{0}-glibc{1}-', env.ZIG_VERSION, matrix.glibc_floor) || '' }}${{ hashFiles('rpc/cli/Cargo.lock') }}
         restore-keys: |
-          ${{ runner.os }}-${{ matrix.target }}-cli-cargo-target-rust-1.88-
+          ${{ runner.os }}-${{ matrix.target }}-cli-cargo-target-rust-1.88-${{ matrix.glibc_floor && format('zig{0}-glibc{1}-', env.ZIG_VERSION, matrix.glibc_floor) || '' }}
 
     # Same convention as crates-publish.yml: the workspace crates stay at
     # 0.1.0 in the repo, so release builds must sync the manifests with the
@@ -147,11 +179,6 @@ jobs:
 
     - name: Build thru CLI binary
       shell: bash
-      env:
-        CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
-        CC_aarch64_unknown_linux_gnu: aarch64-linux-gnu-gcc
-        CXX_aarch64_unknown_linux_gnu: aarch64-linux-gnu-g++
-        AR_aarch64_unknown_linux_gnu: aarch64-linux-gnu-ar
       run: |
         # Stamp the release identity (same convention as crates-publish.yml).
         # Without this the get_version! macro falls back to inference, and
@@ -161,7 +188,45 @@ jobs:
         export THRU_BUILD_CHANNEL=release
         echo "THRU_BUILD_VERSION=${THRU_BUILD_VERSION}"
 
-        cargo build --release --locked --target "${{ matrix.target }}" --manifest-path rpc/cli/Cargo.toml --bin thru
+        # Linux legs build with cargo-zigbuild and a glibc-suffixed target so
+        # the binaries run on older distros (see the matrix comment). The
+        # output path is unaffected: zigbuild writes to the plain triple
+        # directory, rpc/cli/target/<target>/release/.
+        if [ -n "${{ matrix.glibc_floor }}" ]; then
+          cargo zigbuild --release --locked --target "${{ matrix.target }}.${{ matrix.glibc_floor }}" --manifest-path rpc/cli/Cargo.toml --bin thru
+        else
+          cargo build --release --locked --target "${{ matrix.target }}" --manifest-path rpc/cli/Cargo.toml --bin thru
+        fi
+
+    # Regression guard for the portability work: fail the leg if the binary's
+    # glibc requirement ever creeps above the floor again (e.g. a runner image
+    # bump combined with a zigbuild regression), or if a C dependency that is
+    # supposed to be vendored/static (openssl, libgit2, libssh2, zlib) shows
+    # up as a dynamic dependency. readelf is used instead of objdump because
+    # it handles foreign-arch ELFs (the aarch64 leg is inspected on x86_64).
+    - name: Assert glibc floor
+      if: ${{ matrix.glibc_floor != '' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+
+        BIN="rpc/cli/target/${{ matrix.target }}/release/thru"
+        FLOOR="GLIBC_${{ matrix.glibc_floor }}"
+
+        MAX_GLIBC="$(readelf -V "$BIN" | grep -oE 'GLIBC_2\.[0-9]+(\.[0-9]+)?' | sort -Vu | tail -1)"
+        echo "Maximum glibc symbol version: ${MAX_GLIBC} (floor: ${FLOOR})"
+        HIGHEST="$(printf '%s\n%s\n' "$MAX_GLIBC" "$FLOOR" | sort -V | tail -1)"
+        if [ "$HIGHEST" != "$FLOOR" ]; then
+          echo "::error::thru requires ${MAX_GLIBC}, above the ${FLOOR} floor; it would fail to launch on older distros." >&2
+          exit 1
+        fi
+
+        echo "Dynamic dependencies:"
+        readelf -d "$BIN" | grep NEEDED || true
+        if readelf -d "$BIN" | grep NEEDED | grep -E 'libssl|libcrypto|libgit2|libssh2|libz\.so'; then
+          echo "::error::Unexpected dynamic dependency; these libraries must stay vendored/statically linked for portability." >&2
+          exit 1
+        fi
 
     - name: Smoke test thru CLI binary
       # aarch64-linux is cross-compiled and cannot execute on the x86_64
@@ -220,19 +285,93 @@ jobs:
       contents: write
     outputs:
       release_exists: ${{ steps.release-check.outputs.exists }}
+      packages_built: ${{ steps.build-packages.outputs.built }}
     env:
       TAG_NAME: ${{ github.event.release.tag_name || inputs.tag }}
+      NFPM_PKG_VERSION: "2.46.3"
 
     steps:
+    # Only needed for .github/nfpm/thru-cli.yaml; checkout must come first
+    # because it cleans the workspace. The packaging step degrades to a
+    # warning when the config is absent (workflow_dispatch against a tag
+    # that predates deb/rpm packaging).
+    - name: Checkout packaging config
+      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+      with:
+        ref: ${{ github.event.release.tag_name || inputs.tag }}
+        submodules: false
+
     - name: Download thru CLI artifacts
       uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
       with:
         path: cli-release-artifacts
         pattern: cli-*
 
+    # .deb/.rpm packages are nFPM-wrapped copies of the Linux tarball
+    # binaries, so cloud VMs without npm can `apt install ./thru_*.deb` or
+    # `dnf install <release-url>.rpm` straight from the release assets.
+    # nfpm is checksum-verified against its release manifest and pinned by
+    # NFPM_PKG_VERSION.
+    - name: Build thru .deb and .rpm packages
+      id: build-packages
+      run: |
+        set -euo pipefail
+
+        if [ ! -f .github/nfpm/thru-cli.yaml ]; then
+          echo "::warning::.github/nfpm/thru-cli.yaml not present at ${TAG_NAME}; skipping .deb/.rpm packaging."
+          echo "built=false" >> "$GITHUB_OUTPUT"
+          mkdir -p cli-packages
+          exit 0
+        fi
+
+        NFPM_TARBALL="nfpm_${NFPM_PKG_VERSION}_Linux_x86_64.tar.gz"
+        curl -fsSL --retry 5 --retry-delay 5 -O "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_PKG_VERSION}/${NFPM_TARBALL}"
+        curl -fsSL --retry 5 --retry-delay 5 -o nfpm-checksums.txt "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_PKG_VERSION}/checksums.txt"
+        grep " ${NFPM_TARBALL}\$" nfpm-checksums.txt | sha256sum -c -
+        mkdir -p "$HOME/.local/bin"
+        tar -xzf "${NFPM_TARBALL}" -C "$HOME/.local/bin" nfpm
+        rm "${NFPM_TARBALL}" nfpm-checksums.txt
+
+        VERSION="${TAG_NAME#v}"
+        mkdir -p cli-packages
+        while read -r asset_platform nfpm_arch; do
+          tarball="$(find cli-release-artifacts -type f -name "thru-cli-${asset_platform}-${TAG_NAME}.tar.gz" -print -quit)"
+          if [ -z "$tarball" ]; then
+            echo "::warning::No ${asset_platform} tarball in this run; skipping its .deb/.rpm."
+            continue
+          fi
+          workdir="$(mktemp -d)"
+          tar -xzf "$tarball" -C "$workdir"
+          export NFPM_VERSION="$VERSION" NFPM_ARCH="$nfpm_arch" NFPM_BIN="$workdir/thru"
+          "$HOME/.local/bin/nfpm" package -f .github/nfpm/thru-cli.yaml -p deb -t cli-packages/
+          "$HOME/.local/bin/nfpm" package -f .github/nfpm/thru-cli.yaml -p rpm -t cli-packages/
+        done <<'EOF'
+        Linux-x86_64 amd64
+        Linux-aarch64 arm64
+        EOF
+
+        ls -l cli-packages
+        if [ -n "$(ls -A cli-packages)" ]; then
+          echo "built=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "built=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    # Kept as a workflow artifact so test-linux-packages (and dispatch
+    # dry-runs without a release) can consume the packages from this run.
+    - name: Upload thru package artifacts to workflow
+      if: ${{ steps.build-packages.outputs.built == 'true' }}
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      with:
+        name: cli-packages
+        path: cli-packages/
+        retention-days: 90
+        if-no-files-found: error
+
     # The checksums file is scoped with a thru-cli- prefix because the
     # release hosts assets from several workflows; a bare SHA256SUMS that
-    # only covers the CLI tarballs would be misleading next to them.
+    # only covers the CLI tarballs would be misleading next to them. It
+    # covers the .deb/.rpm packages too, since they wrap the same binaries.
     - name: Create thru CLI checksums
       run: |
         set -euo pipefail
@@ -242,7 +381,8 @@ jobs:
           hash=$(sha256sum "$file" | awk '{print $1}')
           filename=$(basename "$file")
           printf '%s  %s\n' "$hash" "$filename" >> cli-release-artifacts/thru-cli-SHA256SUMS
-        done < <(find cli-release-artifacts/cli-* -type f -name 'thru-cli-*.tar.gz' | sort)
+        done < <( { find cli-release-artifacts/cli-* -type f -name 'thru-cli-*.tar.gz';
+                    find cli-packages -type f \( -name '*.deb' -o -name '*.rpm' \); } | sort)
 
         cat cli-release-artifacts/thru-cli-SHA256SUMS
 
@@ -289,6 +429,13 @@ jobs:
           fi
         done
 
+        for file in cli-packages/*.deb cli-packages/*.rpm; do
+          if [ -f "$file" ]; then
+            echo "Uploading $(basename "$file")"
+            gh release upload "${TAG_NAME}" "$file" --repo "${{ github.repository }}" --clobber
+          fi
+        done
+
         gh release upload "${TAG_NAME}" cli-release-artifacts/thru-cli-SHA256SUMS --repo "${{ github.repository }}" --clobber
 
     - name: CLI Release Summary
@@ -297,10 +444,54 @@ jobs:
         echo "✅ Successfully uploaded thru CLI artifacts to release ${TAG_NAME}!"
         echo ""
         echo "thru CLI artifacts:"
-        find cli-release-artifacts/cli-* -type f -exec basename {} \; 2>/dev/null | sort || echo "  No CLI artifacts found"
+        find cli-release-artifacts/cli-* cli-packages -type f -exec basename {} \; 2>/dev/null | sort || echo "  No CLI artifacts found"
         echo ""
         echo "Checksums:"
         cat cli-release-artifacts/thru-cli-SHA256SUMS
+
+  # Install the freshly built .deb/.rpm in clean containers and run the
+  # binary. This is the executable proof of the glibc 2.17 floor: all of
+  # these distros ship a glibc older than the 24.04 build runner's (ubuntu
+  # 22.04 = 2.35, debian 12 = 2.36, amazonlinux 2023 and rocky 9 = 2.34), so
+  # the old un-zigbuilt binaries failed to even launch here. x86_64 only:
+  # the runners cannot execute aarch64 binaries (that leg's floor is covered
+  # by the readelf assertion in build-cli-artifacts).
+  test-linux-packages:
+    needs: [upload-cli-release-artifacts]
+    if: ${{ needs.upload-cli-release-artifacts.outputs.packages_built == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - image: ubuntu:22.04
+            install: apt-get update -qq && apt-get install -qq -y /pkgs/thru_*_amd64.deb
+          - image: ubuntu:24.04
+            install: apt-get update -qq && apt-get install -qq -y /pkgs/thru_*_amd64.deb
+          - image: debian:12
+            install: apt-get update -qq && apt-get install -qq -y /pkgs/thru_*_amd64.deb
+          - image: amazonlinux:2023
+            install: dnf install -q -y /pkgs/thru-*.x86_64.rpm
+          - image: rockylinux:9
+            install: dnf install -q -y /pkgs/thru-*.x86_64.rpm
+
+    steps:
+      - name: Download thru package artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: cli-packages
+          path: cli-packages
+
+      - name: Install package and run thru
+        run: |
+          set -euo pipefail
+
+          docker run --rm -v "$PWD/cli-packages:/pkgs:ro" "${{ matrix.image }}" bash -c '
+            set -euo pipefail
+            ${{ matrix.install }}
+            thru --version
+          '
 
   # Publish the CLI npm packages: the platform packages carry the binaries
   # built in this run (npm selects the right one through os/cpu +
@@ -366,9 +557,14 @@ jobs:
         run: |
           set -euo pipefail
 
+          # The .deb/.rpm packages ride along (the cli-* artifact pattern
+          # matches cli-packages) purely so the checksum verification below
+          # covers every line of thru-cli-SHA256SUMS; npm packaging only
+          # consumes the tarballs.
           mkdir -p cli-assets
           find cli-release-artifacts -type f \
-            \( -name 'thru-cli-*.tar.gz' -o -name 'thru-cli-SHA256SUMS' \) \
+            \( -name 'thru-cli-*.tar.gz' -o -name 'thru-cli-SHA256SUMS' \
+               -o -name '*.deb' -o -name '*.rpm' \) \
             -exec mv {} cli-assets/ \;
 
           cd cli-assets
