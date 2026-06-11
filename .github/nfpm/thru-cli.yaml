@@ -1,0 +1,42 @@
+# nFPM (https://nfpm.goreleaser.com) configuration for the thru CLI .deb and
+# .rpm packages. The packages are thin wrappers around the same binaries that
+# ship in the thru-cli-Linux-*.tar.gz release assets; they are built and
+# attached to the GitHub release by .github/workflows/cli-artifacts.yml so
+# cloud VMs without npm can install via apt/dnf directly from the release:
+#
+#   curl -fsSLO https://github.com/Unto-Labs/thru/releases/latest/download/thru_<version>_amd64.deb
+#   sudo apt install ./thru_<version>_amd64.deb
+#
+#   sudo dnf install https://github.com/Unto-Labs/thru/releases/latest/download/thru-<version>.x86_64.rpm
+#
+# NFPM_VERSION, NFPM_ARCH (amd64|arm64), and NFPM_BIN (path to the extracted
+# thru binary) are provided by the workflow.
+name: thru
+arch: ${NFPM_ARCH}
+platform: linux
+version: ${NFPM_VERSION}
+section: utils
+priority: optional
+maintainer: Unto Labs <support@untolabs.com>
+description: |
+  Thru command-line interface.
+  Command-line client for the Thru network.
+vendor: Unto Labs
+homepage: https://github.com/Unto-Labs/thru
+license: Apache-2.0
+contents:
+  - src: ${NFPM_BIN}
+    dst: /usr/bin/thru
+    expand: true
+    file_info:
+      mode: 0755
+# The binaries are linked against a glibc 2.17 floor (see the glibc_floor
+# matrix value in cli-artifacts.yml) with all other C dependencies vendored
+# and statically linked, so glibc is the only runtime dependency.
+overrides:
+  deb:
+    depends:
+      - libc6 (>= 2.17)
+  rpm:
+    depends:
+      - glibc >= 2.17
