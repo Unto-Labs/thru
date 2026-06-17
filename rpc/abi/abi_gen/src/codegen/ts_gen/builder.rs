@@ -29,6 +29,16 @@ pub fn emit_builder(resolved_type: &ResolvedType, type_ir: Option<&TypeIr>) -> O
         return Some(emit_const_struct_builder(resolved_type));
     }
     if let Some(ir) = type_ir {
+        if let Some(plan) = fam_tail_typeref_builder_plan(resolved_type, ir) {
+            return Some(emit_fam_tail_typeref_struct_builder(
+                resolved_type,
+                ir,
+                plan,
+            ));
+        }
+        if let Some(plan) = jagged_typeref_array_builder_plan(resolved_type, ir) {
+            return Some(emit_jagged_typeref_array_builder(resolved_type, ir, plan));
+        }
         let fam_infos = fam_field_infos(resolved_type);
         if supports_fam_struct(resolved_type, Some(ir), &fam_infos) {
             return Some(emit_fam_struct_builder(resolved_type, ir, fam_infos));
@@ -143,6 +153,39 @@ struct TailTypeRefPlan<'a> {
     prefix_size: u64,
 }
 
+#[derive(Clone)]
+struct HybridTypeRefField<'a> {
+    field: &'a ResolvedField,
+    storage_ident: String,
+    params_ident: String,
+    target_ident: Option<String>,
+    target_name: String,
+}
+
+#[derive(Clone)]
+enum HybridDynamicField<'a> {
+    Fam(FamFieldInfo<'a>),
+    TypeRef(HybridTypeRefField<'a>),
+}
+
+struct FamTailTypeRefPlan<'a> {
+    prefix_fields: Vec<&'a ResolvedField>,
+    dynamic_fields: Vec<HybridDynamicField<'a>>,
+    type_ref_fields: Vec<HybridTypeRefField<'a>>,
+    prefix_size: u64,
+    first_dynamic_index: usize,
+}
+
+struct JaggedTypeRefArrayPlan<'a> {
+    prefix_fields: Vec<&'a ResolvedField>,
+    array_field: &'a ResolvedField,
+    count_field: &'a ResolvedField,
+    target_ident: String,
+    target_name: String,
+    storage_ident: String,
+    prefix_size: u64,
+}
+
 fn tail_typeref_builder_plan<'a>(resolved_type: &'a ResolvedType) -> Option<TailTypeRefPlan<'a>> {
     let ResolvedTypeKind::Struct { fields, .. } = &resolved_type.kind else {
         return None;
@@ -207,14 +250,255 @@ fn tail_typeref_builder_plan<'a>(resolved_type: &'a ResolvedType) -> Option<Tail
     })
 }
 
-fn binding_matches_fam(binding: &TsParamBinding, info: &FamFieldInfo<'_>) -> bool {
-    if binding.ts_name == info.param_binding {
+fn canonical_dynamic_param_name(owner: &str, path: &str) -> String {
+    if path.is_empty() {
+        owner.to_string()
+    } else if path == owner {
+        owner.to_string()
+    } else if let Some(stripped) = path.strip_prefix(&(owner.to_owned() + ".")) {
+        format!("{owner}.{stripped}")
+    } else {
+        format!("{owner}.{path}")
+    }
+}
+
+fn binding_matches_param_name(binding: &TsParamBinding, param_binding: &str) -> bool {
+    if binding.ts_name == param_binding {
         return true;
     }
     binding
         .ts_name
-        .strip_suffix(&format!("_{}", info.param_binding))
+        .strip_suffix(&format!("_{}", param_binding))
         .is_some()
+}
+
+fn typeref_binding_match<'a>(
+    type_refs: &'a [HybridTypeRefField<'a>],
+    binding: &TsParamBinding,
+) -> Option<(&'a HybridTypeRefField<'a>, String)> {
+    for type_ref in type_refs {
+        for (owner, refs) in &type_ref.field.field_type.dynamic_params {
+            for path in refs.keys() {
+                let canonical = canonical_dynamic_param_name(owner, path);
+                if canonical == binding.canonical {
+                    return Some((type_ref, sanitize_param_name(&canonical)));
+                }
+            }
+        }
+    }
+    None
+}
+
+fn fam_tail_typeref_builder_plan<'a>(
+    resolved_type: &'a ResolvedType,
+    type_ir: &TypeIr,
+) -> Option<FamTailTypeRefPlan<'a>> {
+    let ResolvedTypeKind::Struct { fields, .. } = &resolved_type.kind else {
+        return None;
+    };
+
+    let fam_infos = fam_field_infos(resolved_type);
+
+    let mut prefix_fields = Vec::new();
+    let mut dynamic_fields = Vec::new();
+    let mut type_ref_fields = Vec::new();
+    let mut saw_variable = false;
+    let mut first_dynamic_index = fields.len();
+
+    for (index, field) in fields.iter().enumerate() {
+        match &field.field_type.size {
+            Size::Const(_) if !saw_variable => {
+                if !field_has_const_layout(field) {
+                    return None;
+                }
+                prefix_fields.push(field);
+            }
+            Size::Const(_) => return None,
+            Size::Variable(_) => {
+                if !saw_variable {
+                    first_dynamic_index = index;
+                }
+                saw_variable = true;
+                if let Some(info) = fam_infos
+                    .iter()
+                    .find(|candidate| candidate.field.name == field.name)
+                    .cloned()
+                {
+                    dynamic_fields.push(HybridDynamicField::Fam(info));
+                    continue;
+                }
+                let ResolvedTypeKind::TypeRef { target_name, .. } = &field.field_type.kind else {
+                    return None;
+                };
+                let method_name = escape_ts_keyword(&field.name);
+                let type_ref = HybridTypeRefField {
+                    field,
+                    storage_ident: format!("__tnTail_{}", method_name),
+                    params_ident: format!("__tnTailParams_{}", method_name),
+                    target_ident: Some(target_name.clone()),
+                    target_name: target_name.clone(),
+                };
+                type_ref_fields.push(type_ref.clone());
+                dynamic_fields.push(HybridDynamicField::TypeRef(type_ref));
+            }
+        }
+    }
+
+    if type_ref_fields.is_empty() {
+        return None;
+    }
+
+    let bindings: Vec<_> = deduplicated_ts_parameter_bindings(type_ir)
+        .into_iter()
+        .filter(|binding| !binding.derived)
+        .collect();
+    if bindings.is_empty() {
+        return None;
+    }
+    if bindings.iter().any(|binding| {
+        !fam_infos
+            .iter()
+            .any(|info| binding_matches_fam(binding, info))
+            && typeref_binding_match(&type_ref_fields, binding).is_none()
+    }) {
+        return None;
+    }
+
+    let prefix_size: u64 = prefix_fields
+        .iter()
+        .map(|field| match field.field_type.size {
+            Size::Const(sz) => sz,
+            _ => 0,
+        })
+        .sum();
+
+    Some(FamTailTypeRefPlan {
+        prefix_fields,
+        dynamic_fields,
+        type_ref_fields,
+        prefix_size,
+        first_dynamic_index,
+    })
+}
+
+fn jagged_typeref_array_builder_plan<'a>(
+    resolved_type: &'a ResolvedType,
+    type_ir: &TypeIr,
+) -> Option<JaggedTypeRefArrayPlan<'a>> {
+    let ResolvedTypeKind::Struct { fields, .. } = &resolved_type.kind else {
+        return None;
+    };
+
+    let mut prefix_fields = Vec::new();
+    let mut array_field = None;
+    let mut count_field = None;
+    let mut target_ident = None;
+    let mut target_name = None;
+    let mut saw_variable = false;
+
+    for (index, field) in fields.iter().enumerate() {
+        match &field.field_type.size {
+            Size::Const(_) if !saw_variable => {
+                if !field_has_const_layout(field) {
+                    return None;
+                }
+                prefix_fields.push(field);
+            }
+            Size::Const(_) => return None,
+            Size::Variable(_) => {
+                if saw_variable {
+                    return None;
+                }
+                saw_variable = true;
+                let ResolvedTypeKind::Array {
+                    element_type,
+                    size_expression,
+                    jagged,
+                    ..
+                } = &field.field_type.kind
+                else {
+                    return None;
+                };
+                if !*jagged {
+                    return None;
+                }
+                let ExprKind::FieldRef(field_ref) = size_expression else {
+                    return None;
+                };
+                if field_ref.path.len() != 1 {
+                    return None;
+                }
+                let size_field_name = &field_ref.path[0];
+                let Some((size_index, size_field)) = fields
+                    .iter()
+                    .enumerate()
+                    .find(|(_, candidate)| candidate.name == *size_field_name)
+                else {
+                    return None;
+                };
+                if size_index >= index {
+                    return None;
+                }
+                if !matches!(
+                    size_field.field_type.kind,
+                    ResolvedTypeKind::Primitive { .. }
+                ) {
+                    return None;
+                }
+                let ResolvedTypeKind::TypeRef {
+                    target_name: elem_target,
+                    ..
+                } = &element_type.kind
+                else {
+                    return None;
+                };
+                if !matches!(element_type.size, Size::Variable(_)) {
+                    return None;
+                }
+                array_field = Some(field);
+                count_field = Some(size_field);
+                target_ident = Some(elem_target.clone());
+                target_name = Some(elem_target.clone());
+            }
+        }
+    }
+
+    let array_field = array_field?;
+    let count_field = count_field?;
+    let count_param = sanitize_param_name(&count_field.name);
+    let bindings: Vec<_> = deduplicated_ts_parameter_bindings(type_ir)
+        .into_iter()
+        .filter(|binding| !binding.derived)
+        .collect();
+    if bindings
+        .iter()
+        .any(|binding| !binding_matches_param_name(binding, &count_param))
+    {
+        return None;
+    }
+
+    let prefix_size: u64 = prefix_fields
+        .iter()
+        .map(|field| match field.field_type.size {
+            Size::Const(sz) => sz,
+            _ => 0,
+        })
+        .sum();
+    let method_name = escape_ts_keyword(&array_field.name);
+
+    Some(JaggedTypeRefArrayPlan {
+        prefix_fields,
+        array_field,
+        count_field,
+        target_ident: target_ident?,
+        target_name: target_name?,
+        storage_ident: format!("__tnJagged_{}", method_name),
+        prefix_size,
+    })
+}
+
+fn binding_matches_fam(binding: &TsParamBinding, info: &FamFieldInfo<'_>) -> bool {
+    binding_matches_param_name(binding, &info.param_binding)
 }
 
 fn supports_const_struct(resolved_type: &ResolvedType) -> bool {
@@ -452,6 +736,15 @@ fn emit_primitive_setter(
         writeln!(out, "    this.__tnInvalidate();").unwrap();
     }
     writeln!(out, "    return this;\n  }}\n").unwrap();
+}
+
+fn primitive_setter_value_expr(prim_type: &PrimitiveType, value_expr: &str) -> String {
+    let setter = primitive_to_dataview_setter(prim_type);
+    if matches!(prim_type, PrimitiveType::Integral(_)) && setter.contains("Big") {
+        format!("__tnToBigInt({})", value_expr)
+    } else {
+        value_expr.to_string()
+    }
 }
 
 fn emit_typeref_setter(
@@ -893,7 +1186,10 @@ fn emit_fam_struct_builder(
         writeln!(out, "        this.{} = bytes;", storage_ident).unwrap();
         writeln!(out, "        this.{} = elementCount;", count_ident).unwrap();
         if info.size_field_index < first_fam_index {
-            writeln!(out, "        this.set_{}(elementCount);", size_field_name).unwrap();
+            if let ResolvedTypeKind::Primitive { prim_type } = &info.size_field.field_type.kind {
+                let count_arg = primitive_setter_value_expr(prim_type, "elementCount");
+                writeln!(out, "        this.set_{}({});", size_field_name, count_arg).unwrap();
+            }
         }
         writeln!(out, "        this.__tnInvalidate();").unwrap();
         writeln!(out, "      }});").unwrap();
@@ -1044,10 +1340,11 @@ fn emit_fam_struct_builder(
             .unwrap();
             if let ResolvedTypeKind::Primitive { prim_type } = &info.size_field.field_type.kind {
                 let setter = primitive_to_dataview_setter(prim_type);
+                let setter_value = primitive_setter_value_expr(prim_type, &local_count);
                 if needs_endianness_arg(prim_type) {
-                    writeln!(out, "    view.{}(cursor, {}, true);", setter, local_count).unwrap();
+                    writeln!(out, "    view.{}(cursor, {}, true);", setter, setter_value).unwrap();
                 } else {
-                    writeln!(out, "    view.{}(cursor, {});", setter, local_count).unwrap();
+                    writeln!(out, "    view.{}(cursor, {});", setter, setter_value).unwrap();
                 }
                 writeln!(out, "    cursor += {};", info.size_field_size).unwrap();
                 continue;
@@ -1064,6 +1361,684 @@ fn emit_fam_struct_builder(
             class_name, field.name
         );
     }
+    writeln!(out, "  }}\n").unwrap();
+
+    writeln!(
+        out,
+        "  private __tnValidateOrThrow(buffer: Uint8Array, params: {}.Params): void {{",
+        class_name
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    const result = {}.validate(buffer, {{ params }});",
+        class_name
+    )
+    .unwrap();
+    writeln!(out, "    if (!result.ok) {{").unwrap();
+    writeln!(
+        out,
+        "      throw new Error(`${{ {} }}Builder: builder produced invalid buffer (code=${{result.code ?? \"unknown\"}})`);",
+        class_name
+    )
+    .unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out, "    this.__tnLastParams = result.params ?? params;").unwrap();
+    writeln!(out, "    this.__tnLastBuffer = buffer;").unwrap();
+    writeln!(out, "  }}").unwrap();
+
+    writeln!(out, "}}\n").unwrap();
+    out
+}
+
+fn typeref_param_expression(
+    class_name: &str,
+    type_refs: &[HybridTypeRefField<'_>],
+    binding: &TsParamBinding,
+) -> Option<String> {
+    let (type_ref, nested_ts_name) = typeref_binding_match(type_refs, binding)?;
+    Some(format!(
+        "(() => {{ const params = this.{params}; if (!params || params[\"{nested}\"] === undefined) throw new Error(\"{ty}Builder: field '{field}' must be written before computing params\"); return params[\"{nested}\"]; }})()",
+        params = type_ref.params_ident,
+        nested = nested_ts_name.replace('\"', "\\\""),
+        ty = class_name,
+        field = type_ref.field.name
+    ))
+}
+
+fn emit_fam_tail_typeref_struct_builder(
+    resolved_type: &ResolvedType,
+    type_ir: &TypeIr,
+    plan: FamTailTypeRefPlan<'_>,
+) -> String {
+    let class_name = &resolved_type.name;
+    let builder_name = format!("{}Builder", class_name);
+    let bindings: Vec<_> = deduplicated_ts_parameter_bindings(type_ir)
+        .into_iter()
+        .filter(|binding| !binding.derived)
+        .collect();
+    let fam_infos: Vec<_> = plan
+        .dynamic_fields
+        .iter()
+        .filter_map(|field| match field {
+            HybridDynamicField::Fam(info) => Some(info.clone()),
+            HybridDynamicField::TypeRef(_) => None,
+        })
+        .collect();
+    let mut param_exprs = Vec::new();
+    for binding in &bindings {
+        if let Some(expr) = fam_param_expression(class_name, &fam_infos, binding) {
+            param_exprs.push((binding.ts_name.clone(), expr));
+            continue;
+        }
+        if let Some(expr) = typeref_param_expression(class_name, &plan.type_ref_fields, binding) {
+            param_exprs.push((binding.ts_name.clone(), expr));
+        }
+    }
+
+    let mut out = String::new();
+    writeln!(out, "export class {} {{", builder_name).unwrap();
+    writeln!(out, "  private buffer: Uint8Array;").unwrap();
+    writeln!(out, "  private view: DataView;").unwrap();
+    writeln!(
+        out,
+        "  private __tnCachedParams: {}.Params | null = null;",
+        class_name
+    )
+    .unwrap();
+    writeln!(out, "  private __tnLastBuffer: Uint8Array | null = null;").unwrap();
+    writeln!(
+        out,
+        "  private __tnLastParams: {}.Params | null = null;",
+        class_name
+    )
+    .unwrap();
+    for field in &plan.dynamic_fields {
+        match field {
+            HybridDynamicField::Fam(info) => {
+                let method = escape_ts_keyword(&info.field.name);
+                let storage_ident = fam_storage_ident(&method);
+                let count_ident = fam_count_ident(&method);
+                let writer_ident = fam_writer_ident(&method);
+                writeln!(
+                    out,
+                    "  private {}: Uint8Array | null = null;",
+                    storage_ident
+                )
+                .unwrap();
+                writeln!(out, "  private {}: number | null = null;", count_ident).unwrap();
+                writeln!(
+                    out,
+                    "  private {}?: __TnFamWriterResult<{}>;",
+                    writer_ident, builder_name
+                )
+                .unwrap();
+            }
+            HybridDynamicField::TypeRef(type_ref) => {
+                writeln!(
+                    out,
+                    "  private {}: Uint8Array | null = null;",
+                    type_ref.storage_ident
+                )
+                .unwrap();
+                writeln!(
+                    out,
+                    "  private {}: Record<string, bigint> | null = null;",
+                    type_ref.params_ident
+                )
+                .unwrap();
+            }
+        }
+    }
+    writeln!(out, "\n  constructor() {{").unwrap();
+    writeln!(
+        out,
+        "    this.buffer = new Uint8Array({});",
+        plan.prefix_size
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);"
+    )
+    .unwrap();
+    writeln!(out, "  }}\n").unwrap();
+    writeln!(out, "  private __tnInvalidate(): void {{").unwrap();
+    writeln!(out, "    this.__tnCachedParams = null;").unwrap();
+    writeln!(out, "    this.__tnLastBuffer = null;").unwrap();
+    writeln!(out, "    this.__tnLastParams = null;").unwrap();
+    writeln!(out, "  }}\n").unwrap();
+
+    let setter_ctx = SetterContext {
+        buffer_ident: "this.buffer",
+        view_ident: "this.view",
+        invalidate: true,
+    };
+    for field in &plan.prefix_fields {
+        emit_const_field_setter(field, &setter_ctx, &mut out);
+    }
+
+    for field in &plan.dynamic_fields {
+        match field {
+            HybridDynamicField::Fam(info) => {
+                let method = escape_ts_keyword(&info.field.name);
+                let writer_ident = fam_writer_ident(&method);
+                let storage_ident = fam_storage_ident(&method);
+                let count_ident = fam_count_ident(&method);
+                let size_field_name = escape_ts_keyword(&info.size_field.name);
+                let count_expr = if info.element_size == 1 {
+                    "bytes.length".to_string()
+                } else {
+                    format!("bytes.length / {}", info.element_size)
+                };
+                writeln!(
+                    out,
+                    "  {}(): __TnFamWriterResult<{}> {{",
+                    method, builder_name
+                )
+                .unwrap();
+                writeln!(out, "    if (!this.{}) {{", writer_ident).unwrap();
+                writeln!(
+                    out,
+                    "      this.{} = __tnCreateFamWriter(this, \"{}\", (payload) => {{",
+                    writer_ident, method
+                )
+                .unwrap();
+                writeln!(out, "        const bytes = new Uint8Array(payload);").unwrap();
+                if info.element_size > 1 {
+                    writeln!(
+                        out,
+                        "        if (bytes.length % {} !== 0) throw new Error(\"{}Builder: {} length must be a multiple of {}\");",
+                        info.element_size,
+                        class_name,
+                        info.field.name,
+                        info.element_size
+                    )
+                    .unwrap();
+                }
+                writeln!(out, "        const elementCount = {};", count_expr).unwrap();
+                writeln!(out, "        this.{} = bytes;", storage_ident).unwrap();
+                writeln!(out, "        this.{} = elementCount;", count_ident).unwrap();
+                if info.size_field_index < plan.first_dynamic_index {
+                    writeln!(out, "        this.set_{}(elementCount);", size_field_name).unwrap();
+                }
+                writeln!(out, "        this.__tnInvalidate();").unwrap();
+                writeln!(out, "      }});").unwrap();
+                writeln!(out, "    }}").unwrap();
+                writeln!(out, "    return this.{}!;", writer_ident).unwrap();
+                writeln!(out, "  }}\n").unwrap();
+            }
+            HybridDynamicField::TypeRef(type_ref) => {
+                let method_name = escape_ts_keyword(&type_ref.field.name);
+                let ts_target = type_ref
+                    .target_ident
+                    .clone()
+                    .unwrap_or_else(|| "Uint8Array".to_string());
+                writeln!(
+                    out,
+                    "  set_{}(value: {} | __TnStructFieldInput): this {{",
+                    method_name, ts_target
+                )
+                .unwrap();
+                writeln!(
+                    out,
+                    "    const bytes = __tnResolveStructFieldInput(value as __TnStructFieldInput, \"{}Builder::{}\");",
+                    class_name, type_ref.field.name
+                )
+                .unwrap();
+                writeln!(
+                    out,
+                    "    const validation = __tnInvokeDynamicValidate(\"{}\", bytes);",
+                    type_ref.target_name.replace('\"', "\\\"")
+                )
+                .unwrap();
+                writeln!(
+                    out,
+                    "    if (!validation.ok || validation.consumed === undefined) throw new Error(\"{}Builder: field '{}' failed validation\");",
+                    class_name, type_ref.field.name
+                )
+                .unwrap();
+                writeln!(
+                    out,
+                    "    if (__tnBigIntToNumber(validation.consumed, \"{}Builder::{}\") !== bytes.length) throw new Error(\"{}Builder: field '{}' validation did not consume the full buffer\");",
+                    class_name,
+                    type_ref.field.name,
+                    class_name,
+                    type_ref.field.name
+                )
+                .unwrap();
+                writeln!(out, "    this.{} = bytes;", type_ref.storage_ident).unwrap();
+                writeln!(
+                    out,
+                    "    this.{} = validation.params ?? null;",
+                    type_ref.params_ident
+                )
+                .unwrap();
+                writeln!(out, "    this.__tnInvalidate();").unwrap();
+                writeln!(out, "    return this;\n  }}\n").unwrap();
+            }
+        }
+    }
+
+    writeln!(out, "  build(): Uint8Array {{").unwrap();
+    writeln!(out, "    const params = this.__tnComputeParams();").unwrap();
+    writeln!(
+        out,
+        "    const size = {}.footprintFromParams(params);",
+        class_name
+    )
+    .unwrap();
+    writeln!(out, "    const buffer = new Uint8Array(size);").unwrap();
+    writeln!(out, "    this.__tnWriteInto(buffer);").unwrap();
+    writeln!(out, "    this.__tnValidateOrThrow(buffer, params);").unwrap();
+    writeln!(out, "    return buffer;").unwrap();
+    writeln!(out, "  }}\n").unwrap();
+
+    writeln!(
+        out,
+        "  buildInto(target: Uint8Array, offset = 0): Uint8Array {{"
+    )
+    .unwrap();
+    writeln!(out, "    const params = this.__tnComputeParams();").unwrap();
+    writeln!(
+        out,
+        "    const size = {}.footprintFromParams(params);",
+        class_name
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    if (target.length - offset < size) throw new Error(\"{}Builder: target buffer too small\");",
+        class_name
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    const slice = target.subarray(offset, offset + size);"
+    )
+    .unwrap();
+    writeln!(out, "    this.__tnWriteInto(slice);").unwrap();
+    writeln!(out, "    this.__tnValidateOrThrow(slice, params);").unwrap();
+    writeln!(out, "    return target;").unwrap();
+    writeln!(out, "  }}\n").unwrap();
+
+    writeln!(out, "  finish(): {} {{", class_name).unwrap();
+    writeln!(out, "    const buffer = this.build();").unwrap();
+    writeln!(
+        out,
+        "    const params = this.__tnLastParams ?? this.__tnComputeParams();"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    const view = {}.from_array(buffer, {{ params }});",
+        class_name
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    if (!view) throw new Error(\"{}Builder: failed to finalize view\");",
+        class_name
+    )
+    .unwrap();
+    writeln!(out, "    return view;").unwrap();
+    writeln!(out, "  }}\n").unwrap();
+
+    writeln!(out, "  finishView(): {} {{", class_name).unwrap();
+    writeln!(out, "    return this.finish();").unwrap();
+    writeln!(out, "  }}\n").unwrap();
+
+    writeln!(out, "  dynamicParams(): {}.Params {{", class_name).unwrap();
+    writeln!(out, "    return this.__tnComputeParams();").unwrap();
+    writeln!(out, "  }}\n").unwrap();
+
+    writeln!(
+        out,
+        "  private __tnComputeParams(): {}.Params {{",
+        class_name
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    if (this.__tnCachedParams) return this.__tnCachedParams;"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    const params = {}.Params.fromValues({{",
+        class_name
+    )
+    .unwrap();
+    for (name, expr) in &param_exprs {
+        writeln!(out, "      {}: {},", name, expr).unwrap();
+    }
+    writeln!(out, "    }});").unwrap();
+    writeln!(out, "    this.__tnCachedParams = params;").unwrap();
+    writeln!(out, "    return params;").unwrap();
+    writeln!(out, "  }}\n").unwrap();
+
+    writeln!(out, "  private __tnWriteInto(target: Uint8Array): void {{").unwrap();
+    writeln!(out, "    target.set(this.buffer, 0);").unwrap();
+    writeln!(out, "    let cursor = this.buffer.length;").unwrap();
+    for field in &plan.dynamic_fields {
+        match field {
+            HybridDynamicField::Fam(info) => {
+                let method = escape_ts_keyword(&info.field.name);
+                let storage_ident = fam_storage_ident(&method);
+                let local_ident = format!("__tnLocal_{}_bytes", method);
+                writeln!(out, "    const {} = this.{};", local_ident, storage_ident).unwrap();
+                writeln!(
+                    out,
+                    "    if (!{}) throw new Error(\"{}Builder: field '{}' must be written before build\");",
+                    local_ident, class_name, info.field.name
+                )
+                .unwrap();
+                writeln!(out, "    target.set({}, cursor);", local_ident).unwrap();
+                writeln!(out, "    cursor += {}.length;", local_ident).unwrap();
+            }
+            HybridDynamicField::TypeRef(type_ref) => {
+                let local_ident = format!(
+                    "__tnLocal_{}_bytes",
+                    escape_ts_keyword(&type_ref.field.name)
+                );
+                writeln!(
+                    out,
+                    "    const {} = this.{};",
+                    local_ident, type_ref.storage_ident
+                )
+                .unwrap();
+                writeln!(
+                    out,
+                    "    if (!{}) throw new Error(\"{}Builder: field '{}' must be written before build\");",
+                    local_ident, class_name, type_ref.field.name
+                )
+                .unwrap();
+                writeln!(out, "    target.set({}, cursor);", local_ident).unwrap();
+                writeln!(out, "    cursor += {}.length;", local_ident).unwrap();
+            }
+        }
+    }
+    writeln!(out, "  }}\n").unwrap();
+
+    writeln!(
+        out,
+        "  private __tnValidateOrThrow(buffer: Uint8Array, params: {}.Params): void {{",
+        class_name
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    const result = {}.validate(buffer, {{ params }});",
+        class_name
+    )
+    .unwrap();
+    writeln!(out, "    if (!result.ok) {{").unwrap();
+    writeln!(
+        out,
+        "      throw new Error(`${{ {} }}Builder: builder produced invalid buffer (code=${{result.code ?? \"unknown\"}})`);",
+        class_name
+    )
+    .unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out, "    this.__tnLastParams = result.params ?? params;").unwrap();
+    writeln!(out, "    this.__tnLastBuffer = buffer;").unwrap();
+    writeln!(out, "  }}").unwrap();
+
+    writeln!(out, "}}\n").unwrap();
+    out
+}
+
+fn emit_jagged_typeref_array_builder(
+    resolved_type: &ResolvedType,
+    type_ir: &TypeIr,
+    plan: JaggedTypeRefArrayPlan<'_>,
+) -> String {
+    let class_name = &resolved_type.name;
+    let builder_name = format!("{}Builder", class_name);
+    let method_name = escape_ts_keyword(&plan.array_field.name);
+    let count_param = sanitize_param_name(&plan.count_field.name);
+    let bindings: Vec<_> = deduplicated_ts_parameter_bindings(type_ir)
+        .into_iter()
+        .filter(|binding| !binding.derived)
+        .collect();
+    let mut param_exprs = Vec::new();
+    for binding in &bindings {
+        if binding_matches_param_name(binding, &count_param) {
+            param_exprs.push((
+                binding.ts_name.clone(),
+                format!(
+                    "(() => {{ const fragments = this.{storage}; if (!fragments) throw new Error(\"{ty}Builder: field '{field}' must be written before computing params\"); return __tnToBigInt(fragments.length); }})()",
+                    storage = plan.storage_ident,
+                    ty = class_name,
+                    field = plan.array_field.name
+                ),
+            ));
+        }
+    }
+
+    let mut out = String::new();
+    writeln!(out, "export class {} {{", builder_name).unwrap();
+    writeln!(out, "  private buffer: Uint8Array;").unwrap();
+    writeln!(out, "  private view: DataView;").unwrap();
+    writeln!(
+        out,
+        "  private {}: Uint8Array[] | null = null;",
+        plan.storage_ident
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "  private __tnCachedParams: {}.Params | null = null;",
+        class_name
+    )
+    .unwrap();
+    writeln!(out, "  private __tnLastBuffer: Uint8Array | null = null;").unwrap();
+    writeln!(
+        out,
+        "  private __tnLastParams: {}.Params | null = null;",
+        class_name
+    )
+    .unwrap();
+    writeln!(out, "\n  constructor() {{").unwrap();
+    writeln!(
+        out,
+        "    this.buffer = new Uint8Array({});",
+        plan.prefix_size
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);"
+    )
+    .unwrap();
+    writeln!(out, "  }}\n").unwrap();
+    writeln!(out, "  private __tnInvalidate(): void {{").unwrap();
+    writeln!(out, "    this.__tnCachedParams = null;").unwrap();
+    writeln!(out, "    this.__tnLastBuffer = null;").unwrap();
+    writeln!(out, "    this.__tnLastParams = null;").unwrap();
+    writeln!(out, "  }}\n").unwrap();
+
+    let setter_ctx = SetterContext {
+        buffer_ident: "this.buffer",
+        view_ident: "this.view",
+        invalidate: true,
+    };
+    for field in &plan.prefix_fields {
+        emit_const_field_setter(field, &setter_ctx, &mut out);
+    }
+
+    writeln!(
+        out,
+        "  set_{}(values: readonly ({} | __TnStructFieldInput)[]): this {{",
+        method_name, plan.target_ident
+    )
+    .unwrap();
+    writeln!(out, "    const fragments: Uint8Array[] = [];").unwrap();
+    writeln!(out, "    for (let i = 0; i < values.length; i++) {{").unwrap();
+    writeln!(
+        out,
+        "      const bytes = __tnResolveStructFieldInput(values[i] as __TnStructFieldInput, \"{}Builder::{}[\" + i + \"]\");",
+        class_name, plan.array_field.name
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "      const validation = __tnInvokeDynamicValidate(\"{}\", bytes);",
+        plan.target_name.replace('\"', "\\\"")
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "      if (!validation.ok || validation.consumed === undefined) throw new Error(\"{}Builder: field '{}' element failed validation\");",
+        class_name, plan.array_field.name
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "      if (__tnBigIntToNumber(validation.consumed, \"{}Builder::{}\") !== bytes.length) throw new Error(\"{}Builder: field '{}' element validation did not consume the full buffer\");",
+        class_name,
+        plan.array_field.name,
+        class_name,
+        plan.array_field.name
+    )
+    .unwrap();
+    writeln!(out, "      fragments.push(bytes);").unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out, "    this.{} = fragments;", plan.storage_ident).unwrap();
+    writeln!(
+        out,
+        "    this.set_{}(fragments.length);",
+        escape_ts_keyword(&plan.count_field.name)
+    )
+    .unwrap();
+    writeln!(out, "    this.__tnInvalidate();").unwrap();
+    writeln!(out, "    return this;\n  }}\n").unwrap();
+
+    writeln!(out, "  build(): Uint8Array {{").unwrap();
+    writeln!(out, "    const params = this.__tnComputeParams();").unwrap();
+    writeln!(out, "    const fragments = this.__tnCollectFragments();").unwrap();
+    writeln!(out, "    const size = this.__tnComputeSize(fragments);").unwrap();
+    writeln!(out, "    const buffer = new Uint8Array(size);").unwrap();
+    writeln!(out, "    this.__tnWriteInto(buffer, fragments);").unwrap();
+    writeln!(out, "    this.__tnValidateOrThrow(buffer, params);").unwrap();
+    writeln!(out, "    return buffer;").unwrap();
+    writeln!(out, "  }}\n").unwrap();
+
+    writeln!(
+        out,
+        "  buildInto(target: Uint8Array, offset = 0): Uint8Array {{"
+    )
+    .unwrap();
+    writeln!(out, "    const params = this.__tnComputeParams();").unwrap();
+    writeln!(out, "    const fragments = this.__tnCollectFragments();").unwrap();
+    writeln!(out, "    const size = this.__tnComputeSize(fragments);").unwrap();
+    writeln!(
+        out,
+        "    if (target.length - offset < size) throw new Error(\"{}Builder: target buffer too small\");",
+        class_name
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    const slice = target.subarray(offset, offset + size);"
+    )
+    .unwrap();
+    writeln!(out, "    this.__tnWriteInto(slice, fragments);").unwrap();
+    writeln!(out, "    this.__tnValidateOrThrow(slice, params);").unwrap();
+    writeln!(out, "    return target;").unwrap();
+    writeln!(out, "  }}\n").unwrap();
+
+    writeln!(out, "  finish(): {} {{", class_name).unwrap();
+    writeln!(out, "    const buffer = this.build();").unwrap();
+    writeln!(
+        out,
+        "    const params = this.__tnLastParams ?? this.__tnComputeParams();"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    const view = {}.from_array(buffer, {{ params }});",
+        class_name
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    if (!view) throw new Error(\"{}Builder: failed to finalize view\");",
+        class_name
+    )
+    .unwrap();
+    writeln!(out, "    return view;").unwrap();
+    writeln!(out, "  }}\n").unwrap();
+
+    writeln!(out, "  finishView(): {} {{", class_name).unwrap();
+    writeln!(out, "    return this.finish();").unwrap();
+    writeln!(out, "  }}\n").unwrap();
+
+    writeln!(out, "  dynamicParams(): {}.Params {{", class_name).unwrap();
+    writeln!(out, "    return this.__tnComputeParams();").unwrap();
+    writeln!(out, "  }}\n").unwrap();
+
+    writeln!(
+        out,
+        "  private __tnComputeParams(): {}.Params {{",
+        class_name
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    if (this.__tnCachedParams) return this.__tnCachedParams;"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    const params = {}.Params.fromValues({{",
+        class_name
+    )
+    .unwrap();
+    for (name, expr) in &param_exprs {
+        writeln!(out, "      {}: {},", name, expr).unwrap();
+    }
+    writeln!(out, "    }});").unwrap();
+    writeln!(out, "    this.__tnCachedParams = params;").unwrap();
+    writeln!(out, "    return params;").unwrap();
+    writeln!(out, "  }}\n").unwrap();
+
+    writeln!(out, "  private __tnCollectFragments(): Uint8Array[] {{").unwrap();
+    writeln!(out, "    const fragments = this.{};", plan.storage_ident).unwrap();
+    writeln!(
+        out,
+        "    if (!fragments) throw new Error(\"{}Builder: field '{}' must be written before build\");",
+        class_name, plan.array_field.name
+    )
+    .unwrap();
+    writeln!(out, "    return fragments;").unwrap();
+    writeln!(out, "  }}\n").unwrap();
+
+    writeln!(
+        out,
+        "  private __tnComputeSize(fragments: readonly Uint8Array[]): number {{"
+    )
+    .unwrap();
+    writeln!(out, "    let total = this.buffer.length;").unwrap();
+    writeln!(
+        out,
+        "    for (const fragment of fragments) total += fragment.length;"
+    )
+    .unwrap();
+    writeln!(out, "    return total;").unwrap();
+    writeln!(out, "  }}\n").unwrap();
+
+    writeln!(
+        out,
+        "  private __tnWriteInto(target: Uint8Array, fragments: readonly Uint8Array[]): void {{"
+    )
+    .unwrap();
+    writeln!(out, "    target.set(this.buffer, 0);").unwrap();
+    writeln!(out, "    let cursor = this.buffer.length;").unwrap();
+    writeln!(out, "    for (const fragment of fragments) {{").unwrap();
+    writeln!(out, "      target.set(fragment, cursor);").unwrap();
+    writeln!(out, "      cursor += fragment.length;").unwrap();
+    writeln!(out, "    }}").unwrap();
     writeln!(out, "  }}\n").unwrap();
 
     writeln!(

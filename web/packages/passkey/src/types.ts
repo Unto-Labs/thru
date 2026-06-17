@@ -42,6 +42,7 @@ export interface PasskeyPopupContext {
   appUrl?: string;
   origin?: string;
   imageUrl?: string;
+  preferStoredPasskey?: boolean;
 }
 
 /**
@@ -49,6 +50,7 @@ export interface PasskeyPopupContext {
  */
 export interface PasskeyStoredSigningOptions {
   allowPopupFallback?: boolean;
+  allowDiscoverableFallback?: boolean;
   /** Prefer an RP-scoped discoverable credential prompt over a stored
    * credential-id lookup. Native WebViews can show misleading
    * app-level "no passkey" UI when allowCredentials is stale, while a

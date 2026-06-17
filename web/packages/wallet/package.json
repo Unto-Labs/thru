@@ -29,6 +29,12 @@
       "import": "./dist/native/react.js",
       "default": "./dist/native/react.js"
     },
+    "./native/react/transparent": {
+      "types": "./dist/native/react/transparent.d.ts",
+      "react-native": "./src/native/react/transparent.ts",
+      "import": "./dist/native/react/transparent.js",
+      "default": "./dist/native/react/transparent.js"
+    },
     "./native/plugin": "./app.plugin.cjs"
   },
   "files": [

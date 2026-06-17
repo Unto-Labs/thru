@@ -30,6 +30,11 @@ pub(crate) enum SequentialBindingKind {
     Primitive {
         field_index: usize,
     },
+    TypeRefDynamicParam {
+        field_index: usize,
+        target_name: String,
+        nested_ts_name: String,
+    },
     SizeDiscriminatedUnion {
         field_index: usize,
         expected_sizes: Vec<u64>,
@@ -208,9 +213,6 @@ pub(crate) fn build_param_extractor_plan(
     }
 
     let binding_table = collect_dynamic_param_bindings(resolved_type);
-    if has_public_bindings && binding_table.is_empty() {
-        return None;
-    }
     let available: Vec<String> = binding_table.keys().cloned().collect();
 
     let mut value_vars = Vec::new();
@@ -224,12 +226,35 @@ pub(crate) fn build_param_extractor_plan(
             continue;
         }
 
-        /* Try to resolve the binding - if it's not available, it might be from a jagged
-        array element type, so skip it rather than panicking */
+        /* Try to resolve the binding. If it is not available in the root table, it may
+        belong to a nested type-ref payload that must be extracted while scanning. */
         let matched_key = match resolve_param_binding(&binding.ts_name, &available) {
             Some(key) => key,
             None => {
-                /* Parameter not available - likely from jagged array element, skip it */
+                if let Some((field_index, target_name, nested_ts_name)) =
+                    resolve_typeref_dynamic_param(resolved_type, type_lookup, binding)
+                {
+                    let seq_ident = format!("__tnParamSeq_{}", binding.ts_name);
+                    sequential_bindings.push(SequentialBinding {
+                        ts_name: binding.ts_name.clone(),
+                        value_ident: seq_ident.clone(),
+                        kind: SequentialBindingKind::TypeRefDynamicParam {
+                            field_index,
+                            target_name,
+                            nested_ts_name,
+                        },
+                    });
+                    value_vars.push(ParamValue {
+                        ts_name: binding.ts_name.clone(),
+                        value_ident: seq_ident,
+                        source: ParamValueSource::Sequential,
+                        path: None,
+                    });
+                    continue;
+                }
+
+                /* Parameters inside jagged array elements are derived by runtime element
+                validation and are intentionally not part of the parent Params surface. */
                 continue;
             }
         };
@@ -711,6 +736,49 @@ fn resolve_sequential_field(
     None
 }
 
+fn canonical_dynamic_param_name(owner: &str, path: &str) -> String {
+    if path.is_empty() {
+        owner.to_string()
+    } else if path == owner {
+        owner.to_string()
+    } else if let Some(stripped) = path.strip_prefix(&(owner.to_owned() + ".")) {
+        format!("{owner}.{stripped}")
+    } else {
+        format!("{owner}.{path}")
+    }
+}
+
+fn resolve_typeref_dynamic_param(
+    resolved_type: &ResolvedType,
+    type_lookup: &BTreeMap<String, ResolvedType>,
+    binding: &TsParamBinding,
+) -> Option<(usize, String, String)> {
+    let ResolvedTypeKind::Struct { fields, .. } = &resolved_type.kind else {
+        return None;
+    };
+
+    for (field_index, field) in fields.iter().enumerate() {
+        let ResolvedTypeKind::TypeRef { target_name, .. } = &field.field_type.kind else {
+            continue;
+        };
+        let target = type_lookup.get(target_name).unwrap_or(&field.field_type);
+        for (owner, refs) in &target.dynamic_params {
+            for path in refs.keys() {
+                let canonical = canonical_dynamic_param_name(owner, path);
+                if canonical == binding.canonical {
+                    return Some((
+                        field_index,
+                        target_name.clone(),
+                        sanitize_param_name(&canonical),
+                    ));
+                }
+            }
+        }
+    }
+
+    None
+}
+
 fn emit_sequential_scan(
     out: &mut String,
     resolved_type: &ResolvedType,
@@ -761,6 +829,7 @@ fn emit_sequential_scan(
         .iter()
         .filter_map(|binding| match &binding.kind {
             SequentialBindingKind::Primitive { field_index } => Some(*field_index),
+            SequentialBindingKind::TypeRefDynamicParam { field_index, .. } => Some(*field_index),
             SequentialBindingKind::SizeDiscriminatedUnion { field_index, .. } => Some(*field_index),
             SequentialBindingKind::EnumTail { field_index } => Some(*field_index),
         })
@@ -1176,6 +1245,108 @@ fn emit_sequential_field(
                     out,
                     "    __tnCursorMutable += __tnArrayBytes_{};",
                     field_ident
+                )
+                .unwrap();
+            }
+        },
+        ResolvedTypeKind::TypeRef { target_name, .. } => match field.field_type.size {
+            Size::Const(sz) => {
+                if !packed {
+                    let align = field.field_type.alignment.max(1);
+                    if align > 1 {
+                        writeln!(
+                            out,
+                            "    if ((__tnCursorMutable % {}) !== 0) {{ __tnCursorMutable += {} - (__tnCursorMutable % {}); }}",
+                            align, align, align
+                        )
+                        .unwrap();
+                    }
+                }
+                if needs_offset {
+                    writeln!(out, "    offsets[\"{}\"] = __tnCursorMutable;", field.name).unwrap();
+                }
+                writeln!(
+                    out,
+                    "    if (__tnCursorMutable + {} > __tnLength) return null;",
+                    sz
+                )
+                .unwrap();
+                writeln!(out, "    __tnCursorMutable += {};", sz).unwrap();
+            }
+            Size::Variable(_) => {
+                if !packed {
+                    let align = field.field_type.alignment.max(1);
+                    if align > 1 {
+                        writeln!(
+                            out,
+                            "    if ((__tnCursorMutable % {}) !== 0) {{ __tnCursorMutable += {} - (__tnCursorMutable % {}); }}",
+                            align, align, align
+                        )
+                        .unwrap();
+                    }
+                }
+                if needs_offset {
+                    writeln!(out, "    offsets[\"{}\"] = __tnCursorMutable;", field.name).unwrap();
+                }
+                writeln!(
+                    out,
+                    "    const __tnTyperefResult_{} = __tnInvokeDynamicValidate(\"{}\", buffer.subarray(__tnCursorMutable));",
+                    field_ident,
+                    target_name.replace('\"', "\\\"")
+                )
+                .unwrap();
+                writeln!(
+                    out,
+                    "    if (!__tnTyperefResult_{}.ok || __tnTyperefResult_{}.consumed === undefined) return null;",
+                    field_ident, field_ident
+                )
+                .unwrap();
+                let nested_bindings: Vec<&SequentialBinding> = bindings
+                    .iter()
+                    .filter(|binding| {
+                        matches!(
+                            &binding.kind,
+                            SequentialBindingKind::TypeRefDynamicParam { field_index, .. } if *field_index == index
+                        )
+                    })
+                    .collect();
+                if !nested_bindings.is_empty() {
+                    writeln!(
+                        out,
+                        "    const __tnTyperefParams_{} = __tnTyperefResult_{}.params ?? null;",
+                        field_ident, field_ident
+                    )
+                    .unwrap();
+                    for binding in nested_bindings {
+                        let SequentialBindingKind::TypeRefDynamicParam { nested_ts_name, .. } =
+                            &binding.kind
+                        else {
+                            unreachable!();
+                        };
+                        writeln!(
+                            out,
+                            "    if (!__tnTyperefParams_{} || __tnTyperefParams_{}[\"{}\"] === undefined) return null;",
+                            field_ident,
+                            field_ident,
+                            nested_ts_name.replace('\"', "\\\"")
+                        )
+                        .unwrap();
+                        writeln!(
+                            out,
+                            "    {} = __tnTyperefParams_{}[\"{}\"];",
+                            binding.value_ident,
+                            field_ident,
+                            nested_ts_name.replace('\"', "\\\"")
+                        )
+                        .unwrap();
+                    }
+                }
+                writeln!(
+                    out,
+                    "    __tnCursorMutable += __tnBigIntToNumber(__tnTyperefResult_{}.consumed, \"{}::{}\");",
+                    field_ident,
+                    resolved_type.name,
+                    field.name
                 )
                 .unwrap();
             }

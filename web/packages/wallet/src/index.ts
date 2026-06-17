@@ -6,7 +6,10 @@ export {
 
 export type {
   ConnectedApp, ConnectResult, IThruChain, SignMessageParams,
-  SignMessageResult, ThruSigningContext, ThruTransactionIntent, WalletAccount
+  SignMessageResult, ThruSigningContext, ThruSigningSession,
+  ThruSigningSessionCreateOptions, ThruSigningSessionDescriptor,
+  ThruSigningSessionInstruction, ThruSigningSessionInstructionCreateOptions,
+  ThruSigningSessionTimestamp, ThruTransactionIntent, WalletAccount
 } from './interfaces';
 export {
   AddressType,
@@ -25,3 +28,4 @@ export {
   ErrorCode,
 } from './protocol';
 export * from './protocol';
+export type { SigningSessionStorage } from './signing-sessions';

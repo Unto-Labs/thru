@@ -2,10 +2,12 @@ export { NativeSDK } from './NativeSDK';
 export type {
   EventCallback,
   ConnectOptions,
+  CreateAccountOptions,
   IosWebViewMode,
   NativeSDKConfig,
   NativeSDKStorage,
   NativeSDKUiHandlers,
+  NativeWalletExperience,
   RestoreConnectionOptions,
   SDKEvent,
   SignInOptions,
@@ -22,10 +24,19 @@ export type {
   IThruChain,
   SignMessageParams,
   SignMessageResult,
+  ThruPasskeyChallengeIntent,
+  ThruPasskeyChallengeSignature,
   ThruSigningContext,
+  ThruSigningSession,
+  ThruSigningSessionCreateOptions,
+  ThruSigningSessionDescriptor,
+  ThruSigningSessionInstruction,
+  ThruSigningSessionInstructionCreateOptions,
+  ThruSigningSessionTimestamp,
   ThruTransactionIntent,
   WalletAccount,
 } from '../interfaces';
+export type { SigningSessionStorage } from '../signing-sessions';
 
 export {
   EMBEDDED_PROVIDER_EVENTS,
@@ -34,6 +45,7 @@ export {
 } from '../protocol';
 export type {
   ConnectMetadataInput,
+  CreateAccountResult,
   GetConnectionStateResult,
   ManageAccountsResult,
 } from '../protocol';

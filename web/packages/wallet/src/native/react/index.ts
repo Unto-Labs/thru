@@ -8,6 +8,8 @@ export type {
   ThruWalletSheetProps,
   ThruWalletSheetHandle,
 } from './ThruWalletSheet';
+export { ThruTransparentWalletBridge } from './ThruTransparentWalletBridge';
+export type { ThruTransparentWalletBridgeProps } from './ThruTransparentWalletBridge';
 
 export { useWallet } from './hooks/useWallet';
 export { useWalletAvailability } from './hooks/useWalletAvailability';
@@ -19,11 +21,20 @@ export { enableWebAuthnSupport } from './android-webauthn';
 export type {
   WalletAccount,
   ConnectResult,
+  ThruSigningSession,
+  ThruSigningSessionCreateOptions,
+  ThruSigningSessionDescriptor,
+  ThruSigningSessionInstruction,
+  ThruSigningSessionInstructionCreateOptions,
+  ThruSigningSessionTimestamp,
+  ThruTransactionIntent,
 } from "../../interfaces";
+export type { SigningSessionStorage } from "../../signing-sessions";
 
 export type {
   IosWebViewMode,
   NativeSDKStorage,
+  NativeWalletExperience,
   WalletAvailability,
 } from "../NativeSDK";
 export type { ManageAccountsResult } from "../../protocol";

@@ -2,6 +2,7 @@ import {
   PASSKEY_MANAGER_PROGRAM_ADDRESS,
   base64UrlToBytes,
   buildAccountContext,
+  createAuthorityRecord,
   createCredentialLookupSeed,
   createWalletSeed,
   deriveCredentialLookupAddress,
@@ -57,11 +58,11 @@ export async function createPasskeyWallet(opts: {
 
     const createIx = encodeCreateInstruction({
       walletAccountIdx: accountCtx.walletAccountIdx,
-      authority: {
+      authorityRecord: createAuthorityRecord({
         tag: 1,
         pubkeyX: opts.pubkeyX,
         pubkeyY: opts.pubkeyY,
-      },
+      }),
       seed,
       stateProof,
     });

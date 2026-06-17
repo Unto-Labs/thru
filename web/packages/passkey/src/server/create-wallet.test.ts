@@ -22,6 +22,10 @@ vi.mock('@thru/programs/passkey-manager', () => ({
     readOnlyAddresses: [],
     getAccountIndex: () => 2,
   }),
+  createAuthorityRecord: (authority: unknown) => ({
+    authority,
+    expiresAtBlockTimeSeconds: 0xffffffffffffffffn,
+  }),
   createCredentialLookupSeed: async () => new Uint8Array([8]),
   createWalletSeed: async () => new Uint8Array([1]),
   deriveCredentialLookupAddress: async () => new Uint8Array([22]),

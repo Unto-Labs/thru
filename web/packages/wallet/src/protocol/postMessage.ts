@@ -7,14 +7,20 @@ import type {
 
 export const POST_MESSAGE_REQUEST_TYPES = {
   CONNECT: "connect",
+  CREATE_ACCOUNT: "createAccount",
   DISCONNECT: "disconnect",
   SIGN_MESSAGE: "signMessage",
   SIGN_TRANSACTION: "signTransaction",
+  SIGN_PASSKEY_CHALLENGE: "signPasskeyChallenge",
   GET_ACCOUNTS: "getAccounts",
   GET_CONNECTION_STATE: "getConnectionState",
   GET_SIGNING_CONTEXT: "getSigningContext",
   SELECT_ACCOUNT: "selectAccount",
   MANAGE_ACCOUNTS: "manageAccounts",
+  CREATE_SIGNING_SESSION: "createSigningSession",
+  CREATE_SIGNING_SESSION_INSTRUCTION: "createSigningSessionInstruction",
+  CONFIRM_SIGNING_SESSION: "confirmSigningSession",
+  REVOKE_SIGNING_SESSION: "revokeSigningSession",
 } as const;
 
 export type RequestType =
@@ -38,7 +44,7 @@ export const POST_MESSAGE_EVENT_TYPE = "event" as const;
 
 export const IFRAME_READY_EVENT = "iframe:ready" as const;
 
-export const DEFAULT_IFRAME_URL = "http://localhost:3000/embedded";
+export const DEFAULT_IFRAME_URL = "http://localhost:3010/embedded";
 
 const REQUEST_ID_PREFIX = "req";
 
@@ -62,6 +68,11 @@ export interface DisconnectRequestMessage extends BaseRequest {
   payload?: undefined;
 }
 
+export interface CreateAccountRequestMessage extends BaseRequest {
+  type: typeof POST_MESSAGE_REQUEST_TYPES.CREATE_ACCOUNT;
+  payload: CreateAccountPayload;
+}
+
 export interface SignMessageRequestMessage extends BaseRequest {
   type: typeof POST_MESSAGE_REQUEST_TYPES.SIGN_MESSAGE;
   payload: SignMessagePayload;
@@ -70,6 +81,11 @@ export interface SignMessageRequestMessage extends BaseRequest {
 export interface SignTransactionRequestMessage extends BaseRequest {
   type: typeof POST_MESSAGE_REQUEST_TYPES.SIGN_TRANSACTION;
   payload: SignTransactionPayload;
+}
+
+export interface SignPasskeyChallengeRequestMessage extends BaseRequest {
+  type: typeof POST_MESSAGE_REQUEST_TYPES.SIGN_PASSKEY_CHALLENGE;
+  payload: SignPasskeyChallengePayload;
 }
 
 export interface GetAccountsRequestMessage extends BaseRequest {
@@ -97,19 +113,60 @@ export interface ManageAccountsRequestMessage extends BaseRequest {
   payload?: undefined;
 }
 
+export interface CreateSigningSessionRequestMessage extends BaseRequest {
+  type: typeof POST_MESSAGE_REQUEST_TYPES.CREATE_SIGNING_SESSION;
+  payload: CreateSigningSessionPayload;
+}
+
+export interface CreateSigningSessionInstructionRequestMessage extends BaseRequest {
+  type: typeof POST_MESSAGE_REQUEST_TYPES.CREATE_SIGNING_SESSION_INSTRUCTION;
+  payload: CreateSigningSessionInstructionPayload;
+}
+
+export interface ConfirmSigningSessionRequestMessage extends BaseRequest {
+  type: typeof POST_MESSAGE_REQUEST_TYPES.CONFIRM_SIGNING_SESSION;
+  payload: ConfirmSigningSessionPayload;
+}
+
+export interface RevokeSigningSessionRequestMessage extends BaseRequest {
+  type: typeof POST_MESSAGE_REQUEST_TYPES.REVOKE_SIGNING_SESSION;
+  payload: RevokeSigningSessionPayload;
+}
+
 export type PostMessageRequest =
   | ConnectRequestMessage
+  | CreateAccountRequestMessage
   | DisconnectRequestMessage
   | SignMessageRequestMessage
   | SignTransactionRequestMessage
+  | SignPasskeyChallengeRequestMessage
   | GetAccountsRequestMessage
   | GetConnectionStateRequestMessage
   | GetSigningContextRequestMessage
   | SelectAccountRequestMessage
-  | ManageAccountsRequestMessage;
+  | ManageAccountsRequestMessage
+  | CreateSigningSessionRequestMessage
+  | CreateSigningSessionInstructionRequestMessage
+  | ConfirmSigningSessionRequestMessage
+  | RevokeSigningSessionRequestMessage;
 
 export interface DisconnectResult {
   // Empty object keeps compatibility with existing consumers expecting a success payload
+}
+
+export interface CreateAccountPayload {
+  accountName?: string;
+  metadata?: ConnectMetadataInput;
+}
+
+export interface CreateAccountResult {
+  account: WalletAccount;
+  accounts: WalletAccount[];
+  selectedAccount: WalletAccount;
+  signature: string | null;
+  vmError: string | null;
+  userErrorCode: string | null;
+  executionResult: string | null;
 }
 
 export interface GetAccountsResult {
@@ -142,14 +199,20 @@ export interface ManageAccountsResult {
 
 type RequestResultMap = {
   [POST_MESSAGE_REQUEST_TYPES.CONNECT]: ConnectResult;
+  [POST_MESSAGE_REQUEST_TYPES.CREATE_ACCOUNT]: CreateAccountResult;
   [POST_MESSAGE_REQUEST_TYPES.DISCONNECT]: DisconnectResult;
   [POST_MESSAGE_REQUEST_TYPES.SIGN_MESSAGE]: SignMessageResult;
   [POST_MESSAGE_REQUEST_TYPES.SIGN_TRANSACTION]: SignTransactionResult;
+  [POST_MESSAGE_REQUEST_TYPES.SIGN_PASSKEY_CHALLENGE]: SignPasskeyChallengeResult;
   [POST_MESSAGE_REQUEST_TYPES.GET_ACCOUNTS]: GetAccountsResult;
   [POST_MESSAGE_REQUEST_TYPES.GET_CONNECTION_STATE]: GetConnectionStateResult;
   [POST_MESSAGE_REQUEST_TYPES.GET_SIGNING_CONTEXT]: GetSigningContextResult;
   [POST_MESSAGE_REQUEST_TYPES.SELECT_ACCOUNT]: SelectAccountResult;
   [POST_MESSAGE_REQUEST_TYPES.MANAGE_ACCOUNTS]: ManageAccountsResult;
+  [POST_MESSAGE_REQUEST_TYPES.CREATE_SIGNING_SESSION]: CreateSigningSessionResult;
+  [POST_MESSAGE_REQUEST_TYPES.CREATE_SIGNING_SESSION_INSTRUCTION]: CreateSigningSessionInstructionResult;
+  [POST_MESSAGE_REQUEST_TYPES.CONFIRM_SIGNING_SESSION]: ConfirmSigningSessionResult;
+  [POST_MESSAGE_REQUEST_TYPES.REVOKE_SIGNING_SESSION]: RevokeSigningSessionResult;
 };
 
 interface ResponseErrorPayload {
@@ -248,10 +311,72 @@ export interface SignTransactionPayload {
   readWriteAddresses?: string[];
   readOnlyAddresses?: string[];
   review?: TransactionReviewPayload;
+  signingSessionId?: string;
 }
 
 export interface SignTransactionResult {
   signedTransaction: string;
+}
+
+export interface SignPasskeyChallengePayload {
+  /** base64url-encoded challenge bytes from a backend passkey-manager flow. */
+  challenge: string;
+  /** Optional expected wallet address for the selected transparent account. */
+  walletAddress?: string;
+}
+
+export interface SignPasskeyChallengeResult {
+  signatureR: string;
+  signatureS: string;
+  authenticatorData: string;
+  clientDataJSON: string;
+}
+
+export interface CreateSigningSessionPayload {
+  walletAddress?: string;
+  expiresAt: string;
+  review?: TransactionReviewPayload;
+}
+
+export interface CreateSigningSessionInstructionPayload {
+  walletAddress?: string;
+  expiresAt: string;
+  walletAccountIdx: number;
+}
+
+export interface SigningSessionDescriptorPayload {
+  id: string;
+  walletAddress: string;
+  publicKey: string;
+  authIdx: number;
+  expiresAt: string;
+  createdAt: string;
+}
+
+export interface CreateSigningSessionResult {
+  session: SigningSessionDescriptorPayload;
+}
+
+export interface CreateSigningSessionInstructionResult {
+  session: SigningSessionDescriptorPayload;
+  programAddress: string;
+  instructionData: string;
+}
+
+export interface ConfirmSigningSessionPayload {
+  sessionId: string;
+}
+
+export interface ConfirmSigningSessionResult {
+  session: SigningSessionDescriptorPayload;
+}
+
+export interface RevokeSigningSessionPayload {
+  sessionId: string;
+}
+
+export interface RevokeSigningSessionResult {
+  // Empty object keeps compatibility with existing consumers expecting a success payload
 }
 
 export interface TransactionReviewSimulation {

@@ -9,11 +9,15 @@ export {
   INSTRUCTION_REGISTER_CREDENTIAL,
   AUTHORITY_TAG_PASSKEY,
   AUTHORITY_TAG_PUBKEY,
+  AUTHORITY_BYTES,
+  AUTHORITY_RECORD_BYTES,
+  LONG_LIVED_AUTHORITY_EXPIRY_SECONDS,
 } from './constants';
 
 // Types
 export type {
   Authority,
+  AuthorityRecord,
   CreateInstructionParams,
   TransferInstructionParams,
   TargetInstructionParams,
@@ -31,12 +35,24 @@ export type {
 } from './types';
 
 // Instructions
-export { encodeCreateInstruction } from './instructions/create';
+export {
+  buildAuthority,
+  buildAuthorityRecord,
+  createAuthorityRecord,
+  createSessionAuthorityRecord,
+  encodeCreateInstruction,
+  encodeLegacyCreateInstruction,
+} from './instructions/create';
 export { encodeValidateInstruction } from './instructions/validate';
 export { encodeTransferInstruction } from './instructions/transfer';
-export { encodeAddAuthorityInstruction } from './instructions/add-authority';
+export { encodeInvokeInstruction } from './instructions/invoke';
+export {
+  encodeAddAuthorityInstruction,
+  encodeLegacyAddAuthorityInstruction,
+} from './instructions/add-authority';
 export { encodeRemoveAuthorityInstruction } from './instructions/remove-authority';
 export { encodeRegisterCredentialInstruction } from './instructions/register-credential';
+export { concatenateInstructions } from './instructions/shared';
 
 // Challenge
 export { createValidateChallenge, VALIDATE_CHALLENGE_DOMAIN } from './challenge';

@@ -65,3 +65,4 @@ export default function Root() {
 ```
 
 Expo apps should install the config plugin from `@thru/wallet/native/plugin`.
+The SDK trusts both production wallet hosts: `wallet.thru.org` and `wallet.tid.sh`.

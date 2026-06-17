@@ -20,10 +20,12 @@ import {
 } from '../protocol';
 import { IframeManager } from './IframeManager';
 import { EmbeddedThruChain } from './chains/ThruChain';
+import type { SigningSessionDescriptorStore } from '../signing-sessions';
 
 export interface EmbeddedProviderConfig {
   iframeUrl?: string;
   addressTypes?: AddressTypeValue[];
+  signingSessions?: SigningSessionDescriptorStore;
 }
 
 export interface ConnectOptions {
@@ -77,7 +79,11 @@ export class EmbeddedProvider {
     // Create chain instances
     const addressTypes = config.addressTypes || [AddressType.THRU];
     if (addressTypes.includes(AddressType.THRU)) {
-      this._thruChain = new EmbeddedThruChain(this.iframeManager, this);
+      this._thruChain = new EmbeddedThruChain(
+        this.iframeManager,
+        this,
+        config.signingSessions,
+      );
     }
   }
 

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react';
 import type { ConnectResult, IThruChain } from "../../../interfaces";
-import type { ConnectOptions, SignInOptions } from "../../NativeSDK";
+import type { CreateAccountResult } from "../../../protocol";
+import type { ConnectOptions, CreateAccountOptions, SignInOptions } from "../../NativeSDK";
 import { useThru } from './useThru';
 import { waitForWallet } from './waitForWallet';
 
@@ -38,6 +39,15 @@ export function useWallet() {
     return ready.signIn(options);
   }, []);
 
+  const createTransparentAccount = useCallback(
+    async (options?: CreateAccountOptions): Promise<CreateAccountResult> => {
+      const ready =
+        walletRef.current ?? (await waitForWallet(() => walletRef.current));
+      return ready.createAccount(options);
+    },
+    [],
+  );
+
   const disconnect = useCallback(async (): Promise<void> => {
     const ready =
       walletRef.current ?? (await waitForWallet(() => walletRef.current));
@@ -56,6 +66,7 @@ export function useWallet() {
     accounts,
     connect,
     signIn,
+    createAccount: createTransparentAccount,
     disconnect,
     isConnected: isConnected && !!wallet,
     isConnecting,

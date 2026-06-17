@@ -59,7 +59,15 @@ echo ""
 # Build the compliance harness
 echo "=== Building Compliance Harness ==="
 cd "$SCRIPT_DIR"
-cargo build --release --quiet
+if ! cargo build --release --quiet --locked; then
+  echo "Compliance harness build failed"
+  exit 1
+fi
+HARNESS_BIN="${SCRIPT_DIR}/target/release/compliance_harness"
+if [ ! -x "$HARNESS_BIN" ]; then
+  echo "Compliance harness binary not found at $HARNESS_BIN"
+  exit 1
+fi
 echo "Build complete"
 echo ""
 
@@ -86,7 +94,7 @@ for TEST_FILE in $TEST_FILES; do
     echo -n "[$TEST_CATEGORY/$TEST_NAME] "
   fi
 
-  if OUTPUT=$(cargo run --release --quiet -- "$TEST_FILE" $LANGUAGE $VERBOSE $NO_CLEANUP --temp-dir "$TEMP_BASE" 2>&1); then
+  if OUTPUT=$("$HARNESS_BIN" "$TEST_FILE" $LANGUAGE $VERBOSE $NO_CLEANUP --temp-dir "$TEMP_BASE" 2>&1); then
     # Test passed
     ((PASSED++))
     if [ -z "$FAILED_ONLY" ]; then

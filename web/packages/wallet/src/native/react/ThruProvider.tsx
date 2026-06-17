@@ -6,10 +6,12 @@
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import {
   NativeSDK,
+  type CreateAccountOptions,
   type NativeSDKConfig,
   type WalletAvailability,
 } from "../NativeSDK";
 import type { WalletAccount } from "../../interfaces";
+import type { CreateAccountResult } from "../../protocol";
 import { CHECKING_WALLET_AVAILABILITY, ThruContext } from "./ThruContext";
 
 export interface ThruProviderProps {
@@ -147,6 +149,28 @@ export function ThruProvider({ children, config }: ThruProviderProps) {
     }
   }, [sdk]);
 
+  const createAccount = useCallback(
+    async (options?: CreateAccountOptions): Promise<CreateAccountResult> => {
+      if (!sdk) throw new Error("NativeSDK not initialized");
+      try {
+        const result = await sdk.createAccount(options);
+        setSelectedAccount(result.selectedAccount);
+        setAccounts(result.accounts);
+        setIsConnected(true);
+        setIsConnecting(false);
+        setWalletAvailability(sdk.getWalletAvailability());
+        return result;
+      } catch (err) {
+        setError(
+          err instanceof Error ? err : new Error("createAccount failed"),
+        );
+        setIsConnecting(false);
+        throw err;
+      }
+    },
+    [sdk],
+  );
+
   return (
     <ThruContext.Provider
       value={{
@@ -159,6 +183,7 @@ export function ThruProvider({ children, config }: ThruProviderProps) {
         selectedAccount,
         walletAvailability,
         selectAccount,
+        createAccount,
         manageAccounts,
       }}
     >

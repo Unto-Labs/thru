@@ -23,6 +23,7 @@ type WasmReflectBindings = {
 
 type JsonValue = unknown;
 declare const require: ((specifier: string) => unknown) | undefined;
+declare const HermesInternal: unknown;
 
 export interface WasmConfig {
   /**
@@ -90,13 +91,7 @@ export function configureWasm(config: string | WasmConfig): void {
 const wasmDir = resolveWasmDir();
 let bindingsPromise: Promise<WasmReflectBindings> | undefined;
 let cachedBindings: WasmReflectBindings | undefined;
-const dynamicImport = new Function("specifier", "return import(specifier)") as (
-  specifier: string,
-) => Promise<unknown>;
-const resolveModuleUrl = new Function("path", "base", "return new URL(path, base).href") as (
-  path: string,
-  base: string,
-) => string;
+let dynamicImport: ((specifier: string) => Promise<unknown>) | undefined;
 
 function isObjectLike(value: unknown): value is Record<string, unknown> {
   return (typeof value === "object" && value !== null) || typeof value === "function";
@@ -152,7 +147,26 @@ function resolveImportMetaUrl(): string {
 }
 
 async function importModule(specifier: string): Promise<unknown> {
+  if (isHermesRuntime()) {
+    throw new Error(
+      "WASM ABI reflection is not available in React Native/Hermes. Use known-payload decoding or a reflection API fallback."
+    );
+  }
+
+  dynamicImport ??= new Function(
+    "specifier",
+    "return import(specifier)"
+  ) as (specifier: string) => Promise<unknown>;
+
   return dynamicImport(specifier);
+}
+
+function isHermesRuntime(): boolean {
+  return typeof HermesInternal !== "undefined";
+}
+
+function resolveModuleUrl(path: string, base: string): string {
+  return new URL(path, base).href;
 }
 
 function resolveRuntimeUrl(url: string): string {

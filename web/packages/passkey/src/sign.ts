@@ -30,6 +30,8 @@ import {
   closePopup,
 } from './popup';
 
+const WEB_AUTHN_FOCUS_RETRY_DELAYS_MS = [150, 300];
+
 /**
  * Sign a challenge with an existing passkey (by credential ID).
  */
@@ -66,6 +68,7 @@ export async function signWithStoredPasskey(
   }
 
   const allowPopupFallback = options.allowPopupFallback ?? true;
+  const allowDiscoverableFallback = options.allowDiscoverableFallback ?? true;
   const preopenedPopup = allowPopupFallback
     ? maybePreopenPopup('get', openPasskeyPopupWindow)
     : null;
@@ -74,6 +77,11 @@ export async function signWithStoredPasskey(
     : 'inline';
   const storedPasskey = preferredPasskey;
   const canUsePopup = allowPopupFallback && isInIframe();
+
+  if (!allowDiscoverableFallback && !storedPasskey) {
+    closePopup(preopenedPopup);
+    throw new Error('No stored passkey available for this wallet');
+  }
 
   if (options.preferDiscoverable) {
     closePopup(preopenedPopup);
@@ -103,7 +111,7 @@ export async function signWithStoredPasskey(
           passkey: storedPasskey,
         };
       } catch (error) {
-        if (!shouldFallbackToDiscoverable(error)) {
+        if (!allowDiscoverableFallback || !shouldFallbackToDiscoverable(error)) {
           throw error;
         }
         return signWithDiscoverableStoredPasskey(
@@ -275,9 +283,7 @@ async function signWithPasskeyAssertion(
     ];
   }
 
-  const assertion = (await navigator.credentials.get({
-    publicKey: getOptions,
-  })) as PublicKeyCredential | null;
+  const assertion = await getPasskeyAssertionWithFocusRetry(getOptions);
 
   if (!assertion) {
     throw new Error('Passkey authentication was cancelled');
@@ -309,6 +315,48 @@ async function signWithPasskeyAssertion(
     credentialId: arrayBufferToBase64Url(assertion.rawId),
     authenticatorAttachment: rawAttachment,
   };
+}
+
+async function getPasskeyAssertionWithFocusRetry(
+  publicKey: PublicKeyCredentialRequestOptions
+): Promise<PublicKeyCredential | null> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      return (await navigator.credentials.get({
+        publicKey,
+      })) as PublicKeyCredential | null;
+    } catch (error) {
+      const retryDelayMs = WEB_AUTHN_FOCUS_RETRY_DELAYS_MS[attempt];
+      if (retryDelayMs === undefined || !isDocumentNotFocusedError(error)) {
+        throw error;
+      }
+      await waitForFocusRetry(retryDelayMs);
+    }
+  }
+}
+
+function isDocumentNotFocusedError(error: unknown): boolean {
+  const name =
+    error && typeof error === 'object' && 'name' in error
+      ? String((error as { name?: unknown }).name)
+      : '';
+  const message =
+    error && typeof error === 'object' && 'message' in error
+      ? String((error as { message?: unknown }).message)
+      : '';
+  const normalized = `${name} ${message}`.toLowerCase();
+  return normalized.includes('document is not focused');
+}
+
+function waitForFocusRetry(delayMs: number): Promise<void> {
+  return new Promise((resolve) => {
+    const finish = () => setTimeout(resolve, delayMs);
+    if (typeof requestAnimationFrame !== 'function') {
+      finish();
+      return;
+    }
+    requestAnimationFrame(() => requestAnimationFrame(finish));
+  });
 }
 
 async function signWithPasskeyViaPopup(

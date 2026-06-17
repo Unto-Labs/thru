@@ -47,7 +47,12 @@ type __TnIrContext = {
   typeName?: string;
 };
 
-type __TnValidateResult = { ok: boolean; code?: string; consumed?: bigint };
+type __TnValidateResult = {
+  ok: boolean;
+  code?: string;
+  consumed?: bigint;
+  params?: Record<string, bigint>;
+};
 type __TnEvalResult =
   | { ok: true; value: bigint }
   | { ok: false; code: string };
@@ -787,15 +792,15 @@ function __tnNormalizeIrError(err: unknown): string {
 
 __tnRegisterFootprint("InstructionData", (params) => InstructionData.__tnInvokeFootprint(params));
 __tnRegisterValidate("InstructionData", (buffer, params) => InstructionData.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("InstructionData", (buffer) => { const result = InstructionData.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("InstructionData", (buffer) => { const result = InstructionData.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 __tnRegisterFootprint("Pubkey", (params) => Pubkey.__tnInvokeFootprint(params));
 __tnRegisterValidate("Pubkey", (buffer, params) => Pubkey.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("Pubkey", (buffer) => { const result = Pubkey.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("Pubkey", (buffer) => { const result = Pubkey.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 __tnRegisterFootprint("StateProof", (params) => StateProof.__tnInvokeFootprint(params));
 __tnRegisterValidate("StateProof", (buffer, params) => StateProof.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("StateProof", (buffer) => { const result = StateProof.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("StateProof", (buffer) => { const result = StateProof.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR Authority ----- */
 
@@ -960,7 +965,164 @@ export class AuthorityBuilder {
 
 __tnRegisterFootprint("Authority", (params) => Authority.__tnInvokeFootprint(params));
 __tnRegisterValidate("Authority", (buffer, params) => Authority.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("Authority", (buffer) => { const result = Authority.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("Authority", (buffer) => { const result = Authority.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
+/* ----- TYPE DEFINITION FOR AuthorityRecord ----- */
+
+const __tn_ir_AuthorityRecord = {
+  typeName: "AuthorityRecord",
+  root: { op: "const", value: 73n }
+} as const;
+
+export class AuthorityRecord {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): AuthorityRecord {
+    if (!buffer || buffer.length === undefined) throw new Error("AuthorityRecord.__tnCreateView requires a Uint8Array");
+    return new AuthorityRecord(new Uint8Array(buffer));
+  }
+
+  static builder(): AuthorityRecordBuilder {
+    return new AuthorityRecordBuilder();
+  }
+
+  static fromBuilder(builder: AuthorityRecordBuilder): AuthorityRecord | null {
+    const buffer = builder.build();
+    return AuthorityRecord.from_array(buffer);
+  }
+
+  get_authority(): Authority {
+    const offset = 0;
+    const slice = this.buffer.subarray(offset, offset + 65);
+    return Authority.from_array(slice)!;
+  }
+
+  set_authority(value: Authority): void {
+    /* Copy bytes from source struct to this field */
+    const sourceBytes = (value as any).buffer as Uint8Array;
+    const offset = 0;
+    this.buffer.set(sourceBytes, offset);
+  }
+
+  get authority(): Authority {
+    return this.get_authority();
+  }
+
+  set authority(value: Authority) {
+    this.set_authority(value);
+  }
+
+  get_expires_at_block_time_seconds(): bigint {
+    const offset = 65;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_expires_at_block_time_seconds(value: bigint): void {
+    const offset = 65;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get expires_at_block_time_seconds(): bigint {
+    return this.get_expires_at_block_time_seconds();
+  }
+
+  set expires_at_block_time_seconds(value: bigint) {
+    this.set_expires_at_block_time_seconds(value);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_AuthorityRecord.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_AuthorityRecord, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for AuthorityRecord');
+    }
+    return __tnBigIntToNumber(irResult, 'AuthorityRecord::footprint');
+  }
+
+  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    if (buffer.length < 73) return { ok: false, code: "tn.buffer_too_small", consumed: 73 };
+    return { ok: true, consumed: 73 };
+  }
+
+  static from_array(buffer: Uint8Array): AuthorityRecord | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new AuthorityRecord(buffer);
+  }
+
+}
+
+export class AuthorityRecordBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+
+  constructor() {
+    this.buffer = new Uint8Array(73);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  set_authority(value: Uint8Array): this {
+    if (value.length !== 65) throw new Error("authority expects 65 bytes");
+    this.buffer.set(value, 0);
+    return this;
+  }
+
+  set_expires_at_block_time_seconds(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(65, cast, true);
+    return this;
+  }
+
+  build(): Uint8Array {
+    return this.buffer.slice();
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    target.set(this.buffer, offset);
+    return target;
+  }
+
+  finish(): AuthorityRecord {
+    const view = AuthorityRecord.from_array(this.buffer.slice());
+    if (!view) throw new Error("failed to build AuthorityRecord");
+    return view;
+  }
+}
+
+__tnRegisterFootprint("AuthorityRecord", (params) => AuthorityRecord.__tnInvokeFootprint(params));
+__tnRegisterValidate("AuthorityRecord", (buffer, params) => AuthorityRecord.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("AuthorityRecord", (buffer) => { const result = AuthorityRecord.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
 
 /* ----- TYPE DEFINITION FOR P256Point ----- */
 
@@ -1059,7 +1221,7 @@ export class P256Point {
 
 __tnRegisterFootprint("P256Point", (params) => P256Point.__tnInvokeFootprint(params));
 __tnRegisterValidate("P256Point", (buffer, params) => P256Point.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("P256Point", (buffer) => { const result = P256Point.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("P256Point", (buffer) => { const result = P256Point.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR RemoveAuthorityArgs ----- */
 
@@ -1222,7 +1384,7 @@ export class RemoveAuthorityArgsBuilder {
 
 __tnRegisterFootprint("RemoveAuthorityArgs", (params) => RemoveAuthorityArgs.__tnInvokeFootprint(params));
 __tnRegisterValidate("RemoveAuthorityArgs", (buffer, params) => RemoveAuthorityArgs.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("RemoveAuthorityArgs", (buffer) => { const result = RemoveAuthorityArgs.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("RemoveAuthorityArgs", (buffer) => { const result = RemoveAuthorityArgs.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR Seed32 ----- */
 
@@ -1321,7 +1483,7 @@ export class Seed32 {
 
 __tnRegisterFootprint("Seed32", (params) => Seed32.__tnInvokeFootprint(params));
 __tnRegisterValidate("Seed32", (buffer, params) => Seed32.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("Seed32", (buffer) => { const result = Seed32.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("Seed32", (buffer) => { const result = Seed32.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR TransferArgs ----- */
 
@@ -1484,7 +1646,7 @@ export class TransferArgsBuilder {
     return this;
   }
 
-  set_amount(value: number): this {
+  set_amount(value: bigint): this {
     const cast = __tnToBigInt(value);
     this.view.setBigUint64(4, cast, true);
     return this;
@@ -1509,7 +1671,7 @@ export class TransferArgsBuilder {
 
 __tnRegisterFootprint("TransferArgs", (params) => TransferArgs.__tnInvokeFootprint(params));
 __tnRegisterValidate("TransferArgs", (buffer, params) => TransferArgs.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("TransferArgs", (buffer) => { const result = TransferArgs.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("TransferArgs", (buffer) => { const result = TransferArgs.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR ValidateArgs ----- */
 
@@ -1573,6 +1735,16 @@ export class ValidateArgs {
     throw new Error("ValidateArgs: field reference '" + path + "' is not available; provide fieldContext when creating this view");
   }
 
+  static builder(): ValidateArgsBuilder {
+    return new ValidateArgsBuilder();
+  }
+
+  static fromBuilder(builder: ValidateArgsBuilder): ValidateArgs | null {
+    const buffer = builder.build();
+    const params = builder.dynamicParams();
+    return ValidateArgs.from_array(buffer, { params });
+  }
+
   static readonly flexibleArrayWriters = Object.freeze([
     { field: "authenticator_data", method: "authenticator_data", sizeField: "authenticator_data_len", paramKey: "authenticator_data_len", elementSize: 1 },
     { field: "client_data", method: "client_data", sizeField: "client_data_len", paramKey: "client_data_len", elementSize: 1 },
@@ -1581,6 +1753,7 @@ export class ValidateArgs {
   static __tnComputeSequentialLayout(view: DataView, buffer: Uint8Array): { params: Record<string, bigint> | null; offsets: Record<string, number> | null; derived: Record<string, bigint> | null } | null {
     const offsets: Record<string, number> = Object.create(null);
     const __tnLength = buffer.length;
+    let __tnParamSeq_data_data_size: bigint | null = null;
     let __tnFieldValue_wallet_account_idx: number | null = null;
     let __tnFieldValue_auth_idx: number | null = null;
     let __tnFieldValue_authenticator_data_len: number | null = null;
@@ -1619,8 +1792,17 @@ export class ValidateArgs {
     offsets["client_data"] = __tnCursorMutable;
     if (__tnCursorMutable + __tnArrayBytes_client_data > __tnLength) return null;
     __tnCursorMutable += __tnArrayBytes_client_data;
-    return null;
-    return { params: null, offsets: offsets, derived: null };
+    offsets["target_instruction"] = __tnCursorMutable;
+    const __tnTyperefResult_target_instruction = __tnInvokeDynamicValidate("InstructionData", buffer.subarray(__tnCursorMutable));
+    if (!__tnTyperefResult_target_instruction.ok || __tnTyperefResult_target_instruction.consumed === undefined) return null;
+    const __tnTyperefParams_target_instruction = __tnTyperefResult_target_instruction.params ?? null;
+    if (!__tnTyperefParams_target_instruction || __tnTyperefParams_target_instruction["data_data_size"] === undefined) return null;
+    __tnParamSeq_data_data_size = __tnTyperefParams_target_instruction["data_data_size"];
+    __tnCursorMutable += __tnBigIntToNumber(__tnTyperefResult_target_instruction.consumed, "ValidateArgs::target_instruction");
+    const params: Record<string, bigint> = Object.create(null);
+    if (__tnParamSeq_data_data_size === null) return null;
+    params["data_data_size"] = __tnParamSeq_data_data_size as bigint;
+    return { params, offsets: offsets, derived: null };
   }
 
   private static __tnExtractParams(view: DataView, buffer: Uint8Array): { params: ValidateArgs.Params; derived: Record<string, bigint> | null } | null {
@@ -1632,9 +1814,15 @@ export class ValidateArgs {
       return null;
     }
     const __tnParam_client_data_client_data_len = __tnToBigInt(view.getUint16(69, true));
+    const __tnLayout = ValidateArgs.__tnComputeSequentialLayout(view, buffer);
+    if (!__tnLayout || !__tnLayout.params) return null;
+    const __tnSeqParams = __tnLayout.params;
+    const __tnParamSeq_data_data_size = __tnSeqParams["data_data_size"];
+    if (__tnParamSeq_data_data_size === undefined) return null;
     const __tnExtractedParams = ValidateArgs.Params.fromValues({
       authenticator_data_authenticator_data_len: __tnParam_authenticator_data_authenticator_data_len,
       client_data_client_data_len: __tnParam_client_data_client_data_len,
+      data_data_size: __tnParamSeq_data_data_size as bigint,
     });
     return { params: __tnExtractedParams, derived: null };
   }
@@ -1893,10 +2081,11 @@ export class ValidateArgs {
     return this.__tnValidateInternal(buffer, __tnParams);
   }
 
-  static footprintIr(authenticator_data_authenticator_data_len: number | bigint, client_data_client_data_len: number | bigint): bigint {
+  static footprintIr(authenticator_data_authenticator_data_len: number | bigint, client_data_client_data_len: number | bigint, data_data_size: number | bigint): bigint {
     const params = ValidateArgs.Params.fromValues({
       authenticator_data_authenticator_data_len: authenticator_data_authenticator_data_len,
       client_data_client_data_len: client_data_client_data_len,
+      data_data_size: data_data_size,
     });
     return this.footprintIrFromParams(params);
   }
@@ -1905,6 +2094,7 @@ export class ValidateArgs {
     const record: Record<string, bigint> = Object.create(null);
     record["authenticator_data.authenticator_data_len"] = params.authenticator_data_authenticator_data_len;
     record["client_data.client_data_len"] = params.client_data_client_data_len;
+    record["data.data_size"] = params.data_data_size;
     return record;
   }
 
@@ -1920,7 +2110,7 @@ export class ValidateArgs {
     return __tnBigIntToNumber(irResult, 'ValidateArgs::footprintFromParams');
   }
 
-  static footprintFromValues(input: { authenticator_data_authenticator_data_len: number | bigint, client_data_client_data_len: number | bigint }): number {
+  static footprintFromValues(input: { authenticator_data_authenticator_data_len: number | bigint, client_data_client_data_len: number | bigint, data_data_size: number | bigint }): number {
     const params = ValidateArgs.params(input);
     return this.footprintFromParams(params);
   }
@@ -1978,18 +2168,22 @@ export namespace ValidateArgs {
     readonly authenticator_data_authenticator_data_len: bigint;
     /** ABI path: client_data.client_data_len */
     readonly client_data_client_data_len: bigint;
+    /** ABI path: data.data_size */
+    readonly data_data_size: bigint;
   };
 
   export const ParamKeys = Object.freeze({
     authenticator_data_authenticator_data_len: "authenticator_data.authenticator_data_len",
     client_data_client_data_len: "client_data.client_data_len",
+    data_data_size: "data.data_size",
   } as const);
 
   export const Params = {
-    fromValues(input: { authenticator_data_authenticator_data_len: number | bigint, client_data_client_data_len: number | bigint }): Params {
+    fromValues(input: { authenticator_data_authenticator_data_len: number | bigint, client_data_client_data_len: number | bigint, data_data_size: number | bigint }): Params {
       return {
         authenticator_data_authenticator_data_len: __tnToBigInt(input.authenticator_data_authenticator_data_len),
         client_data_client_data_len: __tnToBigInt(input.client_data_client_data_len),
+        data_data_size: __tnToBigInt(input.data_data_size),
       };
     },
     fromBuilder(source: { dynamicParams(): Params } | { params: Params } | Params): Params {
@@ -2003,41 +2197,262 @@ export namespace ValidateArgs {
     }
   };
 
-  export function params(input: { authenticator_data_authenticator_data_len: number | bigint, client_data_client_data_len: number | bigint }): Params {
+  export function params(input: { authenticator_data_authenticator_data_len: number | bigint, client_data_client_data_len: number | bigint, data_data_size: number | bigint }): Params {
     return Params.fromValues(input);
+  }
+}
+
+export class ValidateArgsBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+  private __tnCachedParams: ValidateArgs.Params | null = null;
+  private __tnLastBuffer: Uint8Array | null = null;
+  private __tnLastParams: ValidateArgs.Params | null = null;
+  private __tnFam_authenticator_data: Uint8Array | null = null;
+  private __tnFam_authenticator_dataCount: number | null = null;
+  private __tnFamWriter_authenticator_data?: __TnFamWriterResult<ValidateArgsBuilder>;
+  private __tnFam_client_data: Uint8Array | null = null;
+  private __tnFam_client_dataCount: number | null = null;
+  private __tnFamWriter_client_data?: __TnFamWriterResult<ValidateArgsBuilder>;
+  private __tnTail_target_instruction: Uint8Array | null = null;
+  private __tnTailParams_target_instruction: Record<string, bigint> | null = null;
+
+  constructor() {
+    this.buffer = new Uint8Array(71);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  private __tnInvalidate(): void {
+    this.__tnCachedParams = null;
+    this.__tnLastBuffer = null;
+    this.__tnLastParams = null;
+  }
+
+  set_wallet_account_idx(value: number): this {
+    this.view.setUint16(0, value, true);
+    this.__tnInvalidate();
+    return this;
+  }
+
+  set_auth_idx(value: number): this {
+    this.view.setUint8(2, value);
+    this.__tnInvalidate();
+    return this;
+  }
+
+  set_signature_r(value: Uint8Array): this {
+    if (value.length !== 32) throw new Error("signature_r expects 32 bytes");
+    this.buffer.set(value, 3);
+    this.__tnInvalidate();
+    return this;
+  }
+
+  set_signature_s(value: Uint8Array): this {
+    if (value.length !== 32) throw new Error("signature_s expects 32 bytes");
+    this.buffer.set(value, 35);
+    this.__tnInvalidate();
+    return this;
+  }
+
+  set_authenticator_data_len(value: number): this {
+    this.view.setUint16(67, value, true);
+    this.__tnInvalidate();
+    return this;
+  }
+
+  set_client_data_len(value: number): this {
+    this.view.setUint16(69, value, true);
+    this.__tnInvalidate();
+    return this;
+  }
+
+  authenticator_data(): __TnFamWriterResult<ValidateArgsBuilder> {
+    if (!this.__tnFamWriter_authenticator_data) {
+      this.__tnFamWriter_authenticator_data = __tnCreateFamWriter(this, "authenticator_data", (payload) => {
+        const bytes = new Uint8Array(payload);
+        const elementCount = bytes.length;
+        this.__tnFam_authenticator_data = bytes;
+        this.__tnFam_authenticator_dataCount = elementCount;
+        this.set_authenticator_data_len(elementCount);
+        this.__tnInvalidate();
+      });
+    }
+    return this.__tnFamWriter_authenticator_data!;
+  }
+
+  client_data(): __TnFamWriterResult<ValidateArgsBuilder> {
+    if (!this.__tnFamWriter_client_data) {
+      this.__tnFamWriter_client_data = __tnCreateFamWriter(this, "client_data", (payload) => {
+        const bytes = new Uint8Array(payload);
+        const elementCount = bytes.length;
+        this.__tnFam_client_data = bytes;
+        this.__tnFam_client_dataCount = elementCount;
+        this.set_client_data_len(elementCount);
+        this.__tnInvalidate();
+      });
+    }
+    return this.__tnFamWriter_client_data!;
+  }
+
+  set_target_instruction(value: InstructionData | __TnStructFieldInput): this {
+    const bytes = __tnResolveStructFieldInput(value as __TnStructFieldInput, "ValidateArgsBuilder::target_instruction");
+    const validation = __tnInvokeDynamicValidate("InstructionData", bytes);
+    if (!validation.ok || validation.consumed === undefined) throw new Error("ValidateArgsBuilder: field 'target_instruction' failed validation");
+    if (__tnBigIntToNumber(validation.consumed, "ValidateArgsBuilder::target_instruction") !== bytes.length) throw new Error("ValidateArgsBuilder: field 'target_instruction' validation did not consume the full buffer");
+    this.__tnTail_target_instruction = bytes;
+    this.__tnTailParams_target_instruction = validation.params ?? null;
+    this.__tnInvalidate();
+    return this;
+  }
+
+  build(): Uint8Array {
+    const params = this.__tnComputeParams();
+    const size = ValidateArgs.footprintFromParams(params);
+    const buffer = new Uint8Array(size);
+    this.__tnWriteInto(buffer);
+    this.__tnValidateOrThrow(buffer, params);
+    return buffer;
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    const params = this.__tnComputeParams();
+    const size = ValidateArgs.footprintFromParams(params);
+    if (target.length - offset < size) throw new Error("ValidateArgsBuilder: target buffer too small");
+    const slice = target.subarray(offset, offset + size);
+    this.__tnWriteInto(slice);
+    this.__tnValidateOrThrow(slice, params);
+    return target;
+  }
+
+  finish(): ValidateArgs {
+    const buffer = this.build();
+    const params = this.__tnLastParams ?? this.__tnComputeParams();
+    const view = ValidateArgs.from_array(buffer, { params });
+    if (!view) throw new Error("ValidateArgsBuilder: failed to finalize view");
+    return view;
+  }
+
+  finishView(): ValidateArgs {
+    return this.finish();
+  }
+
+  dynamicParams(): ValidateArgs.Params {
+    return this.__tnComputeParams();
+  }
+
+  private __tnComputeParams(): ValidateArgs.Params {
+    if (this.__tnCachedParams) return this.__tnCachedParams;
+    const params = ValidateArgs.Params.fromValues({
+      authenticator_data_authenticator_data_len: (() => { if (this.__tnFam_authenticator_dataCount === null) throw new Error("ValidateArgsBuilder: field 'authenticator_data' must be written before computing params"); return __tnToBigInt(this.__tnFam_authenticator_dataCount); })(),
+      client_data_client_data_len: (() => { if (this.__tnFam_client_dataCount === null) throw new Error("ValidateArgsBuilder: field 'client_data' must be written before computing params"); return __tnToBigInt(this.__tnFam_client_dataCount); })(),
+      data_data_size: (() => { const params = this.__tnTailParams_target_instruction; if (!params || params["data_data_size"] === undefined) throw new Error("ValidateArgsBuilder: field 'target_instruction' must be written before computing params"); return params["data_data_size"]; })(),
+    });
+    this.__tnCachedParams = params;
+    return params;
+  }
+
+  private __tnWriteInto(target: Uint8Array): void {
+    target.set(this.buffer, 0);
+    let cursor = this.buffer.length;
+    const __tnLocal_authenticator_data_bytes = this.__tnFam_authenticator_data;
+    if (!__tnLocal_authenticator_data_bytes) throw new Error("ValidateArgsBuilder: field 'authenticator_data' must be written before build");
+    target.set(__tnLocal_authenticator_data_bytes, cursor);
+    cursor += __tnLocal_authenticator_data_bytes.length;
+    const __tnLocal_client_data_bytes = this.__tnFam_client_data;
+    if (!__tnLocal_client_data_bytes) throw new Error("ValidateArgsBuilder: field 'client_data' must be written before build");
+    target.set(__tnLocal_client_data_bytes, cursor);
+    cursor += __tnLocal_client_data_bytes.length;
+    const __tnLocal_target_instruction_bytes = this.__tnTail_target_instruction;
+    if (!__tnLocal_target_instruction_bytes) throw new Error("ValidateArgsBuilder: field 'target_instruction' must be written before build");
+    target.set(__tnLocal_target_instruction_bytes, cursor);
+    cursor += __tnLocal_target_instruction_bytes.length;
+  }
+
+  private __tnValidateOrThrow(buffer: Uint8Array, params: ValidateArgs.Params): void {
+    const result = ValidateArgs.validate(buffer, { params });
+    if (!result.ok) {
+      throw new Error(`${ ValidateArgs }Builder: builder produced invalid buffer (code=${result.code ?? "unknown"})`);
+    }
+    this.__tnLastParams = result.params ?? params;
+    this.__tnLastBuffer = buffer;
   }
 }
 
 __tnRegisterFootprint("ValidateArgs", (params) => ValidateArgs.__tnInvokeFootprint(params));
 __tnRegisterValidate("ValidateArgs", (buffer, params) => ValidateArgs.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("ValidateArgs", (buffer) => { const result = ValidateArgs.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("ValidateArgs", (buffer) => { const result = ValidateArgs.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR WalletAccount ----- */
 
 const __tn_ir_WalletAccount = {
   typeName: "WalletAccount",
-  root: { op: "const", value: 9n }
+  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "add", left: { op: "align", alignment: 1, node: { op: "const", value: 1n } }, right: { op: "align", alignment: 8, node: { op: "const", value: 8n } } }, right: { op: "align", alignment: 1, node: { op: "mul", left: { op: "add", left: { op: "field", param: "authorities.num_auth" }, right: { op: "const", value: 1n } }, right: { op: "const", value: 73n } } } } }
 } as const;
 
 export class WalletAccount {
   private view: DataView;
+  private __tnFieldContext: Record<string, number | bigint> | null = null;
+  private __tnParams: WalletAccount.Params;
 
-  private constructor(private buffer: Uint8Array) {
+  private constructor(private buffer: Uint8Array, params?: WalletAccount.Params, fieldContext?: Record<string, number | bigint>) {
     this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    this.__tnFieldContext = fieldContext ?? null;
+    if (params) {
+      this.__tnParams = params;
+    } else {
+      const derived = WalletAccount.__tnExtractParams(this.view, buffer);
+      if (!derived) {
+        throw new Error("WalletAccount: failed to derive dynamic parameters");
+      }
+      this.__tnParams = derived.params;
+    }
   }
 
-  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): WalletAccount {
+  static __tnCreateView(buffer: Uint8Array, opts?: { params?: WalletAccount.Params, fieldContext?: Record<string, number | bigint> }): WalletAccount {
     if (!buffer || buffer.length === undefined) throw new Error("WalletAccount.__tnCreateView requires a Uint8Array");
-    return new WalletAccount(new Uint8Array(buffer));
+    let params = opts?.params ?? null;
+    if (!params) {
+      const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+      const derived = WalletAccount.__tnExtractParams(view, buffer);
+      if (!derived) throw new Error("WalletAccount.__tnCreateView: failed to derive params");
+      params = derived.params;
+    }
+    const instance = new WalletAccount(new Uint8Array(buffer), params, opts?.fieldContext);
+    return instance;
   }
 
-  static builder(): WalletAccountBuilder {
-    return new WalletAccountBuilder();
+  dynamicParams(): WalletAccount.Params {
+    return this.__tnParams;
   }
 
-  static fromBuilder(builder: WalletAccountBuilder): WalletAccount | null {
-    const buffer = builder.build();
-    return WalletAccount.from_array(buffer);
+  withFieldContext(context: Record<string, number | bigint>): this {
+    this.__tnFieldContext = context;
+    return this;
+  }
+
+  private __tnResolveFieldRef(path: string): number {
+    const getterName = `get_${path.replace(/[.]/g, '_')}`;
+    const getter = (this as any)[getterName];
+    if (typeof getter === "function") {
+      const value = getter.call(this);
+      return typeof value === "bigint" ? __tnBigIntToNumber(value, "WalletAccount::__tnResolveFieldRef") : value;
+    }
+    if (this.__tnFieldContext && Object.prototype.hasOwnProperty.call(this.__tnFieldContext, path)) {
+      const contextValue = this.__tnFieldContext[path];
+      return typeof contextValue === "bigint" ? __tnBigIntToNumber(contextValue, "WalletAccount::__tnResolveFieldRef") : contextValue;
+    }
+    throw new Error("WalletAccount: field reference '" + path + "' is not available; provide fieldContext when creating this view");
+  }
+
+  private static __tnExtractParams(view: DataView, buffer: Uint8Array): { params: WalletAccount.Params; derived: Record<string, bigint> | null } | null {
+    if (buffer.length < 1) {
+      return null;
+    }
+    const __tnParam_authorities_num_auth = __tnToBigInt(view.getUint8(0));
+    const __tnExtractedParams = WalletAccount.Params.fromValues({
+      authorities_num_auth: __tnParam_authorities_num_auth,
+    });
+    return { params: __tnExtractedParams, derived: null };
   }
 
   get_num_auth(): number {
@@ -2076,6 +2491,45 @@ export class WalletAccount {
     this.set_nonce(value);
   }
 
+  get_authorities_length(): number {
+    return (this.__tnResolveFieldRef("num_auth") + 1);
+  }
+
+  get_authorities_at(index: number): AuthorityRecord {
+    const offset = 9;
+    const slice = this.buffer.subarray((offset + index * 73), (offset + (index + 1) * 73));
+    return AuthorityRecord.from_array(slice)!;
+  }
+
+  get_authorities(): AuthorityRecord[] {
+    const len = this.get_authorities_length();
+    const result: AuthorityRecord[] = [];
+    for (let i = 0; i < len; i++) {
+      result.push(this.get_authorities_at(i));
+    }
+    return result;
+  }
+
+  set_authorities_at(index: number, value: AuthorityRecord): void {
+    const offset = 9;
+    const slice = this.buffer.subarray(offset + index * 73, offset + (index + 1) * 73);
+    slice.set(value['buffer']);
+  }
+
+  set_authorities(value: AuthorityRecord[]): void {
+    const len = Math.min(this.get_authorities_length(), value.length);
+    for (let i = 0; i < len; i++) {
+      this.set_authorities_at(i, value[i]);
+    }
+  }
+
+  get authorities(): AuthorityRecord[] {
+    return this.get_authorities();
+  }
+
+  set authorities(value: AuthorityRecord[]) {
+    this.set_authorities(value);
+  }
   private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
     return __tnEvalFootprint(__tn_ir_WalletAccount.root, { params: __tnParams });
   }
@@ -2092,89 +2546,118 @@ export class WalletAccount {
     return this.__tnValidateInternal(buffer, __tnParams);
   }
 
-  static footprintIr(): bigint {
-    return this.__tnFootprintInternal(Object.create(null));
+  static footprintIr(authorities_num_auth: number | bigint): bigint {
+    const params = WalletAccount.Params.fromValues({
+      authorities_num_auth: authorities_num_auth,
+    });
+    return this.footprintIrFromParams(params);
   }
 
-  static footprint(): number {
-    const irResult = this.footprintIr();
-      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
-    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
-      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for WalletAccount');
+  private static __tnPackParams(params: WalletAccount.Params): Record<string, bigint> {
+    const record: Record<string, bigint> = Object.create(null);
+    record["authorities.num_auth"] = params.authorities_num_auth;
+    return record;
+  }
+
+  static footprintIrFromParams(params: WalletAccount.Params): bigint {
+    const __tnParams = this.__tnPackParams(params);
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static footprintFromParams(params: WalletAccount.Params): number {
+    const irResult = this.footprintIrFromParams(params);
+    const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for WalletAccount');
+    return __tnBigIntToNumber(irResult, 'WalletAccount::footprintFromParams');
+  }
+
+  static footprintFromValues(input: { authorities_num_auth: number | bigint }): number {
+    const params = WalletAccount.params(input);
+    return this.footprintFromParams(params);
+  }
+
+  static footprint(params: WalletAccount.Params): number {
+    return this.footprintFromParams(params);
+  }
+
+  static validate(buffer: Uint8Array, opts?: { params?: WalletAccount.Params }): { ok: boolean; code?: string; consumed?: number; params?: WalletAccount.Params } {
+    if (!buffer || buffer.length === undefined) {
+      return { ok: false, code: "tn.invalid_buffer" };
     }
-    return __tnBigIntToNumber(irResult, 'WalletAccount::footprint');
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    let params = opts?.params ?? null;
+    if (!params) {
+      const extracted = this.__tnExtractParams(view, buffer);
+      if (!extracted) return { ok: false, code: "tn.param_extraction_failed" };
+      params = extracted.params;
+    }
+    const __tnParamsRec = this.__tnPackParams(params);
+    const irResult = this.__tnValidateInternal(buffer, __tnParamsRec);
+    if (!irResult.ok) {
+      return { ok: false, code: irResult.code, consumed: irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'WalletAccount::validate') : undefined, params };
+    }
+    const consumed = irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'WalletAccount::validate') : undefined;
+    return { ok: true, consumed, params };
   }
 
-  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
-    if (buffer.length < 9) return { ok: false, code: "tn.buffer_too_small", consumed: 9 };
-    return { ok: true, consumed: 9 };
-  }
-
-  static new(num_auth: number, nonce: bigint): WalletAccount {
-    const buffer = new Uint8Array(9);
-    const view = new DataView(buffer.buffer);
-
-    let offset = 0;
-    view.setUint8(0, num_auth); /* num_auth */
-    view.setBigUint64(1, nonce, true); /* nonce (little-endian) */
-
-    return new WalletAccount(buffer);
-  }
-
-  static from_array(buffer: Uint8Array): WalletAccount | null {
+  static from_array(buffer: Uint8Array, opts?: { params?: WalletAccount.Params }): WalletAccount | null {
     if (!buffer || buffer.length === undefined) {
       return null;
     }
     const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-    const validation = this.validate(buffer);
+    let params = opts?.params ?? null;
+    if (!params) {
+      const derived = this.__tnExtractParams(view, buffer);
+      if (!derived) return null;
+      params = derived.params;
+    }
+    const validation = this.validate(buffer, { params });
     if (!validation.ok) {
       return null;
     }
-    return new WalletAccount(buffer);
+    const cached = validation.params ?? params;
+    const state = new WalletAccount(buffer, cached);
+    return state;
   }
+
 
 }
 
-export class WalletAccountBuilder {
-  private buffer: Uint8Array;
-  private view: DataView;
+export namespace WalletAccount {
+  export type Params = {
+    /** ABI path: authorities.num_auth */
+    readonly authorities_num_auth: bigint;
+  };
 
-  constructor() {
-    this.buffer = new Uint8Array(9);
-    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
-  }
+  export const ParamKeys = Object.freeze({
+    authorities_num_auth: "authorities.num_auth",
+  } as const);
 
-  set_num_auth(value: number): this {
-    this.view.setUint8(0, value);
-    return this;
-  }
+  export const Params = {
+    fromValues(input: { authorities_num_auth: number | bigint }): Params {
+      return {
+        authorities_num_auth: __tnToBigInt(input.authorities_num_auth),
+      };
+    },
+    fromBuilder(source: { dynamicParams(): Params } | { params: Params } | Params): Params {
+      if ((source as { dynamicParams?: () => Params }).dynamicParams) {
+        return (source as { dynamicParams(): Params }).dynamicParams();
+      }
+      if ((source as { params?: Params }).params) {
+        return (source as { params: Params }).params;
+      }
+      return source as Params;
+    }
+  };
 
-  set_nonce(value: number): this {
-    const cast = __tnToBigInt(value);
-    this.view.setBigUint64(1, cast, true);
-    return this;
-  }
-
-  build(): Uint8Array {
-    return this.buffer.slice();
-  }
-
-  buildInto(target: Uint8Array, offset = 0): Uint8Array {
-    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
-    target.set(this.buffer, offset);
-    return target;
-  }
-
-  finish(): WalletAccount {
-    const view = WalletAccount.from_array(this.buffer.slice());
-    if (!view) throw new Error("failed to build WalletAccount");
-    return view;
+  export function params(input: { authorities_num_auth: number | bigint }): Params {
+    return Params.fromValues(input);
   }
 }
 
 __tnRegisterFootprint("WalletAccount", (params) => WalletAccount.__tnInvokeFootprint(params));
 __tnRegisterValidate("WalletAccount", (buffer, params) => WalletAccount.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("WalletAccount", (buffer) => { const result = WalletAccount.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("WalletAccount", (buffer) => { const result = WalletAccount.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR WalletCreatedEventData ----- */
 
@@ -2334,7 +2817,7 @@ export class WalletCreatedEventDataBuilder {
 
 __tnRegisterFootprint("WalletCreatedEventData", (params) => WalletCreatedEventData.__tnInvokeFootprint(params));
 __tnRegisterValidate("WalletCreatedEventData", (buffer, params) => WalletCreatedEventData.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("WalletCreatedEventData", (buffer) => { const result = WalletCreatedEventData.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("WalletCreatedEventData", (buffer) => { const result = WalletCreatedEventData.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR WalletTransferEventData ----- */
 
@@ -2493,7 +2976,7 @@ export class WalletTransferEventDataBuilder {
     return this;
   }
 
-  set_amount(value: number): this {
+  set_amount(value: bigint): this {
     const cast = __tnToBigInt(value);
     this.view.setBigUint64(64, cast, true);
     return this;
@@ -2518,7 +3001,7 @@ export class WalletTransferEventDataBuilder {
 
 __tnRegisterFootprint("WalletTransferEventData", (params) => WalletTransferEventData.__tnInvokeFootprint(params));
 __tnRegisterValidate("WalletTransferEventData", (buffer, params) => WalletTransferEventData.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("WalletTransferEventData", (buffer) => { const result = WalletTransferEventData.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("WalletTransferEventData", (buffer) => { const result = WalletTransferEventData.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR WalletValidatedEventData ----- */
 
@@ -2650,7 +3133,7 @@ export class WalletValidatedEventDataBuilder {
     return this;
   }
 
-  set_new_nonce(value: number): this {
+  set_new_nonce(value: bigint): this {
     const cast = __tnToBigInt(value);
     this.view.setBigUint64(32, cast, true);
     return this;
@@ -2675,13 +3158,13 @@ export class WalletValidatedEventDataBuilder {
 
 __tnRegisterFootprint("WalletValidatedEventData", (params) => WalletValidatedEventData.__tnInvokeFootprint(params));
 __tnRegisterValidate("WalletValidatedEventData", (buffer, params) => WalletValidatedEventData.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("WalletValidatedEventData", (buffer) => { const result = WalletValidatedEventData.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("WalletValidatedEventData", (buffer) => { const result = WalletValidatedEventData.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR AddAuthorityArgs ----- */
 
 const __tn_ir_AddAuthorityArgs = {
   typeName: "AddAuthorityArgs",
-  root: { op: "const", value: 67n }
+  root: { op: "const", value: 75n }
 } as const;
 
 export class AddAuthorityArgs {
@@ -2723,25 +3206,25 @@ export class AddAuthorityArgs {
     this.set_wallet_account_idx(value);
   }
 
-  get_authority(): Authority {
+  get_authority_record(): AuthorityRecord {
     const offset = 2;
-    const slice = this.buffer.subarray(offset, offset + 65);
-    return Authority.from_array(slice)!;
+    const slice = this.buffer.subarray(offset, offset + 73);
+    return AuthorityRecord.from_array(slice)!;
   }
 
-  set_authority(value: Authority): void {
+  set_authority_record(value: AuthorityRecord): void {
     /* Copy bytes from source struct to this field */
     const sourceBytes = (value as any).buffer as Uint8Array;
     const offset = 2;
     this.buffer.set(sourceBytes, offset);
   }
 
-  get authority(): Authority {
-    return this.get_authority();
+  get authority_record(): AuthorityRecord {
+    return this.get_authority_record();
   }
 
-  set authority(value: Authority) {
-    this.set_authority(value);
+  set authority_record(value: AuthorityRecord) {
+    this.set_authority_record(value);
   }
 
   private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
@@ -2774,8 +3257,8 @@ export class AddAuthorityArgs {
   }
 
   static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
-    if (buffer.length < 67) return { ok: false, code: "tn.buffer_too_small", consumed: 67 };
-    return { ok: true, consumed: 67 };
+    if (buffer.length < 75) return { ok: false, code: "tn.buffer_too_small", consumed: 75 };
+    return { ok: true, consumed: 75 };
   }
 
   static from_array(buffer: Uint8Array): AddAuthorityArgs | null {
@@ -2797,7 +3280,7 @@ export class AddAuthorityArgsBuilder {
   private view: DataView;
 
   constructor() {
-    this.buffer = new Uint8Array(67);
+    this.buffer = new Uint8Array(75);
     this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
   }
 
@@ -2806,8 +3289,8 @@ export class AddAuthorityArgsBuilder {
     return this;
   }
 
-  set_authority(value: Uint8Array): this {
-    if (value.length !== 65) throw new Error("authority expects 65 bytes");
+  set_authority_record(value: Uint8Array): this {
+    if (value.length !== 73) throw new Error("authority_record expects 73 bytes");
     this.buffer.set(value, 2);
     return this;
   }
@@ -2831,7 +3314,7 @@ export class AddAuthorityArgsBuilder {
 
 __tnRegisterFootprint("AddAuthorityArgs", (params) => AddAuthorityArgs.__tnInvokeFootprint(params));
 __tnRegisterValidate("AddAuthorityArgs", (buffer, params) => AddAuthorityArgs.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("AddAuthorityArgs", (buffer) => { const result = AddAuthorityArgs.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("AddAuthorityArgs", (buffer) => { const result = AddAuthorityArgs.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR CredentialLookup ----- */
 
@@ -2964,7 +3447,7 @@ export class CredentialLookupBuilder {
 
 __tnRegisterFootprint("CredentialLookup", (params) => CredentialLookup.__tnInvokeFootprint(params));
 __tnRegisterValidate("CredentialLookup", (buffer, params) => CredentialLookup.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("CredentialLookup", (buffer) => { const result = CredentialLookup.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("CredentialLookup", (buffer) => { const result = CredentialLookup.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR CredentialRegisteredEventData ----- */
 
@@ -3124,7 +3607,7 @@ export class CredentialRegisteredEventDataBuilder {
 
 __tnRegisterFootprint("CredentialRegisteredEventData", (params) => CredentialRegisteredEventData.__tnInvokeFootprint(params));
 __tnRegisterValidate("CredentialRegisteredEventData", (buffer, params) => CredentialRegisteredEventData.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("CredentialRegisteredEventData", (buffer) => { const result = CredentialRegisteredEventData.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("CredentialRegisteredEventData", (buffer) => { const result = CredentialRegisteredEventData.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR PasskeyEvent ----- */
 
@@ -3193,7 +3676,7 @@ export class PasskeyEvent {
     }
   }
 
-  static __tnCreateView(buffer: Uint8Array, opts?: { params?: PasskeyEvent.Params }): PasskeyEvent {
+  static __tnCreateView(buffer: Uint8Array, opts?: { params?: PasskeyEvent.Params, fieldContext?: Record<string, number | bigint> }): PasskeyEvent {
     if (!buffer || buffer.length === undefined) throw new Error("PasskeyEvent.__tnCreateView requires a Uint8Array");
     let params = opts?.params ?? null;
     if (!params) {
@@ -3537,25 +4020,47 @@ export class PasskeyEventBuilder {
 
 __tnRegisterFootprint("PasskeyEvent", (params) => PasskeyEvent.__tnInvokeFootprint(params));
 __tnRegisterValidate("PasskeyEvent", (buffer, params) => PasskeyEvent.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("PasskeyEvent", (buffer) => { const result = PasskeyEvent.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("PasskeyEvent", (buffer) => { const result = PasskeyEvent.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR CreateArgs ----- */
 
 const __tn_ir_CreateArgs = {
   typeName: "CreateArgs",
-  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "add", left: { op: "add", left: { op: "align", alignment: 2, node: { op: "const", value: 2n } }, right: { op: "align", alignment: 1, node: { op: "const", value: 65n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 32n } } }, right: { op: "align", alignment: 1, node: { op: "call", typeName: "StateProof", args: [{ name: "proof_body.hdr.type_slot", source: "proof_body.hdr.type_slot" }, { name: "proof_body.payload_size", source: "proof_body.payload_size" }] } } } }
+  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "add", left: { op: "add", left: { op: "align", alignment: 2, node: { op: "const", value: 2n } }, right: { op: "align", alignment: 1, node: { op: "const", value: 73n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 32n } } }, right: { op: "align", alignment: 1, node: { op: "call", typeName: "StateProof", args: [{ name: "proof_body.hdr.type_slot", source: "proof_body.hdr.type_slot" }, { name: "proof_body.payload_size", source: "proof_body.payload_size" }] } } } }
 } as const;
 
 export class CreateArgs {
   private view: DataView;
+  private __tnParams: CreateArgs.Params;
 
-  private constructor(private buffer: Uint8Array) {
+  private constructor(private buffer: Uint8Array, params?: CreateArgs.Params) {
     this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    if (params) {
+      this.__tnParams = params;
+    } else {
+      const derived = CreateArgs.__tnExtractParams(this.view, buffer);
+      if (!derived) {
+        throw new Error("CreateArgs: failed to derive dynamic parameters");
+      }
+      this.__tnParams = derived.params;
+    }
   }
 
-  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): CreateArgs {
+  static __tnCreateView(buffer: Uint8Array, opts?: { params?: CreateArgs.Params, fieldContext?: Record<string, number | bigint> }): CreateArgs {
     if (!buffer || buffer.length === undefined) throw new Error("CreateArgs.__tnCreateView requires a Uint8Array");
-    return new CreateArgs(new Uint8Array(buffer));
+    let params = opts?.params ?? null;
+    if (!params) {
+      const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+      const derived = CreateArgs.__tnExtractParams(view, buffer);
+      if (!derived) throw new Error("CreateArgs.__tnCreateView: failed to derive params");
+      params = derived.params;
+    }
+    const instance = new CreateArgs(new Uint8Array(buffer), params);
+    return instance;
+  }
+
+  dynamicParams(): CreateArgs.Params {
+    return this.__tnParams;
   }
 
   static builder(): CreateArgsBuilder {
@@ -3564,7 +4069,53 @@ export class CreateArgs {
 
   static fromBuilder(builder: CreateArgsBuilder): CreateArgs | null {
     const buffer = builder.build();
-    return CreateArgs.from_array(buffer);
+    const params = builder.dynamicParams();
+    return CreateArgs.from_array(buffer, { params });
+  }
+
+  static __tnComputeSequentialLayout(view: DataView, buffer: Uint8Array): { params: Record<string, bigint> | null; offsets: Record<string, number> | null; derived: Record<string, bigint> | null } | null {
+    const __tnLength = buffer.length;
+    let __tnParamSeq_proof_body_hdr_type_slot: bigint | null = null;
+    let __tnParamSeq_proof_body_payload_size: bigint | null = null;
+    let __tnFieldValue_wallet_account_idx: number | null = null;
+    let __tnCursorMutable = 0;
+    if (__tnCursorMutable + 2 > __tnLength) return null;
+    const __tnRead_wallet_account_idx = view.getUint16(__tnCursorMutable, true);
+    __tnFieldValue_wallet_account_idx = __tnRead_wallet_account_idx;
+    __tnCursorMutable += 2;
+    if (__tnCursorMutable + 65 > __tnLength) return null;
+    __tnCursorMutable += 65;
+    if (__tnCursorMutable + 32 > __tnLength) return null;
+    __tnCursorMutable += 32;
+    const __tnTyperefResult_state_proof = __tnInvokeDynamicValidate("StateProof", buffer.subarray(__tnCursorMutable));
+    if (!__tnTyperefResult_state_proof.ok || __tnTyperefResult_state_proof.consumed === undefined) return null;
+    const __tnTyperefParams_state_proof = __tnTyperefResult_state_proof.params ?? null;
+    if (!__tnTyperefParams_state_proof || __tnTyperefParams_state_proof["proof_body_hdr_type_slot"] === undefined) return null;
+    __tnParamSeq_proof_body_hdr_type_slot = __tnTyperefParams_state_proof["proof_body_hdr_type_slot"];
+    if (!__tnTyperefParams_state_proof || __tnTyperefParams_state_proof["proof_body_payload_size"] === undefined) return null;
+    __tnParamSeq_proof_body_payload_size = __tnTyperefParams_state_proof["proof_body_payload_size"];
+    __tnCursorMutable += __tnBigIntToNumber(__tnTyperefResult_state_proof.consumed, "CreateArgs::state_proof");
+    const params: Record<string, bigint> = Object.create(null);
+    if (__tnParamSeq_proof_body_hdr_type_slot === null) return null;
+    params["proof_body_hdr_type_slot"] = __tnParamSeq_proof_body_hdr_type_slot as bigint;
+    if (__tnParamSeq_proof_body_payload_size === null) return null;
+    params["proof_body_payload_size"] = __tnParamSeq_proof_body_payload_size as bigint;
+    return { params, offsets: null, derived: null };
+  }
+
+  private static __tnExtractParams(view: DataView, buffer: Uint8Array): { params: CreateArgs.Params; derived: Record<string, bigint> | null } | null {
+    const __tnLayout = CreateArgs.__tnComputeSequentialLayout(view, buffer);
+    if (!__tnLayout || !__tnLayout.params) return null;
+    const __tnSeqParams = __tnLayout.params;
+    const __tnParamSeq_proof_body_hdr_type_slot = __tnSeqParams["proof_body_hdr_type_slot"];
+    if (__tnParamSeq_proof_body_hdr_type_slot === undefined) return null;
+    const __tnParamSeq_proof_body_payload_size = __tnSeqParams["proof_body_payload_size"];
+    if (__tnParamSeq_proof_body_payload_size === undefined) return null;
+    const __tnExtractedParams = CreateArgs.Params.fromValues({
+      proof_body_hdr_type_slot: __tnParamSeq_proof_body_hdr_type_slot as bigint,
+      proof_body_payload_size: __tnParamSeq_proof_body_payload_size as bigint,
+    });
+    return { params: __tnExtractedParams, derived: null };
   }
 
   get_wallet_account_idx(): number {
@@ -3585,29 +4136,29 @@ export class CreateArgs {
     this.set_wallet_account_idx(value);
   }
 
-  get_authority(): Authority {
+  get_authority_record(): AuthorityRecord {
     const offset = 2;
-    const slice = this.buffer.subarray(offset, offset + 65);
-    return Authority.from_array(slice)!;
+    const slice = this.buffer.subarray(offset, offset + 73);
+    return AuthorityRecord.from_array(slice)!;
   }
 
-  set_authority(value: Authority): void {
+  set_authority_record(value: AuthorityRecord): void {
     /* Copy bytes from source struct to this field */
     const sourceBytes = (value as any).buffer as Uint8Array;
     const offset = 2;
     this.buffer.set(sourceBytes, offset);
   }
 
-  get authority(): Authority {
-    return this.get_authority();
+  get authority_record(): AuthorityRecord {
+    return this.get_authority_record();
   }
 
-  set authority(value: Authority) {
-    this.set_authority(value);
+  set authority_record(value: AuthorityRecord) {
+    this.set_authority_record(value);
   }
 
   get_seed(): Seed32 {
-    const offset = 67;
+    const offset = 75;
     const slice = this.buffer.subarray(offset, offset + 32);
     return Seed32.from_array(slice)!;
   }
@@ -3615,7 +4166,7 @@ export class CreateArgs {
   set_seed(value: Seed32): void {
     /* Copy bytes from source struct to this field */
     const sourceBytes = (value as any).buffer as Uint8Array;
-    const offset = 67;
+    const offset = 75;
     this.buffer.set(sourceBytes, offset);
   }
 
@@ -3628,7 +4179,7 @@ export class CreateArgs {
   }
 
   get_state_proof(): StateProof {
-    const offset = 99;
+    const offset = 107;
     const tail = this.buffer.subarray(offset);
     const validation = StateProof.validate(tail);
     if (!validation.ok || validation.consumed === undefined) {
@@ -3643,7 +4194,7 @@ export class CreateArgs {
   set_state_proof(value: StateProof): void {
     /* Copy bytes from source struct to this field */
     const sourceBytes = (value as any).buffer as Uint8Array;
-    const offset = 99;
+    const offset = 107;
     this.buffer.set(sourceBytes, offset);
   }
 
@@ -3654,7 +4205,6 @@ export class CreateArgs {
   set state_proof(value: StateProof) {
     this.set_state_proof(value);
   }
-
   private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
     return __tnEvalFootprint(__tn_ir_CreateArgs.root, { params: __tnParams });
   }
@@ -3671,50 +4221,136 @@ export class CreateArgs {
     return this.__tnValidateInternal(buffer, __tnParams);
   }
 
-  static footprintIr(): bigint {
-    return this.__tnFootprintInternal(Object.create(null));
+  static footprintIr(proof_body_hdr_type_slot: number | bigint, proof_body_payload_size: number | bigint): bigint {
+    const params = CreateArgs.Params.fromValues({
+      proof_body_hdr_type_slot: proof_body_hdr_type_slot,
+      proof_body_payload_size: proof_body_payload_size,
+    });
+    return this.footprintIrFromParams(params);
   }
 
-  static footprint(): number {
-    const irResult = this.footprintIr();
-      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
-    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
-      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for CreateArgs');
+  private static __tnPackParams(params: CreateArgs.Params): Record<string, bigint> {
+    const record: Record<string, bigint> = Object.create(null);
+    record["proof_body.hdr.type_slot"] = params.proof_body_hdr_type_slot;
+    record["proof_body.payload_size"] = params.proof_body_payload_size;
+    return record;
+  }
+
+  static footprintIrFromParams(params: CreateArgs.Params): bigint {
+    const __tnParams = this.__tnPackParams(params);
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static footprintFromParams(params: CreateArgs.Params): number {
+    const irResult = this.footprintIrFromParams(params);
+    const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for CreateArgs');
+    return __tnBigIntToNumber(irResult, 'CreateArgs::footprintFromParams');
+  }
+
+  static footprintFromValues(input: { proof_body_hdr_type_slot: number | bigint, proof_body_payload_size: number | bigint }): number {
+    const params = CreateArgs.params(input);
+    return this.footprintFromParams(params);
+  }
+
+  static footprint(params: CreateArgs.Params): number {
+    return this.footprintFromParams(params);
+  }
+
+  static validate(buffer: Uint8Array, opts?: { params?: CreateArgs.Params }): { ok: boolean; code?: string; consumed?: number; params?: CreateArgs.Params } {
+    if (!buffer || buffer.length === undefined) {
+      return { ok: false, code: "tn.invalid_buffer" };
     }
-    return __tnBigIntToNumber(irResult, 'CreateArgs::footprint');
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    let params = opts?.params ?? null;
+    if (!params) {
+      return { ok: false, code: "tn.param_extraction_failed" };
+    }
+    const __tnParamsRec = this.__tnPackParams(params);
+    const irResult = this.__tnValidateInternal(buffer, __tnParamsRec);
+    if (!irResult.ok) {
+      return { ok: false, code: irResult.code, consumed: irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'CreateArgs::validate') : undefined, params };
+    }
+    const consumed = irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'CreateArgs::validate') : undefined;
+    return { ok: true, consumed, params };
   }
 
-  static validate(_buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
-    __tnLogWarn("CreateArgs::validate falling back to basic length check");
-    return { ok: true, consumed: _buffer.length };
-  }
-
-  static from_array(buffer: Uint8Array): CreateArgs | null {
+  static from_array(buffer: Uint8Array, opts?: { params?: CreateArgs.Params }): CreateArgs | null {
     if (!buffer || buffer.length === undefined) {
       return null;
     }
     const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-    const validation = this.validate(buffer);
+    let params = opts?.params ?? null;
+    if (!params) {
+      __tnLogWarn('CreateArgs::from_array requires params when IR extraction is unavailable');
+      return null;
+    }
+    const validation = this.validate(buffer, { params });
     if (!validation.ok) {
       return null;
     }
-    return new CreateArgs(buffer);
+    const cached = validation.params ?? params;
+    const state = new CreateArgs(buffer, cached);
+    return state;
   }
 
+
+}
+
+export namespace CreateArgs {
+  export type Params = {
+    /** ABI path: proof_body.hdr.type_slot */
+    readonly proof_body_hdr_type_slot: bigint;
+    /** ABI path: proof_body.payload_size */
+    readonly proof_body_payload_size: bigint;
+  };
+
+  export const ParamKeys = Object.freeze({
+    proof_body_hdr_type_slot: "proof_body.hdr.type_slot",
+    proof_body_payload_size: "proof_body.payload_size",
+  } as const);
+
+  export const Params = {
+    fromValues(input: { proof_body_hdr_type_slot: number | bigint, proof_body_payload_size: number | bigint }): Params {
+      return {
+        proof_body_hdr_type_slot: __tnToBigInt(input.proof_body_hdr_type_slot),
+        proof_body_payload_size: __tnToBigInt(input.proof_body_payload_size),
+      };
+    },
+    fromBuilder(source: { dynamicParams(): Params } | { params: Params } | Params): Params {
+      if ((source as { dynamicParams?: () => Params }).dynamicParams) {
+        return (source as { dynamicParams(): Params }).dynamicParams();
+      }
+      if ((source as { params?: Params }).params) {
+        return (source as { params: Params }).params;
+      }
+      return source as Params;
+    }
+  };
+
+  export function params(input: { proof_body_hdr_type_slot: number | bigint, proof_body_payload_size: number | bigint }): Params {
+    return Params.fromValues(input);
+  }
 }
 
 export class CreateArgsBuilder {
   private buffer: Uint8Array;
   private view: DataView;
+  private __tnCachedParams: CreateArgs.Params | null = null;
+  private __tnLastBuffer: Uint8Array | null = null;
+  private __tnLastParams: CreateArgs.Params | null = null;
   private __tnTail_state_proof: Uint8Array | null = null;
+  private __tnTailParams_state_proof: Record<string, bigint> | null = null;
 
   constructor() {
-    this.buffer = new Uint8Array(99);
+    this.buffer = new Uint8Array(107);
     this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
   }
 
   private __tnInvalidate(): void {
-    /* Placeholder for future cache invalidation. */
+    this.__tnCachedParams = null;
+    this.__tnLastBuffer = null;
+    this.__tnLastParams = null;
   }
 
   set_wallet_account_idx(value: number): this {
@@ -3723,8 +4359,8 @@ export class CreateArgsBuilder {
     return this;
   }
 
-  set_authority(value: Uint8Array): this {
-    if (value.length !== 65) throw new Error("authority expects 65 bytes");
+  set_authority_record(value: Uint8Array): this {
+    if (value.length !== 73) throw new Error("authority_record expects 73 bytes");
     this.buffer.set(value, 2);
     this.__tnInvalidate();
     return this;
@@ -3732,40 +4368,45 @@ export class CreateArgsBuilder {
 
   set_seed(value: Uint8Array): this {
     if (value.length !== 32) throw new Error("seed expects 32 bytes");
-    this.buffer.set(value, 67);
+    this.buffer.set(value, 75);
     this.__tnInvalidate();
     return this;
   }
 
   set_state_proof(value: StateProof | __TnStructFieldInput): this {
     const bytes = __tnResolveStructFieldInput(value as __TnStructFieldInput, "CreateArgsBuilder::state_proof");
+    const validation = __tnInvokeDynamicValidate("StateProof", bytes);
+    if (!validation.ok || validation.consumed === undefined) throw new Error("CreateArgsBuilder: field 'state_proof' failed validation");
+    if (__tnBigIntToNumber(validation.consumed, "CreateArgsBuilder::state_proof") !== bytes.length) throw new Error("CreateArgsBuilder: field 'state_proof' validation did not consume the full buffer");
     this.__tnTail_state_proof = bytes;
+    this.__tnTailParams_state_proof = validation.params ?? null;
     this.__tnInvalidate();
     return this;
   }
 
   build(): Uint8Array {
-    const fragments = this.__tnCollectTailFragments();
-    const size = this.__tnComputeSize(fragments);
+    const params = this.__tnComputeParams();
+    const size = CreateArgs.footprintFromParams(params);
     const buffer = new Uint8Array(size);
-    this.__tnWriteInto(buffer, fragments);
-    this.__tnValidateOrThrow(buffer);
+    this.__tnWriteInto(buffer);
+    this.__tnValidateOrThrow(buffer, params);
     return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
-    const fragments = this.__tnCollectTailFragments();
-    const size = this.__tnComputeSize(fragments);
+    const params = this.__tnComputeParams();
+    const size = CreateArgs.footprintFromParams(params);
     if (target.length - offset < size) throw new Error("CreateArgsBuilder: target buffer too small");
     const slice = target.subarray(offset, offset + size);
-    this.__tnWriteInto(slice, fragments);
-    this.__tnValidateOrThrow(slice);
+    this.__tnWriteInto(slice);
+    this.__tnValidateOrThrow(slice, params);
     return target;
   }
 
   finish(): CreateArgs {
     const buffer = this.build();
-    const view = CreateArgs.from_array(buffer);
+    const params = this.__tnLastParams ?? this.__tnComputeParams();
+    const view = CreateArgs.from_array(buffer, { params });
     if (!view) throw new Error("CreateArgsBuilder: failed to finalize view");
     return view;
   }
@@ -3774,44 +4415,42 @@ export class CreateArgsBuilder {
     return this.finish();
   }
 
-  private __tnCollectTailFragments(): Uint8Array[] {
-    return [
-      (() => {
-        const bytes = this.__tnTail_state_proof;
-        if (!bytes) throw new Error("CreateArgsBuilder: field 'state_proof' must be set before build()");
-        return bytes;
-      })(),
-    ];
+  dynamicParams(): CreateArgs.Params {
+    return this.__tnComputeParams();
   }
 
-  private __tnComputeSize(fragments: readonly Uint8Array[]): number {
-    let total = this.buffer.length;
-    for (const fragment of fragments) {
-      total += fragment.length;
-    }
-    return total;
+  private __tnComputeParams(): CreateArgs.Params {
+    if (this.__tnCachedParams) return this.__tnCachedParams;
+    const params = CreateArgs.Params.fromValues({
+      proof_body_hdr_type_slot: (() => { const params = this.__tnTailParams_state_proof; if (!params || params["proof_body_hdr_type_slot"] === undefined) throw new Error("CreateArgsBuilder: field 'state_proof' must be written before computing params"); return params["proof_body_hdr_type_slot"]; })(),
+      proof_body_payload_size: (() => { const params = this.__tnTailParams_state_proof; if (!params || params["proof_body_payload_size"] === undefined) throw new Error("CreateArgsBuilder: field 'state_proof' must be written before computing params"); return params["proof_body_payload_size"]; })(),
+    });
+    this.__tnCachedParams = params;
+    return params;
   }
 
-  private __tnWriteInto(target: Uint8Array, fragments: readonly Uint8Array[]): void {
+  private __tnWriteInto(target: Uint8Array): void {
     target.set(this.buffer, 0);
     let cursor = this.buffer.length;
-    for (const fragment of fragments) {
-      target.set(fragment, cursor);
-      cursor += fragment.length;
-    }
+    const __tnLocal_state_proof_bytes = this.__tnTail_state_proof;
+    if (!__tnLocal_state_proof_bytes) throw new Error("CreateArgsBuilder: field 'state_proof' must be written before build");
+    target.set(__tnLocal_state_proof_bytes, cursor);
+    cursor += __tnLocal_state_proof_bytes.length;
   }
 
-  private __tnValidateOrThrow(buffer: Uint8Array): void {
-    const result = CreateArgs.validate(buffer);
+  private __tnValidateOrThrow(buffer: Uint8Array, params: CreateArgs.Params): void {
+    const result = CreateArgs.validate(buffer, { params });
     if (!result.ok) {
-      throw new Error(`CreateArgsBuilder: builder produced invalid buffer (code=${result.code ?? "unknown"})`);
+      throw new Error(`${ CreateArgs }Builder: builder produced invalid buffer (code=${result.code ?? "unknown"})`);
     }
+    this.__tnLastParams = result.params ?? params;
+    this.__tnLastBuffer = buffer;
   }
 }
 
 __tnRegisterFootprint("CreateArgs", (params) => CreateArgs.__tnInvokeFootprint(params));
 __tnRegisterValidate("CreateArgs", (buffer, params) => CreateArgs.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("CreateArgs", (buffer) => { const result = CreateArgs.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("CreateArgs", (buffer) => { const result = CreateArgs.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR RegisterCredentialArgs ----- */
 
@@ -3822,14 +4461,36 @@ const __tn_ir_RegisterCredentialArgs = {
 
 export class RegisterCredentialArgs {
   private view: DataView;
+  private __tnParams: RegisterCredentialArgs.Params;
 
-  private constructor(private buffer: Uint8Array) {
+  private constructor(private buffer: Uint8Array, params?: RegisterCredentialArgs.Params) {
     this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    if (params) {
+      this.__tnParams = params;
+    } else {
+      const derived = RegisterCredentialArgs.__tnExtractParams(this.view, buffer);
+      if (!derived) {
+        throw new Error("RegisterCredentialArgs: failed to derive dynamic parameters");
+      }
+      this.__tnParams = derived.params;
+    }
   }
 
-  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): RegisterCredentialArgs {
+  static __tnCreateView(buffer: Uint8Array, opts?: { params?: RegisterCredentialArgs.Params, fieldContext?: Record<string, number | bigint> }): RegisterCredentialArgs {
     if (!buffer || buffer.length === undefined) throw new Error("RegisterCredentialArgs.__tnCreateView requires a Uint8Array");
-    return new RegisterCredentialArgs(new Uint8Array(buffer));
+    let params = opts?.params ?? null;
+    if (!params) {
+      const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+      const derived = RegisterCredentialArgs.__tnExtractParams(view, buffer);
+      if (!derived) throw new Error("RegisterCredentialArgs.__tnCreateView: failed to derive params");
+      params = derived.params;
+    }
+    const instance = new RegisterCredentialArgs(new Uint8Array(buffer), params);
+    return instance;
+  }
+
+  dynamicParams(): RegisterCredentialArgs.Params {
+    return this.__tnParams;
   }
 
   static builder(): RegisterCredentialArgsBuilder {
@@ -3838,7 +4499,56 @@ export class RegisterCredentialArgs {
 
   static fromBuilder(builder: RegisterCredentialArgsBuilder): RegisterCredentialArgs | null {
     const buffer = builder.build();
-    return RegisterCredentialArgs.from_array(buffer);
+    const params = builder.dynamicParams();
+    return RegisterCredentialArgs.from_array(buffer, { params });
+  }
+
+  static __tnComputeSequentialLayout(view: DataView, buffer: Uint8Array): { params: Record<string, bigint> | null; offsets: Record<string, number> | null; derived: Record<string, bigint> | null } | null {
+    const __tnLength = buffer.length;
+    let __tnParamSeq_proof_body_hdr_type_slot: bigint | null = null;
+    let __tnParamSeq_proof_body_payload_size: bigint | null = null;
+    let __tnFieldValue_wallet_account_idx: number | null = null;
+    let __tnFieldValue_lookup_account_idx: number | null = null;
+    let __tnCursorMutable = 0;
+    if (__tnCursorMutable + 2 > __tnLength) return null;
+    const __tnRead_wallet_account_idx = view.getUint16(__tnCursorMutable, true);
+    __tnFieldValue_wallet_account_idx = __tnRead_wallet_account_idx;
+    __tnCursorMutable += 2;
+    if (__tnCursorMutable + 2 > __tnLength) return null;
+    const __tnRead_lookup_account_idx = view.getUint16(__tnCursorMutable, true);
+    __tnFieldValue_lookup_account_idx = __tnRead_lookup_account_idx;
+    __tnCursorMutable += 2;
+    if (__tnCursorMutable + 32 > __tnLength) return null;
+    __tnCursorMutable += 32;
+    const __tnTyperefResult_state_proof = __tnInvokeDynamicValidate("StateProof", buffer.subarray(__tnCursorMutable));
+    if (!__tnTyperefResult_state_proof.ok || __tnTyperefResult_state_proof.consumed === undefined) return null;
+    const __tnTyperefParams_state_proof = __tnTyperefResult_state_proof.params ?? null;
+    if (!__tnTyperefParams_state_proof || __tnTyperefParams_state_proof["proof_body_hdr_type_slot"] === undefined) return null;
+    __tnParamSeq_proof_body_hdr_type_slot = __tnTyperefParams_state_proof["proof_body_hdr_type_slot"];
+    if (!__tnTyperefParams_state_proof || __tnTyperefParams_state_proof["proof_body_payload_size"] === undefined) return null;
+    __tnParamSeq_proof_body_payload_size = __tnTyperefParams_state_proof["proof_body_payload_size"];
+    __tnCursorMutable += __tnBigIntToNumber(__tnTyperefResult_state_proof.consumed, "RegisterCredentialArgs::state_proof");
+    const params: Record<string, bigint> = Object.create(null);
+    if (__tnParamSeq_proof_body_hdr_type_slot === null) return null;
+    params["proof_body_hdr_type_slot"] = __tnParamSeq_proof_body_hdr_type_slot as bigint;
+    if (__tnParamSeq_proof_body_payload_size === null) return null;
+    params["proof_body_payload_size"] = __tnParamSeq_proof_body_payload_size as bigint;
+    return { params, offsets: null, derived: null };
+  }
+
+  private static __tnExtractParams(view: DataView, buffer: Uint8Array): { params: RegisterCredentialArgs.Params; derived: Record<string, bigint> | null } | null {
+    const __tnLayout = RegisterCredentialArgs.__tnComputeSequentialLayout(view, buffer);
+    if (!__tnLayout || !__tnLayout.params) return null;
+    const __tnSeqParams = __tnLayout.params;
+    const __tnParamSeq_proof_body_hdr_type_slot = __tnSeqParams["proof_body_hdr_type_slot"];
+    if (__tnParamSeq_proof_body_hdr_type_slot === undefined) return null;
+    const __tnParamSeq_proof_body_payload_size = __tnSeqParams["proof_body_payload_size"];
+    if (__tnParamSeq_proof_body_payload_size === undefined) return null;
+    const __tnExtractedParams = RegisterCredentialArgs.Params.fromValues({
+      proof_body_hdr_type_slot: __tnParamSeq_proof_body_hdr_type_slot as bigint,
+      proof_body_payload_size: __tnParamSeq_proof_body_payload_size as bigint,
+    });
+    return { params: __tnExtractedParams, derived: null };
   }
 
   get_wallet_account_idx(): number {
@@ -3925,7 +4635,6 @@ export class RegisterCredentialArgs {
   set state_proof(value: StateProof) {
     this.set_state_proof(value);
   }
-
   private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
     return __tnEvalFootprint(__tn_ir_RegisterCredentialArgs.root, { params: __tnParams });
   }
@@ -3942,42 +4651,126 @@ export class RegisterCredentialArgs {
     return this.__tnValidateInternal(buffer, __tnParams);
   }
 
-  static footprintIr(): bigint {
-    return this.__tnFootprintInternal(Object.create(null));
+  static footprintIr(proof_body_hdr_type_slot: number | bigint, proof_body_payload_size: number | bigint): bigint {
+    const params = RegisterCredentialArgs.Params.fromValues({
+      proof_body_hdr_type_slot: proof_body_hdr_type_slot,
+      proof_body_payload_size: proof_body_payload_size,
+    });
+    return this.footprintIrFromParams(params);
   }
 
-  static footprint(): number {
-    const irResult = this.footprintIr();
-      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
-    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
-      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for RegisterCredentialArgs');
+  private static __tnPackParams(params: RegisterCredentialArgs.Params): Record<string, bigint> {
+    const record: Record<string, bigint> = Object.create(null);
+    record["proof_body.hdr.type_slot"] = params.proof_body_hdr_type_slot;
+    record["proof_body.payload_size"] = params.proof_body_payload_size;
+    return record;
+  }
+
+  static footprintIrFromParams(params: RegisterCredentialArgs.Params): bigint {
+    const __tnParams = this.__tnPackParams(params);
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static footprintFromParams(params: RegisterCredentialArgs.Params): number {
+    const irResult = this.footprintIrFromParams(params);
+    const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for RegisterCredentialArgs');
+    return __tnBigIntToNumber(irResult, 'RegisterCredentialArgs::footprintFromParams');
+  }
+
+  static footprintFromValues(input: { proof_body_hdr_type_slot: number | bigint, proof_body_payload_size: number | bigint }): number {
+    const params = RegisterCredentialArgs.params(input);
+    return this.footprintFromParams(params);
+  }
+
+  static footprint(params: RegisterCredentialArgs.Params): number {
+    return this.footprintFromParams(params);
+  }
+
+  static validate(buffer: Uint8Array, opts?: { params?: RegisterCredentialArgs.Params }): { ok: boolean; code?: string; consumed?: number; params?: RegisterCredentialArgs.Params } {
+    if (!buffer || buffer.length === undefined) {
+      return { ok: false, code: "tn.invalid_buffer" };
     }
-    return __tnBigIntToNumber(irResult, 'RegisterCredentialArgs::footprint');
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    let params = opts?.params ?? null;
+    if (!params) {
+      return { ok: false, code: "tn.param_extraction_failed" };
+    }
+    const __tnParamsRec = this.__tnPackParams(params);
+    const irResult = this.__tnValidateInternal(buffer, __tnParamsRec);
+    if (!irResult.ok) {
+      return { ok: false, code: irResult.code, consumed: irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'RegisterCredentialArgs::validate') : undefined, params };
+    }
+    const consumed = irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'RegisterCredentialArgs::validate') : undefined;
+    return { ok: true, consumed, params };
   }
 
-  static validate(_buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
-    __tnLogWarn("RegisterCredentialArgs::validate falling back to basic length check");
-    return { ok: true, consumed: _buffer.length };
-  }
-
-  static from_array(buffer: Uint8Array): RegisterCredentialArgs | null {
+  static from_array(buffer: Uint8Array, opts?: { params?: RegisterCredentialArgs.Params }): RegisterCredentialArgs | null {
     if (!buffer || buffer.length === undefined) {
       return null;
     }
     const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-    const validation = this.validate(buffer);
+    let params = opts?.params ?? null;
+    if (!params) {
+      __tnLogWarn('RegisterCredentialArgs::from_array requires params when IR extraction is unavailable');
+      return null;
+    }
+    const validation = this.validate(buffer, { params });
     if (!validation.ok) {
       return null;
     }
-    return new RegisterCredentialArgs(buffer);
+    const cached = validation.params ?? params;
+    const state = new RegisterCredentialArgs(buffer, cached);
+    return state;
   }
 
+
+}
+
+export namespace RegisterCredentialArgs {
+  export type Params = {
+    /** ABI path: proof_body.hdr.type_slot */
+    readonly proof_body_hdr_type_slot: bigint;
+    /** ABI path: proof_body.payload_size */
+    readonly proof_body_payload_size: bigint;
+  };
+
+  export const ParamKeys = Object.freeze({
+    proof_body_hdr_type_slot: "proof_body.hdr.type_slot",
+    proof_body_payload_size: "proof_body.payload_size",
+  } as const);
+
+  export const Params = {
+    fromValues(input: { proof_body_hdr_type_slot: number | bigint, proof_body_payload_size: number | bigint }): Params {
+      return {
+        proof_body_hdr_type_slot: __tnToBigInt(input.proof_body_hdr_type_slot),
+        proof_body_payload_size: __tnToBigInt(input.proof_body_payload_size),
+      };
+    },
+    fromBuilder(source: { dynamicParams(): Params } | { params: Params } | Params): Params {
+      if ((source as { dynamicParams?: () => Params }).dynamicParams) {
+        return (source as { dynamicParams(): Params }).dynamicParams();
+      }
+      if ((source as { params?: Params }).params) {
+        return (source as { params: Params }).params;
+      }
+      return source as Params;
+    }
+  };
+
+  export function params(input: { proof_body_hdr_type_slot: number | bigint, proof_body_payload_size: number | bigint }): Params {
+    return Params.fromValues(input);
+  }
 }
 
 export class RegisterCredentialArgsBuilder {
   private buffer: Uint8Array;
   private view: DataView;
+  private __tnCachedParams: RegisterCredentialArgs.Params | null = null;
+  private __tnLastBuffer: Uint8Array | null = null;
+  private __tnLastParams: RegisterCredentialArgs.Params | null = null;
   private __tnTail_state_proof: Uint8Array | null = null;
+  private __tnTailParams_state_proof: Record<string, bigint> | null = null;
 
   constructor() {
     this.buffer = new Uint8Array(36);
@@ -3985,7 +4778,9 @@ export class RegisterCredentialArgsBuilder {
   }
 
   private __tnInvalidate(): void {
-    /* Placeholder for future cache invalidation. */
+    this.__tnCachedParams = null;
+    this.__tnLastBuffer = null;
+    this.__tnLastParams = null;
   }
 
   set_wallet_account_idx(value: number): this {
@@ -4009,33 +4804,38 @@ export class RegisterCredentialArgsBuilder {
 
   set_state_proof(value: StateProof | __TnStructFieldInput): this {
     const bytes = __tnResolveStructFieldInput(value as __TnStructFieldInput, "RegisterCredentialArgsBuilder::state_proof");
+    const validation = __tnInvokeDynamicValidate("StateProof", bytes);
+    if (!validation.ok || validation.consumed === undefined) throw new Error("RegisterCredentialArgsBuilder: field 'state_proof' failed validation");
+    if (__tnBigIntToNumber(validation.consumed, "RegisterCredentialArgsBuilder::state_proof") !== bytes.length) throw new Error("RegisterCredentialArgsBuilder: field 'state_proof' validation did not consume the full buffer");
     this.__tnTail_state_proof = bytes;
+    this.__tnTailParams_state_proof = validation.params ?? null;
     this.__tnInvalidate();
     return this;
   }
 
   build(): Uint8Array {
-    const fragments = this.__tnCollectTailFragments();
-    const size = this.__tnComputeSize(fragments);
+    const params = this.__tnComputeParams();
+    const size = RegisterCredentialArgs.footprintFromParams(params);
     const buffer = new Uint8Array(size);
-    this.__tnWriteInto(buffer, fragments);
-    this.__tnValidateOrThrow(buffer);
+    this.__tnWriteInto(buffer);
+    this.__tnValidateOrThrow(buffer, params);
     return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
-    const fragments = this.__tnCollectTailFragments();
-    const size = this.__tnComputeSize(fragments);
+    const params = this.__tnComputeParams();
+    const size = RegisterCredentialArgs.footprintFromParams(params);
     if (target.length - offset < size) throw new Error("RegisterCredentialArgsBuilder: target buffer too small");
     const slice = target.subarray(offset, offset + size);
-    this.__tnWriteInto(slice, fragments);
-    this.__tnValidateOrThrow(slice);
+    this.__tnWriteInto(slice);
+    this.__tnValidateOrThrow(slice, params);
     return target;
   }
 
   finish(): RegisterCredentialArgs {
     const buffer = this.build();
-    const view = RegisterCredentialArgs.from_array(buffer);
+    const params = this.__tnLastParams ?? this.__tnComputeParams();
+    const view = RegisterCredentialArgs.from_array(buffer, { params });
     if (!view) throw new Error("RegisterCredentialArgsBuilder: failed to finalize view");
     return view;
   }
@@ -4044,44 +4844,42 @@ export class RegisterCredentialArgsBuilder {
     return this.finish();
   }
 
-  private __tnCollectTailFragments(): Uint8Array[] {
-    return [
-      (() => {
-        const bytes = this.__tnTail_state_proof;
-        if (!bytes) throw new Error("RegisterCredentialArgsBuilder: field 'state_proof' must be set before build()");
-        return bytes;
-      })(),
-    ];
+  dynamicParams(): RegisterCredentialArgs.Params {
+    return this.__tnComputeParams();
   }
 
-  private __tnComputeSize(fragments: readonly Uint8Array[]): number {
-    let total = this.buffer.length;
-    for (const fragment of fragments) {
-      total += fragment.length;
-    }
-    return total;
+  private __tnComputeParams(): RegisterCredentialArgs.Params {
+    if (this.__tnCachedParams) return this.__tnCachedParams;
+    const params = RegisterCredentialArgs.Params.fromValues({
+      proof_body_hdr_type_slot: (() => { const params = this.__tnTailParams_state_proof; if (!params || params["proof_body_hdr_type_slot"] === undefined) throw new Error("RegisterCredentialArgsBuilder: field 'state_proof' must be written before computing params"); return params["proof_body_hdr_type_slot"]; })(),
+      proof_body_payload_size: (() => { const params = this.__tnTailParams_state_proof; if (!params || params["proof_body_payload_size"] === undefined) throw new Error("RegisterCredentialArgsBuilder: field 'state_proof' must be written before computing params"); return params["proof_body_payload_size"]; })(),
+    });
+    this.__tnCachedParams = params;
+    return params;
   }
 
-  private __tnWriteInto(target: Uint8Array, fragments: readonly Uint8Array[]): void {
+  private __tnWriteInto(target: Uint8Array): void {
     target.set(this.buffer, 0);
     let cursor = this.buffer.length;
-    for (const fragment of fragments) {
-      target.set(fragment, cursor);
-      cursor += fragment.length;
-    }
+    const __tnLocal_state_proof_bytes = this.__tnTail_state_proof;
+    if (!__tnLocal_state_proof_bytes) throw new Error("RegisterCredentialArgsBuilder: field 'state_proof' must be written before build");
+    target.set(__tnLocal_state_proof_bytes, cursor);
+    cursor += __tnLocal_state_proof_bytes.length;
   }
 
-  private __tnValidateOrThrow(buffer: Uint8Array): void {
-    const result = RegisterCredentialArgs.validate(buffer);
+  private __tnValidateOrThrow(buffer: Uint8Array, params: RegisterCredentialArgs.Params): void {
+    const result = RegisterCredentialArgs.validate(buffer, { params });
     if (!result.ok) {
-      throw new Error(`RegisterCredentialArgsBuilder: builder produced invalid buffer (code=${result.code ?? "unknown"})`);
+      throw new Error(`${ RegisterCredentialArgs }Builder: builder produced invalid buffer (code=${result.code ?? "unknown"})`);
     }
+    this.__tnLastParams = result.params ?? params;
+    this.__tnLastBuffer = buffer;
   }
 }
 
 __tnRegisterFootprint("RegisterCredentialArgs", (params) => RegisterCredentialArgs.__tnInvokeFootprint(params));
 __tnRegisterValidate("RegisterCredentialArgs", (buffer, params) => RegisterCredentialArgs.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("RegisterCredentialArgs", (buffer) => { const result = RegisterCredentialArgs.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("RegisterCredentialArgs", (buffer) => { const result = RegisterCredentialArgs.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR PasskeyInstruction ----- */
 
@@ -4160,7 +4958,7 @@ export class PasskeyInstruction {
     }
   }
 
-  static __tnCreateView(buffer: Uint8Array, opts?: { params?: PasskeyInstruction.Params }): PasskeyInstruction {
+  static __tnCreateView(buffer: Uint8Array, opts?: { params?: PasskeyInstruction.Params, fieldContext?: Record<string, number | bigint> }): PasskeyInstruction {
     if (!buffer || buffer.length === undefined) throw new Error("PasskeyInstruction.__tnCreateView requires a Uint8Array");
     let params = opts?.params ?? null;
     if (!params) {
@@ -4200,7 +4998,7 @@ export class PasskeyInstruction {
       tag: 1,
       payloadSize: null,
       payloadType: "PasskeyInstruction::payload::validate",
-      createPayloadBuilder: () => null,
+      createPayloadBuilder: () => __tnMaybeCallBuilder(ValidateArgs),
     },
     {
       name: "transfer",
@@ -4212,7 +5010,7 @@ export class PasskeyInstruction {
     {
       name: "add_authority",
       tag: 4,
-      payloadSize: 67,
+      payloadSize: 75,
       payloadType: "PasskeyInstruction::payload::add_authority",
       createPayloadBuilder: () => __tnMaybeCallBuilder(AddAuthorityArgs),
     },
@@ -4561,5 +5359,5 @@ export class PasskeyInstructionBuilder {
 
 __tnRegisterFootprint("PasskeyInstruction", (params) => PasskeyInstruction.__tnInvokeFootprint(params));
 __tnRegisterValidate("PasskeyInstruction", (buffer, params) => PasskeyInstruction.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("PasskeyInstruction", (buffer) => { const result = PasskeyInstruction.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("PasskeyInstruction", (buffer) => { const result = PasskeyInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 

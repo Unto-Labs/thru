@@ -11,8 +11,9 @@ export type {
 
 export { executePasskeyTransaction } from './execute-tx';
 
-export { addDeviceToAccount } from './add-device';
+export { addAuthorityToAccount, addDeviceToAccount } from './add-device';
 export type {
+  AddAuthorityParams,
   AddDeviceParams,
   AddDeviceResult,
   AnyThruClient,

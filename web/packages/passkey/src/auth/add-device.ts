@@ -12,12 +12,15 @@
 
 import {
   type Authority,
+  type AuthorityRecord,
   buildAccountContext,
-  createValidateChallenge,
+  createAuthorityRecord,
   createCredentialLookupSeed,
+  createValidateChallenge,
   decodeAddress,
   deriveWalletAddress,
   encodeAddAuthorityInstruction,
+  encodeLegacyAddAuthorityInstruction,
   encodeRegisterCredentialInstruction,
   encodeValidateInstruction,
   parseWalletAuthorities,
@@ -57,6 +60,7 @@ export interface AddDeviceParams {
   authIdx: number;
   /** New passkey to attach. tag = 1 (passkey). */
   newAuthority: Authority;
+  newAuthorityRecord?: AuthorityRecord;
   /** Optional credential-lookup registration so the new passkey is
       discoverable on subsequent sign-ins. */
   credentialId?: Uint8Array;
@@ -100,12 +104,32 @@ export interface AddDeviceResult extends TxExecutorResult {
   newAuthorityIdx: number;
 }
 
+export interface AddAuthorityParams
+  extends Omit<AddDeviceParams, "newAuthority" | "newAuthorityRecord" | "credentialId" | "walletName"> {
+  /** Complete authority record to append. */
+  authorityRecord: AuthorityRecord;
+}
+
 /**
  * Run VALIDATE + ADD_AUTHORITY [+ REGISTER_CREDENTIAL] to attach a new
  * passkey to an on-chain WalletAccount.
  */
 export async function addDeviceToAccount(
   params: AddDeviceParams,
+): Promise<AddDeviceResult> {
+  return addAuthorityToAccount({
+    ...params,
+    authorityRecord:
+      params.newAuthorityRecord ?? createAuthorityRecord(params.newAuthority),
+  });
+}
+
+/**
+ * Run VALIDATE + ADD_AUTHORITY to attach a complete authority record to an
+ * on-chain WalletAccount.
+ */
+export async function addAuthorityToAccount(
+  params: AddAuthorityParams & Pick<AddDeviceParams, "credentialId" | "walletName">,
 ): Promise<AddDeviceResult> {
   const status = params.onStatus ?? (() => {});
 
@@ -159,9 +183,13 @@ export async function addDeviceToAccount(
   });
 
   const passkeyProgramPubkey = decodeAddress(params.programAddress);
-  const addAuthorityInstruction = encodeAddAuthorityInstruction({
+  const encodeAuthorityInstruction =
+    parsed.layout === "legacyAuthority"
+      ? encodeLegacyAddAuthorityInstruction
+      : encodeAddAuthorityInstruction;
+  const addAuthorityInstruction = encodeAuthorityInstruction({
     walletAccountIdx: ctx.walletAccountIdx,
-    authority: params.newAuthority,
+    authorityRecord: params.authorityRecord,
   });
 
   let targetProgramIdx = ctx.getAccountIndex(passkeyProgramPubkey);

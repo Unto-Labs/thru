@@ -13,6 +13,7 @@ import {
   ErrorCode,
   type ConnectMetadataInput,
   type ConnectRequestPayload,
+  type CreateAccountResult,
   type GetConnectionStateResult,
   type ManageAccountsResult,
   normalizeConnectionStateResult,
@@ -23,8 +24,13 @@ import type {
   WebViewRefLike,
 } from "./provider/WebViewBridge";
 import { createThruClient, type Thru } from "@thru/sdk/client";
+import {
+  SigningSessionDescriptorStore,
+  resolveSigningSessionStorageKey,
+} from "../signing-sessions";
 
 export type IosWebViewMode = "direct" | "shell-iframe";
+export type NativeWalletExperience = "standard" | "transparent";
 
 export type WalletAvailability =
   | {
@@ -66,9 +72,14 @@ export type WalletAvailability =
 
 export interface NativeSDKConfig {
   walletUrl?: string;
+  /** Wallet presentation loaded in the native WebView. Transparent mode
+      signs in without opening the native wallet sheet. */
+  walletExperience?: NativeWalletExperience;
   /** Stamped on every postMessage so wallet's ConnectedAppsStorage can
       scope per-host. Default: 'thru-mobile://app'. */
   origin?: string;
+  /** Default app metadata used for connection and transparent hydration. */
+  metadata?: ConnectMetadataInput;
   rpcUrl?: string;
   addressTypes?: AddressTypeValue[];
   /** iOS-only host mode. Shell iframe is the default; direct is kept
@@ -81,6 +92,8 @@ export interface NativeSDKConfig {
   storageKey?: string;
   /** Override the key used to remember the app-local selected account. */
   selectedAccountStorageKey?: string;
+  /** Override the key used for app-local signing session descriptors. */
+  signingSessionStorageKey?: string;
 }
 
 export interface SignInOptions {
@@ -95,6 +108,11 @@ export interface ConnectOptions {
   metadata?: ConnectMetadataInput;
   preferredAccountAddress?: string;
   intent?: ConnectRequestPayload["intent"];
+}
+
+export interface CreateAccountOptions {
+  accountName?: string;
+  metadata?: ConnectMetadataInput;
 }
 
 export interface RestoreConnectionOptions {
@@ -125,6 +143,10 @@ export interface NativeSDKUiHandlers {
 
 const DEFAULT_STORAGE_KEY = "thru.native-sdk.connection.v1";
 const SELECTED_ACCOUNT_STORAGE_KEY_SUFFIX = ".selected-account.v1";
+const SIGNING_SESSION_STORAGE_KEY_SUFFIX = ".signing-sessions.v1";
+const DEFAULT_NATIVE_WALLET_URL = "https://wallet.thru.org/embedded/native";
+const DEFAULT_TRANSPARENT_WALLET_URL =
+  "https://wallet.thru.org/embedded/native/transparent";
 
 const CHECKING_WALLET_AVAILABILITY: WalletAvailability = {
   status: "checking",
@@ -138,6 +160,20 @@ const CHECKING_WALLET_AVAILABILITY: WalletAvailability = {
   metadata: null,
   error: null,
 };
+
+function completeAppMetadata(
+  metadata: ConnectMetadataInput | AppMetadata | null | undefined,
+): AppMetadata | undefined {
+  if (!metadata?.appId || !metadata.appName || !metadata.appUrl) {
+    return undefined;
+  }
+  return {
+    appId: metadata.appId,
+    appName: metadata.appName,
+    appUrl: metadata.appUrl,
+    ...(metadata.imageUrl ? { imageUrl: metadata.imageUrl } : {}),
+  };
+}
 
 interface PersistedSelectedAccountSnapshot {
   version: 1;
@@ -167,6 +203,8 @@ export class NativeSDK {
   private readonly storageKey: string;
   private readonly selectedAccountStorageKey: string;
   private readonly iosWebViewMode: IosWebViewMode;
+  private readonly walletExperience: NativeWalletExperience;
+  private readonly defaultMetadata?: ConnectMetadataInput;
 
   constructor(config: NativeSDKConfig = {}) {
     this.origin = config.origin ?? "thru-mobile://app";
@@ -177,10 +215,35 @@ export class NativeSDK {
       config.selectedAccountStorageKey ??
       `${this.storageKey}${SELECTED_ACCOUNT_STORAGE_KEY_SUFFIX}`;
     this.iosWebViewMode = config.iosWebViewMode ?? "shell-iframe";
+    this.walletExperience = config.walletExperience ?? "standard";
+    this.defaultMetadata = config.metadata;
+    const walletUrl =
+      config.walletUrl ??
+      (this.walletExperience === "transparent"
+        ? DEFAULT_TRANSPARENT_WALLET_URL
+        : DEFAULT_NATIVE_WALLET_URL);
+    const walletOrigin = new URL(walletUrl).origin;
+    const signingSessions = this.storage
+      ? new SigningSessionDescriptorStore(
+          this.storage,
+          resolveSigningSessionStorageKey({
+            walletOrigin,
+            appOrigin: this.origin,
+            storageKey:
+              config.signingSessionStorageKey ??
+              `${this.storageKey}${SIGNING_SESSION_STORAGE_KEY_SUFFIX}`,
+          }),
+        )
+      : undefined;
     this.provider = new NativeProvider({
-      walletUrl: config.walletUrl,
+      walletUrl,
       origin: this.origin,
+      metadata: this.defaultMetadata
+        ? this.resolveMetadata(this.defaultMetadata)
+        : undefined,
       addressTypes: config.addressTypes ?? [AddressType.THRU],
+      signingSessions,
+      walletExperience: this.walletExperience,
     });
     this.setupEventForwarding();
   }
@@ -252,13 +315,13 @@ export class NativeSDK {
 
     const inFlight = (async () => {
       try {
-        this.provider.requestShow();
+        await this.provider.requestShow();
         if (!this.initialized) await this.initialize();
 
         const metadata = this.resolveMetadata(options?.metadata);
         const preferredAccountAddress = isAccountSwitch
           ? null
-          : await this.readSelectedAccountAddress();
+          : options?.preferredAccountAddress ?? (await this.readSelectedAccountAddress());
         const providerOptions =
           metadata || preferredAccountAddress || options?.intent
             ? {
@@ -318,11 +381,57 @@ export class NativeSDK {
     });
   }
 
+  async createAccount(
+    options: CreateAccountOptions = {},
+  ): Promise<CreateAccountResult> {
+    this.emit("connect", { status: "connecting" });
+
+    try {
+      await this.provider.requestShow();
+      if (!this.initialized) await this.initialize();
+
+      const metadata = this.resolveMetadata(options.metadata);
+      const result = await this.provider.createAccount({
+        ...(options.accountName ? { accountName: options.accountName } : {}),
+        ...(metadata ? { metadata } : {}),
+      });
+      const selectedAccount = result.selectedAccount ?? result.account;
+      const activeResult: CreateAccountResult = {
+        ...result,
+        accounts: this.provider.getAccounts(),
+        selectedAccount,
+        account: selectedAccount,
+      };
+      const completedResult: ConnectResult = {
+        accounts: activeResult.accounts,
+        selectedAccount: activeResult.selectedAccount,
+        status: "completed",
+        metadata: completeAppMetadata(metadata),
+      };
+      this.lastConnectResult = completedResult;
+      await this.persistSelectedAccountAddress(
+        activeResult.selectedAccount.address,
+      );
+      await this.clearPersistedConnection();
+      this.setWalletAvailability(
+        walletAvailabilityFromConnectResult(completedResult),
+      );
+      this.emit("connect", completedResult);
+      this.emit("accountChanged", activeResult.selectedAccount);
+      return activeResult;
+    } catch (error) {
+      this.provider.requestHide();
+      this.emit("error", error);
+      throw error;
+    }
+  }
+
   async disconnect(): Promise<void> {
     try {
       await this.provider.disconnect();
       this.emit("disconnect", {});
       this.lastConnectResult = null;
+      await this.persistSelectedAccountAddress(null);
       await this.clearPersistedConnection();
       this.clearAuthorizedAvailability();
     } catch (error) {
@@ -500,11 +609,15 @@ export class NativeSDK {
     if (!this.initialized) await this.initialize();
 
     const metadata =
-      options?.metadata ?? this.lastConnectResult?.metadata ?? undefined;
+      options?.metadata ??
+      this.lastConnectResult?.metadata ??
+      this.defaultMetadata ??
+      undefined;
     const providerOptions = metadata
       ? { metadata: this.resolveMetadata(metadata) }
       : undefined;
-    const preferredAccountAddress = await this.readSelectedAccountAddress();
+    const preferredAccountAddress =
+      options?.preferredAccountAddress ?? (await this.readSelectedAccountAddress());
     const nextProviderOptions =
       providerOptions || preferredAccountAddress
         ? {
@@ -575,18 +688,19 @@ export class NativeSDK {
   private resolveMetadata(
     input?: ConnectMetadataInput,
   ): ConnectMetadataInput | undefined {
-    if (!input) {
+    const effectiveInput = input ?? this.defaultMetadata;
+    if (!effectiveInput) {
       /* On RN we have no window.location.origin; require explicit
          metadata, but stamp the configured origin as appId so the
          wallet can scope per-host. */
       return { appId: this.origin };
     }
     const metadata: ConnectMetadataInput = {
-      appId: input.appId ?? this.origin,
+      appId: effectiveInput.appId ?? this.origin,
     };
-    if (input.appUrl) metadata.appUrl = input.appUrl;
-    if (input.appName) metadata.appName = input.appName;
-    if (input.imageUrl) metadata.imageUrl = input.imageUrl;
+    if (effectiveInput.appUrl) metadata.appUrl = effectiveInput.appUrl;
+    if (effectiveInput.appName) metadata.appName = effectiveInput.appName;
+    if (effectiveInput.imageUrl) metadata.imageUrl = effectiveInput.imageUrl;
     return metadata;
   }
 

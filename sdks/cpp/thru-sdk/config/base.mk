@@ -29,6 +29,11 @@ OBJDUMP?=objdump
 AR?=ar
 RANLIB?=ranlib
 
+# Optional wrapper invoked in front of compile rules.  Empty by default; set to
+# e.g. 'sccache' or 'ccache' to cache object compilation while leaving the
+# selected cross-toolchain unchanged.
+COMPILER_LAUNCHER?=
+
 # Obtain compiler version so that decisions can be made on disabling/enabling
 # certain flags
-CXX_MAJOR_VERSION=$(shell $(CXX) -dumpversion | cut -f1 -d.) 
+CXX_MAJOR_VERSION=$(shell $(CXX) -dumpversion | cut -f1 -d.)

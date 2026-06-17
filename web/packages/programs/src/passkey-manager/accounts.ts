@@ -1,15 +1,20 @@
 import { encodeAddress } from '@thru/sdk/helpers';
+import { LONG_LIVED_AUTHORITY_EXPIRY_SECONDS } from './constants';
 import {
   CredentialLookup,
   WalletAccount,
 } from './abi/thru/program/passkey_manager/types';
+
+const LEGACY_WALLET_HEADER_BYTES = 9;
+const LEGACY_AUTHORITY_BYTES = 65;
+const AUTHORITY_DATA_BYTES = 64;
 
 /**
  * Parse wallet account data to extract nonce.
  */
 export function parseWalletNonce(data: Uint8Array): bigint {
   const account = WalletAccount.from_array(data);
-  if (!account) return 0n;
+  if (!account) return parseLegacyWalletNonce(data) ?? 0n;
   return account.get_nonce();
 }
 
@@ -24,9 +29,7 @@ export async function fetchWalletNonce(
   const account = await sdk.accounts.get(walletAddress);
   const data = account.data?.data;
   if (!data) return 0n;
-  const parsed = WalletAccount.from_array(data);
-  if (!parsed) return 0n;
-  return parsed.get_nonce();
+  return parseWalletNonce(data);
 }
 
 /* ------------------------------------------------------------------ */
@@ -36,17 +39,20 @@ export async function fetchWalletNonce(
 export type ParsedAuthority =
   | {
       idx: number;
+      expiresAtBlockTimeSeconds: bigint;
       kind: 'passkey';
       x: Uint8Array;
       y: Uint8Array;
     }
   | {
       idx: number;
+      expiresAtBlockTimeSeconds: bigint;
       kind: 'pubkey';
       pubkey: Uint8Array;
     }
   | {
       idx: number;
+      expiresAtBlockTimeSeconds: bigint;
       kind: 'unknown';
       tag: number;
       data: Uint8Array;
@@ -55,56 +61,84 @@ export type ParsedAuthority =
 export interface WalletAuthorities {
   nonce: bigint;
   authorities: ParsedAuthority[];
-}
-
-const AUTHORITY_HEADER_BYTES = 9; /* num_auth (u8) + nonce (u64 LE) */
-const AUTHORITY_ENTRY_BYTES = 65; /* tag (u8) + data (64) */
-
-function readU64LE(data: Uint8Array, offset: number): bigint {
-  if (offset + 8 > data.length) {
-    throw new Error('Out of bounds');
-  }
-  let value = 0n;
-  for (let i = 0; i < 8; i++) {
-    value |= BigInt(data[offset + i]) << (8n * BigInt(i));
-  }
-  return value;
+  layout: 'authorityRecord' | 'legacyAuthority';
 }
 
 /**
  * Parse the on-chain WalletAccount data buffer into its nonce and full
- * authority list. The on-chain layout is:
- *
- *   num_auth: u8
- *   nonce:    u64 LE
- *   authorities[num_auth + 1]: { tag: u8, data: [u8; 64] }
- *
- * (`num_auth + 1` because num_auth stores the count minus one.)
+ * authority list using the generated ABI view.
  */
 export function parseWalletAuthorities(data: Uint8Array): WalletAuthorities {
-  if (data.length < AUTHORITY_HEADER_BYTES) {
-    throw new Error('Wallet data too small');
-  }
-
-  const numAuth = data[0];
-  const nonce = readU64LE(data, 1);
-
-  const count = numAuth + 1;
-  const required =
-    AUTHORITY_HEADER_BYTES + count * AUTHORITY_ENTRY_BYTES;
-  if (data.length < required) {
+  const account = WalletAccount.from_array(data);
+  if (!account) {
+    const legacy = parseLegacyWalletAuthorities(data);
+    if (legacy) return legacy;
     throw new Error('Wallet data truncated');
   }
 
   const authorities: ParsedAuthority[] = [];
-  for (let idx = 0; idx < count; idx++) {
-    const offset = AUTHORITY_HEADER_BYTES + idx * AUTHORITY_ENTRY_BYTES;
-    const tag = data[offset];
-    const payload = data.slice(offset + 1, offset + AUTHORITY_ENTRY_BYTES);
+  account.get_authorities().forEach((record, idx) => {
+    const authority = record.get_authority();
+    const tag = authority.get_tag();
+    const payload = Uint8Array.from(authority.get_data());
+    const expiresAtBlockTimeSeconds =
+      record.get_expires_at_block_time_seconds();
 
     if (tag === 1) {
       authorities.push({
         idx,
+        expiresAtBlockTimeSeconds,
+        kind: 'passkey',
+        x: payload.slice(0, 32),
+        y: payload.slice(32, 64),
+      });
+      return;
+    }
+
+    if (tag === 2) {
+      authorities.push({
+        idx,
+        expiresAtBlockTimeSeconds,
+        kind: 'pubkey',
+        pubkey: payload.slice(0, 32),
+      });
+      return;
+    }
+
+    authorities.push({ idx, expiresAtBlockTimeSeconds, kind: 'unknown', tag, data: payload });
+  });
+
+  return { nonce: account.get_nonce(), authorities, layout: 'authorityRecord' };
+}
+
+function parseLegacyWalletNonce(data: Uint8Array): bigint | null {
+  if (data.length < LEGACY_WALLET_HEADER_BYTES) return null;
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  return view.getBigUint64(1, true);
+}
+
+function parseLegacyWalletAuthorities(data: Uint8Array): WalletAuthorities | null {
+  if (data.length < LEGACY_WALLET_HEADER_BYTES) return null;
+
+  const numAuth = data[0];
+  const authorityCount = numAuth + 1;
+  const requiredLength = LEGACY_WALLET_HEADER_BYTES + authorityCount * LEGACY_AUTHORITY_BYTES;
+  if (data.length < requiredLength) return null;
+
+  const nonce = parseLegacyWalletNonce(data);
+  if (nonce === null) return null;
+
+  const authorities: ParsedAuthority[] = [];
+  for (let idx = 0; idx < authorityCount; idx += 1) {
+    const offset = LEGACY_WALLET_HEADER_BYTES + idx * LEGACY_AUTHORITY_BYTES;
+    const tag = data[offset];
+    const payload = data.slice(offset + 1, offset + 1 + AUTHORITY_DATA_BYTES);
+    const expiresAtBlockTimeSeconds = LONG_LIVED_AUTHORITY_EXPIRY_SECONDS;
+
+    if (tag === 1) {
+      authorities.push({
+        idx,
+        expiresAtBlockTimeSeconds,
         kind: 'passkey',
         x: payload.slice(0, 32),
         y: payload.slice(32, 64),
@@ -113,14 +147,19 @@ export function parseWalletAuthorities(data: Uint8Array): WalletAuthorities {
     }
 
     if (tag === 2) {
-      authorities.push({ idx, kind: 'pubkey', pubkey: payload.slice(0, 32) });
+      authorities.push({
+        idx,
+        expiresAtBlockTimeSeconds,
+        kind: 'pubkey',
+        pubkey: payload.slice(0, 32),
+      });
       continue;
     }
 
-    authorities.push({ idx, kind: 'unknown', tag, data: payload });
+    authorities.push({ idx, expiresAtBlockTimeSeconds, kind: 'unknown', tag, data: payload });
   }
 
-  return { nonce, authorities };
+  return { nonce, authorities, layout: 'legacyAuthority' };
 }
 
 /**

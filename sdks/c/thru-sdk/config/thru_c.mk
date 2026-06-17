@@ -213,14 +213,14 @@ $(OBJDIR)/obj/%.o : %.c $(THRU_PREPROCESS_PREREQ) $(OBJDIR)/info
 	# Compiling C source $< to $@
 	#######################################################################
 	$(MKDIR) $(dir $@) && \
-$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+$(COMPILER_LAUNCHER) $(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 $(OBJDIR)/obj/%.o : %.S $(OBJDIR)/info
 	#######################################################################
 	# Compiling asm source $< to $@
 	#######################################################################
 	$(MKDIR) $(dir $@) && \
-$(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
+$(COMPILER_LAUNCHER) $(CC) $(CPPFLAGS) $(CFLAGS) -c $< -o $@
 
 $(OBJDIR)/obj/%.S : %.c $(OBJDIR)/info
 	#######################################################################

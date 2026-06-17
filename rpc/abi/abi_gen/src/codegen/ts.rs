@@ -226,7 +226,7 @@ fn emit_type_registration_by_name(name: &str) -> String {
     format!(
         "__tnRegisterFootprint(\"{name}\", (params) => {name}.__tnInvokeFootprint(params));\n\
 __tnRegisterValidate(\"{name}\", (buffer, params) => {name}.__tnInvokeValidate(buffer, params));\n\
-__tnRegisterDynamicValidate(\"{name}\", (buffer) => {{ const result = {name}.validate(buffer); return {{ ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }}; }});\n\n",
+__tnRegisterDynamicValidate(\"{name}\", (buffer) => {{ const result = {name}.validate(buffer); const params = (result as {{ params?: Record<string, bigint> }}).params; return {{ ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }}; }});\n\n",
         name = name
     )
 }

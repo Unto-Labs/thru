@@ -18,7 +18,7 @@ export function encodeTransferInstruction(params: TransferInstructionParams): Ui
   const argsPayload = new TransferArgsBuilder()
     .set_wallet_account_idx(walletAccountIdx)
     .set_to_account_idx(toAccountIdx)
-    .set_amount(amount as unknown as number)
+    .set_amount(amount)
     .build();
 
   return new PasskeyInstructionBuilder()

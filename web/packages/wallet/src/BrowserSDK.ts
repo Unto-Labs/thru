@@ -10,16 +10,25 @@ import type {
 } from './interfaces';
 import { EmbeddedProvider } from './provider/EmbeddedProvider';
 import {
+  DEFAULT_IFRAME_URL,
   EMBEDDED_PROVIDER_EVENTS,
   type ConnectMetadataInput,
   type ManageAccountsResult,
 } from './protocol';
+import {
+  SigningSessionDescriptorStore,
+  getDefaultBrowserSigningSessionStorage,
+  resolveSigningSessionStorageKey,
+  type SigningSessionStorage,
+} from './signing-sessions';
 import { createThruClient, Thru } from '@thru/sdk/client';
 
 export interface BrowserSDKConfig {
   iframeUrl?: string;
   addressTypes?: AddressTypeValue[];
   rpcUrl?: string;
+  signingSessionStorage?: SigningSessionStorage | false;
+  signingSessionStorageKey?: string;
 }
 
 export interface ConnectOptions {
@@ -43,9 +52,31 @@ export class BrowserSDK {
   private lastConnectResult: ConnectResult | null = null;
 
   constructor(config: BrowserSDKConfig = {}) {
+    const iframeUrl = config.iframeUrl;
+    const walletOrigin = new URL(iframeUrl ?? DEFAULT_IFRAME_URL).origin;
+    const appOrigin =
+      typeof window !== 'undefined' && window.location.origin
+        ? window.location.origin
+        : 'unknown';
+    const storage =
+      config.signingSessionStorage === false
+        ? null
+        : config.signingSessionStorage ?? getDefaultBrowserSigningSessionStorage();
+    const signingSessions = storage
+      ? new SigningSessionDescriptorStore(
+          storage,
+          resolveSigningSessionStorageKey({
+            walletOrigin,
+            appOrigin,
+            storageKey: config.signingSessionStorageKey,
+          }),
+        )
+      : undefined;
+
     this.provider = new EmbeddedProvider({
-      iframeUrl: config.iframeUrl,
+      iframeUrl,
       addressTypes: config.addressTypes || [AddressType.THRU],
+      signingSessions,
     });
 
     this.thruClient = createThruClient({

@@ -46,7 +46,12 @@ type __TnIrContext = {
   typeName?: string;
 };
 
-type __TnValidateResult = { ok: boolean; code?: string; consumed?: bigint };
+type __TnValidateResult = {
+  ok: boolean;
+  code?: string;
+  consumed?: bigint;
+  params?: Record<string, bigint>;
+};
 type __TnEvalResult =
   | { ok: true; value: bigint }
   | { ok: false; code: string };
@@ -786,11 +791,11 @@ function __tnNormalizeIrError(err: unknown): string {
 
 __tnRegisterFootprint("Hash", (params) => Hash.__tnInvokeFootprint(params));
 __tnRegisterValidate("Hash", (buffer, params) => Hash.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("Hash", (buffer) => { const result = Hash.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("Hash", (buffer) => { const result = Hash.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 __tnRegisterFootprint("Pubkey", (params) => Pubkey.__tnInvokeFootprint(params));
 __tnRegisterValidate("Pubkey", (buffer, params) => Pubkey.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("Pubkey", (buffer) => { const result = Pubkey.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("Pubkey", (buffer) => { const result = Pubkey.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR StateProofHeader ----- */
 
@@ -916,7 +921,7 @@ export class StateProofHeaderBuilder {
     this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
   }
 
-  set_type_slot(value: number): this {
+  set_type_slot(value: bigint): this {
     const cast = __tnToBigInt(value);
     this.view.setBigUint64(0, cast, true);
     return this;
@@ -947,7 +952,7 @@ export class StateProofHeaderBuilder {
 
 __tnRegisterFootprint("StateProofHeader", (params) => StateProofHeader.__tnInvokeFootprint(params));
 __tnRegisterValidate("StateProofHeader", (buffer, params) => StateProofHeader.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("StateProofHeader", (buffer) => { const result = StateProofHeader.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("StateProofHeader", (buffer) => { const result = StateProofHeader.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR StateProof ----- */
 
@@ -1739,5 +1744,5 @@ export class StateProofBuilder {
 
 __tnRegisterFootprint("StateProof", (params) => StateProof.__tnInvokeFootprint(params));
 __tnRegisterValidate("StateProof", (buffer, params) => StateProof.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("StateProof", (buffer) => { const result = StateProof.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("StateProof", (buffer) => { const result = StateProof.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 

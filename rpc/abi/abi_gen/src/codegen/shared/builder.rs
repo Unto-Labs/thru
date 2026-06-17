@@ -221,7 +221,7 @@ impl<'a> IrBuilder<'a> {
     ) -> Result<IrNode, IrBuildError> {
         match &ty.kind {
             ResolvedTypeKind::Primitive { .. } => Self::const_node(ty),
-            ResolvedTypeKind::TypeRef { .. } => self.build_typeref_node(ty),
+            ResolvedTypeKind::TypeRef { .. } => self.build_typeref_node(ty, params),
             ResolvedTypeKind::Struct { .. } => match &ty.size {
                 Size::Const(_) => Self::const_node(ty),
                 Size::Variable(_) => self.build_variable_struct(ty, params),
@@ -245,7 +245,11 @@ impl<'a> IrBuilder<'a> {
         }
     }
 
-    fn build_typeref_node(&self, ty: &ResolvedType) -> Result<IrNode, IrBuildError> {
+    fn build_typeref_node(
+        &self,
+        ty: &ResolvedType,
+        params: &mut ParameterRegistry,
+    ) -> Result<IrNode, IrBuildError> {
         let target_name = match &ty.kind {
             ResolvedTypeKind::TypeRef { target_name, .. } => target_name,
             _ => {
@@ -262,7 +266,7 @@ impl<'a> IrBuilder<'a> {
                     type_name: target_name.clone(),
                 })?;
 
-        let arguments = self.collect_callee_arguments(target);
+        let arguments = self.collect_callee_arguments(target, params);
         Ok(IrNode::CallNested(CallNestedNode {
             type_name: target_name.clone(),
             arguments,
@@ -270,11 +274,16 @@ impl<'a> IrBuilder<'a> {
         }))
     }
 
-    fn collect_callee_arguments(&self, ty: &ResolvedType) -> Vec<IrArgument> {
+    fn collect_callee_arguments(
+        &self,
+        ty: &ResolvedType,
+        params: &mut ParameterRegistry,
+    ) -> Vec<IrArgument> {
         let mut args = Vec::new();
         for (owner, refs) in &ty.dynamic_params {
             for path in refs.keys() {
                 let name = canonical_name(owner, path);
+                params.ensure(owner, path, None, false);
                 args.push(IrArgument {
                     name: name.clone(),
                     value: name,
@@ -345,7 +354,7 @@ impl<'a> IrBuilder<'a> {
                     }
                     ResolvedTypeKind::TypeRef { .. } => {
                         extend_field_dynamic = false;
-                        let node = self.build_typeref_node(&field.field_type)?;
+                        let node = self.build_typeref_node(&field.field_type, params)?;
                         Self::align_node(node, field.field_type.alignment)
                     }
                     _ => {

@@ -66,6 +66,43 @@ export interface ThruTransactionReviewPayload {
   abiReflection?: ThruTransactionReviewAbiReflection;
 }
 
+export type ThruSigningSessionTimestamp = Date | number | bigint | string;
+
+export interface ThruSigningSessionCreateOptions {
+  walletAddress?: string;
+  durationSeconds?: number;
+  expiresAt?: ThruSigningSessionTimestamp;
+  review?: ThruTransactionReviewPayload;
+}
+
+export interface ThruSigningSessionInstructionCreateOptions extends Omit<
+  ThruSigningSessionCreateOptions,
+  "review"
+> {
+  walletAccountIdx: number;
+}
+
+export interface ThruSigningSessionDescriptor {
+  id: string;
+  walletAddress: string;
+  publicKey: string;
+  authIdx: number;
+  expiresAt: number;
+  createdAt: number;
+}
+
+export interface ThruSigningSession extends ThruSigningSessionDescriptor {
+  signTransaction(transaction: ThruTransactionIntent): Promise<string>;
+  revoke(): Promise<void>;
+  toJSON(): ThruSigningSessionDescriptor;
+}
+
+export interface ThruSigningSessionInstruction {
+  session: ThruSigningSession;
+  programAddress: string;
+  instructionData: Uint8Array;
+}
+
 export interface ThruTransactionIntent {
   walletAddress?: string;
   programAddress: string;
@@ -73,6 +110,21 @@ export interface ThruTransactionIntent {
   readWriteAddresses?: string[];
   readOnlyAddresses?: string[];
   review?: ThruTransactionReviewPayload;
+  /** @internal Used by ThruSigningSession handles. */
+  signingSessionId?: string;
+}
+
+export interface ThruPasskeyChallengeIntent {
+  /** base64url-encoded passkey-manager challenge bytes. */
+  challenge: string;
+  walletAddress?: string;
+}
+
+export interface ThruPasskeyChallengeSignature {
+  signatureR: string;
+  signatureS: string;
+  authenticatorData: string;
+  clientDataJSON: string;
 }
 
 export interface ConnectedApp {

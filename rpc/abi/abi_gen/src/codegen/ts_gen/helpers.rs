@@ -6,12 +6,9 @@ use crate::abi::types::{FloatingPointType, IntegralType, PrimitiveType};
 pub fn primitive_to_ts_type(prim_type: &PrimitiveType) -> &'static str {
     match prim_type {
         PrimitiveType::Integral(int_type) => match int_type {
-            IntegralType::U8 | IntegralType::U16 | IntegralType::U32 | IntegralType::U64 => {
-                "number"
-            }
-            IntegralType::I8 | IntegralType::I16 | IntegralType::I32 | IntegralType::I64 => {
-                "number"
-            }
+            IntegralType::U64 | IntegralType::I64 => "bigint",
+            IntegralType::U8 | IntegralType::U16 | IntegralType::U32 => "number",
+            IntegralType::I8 | IntegralType::I16 | IntegralType::I32 => "number",
             IntegralType::Char => "number",
         },
         PrimitiveType::FloatingPoint(_) => "number",

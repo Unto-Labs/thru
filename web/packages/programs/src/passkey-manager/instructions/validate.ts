@@ -1,22 +1,9 @@
 import type { ValidateInstructionParams } from '../types';
-import { PasskeyInstructionBuilder } from '../abi/thru/program/passkey_manager/types';
+import {
+  PasskeyInstructionBuilder,
+  ValidateArgsBuilder,
+} from '../abi/thru/program/passkey_manager/types';
 import { buildTargetInstructionBytes } from '../target-instruction';
-
-const U8_SIZE = Uint8Array.BYTES_PER_ELEMENT;
-const U16_SIZE = Uint16Array.BYTES_PER_ELEMENT;
-const P256_COORDINATE_SIZE = 32;
-const VALIDATE_FIXED_PREFIX_SIZE =
-  U16_SIZE +
-  U8_SIZE +
-  P256_COORDINATE_SIZE +
-  P256_COORDINATE_SIZE +
-  U16_SIZE +
-  U16_SIZE;
-
-function writeU16LE(target: Uint8Array, offset: number, value: number): void {
-  target[offset] = value & 0xff;
-  target[offset + 1] = (value >> 8) & 0xff;
-}
 
 export function encodeValidateInstruction(params: ValidateInstructionParams): Uint8Array {
   const {
@@ -44,36 +31,19 @@ export function encodeValidateInstruction(params: ValidateInstructionParams): Ui
 
   const targetInstructionBytes = buildTargetInstructionBytes(targetInstruction);
 
-  const argsPayload = new Uint8Array(
-    VALIDATE_FIXED_PREFIX_SIZE +
-      authenticatorData.length +
-      clientDataJSON.length +
-      targetInstructionBytes.length
-  );
-  let offset = 0;
-
-  writeU16LE(argsPayload, offset, walletAccountIdx);
-  offset += 2;
-  argsPayload[offset] = authIdx;
-  offset += 1;
-  argsPayload.set(signatureR, offset);
-  offset += signatureR.length;
-  argsPayload.set(signatureS, offset);
-  offset += signatureS.length;
-  writeU16LE(argsPayload, offset, authenticatorData.length);
-  offset += 2;
-  writeU16LE(argsPayload, offset, clientDataJSON.length);
-  offset += 2;
-  argsPayload.set(authenticatorData, offset);
-  offset += authenticatorData.length;
-  argsPayload.set(clientDataJSON, offset);
-  offset += clientDataJSON.length;
-  argsPayload.set(targetInstructionBytes, offset);
+  const argsBuilder = new ValidateArgsBuilder()
+    .set_wallet_account_idx(walletAccountIdx)
+    .set_auth_idx(authIdx)
+    .set_signature_r(signatureR)
+    .set_signature_s(signatureS)
+    .set_target_instruction(targetInstructionBytes);
+  argsBuilder.authenticator_data().write(authenticatorData).finish();
+  argsBuilder.client_data().write(clientDataJSON).finish();
 
   return new PasskeyInstructionBuilder()
     .payload()
     .select('validate')
-    .writePayload(argsPayload)
+    .writePayload(argsBuilder)
     .finish()
     .build();
 }

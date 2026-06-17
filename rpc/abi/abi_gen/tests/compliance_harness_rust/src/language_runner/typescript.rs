@@ -706,6 +706,43 @@ const hydrateEnumBuilder = (TypeClass: any, builder: any, view: any, bytes: Uint
   return hydrated;
 }};
 
+const exactJaggedElementBytes = (element: any): any => {{
+  const raw = element?.buffer;
+  if (!(raw instanceof Uint8Array)) {{
+    return element;
+  }}
+  const TypeClass = element?.constructor;
+  if (!TypeClass || typeof TypeClass.validate !== "function") {{
+    return element;
+  }}
+  const params = deriveParamsForType(TypeClass, element);
+  const validation = params ? TypeClass.validate(raw, {{ params }}) : TypeClass.validate(raw);
+  if (!validation.ok || validation.consumed === undefined) {{
+    return element;
+  }}
+  return raw.slice(0, Number(validation.consumed));
+}};
+
+const hydrateJaggedArrayBuilder = (builder: Record<string, any>, view: Record<string, any>): boolean => {{
+  let hydrated = false;
+  for (const key of Object.keys(builder)) {{
+    if (!key.startsWith("__tnJagged_")) {{
+      continue;
+    }}
+    const field = key.slice("__tnJagged_".length);
+    const getter = view[`get_${{field}}`];
+    const setter = builder[`set_${{field}}`];
+    if (typeof getter !== "function" || typeof setter !== "function") {{
+      continue;
+    }}
+    const values = getter.call(view);
+    const exactValues = Array.isArray(values) ? values.map(exactJaggedElementBytes) : values;
+    setter.call(builder, exactValues);
+    hydrated = true;
+  }}
+  return hydrated;
+}};
+
 const hydrateBuilderFromView = (TypeClass: any, builder: any, view: any, bytes: Uint8Array): void => {{
   const builderAny = builder as Record<string, any>;
   const viewAny = view as Record<string, any>;
@@ -732,6 +769,7 @@ const hydrateBuilderFromView = (TypeClass: any, builder: any, view: any, bytes: 
       builderAny[storageProp] = payload;
       builderAny[`${{storageProp}}Count`] = count;
     }}
+    hydrateJaggedArrayBuilder(builderAny, viewAny);
     return;
   }}
   if (hydrateEnumBuilder(TypeClass, builderAny, view, bytes)) {{

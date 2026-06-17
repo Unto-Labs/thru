@@ -3,7 +3,10 @@ import {
   InstructionData,
   InstructionDataBuilder,
 } from './abi/thru/common/primitives/types';
-import { MulticallArgs } from './abi/thru/program/multicall/types';
+import {
+  MulticallArgs,
+  MulticallArgsBuilder,
+} from './abi/thru/program/multicall/types';
 
 export {
   InstructionData,
@@ -11,6 +14,7 @@ export {
 } from './abi/thru/common/primitives/types';
 export {
   MulticallArgs,
+  MulticallArgsBuilder,
   MulticallError,
 } from './abi/thru/program/multicall/types';
 
@@ -24,11 +28,6 @@ export const MULTICALL_PROGRAM_PUBKEY = new Uint8Array([
 ]);
 
 export const MULTICALL_PROGRAM_ADDRESS = encodeAddress(MULTICALL_PROGRAM_PUBKEY);
-
-function writeU16LE(target: Uint8Array, offset: number, value: number): void {
-  target[offset] = value & 0xff;
-  target[offset + 1] = (value >> 8) & 0xff;
-}
 
 function assertProgramIdx(programIdx: number): void {
   if (!Number.isInteger(programIdx) || programIdx < 0 || programIdx > 0xffff) {
@@ -58,17 +57,7 @@ export function buildMulticallInstruction(calls: MulticallCall[]): Uint8Array {
   if (calls.length > 0xffff) throw new Error('calls length must be 0-65535');
 
   const encodedCalls = calls.map(buildInstructionData);
-  const totalLength = 2 + encodedCalls.reduce((sum, call) => sum + call.length, 0);
-
-  const output = new Uint8Array(totalLength);
-  let offset = 0;
-  writeU16LE(output, offset, calls.length);
-  offset += 2;
-
-  for (const call of encodedCalls) {
-    output.set(call, offset);
-    offset += call.length;
-  }
+  const output = new MulticallArgsBuilder().set_calls(encodedCalls).build();
 
   const validation = MulticallArgs.validate(output);
   if (!validation.ok || validation.consumed !== output.length) {

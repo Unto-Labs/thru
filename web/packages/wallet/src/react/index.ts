@@ -25,6 +25,12 @@ export type {
   SignMessageParams,
   SignMessageResult,
   ThruSigningContext,
+  ThruSigningSession,
+  ThruSigningSessionCreateOptions,
+  ThruSigningSessionDescriptor,
+  ThruSigningSessionTimestamp,
   ThruTransactionEncoding,
+  ThruTransactionIntent,
   WalletAccount,
 } from "../interfaces";
+export type { SigningSessionStorage } from "../signing-sessions";

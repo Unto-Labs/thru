@@ -65,48 +65,15 @@ impl LanguageRunner for RustRunner {
             println!("  [1/5] Generating Rust code...");
         }
 
-        let codegen_result = Command::new("cargo")
-            .args(&["run", "--quiet", "--", "codegen"])
-            .arg("--files")
-            .arg(&abi_file_path)
-            .arg("--language")
-            .arg(self.codegen_language_param())
-            .arg("--output")
-            .arg(&generated_code_dir)
-            .current_dir("../../") /* Run from abi_gen root */
-            .output();
-
-        match codegen_result {
-            Ok(output) => {
-                let stderr_text = String::from_utf8_lossy(&output.stderr);
-                let has_errors = stderr_text.lines().any(|line| {
-                    let trimmed = line.trim_start();
-                    trimmed.starts_with("error:") || trimmed.starts_with("error[")
-                });
-
-                if !output.status.success() && has_errors {
-                    return Ok(TestResult {
-                        test_name: test_name.to_string(),
-                        test_file: test_file.to_string(),
-                        status: "fail".to_string(),
-                        duration_ms: start_time.elapsed().as_millis() as u64,
-                        stages: Some(stages),
-                        error: Some(TestError {
-                            stage: "code_generation".to_string(),
-                            message: "Code generation failed".to_string(),
-                            details: Some(stderr_text.to_string()),
-                        }),
-                    });
-                }
-
+        match abi_gen::cmds::codegen::run(
+            vec![abi_file_path.to_path_buf()],
+            Vec::new(),
+            abi_gen::cmds::codegen::Language::Rust,
+            generated_code_dir.clone(),
+            verbose,
+        ) {
+            Ok(()) => {
                 stages.code_generation = "ok".to_string();
-
-                if verbose && !stderr_text.is_empty() {
-                    println!(
-                        "  Code generation had {} bytes of stderr output (warnings)",
-                        stderr_text.len()
-                    );
-                }
             }
             Err(e) => {
                 return Ok(TestResult {
@@ -117,8 +84,8 @@ impl LanguageRunner for RustRunner {
                     stages: Some(stages),
                     error: Some(TestError {
                         stage: "code_generation".to_string(),
-                        message: format!("Failed to run codegen: {}", e),
-                        details: None,
+                        message: "Code generation failed".to_string(),
+                        details: Some(e.to_string()),
                     }),
                 });
             }

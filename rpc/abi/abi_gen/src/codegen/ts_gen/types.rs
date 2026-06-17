@@ -564,9 +564,9 @@ fn emit_struct_class(
         None
     };
     let extractor_available = if has_param_cache {
-        type_ir
-            .map(|_| !collect_dynamic_param_bindings(resolved_type).is_empty())
-            .unwrap_or(false)
+        param_plan.as_ref().map_or(false, |plan| {
+            !plan.direct_bindings.is_empty() || !plan.sequential_bindings.is_empty()
+        })
     } else {
         false
     };
@@ -716,13 +716,8 @@ fn emit_struct_class(
         if extractor_available {
             writeln!(
                 output,
-                "  static __tnCreateView(buffer: Uint8Array, opts?: {{ params?: {}.Params{} }}): {} {{",
+                "  static __tnCreateView(buffer: Uint8Array, opts?: {{ params?: {}.Params, fieldContext?: Record<string, number | bigint> }}): {} {{",
                 class_name,
-                if uses_field_ref_resolver {
-                    ", fieldContext?: Record<string, number | bigint>"
-                } else {
-                    ""
-                },
                 class_name
             )
             .unwrap();
@@ -790,13 +785,8 @@ fn emit_struct_class(
         } else {
             writeln!(
                 output,
-                "  static __tnCreateView(buffer: Uint8Array, opts?: {{ params?: {}.Params{} }}): {} {{",
+                "  static __tnCreateView(buffer: Uint8Array, opts?: {{ params?: {}.Params, fieldContext?: Record<string, number | bigint> }}): {} {{",
                 class_name,
-                if uses_field_ref_resolver {
-                    ", fieldContext?: Record<string, number | bigint>"
-                } else {
-                    ""
-                },
                 class_name
             )
             .unwrap();

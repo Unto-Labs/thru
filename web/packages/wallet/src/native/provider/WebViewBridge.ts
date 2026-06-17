@@ -16,7 +16,10 @@ import {
    iframe<->ReactNativeWebView postMessage traffic. This bridge only
    speaks the RN side: webView.injectJavaScript out, onMessage in. */
 
-const PRODUCTION_WALLET_ORIGINS = ['https://wallet.thru.org'];
+const PRODUCTION_WALLET_ORIGINS = [
+  'https://wallet.thru.org',
+  'https://wallet.tid.sh',
+];
 
 function isDevelopmentBuild(): boolean {
   const runtime = globalThis as typeof globalThis & {
@@ -88,6 +91,11 @@ function validateWalletOrigin(walletUrl: string): void {
   }
 }
 
+function isNativeEmbeddedWalletPath(pathname: string): boolean {
+  const normalized = pathname.replace(/\/+$/, '') || '/';
+  return normalized === '/embedded/native' || normalized.startsWith('/embedded/native/');
+}
+
 /* Minimal contract for a react-native-webview ref. We accept both refs
    ({ current: WebView }) and direct WebView instances. */
 export interface WebViewRefLike {
@@ -104,9 +112,14 @@ const FAST_REQUEST_TIMEOUT_MS = 30 * 1000;
 
 const SLOW_REQUEST_TYPES: ReadonlySet<string> = new Set([
   POST_MESSAGE_REQUEST_TYPES.CONNECT,
+  POST_MESSAGE_REQUEST_TYPES.CREATE_ACCOUNT,
   POST_MESSAGE_REQUEST_TYPES.SIGN_MESSAGE,
   POST_MESSAGE_REQUEST_TYPES.SIGN_TRANSACTION,
+  POST_MESSAGE_REQUEST_TYPES.SIGN_PASSKEY_CHALLENGE,
   POST_MESSAGE_REQUEST_TYPES.MANAGE_ACCOUNTS,
+  POST_MESSAGE_REQUEST_TYPES.CREATE_SIGNING_SESSION,
+  POST_MESSAGE_REQUEST_TYPES.CREATE_SIGNING_SESSION_INSTRUCTION,
+  POST_MESSAGE_REQUEST_TYPES.CONFIRM_SIGNING_SESSION,
 ]);
 
 export interface WebViewBridgeOptions {
@@ -154,7 +167,7 @@ export class WebViewBridge {
    */
   getIframeSrc(): string {
     const url = new URL(this.walletUrl);
-    if (!url.pathname.endsWith('/native')) {
+    if (!isNativeEmbeddedWalletPath(url.pathname)) {
       url.pathname = `${url.pathname.replace(/\/$/, '')}/native`;
     }
     url.searchParams.set('tn_frame_id', this.frameId);
@@ -246,14 +259,11 @@ export class WebViewBridge {
       });
 
       const script = `try {
-        var msg = ${JSON.stringify(request)};
+        var msg = ${JSON.stringify({ ...request, frameId: this.frameId })};
         if (window.__pushIn) {
           window.__pushIn(msg);
         } else {
-          window.dispatchEvent(new MessageEvent('message', {
-            data: msg,
-            origin: msg.origin || ''
-          }));
+          window.postMessage(msg, window.location.origin);
         }
       } catch (e) {} ; true;`;
       this.webView!.injectJavaScript(script);

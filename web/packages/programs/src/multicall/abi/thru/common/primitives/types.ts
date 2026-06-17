@@ -44,7 +44,12 @@ type __TnIrContext = {
   typeName?: string;
 };
 
-type __TnValidateResult = { ok: boolean; code?: string; consumed?: bigint };
+type __TnValidateResult = {
+  ok: boolean;
+  code?: string;
+  consumed?: bigint;
+  params?: Record<string, bigint>;
+};
 type __TnEvalResult =
   | { ok: true; value: bigint }
   | { ok: false; code: string };
@@ -967,7 +972,7 @@ export class DateBuilder {
 
 __tnRegisterFootprint("Date", (params) => Date.__tnInvokeFootprint(params));
 __tnRegisterValidate("Date", (buffer, params) => Date.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("Date", (buffer) => { const result = Date.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("Date", (buffer) => { const result = Date.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR Duration ----- */
 
@@ -1131,7 +1136,7 @@ export class DurationBuilder {
 
 __tnRegisterFootprint("Duration", (params) => Duration.__tnInvokeFootprint(params));
 __tnRegisterValidate("Duration", (buffer, params) => Duration.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("Duration", (buffer) => { const result = Duration.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("Duration", (buffer) => { const result = Duration.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR FixedPoint ----- */
 
@@ -1295,7 +1300,7 @@ export class FixedPointBuilder {
 
 __tnRegisterFootprint("FixedPoint", (params) => FixedPoint.__tnInvokeFootprint(params));
 __tnRegisterValidate("FixedPoint", (buffer, params) => FixedPoint.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("FixedPoint", (buffer) => { const result = FixedPoint.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("FixedPoint", (buffer) => { const result = FixedPoint.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR Hash ----- */
 
@@ -1437,7 +1442,7 @@ export class HashBuilder {
 
 __tnRegisterFootprint("Hash", (params) => Hash.__tnInvokeFootprint(params));
 __tnRegisterValidate("Hash", (buffer, params) => Hash.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("Hash", (buffer) => { const result = Hash.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("Hash", (buffer) => { const result = Hash.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR InstructionData ----- */
 
@@ -1837,7 +1842,7 @@ export class InstructionDataBuilder {
 
 __tnRegisterFootprint("InstructionData", (params) => InstructionData.__tnInvokeFootprint(params));
 __tnRegisterValidate("InstructionData", (buffer, params) => InstructionData.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("InstructionData", (buffer) => { const result = InstructionData.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("InstructionData", (buffer) => { const result = InstructionData.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR Pubkey ----- */
 
@@ -1979,7 +1984,7 @@ export class PubkeyBuilder {
 
 __tnRegisterFootprint("Pubkey", (params) => Pubkey.__tnInvokeFootprint(params));
 __tnRegisterValidate("Pubkey", (buffer, params) => Pubkey.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("Pubkey", (buffer) => { const result = Pubkey.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("Pubkey", (buffer) => { const result = Pubkey.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR Signature ----- */
 
@@ -2121,7 +2126,7 @@ export class SignatureBuilder {
 
 __tnRegisterFootprint("Signature", (params) => Signature.__tnInvokeFootprint(params));
 __tnRegisterValidate("Signature", (buffer, params) => Signature.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("Signature", (buffer) => { const result = Signature.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("Signature", (buffer) => { const result = Signature.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR Timestamp ----- */
 
@@ -2261,5 +2266,5 @@ export class TimestampBuilder {
 
 __tnRegisterFootprint("Timestamp", (params) => Timestamp.__tnInvokeFootprint(params));
 __tnRegisterValidate("Timestamp", (buffer, params) => Timestamp.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("Timestamp", (buffer) => { const result = Timestamp.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("Timestamp", (buffer) => { const result = Timestamp.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 

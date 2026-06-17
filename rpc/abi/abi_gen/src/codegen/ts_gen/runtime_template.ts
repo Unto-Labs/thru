@@ -41,7 +41,12 @@ type __TnIrContext = {
   typeName?: string;
 };
 
-type __TnValidateResult = { ok: boolean; code?: string; consumed?: bigint };
+type __TnValidateResult = {
+  ok: boolean;
+  code?: string;
+  consumed?: bigint;
+  params?: Record<string, bigint>;
+};
 type __TnEvalResult =
   | { ok: true; value: bigint }
   | { ok: false; code: string };

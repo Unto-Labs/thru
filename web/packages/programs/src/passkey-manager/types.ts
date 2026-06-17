@@ -64,9 +64,14 @@ export type Authority =
       pubkey: Uint8Array; // 32 bytes
     };
 
+export interface AuthorityRecord {
+  authority: Authority;
+  expiresAtBlockTimeSeconds: bigint;
+}
+
 export interface CreateInstructionParams {
   walletAccountIdx: number;
-  authority: Authority;
+  authorityRecord: AuthorityRecord;
   seed: Uint8Array;
   stateProof: Uint8Array;
 }
@@ -94,7 +99,7 @@ export interface ValidateInstructionParams {
 
 export interface AddAuthorityInstructionParams {
   walletAccountIdx: number;
-  authority: Authority;
+  authorityRecord: AuthorityRecord;
 }
 
 export interface RemoveAuthorityInstructionParams {

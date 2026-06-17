@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ErrorCode,
   EMBEDDED_PROVIDER_EVENTS,
@@ -96,6 +96,20 @@ async function flush(): Promise<void> {
   for (let i = 0; i < 8; i++) await Promise.resolve();
 }
 
+async function wait(ms: number): Promise<void> {
+  await new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function waitForInjectedRequest(webView: MockWebView): Promise<string> {
+  for (let i = 0; i < 60; i++) {
+    await flush();
+    const script = webView.injected[0];
+    if (script) return script;
+    await wait(50);
+  }
+  throw new Error("Timed out waiting for injected request");
+}
+
 function parseInjectedRequest(script: string): {
   id: string;
   type: string;
@@ -136,6 +150,191 @@ describe("NativeSDK", () => {
     });
     expect(directSdk.getIosWebViewMode()).toBe("direct");
     directSdk.destroy();
+  });
+
+  it("defaults transparent wallet experience to the transparent native route", () => {
+    const transparentSdk = new NativeSDK({
+      walletExperience: "transparent",
+      origin: "thru-mobile://token-dummy",
+    });
+    const iframeUrl = new URL(transparentSdk.getIframeSrc());
+
+    expect(iframeUrl.origin).toBe("https://wallet.thru.org");
+    expect(iframeUrl.pathname).toBe("/embedded/native/transparent");
+
+    transparentSdk.destroy();
+  });
+
+  it("requests a transparent focus surface for transparent connect", async () => {
+    sdk.destroy();
+    sdk = new NativeSDK({
+      walletUrl: "http://localhost:3000/embedded/native/transparent",
+      walletExperience: "transparent",
+      origin: "thru-mobile://token-dummy",
+    });
+    webView = new MockWebView();
+    sdk.attachWebView(webView);
+    const onShowRequested = vi.fn();
+    const onHideRequested = vi.fn();
+    sdk.setUiHandlers({ onShowRequested, onHideRequested });
+
+    const frameId = frameIdFor(sdk);
+    const promise = sdk.signIn({
+      app_id: "token_dummy_app",
+      app_display_name: "Token Dummy App",
+    });
+
+    sdk.onMessage(readyMessage(frameId));
+    await flush();
+
+    expect(onShowRequested).toHaveBeenCalledTimes(1);
+    const request = parseInjectedRequest(await waitForInjectedRequest(webView));
+    expect(request.type).toBe(POST_MESSAGE_REQUEST_TYPES.CONNECT);
+    expect(request.payload).toEqual({
+      metadata: {
+        appId: "token_dummy_app",
+        appName: "Token Dummy App",
+      },
+    });
+
+    const result = {
+      accounts: [
+        {
+          accountType: "thru",
+          address: "thru_test_address",
+          label: "Account 1",
+        },
+      ],
+      status: "completed",
+    };
+    sdk.onMessage(responseMessage(frameId, request.id, result));
+
+    await expect(promise).resolves.toEqual({
+      ...result,
+      selectedAccount: result.accounts[0],
+    });
+    expect(onHideRequested).toHaveBeenCalledTimes(1);
+  });
+
+  it("sends transparent createAccount requests through the wallet WebView", async () => {
+    sdk.destroy();
+    sdk = new NativeSDK({
+      walletUrl: "http://localhost:3000/embedded/native/transparent",
+      walletExperience: "transparent",
+      origin: "thru-mobile://token-dummy",
+    });
+    webView = new MockWebView();
+    sdk.attachWebView(webView);
+    const onShowRequested = vi.fn();
+    const onHideRequested = vi.fn();
+    const onConnect = vi.fn();
+    sdk.setUiHandlers({ onShowRequested, onHideRequested });
+    sdk.on("connect", onConnect);
+
+    const frameId = frameIdFor(sdk);
+    const promise = sdk.createAccount({
+      accountName: "JCoin Account",
+      metadata: {
+        appId: "token_dummy_app",
+        appName: "Token Dummy App",
+        appUrl: "thru-mobile://token-dummy",
+      },
+    });
+
+    sdk.onMessage(readyMessage(frameId));
+    await flush();
+
+    expect(onShowRequested).toHaveBeenCalledTimes(1);
+    const request = parseInjectedRequest(await waitForInjectedRequest(webView));
+    expect(request.type).toBe(POST_MESSAGE_REQUEST_TYPES.CREATE_ACCOUNT);
+    expect(request.payload).toEqual({
+      accountName: "JCoin Account",
+      metadata: {
+        appId: "token_dummy_app",
+        appName: "Token Dummy App",
+        appUrl: "thru-mobile://token-dummy",
+      },
+    });
+
+    const result = {
+      account: {
+        accountType: "thru",
+        address: "thru_created_address",
+        label: "JCoin Account",
+      },
+      accounts: [
+        {
+          accountType: "thru",
+          address: "thru_created_address",
+          label: "JCoin Account",
+        },
+      ],
+      selectedAccount: {
+        accountType: "thru",
+        address: "thru_created_address",
+        label: "JCoin Account",
+      },
+      signature: "thru_signature",
+      vmError: "0",
+      userErrorCode: "0",
+      executionResult: "0",
+    };
+    sdk.onMessage(responseMessage(frameId, request.id, result));
+
+    await expect(promise).resolves.toEqual(result);
+    expect(onHideRequested).toHaveBeenCalledTimes(1);
+    expect(onConnect).toHaveBeenLastCalledWith({
+      accounts: result.accounts,
+      selectedAccount: result.selectedAccount,
+      status: "completed",
+      metadata: {
+        appId: "token_dummy_app",
+        appName: "Token Dummy App",
+        appUrl: "thru-mobile://token-dummy",
+      },
+    });
+  });
+
+  it("sends transparent passkey challenge signing requests through the wallet WebView", async () => {
+    sdk.destroy();
+    sdk = new NativeSDK({
+      walletUrl: "http://localhost:3000/embedded/native/transparent",
+      walletExperience: "transparent",
+      origin: "thru-mobile://token-dummy",
+    });
+    webView = new MockWebView();
+    sdk.attachWebView(webView);
+    const onShowRequested = vi.fn();
+    const onHideRequested = vi.fn();
+    sdk.setUiHandlers({ onShowRequested, onHideRequested });
+
+    const frameId = frameIdFor(sdk);
+    const promise = sdk.thru.signPasskeyChallenge({
+      challenge: "challenge_base64url",
+      walletAddress: "thru_test_address",
+    });
+
+    sdk.onMessage(readyMessage(frameId));
+    await flush();
+
+    expect(onShowRequested).toHaveBeenCalledTimes(1);
+    const request = parseInjectedRequest(await waitForInjectedRequest(webView));
+    expect(request.type).toBe(POST_MESSAGE_REQUEST_TYPES.SIGN_PASSKEY_CHALLENGE);
+    expect(request.payload).toEqual({
+      challenge: "challenge_base64url",
+      walletAddress: "thru_test_address",
+    });
+
+    const result = {
+      signatureR: "01",
+      signatureS: "02",
+      authenticatorData: "authenticator_data_base64",
+      clientDataJSON: "client_data_json_base64",
+    };
+    sdk.onMessage(responseMessage(frameId, request.id, result));
+
+    await expect(promise).resolves.toEqual(result);
+    expect(onHideRequested).toHaveBeenCalledTimes(1);
   });
 
   it("maps signIn snake-case app metadata to wallet connect metadata", async () => {

@@ -16,7 +16,10 @@ import {
  * Development builds additionally allow localhost, LAN, and Tailscale
  * origins so local HTTPS RP-ID testing can use the hosted wallet path.
  */
-const PRODUCTION_IFRAME_ORIGINS = ['https://wallet.thru.org'];
+const PRODUCTION_IFRAME_ORIGINS = [
+  'https://wallet.thru.org',
+  'https://wallet.tid.sh',
+];
 
 const SLOW_REQUEST_TIMEOUT_MS = 5 * 60 * 1000;
 const FAST_REQUEST_TIMEOUT_MS = 30 * 1000;
@@ -26,7 +29,11 @@ const SLOW_REQUEST_TYPES: ReadonlySet<string> = new Set([
   POST_MESSAGE_REQUEST_TYPES.CONNECT,
   POST_MESSAGE_REQUEST_TYPES.SIGN_MESSAGE,
   POST_MESSAGE_REQUEST_TYPES.SIGN_TRANSACTION,
+  POST_MESSAGE_REQUEST_TYPES.SIGN_PASSKEY_CHALLENGE,
   POST_MESSAGE_REQUEST_TYPES.MANAGE_ACCOUNTS,
+  POST_MESSAGE_REQUEST_TYPES.CREATE_SIGNING_SESSION,
+  POST_MESSAGE_REQUEST_TYPES.CREATE_SIGNING_SESSION_INSTRUCTION,
+  POST_MESSAGE_REQUEST_TYPES.CONFIRM_SIGNING_SESSION,
 ]);
 
 function isPrivateIpv4Host(hostname: string): boolean {

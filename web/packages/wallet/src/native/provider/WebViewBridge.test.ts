@@ -170,6 +170,16 @@ describe('WebViewBridge', () => {
     ).toThrow(/Untrusted wallet origin/);
   });
 
+  it('allows wallet.tid.sh in production builds', () => {
+    process.env.NODE_ENV = 'production';
+
+    const productionBridge = new WebViewBridge({
+      walletUrl: 'https://wallet.tid.sh/embedded',
+    });
+    expect(productionBridge.walletOrigin).toBe('https://wallet.tid.sh');
+    productionBridge.destroy();
+  });
+
   it('uses the React Native __DEV__ flag when present', () => {
     process.env.NODE_ENV = 'test';
     (globalThis as typeof globalThis & { __DEV__?: boolean }).__DEV__ = false;
@@ -191,6 +201,16 @@ describe('WebViewBridge', () => {
     expect(src).toContain('tn_frame_id=');
     expect(src).toContain('/embedded/native');
     expect(src.startsWith('http://localhost:3000/embedded')).toBe(true);
+  });
+
+  it('preserves transparent native wallet paths', () => {
+    const transparentBridge = new WebViewBridge({
+      walletUrl: 'http://localhost:3000/embedded/native/transparent',
+    });
+    const src = new URL(transparentBridge.getIframeSrc());
+    expect(src.pathname).toBe('/embedded/native/transparent');
+    expect(src.searchParams.get('tn_frame_id')).toBe(transparentBridge.frameId);
+    transparentBridge.destroy();
   });
 
   it('resolves awaitReady on IFRAME_READY_EVENT with matching frameId', async () => {
@@ -233,7 +253,8 @@ describe('WebViewBridge', () => {
     await flush();
     expect(webView.injected.length).toBe(1);
     expect(webView.injected[0]).toContain('window.__pushIn');
-    expect(webView.injected[0]).toContain('MessageEvent');
+    expect(webView.injected[0]).toContain('window.postMessage');
+    expect(webView.injected[0]).toContain(bridge.frameId);
     expect(webView.injected[0]).toContain(id);
 
     bridge.onMessage(responseMessage(bridge.frameId, id, { accounts: [] }));

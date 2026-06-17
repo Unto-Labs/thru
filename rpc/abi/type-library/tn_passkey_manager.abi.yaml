@@ -69,9 +69,23 @@ types:
             element-type:
               primitive: u8
 
+# AuthorityRecord: 73-byte wallet authority entry
+- name: AuthorityRecord
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: authority
+        field-type:
+          type-ref:
+            name: Authority
+      - name: expires_at_block_time_seconds
+        field-type:
+          primitive: u64
+
 # ── Instruction argument types ──
 
-# CREATE (tag 0x00): 99 bytes fixed + StateProof
+# CREATE (tag 0x00): 107 bytes fixed + StateProof
 - name: CreateArgs
   kind:
     struct:
@@ -80,10 +94,10 @@ types:
       - name: wallet_account_idx
         field-type:
           primitive: u16
-      - name: authority
+      - name: authority_record
         field-type:
           type-ref:
-            name: Authority
+            name: AuthorityRecord
       - name: seed
         field-type:
           type-ref:
@@ -159,7 +173,7 @@ types:
         field-type:
           primitive: u64
 
-# ADD_AUTHORITY (tag 0x04): 67 bytes
+# ADD_AUTHORITY (tag 0x04): 75 bytes
 - name: AddAuthorityArgs
   kind:
     struct:
@@ -168,10 +182,10 @@ types:
       - name: wallet_account_idx
         field-type:
           primitive: u16
-      - name: authority
+      - name: authority_record
         field-type:
           type-ref:
-            name: Authority
+            name: AuthorityRecord
 
 # REMOVE_AUTHORITY (tag 0x05): 3 bytes
 - name: RemoveAuthorityArgs
@@ -271,6 +285,20 @@ types:
       - name: nonce
         field-type:
           primitive: u64
+      - name: authorities
+        field-type:
+          array:
+            size:
+              add:
+                left:
+                  field-ref:
+                    path: ["num_auth"]
+                right:
+                  literal:
+                    u64: 1
+            element-type:
+              type-ref:
+                name: AuthorityRecord
 
 - name: CredentialLookup
   kind:

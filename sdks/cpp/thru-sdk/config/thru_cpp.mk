@@ -212,14 +212,14 @@ $(OBJDIR)/obj/%.o : %.cpp $(OBJDIR)/info
 	# Compiling C++ source $< to $@
 	#######################################################################
 	$(MKDIR) $(dir $@) && \
-$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
+$(COMPILER_LAUNCHER) $(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
 $(OBJDIR)/obj/%.o : %.S $(OBJDIR)/info
 	#######################################################################
 	# Compiling asm source $< to $@
 	#######################################################################
 	$(MKDIR) $(dir $@) && \
-$(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
+$(COMPILER_LAUNCHER) $(CXX) $(CPPFLAGS) $(CXXFLAGS) -c $< -o $@
 
 $(OBJDIR)/obj/%.S : %.cpp $(OBJDIR)/info
 	#######################################################################
@@ -286,4 +286,4 @@ asm: $(DEPFILES:.d=.S)
 
 ppp: $(DEPFILES:.d=.i)
 
-endif 
+endif

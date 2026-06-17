@@ -466,6 +466,14 @@ fn test_ts_bigint_for_64bit() {
         content.contains("getBigUint64") || content.contains("getBigInt64"),
         "Missing BigInt DataView methods for 64-bit integers"
     );
+    assert!(
+        content.contains("set_u64_val(value: bigint): this"),
+        "u64 builder setters should require bigint inputs"
+    );
+    assert!(
+        content.contains("set_i64_val(value: bigint): this"),
+        "i64 builder setters should require bigint inputs"
+    );
 
     println!("✓ TypeScript BigInt usage test passed");
 }
@@ -947,7 +955,7 @@ fn test_ts_tail_typeref_struct_builders() {
 }
 
 #[test]
-fn test_ts_fam_struct_with_trailing_typeref_skips_builder() {
+fn test_ts_fam_struct_with_trailing_typeref_builder_roundtrip() {
     let test_dir = setup_test_dir("passkey_validate_trailing_instruction_data");
     generate_ts_code_with_includes(
         "rpc/abi/type-library/tn_passkey_manager.abi.yaml",
@@ -963,12 +971,221 @@ fn test_ts_fam_struct_with_trailing_typeref_skips_builder() {
         "ValidateArgs should expose the trailing InstructionData field"
     );
     assert!(
-        !content.contains("class ValidateArgsBuilder"),
-        "ValidateArgsBuilder should not be emitted for FAM plus trailing type-ref layouts"
+        content.contains("class ValidateArgsBuilder"),
+        "ValidateArgsBuilder should be emitted for FAM plus trailing type-ref layouts"
     );
     assert!(
-        content.contains("createPayloadBuilder: () => null"),
-        "Variant descriptors should safely return null when ValidateArgs has no builder"
+        content.contains("data_data_size"),
+        "ValidateArgs params should include nested InstructionData payload size"
+    );
+    assert!(
+        content.contains(
+            "set_target_instruction(value: InstructionData | __TnStructFieldInput): this"
+        ),
+        "ValidateArgsBuilder should accept generated views, raw bytes, or builders for the trailing instruction"
+    );
+    assert!(
+        content.contains("createPayloadBuilder: () => __tnMaybeCallBuilder(ValidateArgs)"),
+        "Variant descriptors should surface the generated ValidateArgs builder"
+    );
+
+    if !ensure_tsc_available() {
+        return;
+    }
+
+    let ts_script = r#"
+import {
+  PasskeyInstructionBuilder,
+  ValidateArgs,
+  ValidateArgsBuilder,
+} from "./thru/program/passkey_manager/types.js";
+import { InstructionDataBuilder } from "./thru/common/primitives/types.js";
+
+const targetBuilder = new InstructionDataBuilder();
+targetBuilder.set_program_idx(7);
+targetBuilder.data().write(Uint8Array.from([0xaa, 0xbb, 0xcc])).finish();
+const targetBytes = targetBuilder.build();
+
+const builder = new ValidateArgsBuilder()
+  .set_wallet_account_idx(0x1234)
+  .set_auth_idx(5)
+  .set_signature_r(new Uint8Array(32).fill(0x11))
+  .set_signature_s(new Uint8Array(32).fill(0x22))
+  .set_target_instruction(targetBytes);
+builder.authenticator_data().write(Uint8Array.from([0x33, 0x44])).finish();
+builder.client_data().write(Uint8Array.from([0x55])).finish();
+
+const bytes = builder.build();
+const validation = ValidateArgs.validate(bytes);
+if (!validation.ok || validation.consumed !== bytes.length) {
+  throw new Error(`ValidateArgs validation failed: ${validation.code}`);
+}
+const view = ValidateArgs.from_array(bytes);
+if (!view) {
+  throw new Error("ValidateArgs.from_array returned null");
+}
+const params = view.dynamicParams();
+if (params.authenticator_data_authenticator_data_len !== 2n || params.client_data_client_data_len !== 1n || params.data_data_size !== 3n) {
+  throw new Error("ValidateArgs dynamic params were not propagated");
+}
+const target = view.get_target_instruction();
+if (target.get_program_idx() !== 7 || target.get_data().join(",") !== "170,187,204") {
+  throw new Error("Nested InstructionData did not roundtrip");
+}
+
+const instructionBytes = new PasskeyInstructionBuilder()
+  .payload()
+  .select("validate")
+  .writePayload(builder)
+  .finish()
+  .build();
+if (instructionBytes[0] !== 1) {
+  throw new Error("PasskeyInstructionBuilder did not select validate");
+}
+
+console.log("validate builder ok");
+"#;
+    let script_path = test_dir.join("validate_builder_test.ts");
+    fs::write(&script_path, ts_script.trim())
+        .expect("Failed to write validate builder test script");
+    let dist_dir = test_dir.join("dist");
+    fs::create_dir_all(&dist_dir).unwrap();
+
+    let compile_status = Command::new("tsc")
+        .current_dir(&test_dir)
+        .args(&[
+            "--strict",
+            "--module",
+            "NodeNext",
+            "--moduleResolution",
+            "NodeNext",
+            "--target",
+            "ES2020",
+            "--esModuleInterop",
+            "--outDir",
+            "dist",
+            script_path.file_name().unwrap().to_str().unwrap(),
+        ])
+        .status()
+        .expect("Failed to run tsc for validate builder test");
+    assert!(
+        compile_status.success(),
+        "TypeScript compilation failed for validate builder test"
+    );
+
+    let js_entry = PathBuf::from("dist").join("validate_builder_test.js");
+    let node_status = Command::new("node")
+        .current_dir(&test_dir)
+        .arg(js_entry)
+        .status()
+        .expect("Failed to run node for validate builder test");
+    assert!(
+        node_status.success(),
+        "Node execution failed for validate builder test"
+    );
+}
+
+#[test]
+fn test_ts_jagged_typeref_array_builder_roundtrip() {
+    let test_dir = setup_test_dir("multicall_jagged_builder");
+    generate_ts_code_with_includes(
+        "rpc/abi/type-library/tn_multicall.abi.yaml",
+        &["rpc/abi/type-library"],
+        &test_dir,
+    )
+    .expect("Code generation failed");
+
+    let ts_file = test_dir.join("thru/program/multicall/types.ts");
+    let content = fs::read_to_string(&ts_file).expect("Failed to read multicall types.ts");
+    assert!(
+        content.contains("class MulticallArgsBuilder"),
+        "MulticallArgsBuilder should be emitted for jagged type-ref arrays"
+    );
+    assert!(
+        content.contains(
+            "set_calls(values: readonly (InstructionData | __TnStructFieldInput)[]): this"
+        ),
+        "MulticallArgsBuilder should expose a structured jagged-array setter"
+    );
+
+    if !ensure_tsc_available() {
+        return;
+    }
+
+    let ts_script = r#"
+import {
+  MulticallArgs,
+  MulticallArgsBuilder,
+} from "./thru/program/multicall/types.js";
+import { InstructionDataBuilder } from "./thru/common/primitives/types.js";
+
+function instruction(programIdx: number, data: number[]): Uint8Array {
+  const builder = new InstructionDataBuilder();
+  builder.set_program_idx(programIdx);
+  builder.data().write(Uint8Array.from(data)).finish();
+  return builder.build();
+}
+
+const builder = new MulticallArgsBuilder().set_calls([
+  instruction(2, [0xaa]),
+  instruction(5, [0xbb, 0xcc]),
+]);
+const bytes = builder.build();
+const validation = MulticallArgs.validate(bytes);
+if (!validation.ok || validation.consumed !== bytes.length) {
+  throw new Error(`MulticallArgs validation failed: ${validation.code}`);
+}
+const view = MulticallArgs.from_array(bytes);
+if (!view) {
+  throw new Error("MulticallArgs.from_array returned null");
+}
+if (view.dynamicParams().calls_calls_count !== 2n) {
+  throw new Error("MulticallArgs dynamic count was not propagated");
+}
+const calls = view.get_calls();
+if (calls.length !== 2 || calls[0].get_program_idx() !== 2 || calls[1].get_data().join(",") !== "187,204") {
+  throw new Error("Jagged multicall elements did not roundtrip");
+}
+
+console.log("multicall builder ok");
+"#;
+    let script_path = test_dir.join("multicall_builder_test.ts");
+    fs::write(&script_path, ts_script.trim())
+        .expect("Failed to write multicall builder test script");
+    let dist_dir = test_dir.join("dist");
+    fs::create_dir_all(&dist_dir).unwrap();
+
+    let compile_status = Command::new("tsc")
+        .current_dir(&test_dir)
+        .args(&[
+            "--strict",
+            "--module",
+            "NodeNext",
+            "--moduleResolution",
+            "NodeNext",
+            "--target",
+            "ES2020",
+            "--esModuleInterop",
+            "--outDir",
+            "dist",
+            script_path.file_name().unwrap().to_str().unwrap(),
+        ])
+        .status()
+        .expect("Failed to run tsc for multicall builder test");
+    assert!(
+        compile_status.success(),
+        "TypeScript compilation failed for multicall builder test"
+    );
+
+    let js_entry = PathBuf::from("dist").join("multicall_builder_test.js");
+    let node_status = Command::new("node")
+        .current_dir(&test_dir)
+        .arg(js_entry)
+        .status()
+        .expect("Failed to run node for multicall builder test");
+    assert!(
+        node_status.success(),
+        "Node execution failed for multicall builder test"
     );
 }
 

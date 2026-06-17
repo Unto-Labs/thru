@@ -10,7 +10,7 @@ packages:
   - 'wallet-auth-manager'
   - 'wallet-keypair-manager'
   - 'chain-indexer'
-  - '../mobile/passkey-demo-dapp'
+  - 'passkey-demo-dapp'
   - 'wallet'
   - 'wallet/frontend/site'
   - 'wallet/frontend/mobile'

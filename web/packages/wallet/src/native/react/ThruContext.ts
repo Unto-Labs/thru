@@ -1,10 +1,11 @@
 import { createContext } from 'react';
 import type {
+  CreateAccountOptions,
   NativeSDK,
   WalletAvailability,
 } from "../NativeSDK";
 import type { WalletAccount } from "../../interfaces";
-import type { ManageAccountsResult } from "../../protocol";
+import type { CreateAccountResult, ManageAccountsResult } from "../../protocol";
 
 export const CHECKING_WALLET_AVAILABILITY: WalletAvailability = {
   status: 'checking',
@@ -31,6 +32,7 @@ export interface ThruContextValue {
   walletAvailability: WalletAvailability;
   error: Error | null;
   selectAccount: (account: WalletAccount) => Promise<void>;
+  createAccount: (options?: CreateAccountOptions) => Promise<CreateAccountResult>;
   manageAccounts: () => Promise<ManageAccountsResult>;
 }
 

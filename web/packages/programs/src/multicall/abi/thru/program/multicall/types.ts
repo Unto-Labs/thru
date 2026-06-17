@@ -46,7 +46,12 @@ type __TnIrContext = {
   typeName?: string;
 };
 
-type __TnValidateResult = { ok: boolean; code?: string; consumed?: bigint };
+type __TnValidateResult = {
+  ok: boolean;
+  code?: string;
+  consumed?: bigint;
+  params?: Record<string, bigint>;
+};
 type __TnEvalResult =
   | { ok: true; value: bigint }
   | { ok: false; code: string };
@@ -786,7 +791,7 @@ function __tnNormalizeIrError(err: unknown): string {
 
 __tnRegisterFootprint("InstructionData", (params) => InstructionData.__tnInvokeFootprint(params));
 __tnRegisterValidate("InstructionData", (buffer, params) => InstructionData.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("InstructionData", (buffer) => { const result = InstructionData.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("InstructionData", (buffer) => { const result = InstructionData.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR MulticallArgs ----- */
 
@@ -848,6 +853,16 @@ export class MulticallArgs {
       return typeof contextValue === "bigint" ? __tnBigIntToNumber(contextValue, "MulticallArgs::__tnResolveFieldRef") : contextValue;
     }
     throw new Error("MulticallArgs: field reference '" + path + "' is not available; provide fieldContext when creating this view");
+  }
+
+  static builder(): MulticallArgsBuilder {
+    return new MulticallArgsBuilder();
+  }
+
+  static fromBuilder(builder: MulticallArgsBuilder): MulticallArgs | null {
+    const buffer = builder.build();
+    const params = builder.dynamicParams();
+    return MulticallArgs.from_array(buffer, { params });
   }
 
   private static __tnExtractParams(view: DataView, buffer: Uint8Array): { params: MulticallArgs.Params; derived: Record<string, bigint> | null } | null {
@@ -1086,9 +1101,126 @@ export namespace MulticallArgs {
   }
 }
 
+export class MulticallArgsBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+  private __tnJagged_calls: Uint8Array[] | null = null;
+  private __tnCachedParams: MulticallArgs.Params | null = null;
+  private __tnLastBuffer: Uint8Array | null = null;
+  private __tnLastParams: MulticallArgs.Params | null = null;
+
+  constructor() {
+    this.buffer = new Uint8Array(2);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  private __tnInvalidate(): void {
+    this.__tnCachedParams = null;
+    this.__tnLastBuffer = null;
+    this.__tnLastParams = null;
+  }
+
+  set_calls_count(value: number): this {
+    this.view.setUint16(0, value, true);
+    this.__tnInvalidate();
+    return this;
+  }
+
+  set_calls(values: readonly (InstructionData | __TnStructFieldInput)[]): this {
+    const fragments: Uint8Array[] = [];
+    for (let i = 0; i < values.length; i++) {
+      const bytes = __tnResolveStructFieldInput(values[i] as __TnStructFieldInput, "MulticallArgsBuilder::calls[" + i + "]");
+      const validation = __tnInvokeDynamicValidate("InstructionData", bytes);
+      if (!validation.ok || validation.consumed === undefined) throw new Error("MulticallArgsBuilder: field 'calls' element failed validation");
+      if (__tnBigIntToNumber(validation.consumed, "MulticallArgsBuilder::calls") !== bytes.length) throw new Error("MulticallArgsBuilder: field 'calls' element validation did not consume the full buffer");
+      fragments.push(bytes);
+    }
+    this.__tnJagged_calls = fragments;
+    this.set_calls_count(fragments.length);
+    this.__tnInvalidate();
+    return this;
+  }
+
+  build(): Uint8Array {
+    const params = this.__tnComputeParams();
+    const fragments = this.__tnCollectFragments();
+    const size = this.__tnComputeSize(fragments);
+    const buffer = new Uint8Array(size);
+    this.__tnWriteInto(buffer, fragments);
+    this.__tnValidateOrThrow(buffer, params);
+    return buffer;
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    const params = this.__tnComputeParams();
+    const fragments = this.__tnCollectFragments();
+    const size = this.__tnComputeSize(fragments);
+    if (target.length - offset < size) throw new Error("MulticallArgsBuilder: target buffer too small");
+    const slice = target.subarray(offset, offset + size);
+    this.__tnWriteInto(slice, fragments);
+    this.__tnValidateOrThrow(slice, params);
+    return target;
+  }
+
+  finish(): MulticallArgs {
+    const buffer = this.build();
+    const params = this.__tnLastParams ?? this.__tnComputeParams();
+    const view = MulticallArgs.from_array(buffer, { params });
+    if (!view) throw new Error("MulticallArgsBuilder: failed to finalize view");
+    return view;
+  }
+
+  finishView(): MulticallArgs {
+    return this.finish();
+  }
+
+  dynamicParams(): MulticallArgs.Params {
+    return this.__tnComputeParams();
+  }
+
+  private __tnComputeParams(): MulticallArgs.Params {
+    if (this.__tnCachedParams) return this.__tnCachedParams;
+    const params = MulticallArgs.Params.fromValues({
+      calls_calls_count: (() => { const fragments = this.__tnJagged_calls; if (!fragments) throw new Error("MulticallArgsBuilder: field 'calls' must be written before computing params"); return __tnToBigInt(fragments.length); })(),
+    });
+    this.__tnCachedParams = params;
+    return params;
+  }
+
+  private __tnCollectFragments(): Uint8Array[] {
+    const fragments = this.__tnJagged_calls;
+    if (!fragments) throw new Error("MulticallArgsBuilder: field 'calls' must be written before build");
+    return fragments;
+  }
+
+  private __tnComputeSize(fragments: readonly Uint8Array[]): number {
+    let total = this.buffer.length;
+    for (const fragment of fragments) total += fragment.length;
+    return total;
+  }
+
+  private __tnWriteInto(target: Uint8Array, fragments: readonly Uint8Array[]): void {
+    target.set(this.buffer, 0);
+    let cursor = this.buffer.length;
+    for (const fragment of fragments) {
+      target.set(fragment, cursor);
+      cursor += fragment.length;
+    }
+  }
+
+  private __tnValidateOrThrow(buffer: Uint8Array, params: MulticallArgs.Params): void {
+    const result = MulticallArgs.validate(buffer, { params });
+    if (!result.ok) {
+      throw new Error(`${ MulticallArgs }Builder: builder produced invalid buffer (code=${result.code ?? "unknown"})`);
+    }
+    this.__tnLastParams = result.params ?? params;
+    this.__tnLastBuffer = buffer;
+  }
+}
+
 __tnRegisterFootprint("MulticallArgs", (params) => MulticallArgs.__tnInvokeFootprint(params));
 __tnRegisterValidate("MulticallArgs", (buffer, params) => MulticallArgs.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("MulticallArgs", (buffer) => { const result = MulticallArgs.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("MulticallArgs", (buffer) => { const result = MulticallArgs.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR MulticallError ----- */
 
@@ -1228,5 +1360,5 @@ export class MulticallErrorBuilder {
 
 __tnRegisterFootprint("MulticallError", (params) => MulticallError.__tnInvokeFootprint(params));
 __tnRegisterValidate("MulticallError", (buffer, params) => MulticallError.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("MulticallError", (buffer) => { const result = MulticallError.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("MulticallError", (buffer) => { const result = MulticallError.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
