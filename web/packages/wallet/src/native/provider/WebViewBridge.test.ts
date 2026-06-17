@@ -154,9 +154,9 @@ describe('WebViewBridge', () => {
     process.env.NODE_ENV = 'production';
 
     const productionBridge = new WebViewBridge({
-      walletUrl: 'https://wallet.thru.org/embedded',
+      walletUrl: 'https://app.tid.sh/embedded',
     });
-    expect(productionBridge.walletOrigin).toBe('https://wallet.thru.org');
+    expect(productionBridge.walletOrigin).toBe('https://app.tid.sh');
     productionBridge.destroy();
 
     expect(

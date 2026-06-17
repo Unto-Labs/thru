@@ -159,7 +159,7 @@ describe("NativeSDK", () => {
     });
     const iframeUrl = new URL(transparentSdk.getIframeSrc());
 
-    expect(iframeUrl.origin).toBe("https://wallet.thru.org");
+    expect(iframeUrl.origin).toBe("https://app.tid.sh");
     expect(iframeUrl.pathname).toBe("/embedded/native/transparent");
 
     transparentSdk.destroy();

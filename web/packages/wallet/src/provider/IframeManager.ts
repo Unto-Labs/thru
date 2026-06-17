@@ -17,7 +17,7 @@ import {
  * origins so local HTTPS RP-ID testing can use the hosted wallet path.
  */
 const PRODUCTION_IFRAME_ORIGINS = [
-  'https://wallet.thru.org',
+  'https://app.tid.sh',
   'https://wallet.tid.sh',
 ];
 

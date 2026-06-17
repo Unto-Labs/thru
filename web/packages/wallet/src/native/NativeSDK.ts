@@ -144,9 +144,9 @@ export interface NativeSDKUiHandlers {
 const DEFAULT_STORAGE_KEY = "thru.native-sdk.connection.v1";
 const SELECTED_ACCOUNT_STORAGE_KEY_SUFFIX = ".selected-account.v1";
 const SIGNING_SESSION_STORAGE_KEY_SUFFIX = ".signing-sessions.v1";
-const DEFAULT_NATIVE_WALLET_URL = "https://wallet.thru.org/embedded/native";
+const DEFAULT_NATIVE_WALLET_URL = "https://app.tid.sh/embedded/native";
 const DEFAULT_TRANSPARENT_WALLET_URL =
-  "https://wallet.thru.org/embedded/native/transparent";
+  "https://app.tid.sh/embedded/native/transparent";
 
 const CHECKING_WALLET_AVAILABILITY: WalletAvailability = {
   status: "checking",
@@ -268,7 +268,7 @@ export class NativeSDK {
     return this.provider.getIframeSrc();
   }
 
-  /** Wallet origin (e.g. https://wallet.thru.org). */
+  /** Wallet origin (e.g. https://app.tid.sh). */
   getWalletOrigin(): string {
     return this.provider.getWalletOrigin();
   }

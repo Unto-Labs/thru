@@ -22,7 +22,7 @@ function getDefaultConfig(config?: PasskeyMobileConfig): Required<PasskeyMobileC
   const env = (globalThis as ProcessLike).process?.env ?? {};
 
   return {
-    rpId: config?.rpId ?? env.EXPO_PUBLIC_PASSKEY_RP_ID ?? 'wallet.thru.org',
+    rpId: config?.rpId ?? env.EXPO_PUBLIC_PASSKEY_RP_ID ?? 'app.tid.sh',
     rpName: config?.rpName ?? env.EXPO_PUBLIC_PASSKEY_RP_NAME ?? 'Thru Wallet',
   };
 }

@@ -1,7 +1,7 @@
 /* Expo entrypoint for the config plugin. Keep this file dependency-free so
    Expo can load it from a clean workspace before package build artifacts exist. */
 
-const DEFAULT_RP_DOMAIN = "wallet.thru.org";
+const DEFAULT_RP_DOMAIN = "app.tid.sh";
 const APP_BOUND_DOMAIN_CAP = 10;
 const MIN_ANDROID_SDK_FOR_PASSKEYS = 28;
 const ANDROID_SYSTEM_BRIGHTNESS_PERMISSION =

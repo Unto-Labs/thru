@@ -95,7 +95,7 @@ export interface ShellOptions {
 }
 
 /**
- * Returns the shell HTML for loading wallet.thru.org/embedded inside a
+ * Returns the shell HTML for loading app.tid.sh/embedded inside a
  * react-native-webview. The shell hosts an <iframe> pointing at the wallet
  * and bridges window.postMessage traffic between the iframe and the
  * react-native-webview's onMessage / injectJavaScript channels.

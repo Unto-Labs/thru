@@ -15,7 +15,7 @@ import { BrowserSDK } from '@thru/wallet';
 
 // Configure the wallet iframe location and the RPC endpoint to talk to
 const sdk = new BrowserSDK({
-  iframeUrl: 'https://wallet.thru.org/embedded',
+  iframeUrl: 'https://app.tid.sh/embedded',
   rpcUrl: 'https://grpc-web.alphanet.thruput.org',
 });
 
@@ -56,7 +56,7 @@ import { ThruProvider, ThruWalletSheet } from '@thru/wallet/native/react';
 
 export default function Root() {
   return (
-    <ThruProvider config={{ walletUrl: 'https://wallet.thru.org/embedded' }}>
+    <ThruProvider config={{ walletUrl: 'https://app.tid.sh/embedded' }}>
       <App />
       <ThruWalletSheet />
     </ThruProvider>
@@ -65,4 +65,4 @@ export default function Root() {
 ```
 
 Expo apps should install the config plugin from `@thru/wallet/native/plugin`.
-The SDK trusts both production wallet hosts: `wallet.thru.org` and `wallet.tid.sh`.
+The SDK trusts both production wallet hosts: `app.tid.sh` and `wallet.tid.sh`.

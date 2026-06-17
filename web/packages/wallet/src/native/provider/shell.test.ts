@@ -6,8 +6,8 @@ import { getShellHtml } from './shell';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const TEST_SHELL_OPTIONS = {
-  walletUrl: 'https://wallet.thru.org/embedded?tn_frame_id=frame_test',
-  walletOrigin: 'https://wallet.thru.org',
+  walletUrl: 'https://app.tid.sh/embedded?tn_frame_id=frame_test',
+  walletOrigin: 'https://app.tid.sh',
 };
 
 describe('native shell HTML', () => {
@@ -36,7 +36,7 @@ describe('native shell HTML', () => {
 
   it('substitutes shell placeholders without reprocessing inserted values', () => {
     const walletUrl =
-      'https://wallet.thru.org/embedded?marker=WALLET_ORIGIN_PLACEHOLDER';
+      'https://app.tid.sh/embedded?marker=WALLET_ORIGIN_PLACEHOLDER';
     const walletOrigin = 'thru-mobile://WALLET_URL_PLACEHOLDER/$&';
 
     const html = getShellHtml({ walletUrl, walletOrigin });

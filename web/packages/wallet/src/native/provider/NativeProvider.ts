@@ -29,12 +29,12 @@ import {
   type WebViewRefLike,
 } from "./WebViewBridge";
 
-const DEFAULT_WALLET_URL = "https://wallet.thru.org/embedded/native";
+const DEFAULT_WALLET_URL = "https://app.tid.sh/embedded/native";
 const DEFAULT_ORIGIN = "thru-mobile://app";
 const TRANSPARENT_FOCUS_SETTLE_MS = 500;
 
 export interface NativeProviderConfig {
-  /** wallet.thru.org/embedded/native URL to load. */
+  /** app.tid.sh/embedded/native URL to load. */
   walletUrl?: string;
   /** Standard bottom-sheet wallet or transparent auto-signing wallet. */
   walletExperience?: "standard" | "transparent";
@@ -153,7 +153,7 @@ export class NativeProvider {
     return this.bridge.getIframeSrc();
   }
 
-  /** Wallet origin (e.g. https://wallet.thru.org). The shell template
+  /** Wallet origin (e.g. https://app.tid.sh). The shell template
       should substitute this for WALLET_ORIGIN_PLACEHOLDER. */
   getWalletOrigin(): string {
     return this.bridge.walletOrigin;

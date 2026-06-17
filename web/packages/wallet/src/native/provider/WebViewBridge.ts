@@ -12,12 +12,12 @@ import {
 
 /* RN-side analog of `web/packages/embedded-provider/src/IframeManager.ts`.
    The wallet ships unchanged. The shell HTML (src/shell.html) hosts an
-   <iframe src="wallet.thru.org/embedded/native"> and forwards
+   <iframe src="app.tid.sh/embedded/native"> and forwards
    iframe<->ReactNativeWebView postMessage traffic. This bridge only
    speaks the RN side: webView.injectJavaScript out, onMessage in. */
 
 const PRODUCTION_WALLET_ORIGINS = [
-  'https://wallet.thru.org',
+  'https://app.tid.sh',
   'https://wallet.tid.sh',
 ];
 
