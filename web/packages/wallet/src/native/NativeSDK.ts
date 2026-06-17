@@ -4,6 +4,8 @@ import {
   type AddressType as AddressTypeValue,
   type ConnectResult,
   type IThruChain,
+  type ThruSigningSessionCreateOptions,
+  type ThruSigningSessionDescriptor,
   type WalletAccount,
   normalizeActiveWalletAccounts,
   normalizeWalletAccountResult,
@@ -16,6 +18,7 @@ import {
   type CreateAccountResult,
   type GetConnectionStateResult,
   type ManageAccountsResult,
+  type SigningSessionDescriptorPayload,
   normalizeConnectionStateResult,
 } from "../protocol";
 import { NativeProvider } from "./provider/NativeProvider";
@@ -113,6 +116,7 @@ export interface ConnectOptions {
 export interface CreateAccountOptions {
   accountName?: string;
   metadata?: ConnectMetadataInput;
+  createSigningSession?: Omit<ThruSigningSessionCreateOptions, "walletAddress" | "review">;
 }
 
 export interface RestoreConnectionOptions {
@@ -175,6 +179,19 @@ function completeAppMetadata(
   };
 }
 
+function signingSessionDescriptorFromWire(
+  session: SigningSessionDescriptorPayload,
+): ThruSigningSessionDescriptor {
+  return {
+    id: session.id,
+    walletAddress: session.walletAddress,
+    publicKey: session.publicKey,
+    authIdx: session.authIdx,
+    expiresAt: Number(BigInt(session.expiresAt)),
+    createdAt: Number(BigInt(session.createdAt)),
+  };
+}
+
 interface PersistedSelectedAccountSnapshot {
   version: 1;
   origin: string;
@@ -205,6 +222,7 @@ export class NativeSDK {
   private readonly iosWebViewMode: IosWebViewMode;
   private readonly walletExperience: NativeWalletExperience;
   private readonly defaultMetadata?: ConnectMetadataInput;
+  private readonly signingSessions?: SigningSessionDescriptorStore;
 
   constructor(config: NativeSDKConfig = {}) {
     this.origin = config.origin ?? "thru-mobile://app";
@@ -235,6 +253,7 @@ export class NativeSDK {
           }),
         )
       : undefined;
+    this.signingSessions = signingSessions;
     this.provider = new NativeProvider({
       walletUrl,
       origin: this.origin,
@@ -394,6 +413,9 @@ export class NativeSDK {
       const result = await this.provider.createAccount({
         ...(options.accountName ? { accountName: options.accountName } : {}),
         ...(metadata ? { metadata } : {}),
+        ...(options.createSigningSession
+          ? { createSigningSession: options.createSigningSession }
+          : {}),
       });
       const selectedAccount = result.selectedAccount ?? result.account;
       const activeResult: CreateAccountResult = {
@@ -412,6 +434,14 @@ export class NativeSDK {
       await this.persistSelectedAccountAddress(
         activeResult.selectedAccount.address,
       );
+      if (activeResult.signingSession) {
+        if (!this.signingSessions) {
+          throw new Error("NativeSDKStorage is required for signing sessions");
+        }
+        await this.signingSessions.saveReplacingWalletSessions(
+          signingSessionDescriptorFromWire(activeResult.signingSession),
+        );
+      }
       await this.clearPersistedConnection();
       this.setWalletAvailability(
         walletAvailabilityFromConnectResult(completedResult),

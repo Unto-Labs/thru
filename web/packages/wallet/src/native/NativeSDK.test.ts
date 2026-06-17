@@ -295,6 +295,93 @@ describe("NativeSDK", () => {
     });
   });
 
+  it("persists a bundled transparent createAccount signing session", async () => {
+    sdk.destroy();
+    const storage = new MockStorage();
+    sdk = new NativeSDK({
+      walletUrl: "http://localhost:3000/embedded/native/transparent",
+      walletExperience: "transparent",
+      origin: "thru-mobile://token-dummy",
+      storage,
+    });
+    webView = new MockWebView();
+    sdk.attachWebView(webView);
+    const nowSeconds = 1_800_000_000;
+
+    const frameId = frameIdFor(sdk);
+    const promise = sdk.createAccount({
+      accountName: "JCoin Account",
+      metadata: {
+        appId: "token_dummy_app",
+        appName: "Token Dummy App",
+        appUrl: "thru-mobile://token-dummy",
+      },
+      createSigningSession: { expiresAt: nowSeconds + 120 },
+    });
+
+    sdk.onMessage(readyMessage(frameId));
+    await flush();
+
+    const request = parseInjectedRequest(await waitForInjectedRequest(webView));
+    expect(request.type).toBe(POST_MESSAGE_REQUEST_TYPES.CREATE_ACCOUNT);
+    expect(request.payload).toEqual({
+      accountName: "JCoin Account",
+      metadata: {
+        appId: "token_dummy_app",
+        appName: "Token Dummy App",
+        appUrl: "thru-mobile://token-dummy",
+      },
+      createSigningSession: {
+        expiresAt: String(nowSeconds + 120),
+      },
+    });
+
+    const result = {
+      account: {
+        accountType: "thru",
+        address: "thru_created_address",
+        label: "JCoin Account",
+      },
+      accounts: [
+        {
+          accountType: "thru",
+          address: "thru_created_address",
+          label: "JCoin Account",
+        },
+      ],
+      selectedAccount: {
+        accountType: "thru",
+        address: "thru_created_address",
+        label: "JCoin Account",
+      },
+      signature: "thru_signature",
+      vmError: "0",
+      userErrorCode: "0",
+      executionResult: "0",
+      signingSession: {
+        id: "session_1",
+        walletAddress: "thru_created_address",
+        publicKey: "thru_session_address",
+        authIdx: 1,
+        expiresAt: String(nowSeconds + 120),
+        createdAt: String(nowSeconds),
+      },
+    };
+    sdk.onMessage(responseMessage(frameId, request.id, result));
+
+    await expect(promise).resolves.toEqual(result);
+    await expect(sdk.thru.getSigningSessions()).resolves.toEqual([
+      expect.objectContaining({
+        id: "session_1",
+        walletAddress: "thru_created_address",
+        publicKey: "thru_session_address",
+        authIdx: 1,
+        expiresAt: nowSeconds + 120,
+        createdAt: nowSeconds,
+      }),
+    ]);
+  });
+
   it("sends transparent passkey challenge signing requests through the wallet WebView", async () => {
     sdk.destroy();
     sdk = new NativeSDK({

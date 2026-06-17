@@ -157,6 +157,9 @@ export interface DisconnectResult {
 export interface CreateAccountPayload {
   accountName?: string;
   metadata?: ConnectMetadataInput;
+  createSigningSession?: {
+    expiresAt: string;
+  };
 }
 
 export interface CreateAccountResult {
@@ -167,6 +170,7 @@ export interface CreateAccountResult {
   vmError: string | null;
   userErrorCode: string | null;
   executionResult: string | null;
+  signingSession?: SigningSessionDescriptorPayload;
 }
 
 export interface GetAccountsResult {

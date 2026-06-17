@@ -28,6 +28,8 @@ import {
   type WebViewMessageEventLike,
   type WebViewRefLike,
 } from "./WebViewBridge";
+import { resolveSessionExpirySeconds } from "../../signing-sessions";
+import type { ThruSigningSessionCreateOptions } from "../../interfaces";
 
 const DEFAULT_WALLET_URL = "https://app.tid.sh/embedded/native";
 const DEFAULT_ORIGIN = "thru-mobile://app";
@@ -56,6 +58,7 @@ export interface ConnectOptions {
 export interface CreateAccountOptions {
   accountName?: string;
   metadata?: ConnectMetadataInput;
+  createSigningSession?: Omit<ThruSigningSessionCreateOptions, "walletAddress" | "review">;
 }
 
 export type NativeProviderEvent = EmbeddedProviderEvent;
@@ -238,6 +241,11 @@ export class NativeProvider {
       const payload: CreateAccountPayload = {};
       if (options?.accountName) payload.accountName = options.accountName;
       if (options?.metadata) payload.metadata = options.metadata;
+      if (options?.createSigningSession) {
+        payload.createSigningSession = {
+          expiresAt: String(resolveSessionExpirySeconds(options.createSigningSession)),
+        };
+      }
 
       const response = await this.bridge.sendMessage({
         id: createRequestId(),
