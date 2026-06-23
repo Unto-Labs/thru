@@ -3,7 +3,7 @@ abi:
   name: "AMM Program"
   abi-version: 1
   package-version: 0.1.0
-  description: ABI for the Thru AMM program events
+  description: ABI for the Thru AMM program instructions, pool account state, and events
   imports:
     # thru_primitives
     - type: onchain
@@ -11,7 +11,303 @@ abi:
       target: abi
       network: mainnet
       revision: latest
+    # state_proof
+    - type: onchain
+      address: ta1l4yBjT6a7PQ4Wu_sJPQwb8jJiJ8Ei71gOuE5Dnotfrl
+      target: abi
+      network: mainnet
+      revision: latest
+  options:
+    program-metadata:
+      root-types:
+        instruction-root: "AmmInstruction"
+        account-root: "AmmPoolMetadata"
+        errors: "AmmError"
+        events: "AmmEvent"
 types:
+- name: Seed32
+  kind:
+    array:
+      packed: true
+      size:
+        literal:
+          u64: 32
+      element-type:
+        primitive: u8
+- name: AmmInitPoolInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: payer_account_idx
+        field-type:
+          primitive: u16
+      - name: pool_account_idx
+        field-type:
+          primitive: u16
+      - name: lp_mint_account_idx
+        field-type:
+          primitive: u16
+      - name: vault_one_account_idx
+        field-type:
+          primitive: u16
+      - name: vault_two_account_idx
+        field-type:
+          primitive: u16
+      - name: mint_one_account_idx
+        field-type:
+          primitive: u16
+      - name: mint_two_account_idx
+        field-type:
+          primitive: u16
+      - name: token_program_account_idx
+        field-type:
+          primitive: u16
+      - name: swap_fee_bps
+        field-type:
+          primitive: u16
+      - name: lp_mint_seed
+        field-type:
+          type-ref:
+            name: Seed32
+      - name: pool_proof_size
+        field-type:
+          primitive: u64
+      - name: lp_mint_proof_size
+        field-type:
+          primitive: u64
+      - name: vault_one_proof_size
+        field-type:
+          primitive: u64
+      - name: vault_two_proof_size
+        field-type:
+          primitive: u64
+      - name: pool_proof
+        field-type:
+          array:
+            size:
+              field-ref:
+                path: ["pool_proof_size"]
+            element-type:
+              primitive: u8
+      - name: lp_mint_proof
+        field-type:
+          array:
+            size:
+              field-ref:
+                path: ["lp_mint_proof_size"]
+            element-type:
+              primitive: u8
+      - name: vault_one_proof
+        field-type:
+          array:
+            size:
+              field-ref:
+                path: ["vault_one_proof_size"]
+            element-type:
+              primitive: u8
+      - name: vault_two_proof
+        field-type:
+          array:
+            size:
+              field-ref:
+                path: ["vault_two_proof_size"]
+            element-type:
+              primitive: u8
+- name: AmmAddLiquidityInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: pool_account_idx
+        field-type:
+          primitive: u16
+      - name: depositor_account_idx
+        field-type:
+          primitive: u16
+      - name: depositor_token_one_account_idx
+        field-type:
+          primitive: u16
+      - name: depositor_token_two_account_idx
+        field-type:
+          primitive: u16
+      - name: depositor_lp_account_idx
+        field-type:
+          primitive: u16
+      - name: vault_one_account_idx
+        field-type:
+          primitive: u16
+      - name: vault_two_account_idx
+        field-type:
+          primitive: u16
+      - name: lp_mint_account_idx
+        field-type:
+          primitive: u16
+      - name: token_program_account_idx
+        field-type:
+          primitive: u16
+      - name: max_amount_mint_one
+        field-type:
+          primitive: u64
+      - name: max_amount_mint_two
+        field-type:
+          primitive: u64
+- name: AmmWithdrawLiquidityInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: pool_account_idx
+        field-type:
+          primitive: u16
+      - name: withdrawer_account_idx
+        field-type:
+          primitive: u16
+      - name: withdrawer_token_one_account_idx
+        field-type:
+          primitive: u16
+      - name: withdrawer_token_two_account_idx
+        field-type:
+          primitive: u16
+      - name: withdrawer_lp_account_idx
+        field-type:
+          primitive: u16
+      - name: vault_one_account_idx
+        field-type:
+          primitive: u16
+      - name: vault_two_account_idx
+        field-type:
+          primitive: u16
+      - name: lp_mint_account_idx
+        field-type:
+          primitive: u16
+      - name: token_program_account_idx
+        field-type:
+          primitive: u16
+      - name: lp_amount
+        field-type:
+          primitive: u64
+- name: AmmSwapInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: pool_account_idx
+        field-type:
+          primitive: u16
+      - name: user_transfer_authority_idx
+        field-type:
+          primitive: u16
+      - name: user_input_account_idx
+        field-type:
+          primitive: u16
+      - name: user_output_account_idx
+        field-type:
+          primitive: u16
+      - name: vault_input_account_idx
+        field-type:
+          primitive: u16
+      - name: vault_output_account_idx
+        field-type:
+          primitive: u16
+      - name: lp_mint_account_idx
+        field-type:
+          primitive: u16
+      - name: token_program_account_idx
+        field-type:
+          primitive: u16
+      - name: amount_in
+        field-type:
+          primitive: u64
+- name: AmmInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: discriminant
+        field-type:
+          primitive: u32
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - discriminant
+            variants:
+            - name: init_pool
+              tag-value: 0
+              variant-type:
+                type-ref:
+                  name: AmmInitPoolInstruction
+            - name: add_liquidity
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: AmmAddLiquidityInstruction
+            - name: withdraw_liquidity
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: AmmWithdrawLiquidityInstruction
+            - name: swap
+              tag-value: 3
+              variant-type:
+                type-ref:
+                  name: AmmSwapInstruction
+- name: AmmPoolMetadata
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: is_initialized
+        field-type:
+          primitive: u8
+      - name: locked_lp_supply
+        field-type:
+          primitive: u64
+      - name: swap_fee_bps
+        field-type:
+          primitive: u16
+      - name: swap_pool_authority
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: mint_one
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: mint_two
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: vault_one
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: vault_two
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: lp_mint
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+- name: AmmError
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: code
+        field-type:
+          primitive: u64
 - name: PoolInitEventData
   kind:
     struct:

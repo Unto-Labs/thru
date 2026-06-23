@@ -1745,4 +1745,3 @@ export class StateProofBuilder {
 __tnRegisterFootprint("StateProof", (params) => StateProof.__tnInvokeFootprint(params));
 __tnRegisterValidate("StateProof", (buffer, params) => StateProof.__tnInvokeValidate(buffer, params));
 __tnRegisterDynamicValidate("StateProof", (buffer) => { const result = StateProof.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
-

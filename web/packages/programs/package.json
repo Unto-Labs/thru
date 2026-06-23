@@ -17,11 +17,18 @@
       "types": "./dist/multicall/index.d.ts",
       "import": "./dist/multicall/index.js",
       "require": "./dist/multicall/index.cjs"
+    },
+    "./amm": {
+      "types": "./dist/amm/index.d.ts",
+      "import": "./dist/amm/index.js",
+      "require": "./dist/amm/index.cjs"
     }
   },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:run": "vitest run",
     "clean": "rm -rf dist"
   },
   "dependencies": {

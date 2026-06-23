@@ -3372,6 +3372,17 @@ fn enum_param_expression(
             tag = info.tag_ts_name,
         ));
     }
+    if let Some(tag_field) = info.tag_field {
+        let field_tag_path = format!("{}.{}", info.enum_field.name, tag_field.name);
+        let qualified_tag_path =
+            format!("{}::{}.{}", type_name, info.enum_field.name, tag_field.name);
+        if binding.canonical == field_tag_path || binding.canonical == qualified_tag_path {
+            return Some(format!(
+                "(() => {{ if (this.__tnField_{tag} === null) throw new Error(\"{type_name}Builder: missing enum tag\"); return __tnToBigInt(this.__tnField_{tag}); }})()",
+                tag = info.tag_ts_name,
+            ));
+        }
+    }
 
     let field_payload_path = format!("{}.payload_size", info.enum_field.name);
     let qualified_payload_path = format!("{}::{}.payload_size", type_name, info.enum_field.name);

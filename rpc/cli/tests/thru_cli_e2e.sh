@@ -51,7 +51,7 @@ CONFIG_DIR="$CLI_TMP_HOME/.thru/cli"
 CONFIG_PATH="$CONFIG_DIR/config.yaml"
 readonly CONFIG_DIR CONFIG_PATH
 
-THRU_CLI_BIN_DEFAULT="$REPO_ROOT/rpc/cli/target/debug/thru"
+THRU_CLI_BIN_DEFAULT="$REPO_ROOT/rpc/cli/target/release/thru"
 THRU_CLI_BIN="${THRU_CLI_BIN:-$THRU_CLI_BIN_DEFAULT}"
 readonly THRU_CLI_BIN_DEFAULT THRU_CLI_BIN
 
@@ -448,7 +448,7 @@ check_prerequisites() {
 
   if [[ "$SKIP_BUILD" != "1" ]]; then
     log "Building thru CLI via cargo (workspace root: $REPO_ROOT/rpc/cli)"
-    (cd "$REPO_ROOT/rpc/cli" && cargo build -p thru)
+    (cd "$REPO_ROOT/rpc/cli" && cargo build --release -p thru)
   else
     log "Skipping build (SKIP_BUILD=1)"
   fi

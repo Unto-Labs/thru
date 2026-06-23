@@ -1335,7 +1335,7 @@ export class MulticallErrorBuilder {
     this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
   }
 
-  set_code(value: number): this {
+  set_code(value: bigint): this {
     const cast = __tnToBigInt(value);
     this.view.setBigUint64(0, cast, true);
     return this;
@@ -1361,4 +1361,3 @@ export class MulticallErrorBuilder {
 __tnRegisterFootprint("MulticallError", (params) => MulticallError.__tnInvokeFootprint(params));
 __tnRegisterValidate("MulticallError", (buffer, params) => MulticallError.__tnInvokeValidate(buffer, params));
 __tnRegisterDynamicValidate("MulticallError", (buffer) => { const result = MulticallError.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
-

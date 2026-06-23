@@ -130,6 +130,13 @@ impl TypeScriptCodeGenerator {
         }
 
         /* Write to file */
+        while output.ends_with("\n\n") {
+            output.pop();
+        }
+        if !output.ends_with('\n') {
+            output.push('\n');
+        }
+
         let types_path = format!("{}/types.ts", self.options.output_dir);
         if let Err(e) = fs::write(&types_path, &output) {
             eprintln!(

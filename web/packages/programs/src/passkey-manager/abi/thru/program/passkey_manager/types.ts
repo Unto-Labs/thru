@@ -1122,7 +1122,7 @@ export class AuthorityRecordBuilder {
 
 __tnRegisterFootprint("AuthorityRecord", (params) => AuthorityRecord.__tnInvokeFootprint(params));
 __tnRegisterValidate("AuthorityRecord", (buffer, params) => AuthorityRecord.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("AuthorityRecord", (buffer) => { const result = AuthorityRecord.validate(buffer); return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed) }; });
+__tnRegisterDynamicValidate("AuthorityRecord", (buffer) => { const result = AuthorityRecord.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR P256Point ----- */
 
@@ -3993,7 +3993,7 @@ export class PasskeyEventBuilder {
   private __tnComputeParams(): PasskeyEvent.Params {
     if (this.__tnCachedParams) return this.__tnCachedParams;
     const params = PasskeyEvent.Params.fromValues({
-      payload_event_type: (() => { return __tnToBigInt(this.__tnPrefixView.getUint8(0)); })(),
+      payload_event_type: (() => { if (this.__tnField_event_type === null) throw new Error("PasskeyEventBuilder: missing enum tag"); return __tnToBigInt(this.__tnField_event_type); })(),
     });
     this.__tnCachedParams = params;
     return params;
@@ -4083,8 +4083,8 @@ export class CreateArgs {
     const __tnRead_wallet_account_idx = view.getUint16(__tnCursorMutable, true);
     __tnFieldValue_wallet_account_idx = __tnRead_wallet_account_idx;
     __tnCursorMutable += 2;
-    if (__tnCursorMutable + 65 > __tnLength) return null;
-    __tnCursorMutable += 65;
+    if (__tnCursorMutable + 73 > __tnLength) return null;
+    __tnCursorMutable += 73;
     if (__tnCursorMutable + 32 > __tnLength) return null;
     __tnCursorMutable += 32;
     const __tnTyperefResult_state_proof = __tnInvokeDynamicValidate("StateProof", buffer.subarray(__tnCursorMutable));
@@ -5360,4 +5360,3 @@ export class PasskeyInstructionBuilder {
 __tnRegisterFootprint("PasskeyInstruction", (params) => PasskeyInstruction.__tnInvokeFootprint(params));
 __tnRegisterValidate("PasskeyInstruction", (buffer, params) => PasskeyInstruction.__tnInvokeValidate(buffer, params));
 __tnRegisterDynamicValidate("PasskeyInstruction", (buffer) => { const result = PasskeyInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
-

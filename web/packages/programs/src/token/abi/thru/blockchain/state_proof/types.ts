@@ -32,6 +32,12 @@ type __TnIrNode =
       readonly op: "call";
       readonly typeName: string;
       readonly args: readonly { readonly name: string; readonly source: string }[];
+    }
+  | {
+      readonly op: "sumOverArray";
+      readonly count: __TnIrNode;
+      readonly elementTypeName: string;
+      readonly fieldName: string;
     };
 
 type __TnIrContext = {
@@ -40,7 +46,12 @@ type __TnIrContext = {
   typeName?: string;
 };
 
-type __TnValidateResult = { ok: boolean; code?: string; consumed?: bigint };
+type __TnValidateResult = {
+  ok: boolean;
+  code?: string;
+  consumed?: bigint;
+  params?: Record<string, bigint>;
+};
 type __TnEvalResult =
   | { ok: true; value: bigint }
   | { ok: false; code: string };
@@ -517,6 +528,10 @@ const __tnValidateRegistry: Record<
   string,
   (buffer: Uint8Array, params: Record<string, bigint>) => __TnValidateResult
 > = {};
+const __tnDynamicValidateRegistry: Record<
+  string,
+  (buffer: Uint8Array) => __TnValidateResult
+> = {};
 
 function __tnRegisterFootprint(
   typeName: string,
@@ -530,6 +545,13 @@ function __tnRegisterValidate(
   fn: (buffer: Uint8Array, params: Record<string, bigint>) => __TnValidateResult
 ): void {
   __tnValidateRegistry[typeName] = fn;
+}
+
+function __tnRegisterDynamicValidate(
+  typeName: string,
+  fn: (buffer: Uint8Array) => __TnValidateResult
+): void {
+  __tnDynamicValidateRegistry[typeName] = fn;
 }
 
 function __tnInvokeFootprint(
@@ -551,8 +573,17 @@ function __tnInvokeValidate(
   return fn(buffer, params);
 }
 
+function __tnInvokeDynamicValidate(
+  typeName: string,
+  buffer: Uint8Array
+): __TnValidateResult {
+  const fn = __tnDynamicValidateRegistry[typeName];
+  if (!fn) throw new Error(`IR runtime missing dynamic validate helper for ${typeName}`);
+  return fn(buffer);
+}
+
 function __tnEvalFootprint(node: __TnIrNode, ctx: __TnIrContext): bigint {
-  return __tnEvalIrNode(node, ctx);
+  return __tnEvalIrNode(node, ctx, __tnToBigInt(0));
 }
 
 function __tnTryEvalFootprint(
@@ -567,7 +598,7 @@ function __tnTryEvalIr(
   ctx: __TnIrContext
 ): __TnEvalResult {
   try {
-    return { ok: true, value: __tnEvalIrNode(node, ctx) };
+    return { ok: true, value: __tnEvalIrNode(node, ctx, __tnToBigInt(0)) };
   } catch (err) {
     return { ok: false, code: __tnNormalizeIrError(err) };
   }
@@ -598,7 +629,11 @@ function __tnValidateIrTree(
   return { ok: true, consumed: required };
 }
 
-function __tnEvalIrNode(node: __TnIrNode, ctx: __TnIrContext): bigint {
+function __tnEvalIrNode(
+  node: __TnIrNode,
+  ctx: __TnIrContext,
+  baseOffset: bigint
+): bigint {
   switch (node.op) {
     case "zero":
       return __tnToBigInt(0);
@@ -616,17 +651,22 @@ function __tnEvalIrNode(node: __TnIrNode, ctx: __TnIrContext): bigint {
       return val;
     }
     case "add":
-      return __tnCheckedAdd(
-        __tnEvalIrNode(node.left, ctx),
-        __tnEvalIrNode(node.right, ctx)
-      );
+      {
+        const left = __tnEvalIrNode(node.left, ctx, baseOffset);
+        const right = __tnEvalIrNode(
+          node.right,
+          ctx,
+          __tnCheckedAdd(baseOffset, left)
+        );
+        return __tnCheckedAdd(left, right);
+      }
     case "mul":
       return __tnCheckedMul(
-        __tnEvalIrNode(node.left, ctx),
-        __tnEvalIrNode(node.right, ctx)
+        __tnEvalIrNode(node.left, ctx, baseOffset),
+        __tnEvalIrNode(node.right, ctx, baseOffset)
       );
     case "align":
-      return __tnAlign(__tnEvalIrNode(node.node, ctx), node.alignment);
+      return __tnAlign(__tnEvalIrNode(node.node, ctx, baseOffset), node.alignment);
     case "switch": {
       const tagVal = ctx.params[node.tag];
       if (tagVal === undefined) {
@@ -639,10 +679,10 @@ function __tnEvalIrNode(node: __TnIrNode, ctx: __TnIrContext): bigint {
       const tagNumber = Number(tagVal);
       for (const caseNode of node.cases) {
         if (caseNode.value === tagNumber) {
-          return __tnEvalIrNode(caseNode.node, ctx);
+          return __tnEvalIrNode(caseNode.node, ctx, baseOffset);
         }
       }
-      if (node.default) return __tnEvalIrNode(node.default, ctx);
+      if (node.default) return __tnEvalIrNode(node.default, ctx, baseOffset);
       __tnRaiseIrError(
         "tn.ir.invalid_tag",
         `Unhandled IR switch value ${tagNumber} for '${node.tag}'`
@@ -662,9 +702,10 @@ function __tnEvalIrNode(node: __TnIrNode, ctx: __TnIrContext): bigint {
         nestedParams[arg.name] = val;
       }
       if (ctx.buffer) {
+        const nestedOffset = __tnBigIntToNumber(baseOffset, "IR nested offset");
         const nestedResult = __tnInvokeValidate(
           node.typeName,
-          ctx.buffer,
+          ctx.buffer.subarray(nestedOffset),
           nestedParams
         );
         if (!nestedResult.ok) {
@@ -683,6 +724,36 @@ function __tnEvalIrNode(node: __TnIrNode, ctx: __TnIrContext): bigint {
         }
       }
       return __tnInvokeFootprint(node.typeName, nestedParams);
+    }
+    case "sumOverArray": {
+      if (!ctx.buffer) {
+        __tnRaiseIrError(
+          "tn.ir.missing_buffer",
+          `Jagged array '${node.fieldName}' requires buffer-backed validation`
+        );
+      }
+      const count = __tnBigIntToNumber(
+        __tnEvalIrNode(node.count, ctx, baseOffset),
+        `Jagged array '${node.fieldName}' count`
+      );
+      let cursor = __tnBigIntToNumber(baseOffset, "IR jagged array offset");
+      let total = __tnToBigInt(0);
+      for (let i = 0; i < count; i++) {
+        const result = __tnInvokeDynamicValidate(
+          node.elementTypeName,
+          ctx.buffer.subarray(cursor)
+        );
+        if (!result.ok || result.consumed === undefined) {
+          const code = result.code ?? "tn.ir.runtime_error";
+          __tnRaiseIrError(
+            code,
+            `Jagged array '${node.fieldName}' element ${i} failed validation`
+          );
+        }
+        cursor += __tnBigIntToNumber(result.consumed, "IR jagged element size");
+        total = __tnCheckedAdd(total, result.consumed);
+      }
+      return total;
     }
     default:
       __tnRaiseIrError(
@@ -717,6 +788,14 @@ function __tnNormalizeIrError(err: unknown): string {
   if (message.length > 0) return `tn.ir.runtime_error: ${message}`;
   return "tn.ir.runtime_error";
 }
+
+__tnRegisterFootprint("Hash", (params) => Hash.__tnInvokeFootprint(params));
+__tnRegisterValidate("Hash", (buffer, params) => Hash.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("Hash", (buffer) => { const result = Hash.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
+__tnRegisterFootprint("Pubkey", (params) => Pubkey.__tnInvokeFootprint(params));
+__tnRegisterValidate("Pubkey", (buffer, params) => Pubkey.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("Pubkey", (buffer) => { const result = Pubkey.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR StateProofHeader ----- */
 
@@ -833,9 +912,6 @@ export class StateProofHeader {
 
 }
 
-__tnRegisterFootprint("StateProofHeader", (params) => StateProofHeader.__tnInvokeFootprint(params));
-__tnRegisterValidate("StateProofHeader", (buffer, params) => StateProofHeader.__tnInvokeValidate(buffer, params));
-
 export class StateProofHeaderBuilder {
   private buffer: Uint8Array;
   private view: DataView;
@@ -845,7 +921,7 @@ export class StateProofHeaderBuilder {
     this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
   }
 
-  set_type_slot(value: number): this {
+  set_type_slot(value: bigint): this {
     const cast = __tnToBigInt(value);
     this.view.setBigUint64(0, cast, true);
     return this;
@@ -873,6 +949,10 @@ export class StateProofHeaderBuilder {
     return view;
   }
 }
+
+__tnRegisterFootprint("StateProofHeader", (params) => StateProofHeader.__tnInvokeFootprint(params));
+__tnRegisterValidate("StateProofHeader", (buffer, params) => StateProofHeader.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("StateProofHeader", (buffer) => { const result = StateProofHeader.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR StateProof ----- */
 
@@ -1548,9 +1628,6 @@ export namespace StateProof {
   }
 }
 
-__tnRegisterFootprint("StateProof", (params) => StateProof.__tnInvokeFootprint(params));
-__tnRegisterValidate("StateProof", (buffer, params) => StateProof.__tnInvokeValidate(buffer, params));
-
 export class StateProofBuilder {
   private __tnPrefixBuffer: Uint8Array;
   private __tnPrefixView: DataView;
@@ -1665,3 +1742,6 @@ export class StateProofBuilder {
   }
 }
 
+__tnRegisterFootprint("StateProof", (params) => StateProof.__tnInvokeFootprint(params));
+__tnRegisterValidate("StateProof", (buffer, params) => StateProof.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("StateProof", (buffer) => { const result = StateProof.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });

@@ -13,6 +13,7 @@ import { validateParsedData } from "../schema/validation";
 import { getCheckpoint, updateCheckpoint } from "../checkpoint";
 import type { EventStream } from "./types";
 import type { StreamBatch } from "../types";
+import type { ProcessorStatusObserver } from "../runtime/status";
 
 // ============================================================
 // Types
@@ -33,6 +34,8 @@ export interface ProcessorOptions {
   logLevel?: "debug" | "info" | "warn" | "error";
   /** Validate parse output with Zod (useful for development) */
   validateParse?: boolean;
+  /** Runtime status observer */
+  observer?: ProcessorStatusObserver;
 }
 
 export interface ProcessorStats {
@@ -141,6 +144,7 @@ export async function runEventStreamProcessor(
     pageSize = 512,
     logLevel = "info",
     validateParse = false,
+    observer,
   } = options;
 
   const log = (level: string, msg: string) => {
@@ -158,6 +162,10 @@ export async function runEventStreamProcessor(
   // checkpoint slot and relying on idempotent inserts avoids skipping
   // unprocessed events from the same slot after partial commits.
   const startSlot = checkpoint ? checkpoint.slot : defaultStartSlot;
+  observer?.onStart?.({
+    startSlot,
+    checkpointSlot: checkpoint?.slot ?? null,
+  });
 
   log(
     "info",
@@ -230,12 +238,12 @@ export async function runEventStreamProcessor(
           );
         }
       } catch (filterErr) {
+        observer?.onError?.("filterBatch", filterErr);
         log(
           "error",
           `filterBatch hook failed: ${filterErr instanceof Error ? filterErr.message : String(filterErr)}`
         );
-        // On filter error, skip the batch
-        return;
+        throw filterErr;
       }
     }
 
@@ -244,31 +252,42 @@ export async function runEventStreamProcessor(
       | undefined;
     const lastEventToCommitId = lastEventToCommit?.id ?? null;
     let committedEvents = eventsToCommit;
-    await db.transaction(async (tx) => {
-      // Insert events (skip duplicates)
-      committedEvents = (await tx
-        .insert(stream.table as PgTable)
-        .values(eventsToCommit)
-        .onConflictDoNothing()
-        .returning()) as Record<string, unknown>[];
+    try {
+      await db.transaction(async (tx) => {
+        // Insert events (skip duplicates)
+        committedEvents = (await tx
+          .insert(stream.table as PgTable)
+          .values(eventsToCommit)
+          .onConflictDoNothing()
+          .returning()) as Record<string, unknown>[];
 
-      // Update checkpoint
-      await updateCheckpoint(
-        tx as unknown as DatabaseClient,
-        stream.name,
-        batch.slot,
-        lastEventToCommitId
-      );
-    });
+        // Update checkpoint
+        await updateCheckpoint(
+          tx as unknown as DatabaseClient,
+          stream.name,
+          batch.slot,
+          lastEventToCommitId
+        );
+      });
+    } catch (commitErr) {
+      observer?.onError?.("commit", commitErr);
+      throw commitErr;
+    }
 
     stats.batchesCommitted++;
     stats.lastSlot = batch.slot;
+    observer?.onBatchCommitted?.({
+      slot: batch.slot,
+      count: eventsToCommit.length,
+    });
+    observer?.onCheckpoint?.({ slot: batch.slot });
 
     // Call onCommit hook if defined
     if (stream.onCommit && committedEvents.length > 0) {
       try {
         await stream.onCommit({ ...batch, events: committedEvents }, { db });
       } catch (hookErr) {
+        observer?.onError?.("onCommit", hookErr);
         log(
           "error",
           `onCommit hook failed: ${hookErr instanceof Error ? hookErr.message : String(hookErr)}`
@@ -278,7 +297,14 @@ export async function runEventStreamProcessor(
     }
   };
 
-  // Background timer to flush pending events that exceed the timeout
+  let rejectFlushFailure: (error: unknown) => void = () => {};
+  const flushFailure = new Promise<never>((_, reject) => {
+    rejectFlushFailure = reject;
+  });
+
+  // Background timer to flush pending events that exceed the timeout.
+  // Failures here must reject the processor so the supervisor can restart
+  // from the last durable checkpoint instead of silently dropping the batch.
   const flushInterval = setInterval(async () => {
     const batch = batcher.flushIfStale();
     if (batch) {
@@ -293,11 +319,13 @@ export async function runEventStreamProcessor(
           "error",
           `Timeout flush failed: ${err instanceof Error ? err.message : String(err)}`
         );
+        clearInterval(flushInterval);
+        rejectFlushFailure(err);
       }
     }
   }, 1000);
 
-  try {
+  const processReplay = async () => {
     for await (const event of replay) {
       if (abortSignal?.aborted) {
         log("info", "Abort signal received, stopping...");
@@ -305,15 +333,30 @@ export async function runEventStreamProcessor(
       }
 
       eventsReceivedSinceLastLog++;
+      observer?.onRecord?.({
+        slot: event.slot ?? null,
+        id: event.eventId ?? null,
+      });
 
       // Parse the event
-      const parsed = stream.parse(event);
-      if (!parsed) continue;
+      let parsed: Record<string, unknown> | null;
+      try {
+        parsed = stream.parse(event) as Record<string, unknown> | null;
+      } catch (parseErr) {
+        observer?.onParserError?.(parseErr);
+        observer?.onError?.("parse", parseErr);
+        throw parseErr;
+      }
+      if (!parsed) {
+        observer?.onParserNull?.();
+        continue;
+      }
 
       // Validate parse output if enabled
       if (validateParse) {
         const validation = validateParsedData(stream.schema, parsed, stream.name);
         if (!validation.success) {
+          observer?.onParseValidationError?.(validation.error);
           log("error", validation.error);
           continue; // Skip invalid events
         }
@@ -352,6 +395,10 @@ export async function runEventStreamProcessor(
         `Final flush: ${finalBatch.events.length} event(s) at slot ${finalBatch.slot}`
       );
     }
+  };
+
+  try {
+    await Promise.race([processReplay(), flushFailure]);
   } catch (err) {
     log(
       "error",
@@ -360,6 +407,7 @@ export async function runEventStreamProcessor(
     throw err;
   } finally {
     clearInterval(flushInterval);
+    rejectFlushFailure = () => {};
   }
 
   log(

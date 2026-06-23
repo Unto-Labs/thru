@@ -479,6 +479,141 @@ fn test_ts_bigint_for_64bit() {
 }
 
 #[test]
+fn test_ts_u64_field_ref_array_compile() {
+    let test_dir = setup_test_dir("u64_field_ref_array");
+
+    let abi_file = test_dir.join("u64_field_ref_array.abi.yaml");
+    fs::write(
+        &abi_file,
+        r#"abi:
+  package: "compliance.u64_field_ref_array"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Dynamic arrays driven by u64 length fields"
+
+types:
+  - name: "U64FieldRefArray"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "first_size"
+            field-type:
+              primitive: u64
+          - name: "second_size"
+            field-type:
+              primitive: u64
+          - name: "first"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path:
+                      - first_size
+                element-type:
+                  primitive: u8
+          - name: "second"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path:
+                      - second_size
+                element-type:
+                  primitive: u8
+"#,
+    )
+    .unwrap();
+
+    generate_ts_code(abi_file.to_str().unwrap(), &test_dir).expect("Code generation failed");
+
+    let ts_file = test_dir.join("compliance/u64_field_ref_array/types.ts");
+    let content = fs::read_to_string(&ts_file).expect("Failed to read generated file");
+    assert!(
+        content.contains("let __tnFieldValue_first_size: bigint | null = null;"),
+        "u64 cached field values should be typed as bigint"
+    );
+
+    check_typescript_compilation(&ts_file).expect("TypeScript compilation failed");
+
+    println!("✓ TypeScript u64 field-ref array compilation test passed");
+}
+
+#[test]
+fn test_ts_enum_builder_uses_physical_u32_tag_field() {
+    let test_dir = setup_test_dir("u32_tag_ref_enum_builder");
+
+    let abi_file = test_dir.join("u32_tag_ref_enum_builder.abi.yaml");
+    fs::write(
+        &abi_file,
+        r#"abi:
+  package: "compliance.u32_tag_ref_enum_builder"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Enum payload tagged by a u32 discriminant field"
+
+types:
+  - name: "U32TaggedInstruction"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "discriminant"
+            field-type:
+              primitive: u32
+          - name: "payload"
+            field-type:
+              enum:
+                packed: true
+                tag-ref:
+                  field-ref:
+                    path:
+                      - discriminant
+                variants:
+                  - name: "first"
+                    tag-value: 0
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "amount"
+                            field-type:
+                              primitive: u16
+                  - name: "second"
+                    tag-value: 1
+                    variant-type:
+                      struct:
+                        packed: true
+                        fields:
+                          - name: "amount"
+                            field-type:
+                              primitive: u64
+"#,
+    )
+    .unwrap();
+
+    generate_ts_code(abi_file.to_str().unwrap(), &test_dir).expect("Code generation failed");
+
+    let ts_file = test_dir.join("compliance/u32_tag_ref_enum_builder/types.ts");
+    let content = fs::read_to_string(&ts_file).expect("Failed to read generated file");
+    assert!(
+        content
+            .contains("payload_discriminant: (() => { if (this.__tnField_discriminant === null)"),
+        "u32 tag-ref enum builder params should use the assigned physical tag field"
+    );
+    assert!(
+        !content.contains(
+            "payload_discriminant: (() => { return __tnToBigInt(this.__tnPrefixView.getUint32"
+        ),
+        "u32 tag-ref enum builder params should not read the unwritten prefix buffer"
+    );
+
+    check_typescript_compilation(&ts_file).expect("TypeScript compilation failed");
+
+    println!("✓ TypeScript u32 tag-ref enum builder uses physical tag field");
+}
+
+#[test]
 fn test_ts_little_endian_comments() {
     let test_dir = setup_test_dir("endian_test");
 

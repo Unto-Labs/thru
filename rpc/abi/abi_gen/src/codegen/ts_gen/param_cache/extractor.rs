@@ -6,8 +6,8 @@ use crate::codegen::ts_gen::enum_utils::{enum_field_info_by_name, enum_field_inf
 use crate::codegen::ts_gen::helpers::{
     collect_field_ref_paths, collect_field_value_refs, escape_ts_keyword,
     expr_to_ts_bigint_with_resolver, expr_to_ts_with_resolver, needs_endianness_arg,
-    primitive_size, primitive_to_dataview_getter, sequential_size_expression,
-    struct_field_const_offset,
+    primitive_size, primitive_to_dataview_getter, primitive_to_ts_return_type,
+    sequential_size_expression, struct_field_const_offset,
 };
 use crate::codegen::ts_gen::ir_helpers::{
     TsParamBinding, collect_dynamic_param_bindings, deduplicated_ts_parameter_bindings,
@@ -812,15 +812,19 @@ fn emit_sequential_scan(
     }
     let mut cached_fields = Vec::new();
     for field in fields {
-        if matches!(field.field_type.kind, ResolvedTypeKind::Primitive { .. }) {
-            cached_fields.push((field.name.clone(), escape_ts_keyword(&field.name)));
+        if let ResolvedTypeKind::Primitive { prim_type } = &field.field_type.kind {
+            cached_fields.push((
+                field.name.clone(),
+                escape_ts_keyword(&field.name),
+                primitive_to_ts_return_type(prim_type),
+            ));
         }
     }
-    for (_, ident) in &cached_fields {
+    for (_, ident, ts_type) in &cached_fields {
         writeln!(
             header,
-            "    let __tnFieldValue_{}: number | null = null;",
-            ident
+            "    let __tnFieldValue_{}: {} | null = null;",
+            ident, ts_type
         )
         .unwrap();
     }

@@ -53,7 +53,8 @@ panic = "abort"
 opt-level = "z"     # Optimize for size
 lto = true          # Enable link-time optimization
 codegen-units = 1   # Better optimization
-strip = true        # Strip symbols for smaller binaries
+debug = 2           # Keep full DWARF debug info for diagnostics
+strip = false       # Keep symbol tables and DWARF sections
 ```
 
 3. **Copy configuration files:**

@@ -33,6 +33,12 @@ type __TnIrNode =
       readonly op: "call";
       readonly typeName: string;
       readonly args: readonly { readonly name: string; readonly source: string }[];
+    }
+  | {
+      readonly op: "sumOverArray";
+      readonly count: __TnIrNode;
+      readonly elementTypeName: string;
+      readonly fieldName: string;
     };
 
 type __TnIrContext = {
@@ -41,7 +47,12 @@ type __TnIrContext = {
   typeName?: string;
 };
 
-type __TnValidateResult = { ok: boolean; code?: string; consumed?: bigint };
+type __TnValidateResult = {
+  ok: boolean;
+  code?: string;
+  consumed?: bigint;
+  params?: Record<string, bigint>;
+};
 type __TnEvalResult =
   | { ok: true; value: bigint }
   | { ok: false; code: string };
@@ -518,6 +529,10 @@ const __tnValidateRegistry: Record<
   string,
   (buffer: Uint8Array, params: Record<string, bigint>) => __TnValidateResult
 > = {};
+const __tnDynamicValidateRegistry: Record<
+  string,
+  (buffer: Uint8Array) => __TnValidateResult
+> = {};
 
 function __tnRegisterFootprint(
   typeName: string,
@@ -531,6 +546,13 @@ function __tnRegisterValidate(
   fn: (buffer: Uint8Array, params: Record<string, bigint>) => __TnValidateResult
 ): void {
   __tnValidateRegistry[typeName] = fn;
+}
+
+function __tnRegisterDynamicValidate(
+  typeName: string,
+  fn: (buffer: Uint8Array) => __TnValidateResult
+): void {
+  __tnDynamicValidateRegistry[typeName] = fn;
 }
 
 function __tnInvokeFootprint(
@@ -552,8 +574,17 @@ function __tnInvokeValidate(
   return fn(buffer, params);
 }
 
+function __tnInvokeDynamicValidate(
+  typeName: string,
+  buffer: Uint8Array
+): __TnValidateResult {
+  const fn = __tnDynamicValidateRegistry[typeName];
+  if (!fn) throw new Error(`IR runtime missing dynamic validate helper for ${typeName}`);
+  return fn(buffer);
+}
+
 function __tnEvalFootprint(node: __TnIrNode, ctx: __TnIrContext): bigint {
-  return __tnEvalIrNode(node, ctx);
+  return __tnEvalIrNode(node, ctx, __tnToBigInt(0));
 }
 
 function __tnTryEvalFootprint(
@@ -568,7 +599,7 @@ function __tnTryEvalIr(
   ctx: __TnIrContext
 ): __TnEvalResult {
   try {
-    return { ok: true, value: __tnEvalIrNode(node, ctx) };
+    return { ok: true, value: __tnEvalIrNode(node, ctx, __tnToBigInt(0)) };
   } catch (err) {
     return { ok: false, code: __tnNormalizeIrError(err) };
   }
@@ -599,7 +630,11 @@ function __tnValidateIrTree(
   return { ok: true, consumed: required };
 }
 
-function __tnEvalIrNode(node: __TnIrNode, ctx: __TnIrContext): bigint {
+function __tnEvalIrNode(
+  node: __TnIrNode,
+  ctx: __TnIrContext,
+  baseOffset: bigint
+): bigint {
   switch (node.op) {
     case "zero":
       return __tnToBigInt(0);
@@ -617,17 +652,22 @@ function __tnEvalIrNode(node: __TnIrNode, ctx: __TnIrContext): bigint {
       return val;
     }
     case "add":
-      return __tnCheckedAdd(
-        __tnEvalIrNode(node.left, ctx),
-        __tnEvalIrNode(node.right, ctx)
-      );
+      {
+        const left = __tnEvalIrNode(node.left, ctx, baseOffset);
+        const right = __tnEvalIrNode(
+          node.right,
+          ctx,
+          __tnCheckedAdd(baseOffset, left)
+        );
+        return __tnCheckedAdd(left, right);
+      }
     case "mul":
       return __tnCheckedMul(
-        __tnEvalIrNode(node.left, ctx),
-        __tnEvalIrNode(node.right, ctx)
+        __tnEvalIrNode(node.left, ctx, baseOffset),
+        __tnEvalIrNode(node.right, ctx, baseOffset)
       );
     case "align":
-      return __tnAlign(__tnEvalIrNode(node.node, ctx), node.alignment);
+      return __tnAlign(__tnEvalIrNode(node.node, ctx, baseOffset), node.alignment);
     case "switch": {
       const tagVal = ctx.params[node.tag];
       if (tagVal === undefined) {
@@ -640,10 +680,10 @@ function __tnEvalIrNode(node: __TnIrNode, ctx: __TnIrContext): bigint {
       const tagNumber = Number(tagVal);
       for (const caseNode of node.cases) {
         if (caseNode.value === tagNumber) {
-          return __tnEvalIrNode(caseNode.node, ctx);
+          return __tnEvalIrNode(caseNode.node, ctx, baseOffset);
         }
       }
-      if (node.default) return __tnEvalIrNode(node.default, ctx);
+      if (node.default) return __tnEvalIrNode(node.default, ctx, baseOffset);
       __tnRaiseIrError(
         "tn.ir.invalid_tag",
         `Unhandled IR switch value ${tagNumber} for '${node.tag}'`
@@ -663,9 +703,10 @@ function __tnEvalIrNode(node: __TnIrNode, ctx: __TnIrContext): bigint {
         nestedParams[arg.name] = val;
       }
       if (ctx.buffer) {
+        const nestedOffset = __tnBigIntToNumber(baseOffset, "IR nested offset");
         const nestedResult = __tnInvokeValidate(
           node.typeName,
-          ctx.buffer,
+          ctx.buffer.subarray(nestedOffset),
           nestedParams
         );
         if (!nestedResult.ok) {
@@ -684,6 +725,36 @@ function __tnEvalIrNode(node: __TnIrNode, ctx: __TnIrContext): bigint {
         }
       }
       return __tnInvokeFootprint(node.typeName, nestedParams);
+    }
+    case "sumOverArray": {
+      if (!ctx.buffer) {
+        __tnRaiseIrError(
+          "tn.ir.missing_buffer",
+          `Jagged array '${node.fieldName}' requires buffer-backed validation`
+        );
+      }
+      const count = __tnBigIntToNumber(
+        __tnEvalIrNode(node.count, ctx, baseOffset),
+        `Jagged array '${node.fieldName}' count`
+      );
+      let cursor = __tnBigIntToNumber(baseOffset, "IR jagged array offset");
+      let total = __tnToBigInt(0);
+      for (let i = 0; i < count; i++) {
+        const result = __tnInvokeDynamicValidate(
+          node.elementTypeName,
+          ctx.buffer.subarray(cursor)
+        );
+        if (!result.ok || result.consumed === undefined) {
+          const code = result.code ?? "tn.ir.runtime_error";
+          __tnRaiseIrError(
+            code,
+            `Jagged array '${node.fieldName}' element ${i} failed validation`
+          );
+        }
+        cursor += __tnBigIntToNumber(result.consumed, "IR jagged element size");
+        total = __tnCheckedAdd(total, result.consumed);
+      }
+      return total;
     }
     default:
       __tnRaiseIrError(
@@ -718,6 +789,14 @@ function __tnNormalizeIrError(err: unknown): string {
   if (message.length > 0) return `tn.ir.runtime_error: ${message}`;
   return "tn.ir.runtime_error";
 }
+
+__tnRegisterFootprint("Pubkey", (params) => Pubkey.__tnInvokeFootprint(params));
+__tnRegisterValidate("Pubkey", (buffer, params) => Pubkey.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("Pubkey", (buffer) => { const result = Pubkey.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
+__tnRegisterFootprint("StateProof", (params) => StateProof.__tnInvokeFootprint(params));
+__tnRegisterValidate("StateProof", (buffer, params) => StateProof.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("StateProof", (buffer) => { const result = StateProof.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR BurnInstruction ----- */
 
@@ -880,9 +959,6 @@ export class BurnInstruction {
 
 }
 
-__tnRegisterFootprint("BurnInstruction", (params) => BurnInstruction.__tnInvokeFootprint(params));
-__tnRegisterValidate("BurnInstruction", (buffer, params) => BurnInstruction.__tnInvokeValidate(buffer, params));
-
 export class BurnInstructionBuilder {
   private buffer: Uint8Array;
   private view: DataView;
@@ -907,7 +983,7 @@ export class BurnInstructionBuilder {
     return this;
   }
 
-  set_amount(value: number): this {
+  set_amount(value: bigint): this {
     const cast = __tnToBigInt(value);
     this.view.setBigUint64(6, cast, true);
     return this;
@@ -929,6 +1005,10 @@ export class BurnInstructionBuilder {
     return view;
   }
 }
+
+__tnRegisterFootprint("BurnInstruction", (params) => BurnInstruction.__tnInvokeFootprint(params));
+__tnRegisterValidate("BurnInstruction", (buffer, params) => BurnInstruction.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("BurnInstruction", (buffer) => { const result = BurnInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR CloseAccountInstruction ----- */
 
@@ -1072,9 +1152,6 @@ export class CloseAccountInstruction {
 
 }
 
-__tnRegisterFootprint("CloseAccountInstruction", (params) => CloseAccountInstruction.__tnInvokeFootprint(params));
-__tnRegisterValidate("CloseAccountInstruction", (buffer, params) => CloseAccountInstruction.__tnInvokeValidate(buffer, params));
-
 export class CloseAccountInstructionBuilder {
   private buffer: Uint8Array;
   private view: DataView;
@@ -1115,6 +1192,10 @@ export class CloseAccountInstructionBuilder {
     return view;
   }
 }
+
+__tnRegisterFootprint("CloseAccountInstruction", (params) => CloseAccountInstruction.__tnInvokeFootprint(params));
+__tnRegisterValidate("CloseAccountInstruction", (buffer, params) => CloseAccountInstruction.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("CloseAccountInstruction", (buffer) => { const result = CloseAccountInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR FreezeAccountInstruction ----- */
 
@@ -1258,9 +1339,6 @@ export class FreezeAccountInstruction {
 
 }
 
-__tnRegisterFootprint("FreezeAccountInstruction", (params) => FreezeAccountInstruction.__tnInvokeFootprint(params));
-__tnRegisterValidate("FreezeAccountInstruction", (buffer, params) => FreezeAccountInstruction.__tnInvokeValidate(buffer, params));
-
 export class FreezeAccountInstructionBuilder {
   private buffer: Uint8Array;
   private view: DataView;
@@ -1301,6 +1379,10 @@ export class FreezeAccountInstructionBuilder {
     return view;
   }
 }
+
+__tnRegisterFootprint("FreezeAccountInstruction", (params) => FreezeAccountInstruction.__tnInvokeFootprint(params));
+__tnRegisterValidate("FreezeAccountInstruction", (buffer, params) => FreezeAccountInstruction.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("FreezeAccountInstruction", (buffer) => { const result = FreezeAccountInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR MintToInstruction ----- */
 
@@ -1463,9 +1545,6 @@ export class MintToInstruction {
 
 }
 
-__tnRegisterFootprint("MintToInstruction", (params) => MintToInstruction.__tnInvokeFootprint(params));
-__tnRegisterValidate("MintToInstruction", (buffer, params) => MintToInstruction.__tnInvokeValidate(buffer, params));
-
 export class MintToInstructionBuilder {
   private buffer: Uint8Array;
   private view: DataView;
@@ -1490,7 +1569,7 @@ export class MintToInstructionBuilder {
     return this;
   }
 
-  set_amount(value: number): this {
+  set_amount(value: bigint): this {
     const cast = __tnToBigInt(value);
     this.view.setBigUint64(6, cast, true);
     return this;
@@ -1512,6 +1591,10 @@ export class MintToInstructionBuilder {
     return view;
   }
 }
+
+__tnRegisterFootprint("MintToInstruction", (params) => MintToInstruction.__tnInvokeFootprint(params));
+__tnRegisterValidate("MintToInstruction", (buffer, params) => MintToInstruction.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("MintToInstruction", (buffer) => { const result = MintToInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR Seed32 ----- */
 
@@ -1610,6 +1693,7 @@ export class Seed32 {
 
 __tnRegisterFootprint("Seed32", (params) => Seed32.__tnInvokeFootprint(params));
 __tnRegisterValidate("Seed32", (buffer, params) => Seed32.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("Seed32", (buffer) => { const result = Seed32.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR ThawAccountEventData ----- */
 
@@ -1750,9 +1834,6 @@ export class ThawAccountEventData {
 
 }
 
-__tnRegisterFootprint("ThawAccountEventData", (params) => ThawAccountEventData.__tnInvokeFootprint(params));
-__tnRegisterValidate("ThawAccountEventData", (buffer, params) => ThawAccountEventData.__tnInvokeValidate(buffer, params));
-
 export class ThawAccountEventDataBuilder {
   private buffer: Uint8Array;
   private view: DataView;
@@ -1796,6 +1877,10 @@ export class ThawAccountEventDataBuilder {
     return view;
   }
 }
+
+__tnRegisterFootprint("ThawAccountEventData", (params) => ThawAccountEventData.__tnInvokeFootprint(params));
+__tnRegisterValidate("ThawAccountEventData", (buffer, params) => ThawAccountEventData.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("ThawAccountEventData", (buffer) => { const result = ThawAccountEventData.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR ThawAccountInstruction ----- */
 
@@ -1939,9 +2024,6 @@ export class ThawAccountInstruction {
 
 }
 
-__tnRegisterFootprint("ThawAccountInstruction", (params) => ThawAccountInstruction.__tnInvokeFootprint(params));
-__tnRegisterValidate("ThawAccountInstruction", (buffer, params) => ThawAccountInstruction.__tnInvokeValidate(buffer, params));
-
 export class ThawAccountInstructionBuilder {
   private buffer: Uint8Array;
   private view: DataView;
@@ -1982,6 +2064,10 @@ export class ThawAccountInstructionBuilder {
     return view;
   }
 }
+
+__tnRegisterFootprint("ThawAccountInstruction", (params) => ThawAccountInstruction.__tnInvokeFootprint(params));
+__tnRegisterValidate("ThawAccountInstruction", (buffer, params) => ThawAccountInstruction.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("ThawAccountInstruction", (buffer) => { const result = ThawAccountInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR TickerField ----- */
 
@@ -2104,9 +2190,6 @@ export class TickerField {
 
 }
 
-__tnRegisterFootprint("TickerField", (params) => TickerField.__tnInvokeFootprint(params));
-__tnRegisterValidate("TickerField", (buffer, params) => TickerField.__tnInvokeValidate(buffer, params));
-
 export class TickerFieldBuilder {
   private buffer: Uint8Array;
   private view: DataView;
@@ -2146,6 +2229,10 @@ export class TickerFieldBuilder {
     return view;
   }
 }
+
+__tnRegisterFootprint("TickerField", (params) => TickerField.__tnInvokeFootprint(params));
+__tnRegisterValidate("TickerField", (buffer, params) => TickerField.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("TickerField", (buffer) => { const result = TickerField.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR TokenAccount ----- */
 
@@ -2301,9 +2388,6 @@ export class TokenAccount {
 
 }
 
-__tnRegisterFootprint("TokenAccount", (params) => TokenAccount.__tnInvokeFootprint(params));
-__tnRegisterValidate("TokenAccount", (buffer, params) => TokenAccount.__tnInvokeValidate(buffer, params));
-
 export class TokenAccountBuilder {
   private buffer: Uint8Array;
   private view: DataView;
@@ -2325,7 +2409,7 @@ export class TokenAccountBuilder {
     return this;
   }
 
-  set_amount(value: number): this {
+  set_amount(value: bigint): this {
     const cast = __tnToBigInt(value);
     this.view.setBigUint64(64, cast, true);
     return this;
@@ -2352,6 +2436,10 @@ export class TokenAccountBuilder {
     return view;
   }
 }
+
+__tnRegisterFootprint("TokenAccount", (params) => TokenAccount.__tnInvokeFootprint(params));
+__tnRegisterValidate("TokenAccount", (buffer, params) => TokenAccount.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("TokenAccount", (buffer) => { const result = TokenAccount.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR TokenMintAccount ----- */
 
@@ -2567,9 +2655,6 @@ export class TokenMintAccount {
 
 }
 
-__tnRegisterFootprint("TokenMintAccount", (params) => TokenMintAccount.__tnInvokeFootprint(params));
-__tnRegisterValidate("TokenMintAccount", (buffer, params) => TokenMintAccount.__tnInvokeValidate(buffer, params));
-
 export class TokenMintAccountBuilder {
   private buffer: Uint8Array;
   private view: DataView;
@@ -2584,7 +2669,7 @@ export class TokenMintAccountBuilder {
     return this;
   }
 
-  set_supply(value: number): this {
+  set_supply(value: bigint): this {
     const cast = __tnToBigInt(value);
     this.view.setBigUint64(1, cast, true);
     return this;
@@ -2636,6 +2721,10 @@ export class TokenMintAccountBuilder {
   }
 }
 
+__tnRegisterFootprint("TokenMintAccount", (params) => TokenMintAccount.__tnInvokeFootprint(params));
+__tnRegisterValidate("TokenMintAccount", (buffer, params) => TokenMintAccount.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("TokenMintAccount", (buffer) => { const result = TokenMintAccount.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
 /* ----- TYPE DEFINITION FOR TokenProgramAccount ----- */
 
 const __tn_ir_TokenProgramAccount = {
@@ -2660,7 +2749,7 @@ export class TokenProgramAccount {
     }
   }
 
-  static __tnCreateView(buffer: Uint8Array, opts?: { params?: TokenProgramAccount.Params }): TokenProgramAccount {
+  static __tnCreateView(buffer: Uint8Array, opts?: { params?: TokenProgramAccount.Params, fieldContext?: Record<string, number | bigint> }): TokenProgramAccount {
     if (!buffer || buffer.length === undefined) throw new Error("TokenProgramAccount.__tnCreateView requires a Uint8Array");
     let params = opts?.params ?? null;
     if (!params) {
@@ -2680,7 +2769,6 @@ export class TokenProgramAccount {
   static __tnComputeSequentialLayout(view: DataView, buffer: Uint8Array): { params: Record<string, bigint> | null; offsets: Record<string, number> | null; derived: Record<string, bigint> | null } | null {
     const __tnLength = buffer.length;
     let __tnParamSeq_data_payload_size: bigint | null = null;
-    let __tnParamSeq_TokenProgramAccount__data_payload_size: bigint | null = null;
     let __tnCursorMutable = 0;
     const __tnSduAvailable_data = __tnLength - __tnCursorMutable;
     let __tnSduSize_data = -1;
@@ -2690,13 +2778,10 @@ export class TokenProgramAccount {
       default: return null;
     }
     __tnParamSeq_data_payload_size = __tnToBigInt(__tnSduSize_data);
-    __tnParamSeq_TokenProgramAccount__data_payload_size = __tnToBigInt(__tnSduSize_data);
     __tnCursorMutable += __tnSduSize_data;
     const params: Record<string, bigint> = Object.create(null);
     if (__tnParamSeq_data_payload_size === null) return null;
     params["data_payload_size"] = __tnParamSeq_data_payload_size as bigint;
-    if (__tnParamSeq_TokenProgramAccount__data_payload_size === null) return null;
-    params["TokenProgramAccount__data_payload_size"] = __tnParamSeq_TokenProgramAccount__data_payload_size as bigint;
     return { params, offsets: null, derived: null };
   }
 
@@ -2706,11 +2791,8 @@ export class TokenProgramAccount {
     const __tnSeqParams = __tnLayout.params;
     const __tnParamSeq_data_payload_size = __tnSeqParams["data_payload_size"];
     if (__tnParamSeq_data_payload_size === undefined) return null;
-    const __tnParamSeq_TokenProgramAccount__data_payload_size = __tnSeqParams["TokenProgramAccount__data_payload_size"];
-    if (__tnParamSeq_TokenProgramAccount__data_payload_size === undefined) return null;
     const __tnExtractedParams = TokenProgramAccount.Params.fromValues({
       data_payload_size: __tnParamSeq_data_payload_size as bigint,
-      TokenProgramAccount__data_payload_size: __tnParamSeq_TokenProgramAccount__data_payload_size as bigint,
     });
     return { params: __tnExtractedParams, derived: null };
   }
@@ -2730,10 +2812,9 @@ export class TokenProgramAccount {
     return this.__tnValidateInternal(buffer, __tnParams);
   }
 
-  static footprintIr(data_payload_size: number | bigint, TokenProgramAccount__data_payload_size: number | bigint): bigint {
+  static footprintIr(data_payload_size: number | bigint): bigint {
     const params = TokenProgramAccount.Params.fromValues({
       data_payload_size: data_payload_size,
-      TokenProgramAccount__data_payload_size: TokenProgramAccount__data_payload_size,
     });
     return this.footprintIrFromParams(params);
   }
@@ -2741,7 +2822,7 @@ export class TokenProgramAccount {
   private static __tnPackParams(params: TokenProgramAccount.Params): Record<string, bigint> {
     const record: Record<string, bigint> = Object.create(null);
     record["data.payload_size"] = params.data_payload_size;
-    record["TokenProgramAccount::data.payload_size"] = params.TokenProgramAccount__data_payload_size;
+    record["TokenProgramAccount::data.payload_size"] = params.data_payload_size;
     return record;
   }
 
@@ -2757,7 +2838,7 @@ export class TokenProgramAccount {
     return __tnBigIntToNumber(irResult, 'TokenProgramAccount::footprintFromParams');
   }
 
-  static footprintFromValues(input: { data_payload_size: number | bigint, TokenProgramAccount__data_payload_size: number | bigint }): number {
+  static footprintFromValues(input: { data_payload_size: number | bigint }): number {
     const params = TokenProgramAccount.params(input);
     return this.footprintFromParams(params);
   }
@@ -2813,20 +2894,16 @@ export namespace TokenProgramAccount {
   export type Params = {
     /** ABI path: data.payload_size */
     readonly data_payload_size: bigint;
-    /** Runtime payload size (bytes) selecting size-discriminated variant (ABI path: TokenProgramAccount::data.payload_size) */
-    readonly TokenProgramAccount__data_payload_size: bigint;
   };
 
   export const ParamKeys = Object.freeze({
     data_payload_size: "data.payload_size",
-    TokenProgramAccount__data_payload_size: "TokenProgramAccount::data.payload_size",
   } as const);
 
   export const Params = {
-    fromValues(input: { data_payload_size: number | bigint, TokenProgramAccount__data_payload_size: number | bigint }): Params {
+    fromValues(input: { data_payload_size: number | bigint }): Params {
       return {
         data_payload_size: __tnToBigInt(input.data_payload_size),
-        TokenProgramAccount__data_payload_size: __tnToBigInt(input.TokenProgramAccount__data_payload_size),
       };
     },
     fromBuilder(source: { dynamicParams(): Params } | { params: Params } | Params): Params {
@@ -2840,13 +2917,14 @@ export namespace TokenProgramAccount {
     }
   };
 
-  export function params(input: { data_payload_size: number | bigint, TokenProgramAccount__data_payload_size: number | bigint }): Params {
+  export function params(input: { data_payload_size: number | bigint }): Params {
     return Params.fromValues(input);
   }
 }
 
 __tnRegisterFootprint("TokenProgramAccount", (params) => TokenProgramAccount.__tnInvokeFootprint(params));
 __tnRegisterValidate("TokenProgramAccount", (buffer, params) => TokenProgramAccount.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("TokenProgramAccount", (buffer) => { const result = TokenProgramAccount.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR TransferEventData ----- */
 
@@ -3020,9 +3098,6 @@ export class TransferEventData {
 
 }
 
-__tnRegisterFootprint("TransferEventData", (params) => TransferEventData.__tnInvokeFootprint(params));
-__tnRegisterValidate("TransferEventData", (buffer, params) => TransferEventData.__tnInvokeValidate(buffer, params));
-
 export class TransferEventDataBuilder {
   private buffer: Uint8Array;
   private view: DataView;
@@ -3044,19 +3119,19 @@ export class TransferEventDataBuilder {
     return this;
   }
 
-  set_amount(value: number): this {
+  set_amount(value: bigint): this {
     const cast = __tnToBigInt(value);
     this.view.setBigUint64(64, cast, true);
     return this;
   }
 
-  set_source_post_balance(value: number): this {
+  set_source_post_balance(value: bigint): this {
     const cast = __tnToBigInt(value);
     this.view.setBigUint64(72, cast, true);
     return this;
   }
 
-  set_dest_post_balance(value: number): this {
+  set_dest_post_balance(value: bigint): this {
     const cast = __tnToBigInt(value);
     this.view.setBigUint64(80, cast, true);
     return this;
@@ -3078,6 +3153,10 @@ export class TransferEventDataBuilder {
     return view;
   }
 }
+
+__tnRegisterFootprint("TransferEventData", (params) => TransferEventData.__tnInvokeFootprint(params));
+__tnRegisterValidate("TransferEventData", (buffer, params) => TransferEventData.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("TransferEventData", (buffer) => { const result = TransferEventData.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR TransferInstruction ----- */
 
@@ -3221,9 +3300,6 @@ export class TransferInstruction {
 
 }
 
-__tnRegisterFootprint("TransferInstruction", (params) => TransferInstruction.__tnInvokeFootprint(params));
-__tnRegisterValidate("TransferInstruction", (buffer, params) => TransferInstruction.__tnInvokeValidate(buffer, params));
-
 export class TransferInstructionBuilder {
   private buffer: Uint8Array;
   private view: DataView;
@@ -3243,7 +3319,7 @@ export class TransferInstructionBuilder {
     return this;
   }
 
-  set_amount(value: number): this {
+  set_amount(value: bigint): this {
     const cast = __tnToBigInt(value);
     this.view.setBigUint64(4, cast, true);
     return this;
@@ -3265,6 +3341,10 @@ export class TransferInstructionBuilder {
     return view;
   }
 }
+
+__tnRegisterFootprint("TransferInstruction", (params) => TransferInstruction.__tnInvokeFootprint(params));
+__tnRegisterValidate("TransferInstruction", (buffer, params) => TransferInstruction.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("TransferInstruction", (buffer) => { const result = TransferInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR BurnEventData ----- */
 
@@ -3459,9 +3539,6 @@ export class BurnEventData {
 
 }
 
-__tnRegisterFootprint("BurnEventData", (params) => BurnEventData.__tnInvokeFootprint(params));
-__tnRegisterValidate("BurnEventData", (buffer, params) => BurnEventData.__tnInvokeValidate(buffer, params));
-
 export class BurnEventDataBuilder {
   private buffer: Uint8Array;
   private view: DataView;
@@ -3489,19 +3566,19 @@ export class BurnEventDataBuilder {
     return this;
   }
 
-  set_amount(value: number): this {
+  set_amount(value: bigint): this {
     const cast = __tnToBigInt(value);
     this.view.setBigUint64(96, cast, true);
     return this;
   }
 
-  set_account_post_balance(value: number): this {
+  set_account_post_balance(value: bigint): this {
     const cast = __tnToBigInt(value);
     this.view.setBigUint64(104, cast, true);
     return this;
   }
 
-  set_mint_supply(value: number): this {
+  set_mint_supply(value: bigint): this {
     const cast = __tnToBigInt(value);
     this.view.setBigUint64(112, cast, true);
     return this;
@@ -3523,6 +3600,10 @@ export class BurnEventDataBuilder {
     return view;
   }
 }
+
+__tnRegisterFootprint("BurnEventData", (params) => BurnEventData.__tnInvokeFootprint(params));
+__tnRegisterValidate("BurnEventData", (buffer, params) => BurnEventData.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("BurnEventData", (buffer) => { const result = BurnEventData.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR CloseAccountEventData ----- */
 
@@ -3663,9 +3744,6 @@ export class CloseAccountEventData {
 
 }
 
-__tnRegisterFootprint("CloseAccountEventData", (params) => CloseAccountEventData.__tnInvokeFootprint(params));
-__tnRegisterValidate("CloseAccountEventData", (buffer, params) => CloseAccountEventData.__tnInvokeValidate(buffer, params));
-
 export class CloseAccountEventDataBuilder {
   private buffer: Uint8Array;
   private view: DataView;
@@ -3709,6 +3787,10 @@ export class CloseAccountEventDataBuilder {
     return view;
   }
 }
+
+__tnRegisterFootprint("CloseAccountEventData", (params) => CloseAccountEventData.__tnInvokeFootprint(params));
+__tnRegisterValidate("CloseAccountEventData", (buffer, params) => CloseAccountEventData.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("CloseAccountEventData", (buffer) => { const result = CloseAccountEventData.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR FreezeAccountEventData ----- */
 
@@ -3849,9 +3931,6 @@ export class FreezeAccountEventData {
 
 }
 
-__tnRegisterFootprint("FreezeAccountEventData", (params) => FreezeAccountEventData.__tnInvokeFootprint(params));
-__tnRegisterValidate("FreezeAccountEventData", (buffer, params) => FreezeAccountEventData.__tnInvokeValidate(buffer, params));
-
 export class FreezeAccountEventDataBuilder {
   private buffer: Uint8Array;
   private view: DataView;
@@ -3895,6 +3974,10 @@ export class FreezeAccountEventDataBuilder {
     return view;
   }
 }
+
+__tnRegisterFootprint("FreezeAccountEventData", (params) => FreezeAccountEventData.__tnInvokeFootprint(params));
+__tnRegisterValidate("FreezeAccountEventData", (buffer, params) => FreezeAccountEventData.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("FreezeAccountEventData", (buffer) => { const result = FreezeAccountEventData.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR InitializeAccountEventData ----- */
 
@@ -4035,9 +4118,6 @@ export class InitializeAccountEventData {
 
 }
 
-__tnRegisterFootprint("InitializeAccountEventData", (params) => InitializeAccountEventData.__tnInvokeFootprint(params));
-__tnRegisterValidate("InitializeAccountEventData", (buffer, params) => InitializeAccountEventData.__tnInvokeValidate(buffer, params));
-
 export class InitializeAccountEventDataBuilder {
   private buffer: Uint8Array;
   private view: DataView;
@@ -4081,6 +4161,10 @@ export class InitializeAccountEventDataBuilder {
     return view;
   }
 }
+
+__tnRegisterFootprint("InitializeAccountEventData", (params) => InitializeAccountEventData.__tnInvokeFootprint(params));
+__tnRegisterValidate("InitializeAccountEventData", (buffer, params) => InitializeAccountEventData.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("InitializeAccountEventData", (buffer) => { const result = InitializeAccountEventData.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR InitializeMintEventData ----- */
 
@@ -4296,9 +4380,6 @@ export class InitializeMintEventData {
 
 }
 
-__tnRegisterFootprint("InitializeMintEventData", (params) => InitializeMintEventData.__tnInvokeFootprint(params));
-__tnRegisterValidate("InitializeMintEventData", (buffer, params) => InitializeMintEventData.__tnInvokeValidate(buffer, params));
-
 export class InitializeMintEventDataBuilder {
   private buffer: Uint8Array;
   private view: DataView;
@@ -4326,7 +4407,7 @@ export class InitializeMintEventDataBuilder {
     return this;
   }
 
-  set_supply(value: number): this {
+  set_supply(value: bigint): this {
     const cast = __tnToBigInt(value);
     this.view.setBigUint64(96, cast, true);
     return this;
@@ -4364,6 +4445,10 @@ export class InitializeMintEventDataBuilder {
     return view;
   }
 }
+
+__tnRegisterFootprint("InitializeMintEventData", (params) => InitializeMintEventData.__tnInvokeFootprint(params));
+__tnRegisterValidate("InitializeMintEventData", (buffer, params) => InitializeMintEventData.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("InitializeMintEventData", (buffer) => { const result = InitializeMintEventData.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR MintToEventData ----- */
 
@@ -4558,9 +4643,6 @@ export class MintToEventData {
 
 }
 
-__tnRegisterFootprint("MintToEventData", (params) => MintToEventData.__tnInvokeFootprint(params));
-__tnRegisterValidate("MintToEventData", (buffer, params) => MintToEventData.__tnInvokeValidate(buffer, params));
-
 export class MintToEventDataBuilder {
   private buffer: Uint8Array;
   private view: DataView;
@@ -4588,19 +4670,19 @@ export class MintToEventDataBuilder {
     return this;
   }
 
-  set_amount(value: number): this {
+  set_amount(value: bigint): this {
     const cast = __tnToBigInt(value);
     this.view.setBigUint64(96, cast, true);
     return this;
   }
 
-  set_dest_post_balance(value: number): this {
+  set_dest_post_balance(value: bigint): this {
     const cast = __tnToBigInt(value);
     this.view.setBigUint64(104, cast, true);
     return this;
   }
 
-  set_mint_supply(value: number): this {
+  set_mint_supply(value: bigint): this {
     const cast = __tnToBigInt(value);
     this.view.setBigUint64(112, cast, true);
     return this;
@@ -4622,6 +4704,10 @@ export class MintToEventDataBuilder {
     return view;
   }
 }
+
+__tnRegisterFootprint("MintToEventData", (params) => MintToEventData.__tnInvokeFootprint(params));
+__tnRegisterValidate("MintToEventData", (buffer, params) => MintToEventData.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("MintToEventData", (buffer) => { const result = MintToEventData.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR TokenEvent ----- */
 
@@ -4710,7 +4796,7 @@ export class TokenEvent {
     }
   }
 
-  static __tnCreateView(buffer: Uint8Array, opts?: { params?: TokenEvent.Params }): TokenEvent {
+  static __tnCreateView(buffer: Uint8Array, opts?: { params?: TokenEvent.Params, fieldContext?: Record<string, number | bigint> }): TokenEvent {
     if (!buffer || buffer.length === undefined) throw new Error("TokenEvent.__tnCreateView requires a Uint8Array");
     let params = opts?.params ?? null;
     if (!params) {
@@ -4801,13 +4887,8 @@ export class TokenEvent {
       return null;
     }
     const __tnParam_payload_event_type = __tnToBigInt(view.getUint8(0));
-    if (buffer.length < 1) {
-      return null;
-    }
-    const __tnParam_TokenEvent__payload_event_type = __tnToBigInt(view.getUint8(0));
     const __tnExtractedParams = TokenEvent.Params.fromValues({
       payload_event_type: __tnParam_payload_event_type,
-      TokenEvent__payload_event_type: __tnParam_TokenEvent__payload_event_type,
     });
     return { params: __tnExtractedParams, derived: null };
   }
@@ -4861,10 +4942,9 @@ export class TokenEvent {
     return this.__tnValidateInternal(buffer, __tnParams);
   }
 
-  static footprintIr(payload_event_type: number | bigint, TokenEvent__payload_event_type: number | bigint): bigint {
+  static footprintIr(payload_event_type: number | bigint): bigint {
     const params = TokenEvent.Params.fromValues({
       payload_event_type: payload_event_type,
-      TokenEvent__payload_event_type: TokenEvent__payload_event_type,
     });
     return this.footprintIrFromParams(params);
   }
@@ -4872,7 +4952,7 @@ export class TokenEvent {
   private static __tnPackParams(params: TokenEvent.Params): Record<string, bigint> {
     const record: Record<string, bigint> = Object.create(null);
     record["payload.event_type"] = params.payload_event_type;
-    record["TokenEvent::payload.event_type"] = params.TokenEvent__payload_event_type;
+    record["TokenEvent::payload.event_type"] = params.payload_event_type;
     return record;
   }
 
@@ -4888,7 +4968,7 @@ export class TokenEvent {
     return __tnBigIntToNumber(irResult, 'TokenEvent::footprintFromParams');
   }
 
-  static footprintFromValues(input: { payload_event_type: number | bigint, TokenEvent__payload_event_type: number | bigint }): number {
+  static footprintFromValues(input: { payload_event_type: number | bigint }): number {
     const params = TokenEvent.params(input);
     return this.footprintFromParams(params);
   }
@@ -4944,24 +5024,16 @@ export namespace TokenEvent {
   export type Params = {
     /** ABI path: payload.event_type */
     readonly payload_event_type: bigint;
-    /** ABI path: TokenEvent::payload.event_type */
-    readonly TokenEvent__payload_event_type: bigint;
   };
 
   export const ParamKeys = Object.freeze({
     payload_event_type: "payload.event_type",
-    TokenEvent__payload_event_type: "TokenEvent::payload.event_type",
   } as const);
 
   export const Params = {
-    fromValues(input: { payload_event_type: number | bigint, TokenEvent__payload_event_type?: number | bigint }): Params {
-      const payloadEventType = __tnToBigInt(input.payload_event_type);
-      const tokenEventPayloadType = input.TokenEvent__payload_event_type !== undefined
-        ? __tnToBigInt(input.TokenEvent__payload_event_type)
-        : payloadEventType;
+    fromValues(input: { payload_event_type: number | bigint }): Params {
       return {
-        payload_event_type: payloadEventType,
-        TokenEvent__payload_event_type: tokenEventPayloadType,
+        payload_event_type: __tnToBigInt(input.payload_event_type),
       };
     },
     fromBuilder(source: { dynamicParams(): Params } | { params: Params } | Params): Params {
@@ -4975,13 +5047,10 @@ export namespace TokenEvent {
     }
   };
 
-  export function params(input: { payload_event_type: number | bigint, TokenEvent__payload_event_type?: number | bigint }): Params {
+  export function params(input: { payload_event_type: number | bigint }): Params {
     return Params.fromValues(input);
   }
 }
-
-__tnRegisterFootprint("TokenEvent", (params) => TokenEvent.__tnInvokeFootprint(params));
-__tnRegisterValidate("TokenEvent", (buffer, params) => TokenEvent.__tnInvokeValidate(buffer, params));
 
 export class TokenEventBuilder {
   private __tnPrefixBuffer: Uint8Array;
@@ -5071,10 +5140,8 @@ export class TokenEventBuilder {
 
   private __tnComputeParams(): TokenEvent.Params {
     if (this.__tnCachedParams) return this.__tnCachedParams;
-    const eventType = __tnToBigInt(this.__tnPrefixView.getUint8(0));
     const params = TokenEvent.Params.fromValues({
-      payload_event_type: eventType,
-      TokenEvent__payload_event_type: eventType,
+      payload_event_type: (() => { if (this.__tnField_event_type === null) throw new Error("TokenEventBuilder: missing enum tag"); return __tnToBigInt(this.__tnField_event_type); })(),
     });
     this.__tnCachedParams = params;
     return params;
@@ -5099,6 +5166,10 @@ export class TokenEventBuilder {
   }
 }
 
+__tnRegisterFootprint("TokenEvent", (params) => TokenEvent.__tnInvokeFootprint(params));
+__tnRegisterValidate("TokenEvent", (buffer, params) => TokenEvent.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("TokenEvent", (buffer) => { const result = TokenEvent.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
 /* ----- TYPE DEFINITION FOR InitializeAccountInstruction ----- */
 
 const __tn_ir_InitializeAccountInstruction = {
@@ -5108,14 +5179,36 @@ const __tn_ir_InitializeAccountInstruction = {
 
 export class InitializeAccountInstruction {
   private view: DataView;
+  private __tnParams: InitializeAccountInstruction.Params;
 
-  private constructor(private buffer: Uint8Array) {
+  private constructor(private buffer: Uint8Array, params?: InitializeAccountInstruction.Params) {
     this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    if (params) {
+      this.__tnParams = params;
+    } else {
+      const derived = InitializeAccountInstruction.__tnExtractParams(this.view, buffer);
+      if (!derived) {
+        throw new Error("InitializeAccountInstruction: failed to derive dynamic parameters");
+      }
+      this.__tnParams = derived.params;
+    }
   }
 
-  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): InitializeAccountInstruction {
+  static __tnCreateView(buffer: Uint8Array, opts?: { params?: InitializeAccountInstruction.Params, fieldContext?: Record<string, number | bigint> }): InitializeAccountInstruction {
     if (!buffer || buffer.length === undefined) throw new Error("InitializeAccountInstruction.__tnCreateView requires a Uint8Array");
-    return new InitializeAccountInstruction(new Uint8Array(buffer));
+    let params = opts?.params ?? null;
+    if (!params) {
+      const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+      const derived = InitializeAccountInstruction.__tnExtractParams(view, buffer);
+      if (!derived) throw new Error("InitializeAccountInstruction.__tnCreateView: failed to derive params");
+      params = derived.params;
+    }
+    const instance = new InitializeAccountInstruction(new Uint8Array(buffer), params);
+    return instance;
+  }
+
+  dynamicParams(): InitializeAccountInstruction.Params {
+    return this.__tnParams;
   }
 
   static builder(): InitializeAccountInstructionBuilder {
@@ -5124,7 +5217,61 @@ export class InitializeAccountInstruction {
 
   static fromBuilder(builder: InitializeAccountInstructionBuilder): InitializeAccountInstruction | null {
     const buffer = builder.build();
-    return InitializeAccountInstruction.from_array(buffer);
+    const params = builder.dynamicParams();
+    return InitializeAccountInstruction.from_array(buffer, { params });
+  }
+
+  static __tnComputeSequentialLayout(view: DataView, buffer: Uint8Array): { params: Record<string, bigint> | null; offsets: Record<string, number> | null; derived: Record<string, bigint> | null } | null {
+    const __tnLength = buffer.length;
+    let __tnParamSeq_proof_body_hdr_type_slot: bigint | null = null;
+    let __tnParamSeq_proof_body_payload_size: bigint | null = null;
+    let __tnFieldValue_token_account_index: number | null = null;
+    let __tnFieldValue_mint_account_index: number | null = null;
+    let __tnFieldValue_owner_account_index: number | null = null;
+    let __tnCursorMutable = 0;
+    if (__tnCursorMutable + 2 > __tnLength) return null;
+    const __tnRead_token_account_index = view.getUint16(__tnCursorMutable, true);
+    __tnFieldValue_token_account_index = __tnRead_token_account_index;
+    __tnCursorMutable += 2;
+    if (__tnCursorMutable + 2 > __tnLength) return null;
+    const __tnRead_mint_account_index = view.getUint16(__tnCursorMutable, true);
+    __tnFieldValue_mint_account_index = __tnRead_mint_account_index;
+    __tnCursorMutable += 2;
+    if (__tnCursorMutable + 2 > __tnLength) return null;
+    const __tnRead_owner_account_index = view.getUint16(__tnCursorMutable, true);
+    __tnFieldValue_owner_account_index = __tnRead_owner_account_index;
+    __tnCursorMutable += 2;
+    if (__tnCursorMutable + 32 > __tnLength) return null;
+    __tnCursorMutable += 32;
+    const __tnTyperefResult_state_proof = __tnInvokeDynamicValidate("StateProof", buffer.subarray(__tnCursorMutable));
+    if (!__tnTyperefResult_state_proof.ok || __tnTyperefResult_state_proof.consumed === undefined) return null;
+    const __tnTyperefParams_state_proof = __tnTyperefResult_state_proof.params ?? null;
+    if (!__tnTyperefParams_state_proof || __tnTyperefParams_state_proof["proof_body_hdr_type_slot"] === undefined) return null;
+    __tnParamSeq_proof_body_hdr_type_slot = __tnTyperefParams_state_proof["proof_body_hdr_type_slot"];
+    if (!__tnTyperefParams_state_proof || __tnTyperefParams_state_proof["proof_body_payload_size"] === undefined) return null;
+    __tnParamSeq_proof_body_payload_size = __tnTyperefParams_state_proof["proof_body_payload_size"];
+    __tnCursorMutable += __tnBigIntToNumber(__tnTyperefResult_state_proof.consumed, "InitializeAccountInstruction::state_proof");
+    const params: Record<string, bigint> = Object.create(null);
+    if (__tnParamSeq_proof_body_hdr_type_slot === null) return null;
+    params["proof_body_hdr_type_slot"] = __tnParamSeq_proof_body_hdr_type_slot as bigint;
+    if (__tnParamSeq_proof_body_payload_size === null) return null;
+    params["proof_body_payload_size"] = __tnParamSeq_proof_body_payload_size as bigint;
+    return { params, offsets: null, derived: null };
+  }
+
+  private static __tnExtractParams(view: DataView, buffer: Uint8Array): { params: InitializeAccountInstruction.Params; derived: Record<string, bigint> | null } | null {
+    const __tnLayout = InitializeAccountInstruction.__tnComputeSequentialLayout(view, buffer);
+    if (!__tnLayout || !__tnLayout.params) return null;
+    const __tnSeqParams = __tnLayout.params;
+    const __tnParamSeq_proof_body_hdr_type_slot = __tnSeqParams["proof_body_hdr_type_slot"];
+    if (__tnParamSeq_proof_body_hdr_type_slot === undefined) return null;
+    const __tnParamSeq_proof_body_payload_size = __tnSeqParams["proof_body_payload_size"];
+    if (__tnParamSeq_proof_body_payload_size === undefined) return null;
+    const __tnExtractedParams = InitializeAccountInstruction.Params.fromValues({
+      proof_body_hdr_type_slot: __tnParamSeq_proof_body_hdr_type_slot as bigint,
+      proof_body_payload_size: __tnParamSeq_proof_body_payload_size as bigint,
+    });
+    return { params: __tnExtractedParams, derived: null };
   }
 
   get_token_account_index(): number {
@@ -5229,7 +5376,6 @@ export class InitializeAccountInstruction {
   set state_proof(value: StateProof) {
     this.set_state_proof(value);
   }
-
   private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
     return __tnEvalFootprint(__tn_ir_InitializeAccountInstruction.root, { params: __tnParams });
   }
@@ -5246,45 +5392,126 @@ export class InitializeAccountInstruction {
     return this.__tnValidateInternal(buffer, __tnParams);
   }
 
-  static footprintIr(): bigint {
-    return this.__tnFootprintInternal(Object.create(null));
+  static footprintIr(proof_body_hdr_type_slot: number | bigint, proof_body_payload_size: number | bigint): bigint {
+    const params = InitializeAccountInstruction.Params.fromValues({
+      proof_body_hdr_type_slot: proof_body_hdr_type_slot,
+      proof_body_payload_size: proof_body_payload_size,
+    });
+    return this.footprintIrFromParams(params);
   }
 
-  static footprint(): number {
-    const irResult = this.footprintIr();
-      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
-    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
-      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for InitializeAccountInstruction');
+  private static __tnPackParams(params: InitializeAccountInstruction.Params): Record<string, bigint> {
+    const record: Record<string, bigint> = Object.create(null);
+    record["proof_body.hdr.type_slot"] = params.proof_body_hdr_type_slot;
+    record["proof_body.payload_size"] = params.proof_body_payload_size;
+    return record;
+  }
+
+  static footprintIrFromParams(params: InitializeAccountInstruction.Params): bigint {
+    const __tnParams = this.__tnPackParams(params);
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static footprintFromParams(params: InitializeAccountInstruction.Params): number {
+    const irResult = this.footprintIrFromParams(params);
+    const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for InitializeAccountInstruction');
+    return __tnBigIntToNumber(irResult, 'InitializeAccountInstruction::footprintFromParams');
+  }
+
+  static footprintFromValues(input: { proof_body_hdr_type_slot: number | bigint, proof_body_payload_size: number | bigint }): number {
+    const params = InitializeAccountInstruction.params(input);
+    return this.footprintFromParams(params);
+  }
+
+  static footprint(params: InitializeAccountInstruction.Params): number {
+    return this.footprintFromParams(params);
+  }
+
+  static validate(buffer: Uint8Array, opts?: { params?: InitializeAccountInstruction.Params }): { ok: boolean; code?: string; consumed?: number; params?: InitializeAccountInstruction.Params } {
+    if (!buffer || buffer.length === undefined) {
+      return { ok: false, code: "tn.invalid_buffer" };
     }
-    return __tnBigIntToNumber(irResult, 'InitializeAccountInstruction::footprint');
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    let params = opts?.params ?? null;
+    if (!params) {
+      return { ok: false, code: "tn.param_extraction_failed" };
+    }
+    const __tnParamsRec = this.__tnPackParams(params);
+    const irResult = this.__tnValidateInternal(buffer, __tnParamsRec);
+    if (!irResult.ok) {
+      return { ok: false, code: irResult.code, consumed: irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'InitializeAccountInstruction::validate') : undefined, params };
+    }
+    const consumed = irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'InitializeAccountInstruction::validate') : undefined;
+    return { ok: true, consumed, params };
   }
 
-  static validate(_buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
-    __tnLogWarn("InitializeAccountInstruction::validate falling back to basic length check");
-    return { ok: true, consumed: _buffer.length };
-  }
-
-  static from_array(buffer: Uint8Array): InitializeAccountInstruction | null {
+  static from_array(buffer: Uint8Array, opts?: { params?: InitializeAccountInstruction.Params }): InitializeAccountInstruction | null {
     if (!buffer || buffer.length === undefined) {
       return null;
     }
     const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-    const validation = this.validate(buffer);
+    let params = opts?.params ?? null;
+    if (!params) {
+      __tnLogWarn('InitializeAccountInstruction::from_array requires params when IR extraction is unavailable');
+      return null;
+    }
+    const validation = this.validate(buffer, { params });
     if (!validation.ok) {
       return null;
     }
-    return new InitializeAccountInstruction(buffer);
+    const cached = validation.params ?? params;
+    const state = new InitializeAccountInstruction(buffer, cached);
+    return state;
   }
+
 
 }
 
-__tnRegisterFootprint("InitializeAccountInstruction", (params) => InitializeAccountInstruction.__tnInvokeFootprint(params));
-__tnRegisterValidate("InitializeAccountInstruction", (buffer, params) => InitializeAccountInstruction.__tnInvokeValidate(buffer, params));
+export namespace InitializeAccountInstruction {
+  export type Params = {
+    /** ABI path: proof_body.hdr.type_slot */
+    readonly proof_body_hdr_type_slot: bigint;
+    /** ABI path: proof_body.payload_size */
+    readonly proof_body_payload_size: bigint;
+  };
+
+  export const ParamKeys = Object.freeze({
+    proof_body_hdr_type_slot: "proof_body.hdr.type_slot",
+    proof_body_payload_size: "proof_body.payload_size",
+  } as const);
+
+  export const Params = {
+    fromValues(input: { proof_body_hdr_type_slot: number | bigint, proof_body_payload_size: number | bigint }): Params {
+      return {
+        proof_body_hdr_type_slot: __tnToBigInt(input.proof_body_hdr_type_slot),
+        proof_body_payload_size: __tnToBigInt(input.proof_body_payload_size),
+      };
+    },
+    fromBuilder(source: { dynamicParams(): Params } | { params: Params } | Params): Params {
+      if ((source as { dynamicParams?: () => Params }).dynamicParams) {
+        return (source as { dynamicParams(): Params }).dynamicParams();
+      }
+      if ((source as { params?: Params }).params) {
+        return (source as { params: Params }).params;
+      }
+      return source as Params;
+    }
+  };
+
+  export function params(input: { proof_body_hdr_type_slot: number | bigint, proof_body_payload_size: number | bigint }): Params {
+    return Params.fromValues(input);
+  }
+}
 
 export class InitializeAccountInstructionBuilder {
   private buffer: Uint8Array;
   private view: DataView;
+  private __tnCachedParams: InitializeAccountInstruction.Params | null = null;
+  private __tnLastBuffer: Uint8Array | null = null;
+  private __tnLastParams: InitializeAccountInstruction.Params | null = null;
   private __tnTail_state_proof: Uint8Array | null = null;
+  private __tnTailParams_state_proof: Record<string, bigint> | null = null;
 
   constructor() {
     this.buffer = new Uint8Array(38);
@@ -5292,7 +5519,9 @@ export class InitializeAccountInstructionBuilder {
   }
 
   private __tnInvalidate(): void {
-    /* Placeholder for future cache invalidation. */
+    this.__tnCachedParams = null;
+    this.__tnLastBuffer = null;
+    this.__tnLastParams = null;
   }
 
   set_token_account_index(value: number): this {
@@ -5322,33 +5551,38 @@ export class InitializeAccountInstructionBuilder {
 
   set_state_proof(value: StateProof | __TnStructFieldInput): this {
     const bytes = __tnResolveStructFieldInput(value as __TnStructFieldInput, "InitializeAccountInstructionBuilder::state_proof");
+    const validation = __tnInvokeDynamicValidate("StateProof", bytes);
+    if (!validation.ok || validation.consumed === undefined) throw new Error("InitializeAccountInstructionBuilder: field 'state_proof' failed validation");
+    if (__tnBigIntToNumber(validation.consumed, "InitializeAccountInstructionBuilder::state_proof") !== bytes.length) throw new Error("InitializeAccountInstructionBuilder: field 'state_proof' validation did not consume the full buffer");
     this.__tnTail_state_proof = bytes;
+    this.__tnTailParams_state_proof = validation.params ?? null;
     this.__tnInvalidate();
     return this;
   }
 
   build(): Uint8Array {
-    const fragments = this.__tnCollectTailFragments();
-    const size = this.__tnComputeSize(fragments);
+    const params = this.__tnComputeParams();
+    const size = InitializeAccountInstruction.footprintFromParams(params);
     const buffer = new Uint8Array(size);
-    this.__tnWriteInto(buffer, fragments);
-    this.__tnValidateOrThrow(buffer);
+    this.__tnWriteInto(buffer);
+    this.__tnValidateOrThrow(buffer, params);
     return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
-    const fragments = this.__tnCollectTailFragments();
-    const size = this.__tnComputeSize(fragments);
+    const params = this.__tnComputeParams();
+    const size = InitializeAccountInstruction.footprintFromParams(params);
     if (target.length - offset < size) throw new Error("InitializeAccountInstructionBuilder: target buffer too small");
     const slice = target.subarray(offset, offset + size);
-    this.__tnWriteInto(slice, fragments);
-    this.__tnValidateOrThrow(slice);
+    this.__tnWriteInto(slice);
+    this.__tnValidateOrThrow(slice, params);
     return target;
   }
 
   finish(): InitializeAccountInstruction {
     const buffer = this.build();
-    const view = InitializeAccountInstruction.from_array(buffer);
+    const params = this.__tnLastParams ?? this.__tnComputeParams();
+    const view = InitializeAccountInstruction.from_array(buffer, { params });
     if (!view) throw new Error("InitializeAccountInstructionBuilder: failed to finalize view");
     return view;
   }
@@ -5357,40 +5591,42 @@ export class InitializeAccountInstructionBuilder {
     return this.finish();
   }
 
-  private __tnCollectTailFragments(): Uint8Array[] {
-    return [
-      (() => {
-        const bytes = this.__tnTail_state_proof;
-        if (!bytes) throw new Error("InitializeAccountInstructionBuilder: field 'state_proof' must be set before build()");
-        return bytes;
-      })(),
-    ];
+  dynamicParams(): InitializeAccountInstruction.Params {
+    return this.__tnComputeParams();
   }
 
-  private __tnComputeSize(fragments: readonly Uint8Array[]): number {
-    let total = this.buffer.length;
-    for (const fragment of fragments) {
-      total += fragment.length;
-    }
-    return total;
+  private __tnComputeParams(): InitializeAccountInstruction.Params {
+    if (this.__tnCachedParams) return this.__tnCachedParams;
+    const params = InitializeAccountInstruction.Params.fromValues({
+      proof_body_hdr_type_slot: (() => { const params = this.__tnTailParams_state_proof; if (!params || params["proof_body_hdr_type_slot"] === undefined) throw new Error("InitializeAccountInstructionBuilder: field 'state_proof' must be written before computing params"); return params["proof_body_hdr_type_slot"]; })(),
+      proof_body_payload_size: (() => { const params = this.__tnTailParams_state_proof; if (!params || params["proof_body_payload_size"] === undefined) throw new Error("InitializeAccountInstructionBuilder: field 'state_proof' must be written before computing params"); return params["proof_body_payload_size"]; })(),
+    });
+    this.__tnCachedParams = params;
+    return params;
   }
 
-  private __tnWriteInto(target: Uint8Array, fragments: readonly Uint8Array[]): void {
+  private __tnWriteInto(target: Uint8Array): void {
     target.set(this.buffer, 0);
     let cursor = this.buffer.length;
-    for (const fragment of fragments) {
-      target.set(fragment, cursor);
-      cursor += fragment.length;
-    }
+    const __tnLocal_state_proof_bytes = this.__tnTail_state_proof;
+    if (!__tnLocal_state_proof_bytes) throw new Error("InitializeAccountInstructionBuilder: field 'state_proof' must be written before build");
+    target.set(__tnLocal_state_proof_bytes, cursor);
+    cursor += __tnLocal_state_proof_bytes.length;
   }
 
-  private __tnValidateOrThrow(buffer: Uint8Array): void {
-    const result = InitializeAccountInstruction.validate(buffer);
+  private __tnValidateOrThrow(buffer: Uint8Array, params: InitializeAccountInstruction.Params): void {
+    const result = InitializeAccountInstruction.validate(buffer, { params });
     if (!result.ok) {
-      throw new Error(`InitializeAccountInstructionBuilder: builder produced invalid buffer (code=${result.code ?? "unknown"})`);
+      throw new Error(`${ InitializeAccountInstruction }Builder: builder produced invalid buffer (code=${result.code ?? "unknown"})`);
     }
+    this.__tnLastParams = result.params ?? params;
+    this.__tnLastBuffer = buffer;
   }
 }
+
+__tnRegisterFootprint("InitializeAccountInstruction", (params) => InitializeAccountInstruction.__tnInvokeFootprint(params));
+__tnRegisterValidate("InitializeAccountInstruction", (buffer, params) => InitializeAccountInstruction.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("InitializeAccountInstruction", (buffer) => { const result = InitializeAccountInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR InitializeMintInstruction ----- */
 
@@ -5401,14 +5637,36 @@ const __tn_ir_InitializeMintInstruction = {
 
 export class InitializeMintInstruction {
   private view: DataView;
+  private __tnParams: InitializeMintInstruction.Params;
 
-  private constructor(private buffer: Uint8Array) {
+  private constructor(private buffer: Uint8Array, params?: InitializeMintInstruction.Params) {
     this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    if (params) {
+      this.__tnParams = params;
+    } else {
+      const derived = InitializeMintInstruction.__tnExtractParams(this.view, buffer);
+      if (!derived) {
+        throw new Error("InitializeMintInstruction: failed to derive dynamic parameters");
+      }
+      this.__tnParams = derived.params;
+    }
   }
 
-  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): InitializeMintInstruction {
+  static __tnCreateView(buffer: Uint8Array, opts?: { params?: InitializeMintInstruction.Params, fieldContext?: Record<string, number | bigint> }): InitializeMintInstruction {
     if (!buffer || buffer.length === undefined) throw new Error("InitializeMintInstruction.__tnCreateView requires a Uint8Array");
-    return new InitializeMintInstruction(new Uint8Array(buffer));
+    let params = opts?.params ?? null;
+    if (!params) {
+      const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+      const derived = InitializeMintInstruction.__tnExtractParams(view, buffer);
+      if (!derived) throw new Error("InitializeMintInstruction.__tnCreateView: failed to derive params");
+      params = derived.params;
+    }
+    const instance = new InitializeMintInstruction(new Uint8Array(buffer), params);
+    return instance;
+  }
+
+  dynamicParams(): InitializeMintInstruction.Params {
+    return this.__tnParams;
   }
 
   static builder(): InitializeMintInstructionBuilder {
@@ -5417,7 +5675,69 @@ export class InitializeMintInstruction {
 
   static fromBuilder(builder: InitializeMintInstructionBuilder): InitializeMintInstruction | null {
     const buffer = builder.build();
-    return InitializeMintInstruction.from_array(buffer);
+    const params = builder.dynamicParams();
+    return InitializeMintInstruction.from_array(buffer, { params });
+  }
+
+  static __tnComputeSequentialLayout(view: DataView, buffer: Uint8Array): { params: Record<string, bigint> | null; offsets: Record<string, number> | null; derived: Record<string, bigint> | null } | null {
+    const __tnLength = buffer.length;
+    let __tnParamSeq_proof_body_hdr_type_slot: bigint | null = null;
+    let __tnParamSeq_proof_body_payload_size: bigint | null = null;
+    let __tnFieldValue_mint_account_index: number | null = null;
+    let __tnFieldValue_decimals: number | null = null;
+    let __tnFieldValue_has_freeze_authority: number | null = null;
+    let __tnCursorMutable = 0;
+    if (__tnCursorMutable + 2 > __tnLength) return null;
+    const __tnRead_mint_account_index = view.getUint16(__tnCursorMutable, true);
+    __tnFieldValue_mint_account_index = __tnRead_mint_account_index;
+    __tnCursorMutable += 2;
+    if (__tnCursorMutable + 1 > __tnLength) return null;
+    const __tnRead_decimals = view.getUint8(__tnCursorMutable);
+    __tnFieldValue_decimals = __tnRead_decimals;
+    __tnCursorMutable += 1;
+    if (__tnCursorMutable + 32 > __tnLength) return null;
+    __tnCursorMutable += 32;
+    if (__tnCursorMutable + 32 > __tnLength) return null;
+    __tnCursorMutable += 32;
+    if (__tnCursorMutable + 32 > __tnLength) return null;
+    __tnCursorMutable += 32;
+    if (__tnCursorMutable + 1 > __tnLength) return null;
+    const __tnRead_has_freeze_authority = view.getUint8(__tnCursorMutable);
+    __tnFieldValue_has_freeze_authority = __tnRead_has_freeze_authority;
+    __tnCursorMutable += 1;
+    if (__tnCursorMutable + 9 > __tnLength) return null;
+    __tnCursorMutable += 9;
+    if (__tnCursorMutable + 32 > __tnLength) return null;
+    __tnCursorMutable += 32;
+    const __tnTyperefResult_state_proof = __tnInvokeDynamicValidate("StateProof", buffer.subarray(__tnCursorMutable));
+    if (!__tnTyperefResult_state_proof.ok || __tnTyperefResult_state_proof.consumed === undefined) return null;
+    const __tnTyperefParams_state_proof = __tnTyperefResult_state_proof.params ?? null;
+    if (!__tnTyperefParams_state_proof || __tnTyperefParams_state_proof["proof_body_hdr_type_slot"] === undefined) return null;
+    __tnParamSeq_proof_body_hdr_type_slot = __tnTyperefParams_state_proof["proof_body_hdr_type_slot"];
+    if (!__tnTyperefParams_state_proof || __tnTyperefParams_state_proof["proof_body_payload_size"] === undefined) return null;
+    __tnParamSeq_proof_body_payload_size = __tnTyperefParams_state_proof["proof_body_payload_size"];
+    __tnCursorMutable += __tnBigIntToNumber(__tnTyperefResult_state_proof.consumed, "InitializeMintInstruction::state_proof");
+    const params: Record<string, bigint> = Object.create(null);
+    if (__tnParamSeq_proof_body_hdr_type_slot === null) return null;
+    params["proof_body_hdr_type_slot"] = __tnParamSeq_proof_body_hdr_type_slot as bigint;
+    if (__tnParamSeq_proof_body_payload_size === null) return null;
+    params["proof_body_payload_size"] = __tnParamSeq_proof_body_payload_size as bigint;
+    return { params, offsets: null, derived: null };
+  }
+
+  private static __tnExtractParams(view: DataView, buffer: Uint8Array): { params: InitializeMintInstruction.Params; derived: Record<string, bigint> | null } | null {
+    const __tnLayout = InitializeMintInstruction.__tnComputeSequentialLayout(view, buffer);
+    if (!__tnLayout || !__tnLayout.params) return null;
+    const __tnSeqParams = __tnLayout.params;
+    const __tnParamSeq_proof_body_hdr_type_slot = __tnSeqParams["proof_body_hdr_type_slot"];
+    if (__tnParamSeq_proof_body_hdr_type_slot === undefined) return null;
+    const __tnParamSeq_proof_body_payload_size = __tnSeqParams["proof_body_payload_size"];
+    if (__tnParamSeq_proof_body_payload_size === undefined) return null;
+    const __tnExtractedParams = InitializeMintInstruction.Params.fromValues({
+      proof_body_hdr_type_slot: __tnParamSeq_proof_body_hdr_type_slot as bigint,
+      proof_body_payload_size: __tnParamSeq_proof_body_payload_size as bigint,
+    });
+    return { params: __tnExtractedParams, derived: null };
   }
 
   get_mint_account_index(): number {
@@ -5606,7 +5926,6 @@ export class InitializeMintInstruction {
   set state_proof(value: StateProof) {
     this.set_state_proof(value);
   }
-
   private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
     return __tnEvalFootprint(__tn_ir_InitializeMintInstruction.root, { params: __tnParams });
   }
@@ -5623,45 +5942,126 @@ export class InitializeMintInstruction {
     return this.__tnValidateInternal(buffer, __tnParams);
   }
 
-  static footprintIr(): bigint {
-    return this.__tnFootprintInternal(Object.create(null));
+  static footprintIr(proof_body_hdr_type_slot: number | bigint, proof_body_payload_size: number | bigint): bigint {
+    const params = InitializeMintInstruction.Params.fromValues({
+      proof_body_hdr_type_slot: proof_body_hdr_type_slot,
+      proof_body_payload_size: proof_body_payload_size,
+    });
+    return this.footprintIrFromParams(params);
   }
 
-  static footprint(): number {
-    const irResult = this.footprintIr();
-      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
-    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
-      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for InitializeMintInstruction');
+  private static __tnPackParams(params: InitializeMintInstruction.Params): Record<string, bigint> {
+    const record: Record<string, bigint> = Object.create(null);
+    record["proof_body.hdr.type_slot"] = params.proof_body_hdr_type_slot;
+    record["proof_body.payload_size"] = params.proof_body_payload_size;
+    return record;
+  }
+
+  static footprintIrFromParams(params: InitializeMintInstruction.Params): bigint {
+    const __tnParams = this.__tnPackParams(params);
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static footprintFromParams(params: InitializeMintInstruction.Params): number {
+    const irResult = this.footprintIrFromParams(params);
+    const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for InitializeMintInstruction');
+    return __tnBigIntToNumber(irResult, 'InitializeMintInstruction::footprintFromParams');
+  }
+
+  static footprintFromValues(input: { proof_body_hdr_type_slot: number | bigint, proof_body_payload_size: number | bigint }): number {
+    const params = InitializeMintInstruction.params(input);
+    return this.footprintFromParams(params);
+  }
+
+  static footprint(params: InitializeMintInstruction.Params): number {
+    return this.footprintFromParams(params);
+  }
+
+  static validate(buffer: Uint8Array, opts?: { params?: InitializeMintInstruction.Params }): { ok: boolean; code?: string; consumed?: number; params?: InitializeMintInstruction.Params } {
+    if (!buffer || buffer.length === undefined) {
+      return { ok: false, code: "tn.invalid_buffer" };
     }
-    return __tnBigIntToNumber(irResult, 'InitializeMintInstruction::footprint');
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    let params = opts?.params ?? null;
+    if (!params) {
+      return { ok: false, code: "tn.param_extraction_failed" };
+    }
+    const __tnParamsRec = this.__tnPackParams(params);
+    const irResult = this.__tnValidateInternal(buffer, __tnParamsRec);
+    if (!irResult.ok) {
+      return { ok: false, code: irResult.code, consumed: irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'InitializeMintInstruction::validate') : undefined, params };
+    }
+    const consumed = irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'InitializeMintInstruction::validate') : undefined;
+    return { ok: true, consumed, params };
   }
 
-  static validate(_buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
-    __tnLogWarn("InitializeMintInstruction::validate falling back to basic length check");
-    return { ok: true, consumed: _buffer.length };
-  }
-
-  static from_array(buffer: Uint8Array): InitializeMintInstruction | null {
+  static from_array(buffer: Uint8Array, opts?: { params?: InitializeMintInstruction.Params }): InitializeMintInstruction | null {
     if (!buffer || buffer.length === undefined) {
       return null;
     }
     const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-    const validation = this.validate(buffer);
+    let params = opts?.params ?? null;
+    if (!params) {
+      __tnLogWarn('InitializeMintInstruction::from_array requires params when IR extraction is unavailable');
+      return null;
+    }
+    const validation = this.validate(buffer, { params });
     if (!validation.ok) {
       return null;
     }
-    return new InitializeMintInstruction(buffer);
+    const cached = validation.params ?? params;
+    const state = new InitializeMintInstruction(buffer, cached);
+    return state;
   }
+
 
 }
 
-__tnRegisterFootprint("InitializeMintInstruction", (params) => InitializeMintInstruction.__tnInvokeFootprint(params));
-__tnRegisterValidate("InitializeMintInstruction", (buffer, params) => InitializeMintInstruction.__tnInvokeValidate(buffer, params));
+export namespace InitializeMintInstruction {
+  export type Params = {
+    /** ABI path: proof_body.hdr.type_slot */
+    readonly proof_body_hdr_type_slot: bigint;
+    /** ABI path: proof_body.payload_size */
+    readonly proof_body_payload_size: bigint;
+  };
+
+  export const ParamKeys = Object.freeze({
+    proof_body_hdr_type_slot: "proof_body.hdr.type_slot",
+    proof_body_payload_size: "proof_body.payload_size",
+  } as const);
+
+  export const Params = {
+    fromValues(input: { proof_body_hdr_type_slot: number | bigint, proof_body_payload_size: number | bigint }): Params {
+      return {
+        proof_body_hdr_type_slot: __tnToBigInt(input.proof_body_hdr_type_slot),
+        proof_body_payload_size: __tnToBigInt(input.proof_body_payload_size),
+      };
+    },
+    fromBuilder(source: { dynamicParams(): Params } | { params: Params } | Params): Params {
+      if ((source as { dynamicParams?: () => Params }).dynamicParams) {
+        return (source as { dynamicParams(): Params }).dynamicParams();
+      }
+      if ((source as { params?: Params }).params) {
+        return (source as { params: Params }).params;
+      }
+      return source as Params;
+    }
+  };
+
+  export function params(input: { proof_body_hdr_type_slot: number | bigint, proof_body_payload_size: number | bigint }): Params {
+    return Params.fromValues(input);
+  }
+}
 
 export class InitializeMintInstructionBuilder {
   private buffer: Uint8Array;
   private view: DataView;
+  private __tnCachedParams: InitializeMintInstruction.Params | null = null;
+  private __tnLastBuffer: Uint8Array | null = null;
+  private __tnLastParams: InitializeMintInstruction.Params | null = null;
   private __tnTail_state_proof: Uint8Array | null = null;
+  private __tnTailParams_state_proof: Record<string, bigint> | null = null;
 
   constructor() {
     this.buffer = new Uint8Array(141);
@@ -5669,7 +6069,9 @@ export class InitializeMintInstructionBuilder {
   }
 
   private __tnInvalidate(): void {
-    /* Placeholder for future cache invalidation. */
+    this.__tnCachedParams = null;
+    this.__tnLastBuffer = null;
+    this.__tnLastParams = null;
   }
 
   set_mint_account_index(value: number): this {
@@ -5727,33 +6129,38 @@ export class InitializeMintInstructionBuilder {
 
   set_state_proof(value: StateProof | __TnStructFieldInput): this {
     const bytes = __tnResolveStructFieldInput(value as __TnStructFieldInput, "InitializeMintInstructionBuilder::state_proof");
+    const validation = __tnInvokeDynamicValidate("StateProof", bytes);
+    if (!validation.ok || validation.consumed === undefined) throw new Error("InitializeMintInstructionBuilder: field 'state_proof' failed validation");
+    if (__tnBigIntToNumber(validation.consumed, "InitializeMintInstructionBuilder::state_proof") !== bytes.length) throw new Error("InitializeMintInstructionBuilder: field 'state_proof' validation did not consume the full buffer");
     this.__tnTail_state_proof = bytes;
+    this.__tnTailParams_state_proof = validation.params ?? null;
     this.__tnInvalidate();
     return this;
   }
 
   build(): Uint8Array {
-    const fragments = this.__tnCollectTailFragments();
-    const size = this.__tnComputeSize(fragments);
+    const params = this.__tnComputeParams();
+    const size = InitializeMintInstruction.footprintFromParams(params);
     const buffer = new Uint8Array(size);
-    this.__tnWriteInto(buffer, fragments);
-    this.__tnValidateOrThrow(buffer);
+    this.__tnWriteInto(buffer);
+    this.__tnValidateOrThrow(buffer, params);
     return buffer;
   }
 
   buildInto(target: Uint8Array, offset = 0): Uint8Array {
-    const fragments = this.__tnCollectTailFragments();
-    const size = this.__tnComputeSize(fragments);
+    const params = this.__tnComputeParams();
+    const size = InitializeMintInstruction.footprintFromParams(params);
     if (target.length - offset < size) throw new Error("InitializeMintInstructionBuilder: target buffer too small");
     const slice = target.subarray(offset, offset + size);
-    this.__tnWriteInto(slice, fragments);
-    this.__tnValidateOrThrow(slice);
+    this.__tnWriteInto(slice);
+    this.__tnValidateOrThrow(slice, params);
     return target;
   }
 
   finish(): InitializeMintInstruction {
     const buffer = this.build();
-    const view = InitializeMintInstruction.from_array(buffer);
+    const params = this.__tnLastParams ?? this.__tnComputeParams();
+    const view = InitializeMintInstruction.from_array(buffer, { params });
     if (!view) throw new Error("InitializeMintInstructionBuilder: failed to finalize view");
     return view;
   }
@@ -5762,40 +6169,42 @@ export class InitializeMintInstructionBuilder {
     return this.finish();
   }
 
-  private __tnCollectTailFragments(): Uint8Array[] {
-    return [
-      (() => {
-        const bytes = this.__tnTail_state_proof;
-        if (!bytes) throw new Error("InitializeMintInstructionBuilder: field 'state_proof' must be set before build()");
-        return bytes;
-      })(),
-    ];
+  dynamicParams(): InitializeMintInstruction.Params {
+    return this.__tnComputeParams();
   }
 
-  private __tnComputeSize(fragments: readonly Uint8Array[]): number {
-    let total = this.buffer.length;
-    for (const fragment of fragments) {
-      total += fragment.length;
-    }
-    return total;
+  private __tnComputeParams(): InitializeMintInstruction.Params {
+    if (this.__tnCachedParams) return this.__tnCachedParams;
+    const params = InitializeMintInstruction.Params.fromValues({
+      proof_body_hdr_type_slot: (() => { const params = this.__tnTailParams_state_proof; if (!params || params["proof_body_hdr_type_slot"] === undefined) throw new Error("InitializeMintInstructionBuilder: field 'state_proof' must be written before computing params"); return params["proof_body_hdr_type_slot"]; })(),
+      proof_body_payload_size: (() => { const params = this.__tnTailParams_state_proof; if (!params || params["proof_body_payload_size"] === undefined) throw new Error("InitializeMintInstructionBuilder: field 'state_proof' must be written before computing params"); return params["proof_body_payload_size"]; })(),
+    });
+    this.__tnCachedParams = params;
+    return params;
   }
 
-  private __tnWriteInto(target: Uint8Array, fragments: readonly Uint8Array[]): void {
+  private __tnWriteInto(target: Uint8Array): void {
     target.set(this.buffer, 0);
     let cursor = this.buffer.length;
-    for (const fragment of fragments) {
-      target.set(fragment, cursor);
-      cursor += fragment.length;
-    }
+    const __tnLocal_state_proof_bytes = this.__tnTail_state_proof;
+    if (!__tnLocal_state_proof_bytes) throw new Error("InitializeMintInstructionBuilder: field 'state_proof' must be written before build");
+    target.set(__tnLocal_state_proof_bytes, cursor);
+    cursor += __tnLocal_state_proof_bytes.length;
   }
 
-  private __tnValidateOrThrow(buffer: Uint8Array): void {
-    const result = InitializeMintInstruction.validate(buffer);
+  private __tnValidateOrThrow(buffer: Uint8Array, params: InitializeMintInstruction.Params): void {
+    const result = InitializeMintInstruction.validate(buffer, { params });
     if (!result.ok) {
-      throw new Error(`InitializeMintInstructionBuilder: builder produced invalid buffer (code=${result.code ?? "unknown"})`);
+      throw new Error(`${ InitializeMintInstruction }Builder: builder produced invalid buffer (code=${result.code ?? "unknown"})`);
     }
+    this.__tnLastParams = result.params ?? params;
+    this.__tnLastBuffer = buffer;
   }
 }
+
+__tnRegisterFootprint("InitializeMintInstruction", (params) => InitializeMintInstruction.__tnInvokeFootprint(params));
+__tnRegisterValidate("InitializeMintInstruction", (buffer, params) => InitializeMintInstruction.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("InitializeMintInstruction", (buffer) => { const result = InitializeMintInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR TokenInstruction ----- */
 
@@ -5884,7 +6293,7 @@ export class TokenInstruction {
     }
   }
 
-  static __tnCreateView(buffer: Uint8Array, opts?: { params?: TokenInstruction.Params }): TokenInstruction {
+  static __tnCreateView(buffer: Uint8Array, opts?: { params?: TokenInstruction.Params, fieldContext?: Record<string, number | bigint> }): TokenInstruction {
     if (!buffer || buffer.length === undefined) throw new Error("TokenInstruction.__tnCreateView requires a Uint8Array");
     let params = opts?.params ?? null;
     if (!params) {
@@ -6184,9 +6593,6 @@ export namespace TokenInstruction {
   }
 }
 
-__tnRegisterFootprint("TokenInstruction", (params) => TokenInstruction.__tnInvokeFootprint(params));
-__tnRegisterValidate("TokenInstruction", (buffer, params) => TokenInstruction.__tnInvokeValidate(buffer, params));
-
 export class TokenInstructionBuilder {
   private __tnPrefixBuffer: Uint8Array;
   private __tnPrefixView: DataView;
@@ -6301,3 +6707,7 @@ export class TokenInstructionBuilder {
     this.__tnLastBuffer = buffer;
   }
 }
+
+__tnRegisterFootprint("TokenInstruction", (params) => TokenInstruction.__tnInvokeFootprint(params));
+__tnRegisterValidate("TokenInstruction", (buffer, params) => TokenInstruction.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("TokenInstruction", (buffer) => { const result = TokenInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });

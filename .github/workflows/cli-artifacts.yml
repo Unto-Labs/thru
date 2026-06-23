@@ -198,6 +198,14 @@ jobs:
           cargo build --release --locked --target "${{ matrix.target }}" --manifest-path rpc/cli/Cargo.toml --bin thru
         fi
 
+    - name: Verify Linux CLI debug info
+      if: ${{ runner.os == 'Linux' }}
+      shell: bash
+      run: |
+        set -euo pipefail
+        BIN="rpc/cli/target/${{ matrix.target }}/release/thru"
+        python3 .github/scripts/verify-elf-debug-info.py "$BIN"
+
     # Regression guard for the portability work: fail the leg if the binary's
     # glibc requirement ever creeps above the floor again (e.g. a runner image
     # bump combined with a zigbuild regression), or if a C dependency that is

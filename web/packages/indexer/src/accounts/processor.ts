@@ -13,6 +13,7 @@ import type { DatabaseClient } from "../schema/types";
 import { validateParsedData } from "../schema/validation";
 import { getCheckpoint, updateCheckpoint } from "../checkpoint";
 import type { AccountStream } from "./types";
+import type { ProcessorStatusObserver } from "../runtime/status";
 
 // ============================================================
 // Types
@@ -27,6 +28,8 @@ export interface AccountProcessorOptions {
   logLevel?: "debug" | "info" | "warn" | "error";
   /** Validate parse output with Zod (useful for development) */
   validateParse?: boolean;
+  /** Runtime status observer */
+  observer?: ProcessorStatusObserver;
 }
 
 export interface AccountProcessorStats {
@@ -67,7 +70,7 @@ export async function runAccountStreamProcessor(
   options: AccountProcessorOptions,
   abortSignal?: AbortSignal
 ): Promise<AccountProcessorStats> {
-  const { clientFactory, db, logLevel = "info", validateParse = false } = options;
+  const { clientFactory, db, logLevel = "info", validateParse = false, observer } = options;
   const checkpointName = `account:${stream.name}`;
 
   const log = (
@@ -93,6 +96,10 @@ export async function runAccountStreamProcessor(
   // Load checkpoint for resumable backfill
   const checkpoint = await getCheckpoint(db, checkpointName);
   const minUpdatedSlot = checkpoint?.slot;
+  observer?.onStart?.({
+    startSlot: minUpdatedSlot,
+    checkpointSlot: checkpoint?.slot ?? null,
+  });
   if (minUpdatedSlot) {
     log("info", `Resuming from checkpoint: slot ${minUpdatedSlot}`);
   }
@@ -147,6 +154,10 @@ export async function runAccountStreamProcessor(
       if (event.type === "account") {
         const account = event.account;
         stats.accountsProcessed++;
+        observer?.onRecord?.({
+          slot: account.slot,
+          id: account.addressHex,
+        });
 
         // Log first few accounts for debugging
         if (stats.accountsProcessed <= 3) {
@@ -168,19 +179,30 @@ export async function runAccountStreamProcessor(
           try {
             await db.delete(stream.table).where(eq(table[idField], idValue));
             stats.accountsDeleted++;
+            observer?.onCheckpoint?.({ slot: account.slot });
             log("info", `Deleted row for account ${account.addressHex}`);
             if (account.slot > lastProcessedSlot) {
               lastProcessedSlot = account.slot;
             }
           } catch (err) {
+            observer?.onError?.("commit", err);
             log("error", `Failed to delete account ${account.addressHex}: ${err}`);
+            throw err;
           }
           continue;
         }
 
         // Parse using stream's parser
-        const parsed = stream.parse(account);
+        let parsed;
+        try {
+          parsed = stream.parse(account);
+        } catch (parseErr) {
+          observer?.onParserError?.(parseErr);
+          observer?.onError?.("parse", parseErr);
+          throw parseErr;
+        }
         if (!parsed) {
+          observer?.onParserNull?.();
           log(
             "debug",
             `Skipped account ${account.addressHex} - parser returned null (dataLen=${account.data.length})`
@@ -195,6 +217,7 @@ export async function runAccountStreamProcessor(
         if (validateParse) {
           const validation = validateParsedData(stream.schema, parsed, stream.name);
           if (!validation.success) {
+            observer?.onParseValidationError?.(validation.error);
             log("error", validation.error);
             continue; // Skip invalid accounts
           }
@@ -226,10 +249,12 @@ export async function runAccountStreamProcessor(
             );
           }
         } catch (err) {
+          observer?.onError?.("commit", err);
           log(
             "error",
             `Failed to upsert account ${account.addressHex}: ${err}`
           );
+          throw err;
         }
 
         // Track highest slot for checkpoint
@@ -250,6 +275,7 @@ export async function runAccountStreamProcessor(
         const slot = event.block.slot;
         if (lastProcessedSlot > 0n) {
           await updateCheckpoint(db, checkpointName, lastProcessedSlot, null);
+          observer?.onCheckpoint?.({ slot: lastProcessedSlot });
           log(
             "debug",
             `Block finished: slot ${slot}, checkpoint saved at account slot ${lastProcessedSlot}`
@@ -266,6 +292,7 @@ export async function runAccountStreamProcessor(
     // Final checkpoint save
     if (lastProcessedSlot > 0n) {
       await updateCheckpoint(db, checkpointName, lastProcessedSlot, null);
+      observer?.onCheckpoint?.({ slot: lastProcessedSlot });
       log("info", `Final checkpoint saved: slot ${lastProcessedSlot}`);
     }
   } catch (err) {

@@ -65,7 +65,14 @@ export {
 // ============================================================
 
 export { Indexer, type IndexerResult } from "./runtime";
-export type { IndexerConfig } from "./runtime";
+export type {
+  IndexerConfig,
+  IndexerStatus,
+  IndexerStreamStatus,
+  IndexerStreamState,
+  IndexerStreamKind,
+  NormalizedIndexerError,
+} from "./runtime";
 
 // ============================================================
 // Shared Types

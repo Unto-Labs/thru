@@ -2267,4 +2267,3 @@ export class TimestampBuilder {
 __tnRegisterFootprint("Timestamp", (params) => Timestamp.__tnInvokeFootprint(params));
 __tnRegisterValidate("Timestamp", (buffer, params) => Timestamp.__tnInvokeValidate(buffer, params));
 __tnRegisterDynamicValidate("Timestamp", (buffer) => { const result = Timestamp.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
-

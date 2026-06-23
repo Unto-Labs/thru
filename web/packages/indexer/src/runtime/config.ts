@@ -35,6 +35,18 @@ export interface IndexerConfig {
   /** Log level (default: "info") */
   logLevel?: "debug" | "info" | "warn" | "error";
 
+  /** Human-readable endpoint label included in normalized stream errors */
+  endpointLabel?: string;
+
+  /** Initial supervisor restart backoff in milliseconds (default: 1000) */
+  supervisorInitialBackoffMs?: number;
+
+  /** Maximum supervisor restart backoff in milliseconds (default: 30000) */
+  supervisorMaxBackoffMs?: number;
+
+  /** Mark running streams unhealthy when no activity is seen for this long (default: 300000, disabled with 0) */
+  streamStaleMs?: number;
+
   /**
    * Validate parse output at runtime using Zod schemas.
    * Useful for development to catch type mismatches early.

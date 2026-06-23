@@ -178,6 +178,53 @@ describe("runEventStreamProcessor", () => {
     expect(onCommit).not.toHaveBeenCalled();
   });
 
+  it("rejects when a timeout flush commit fails", async () => {
+    vi.useFakeTimers();
+    let resolveParsed: () => void = () => {};
+    const parsed = new Promise<void>((resolve) => {
+      resolveParsed = resolve;
+    });
+    replayMocks.createEventReplay.mockImplementation(() => ({
+      [Symbol.asyncIterator]: async function* () {
+        yield { eventId: "event-1", slot: 7n };
+        await new Promise(() => {});
+      },
+    }));
+    const transaction = vi.fn(async () => {
+      throw new Error("database unavailable");
+    });
+    const stream = createStream({
+      parse: vi.fn((event: { eventId: string; slot: bigint }) => {
+        resolveParsed();
+        return {
+          id: event.eventId,
+          slot: event.slot,
+        };
+      }),
+    });
+
+    try {
+      const promise = runEventStreamProcessor(
+        stream,
+        {
+          clientFactory: vi.fn(),
+          db: { transaction } as any,
+          defaultStartSlot: 0n,
+          logLevel: "error",
+        }
+      );
+      const rejection = expect(promise).rejects.toThrow("database unavailable");
+
+      await parsed;
+      await vi.advanceTimersByTimeAsync(6000);
+
+      await rejection;
+      expect(transaction).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("checkpoints the last post-filter event for partially filtered batches", async () => {
     replayMocks.events = [
       { eventId: "event-1", slot: 7n },

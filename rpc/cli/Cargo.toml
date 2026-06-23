@@ -5,3 +5,7 @@ members = [
     "crates/thru-cli",
     "crates/thru",
 ]
+
+[profile.release]
+debug = 2
+strip = false
