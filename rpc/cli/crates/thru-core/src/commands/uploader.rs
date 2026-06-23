@@ -147,6 +147,7 @@ impl UploaderManager {
             .http_endpoint(rpc_url)
             .timeout(Duration::from_secs(config.timeout_seconds))
             .auth_token(config.auth_token.clone())
+            .announce_pending_signature(config.announce_pending_signature)
             .build()?;
 
         // Get uploader program public key
@@ -1412,6 +1413,7 @@ async fn get_uploader_status(
         .http_endpoint(rpc_url.clone())
         .timeout(Duration::from_secs(config.timeout_seconds))
         .auth_token(config.auth_token.clone())
+        .announce_pending_signature(config.announce_pending_signature)
         .build()?;
 
     // Verify connectivity with a simple call first

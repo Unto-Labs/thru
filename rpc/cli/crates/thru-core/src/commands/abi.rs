@@ -429,6 +429,7 @@ impl AbiProgramManager {
             .http_endpoint(rpc_url)
             .timeout(Duration::from_secs(config.timeout_seconds))
             .auth_token(config.auth_token.clone())
+            .announce_pending_signature(config.announce_pending_signature)
             .build()?;
 
         // Ensure the configured manager program key is valid even if unused directly

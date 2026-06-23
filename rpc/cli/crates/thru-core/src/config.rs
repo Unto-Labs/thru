@@ -255,6 +255,12 @@ pub struct Config {
     /// Which named network profile is active by default
     #[serde(default)]
     pub default_network: Option<String>,
+
+    /// Runtime-only: whether transaction-submitting commands should print the
+    /// pending signature to stderr before sending. Set from the CLI flags in
+    /// `run` (enabled outside `--json`/`--quiet`); never persisted to disk.
+    #[serde(skip)]
+    pub announce_pending_signature: bool,
 }
 
 impl Default for Config {
@@ -292,6 +298,7 @@ impl Default for Config {
             github_repo: None,
             networks: HashMap::new(),
             default_network: None,
+            announce_pending_signature: false,
         }
     }
 }

@@ -40,7 +40,9 @@ use tonic_health::pb::{HealthCheckRequest, HealthCheckResponse, health_client::H
 use std::convert::TryFrom;
 
 use thru_base::rpc_types::{MakeStateProofConfig, ProofType};
+use thru_base::tn_signature_encoding::tn_signature_to_string;
 use thru_base::tn_tools::{Pubkey, Signature};
+use thru_base::txn_lib::TN_TXN_SIGNATURE_SZ;
 use thru_grpc_client::thru::{
     common::v1 as commonv1,
     core::v1 as corev1,
@@ -65,6 +67,7 @@ pub struct ClientBuilder {
     endpoint: Endpoint,
     timeout: Duration,
     auth_token: Option<String>,
+    announce_pending_signature: bool,
 }
 
 impl ClientBuilder {
@@ -76,6 +79,7 @@ impl ClientBuilder {
             endpoint: default_endpoint,
             timeout: Duration::from_secs(30),
             auth_token: None,
+            announce_pending_signature: false,
         }
     }
 
@@ -110,6 +114,14 @@ impl ClientBuilder {
         self
     }
 
+    /// Enable printing the transaction signature to stderr just before a
+    /// transaction is sent (see [`Client::execute_transaction`]). Off by
+    /// default so library consumers are unaffected; the CLI opts in.
+    pub fn announce_pending_signature(mut self, enabled: bool) -> Self {
+        self.announce_pending_signature = enabled;
+        self
+    }
+
     /// Build the client.
     pub fn build(self) -> Result<Client> {
         let channel = self.endpoint.connect_lazy();
@@ -129,6 +141,7 @@ impl ClientBuilder {
             channel,
             timeout: self.timeout,
             auth_header,
+            announce_pending_signature: self.announce_pending_signature,
         })
     }
 }
@@ -144,6 +157,7 @@ pub struct Client {
     channel: Channel,
     timeout: Duration,
     auth_header: Option<MetadataValue<tonic::metadata::Ascii>>,
+    announce_pending_signature: bool,
 }
 
 impl Client {
@@ -574,6 +588,27 @@ impl Client {
         }
     }
 
+    /// Print the pending transaction signature to stderr before submission,
+    /// when enabled via [`ClientBuilder::announce_pending_signature`].
+    ///
+    /// The fee-payer signature is the trailing 64 bytes of the signed wire
+    /// transaction (`Transaction::to_wire`), so it is known locally before the
+    /// network is contacted. It is written to stderr (never the stdout payload),
+    /// so it is safe in `--json` mode; the CLI leaves the flag off in
+    /// `--json`/`--quiet` modes so it cannot interfere with machine-readable
+    /// consumers that merge streams.
+    fn print_pending_signature(&self, transaction: &[u8]) {
+        if !self.announce_pending_signature || transaction.len() < TN_TXN_SIGNATURE_SZ {
+            return;
+        }
+        let mut signature = [0u8; TN_TXN_SIGNATURE_SZ];
+        signature.copy_from_slice(&transaction[transaction.len() - TN_TXN_SIGNATURE_SZ..]);
+        eprintln!(
+            "Submitting transaction: {}",
+            tn_signature_to_string(&signature)
+        );
+    }
+
     /// Submit a transaction and wait for execution or timeout.
     /// Uses server-side streaming to wait for confirmation, then fetches
     /// full transaction details with a single query.
@@ -583,6 +618,7 @@ impl Client {
         timeout: Duration,
     ) -> Result<TransactionDetails> {
         let start = Instant::now();
+        self.print_pending_signature(transaction);
         let signature_bytes = self.send_transaction(transaction).await?;
         let track_resp = match self.track_transaction(&signature_bytes, timeout).await {
             Ok(track_resp) => track_resp,

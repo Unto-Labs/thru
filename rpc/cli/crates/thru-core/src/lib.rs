@@ -41,6 +41,12 @@ pub async fn run() -> anyhow::Result<()> {
         Config::load().await?
     };
 
+    // Announce the pending transaction signature before sending, except in
+    // machine-readable (`--json`) or `--quiet` modes. This works in scripts,
+    // pipes, and logs (non-TTY) since the banner only goes to stderr, never
+    // to the `--json` payload on stdout.
+    config.announce_pending_signature = !cli.json && !cli.quiet;
+
     // Apply global network overrides
     if let Some(ref url) = cli.url {
         config.rpc_base_url = url.clone();

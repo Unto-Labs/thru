@@ -351,6 +351,7 @@ impl ProgramManager {
             .http_endpoint(rpc_url)
             .timeout(Duration::from_secs(config.timeout_seconds))
             .auth_token(config.auth_token.clone())
+            .announce_pending_signature(config.announce_pending_signature)
             .build()?;
 
         // Get manager program public key (though not stored in struct)
@@ -1937,6 +1938,7 @@ async fn get_program_status(
         .http_endpoint(rpc_url.clone())
         .timeout(Duration::from_secs(config.timeout_seconds))
         .auth_token(config.auth_token.clone())
+        .announce_pending_signature(config.announce_pending_signature)
         .build()?;
 
     /* Verify connectivity with a simple call first */
