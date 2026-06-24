@@ -16,6 +16,7 @@ const DEFAULT_METRICS: ReplayMetrics = {
   emittedReconnect: 0,
   discardedDuplicates: 0,
 };
+const RECONNECT_STUCK_THRESHOLD_MS = 30_000;
 
 function compareBigint(a: Slot, b: Slot): number {
   if (a === b) return 0;
@@ -261,6 +262,11 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
       this.logger.info("replay entering STREAMING state");
       const retryConfig = DEFAULT_RETRY_CONFIG;
       let retryAttempt = 0;
+      let waitingFirstReconnectEvent: {
+        startedAtMs: number;
+        attempt: number;
+        resumeSlot: Slot;
+      } | null = null;
       while (true) {
         if (shouldStop()) return;
 
@@ -276,6 +282,16 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
             throw new Error("stream ended");
           }
           const slot = extractSlot(next.value);
+          if (waitingFirstReconnectEvent) {
+            this.logger.info("Replay stream reconnect completed", {
+              event: "replay.stream.reconnect.completed",
+              attempt: waitingFirstReconnectEvent.attempt,
+              resume_slot: waitingFirstReconnectEvent.resumeSlot.toString(),
+              first_event_slot: slot.toString(),
+              duration_ms: Date.now() - waitingFirstReconnectEvent.startedAtMs,
+            });
+            waitingFirstReconnectEvent = null;
+          }
           const key = keyOf(next.value);
           if (seenItem(slot, key)) {
             this.metrics.discardedDuplicates += 1;
@@ -291,14 +307,46 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
 
           const errMsg = err instanceof Error ? err.message : String(err);
           const backoffMs = calculateBackoff(retryAttempt, retryConfig);
-          this.logger.warn(
-            `live stream disconnected (${errMsg}); reconnecting in ${backoffMs}ms from slot ${currentSlot} (attempt ${retryAttempt + 1})`
-          );
+          const attempt = retryAttempt + 1;
+          const reconnectStartedAtMs = Date.now();
+          this.logger.warn("Replay stream reconnect started", {
+            event: "replay.stream.reconnect.started",
+            reason: errMsg === "stream ended" ? "stream_ended" : "stream_error",
+            error: errMsg,
+            backoff_ms: backoffMs,
+            attempt,
+            current_slot: currentSlot.toString(),
+          });
           await abortableDelay(backoffMs, signal);
           if (shouldStop()) return;
 
+          const cleanupStartedAtMs = Date.now();
+          this.logger.info("Replay stream reconnect cleanup started", {
+            event: "replay.stream.reconnect.cleanup_started",
+            phase: "live_pump_close",
+            attempt,
+            current_slot: currentSlot.toString(),
+          });
           currentDispose();
-          await safeClose(livePump);
+          const closeResult = await safeClose(livePump, signal);
+          const cleanupDurationMs = Date.now() - cleanupStartedAtMs;
+          if (closeResult === "timed-out") {
+            this.logger.warn("Replay stream reconnect cleanup stuck", {
+              event: "replay.stream.reconnect.stuck",
+              phase: "live_pump_close",
+              attempt,
+              duration_ms: cleanupDurationMs,
+              timeout_ms: RECONNECT_STUCK_THRESHOLD_MS,
+            });
+          }
+          this.logger.info("Replay stream reconnect cleanup completed", {
+            event: "replay.stream.reconnect.cleanup_completed",
+            phase: "live_pump_close",
+            attempt,
+            duration_ms: cleanupDurationMs,
+            result: closeResult,
+          });
+          if (shouldStop()) return;
           retryAttempt++;
 
           if (onReconnect) {
@@ -309,11 +357,16 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
                 currentFetchBackfill = fresh.fetchBackfill;
               }
               currentDispose = fresh.dispose ?? (() => {});
-              this.logger.info("created fresh client for reconnection");
+              this.logger.info("Replay stream fresh reconnect sources created", {
+                event: "replay.stream.reconnect.sources_created",
+                attempt,
+              });
             } catch (factoryErr) {
-              this.logger.error(
-                `failed to create fresh client: ${factoryErr instanceof Error ? factoryErr.message : String(factoryErr)}; using existing`
-              );
+              this.logger.error("Replay stream fresh reconnect sources failed", {
+                event: "replay.stream.reconnect.sources_failed",
+                attempt,
+                error: factoryErr,
+              });
             }
           }
 
@@ -339,11 +392,21 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
 
           const resumeSlot = currentSlot > 0n ? currentSlot : 0n;
           livePump = createLivePump(resumeSlot, true, currentSlot);
+          waitingFirstReconnectEvent = {
+            startedAtMs: reconnectStartedAtMs,
+            attempt,
+            resumeSlot,
+          };
+          this.logger.info("Replay stream waiting for first event", {
+            event: "replay.stream.waiting_first_event",
+            attempt,
+            resume_slot: resumeSlot.toString(),
+          });
         }
       }
     } finally {
       currentDispose();
-      await safeClose(livePump);
+      await safeClose(livePump, signal);
     }
   }
 
@@ -414,20 +477,43 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
   }
 }
 
-async function safeClose<T>(pump: LivePump<T>): Promise<void> {
+async function safeClose<T>(
+  pump: LivePump<T>,
+  signal?: AbortSignal
+): Promise<"closed" | "timed-out" | "aborted"> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  let onAbort: (() => void) | undefined;
   try {
-    const timeout = new Promise<"timeout">((resolve) => {
-      timeoutId = setTimeout(() => resolve("timeout"), 5000);
-    });
+    if (signal?.aborted) {
+      return "aborted";
+    }
 
+    const timeout = new Promise<"timeout">((resolve) => {
+      timeoutId = setTimeout(() => resolve("timeout"), RECONNECT_STUCK_THRESHOLD_MS);
+    });
+    const abort = signal
+      ? new Promise<"aborted">((resolve) => {
+          onAbort = () => resolve("aborted");
+          signal.addEventListener("abort", onAbort, { once: true });
+        })
+      : null;
+
+    const close = pump.close().then<"closed", "closed">(
+      () => "closed",
+      () => "closed"
+    );
     const result = await Promise.race([
-      pump.close().then(() => "closed" as const),
+      close,
       timeout,
+      ...(abort ? [abort] : []),
     ]);
+    if (result === "aborted") {
+      return "aborted";
+    }
     if (result === "timeout") {
       // pump.close() is still pending — the underlying gRPC stream may leak
       // until garbage collected. This is expected for stale connections.
+      return "timed-out";
     }
   } catch {
     /* ignore close errors */
@@ -435,5 +521,9 @@ async function safeClose<T>(pump: LivePump<T>): Promise<void> {
     if (timeoutId !== undefined) {
       clearTimeout(timeoutId);
     }
+    if (signal && onAbort) {
+      signal.removeEventListener("abort", onAbort);
+    }
   }
+  return "closed";
 }

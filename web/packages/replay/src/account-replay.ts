@@ -32,10 +32,13 @@ import {
   DEFAULT_RETRY_CONFIG,
   calculateBackoff,
   isAbortError,
+  type RetryConfig,
 } from "./retry";
 import type { ReplayLogger } from "./types";
 import { closeIfCloseable, resolveClient } from "./types";
 import { NOOP_LOGGER } from "./logger";
+
+const DEFAULT_RECONNECT_CLEANUP_TIMEOUT_MS = 30_000;
 
 async function closeAsyncIterator<T>(iterator: AsyncIterator<T> | null): Promise<void> {
   if (!iterator || typeof iterator.return !== "function") {
@@ -47,6 +50,91 @@ async function closeAsyncIterator<T>(iterator: AsyncIterator<T> | null): Promise
   } catch {
     /* best-effort */
   }
+}
+
+async function waitForCleanup(
+  promise: Promise<unknown>,
+  timeoutMs: number,
+  label: string,
+  logger: ReplayLogger,
+  signal?: AbortSignal
+): Promise<"completed" | "timed-out" | "aborted"> {
+  const startedAtMs = Date.now();
+  logger.info("Replay stream reconnect cleanup started", {
+    event: "replay.stream.reconnect.cleanup_started",
+    phase: label,
+    timeout_ms: timeoutMs,
+  });
+  if (signal?.aborted) {
+    logger.debug("Replay stream reconnect cleanup aborted", {
+      event: "replay.stream.reconnect.cleanup_completed",
+      phase: label,
+      timeout_ms: timeoutMs,
+      result: "aborted",
+      duration_ms: 0,
+    });
+    return "aborted";
+  }
+
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let onAbort: (() => void) | null = null;
+
+  const timeoutPromise = new Promise<"timed-out">((resolve) => {
+    timer = setTimeout(() => resolve("timed-out"), timeoutMs);
+    timer.unref?.();
+  });
+
+  const abortPromise = signal
+    ? new Promise<"aborted">((resolve) => {
+        onAbort = () => resolve("aborted");
+        signal.addEventListener("abort", onAbort, { once: true });
+      })
+    : null;
+
+  const completionPromise = promise.then<"completed", "completed">(
+    () => "completed",
+    () => "completed"
+  );
+
+  const result = await Promise.race(
+    abortPromise
+      ? [completionPromise, timeoutPromise, abortPromise]
+      : [completionPromise, timeoutPromise]
+  );
+
+  if (timer) {
+    clearTimeout(timer);
+  }
+  if (signal && onAbort) {
+    signal.removeEventListener("abort", onAbort);
+  }
+
+  if (result === "timed-out") {
+    logger.warn("Replay stream reconnect cleanup stuck", {
+      event: "replay.stream.reconnect.stuck",
+      phase: label,
+      timeout_ms: timeoutMs,
+      duration_ms: Date.now() - startedAtMs,
+    });
+  } else if (result === "aborted") {
+    logger.debug("Replay stream reconnect cleanup aborted", {
+      event: "replay.stream.reconnect.cleanup_completed",
+      phase: label,
+      timeout_ms: timeoutMs,
+      result,
+      duration_ms: Date.now() - startedAtMs,
+    });
+  } else {
+    logger.info("Replay stream reconnect cleanup completed", {
+      event: "replay.stream.reconnect.cleanup_completed",
+      phase: label,
+      timeout_ms: timeoutMs,
+      result,
+      duration_ms: Date.now() - startedAtMs,
+    });
+  }
+
+  return result;
 }
 
 /**
@@ -151,6 +239,12 @@ export interface AccountsByOwnerReplayOptions {
 
   /** Cleanup interval for page assembler (default: 10000ms) */
   cleanupInterval?: number;
+
+  /** Maximum time to wait for stale reconnect cleanup before creating a fresh stream. */
+  reconnectCleanupTimeoutMs?: number;
+
+  /** Retry timings for live stream reconnects (default: DEFAULT_RETRY_CONFIG). */
+  retryConfig?: RetryConfig;
 
   /** Called when backfill queue is drained. Returns the highest slot seen during backfill. */
   onBackfillComplete?: (highestSlot: bigint) => void;
@@ -307,6 +401,8 @@ export async function* createAccountsByOwnerReplay(
     maxRetries = 3,
     pageAssemblerOptions,
     cleanupInterval = 10000,
+    reconnectCleanupTimeoutMs = DEFAULT_RECONNECT_CLEANUP_TIMEOUT_MS,
+    retryConfig = DEFAULT_RETRY_CONFIG,
     onBackfillComplete,
     clientFactory,
     logger = NOOP_LOGGER,
@@ -338,6 +434,145 @@ export async function* createAccountsByOwnerReplay(
   let lastActivityTime = Date.now();
   let activeStreamIterator: AsyncIterator<StreamAccountUpdatesResponse> | null = null;
   let activeStreamProcessor: Promise<void> | null = null;
+  let streamGeneration = 0;
+  let retryAttempt = 0;
+
+  const retireActiveStream = (): {
+    iterator: AsyncIterator<StreamAccountUpdatesResponse> | null;
+    processor: Promise<void> | null;
+  } => {
+    const iterator = activeStreamIterator;
+    const processor = activeStreamProcessor;
+    activeStreamIterator = null;
+    activeStreamProcessor = null;
+    streamGeneration++;
+    return { iterator, processor };
+  };
+
+  const cleanupRetiredStream = async (
+    retired: {
+      iterator: AsyncIterator<StreamAccountUpdatesResponse> | null;
+      processor: Promise<void> | null;
+    },
+    iteratorLabel: string,
+    processorLabel: string
+  ): Promise<void> => {
+    if (retired.iterator) {
+      await waitForCleanup(
+        closeAsyncIterator(retired.iterator),
+        reconnectCleanupTimeoutMs,
+        iteratorLabel,
+        logger,
+        signal
+      );
+    }
+    if (shouldStop()) return;
+
+    if (retired.processor) {
+      await waitForCleanup(
+        Promise.allSettled([retired.processor]),
+        reconnectCleanupTimeoutMs,
+        processorLabel,
+        logger,
+        signal
+      );
+    }
+  };
+
+  const createFreshClient = (): void => {
+    if (!clientFactory) {
+      return;
+    }
+
+    logger.info("Replay stream fresh client creation started", {
+      event: "replay.stream.reconnect.client_started",
+    });
+    try {
+      const previousClient = client;
+      const newClient = clientFactory();
+      /* Close the previous client after fresh client creation succeeds, so
+         callers with closeable transports do not keep stale sessions alive. */
+      closeIfCloseable(previousClient);
+      client = newClient;
+      logger.info("Replay stream fresh client creation completed", {
+        event: "replay.stream.reconnect.client_completed",
+      });
+    } catch (err) {
+      logger.error("Replay stream fresh client creation failed", {
+        event: "replay.stream.reconnect.client_failed",
+        error: err,
+      });
+      // Continue with existing client as fallback.
+    }
+  };
+
+  const createStreamProcessor = (reason: "initial" | "reconnect" = "initial"): void => {
+    const minSlot = highestSlotSeen > 0n ? highestSlotSeen : minUpdatedSlot;
+    const generation = ++streamGeneration;
+    const streamStartedAtMs = Date.now();
+    let firstMessageSeen = false;
+    if (reason === "reconnect") {
+      logger.info("Replay stream waiting for first event", {
+        event: "replay.stream.waiting_first_event",
+        generation,
+        min_slot: minSlot?.toString(),
+      });
+    }
+
+    const newStreamFilter = buildOwnerFilterWithMinSlot(owner, dataSizes, minSlot);
+    const newStream = client.streamAccountUpdates({ view, filter: newStreamFilter });
+    const newStreamIterator = newStream[Symbol.asyncIterator]();
+
+    streamDone = false;
+    streamError = null;
+    lastActivityTime = Date.now();
+    activeStreamIterator = newStreamIterator;
+
+    const newProcessor = (async () => {
+      try {
+        while (true) {
+          const next = await newStreamIterator.next();
+          if (generation !== streamGeneration) {
+            return;
+          }
+          if (next.done) break;
+
+          const response = next.value;
+          retryAttempt = 0; // Reset on successful message
+          lastActivityTime = Date.now();
+          if (reason === "reconnect" && !firstMessageSeen) {
+            firstMessageSeen = true;
+            logger.info("Replay stream reconnect completed", {
+              event: "replay.stream.reconnect.completed",
+              generation,
+              first_message: true,
+              duration_ms: Date.now() - streamStartedAtMs,
+            });
+          }
+          const event = processResponseMulti(response, assembler);
+          if (event) {
+            if (event.type === "account") {
+              seenFromStream.add(event.account.addressHex);
+              if (event.account.slot > highestSlotSeen) {
+                highestSlotSeen = event.account.slot;
+              }
+            }
+            streamBuffer.push(event);
+          }
+        }
+      } catch (err) {
+        if (generation === streamGeneration) {
+          streamError = err as Error;
+        }
+      } finally {
+        if (generation === streamGeneration) {
+          streamDone = true;
+        }
+      }
+    })();
+
+    activeStreamProcessor = newProcessor;
+  };
 
   try {
     if (shouldStop()) return;
@@ -349,38 +584,7 @@ export async function* createAccountsByOwnerReplay(
     cleanupTimer.unref?.();
 
     // Start streaming FIRST (concurrent with backfill)
-    const streamFilter = buildOwnerFilterWithMinSlot(owner, dataSizes, minUpdatedSlot);
-    const stream = client.streamAccountUpdates({ view, filter: streamFilter });
-    const streamIterator = stream[Symbol.asyncIterator]();
-    activeStreamIterator = streamIterator;
-
-    // Process stream in background, buffering events
-    activeStreamProcessor = (async () => {
-      try {
-        while (true) {
-          const next = await streamIterator.next();
-          if (next.done) break;
-
-          const response = next.value;
-          lastActivityTime = Date.now();
-          const event = processResponseMulti(response, assembler);
-          if (event) {
-            if (event.type === "account") {
-              // Mark as seen - don't need to GetAccount for this one
-              seenFromStream.add(event.account.addressHex);
-              if (event.account.slot > highestSlotSeen) {
-                highestSlotSeen = event.account.slot;
-              }
-            }
-            streamBuffer.push(event);
-          }
-        }
-      } catch (err) {
-        streamError = err as Error;
-      } finally {
-        streamDone = true;
-      }
-    })();
+    createStreamProcessor();
 
     // Helper to yield buffered stream events
     const yieldStreamBuffer = function* (): Generator<AccountReplayEvent> {
@@ -487,62 +691,8 @@ export async function* createAccountsByOwnerReplay(
     }
 
     // Streaming phase with reconnection
-    const retryConfig = DEFAULT_RETRY_CONFIG;
-    let retryAttempt = 0;
+    retryAttempt = 0;
     lastActivityTime = Date.now();
-
-    // Helper to create a new stream and processor with fresh client
-    const createStreamProcessor = () => {
-      // Get fresh client if factory available (key fix for reconnection)
-      if (clientFactory) {
-        try {
-          const newClient = clientFactory();
-          /* Close the previous client before dropping the reference, so
-             its underlying HTTP/2 session does not linger. We duck-type
-             on `close` because `AccountSource` does not mandate it —
-             callers that supply a factory returning closeable clients
-             (e.g. ChainClient) get automatic cleanup on reconnect. */
-          closeIfCloseable(client);
-          client = newClient;
-          logger.info("[account-stream] created fresh client for reconnection");
-        } catch (err) {
-          logger.error("[account-stream] failed to create fresh client", { error: err });
-          // Continue with existing client as fallback
-        }
-      }
-
-      const newStreamFilter = buildOwnerFilterWithMinSlot(owner, dataSizes, highestSlotSeen > 0n ? highestSlotSeen : minUpdatedSlot);
-      const newStream = client.streamAccountUpdates({ view, filter: newStreamFilter });
-      const newStreamIterator = newStream[Symbol.asyncIterator]();
-      activeStreamIterator = newStreamIterator;
-      const newProcessor = (async () => {
-        try {
-          while (true) {
-            const next = await newStreamIterator.next();
-            if (next.done) break;
-
-            const response = next.value;
-            retryAttempt = 0; // Reset on successful message
-            lastActivityTime = Date.now();
-            const event = processResponseMulti(response, assembler);
-            if (event) {
-              if (event.type === "account") {
-                seenFromStream.add(event.account.addressHex);
-                if (event.account.slot > highestSlotSeen) {
-                  highestSlotSeen = event.account.slot;
-                }
-              }
-              streamBuffer.push(event);
-            }
-          }
-        } catch (err) {
-          streamError = err as Error;
-        } finally {
-          streamDone = true;
-        }
-      })();
-      return { iterator: newStreamIterator, processor: newProcessor };
-    };
 
     // Continue yielding stream events with reconnection on error
     while (true) {
@@ -556,10 +706,13 @@ export async function* createAccountsByOwnerReplay(
       }
 
       // Check for idle timeout - force reconnection if no activity
-      if (!streamDone && Date.now() - lastActivityTime > retryConfig.connectionTimeoutMs) {
-        logger.warn(
-          `[account-stream] no activity for ${retryConfig.connectionTimeoutMs}ms; forcing reconnection`
-        );
+      const idleMs = Date.now() - lastActivityTime;
+      if (!streamDone && idleMs > retryConfig.connectionTimeoutMs) {
+        logger.warn("Replay stream idle timeout detected", {
+          event: "replay.stream.idle_timeout",
+          idleMs,
+          connectionTimeoutMs: retryConfig.connectionTimeoutMs,
+        });
         streamDone = true;
         streamError = new Error(`Operation timed out after ${retryConfig.connectionTimeoutMs}ms`);
       }
@@ -571,44 +724,52 @@ export async function* createAccountsByOwnerReplay(
 
           // Stream error - reconnect with backoff
           const backoffMs = calculateBackoff(retryAttempt, retryConfig);
-          logger.warn(
-            `[account-stream] disconnected (${streamError.message}); reconnecting in ${backoffMs}ms (attempt ${retryAttempt + 1})`
-          );
+          logger.warn("Replay stream reconnect started", {
+            event: "replay.stream.reconnect.started",
+            reason: "stream_error",
+            error: streamError.message,
+            backoffMs,
+            attempt: retryAttempt + 1,
+            highestSlotSeen: highestSlotSeen.toString(),
+          });
           await abortableDelay(backoffMs, signal);
           if (shouldStop()) return;
           retryAttempt++;
 
           // Reset state
+          const retired = retireActiveStream();
           streamDone = false;
           streamError = null;
           streamBuffer.length = 0;
           lastActivityTime = Date.now();
 
-          await closeAsyncIterator(activeStreamIterator);
-          if (activeStreamProcessor) {
-            await Promise.allSettled([activeStreamProcessor]);
-          }
+          await cleanupRetiredStream(retired, "old iterator close", "old processor drain");
+          if (shouldStop()) return;
 
           // Create new stream
-          const { iterator: newIterator, processor: newProcessor } = createStreamProcessor();
-          activeStreamIterator = newIterator;
-          activeStreamProcessor = newProcessor;
+          createFreshClient();
+          createStreamProcessor("reconnect");
           continue;
         } else {
           if (shouldStop()) return;
 
           // Stream ended normally (no error) - this shouldn't happen in practice
           // but if it does, reconnect to maintain live updates
-          logger.warn("[account-stream] stream ended unexpectedly; reconnecting...");
+          logger.warn("Replay stream reconnect started", {
+            event: "replay.stream.reconnect.started",
+            reason: "stream_ended",
+            attempt: retryAttempt + 1,
+            highestSlotSeen: highestSlotSeen.toString(),
+          });
+          const retired = retireActiveStream();
           streamDone = false;
+          streamError = null;
+          streamBuffer.length = 0;
           lastActivityTime = Date.now();
-          await closeAsyncIterator(activeStreamIterator);
-          if (activeStreamProcessor) {
-            await Promise.allSettled([activeStreamProcessor]);
-          }
-          const { iterator: newIterator, processor: newProcessor } = createStreamProcessor();
-          activeStreamIterator = newIterator;
-          activeStreamProcessor = newProcessor;
+          await cleanupRetiredStream(retired, "old iterator close", "old processor drain");
+          if (shouldStop()) return;
+          createFreshClient();
+          createStreamProcessor("reconnect");
           continue;
         }
       }
@@ -620,15 +781,11 @@ export async function* createAccountsByOwnerReplay(
     if (cleanupTimer) {
       clearInterval(cleanupTimer);
     }
-    const closeIteratorPromise = closeAsyncIterator(activeStreamIterator);
+    const retired = retireActiveStream();
     if (ownsClient) {
       closeIfCloseable(client);
     }
-    if (activeStreamProcessor) {
-      await Promise.allSettled([closeIteratorPromise, activeStreamProcessor]);
-    } else {
-      await closeIteratorPromise;
-    }
+    await cleanupRetiredStream(retired, "final iterator close", "final processor drain");
     assembler.clear();
   }
 }

@@ -5,8 +5,8 @@
  * with batching and checkpointing.
  */
 
-import type { ChainClientFactory } from "@thru/replay";
-import { createEventReplay, createConsoleLogger } from "@thru/replay";
+import type { ChainClientFactory, ReplayLogger } from "@thru/replay";
+import { createEventReplay } from "@thru/replay";
 import type { PgTable } from "drizzle-orm/pg-core";
 import type { DatabaseClient } from "../schema/types";
 import { validateParsedData } from "../schema/validation";
@@ -14,6 +14,7 @@ import { getCheckpoint, updateCheckpoint } from "../checkpoint";
 import type { EventStream } from "./types";
 import type { StreamBatch } from "../types";
 import type { ProcessorStatusObserver } from "../runtime/status";
+import { createScopedLogger } from "../runtime/logger";
 
 // ============================================================
 // Types
@@ -32,6 +33,8 @@ export interface ProcessorOptions {
   pageSize?: number;
   /** Log level */
   logLevel?: "debug" | "info" | "warn" | "error";
+  /** Structured logger for processor and replay lifecycle logs */
+  logger?: ReplayLogger;
   /** Validate parse output with Zod (useful for development) */
   validateParse?: boolean;
   /** Runtime status observer */
@@ -143,15 +146,26 @@ export async function runEventStreamProcessor(
     safetyMargin = 64,
     pageSize = 512,
     logLevel = "info",
+    logger: baseLogger,
     validateParse = false,
     observer,
   } = options;
 
-  const log = (level: string, msg: string) => {
-    if (logLevel === "debug" || level !== "debug") {
-      console.log(`[${stream.name}] ${msg}`);
-    }
-  };
+  const logger = createScopedLogger({
+    logger: baseLogger,
+    level: logLevel,
+    prefix: stream.name,
+    bindings: {
+      component: "indexer-stream",
+      stream: stream.name,
+      kind: "event",
+    },
+  });
+  const log = (
+    level: "debug" | "info" | "warn" | "error",
+    msg: string,
+    meta?: Record<string, unknown>
+  ) => logger[level](msg, meta);
 
   log("info", `Starting stream processor: ${stream.description}`);
 
@@ -172,17 +186,6 @@ export async function runEventStreamProcessor(
     `Starting from slot ${startSlot}${checkpoint ? " (resuming)" : " (fresh start)"}`
   );
 
-  // Create logger
-  const logger =
-    logLevel === "debug"
-      ? createConsoleLogger(stream.name)
-      : {
-          debug: () => {},
-          info: (msg: string) => log("info", msg),
-          warn: (msg: string) => log("warn", msg),
-          error: (msg: string) => log("error", msg),
-        };
-
   // Create replay stream with factory for robust reconnection
   const replay = createEventReplay({
     clientFactory,
@@ -195,6 +198,7 @@ export async function runEventStreamProcessor(
     filter: stream.getFilter(),
     logger,
     resubscribeOnEnd: true,
+    signal: abortSignal,
   });
 
   const batcher = new StreamBatcher();

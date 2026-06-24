@@ -3,11 +3,13 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 const processorState = vi.hoisted(() => ({
   eventProcessorCalls: 0,
   eventProcessorMode: "hang" as "throw-once" | "hang" | "always-throw",
+  latestObserver: null as any,
 }));
 
 vi.mock("../streams/processor", () => ({
   runEventStreamProcessor: vi.fn(async (_stream, options, signal: AbortSignal) => {
     processorState.eventProcessorCalls++;
+    processorState.latestObserver = options.observer;
     options.observer?.onStart?.({ startSlot: 0n, checkpointSlot: null });
 
     if (
@@ -87,6 +89,7 @@ describe("Indexer supervisor", () => {
   beforeEach(() => {
     processorState.eventProcessorCalls = 0;
     processorState.eventProcessorMode = "hang";
+    processorState.latestObserver = null;
   });
 
   it("reports configured streams before start", () => {
@@ -110,11 +113,13 @@ describe("Indexer supervisor", () => {
 
   it("restarts a failed stream and preserves phase-specific error metadata", async () => {
     processorState.eventProcessorMode = "throw-once";
+    const logger = createMockLogger();
     const indexer = new Indexer({
       db: createDb() as any,
       clientFactory: (() => ({})) as any,
       eventStreams: [createEventStream("pack-purchases")],
       endpointLabel: "test-endpoint",
+      logger,
       supervisorInitialBackoffMs: 1,
       supervisorMaxBackoffMs: 1,
     });
@@ -135,6 +140,22 @@ describe("Indexer supervisor", () => {
       code: 13,
       endpointLabel: "test-endpoint",
     });
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Indexer stream supervisor restarting",
+      expect.objectContaining({
+        event: "indexer.stream.supervisor_restart",
+        stream: "pack-purchases",
+        kind: "event",
+      })
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      "Indexer stream state changed",
+      expect.objectContaining({
+        event: "indexer.stream.state_changed",
+        stream: "pack-purchases",
+        next_state: "running",
+      })
+    );
 
     indexer.stop();
     await expect(startPromise).resolves.toMatchObject({
@@ -164,10 +185,12 @@ describe("Indexer supervisor", () => {
   });
 
   it("marks health unhealthy when a running stream is stale", async () => {
+    const logger = createMockLogger();
     const indexer = new Indexer({
       db: createDb() as any,
       clientFactory: (() => ({})) as any,
       eventStreams: [createEventStream("pack-purchases")],
+      logger,
       streamStaleMs: 1,
     });
 
@@ -181,6 +204,26 @@ describe("Indexer supervisor", () => {
       state: "running",
       stale: true,
     });
+    expect(
+      logger.warn.mock.calls.filter((call) => call[1]?.event === "indexer.stream.unhealthy")
+    ).toHaveLength(1);
+
+    indexer.getStatus();
+    indexer.getStatus();
+    expect(
+      logger.warn.mock.calls.filter((call) => call[1]?.event === "indexer.stream.unhealthy")
+    ).toHaveLength(1);
+
+    processorState.latestObserver?.onRecord?.({ slot: 2n, id: "event-2" });
+    const recovered = indexer.getStatus();
+    expect(recovered.healthy).toBe(true);
+    expect(logger.info).toHaveBeenCalledWith(
+      "Indexer stream recovered",
+      expect.objectContaining({
+        event: "indexer.stream.recovered",
+        stream: "pack-purchases",
+      })
+    );
 
     indexer.stop();
     await startPromise;
@@ -208,3 +251,12 @@ describe("Indexer supervisor", () => {
     }
   });
 });
+
+function createMockLogger() {
+  return {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  };
+}

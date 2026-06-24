@@ -42,8 +42,10 @@ import {
   type IndexerStreamStatus,
   type ProcessorStatusObserver,
 } from "./status";
+import { createScopedLogger } from "./logger";
 import type { EventStream } from "../streams/types";
 import type { AccountStream } from "../accounts/types";
+import type { ReplayLogger } from "@thru/replay";
 
 // ============================================================
 // Types
@@ -75,11 +77,16 @@ export interface IndexerResult {
  */
 export class Indexer {
   private config: IndexerConfig;
+  private logger: ReplayLogger;
   private abortController: AbortController | null = null;
   private running = false;
   private shutdownRequested = false;
   private startedAtMs: number | null = null;
   private streamStatuses = new Map<string, IndexerStreamStatus>();
+  private streamHealthStates = new Map<string, {
+    unhealthy: boolean;
+    unhealthySinceMs: number | null;
+  }>();
 
   constructor(config: IndexerConfig) {
     this.config = {
@@ -92,6 +99,12 @@ export class Indexer {
       streamStaleMs: 300000,
       ...config,
     };
+    this.logger = createScopedLogger({
+      logger: this.config.logger,
+      level: this.config.logLevel,
+      prefix: "indexer",
+      bindings: { component: "indexer-runtime" },
+    });
 
     this.initializeStreamStatuses();
   }
@@ -114,14 +127,14 @@ export class Indexer {
         : String(err);
       // Check if error is about missing table
       if (message.includes("does not exist") || message.includes("relation")) {
-        console.warn(
-          `[indexer] WARNING: Checkpoint table "indexer_checkpoints" not found.
-[indexer] Make sure to export checkpointTable from your Drizzle schema:
+        this.logger.warn(
+          `Checkpoint table "indexer_checkpoints" not found.
+Make sure to export checkpointTable from your Drizzle schema:
 
   // db/schema.ts
   export { checkpointTable } from "@thru/indexer";
 
-[indexer] Then run: pnpm drizzle-kit push (or generate + migrate)
+Then run: pnpm drizzle-kit push (or generate + migrate)
 `
         );
       }
@@ -165,15 +178,14 @@ export class Indexer {
       endpointLabel,
       supervisorInitialBackoffMs = 1000,
       supervisorMaxBackoffMs = 30000,
+      logger,
     } = this.config;
 
-    console.log("[indexer] Starting indexer...");
-    console.log(
-      `[indexer] Running ${eventStreams.length} event stream(s): ${eventStreams.map((s) => s.name).join(", ") || "none"}`
-    );
-    console.log(
-      `[indexer] Running ${accountStreams.length} account stream(s): ${accountStreams.map((s) => s.name).join(", ") || "none"}`
-    );
+    this.logger.info("Starting indexer", {
+      event: "indexer.started",
+      event_streams: eventStreams.map((stream) => stream.name),
+      account_streams: accountStreams.map((stream) => stream.name),
+    });
 
     try {
       const supervisorOptions = {
@@ -190,6 +202,7 @@ export class Indexer {
           safetyMargin,
           pageSize,
           logLevel,
+          logger,
           validateParse,
         }, supervisorOptions)
       );
@@ -199,6 +212,7 @@ export class Indexer {
           clientFactory,
           db,
           logLevel,
+          logger,
           validateParse,
         }, supervisorOptions)
       );
@@ -210,7 +224,9 @@ export class Indexer {
         accountStreams: accountStreams.map((stream) => this.resultForStream(stream.name)),
       };
 
-      console.log("[indexer] All streams stopped.");
+      this.logger.info("All indexer streams stopped", {
+        event: "indexer.stopped",
+      });
       return result;
     } finally {
       this.running = false;
@@ -227,16 +243,22 @@ export class Indexer {
    */
   stop(): void {
     if (!this.running || !this.abortController) {
-      console.log("[indexer] Not running");
+      this.logger.info("Indexer is not running", {
+        event: "indexer.stop.noop",
+      });
       return;
     }
 
     if (this.shutdownRequested) {
-      console.log("[indexer] Force shutdown...");
+      this.logger.warn("Force shutting down indexer", {
+        event: "indexer.force_shutdown",
+      });
       process.exit(1);
     }
 
-    console.log("[indexer] Shutdown requested, finishing current batches...");
+    this.logger.info("Indexer shutdown requested", {
+      event: "indexer.shutdown_requested",
+    });
     this.shutdownRequested = true;
     this.abortController.abort();
   }
@@ -263,6 +285,7 @@ export class Indexer {
       !this.shutdownRequested &&
       streams.length > 0 &&
       streams.every((stream) => stream.state === "running" && !stream.stale);
+    this.emitHealthTransitions(streams, now);
 
     return {
       running: this.running,
@@ -276,6 +299,7 @@ export class Indexer {
 
   private initializeStreamStatuses(): void {
     this.streamStatuses = new Map();
+    this.streamHealthStates = new Map();
     for (const stream of this.config.eventStreams ?? []) {
       this.streamStatuses.set(this.statusKey("event", stream.name), this.createInitialStreamStatus("event", stream.name));
     }
@@ -326,6 +350,103 @@ export class Indexer {
     };
   }
 
+  private setStreamState(
+    status: IndexerStreamStatus,
+    nextState: IndexerStreamStatus["state"],
+    meta: Record<string, unknown> = {}
+  ): void {
+    const previousState = status.state;
+    status.state = nextState;
+    if (previousState === nextState) {
+      return;
+    }
+
+    this.logger.info("Indexer stream state changed", {
+      event: "indexer.stream.state_changed",
+      stream: status.name,
+      kind: status.kind,
+      previous_state: previousState,
+      next_state: nextState,
+      restart_count: status.restartCount,
+      ...meta,
+    });
+  }
+
+  private streamLogFields(stream: IndexerStreamStatus): Record<string, unknown> {
+    return {
+      stream: stream.name,
+      kind: stream.kind,
+      state: stream.state,
+      stale: stream.stale,
+      checkpoint_slot: stream.checkpointSlot,
+      last_processed_slot: stream.lastProcessedSlot,
+      last_event_at: stream.lastEventAt,
+      restart_count: stream.restartCount,
+      last_error_at: stream.lastErrorAt,
+      last_error: stream.lastError,
+    };
+  }
+
+  private emitHealthTransitions(streams: IndexerStreamStatus[], nowMs: number): void {
+    if (!this.running || this.shutdownRequested) {
+      return;
+    }
+
+    for (const stream of streams) {
+      const key = this.statusKey(stream.kind, stream.name);
+      const unhealthy = stream.state !== "running" || stream.stale;
+      const previous = this.streamHealthStates.get(key);
+      const initialStarting =
+        !previous &&
+        stream.state === "starting" &&
+        stream.restartCount === 0 &&
+        !stream.lastError;
+
+      if (initialStarting) {
+        this.streamHealthStates.set(key, {
+          unhealthy: false,
+          unhealthySinceMs: null,
+        });
+        continue;
+      }
+
+      if (unhealthy && previous?.unhealthy !== true) {
+        this.streamHealthStates.set(key, {
+          unhealthy: true,
+          unhealthySinceMs: nowMs,
+        });
+        this.logger.warn("Indexer stream unhealthy", {
+          event: "indexer.stream.unhealthy",
+          reason: stream.stale ? "stale" : "state",
+          ...this.streamLogFields(stream),
+        });
+        continue;
+      }
+
+      if (!unhealthy && previous?.unhealthy === true) {
+        this.streamHealthStates.set(key, {
+          unhealthy: false,
+          unhealthySinceMs: null,
+        });
+        this.logger.info("Indexer stream recovered", {
+          event: "indexer.stream.recovered",
+          unhealthy_duration_ms: previous.unhealthySinceMs === null
+            ? null
+            : nowMs - previous.unhealthySinceMs,
+          ...this.streamLogFields(stream),
+        });
+        continue;
+      }
+
+      if (!previous) {
+        this.streamHealthStates.set(key, {
+          unhealthy,
+          unhealthySinceMs: unhealthy ? nowMs : null,
+        });
+      }
+    }
+  }
+
   private createObserver(kind: IndexerStreamKind, name: string, endpointLabel?: string): ProcessorStatusObserver {
     const status = this.statusFor(kind, name);
     let startSlot: bigint | null = null;
@@ -335,7 +456,10 @@ export class Indexer {
       onStart: (info) => {
         startSlot = info.startSlot ?? null;
         checkpointSlot = info.checkpointSlot ?? null;
-        status.state = "running";
+        this.setStreamState(status, "running", {
+          start_slot: startSlot?.toString(),
+          checkpoint_slot: checkpointSlot?.toString() ?? null,
+        });
         status.checkpointSlot = checkpointSlot === null ? null : checkpointSlot.toString();
         status.lastStartedAt = new Date().toISOString();
       },
@@ -424,26 +548,29 @@ export class Indexer {
 
     while (!this.abortController?.signal.aborted) {
       const observer = this.createObserver(kind, name, options.endpointLabel);
-      status.state = attempt === 0 ? "starting" : "retrying";
+      this.setStreamState(status, attempt === 0 ? "starting" : "retrying", {
+        attempt,
+      });
       status.lastStartedAt = new Date().toISOString();
 
       try {
         const summary = await runOnce(observer);
         if (this.abortController?.signal.aborted) {
-          status.state = "stopped";
-          console.log(`[indexer] ${kind} stream "${name}" stopped: ${summary}`);
+          this.setStreamState(status, "stopped", { summary });
           return;
         }
 
         throw new Error(`${kind} stream "${name}" completed unexpectedly: ${summary}`);
       } catch (error) {
         if (this.abortController?.signal.aborted) {
-          status.state = "stopped";
+          this.setStreamState(status, "stopped");
           return;
         }
 
         status.restartCount++;
-        status.state = "retrying";
+        this.setStreamState(status, "retrying", {
+          restart_count: status.restartCount,
+        });
         status.lastErrorAt = new Date().toISOString();
         if (!status.lastError || status.lastError.phase === "supervisor") {
           status.lastError = normalizeIndexerError({
@@ -456,16 +583,22 @@ export class Indexer {
         }
 
         const backoffMs = this.supervisorBackoffMs(attempt, options.initialBackoffMs, options.maxBackoffMs);
-        console.error(
-          `[indexer] ${kind} stream "${name}" failed; restarting in ${backoffMs}ms:`,
-          error
-        );
+        this.logger.warn("Indexer stream supervisor restarting", {
+          event: "indexer.stream.supervisor_restart",
+          stream: name,
+          kind,
+          backoff_ms: backoffMs,
+          attempt: attempt + 1,
+          restart_count: status.restartCount,
+          error,
+          last_error: status.lastError,
+        });
         attempt++;
         await this.delay(backoffMs, this.abortController!.signal);
       }
     }
 
-    status.state = "stopped";
+    this.setStreamState(status, "stopped");
   }
 
   private supervisorBackoffMs(attempt: number, initialMs: number, maxMs: number): number {

@@ -2,7 +2,7 @@
  * Indexer configuration types.
  */
 
-import type { ChainClientFactory } from "@thru/replay";
+import type { ChainClientFactory, ReplayLogger } from "@thru/replay";
 import type { DatabaseClient } from "../schema/types";
 import type { EventStream } from "../streams/types";
 import type { AccountStream } from "../accounts/types";
@@ -34,6 +34,9 @@ export interface IndexerConfig {
 
   /** Log level (default: "info") */
   logLevel?: "debug" | "info" | "warn" | "error";
+
+  /** Optional structured logger for runtime, processor, and replay lifecycle logs. */
+  logger?: ReplayLogger;
 
   /** Human-readable endpoint label included in normalized stream errors */
   endpointLabel?: string;

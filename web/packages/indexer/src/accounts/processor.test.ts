@@ -59,6 +59,26 @@ describe("runAccountStreamProcessor", () => {
     expect(checkpointMocks.updateCheckpoint).not.toHaveBeenCalled();
   });
 
+  it("passes abort signals through to account replay", async () => {
+    const controller = new AbortController();
+
+    await runAccountStreamProcessor(
+      createStream(),
+      {
+        clientFactory: vi.fn(),
+        db: {} as any,
+        logLevel: "error",
+      },
+      controller.signal
+    );
+
+    expect(replayMocks.createAccountsByOwnerReplay).toHaveBeenCalledWith(
+      expect.objectContaining({
+        signal: controller.signal,
+      })
+    );
+  });
+
   it("does not log that a checkpoint was saved when no accounts were handled", async () => {
     replayMocks.events = [{ type: "blockFinished", block: { slot: 10n } }];
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});

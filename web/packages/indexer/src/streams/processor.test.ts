@@ -75,6 +75,27 @@ describe("runEventStreamProcessor", () => {
     );
   });
 
+  it("passes abort signals through to event replay", async () => {
+    const controller = new AbortController();
+
+    await runEventStreamProcessor(
+      createStream(),
+      {
+        clientFactory: vi.fn(),
+        db: { transaction: vi.fn() } as any,
+        defaultStartSlot: 0n,
+        logLevel: "error",
+      },
+      controller.signal
+    );
+
+    expect(replayMocks.createEventReplay).toHaveBeenCalledWith(
+      expect.objectContaining({
+        signal: controller.signal,
+      })
+    );
+  });
+
   it("falls back to replaying the checkpoint slot when no checkpoint event id exists", async () => {
     checkpointMocks.getCheckpoint.mockResolvedValue({
       slot: 42n,

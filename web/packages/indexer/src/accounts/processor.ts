@@ -6,7 +6,7 @@
  */
 
 import { eq, sql } from "drizzle-orm";
-import type { ChainClientFactory } from "@thru/replay";
+import type { ChainClientFactory, ReplayLogger } from "@thru/replay";
 import { createAccountsByOwnerReplay, AccountView } from "@thru/replay";
 import { encodeAddress } from "@thru/sdk/helpers";
 import type { DatabaseClient } from "../schema/types";
@@ -14,6 +14,7 @@ import { validateParsedData } from "../schema/validation";
 import { getCheckpoint, updateCheckpoint } from "../checkpoint";
 import type { AccountStream } from "./types";
 import type { ProcessorStatusObserver } from "../runtime/status";
+import { createScopedLogger } from "../runtime/logger";
 
 // ============================================================
 // Types
@@ -26,6 +27,8 @@ export interface AccountProcessorOptions {
   db: DatabaseClient;
   /** Log level */
   logLevel?: "debug" | "info" | "warn" | "error";
+  /** Structured logger for processor and replay lifecycle logs */
+  logger?: ReplayLogger;
   /** Validate parse output with Zod (useful for development) */
   validateParse?: boolean;
   /** Runtime status observer */
@@ -39,15 +42,6 @@ export interface AccountProcessorStats {
   accountsUpdated: number;
   /** Total accounts deleted */
   accountsDeleted: number;
-}
-
-// ============================================================
-// Utilities
-// ============================================================
-
-function shouldLog(level: string, minLevel: string): boolean {
-  const levels = ["debug", "info", "warn", "error"];
-  return levels.indexOf(level) >= levels.indexOf(minLevel);
 }
 
 // ============================================================
@@ -70,22 +64,25 @@ export async function runAccountStreamProcessor(
   options: AccountProcessorOptions,
   abortSignal?: AbortSignal
 ): Promise<AccountProcessorStats> {
-  const { clientFactory, db, logLevel = "info", validateParse = false, observer } = options;
+  const { clientFactory, db, logLevel = "info", logger: baseLogger, validateParse = false, observer } = options;
   const checkpointName = `account:${stream.name}`;
 
+  const logger = createScopedLogger({
+    logger: baseLogger,
+    level: logLevel,
+    prefix: `account-stream:${stream.name}`,
+    bindings: {
+      component: "indexer-stream",
+      stream: stream.name,
+      kind: "account",
+      checkpoint_name: checkpointName,
+    },
+  });
   const log = (
-    level: string,
+    level: "debug" | "info" | "warn" | "error",
     msg: string,
     meta?: Record<string, unknown>
-  ) => {
-    if (shouldLog(level, logLevel)) {
-      if (meta) {
-        console.log(`[account-stream:${stream.name}] ${msg}`, meta);
-      } else {
-        console.log(`[account-stream:${stream.name}] ${msg}`);
-      }
-    }
-  };
+  ) => logger[level](msg, meta);
 
   const stats: AccountProcessorStats = {
     accountsProcessed: 0,
@@ -109,22 +106,6 @@ export async function runAccountStreamProcessor(
     log("info", `Expected data size: ${stream.expectedSize} bytes`);
   }
 
-  // Create logger for the underlying replay stream (mirrors event stream processor)
-  const replayLogger =
-    logLevel === "debug"
-      ? {
-          debug: (msg: string) => log("debug", msg),
-          info: (msg: string) => log("info", msg),
-          warn: (msg: string) => log("warn", msg),
-          error: (msg: string) => log("error", msg),
-        }
-      : {
-          debug: () => {},
-          info: (msg: string) => log("info", msg),
-          warn: (msg: string) => log("warn", msg),
-          error: (msg: string) => log("error", msg),
-        };
-
   // Track highest slot seen for checkpoint persistence
   let lastProcessedSlot = minUpdatedSlot ?? 0n;
 
@@ -136,7 +117,8 @@ export async function runAccountStreamProcessor(
       view: AccountView.FULL,
       dataSizes: stream.dataSizes ?? (stream.expectedSize ? [stream.expectedSize] : undefined),
       minUpdatedSlot,
-      logger: replayLogger,
+      logger,
+      signal: abortSignal,
       onBackfillComplete: (highestSlot) => {
         log(
           "info",

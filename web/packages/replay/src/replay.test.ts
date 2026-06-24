@@ -1,5 +1,5 @@
 import { create } from "@bufbuild/protobuf";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import {
   type Transaction,
   TransactionSchema,
@@ -7,9 +7,11 @@ import {
 } from "@thru/sdk/proto";
 import { createBlockReplay } from "./replay/block-replay";
 import { createTransactionReplay } from "./replay/transaction-replay";
+import { ReplayStream } from "./replay-stream";
+import { DEFAULT_RETRY_CONFIG } from "./retry";
 import { SimulatedChain } from "./testing/simulated-chain";
 import { SimulatedTransactionSource } from "./testing/simulated-transaction-source";
-import type { Slot } from "./types";
+import type { ReplayLogger, Slot } from "./types";
 
 const slotRange = (start: number, end: number): Slot[] => {
   const slots: Slot[] = [];
@@ -27,6 +29,7 @@ describe("block replay", () => {
       pageDelayMs: 2,
       streamDelayMs: 0,
     });
+    const logger = createMockLogger();
 
     const replay = createBlockReplay({
       client: chain,
@@ -34,6 +37,7 @@ describe("block replay", () => {
       safetyMargin: 4n,
       pageSize: 7,
       resubscribeOnEnd: false,
+      logger,
     });
 
     const received: Slot[] = [];
@@ -46,6 +50,8 @@ describe("block replay", () => {
     expect(metrics.emittedBackfill).toBe(50);
     expect(metrics.emittedLive).toBe(15);
     expect(metrics.discardedDuplicates).toBe(0);
+    expect(logger.warn).not.toHaveBeenCalled();
+    expect(logger.error).not.toHaveBeenCalled();
   });
 
   test("drops overlapping live slots during switch", async () => {
@@ -88,12 +94,14 @@ describe("block replay", () => {
       streamDelayMs: 2,
       streamErrorAfter: 5,
     });
+    const logger = createMockLogger();
 
     const replay = createBlockReplay({
       client: chain,
       startSlot: 0n,
       safetyMargin: 3n,
       pageSize: 5,
+      logger,
     });
 
     const received: Slot[] = [];
@@ -105,6 +113,70 @@ describe("block replay", () => {
     expect(extractSlots(received)).toEqual(
       Array.from({ length: 40 }, (_, idx) => idx),
     );
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Replay stream reconnect started",
+      expect.objectContaining({
+        event: "replay.stream.reconnect.started",
+        attempt: 1,
+      })
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      "Replay stream reconnect cleanup started",
+      expect.objectContaining({ event: "replay.stream.reconnect.cleanup_started" })
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      "Replay stream reconnect cleanup completed",
+      expect.objectContaining({ event: "replay.stream.reconnect.cleanup_completed" })
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      "Replay stream waiting for first event",
+      expect.objectContaining({ event: "replay.stream.waiting_first_event" })
+    );
+    expect(logger.info).toHaveBeenCalledWith(
+      "Replay stream reconnect completed",
+      expect.objectContaining({ event: "replay.stream.reconnect.completed" })
+    );
+  });
+
+  test("aborts promptly while generic replay cleanup is closing a stuck live stream", async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    const logger = createMockLogger();
+    const stuck = createRejectingLiveStream();
+
+    try {
+      const replay = new ReplayStream<number>({
+        startSlot: 0n,
+        safetyMargin: 0n,
+        fetchBackfill: async () => ({ items: [], done: true }),
+        subscribeLive: () => stuck.iterable,
+        extractSlot: (value) => BigInt(value),
+        logger,
+        signal: controller.signal,
+      });
+
+      const next = replay[Symbol.asyncIterator]().next();
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(DEFAULT_RETRY_CONFIG.initialDelayMs);
+      await vi.waitFor(() => expect(stuck.return).toHaveBeenCalledTimes(1));
+
+      controller.abort();
+
+      await expect(next).resolves.toEqual({ done: true, value: undefined });
+      expect(logger.info).toHaveBeenCalledWith(
+        "Replay stream reconnect cleanup completed",
+        expect.objectContaining({
+          event: "replay.stream.reconnect.cleanup_completed",
+          result: "aborted",
+        })
+      );
+      expect(logger.warn).not.toHaveBeenCalledWith(
+        "Replay stream reconnect cleanup stuck",
+        expect.anything()
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
 
@@ -185,4 +257,37 @@ function bytesToHex(bytes: Uint8Array): string {
   let hex = "";
   for (const byte of bytes) hex += byte.toString(16).padStart(2, "0");
   return hex;
+}
+
+function createMockLogger(): ReplayLogger {
+  return {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+  };
+}
+
+function createRejectingLiveStream(): {
+  iterable: AsyncIterable<number>;
+  next: ReturnType<typeof vi.fn>;
+  return: ReturnType<typeof vi.fn>;
+} {
+  const next = vi.fn<() => Promise<IteratorResult<number>>>(() =>
+    Promise.reject(new Error("synthetic live failure"))
+  );
+  const returnFn = vi.fn<() => Promise<IteratorResult<number>>>(() => new Promise(() => {}));
+
+  return {
+    next,
+    return: returnFn,
+    iterable: {
+      [Symbol.asyncIterator]() {
+        return {
+          next,
+          return: returnFn,
+        };
+      },
+    },
+  };
 }
