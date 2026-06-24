@@ -49,7 +49,6 @@ use thru_grpc_client::thru::{
     services::v1::{
         self as servicesv1, command_service_client::CommandServiceClient,
         debug_service_client::DebugServiceClient, query_service_client::QueryServiceClient,
-        streaming_service_client::StreamingServiceClient,
     },
 };
 
@@ -619,10 +618,13 @@ impl Client {
     ) -> Result<TransactionDetails> {
         let start = Instant::now();
         self.print_pending_signature(transaction);
-        let signature_bytes = self.send_transaction(transaction).await?;
-        let track_resp = match self.track_transaction(&signature_bytes, timeout).await {
+        let signature_bytes = transaction_signature_from_wire(transaction)?;
+        let track_resp = match self.send_and_track_transaction(transaction, timeout).await {
             Ok(track_resp) => track_resp,
-            Err(err) if is_track_transaction_timeout(&err) => {
+            Err(err)
+                if is_track_transaction_timeout(&err)
+                    || is_possibly_submitted_tracking_error(&err) =>
+            {
                 let fallback_budget =
                     Duration::from_secs(60).max(timeout.saturating_sub(start.elapsed()));
                 return self
@@ -656,6 +658,56 @@ impl Client {
                 "Transaction confirmed via stream but not found in query".to_string(),
             )),
         }
+    }
+
+    async fn send_and_track_transaction(
+        &self,
+        transaction: &[u8],
+        timeout: Duration,
+    ) -> Result<servicesv1::SendAndTrackTxnResponse> {
+        let mut client = CommandServiceClient::new(self.channel.clone())
+            .max_decoding_message_size(128 * 1024 * 1024) /* 128 MB */
+            .max_encoding_message_size(128 * 1024 * 1024); /* 128 MB */
+        let request = servicesv1::SendAndTrackTxnRequest {
+            transaction: transaction.to_vec(),
+            timeout: Some(ProstDuration {
+                seconds: timeout.as_secs() as i64,
+                nanos: timeout.subsec_nanos() as i32,
+            }),
+        };
+
+        let mut grpc_request = Request::new(request);
+        self.apply_metadata(&mut grpc_request);
+        grpc_request.set_timeout(self.timeout + timeout);
+
+        let mut stream = client.send_and_track_txn(grpc_request).await?.into_inner();
+        let deadline = Instant::now() + timeout;
+
+        while Instant::now() < deadline {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            let next = time::timeout(remaining, stream.message()).await;
+
+            match next {
+                Ok(Ok(Some(message))) => {
+                    if let Some(execution) = &message.execution_result {
+                        if execution.execution_result != 0 || execution.vm_error != 0 {
+                            return Ok(message);
+                        }
+                    }
+
+                    if is_confirmed(message.consensus_status) {
+                        return Ok(message);
+                    }
+                }
+                Ok(Ok(None)) => break,
+                Ok(Err(status)) => return Err(ClientError::Rpc(status.to_string())),
+                Err(_) => break,
+            }
+        }
+
+        Err(ClientError::TransactionVerification(
+            "Transaction confirmation timed out".to_string(),
+        ))
     }
 
     /// Generate a state proof using the gRPC service.
@@ -911,58 +963,6 @@ impl Client {
         let signature_bytes =
             array_from_vec(signature.value, "signature").map_err(ClientError::Validation)?;
         Ok(signature_bytes)
-    }
-
-    async fn track_transaction(
-        &self,
-        signature: &[u8; 64],
-        timeout: Duration,
-    ) -> Result<servicesv1::TrackTransactionResponse> {
-        let mut client = StreamingServiceClient::new(self.channel.clone())
-            .max_decoding_message_size(128 * 1024 * 1024) /* 128 MB */
-            .max_encoding_message_size(128 * 1024 * 1024); /* 128 MB */
-        let request = servicesv1::TrackTransactionRequest {
-            signature: Some(commonv1::Signature {
-                value: signature.to_vec(),
-            }),
-            timeout: Some(ProstDuration {
-                seconds: timeout.as_secs() as i64,
-                nanos: timeout.subsec_nanos() as i32,
-            }),
-        };
-
-        let mut grpc_request = Request::new(request);
-        self.apply_metadata(&mut grpc_request);
-        grpc_request.set_timeout(self.timeout + timeout);
-
-        let mut stream = client.track_transaction(grpc_request).await?.into_inner();
-        let deadline = Instant::now() + timeout;
-
-        while Instant::now() < deadline {
-            let remaining = deadline.saturating_duration_since(Instant::now());
-            let next = time::timeout(remaining, stream.message()).await;
-
-            match next {
-                Ok(Ok(Some(message))) => {
-                    if let Some(execution) = &message.execution_result {
-                        if execution.execution_result != 0 || execution.vm_error != 0 {
-                            return Ok(message);
-                        }
-                    }
-
-                    if is_confirmed(message.consensus_status) {
-                        return Ok(message);
-                    }
-                }
-                Ok(Ok(None)) => break,
-                Ok(Err(status)) => return Err(ClientError::Rpc(status.to_string())),
-                Err(_) => break,
-            }
-        }
-
-        Err(ClientError::TransactionVerification(
-            "Transaction confirmation timed out".to_string(),
-        ))
     }
 
     async fn fetch_transaction_details(
@@ -1286,6 +1286,30 @@ fn is_track_transaction_timeout(err: &ClientError) -> bool {
         }
         _ => false,
     }
+}
+
+fn is_possibly_submitted_tracking_error(err: &ClientError) -> bool {
+    match err {
+        ClientError::Rpc(msg) | ClientError::Transport(msg) => {
+            msg.contains("Timeout expired")
+                || msg.contains("operation was cancelled")
+                || msg.contains("send transaction: node busy")
+                || msg.contains("track transaction timeout")
+        }
+        _ => false,
+    }
+}
+
+fn transaction_signature_from_wire(transaction: &[u8]) -> Result<[u8; 64]> {
+    let signature = transaction
+        .get(transaction.len().saturating_sub(64)..)
+        .filter(|bytes| bytes.len() == TN_TXN_SIGNATURE_SZ)
+        .ok_or_else(|| {
+            ClientError::Validation(
+                "transaction must include 64-byte signature at the end".to_string(),
+            )
+        })?;
+    array_from_vec(signature.to_vec(), "signature").map_err(ClientError::Validation)
 }
 
 fn pubkey_bytes(pubkey: &Pubkey) -> Result<[u8; 32]> {
