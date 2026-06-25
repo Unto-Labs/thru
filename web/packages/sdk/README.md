@@ -38,7 +38,7 @@ import {
 } from "@thru/sdk";
 
 const thru = createThruClient({
-  baseUrl: "https://grpc-web.alphanet.thruput.org",
+  baseUrl: "https://rpc.alphanet.thru.org",
 });
 
 // Fetch the latest finalized block
@@ -73,7 +73,7 @@ for await (const update of thru.streaming.trackTransaction(signature)) {
 
 ```ts
 const thru = createThruClient({
-  baseUrl: "https://grpc-web.alphanet.thruput.org",
+  baseUrl: "https://rpc.alphanet.thru.org",
   transportOptions: {
     useBinaryFormat: false,
     defaultTimeoutMs: 10_000,

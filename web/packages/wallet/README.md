@@ -16,7 +16,7 @@ import { BrowserSDK } from '@thru/wallet';
 // Configure the wallet iframe location and the RPC endpoint to talk to
 const sdk = new BrowserSDK({
   iframeUrl: 'https://app.tid.sh/embedded',
-  rpcUrl: 'https://grpc-web.alphanet.thruput.org',
+  rpcUrl: 'https://rpc.alphanet.thru.org',
 });
 
 await sdk.initialize(); // injects the iframe once

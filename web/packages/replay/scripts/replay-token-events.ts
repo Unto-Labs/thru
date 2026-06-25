@@ -10,7 +10,7 @@ import { Filter, FilterParamValue, PageRequest } from "@thru/sdk/proto";
 import { ListEventsRequest, StreamEventsRequest } from "@thru/sdk/proto";
 import { ChainClient } from "../src";
 
-const BASE_URL = "https://grpc.alphanet.thruput.org";
+const BASE_URL = "https://rpc.alphanet.thru.org";
 // const BASE_URL = 'http://34.186.178.127:8080'
 const TOKEN_PROGRAM = "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKqq";
 

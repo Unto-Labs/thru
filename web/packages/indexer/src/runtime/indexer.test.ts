@@ -2,7 +2,8 @@ import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const processorState = vi.hoisted(() => ({
   eventProcessorCalls: 0,
-  eventProcessorMode: "hang" as "throw-once" | "hang" | "always-throw",
+  eventProcessorMode: "hang" as "throw-once" | "hang" | "always-throw" | "scripted",
+  eventProcessorScript: [] as Array<{ delayMs?: number; throw?: boolean }>,
   latestObserver: null as any,
 }));
 
@@ -11,6 +12,18 @@ vi.mock("../streams/processor", () => ({
     processorState.eventProcessorCalls++;
     processorState.latestObserver = options.observer;
     options.observer?.onStart?.({ startSlot: 0n, checkpointSlot: null });
+
+    if (processorState.eventProcessorMode === "scripted") {
+      const step = processorState.eventProcessorScript.shift();
+      if (step?.delayMs) {
+        await new Promise<void>((resolve) => setTimeout(resolve, step.delayMs));
+      }
+      if (step?.throw) {
+        const error = Object.assign(new Error("synthetic stream failure"), { code: 13 });
+        options.observer?.onError?.("live", error);
+        throw error;
+      }
+    }
 
     if (
       processorState.eventProcessorMode === "always-throw" ||
@@ -85,11 +98,17 @@ async function waitFor(predicate: () => boolean): Promise<void> {
   }
 }
 
+async function flushPromises(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
+}
+
 describe("Indexer supervisor", () => {
   beforeEach(() => {
     processorState.eventProcessorCalls = 0;
     processorState.eventProcessorMode = "hang";
     processorState.latestObserver = null;
+    processorState.eventProcessorScript = [];
   });
 
   it("reports configured streams before start", () => {
@@ -182,6 +201,54 @@ describe("Indexer supervisor", () => {
 
     indexer.stop();
     await startPromise;
+  });
+
+  it("resets supervisor backoff after a stable run", async () => {
+    vi.useFakeTimers();
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    const mathRandom = vi.spyOn(Math, "random").mockReturnValue(0);
+    processorState.eventProcessorMode = "scripted";
+    processorState.eventProcessorScript = [
+      { throw: true },
+      { throw: true },
+      { delayMs: 40, throw: true },
+    ];
+
+    const indexer = new Indexer({
+      db: createDb() as any,
+      clientFactory: (() => ({})) as any,
+      eventStreams: [createEventStream("pack-purchases")],
+      supervisorInitialBackoffMs: 10,
+      supervisorMaxBackoffMs: 40,
+    });
+    const backoff = vi.spyOn(indexer as any, "supervisorBackoffMs");
+
+    try {
+      const startPromise = indexer.start();
+      await vi.waitFor(() => expect(backoff).toHaveBeenCalledTimes(1));
+
+      expect(backoff.mock.calls[0]).toEqual([0, 10, 40]);
+
+      await vi.advanceTimersByTimeAsync(10);
+      await vi.waitFor(() => expect(backoff).toHaveBeenCalledTimes(2));
+      expect(backoff.mock.calls[1]).toEqual([1, 10, 40]);
+
+      await vi.advanceTimersByTimeAsync(20);
+      await flushPromises();
+      expect(processorState.eventProcessorCalls).toBe(3);
+
+      await vi.advanceTimersByTimeAsync(40);
+      await vi.waitFor(() => expect(backoff).toHaveBeenCalledTimes(3));
+      expect(backoff.mock.calls[2]).toEqual([0, 10, 40]);
+
+      indexer.stop();
+      await startPromise;
+    } finally {
+      vi.useRealTimers();
+      consoleError.mockRestore();
+      backoff.mockRestore();
+      mathRandom.mockRestore();
+    }
   });
 
   it("marks health unhealthy when a running stream is stale", async () => {

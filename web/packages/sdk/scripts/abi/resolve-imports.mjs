@@ -14,7 +14,7 @@ import {
   resolveImports,
 } from "../../dist/abi/index.js";
 
-const DEFAULT_BASE_URL = "https://grpc-web.alphanet.thruput.org";
+const DEFAULT_BASE_URL = "https://rpc.alphanet.thru.org";
 const PKG_ROOT = resolve(fileURLToPath(new URL(".", import.meta.url)), "../..");
 const WORKSPACE_ROOT = resolve(PKG_ROOT, "../../../");
 
@@ -39,7 +39,7 @@ function usage(message) {
       "  node scripts/abi/resolve-imports.mjs --import-onchain <address> [options]",
       "",
       "Options:",
-      "  --base-url <url>       gRPC-web endpoint (default: alphanet)",
+      "  --base-url <url>       RPC endpoint (default: alphanet)",
       "  --network <name>       network name for synthetic import (default: alphanet)",
       "  --target <program|abi-meta|abi> on-chain import target (default: program)",
       "  --max-depth <n>        max resolution depth (default: 10)",

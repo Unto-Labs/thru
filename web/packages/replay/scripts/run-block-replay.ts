@@ -24,7 +24,7 @@ interface ReplayRunnerConfig {
 }
 
 const DEFAULT_CONFIG: ReplayRunnerConfig = {
-  baseUrl: "https://grpc.alphanet.thruput.org",
+  baseUrl: "https://rpc.alphanet.thru.org",
   apiKey: undefined,
   userAgent: undefined,
   startSlot: 0n,

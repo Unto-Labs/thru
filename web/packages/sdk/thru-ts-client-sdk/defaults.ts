@@ -9,7 +9,7 @@ import {
     TransactionView
 } from "@thru/sdk/proto";
 
-export const DEFAULT_HOST = "https://grpc-web.alphanet.thruput.org";
+export const DEFAULT_HOST = "https://rpc.alphanet.thru.org";
 
 export const DEFAULT_ACCOUNT_VIEW = AccountView.FULL;
 export const DEFAULT_BLOCK_VIEW = BlockView.FULL;

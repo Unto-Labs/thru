@@ -185,7 +185,7 @@ pub struct NetworkConfig {
 /// Configuration structure for the Thru CLI
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
-    /// Endpoint for gRPC requests (e.g. http://127.0.0.1:8472 or https://grpc.alphanet.thruput.org:443)
+    /// Endpoint for gRPC requests (e.g. http://127.0.0.1:8472 or https://rpc.alphanet.thru.org)
     pub rpc_base_url: String,
 
     /// Key management
@@ -266,7 +266,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            rpc_base_url: "https://grpc.alphanet.thruput.org".to_string(),
+            rpc_base_url: "https://rpc.alphanet.thru.org".to_string(),
             keys: KeyManager::new(),
             uploader_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIC"
                 .to_string(),
@@ -724,7 +724,7 @@ mod tests {
     #[test]
     fn test_grpc_url_https_default_port() {
         let mut config = Config::default();
-        config.rpc_base_url = "https://grpc.alphanet.thruput.org".to_string();
+        config.rpc_base_url = "https://rpc.alphanet.thru.org".to_string();
         let grpc_url = config.get_grpc_url().unwrap();
         assert_eq!(grpc_url.port_or_known_default(), Some(443));
     }
@@ -732,7 +732,7 @@ mod tests {
     #[test]
     fn test_grpc_url_explicit_port_443() {
         let mut config = Config::default();
-        config.rpc_base_url = "https://grpc.alphanet.thruput.org:443".to_string();
+        config.rpc_base_url = "https://rpc.alphanet.thru.org:443".to_string();
         let grpc_url = config.get_grpc_url().unwrap();
         assert_eq!(grpc_url.port_or_known_default(), Some(443));
     }
@@ -740,7 +740,7 @@ mod tests {
     #[test]
     fn test_grpc_url_explicit_port_8443() {
         let mut config = Config::default();
-        config.rpc_base_url = "https://grpc.alphanet.thruput.org:8443".to_string();
+        config.rpc_base_url = "https://rpc.alphanet.thru.org:8443".to_string();
         let grpc_url = config.get_grpc_url().unwrap();
         assert_eq!(grpc_url.port(), Some(8443));
     }

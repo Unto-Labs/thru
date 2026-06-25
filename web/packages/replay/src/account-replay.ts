@@ -21,6 +21,7 @@ import type {
   StreamAccountUpdatesRequest,
   StreamAccountUpdatesResponse,
   ListAccountsRequest,
+  ListAccountsResponse,
   BlockFinished,
   Filter,
   FilterParamValue,
@@ -39,6 +40,17 @@ import { closeIfCloseable, resolveClient } from "./types";
 import { NOOP_LOGGER } from "./logger";
 
 const DEFAULT_RECONNECT_CLEANUP_TIMEOUT_MS = 30_000;
+const REPLAY_IDLE_TIMEOUT_ERROR = "ReplayIdleTimeoutError";
+
+function createIdleTimeoutError(timeoutMs: number): Error {
+  const error = new Error(`Operation timed out after ${timeoutMs}ms`);
+  error.name = REPLAY_IDLE_TIMEOUT_ERROR;
+  return error;
+}
+
+function isIdleTimeoutError(error: Error): boolean {
+  return error.name === REPLAY_IDLE_TIMEOUT_ERROR;
+}
 
 async function closeAsyncIterator<T>(iterator: AsyncIterator<T> | null): Promise<void> {
   if (!iterator || typeof iterator.return !== "function") {
@@ -422,6 +434,7 @@ export async function* createAccountsByOwnerReplay(
 
   // Highest slot seen (for checkpoint callback)
   let highestSlotSeen = minUpdatedSlot ?? 0n;
+  const lastEmittedAccounts = new Map<string, { slot: bigint; seq: bigint }>();
 
   // Page assembler for streaming
   const assembler = new PageAssembler(pageAssemblerOptions);
@@ -429,6 +442,7 @@ export async function* createAccountsByOwnerReplay(
 
   // Buffer for stream events
   const streamBuffer: AccountReplayEvent[] = [];
+  const deferredStreamBuffer: AccountReplayEvent[] = [];
   let streamDone = false;
   let streamError: Error | null = null;
   let lastActivityTime = Date.now();
@@ -436,6 +450,83 @@ export async function* createAccountsByOwnerReplay(
   let activeStreamProcessor: Promise<void> | null = null;
   let streamGeneration = 0;
   let retryAttempt = 0;
+  let pendingCatchUpFromSlot: bigint | null = null;
+  const pendingCleanupTasks = new Set<Promise<void>>();
+
+  const shouldEmitAccountState = (account: AccountState): boolean => {
+    const previous = lastEmittedAccounts.get(account.addressHex);
+    if (
+      previous &&
+      (account.slot < previous.slot ||
+        (account.slot === previous.slot && account.seq <= previous.seq))
+    ) {
+      return false;
+    }
+
+    lastEmittedAccounts.set(account.addressHex, {
+      slot: account.slot,
+      seq: account.seq,
+    });
+    if (account.slot > highestSlotSeen) {
+      highestSlotSeen = account.slot;
+    }
+    return true;
+  };
+
+  const queueReplayEvent = (event: AccountReplayEvent): boolean => {
+    if (event.type === "account") {
+      if (!shouldEmitAccountState(event.account)) {
+        return false;
+      }
+      seenFromStream.add(event.account.addressHex);
+    }
+    streamBuffer.push(event);
+    return true;
+  };
+
+  const queueStreamEvent = (event: AccountReplayEvent): boolean => {
+    if (pendingCatchUpFromSlot !== null) {
+      deferredStreamBuffer.push(event);
+      return true;
+    }
+    return queueReplayEvent(event);
+  };
+
+  const flushDeferredStreamEvents = (): void => {
+    while (deferredStreamBuffer.length > 0) {
+      const event = deferredStreamBuffer.shift()!;
+      queueReplayEvent(event);
+    }
+  };
+
+  const getReconnectFromSlot = (): bigint => {
+    if (pendingCatchUpFromSlot === null) {
+      return highestSlotSeen;
+    }
+    if (highestSlotSeen <= 0n) {
+      return pendingCatchUpFromSlot;
+    }
+    return pendingCatchUpFromSlot < highestSlotSeen ? pendingCatchUpFromSlot : highestSlotSeen;
+  };
+
+  const markCatchUpPending = (fromSlot: bigint): bigint => {
+    if (fromSlot <= 0n) {
+      return fromSlot;
+    }
+    if (pendingCatchUpFromSlot === null || fromSlot < pendingCatchUpFromSlot) {
+      pendingCatchUpFromSlot = fromSlot;
+    }
+    return pendingCatchUpFromSlot;
+  };
+
+  const markCatchUpCompleted = (fromSlot: bigint): void => {
+    if (fromSlot <= 0n) {
+      return;
+    }
+    if (pendingCatchUpFromSlot !== null && fromSlot <= pendingCatchUpFromSlot) {
+      pendingCatchUpFromSlot = null;
+    }
+  };
 
   const retireActiveStream = (): {
     iterator: AsyncIterator<StreamAccountUpdatesResponse> | null;
@@ -479,6 +570,27 @@ export async function* createAccountsByOwnerReplay(
     }
   };
 
+  const cleanupRetiredStreamInBackground = (
+    retired: {
+      iterator: AsyncIterator<StreamAccountUpdatesResponse> | null;
+      processor: Promise<void> | null;
+    },
+    iteratorLabel: string,
+    processorLabel: string
+  ): void => {
+    const cleanupTask = cleanupRetiredStream(retired, iteratorLabel, processorLabel)
+      .catch((err) => {
+        logger.warn("Replay stream reconnect cleanup failed", {
+          event: "replay.stream.reconnect.cleanup_failed",
+          error: err,
+        });
+      });
+    pendingCleanupTasks.add(cleanupTask);
+    cleanupTask.finally(() => {
+      pendingCleanupTasks.delete(cleanupTask);
+    });
+  };
+
   const createFreshClient = (): void => {
     if (!clientFactory) {
       return;
@@ -506,8 +618,11 @@ export async function* createAccountsByOwnerReplay(
     }
   };
 
-  const createStreamProcessor = (reason: "initial" | "reconnect" = "initial"): void => {
-    const minSlot = highestSlotSeen > 0n ? highestSlotSeen : minUpdatedSlot;
+  const createStreamProcessor = (
+    reason: "initial" | "reconnect" = "initial",
+    minSlotOverride?: bigint
+  ): void => {
+    const minSlot = minSlotOverride ?? (highestSlotSeen > 0n ? highestSlotSeen : minUpdatedSlot);
     const generation = ++streamGeneration;
     const streamStartedAtMs = Date.now();
     let firstMessageSeen = false;
@@ -516,6 +631,7 @@ export async function* createAccountsByOwnerReplay(
         event: "replay.stream.waiting_first_event",
         generation,
         min_slot: minSlot?.toString(),
+        highest_slot_seen: highestSlotSeen.toString(),
       });
     }
 
@@ -551,13 +667,7 @@ export async function* createAccountsByOwnerReplay(
           }
           const event = processResponseMulti(response, assembler);
           if (event) {
-            if (event.type === "account") {
-              seenFromStream.add(event.account.addressHex);
-              if (event.account.slot > highestSlotSeen) {
-                highestSlotSeen = event.account.slot;
-              }
-            }
-            streamBuffer.push(event);
+            queueStreamEvent(event);
           }
         }
       } catch (err) {
@@ -572,6 +682,165 @@ export async function* createAccountsByOwnerReplay(
     })();
 
     activeStreamProcessor = newProcessor;
+  };
+
+  const queueCatchUpAccounts = async (
+    fromSlot: bigint,
+    reason: "stream_error" | "stream_ended"
+  ): Promise<number> => {
+    if (fromSlot <= 0n) {
+      return 0;
+    }
+
+    const startedAtMs = Date.now();
+    let accountsListed = 0;
+    let accountsFetched = 0;
+    let accountsQueued = 0;
+    let accountsSkipped = 0;
+
+    logger.info("Replay stream reconnect catch-up started", {
+      event: "replay.stream.reconnect.catch_up_started",
+      reason,
+      from_slot: fromSlot.toString(),
+    });
+
+    const catchUpFilter = buildListAccountsOwnerFilter(owner, dataSizes, fromSlot);
+    let pageToken: string | undefined;
+
+    do {
+      if (shouldStop()) return accountsQueued;
+
+      const request: Partial<ListAccountsRequest> = {
+        view: AccountView.META_ONLY,
+        filter: catchUpFilter,
+        page: create(PageRequestSchema, {
+          pageSize,
+          pageToken,
+        }),
+      };
+
+      let response: ListAccountsResponse | null = null;
+      for (let attempt = 0; attempt < maxRetries; attempt++) {
+        try {
+          response = await client.listAccounts(request);
+          break;
+        } catch (err) {
+          if (shouldStop(err)) return accountsQueued;
+          if (attempt === maxRetries - 1) {
+            logger.error("Replay stream reconnect catch-up list accounts failed", {
+              event: "replay.stream.reconnect.catch_up_list_failed",
+              reason,
+              from_slot: fromSlot.toString(),
+              page_token: pageToken,
+              attempts: maxRetries,
+              error: err,
+            });
+            throw err;
+          }
+
+          logger.warn("Replay stream reconnect catch-up list accounts retrying", {
+            event: "replay.stream.reconnect.catch_up_list_retry",
+            reason,
+            from_slot: fromSlot.toString(),
+            page_token: pageToken,
+            attempt: attempt + 1,
+            max_retries: maxRetries,
+            error: err,
+          });
+          await abortableDelay(100 * (attempt + 1), signal);
+        }
+      }
+
+      if (!response) {
+        return accountsQueued;
+      }
+
+      for (const listedAccount of response.accounts) {
+        if (shouldStop()) return accountsQueued;
+        const address = listedAccount.address?.value;
+        if (!address) {
+          accountsSkipped++;
+          continue;
+        }
+
+        accountsListed++;
+        const addressHex = bytesToHex(address);
+        let account: Account | null = null;
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+          try {
+            account = await client.getAccount({
+              address: create(PubkeySchema, { value: address }),
+              view: AccountView.FULL,
+            });
+            break;
+          } catch (err) {
+            if (shouldStop(err)) return accountsQueued;
+            if (attempt === maxRetries - 1) {
+              logger.error(`[catch-up] failed to fetch account ${addressHex} after ${maxRetries} attempts`, { error: err });
+            } else {
+              await abortableDelay(100 * (attempt + 1), signal);
+            }
+          }
+        }
+
+        if (!account) {
+          accountsSkipped++;
+          continue;
+        }
+
+        accountsFetched++;
+        const state = getAccountToState(account);
+        if (!state || state.slot < fromSlot) {
+          accountsSkipped++;
+          continue;
+        }
+
+        if (queueReplayEvent({ type: "account", account: state })) {
+          accountsQueued++;
+        } else {
+          accountsSkipped++;
+        }
+      }
+
+      pageToken = response.page?.nextPageToken;
+    } while (pageToken);
+
+    logger.info("Replay stream reconnect catch-up completed", {
+      event: "replay.stream.reconnect.catch_up_completed",
+      reason,
+      from_slot: fromSlot.toString(),
+      duration_ms: Date.now() - startedAtMs,
+      accounts_listed: accountsListed,
+      accounts_fetched: accountsFetched,
+      accounts_queued: accountsQueued,
+      accounts_skipped: accountsSkipped,
+    });
+
+    return accountsQueued;
+  };
+
+  const queueCatchUpAccountsForReconnect = async (
+    fromSlot: bigint,
+    reason: "stream_error" | "stream_ended"
+  ): Promise<void> => {
+    const catchUpFromSlot = markCatchUpPending(fromSlot);
+    try {
+      await queueCatchUpAccounts(catchUpFromSlot, reason);
+      if (shouldStop()) return;
+      markCatchUpCompleted(catchUpFromSlot);
+      flushDeferredStreamEvents();
+    } catch (err) {
+      if (shouldStop(err)) return;
+      deferredStreamBuffer.length = 0;
+      logger.warn("Replay stream reconnect catch-up failed", {
+        event: "replay.stream.reconnect.catch_up_failed",
+        reason,
+        from_slot: catchUpFromSlot.toString(),
+        error: err,
+      });
+      streamDone = true;
+      streamError = err instanceof Error ? err : new Error(String(err));
+    }
   };
 
   try {
@@ -590,10 +859,6 @@ export async function* createAccountsByOwnerReplay(
     const yieldStreamBuffer = function* (): Generator<AccountReplayEvent> {
       while (streamBuffer.length > 0) {
         const event = streamBuffer.shift()!;
-        if (event.type === "account") {
-          // Ensure it's marked as seen (should already be, but belt and suspenders)
-          seenFromStream.add(event.account.addressHex);
-        }
         yield event;
       }
     };
@@ -676,10 +941,7 @@ export async function* createAccountsByOwnerReplay(
 
       if (account) {
         const state = getAccountToState(account);
-        if (state) {
-          if (state.slot > highestSlotSeen) {
-            highestSlotSeen = state.slot;
-          }
+        if (state && shouldEmitAccountState(state)) {
           yield { type: "account", account: state };
         }
       }
@@ -714,7 +976,7 @@ export async function* createAccountsByOwnerReplay(
           connectionTimeoutMs: retryConfig.connectionTimeoutMs,
         });
         streamDone = true;
-        streamError = new Error(`Operation timed out after ${retryConfig.connectionTimeoutMs}ms`);
+        streamError = createIdleTimeoutError(retryConfig.connectionTimeoutMs);
       }
 
       // Check if stream finished (normally or with error)
@@ -723,32 +985,40 @@ export async function* createAccountsByOwnerReplay(
           if (shouldStop(streamError)) return;
 
           // Stream error - reconnect with backoff
-          const backoffMs = calculateBackoff(retryAttempt, retryConfig);
+          const idleTimeout = isIdleTimeoutError(streamError);
+          const backoffMs = idleTimeout ? 0 : calculateBackoff(retryAttempt, retryConfig);
           logger.warn("Replay stream reconnect started", {
             event: "replay.stream.reconnect.started",
             reason: "stream_error",
             error: streamError.message,
             backoffMs,
             attempt: retryAttempt + 1,
+            idle_timeout: idleTimeout,
             highestSlotSeen: highestSlotSeen.toString(),
           });
-          await abortableDelay(backoffMs, signal);
-          if (shouldStop()) return;
-          retryAttempt++;
+          if (backoffMs > 0) {
+            await abortableDelay(backoffMs, signal);
+            if (shouldStop()) return;
+          }
+          if (idleTimeout) {
+            retryAttempt = 0;
+          } else {
+            retryAttempt++;
+          }
 
           // Reset state
+          const reconnectFromSlot = getReconnectFromSlot();
+          markCatchUpPending(reconnectFromSlot);
           const retired = retireActiveStream();
           streamDone = false;
           streamError = null;
           streamBuffer.length = 0;
           lastActivityTime = Date.now();
 
-          await cleanupRetiredStream(retired, "old iterator close", "old processor drain");
-          if (shouldStop()) return;
-
-          // Create new stream
           createFreshClient();
-          createStreamProcessor("reconnect");
+          createStreamProcessor("reconnect", reconnectFromSlot > 0n ? reconnectFromSlot : undefined);
+          cleanupRetiredStreamInBackground(retired, "old iterator close", "old processor drain");
+          await queueCatchUpAccountsForReconnect(reconnectFromSlot, "stream_error");
           continue;
         } else {
           if (shouldStop()) return;
@@ -761,15 +1031,18 @@ export async function* createAccountsByOwnerReplay(
             attempt: retryAttempt + 1,
             highestSlotSeen: highestSlotSeen.toString(),
           });
+          retryAttempt++;
+          const reconnectFromSlot = getReconnectFromSlot();
+          markCatchUpPending(reconnectFromSlot);
           const retired = retireActiveStream();
           streamDone = false;
           streamError = null;
           streamBuffer.length = 0;
           lastActivityTime = Date.now();
-          await cleanupRetiredStream(retired, "old iterator close", "old processor drain");
-          if (shouldStop()) return;
           createFreshClient();
-          createStreamProcessor("reconnect");
+          createStreamProcessor("reconnect", reconnectFromSlot > 0n ? reconnectFromSlot : undefined);
+          cleanupRetiredStreamInBackground(retired, "old iterator close", "old processor drain");
+          await queueCatchUpAccountsForReconnect(reconnectFromSlot, "stream_ended");
           continue;
         }
       }
@@ -786,6 +1059,9 @@ export async function* createAccountsByOwnerReplay(
       closeIfCloseable(client);
     }
     await cleanupRetiredStream(retired, "final iterator close", "final processor drain");
+    if (pendingCleanupTasks.size > 0) {
+      await Promise.allSettled([...pendingCleanupTasks]);
+    }
     assembler.clear();
   }
 }

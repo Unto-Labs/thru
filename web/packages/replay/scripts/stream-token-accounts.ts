@@ -12,7 +12,7 @@
 import { decodeAddress, encodeAddress } from "@thru/sdk/helpers";
 import { AccountView, ChainClient, createAccountsByOwnerReplay } from "../src";
 
-const BASE_URL = "https://grpc.alphanet.thruput.org";
+const BASE_URL = "https://rpc.alphanet.thru.org";
 const TOKEN_PROGRAM = "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKqq";
 
 // Account data sizes from token_program.abi.yaml

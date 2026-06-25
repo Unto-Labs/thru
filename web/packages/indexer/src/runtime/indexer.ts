@@ -548,10 +548,11 @@ Then run: pnpm drizzle-kit push (or generate + migrate)
 
     while (!this.abortController?.signal.aborted) {
       const observer = this.createObserver(kind, name, options.endpointLabel);
+      const runStartedAtMs = Date.now();
       this.setStreamState(status, attempt === 0 ? "starting" : "retrying", {
         attempt,
       });
-      status.lastStartedAt = new Date().toISOString();
+      status.lastStartedAt = new Date(runStartedAtMs).toISOString();
 
       try {
         const summary = await runOnce(observer);
@@ -580,6 +581,10 @@ Then run: pnpm drizzle-kit push (or generate + migrate)
             streamKind: kind,
             endpointLabel: options.endpointLabel,
           });
+        }
+
+        if (Date.now() - runStartedAtMs >= options.maxBackoffMs) {
+          attempt = 0;
         }
 
         const backoffMs = this.supervisorBackoffMs(attempt, options.initialBackoffMs, options.maxBackoffMs);
