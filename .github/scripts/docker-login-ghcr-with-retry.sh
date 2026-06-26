@@ -6,6 +6,7 @@ username="${DOCKER_LOGIN_USERNAME:-}"
 password="${DOCKER_LOGIN_PASSWORD:-}"
 max_attempts="${DOCKER_LOGIN_MAX_ATTEMPTS:-5}"
 retry_delay_secs="${DOCKER_LOGIN_RETRY_DELAY_SECS:-5}"
+read -r -a docker_cmd <<< "${DOCKER:-docker}"
 
 if [ -z "$username" ]; then
   echo "DOCKER_LOGIN_USERNAME is required" >&2
@@ -20,7 +21,7 @@ fi
 attempt=1
 while [ "$attempt" -le "$max_attempts" ]; do
   echo "Logging into $registry, attempt $attempt/$max_attempts"
-  if printf '%s\n' "$password" | docker login "$registry" --username "$username" --password-stdin; then
+  if printf '%s\n' "$password" | "${docker_cmd[@]}" login "$registry" --username "$username" --password-stdin; then
     exit 0
   fi
 

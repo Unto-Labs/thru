@@ -251,7 +251,7 @@ describe("Indexer supervisor", () => {
     }
   });
 
-  it("marks health unhealthy when a running stream is stale", async () => {
+  it("keeps health healthy while a running stream is stale", async () => {
     const logger = createMockLogger();
     const indexer = new Indexer({
       db: createDb() as any,
@@ -266,34 +266,63 @@ describe("Indexer supervisor", () => {
     await waitFor(() => indexer.getStatus().streams[0].stale);
 
     const status = indexer.getStatus();
-    expect(status.healthy).toBe(false);
+    expect(status.healthy).toBe(true);
     expect(status.streams[0]).toMatchObject({
       state: "running",
       stale: true,
     });
     expect(
       logger.warn.mock.calls.filter((call) => call[1]?.event === "indexer.stream.unhealthy")
-    ).toHaveLength(1);
+    ).toHaveLength(0);
 
     indexer.getStatus();
     indexer.getStatus();
     expect(
       logger.warn.mock.calls.filter((call) => call[1]?.event === "indexer.stream.unhealthy")
-    ).toHaveLength(1);
+    ).toHaveLength(0);
 
     processorState.latestObserver?.onRecord?.({ slot: 2n, id: "event-2" });
     const recovered = indexer.getStatus();
     expect(recovered.healthy).toBe(true);
-    expect(logger.info).toHaveBeenCalledWith(
-      "Indexer stream recovered",
-      expect.objectContaining({
-        event: "indexer.stream.recovered",
-        stream: "pack-purchases",
-      })
-    );
+    expect(recovered.streams[0]).toMatchObject({
+      state: "running",
+      stale: false,
+    });
+    expect(
+      logger.info.mock.calls.filter((call) => call[1]?.event === "indexer.stream.recovered")
+    ).toHaveLength(0);
 
     indexer.stop();
     await startPromise;
+  });
+
+  it("does not mark streams stale unless streamStaleMs is configured", async () => {
+    const indexer = new Indexer({
+      db: createDb() as any,
+      clientFactory: (() => ({})) as any,
+      eventStreams: [createEventStream("pack-purchases")],
+    });
+    const nowSpy = vi.spyOn(Date, "now");
+
+    try {
+      const startPromise = indexer.start();
+      await waitFor(() => indexer.getStatus().streams[0].state === "running");
+
+      const tenMinutesLater = Date.now() + 10 * 60 * 1000;
+      nowSpy.mockReturnValue(tenMinutesLater);
+
+      const status = indexer.getStatus();
+      expect(status.healthy).toBe(true);
+      expect(status.streams[0]).toMatchObject({
+        state: "running",
+        stale: false,
+      });
+
+      indexer.stop();
+      await startPromise;
+    } finally {
+      nowSpy.mockRestore();
+    }
   });
 
   it("removes abort listeners when supervisor delay completes normally", async () => {

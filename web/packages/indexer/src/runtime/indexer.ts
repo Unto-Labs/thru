@@ -96,7 +96,6 @@ export class Indexer {
       logLevel: "info",
       supervisorInitialBackoffMs: 1000,
       supervisorMaxBackoffMs: 30000,
-      streamStaleMs: 300000,
       ...config,
     };
     this.logger = createScopedLogger({
@@ -284,7 +283,7 @@ Then run: pnpm drizzle-kit push (or generate + migrate)
       this.running &&
       !this.shutdownRequested &&
       streams.length > 0 &&
-      streams.every((stream) => stream.state === "running" && !stream.stale);
+      streams.every((stream) => stream.state === "running");
     this.emitHealthTransitions(streams, now);
 
     return {
@@ -394,7 +393,7 @@ Then run: pnpm drizzle-kit push (or generate + migrate)
 
     for (const stream of streams) {
       const key = this.statusKey(stream.kind, stream.name);
-      const unhealthy = stream.state !== "running" || stream.stale;
+      const unhealthy = stream.state !== "running";
       const previous = this.streamHealthStates.get(key);
       const initialStarting =
         !previous &&
@@ -417,7 +416,7 @@ Then run: pnpm drizzle-kit push (or generate + migrate)
         });
         this.logger.warn("Indexer stream unhealthy", {
           event: "indexer.stream.unhealthy",
-          reason: stream.stale ? "stale" : "state",
+          reason: stream.stale ? "state_while_stale" : "state",
           ...this.streamLogFields(stream),
         });
         continue;
@@ -613,8 +612,8 @@ Then run: pnpm drizzle-kit push (or generate + migrate)
   }
 
   private isStreamStale(stream: IndexerStreamStatus, nowMs: number): boolean {
-    const staleMs = this.config.streamStaleMs ?? 300000;
-    if (staleMs <= 0 || stream.state !== "running") {
+    const staleMs = this.config.streamStaleMs;
+    if (staleMs === undefined || staleMs <= 0 || stream.state !== "running") {
       return false;
     }
 

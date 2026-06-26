@@ -47,7 +47,7 @@ export interface IndexerConfig {
   /** Maximum supervisor restart backoff in milliseconds (default: 30000) */
   supervisorMaxBackoffMs?: number;
 
-  /** Mark running streams unhealthy when no activity is seen for this long (default: 300000, disabled with 0) */
+  /** Mark running streams stale when no activity is seen for this long (disabled by default, also disabled with 0) */
   streamStaleMs?: number;
 
   /**

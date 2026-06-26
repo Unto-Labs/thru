@@ -7,8 +7,9 @@ if [[ $# -ne 1 ]]; then
 fi
 
 image="$1"
+read -r -a docker_cmd <<< "${DOCKER:-docker}"
 
-if docker image inspect "$image" >/dev/null 2>&1; then
+if "${docker_cmd[@]}" image inspect "$image" >/dev/null 2>&1; then
   echo "Using local image $image"
   exit 0
 fi
@@ -19,7 +20,7 @@ pull_err=""
 
 for attempt in $(seq 1 "$max_attempts"); do
   echo "Pulling $image (attempt $attempt/$max_attempts)"
-  if pull_err="$(docker pull "$image" 2>&1)"; then
+  if pull_err="$("${docker_cmd[@]}" pull "$image" 2>&1)"; then
     printf '%s\n' "$pull_err"
     exit 0
   fi
