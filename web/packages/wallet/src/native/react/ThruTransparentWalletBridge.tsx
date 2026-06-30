@@ -151,6 +151,7 @@ export function ThruTransparentWalletBridge({
     (event: WebViewLoadEndEvent) => {
       attachIfReady();
       if (isDirectWalletSource) {
+        wallet?.markWebViewReady();
         void enableAndroidWebAuthnIfNeeded().finally(
           refreshWalletAvailabilityIfReady,
         );
@@ -164,6 +165,7 @@ export function ThruTransparentWalletBridge({
       enableAndroidWebAuthnIfNeeded,
       isDirectWalletSource,
       refreshWalletAvailabilityIfReady,
+      wallet,
       webViewProps,
     ],
   );
