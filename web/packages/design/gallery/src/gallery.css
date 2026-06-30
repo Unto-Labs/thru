@@ -1,0 +1,11 @@
+/* Gallery page chrome — light surface so the light-mode tokens read correctly
+   regardless of the browser's prefers-color-scheme. */
+html,
+body {
+  margin: 0;
+}
+body {
+  background: var(--color-surface-higher);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+}

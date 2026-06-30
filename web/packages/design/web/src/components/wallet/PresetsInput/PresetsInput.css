@@ -1,0 +1,84 @@
+.tds-presets {
+  display: flex;
+  gap: var(--space-2);
+  align-items: stretch;
+  width: 100%;
+}
+
+.tds-presets__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(46px, 1fr));
+  gap: var(--space-2);
+  flex: 1;
+}
+
+.tds-presets__tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  padding: var(--space-2) var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  cursor: pointer;
+  background: var(--color-surface-higher);
+  color: var(--color-text-primary);
+  user-select: none;
+  border-radius: var(--radius-none);
+}
+.tds-presets__tile[data-checked] {
+  border-color: var(--color-text-brand);
+  box-shadow: inset 0 0 0 1px var(--color-text-brand);
+}
+.tds-presets__tile[data-disabled] {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.tds-presets__custom {
+  position: relative;
+  flex: 1;
+  display: flex;
+  align-items: center;
+}
+.tds-presets__input {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-text-primary);
+  background: var(--color-surface-higher);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-none);
+  outline: none;
+}
+.tds-presets__input::placeholder {
+  color: var(--color-text-tertiary);
+}
+.tds-presets__input:focus-visible {
+  border-color: var(--color-text-brand);
+  box-shadow: inset 0 0 0 1px var(--color-text-brand);
+}
+.tds-presets__max {
+  position: absolute;
+  right: var(--space-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+
+.tds-presets__toggle {
+  width: 38px;
+  flex: none;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface-higher);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  color: var(--color-text-tertiary);
+  border-radius: var(--radius-none);
+}
+.tds-presets__toggle:hover {
+  border-color: var(--color-text-primary);
+  color: var(--color-text-primary);
+}

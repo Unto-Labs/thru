@@ -33,7 +33,7 @@ export interface IThruChain {
    *
    * The selected account is the managed wallet account shown to the user.
    * The fee payer / signer can differ when the wallet routes transactions
-   * through an embedded manager profile.
+   * through a wallet-local fee payer.
    */
   getSigningContext(): Promise<ThruSigningContext>;
 

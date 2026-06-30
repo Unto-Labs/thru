@@ -39,6 +39,11 @@ pub struct Cli {
     #[arg(long = "network", global = true)]
     pub network: Option<String>,
 
+    /// Skip TLS certificate verification (insecure; for self-signed or
+    /// direct-IP HTTPS endpoints). Disables peer authentication.
+    #[arg(long, global = true)]
+    pub insecure: bool,
+
     #[command(subcommand)]
     pub command: Commands,
 }

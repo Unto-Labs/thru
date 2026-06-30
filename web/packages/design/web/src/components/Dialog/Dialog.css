@@ -1,0 +1,81 @@
+/* Dialog / AlertDialog — ported from thru-design app.css, retargeted to tokens.
+   Enter/exit via Base UI's [data-starting-style] / [data-ending-style] hooks. */
+
+.tds-scrim {
+  position: fixed;
+  inset: 0;
+  background: rgba(21, 30, 30, 0.64);
+  z-index: 100;
+  transition: opacity var(--duration-med) var(--ease-standard);
+}
+.tds-scrim[data-starting-style],
+.tds-scrim[data-ending-style] {
+  opacity: 0;
+}
+
+.tds-dialog {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 440px;
+  max-width: calc(100vw - 32px);
+  background: var(--color-surface-higher);
+  border: 1px solid var(--color-border-secondary);
+  box-shadow: var(--shadow-lg);
+  border-radius: var(--radius-none);
+  padding: var(--space-6);
+  z-index: 101;
+  transition:
+    opacity var(--duration-med) var(--ease-standard),
+    transform var(--duration-med) var(--ease-standard);
+}
+.tds-dialog[data-starting-style],
+.tds-dialog[data-ending-style] {
+  opacity: 0;
+  transform: translate(-50%, -48%) scale(0.97);
+}
+
+.tds-dialog__head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--space-3);
+  margin-bottom: var(--space-1);
+}
+
+.tds-dialog__title {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 22px;
+  font-weight: var(--fw-semibold);
+  letter-spacing: -0.3px;
+  color: var(--color-text-primary);
+}
+
+.tds-dialog__sub {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+  margin: var(--space-2) 0 var(--space-5);
+}
+
+.tds-dialog__close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  padding: var(--space-1);
+}
+.tds-dialog__close:hover {
+  color: var(--color-text-primary);
+}
+
+.tds-dialog__foot {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+  margin-top: var(--space-2);
+}

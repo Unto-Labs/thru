@@ -1,0 +1,70 @@
+/* RadioGroup — ported from thru-design app.css .radio, retargeted to tokens.
+   State via Base UI [data-checked] / [data-disabled]. */
+
+.tds-radio-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-4);
+}
+
+.tds-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.tds-radio__circle {
+  width: 17px;
+  height: 17px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-higher);
+  padding: 0;
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+
+.tds-radio__circle[data-checked] {
+  border-color: var(--brick-400);
+}
+
+.tds-radio__circle:focus-visible {
+  outline: 2px solid var(--brick-400);
+  outline-offset: 2px;
+}
+
+.tds-radio__circle[data-disabled] {
+  border-color: var(--color-border-disabled);
+  background: var(--color-surface-disabled);
+  cursor: not-allowed;
+}
+
+.tds-radio__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: var(--radius-pill);
+  background: var(--brick-400);
+  transform: scale(0);
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+
+.tds-radio__circle[data-checked] .tds-radio__dot {
+  transform: scale(1);
+}
+
+.tds-radio__label {
+  line-height: 1;
+}
+
+.tds-radio:has(.tds-radio__circle[data-disabled]) {
+  color: var(--color-text-disabled);
+  cursor: not-allowed;
+}

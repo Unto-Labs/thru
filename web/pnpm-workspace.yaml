@@ -1,5 +1,6 @@
 packages:
   - 'packages/*'
+  - 'packages/design/gallery'
   - 'packages-private/*'
   - 'test-dapp'
   - 'explorer'

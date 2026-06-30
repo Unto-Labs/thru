@@ -1,0 +1,38 @@
+/* Meter — static measurement within a known range, secondary hue.
+   Ported from thru-design app.css .bar (+ .bar__ind--forest), retargeted. */
+
+.tds-meter {
+  width: 100%;
+  max-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.tds-meter__head {
+  display: flex;
+  justify-content: space-between;
+}
+
+.tds-meter__label,
+.tds-meter__value {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tds-meter__track {
+  width: 100%;
+  height: 6px;
+  background: var(--color-surface-lower);
+  border-radius: var(--radius-none);
+  overflow: hidden;
+}
+
+.tds-meter__ind {
+  height: 100%;
+  background: var(--grass-400);
+  transition: width var(--duration-med) var(--ease-standard);
+}

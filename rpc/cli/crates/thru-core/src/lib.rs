@@ -74,6 +74,15 @@ pub async fn run() -> anyhow::Result<()> {
         }
     }
 
+    // Skip TLS verification when requested (e.g. self-signed / direct-IP nodes)
+    config.insecure = cli.insecure;
+    if cli.insecure && !cli.quiet {
+        eprintln!(
+            "warning: TLS certificate verification disabled (--insecure); \
+             the connection is not authenticated and is exposed to man-in-the-middle attacks."
+        );
+    }
+
     // Execute the command
     let result: Result<(), CliError> = match cli.command {
         Commands::GetVersion => commands::rpc::get_version(&config, cli.json).await,

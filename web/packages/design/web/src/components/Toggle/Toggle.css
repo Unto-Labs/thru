@@ -1,0 +1,82 @@
+/* Toggle + ToggleGroup — ported from thru-design app.css .toggle / .seg,
+   retargeted to tokens. State via Base UI [data-pressed]. */
+
+/* ── Standalone toggle ─────────────────────────────────────── */
+.tds-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-higher);
+  color: var(--color-text-tertiary);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-none);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+
+.tds-toggle[data-pressed] {
+  background: var(--color-surface-lower-inverse);
+  color: var(--color-text-primary-inverse);
+  border-color: var(--color-surface-lower-inverse);
+}
+
+.tds-toggle:focus-visible {
+  outline: 2px solid var(--brick-400);
+  outline-offset: 2px;
+}
+
+.tds-toggle[data-disabled] {
+  background: var(--color-surface-disabled);
+  color: var(--color-text-disabled);
+  border-color: var(--color-border-disabled);
+  cursor: not-allowed;
+}
+
+/* ── Segmented group ───────────────────────────────────────── */
+.tds-seg {
+  display: inline-flex;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-none);
+}
+
+.tds-seg__btn {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-higher);
+  color: var(--color-text-tertiary);
+  border: none;
+  border-right: 1px solid var(--color-border-strong);
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.tds-seg__btn:last-child {
+  border-right: none;
+}
+
+.tds-seg__btn[data-pressed] {
+  background: var(--color-surface-lower-inverse);
+  color: var(--color-text-primary-inverse);
+}
+
+.tds-seg__btn:focus-visible {
+  outline: 2px solid var(--brick-400);
+  outline-offset: -2px;
+}
+
+.tds-seg__btn[data-disabled] {
+  background: var(--color-surface-disabled);
+  color: var(--color-text-disabled);
+  cursor: not-allowed;
+}

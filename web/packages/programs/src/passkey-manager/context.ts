@@ -4,12 +4,6 @@ import { PASSKEY_MANAGER_PROGRAM_ADDRESS } from './constants';
 import type { AccountContext } from './types';
 
 /**
- * Default fee payer address (manager profile).
- */
-export const FEE_PAYER_ADDRESS =
-  'taVcZv3wB2m-euBpMHm2rF9fQRY_fO_g7WdOjs70CxDh_S';
-
-/**
  * Build account context for passkey manager transactions.
  * Handles account deduplication, sorting, and index lookup.
  */
@@ -17,10 +11,10 @@ export function buildAccountContext(params: {
   walletAddress: string;
   readWriteAccounts: Uint8Array[];
   readOnlyAccounts: Uint8Array[];
-  feePayerAddress?: string;
+  feePayerAddress: string;
   programAddress?: string;
 }): AccountContext {
-  const feePayerBytes = decodeAddress(params.feePayerAddress ?? FEE_PAYER_ADDRESS);
+  const feePayerBytes = decodeAddress(params.feePayerAddress);
   const programBytes = decodeAddress(params.programAddress ?? PASSKEY_MANAGER_PROGRAM_ADDRESS);
   const walletBytes = decodeAddress(params.walletAddress);
 

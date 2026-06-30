@@ -1,0 +1,100 @@
+/* Toast — ported from thru-design app.css, retargeted to tokens + the --space
+   scale. Dark inverse surface, accent bar by kind, animated timeout bar. */
+
+.tds-toast-viewport {
+  position: fixed;
+  bottom: var(--space-5);
+  right: var(--space-5);
+  width: 340px;
+  max-width: calc(100vw - 40px);
+  z-index: 120;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: var(--space-2);
+}
+
+.tds-toast {
+  --toast-accent: var(--brick-400);
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  background: var(--steel-800);
+  color: var(--steel-200);
+  border-left: 3px solid var(--toast-accent);
+  padding: var(--space-3) var(--space-5) var(--space-3) var(--space-3);
+  box-shadow: var(--shadow-lg);
+  position: relative;
+  overflow: hidden;
+  transition:
+    transform var(--duration-med) var(--ease-standard),
+    opacity var(--duration-med) var(--ease-standard);
+}
+.tds-toast[data-starting-style],
+.tds-toast[data-ending-style] {
+  opacity: 0;
+  transform: translateX(16px);
+}
+
+.tds-toast--success { --toast-accent: var(--grass-300); }
+.tds-toast--error   { --toast-accent: var(--brick-400); }
+.tds-toast--info    { --toast-accent: var(--sky-300); }
+.tds-toast--warn    { --toast-accent: var(--yellow-400); }
+
+.tds-toast__icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-pill);
+  display: grid;
+  place-items: center;
+  background: color-mix(in srgb, var(--toast-accent) 22%, transparent);
+  color: var(--toast-accent);
+}
+
+.tds-toast__main {
+  flex: 1;
+  min-width: 0;
+}
+.tds-toast__title {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.3;
+  font-weight: var(--fw-semibold);
+  color: var(--teal-0);
+}
+.tds-toast__desc {
+  margin: var(--space-1) 0 0 0;
+  font-size: 12px;
+  line-height: 1.3;
+  color: var(--steel-300);
+  word-break: break-word;
+}
+
+.tds-toast__close {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--steel-400);
+  cursor: pointer;
+  display: inline-flex;
+}
+.tds-toast__close:hover { color: var(--teal-0); }
+
+.tds-toast__bar {
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  background: var(--toast-accent);
+  width: 100%;
+  transform-origin: left;
+  animation: tds-toastbar var(--toast-dur, 5s) linear forwards;
+}
+@keyframes tds-toastbar {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(0); }
+}

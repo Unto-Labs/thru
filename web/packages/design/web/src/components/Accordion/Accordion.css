@@ -1,0 +1,62 @@
+/* Accordion — ported from thru-design app.css .acc, retargeted to tokens.
+   Panel height animates via Base UI's --accordion-panel-height. */
+
+.tds-acc {
+  border: 1px solid var(--color-border-tertiary);
+  width: 100%;
+}
+
+.tds-acc__item {
+  border-bottom: 1px solid var(--color-border-tertiary);
+}
+.tds-acc__item:last-child {
+  border-bottom: none;
+}
+
+.tds-acc__trigger {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  background: var(--color-surface-higher);
+  border: none;
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  text-align: left;
+}
+.tds-acc__trigger:hover {
+  background: var(--teal-100);
+}
+
+/* Chevron glyph rendered inside the trigger rotates when its panel opens. */
+.tds-acc__trigger > svg {
+  color: var(--color-text-tertiary);
+  transition: transform var(--duration-med) var(--ease-standard);
+}
+.tds-acc__trigger[data-panel-open] > svg {
+  transform: rotate(90deg);
+}
+
+.tds-acc__panel {
+  overflow: hidden;
+  height: var(--accordion-panel-height);
+  transition: height var(--duration-med) var(--ease-standard);
+}
+.tds-acc__panel[data-starting-style],
+.tds-acc__panel[data-ending-style] {
+  height: 0;
+}
+
+.tds-acc__panel-inner {
+  padding: 0 var(--space-4) var(--space-4);
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+}
+
+.tds-acc__header {
+  margin: 0;
+}

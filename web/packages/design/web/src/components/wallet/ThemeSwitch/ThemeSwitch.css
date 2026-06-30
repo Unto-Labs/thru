@@ -1,0 +1,31 @@
+.tds-theme-switch {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface-higher);
+  border-radius: var(--radius-none);
+  cursor: pointer;
+}
+.tds-theme-switch__icon {
+  color: var(--color-text-tertiary);
+  display: inline-flex;
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+/* light: sun lit */
+.tds-theme-switch[data-unchecked] .tds-theme-switch__icon:first-child {
+  color: var(--yellow-400);
+}
+/* dark: inverted chrome + moon lit */
+.tds-theme-switch[data-checked] {
+  background: var(--steel-700);
+  border-color: var(--steel-600);
+}
+.tds-theme-switch[data-checked] .tds-theme-switch__icon:last-child {
+  color: var(--sky-200);
+}
+.tds-theme-switch:focus-visible {
+  outline: 2px solid var(--color-border-brand);
+  outline-offset: 2px;
+}

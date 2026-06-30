@@ -1,0 +1,44 @@
+/* NumberField — ported from thru-design app.css .nf, retargeted to tokens. */
+
+.tds-nf {
+  display: inline-flex;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-none);
+}
+
+.tds-nf__btn {
+  font-family: var(--font-mono);
+  width: 32px;
+  background: var(--color-surface-higher);
+  border: none;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  font-size: 15px;
+}
+.tds-nf__btn:hover {
+  background: var(--teal-100);
+}
+.tds-nf__btn:first-child {
+  border-right: 1px solid var(--color-border-strong);
+}
+.tds-nf__btn:last-child {
+  border-left: 1px solid var(--color-border-strong);
+}
+.tds-nf__btn[data-disabled] {
+  color: var(--color-text-disabled);
+  cursor: not-allowed;
+}
+
+.tds-nf__input {
+  width: 64px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  border: none;
+  background: var(--color-surface-higher);
+  color: var(--color-text-primary);
+  padding: var(--space-2) var(--space-1);
+}
+.tds-nf__input:focus {
+  outline: none;
+}

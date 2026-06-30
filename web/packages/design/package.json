@@ -1,0 +1,47 @@
+{
+  "name": "@thru/design",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Thru design system — platform-neutral tokens + per-platform components.",
+  "type": "module",
+  "sideEffects": [
+    "*.css"
+  ],
+  "exports": {
+    "./tokens": {
+      "types": "./tokens/src/index.ts",
+      "import": "./tokens/src/index.ts"
+    },
+    "./tokens/css": "./tokens/src/all.css",
+    "./tokens/tokens.css": "./tokens/src/tokens.css",
+    "./tokens/typography.css": "./tokens/src/typography.css",
+    "./tokens/theme.css": "./tokens/src/theme.css",
+    "./web": {
+      "types": "./web/src/index.ts",
+      "import": "./web/src/index.ts"
+    },
+    "./web/styles.css": "./web/src/styles.css"
+  },
+  "files": [
+    "tokens/src",
+    "web/src"
+  ],
+  "peerDependencies": {
+    "@base-ui/react": "^1.6.0",
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
+  },
+  "peerDependenciesMeta": {
+    "@base-ui/react": { "optional": true },
+    "react": { "optional": true },
+    "react-dom": { "optional": true }
+  },
+  "devDependencies": {
+    "@base-ui/react": "^1.6.0",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "react": "19.2.6",
+    "react-dom": "19.2.6",
+    "typescript": "^6.0.3"
+  }
+}

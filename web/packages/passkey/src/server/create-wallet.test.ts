@@ -8,6 +8,7 @@ vi.mock('@thru/sdk/helpers', () => ({
     if (first === 22) return 'lookup-address';
     return `address-${Array.from(bytes).join('-')}`;
   },
+  encodeSignature: (bytes: Uint8Array) => `sig-${bytes[0]}`,
 }));
 
 vi.mock('@thru/programs/passkey-manager', () => ({
@@ -56,6 +57,19 @@ function clearFeePayerQueues(): void {
   delete globalQueues[feePayerQueueSymbol];
 }
 
+function mockSignedWire(kind: string): Uint8Array {
+  const prefix = new TextEncoder().encode(kind);
+  const wire = new Uint8Array(prefix.length + 64);
+  wire.set(prefix, 0);
+  wire.fill(kind === 'wallet' ? 1 : 2, prefix.length);
+  return wire;
+}
+
+function mockWireKind(wire: Uint8Array): string {
+  const prefixEnd = wire.findIndex((value) => value === 1 || value === 2);
+  return new TextDecoder().decode(wire.slice(0, prefixEnd));
+}
+
 describe('createPasskeyWallet', () => {
   beforeEach(() => {
     clearFeePayerQueues();
@@ -100,16 +114,13 @@ describe('createPasskeyWallet', () => {
           const kind = params.accounts.readWrite.length === 1 ? 'wallet' : 'lookup';
           return {
             sign: vi.fn(async () => {}),
-            toWire: () => new TextEncoder().encode(kind),
+            toWire: () => mockSignedWire(kind),
           };
         }),
-        send: vi.fn(async (wire: Uint8Array) => {
-          const kind = new TextDecoder().decode(wire);
+        sendAndTrack: vi.fn(async function* (wire: Uint8Array) {
+          const kind = mockWireKind(wire);
           sentKinds.push(kind);
-          return `${kind}-sig-${sentKinds.length}`;
-        }),
-        track: vi.fn(async function* (signature: string) {
-          if (signature.startsWith('wallet-sig')) {
+          if (kind === 'wallet') {
             state.walletTrackCount += 1;
             if (state.walletTrackCount === 1) {
               walletTrackStarted.resolve();
@@ -126,6 +137,8 @@ describe('createPasskeyWallet', () => {
           }
 
           yield {
+            status: 2,
+            signature: { value: new Uint8Array([sentKinds.length]) },
             executionResult: {
               userErrorCode: 0n,
               vmError: 0,

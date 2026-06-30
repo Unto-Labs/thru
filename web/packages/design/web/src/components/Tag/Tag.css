@@ -1,0 +1,40 @@
+/* Tag / Chip — solid-fill mono labels, square by default.
+   Ported from thru-design app.css .chip, retargeted to canonical tokens. */
+
+.tds-tag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  background: var(--color-surface-lower);
+  color: var(--color-text-primary);
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-none);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.tds-tag--neutral {
+  background: var(--color-surface-lower);
+  color: var(--color-text-primary);
+}
+.tds-tag--dark {
+  background: var(--color-surface-lower-inverse);
+  color: var(--color-text-primary-inverse);
+}
+.tds-tag--brick {
+  background: var(--brick-100);
+  color: var(--brick-400);
+}
+.tds-tag--sky {
+  background: var(--sky-100);
+  color: var(--sky-400);
+}
+.tds-tag--grass {
+  background: var(--grass-100);
+  color: var(--grass-400);
+}
+.tds-tag--yellow {
+  background: var(--yellow-100);
+  color: var(--yellow-400);
+}

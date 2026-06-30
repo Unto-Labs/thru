@@ -1,0 +1,31 @@
+.tds-disc {
+  position: relative;
+  display: inline-block;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-higher);
+  flex: none;
+  vertical-align: middle;
+}
+.tds-disc__inner {
+  position: absolute;
+  border-radius: var(--radius-pill);
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+}
+.tds-disc__glyph {
+  font-family: var(--font-mono);
+  font-weight: var(--fw-semibold);
+  line-height: 1;
+}
+.tds-disc__av {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+.tds-disc__av img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}

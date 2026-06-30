@@ -1,0 +1,18 @@
+/* Separator — hairline divider.
+   Ported from thru-design app.css .sep / .sep--v, retargeted to tokens. */
+
+.tds-sep {
+  background: var(--color-border-tertiary);
+  border: none;
+}
+
+.tds-sep--horizontal {
+  height: 1px;
+  width: 100%;
+}
+
+.tds-sep--vertical {
+  width: 1px;
+  height: 20px;
+  align-self: center;
+}

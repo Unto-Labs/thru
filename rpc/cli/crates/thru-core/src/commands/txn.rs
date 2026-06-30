@@ -734,6 +734,7 @@ fn create_rpc_client(config: &Config) -> Result<Client, CliError> {
     let rpc_url = config.get_grpc_url()?;
 
     ClientBuilder::new()
+        .insecure(config.insecure)
         .http_endpoint(rpc_url)
         .timeout(Duration::from_secs(config.timeout_seconds))
         .auth_token(config.auth_token.clone())

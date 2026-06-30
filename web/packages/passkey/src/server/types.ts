@@ -11,6 +11,13 @@ export interface BuiltPasskeyTransaction {
   rawTransaction: Uint8Array;
 }
 
+export interface TransactionExecutionResultLike {
+  userErrorCode?: bigint | number | null;
+  vmError?: bigint | number | null;
+  executionResult?: bigint | number | null;
+  consumedComputeUnits?: number;
+}
+
 export interface ThruClient {
   accounts: {
     get: (address: string) => Promise<{ data?: { data?: Uint8Array } }>;
@@ -44,12 +51,17 @@ export interface ThruClient {
       signature: string,
       opts: { timeoutMs: number }
     ) => AsyncIterable<{
-      executionResult?: {
-        userErrorCode: bigint;
-        vmError?: bigint | number | null;
-        executionResult?: bigint | number | null;
-      };
+      executionResult?: TransactionExecutionResultLike;
       statusCode?: number;
+    }>;
+    sendAndTrack: (
+      transaction: Uint8Array,
+      opts: { timeoutMs: number }
+    ) => AsyncIterable<{
+      status?: number;
+      signature?: { value: Uint8Array };
+      consensusStatus?: number;
+      executionResult?: TransactionExecutionResultLike;
     }>;
   };
 }

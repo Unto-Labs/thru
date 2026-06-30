@@ -61,7 +61,7 @@ export { createValidateChallenge, VALIDATE_CHALLENGE_DOMAIN } from './challenge'
 export { createWalletSeed, deriveWalletAddress, createCredentialLookupSeed, deriveCredentialLookupAddress } from './seeds';
 
 // Account context building
-export { buildAccountContext, buildPasskeyReadWriteAccounts, FEE_PAYER_ADDRESS } from './context';
+export { buildAccountContext, buildPasskeyReadWriteAccounts } from './context';
 export { decodeAddress, encodeAddress } from '@thru/sdk/helpers';
 
 // Account parsing

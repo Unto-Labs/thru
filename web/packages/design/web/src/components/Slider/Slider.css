@@ -1,0 +1,51 @@
+/* Slider — ported from thru-design app.css .slider, retargeted to tokens. */
+
+.tds-slider {
+  width: 100%;
+  max-width: 260px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.tds-slider__head {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.tds-slider__control {
+  display: flex;
+  align-items: center;
+  height: 18px;
+  width: 100%;
+}
+
+.tds-slider__track {
+  width: 100%;
+  height: 4px;
+  background: var(--color-border-secondary);
+  position: relative;
+}
+
+.tds-slider__indicator {
+  background: var(--color-surface-lower-inverse);
+  height: 100%;
+}
+
+.tds-slider__thumb {
+  width: 14px;
+  height: 14px;
+  background: var(--color-surface-lower-inverse);
+  border: 2px solid var(--color-surface-higher);
+  box-shadow: 0 0 0 1px var(--color-surface-lower-inverse);
+  border-radius: var(--radius-none);
+}
+.tds-slider__thumb:focus-visible {
+  outline: 2px solid var(--brick-400);
+  outline-offset: 2px;
+}

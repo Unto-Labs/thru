@@ -1,0 +1,61 @@
+/* Tabs — "hat" style (the old explorer look): folder-bordered tabs with a brick
+   "hat" bar that slides across the top of the active tab (via Base UI's
+   --active-tab-width / --active-tab-left). */
+
+.tds-tabs {
+  width: 100%;
+}
+
+.tds-tabs__list {
+  position: relative;
+  display: flex;
+  gap: 0;
+}
+
+.tds-tabs__tab {
+  position: relative;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  padding: var(--space-2) var(--space-4);
+  margin-top: 6px; /* room for the hat above the tab */
+  background: var(--color-surface-higher);
+  border: 1px solid transparent;
+  border-bottom: none; /* open-bottom folder shape */
+  border-radius: var(--radius-none);
+  color: var(--color-text-secondary);
+  cursor: pointer;
+  transition:
+    color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+.tds-tabs__tab:hover {
+  color: var(--color-text-primary);
+}
+.tds-tabs__tab[data-active] {
+  border-color: var(--color-border-strong);
+  color: var(--color-text-brand);
+  font-weight: var(--fw-semibold);
+}
+
+/* The "hat" — a brick bar at the top, sliding to sit above the active tab.
+   The right end is sheared into the Thru "wing" slant (matches RedHeader). */
+.tds-tabs__indicator {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 6px;
+  background: var(--color-surface-brick);
+  width: var(--active-tab-width);
+  transform: translateX(var(--active-tab-left));
+  clip-path: polygon(0 0, calc(100% - 7px) 0, 100% 100%, 0 100%);
+  transition:
+    transform var(--duration-med) var(--ease-standard),
+    width var(--duration-med) var(--ease-standard);
+}
+
+.tds-tabs__panel {
+  padding: var(--space-4) var(--space-1);
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+}

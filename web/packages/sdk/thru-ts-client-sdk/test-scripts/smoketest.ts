@@ -7,6 +7,7 @@ import { Filter, FilterParamValue } from "../domain/filters";
 import { PageRequest } from "../domain/pagination";
 import { Pubkey, Signature } from "../domain/primitives";
 import type { Transaction as TransactionModel } from "../domain/transactions";
+import type { SendAndTrackTxnUpdate } from "../modules/transactions";
 import type { TrackTransactionUpdate } from "../modules/streaming";
 import { ConsensusStatus, StateProofType } from "@thru/sdk/proto";
 
@@ -201,6 +202,13 @@ function logTrackUpdate(update: TrackTransactionUpdate): void {
     );
 }
 
+function logSendAndTrackUpdate(update: SendAndTrackTxnUpdate): void {
+    const signature = update.signature?.value ? encodeSignature(update.signature.value) : "none";
+    console.log(
+        ` - Update submission=${update.status} consensus=${consensusStatusLabel(update.consensusStatus)} consumedCU=${update.executionResult?.consumedComputeUnits ?? 0} signature=${signature}`,
+    );
+}
+
 async function streamWithLimit<T>(
     iterable: AsyncIterable<T>,
     limit: number,
@@ -275,10 +283,29 @@ async function main(): Promise<void> {
         });
 
         if (creationTransaction) {
-            const sendResult = await runStep("Sign and send account creation transaction", async () => {
+            const sendResult = await runStep("Sign, send, and track account creation transaction", async () => {
                 const signature = await creationTransaction.sign(demoKeyPair.privateKey);
                 console.log(` - Local signature: ${signature.toThruFmt()}`);
-                const submittedSignature = await sdk.transactions.send(creationTransaction.toWire());
+
+                let submittedSignature = signature.toThruFmt();
+                let finalized = false;
+                for await (const update of sdk.transactions.sendAndTrack(creationTransaction.toWire(), { timeoutMs: 30000 })) {
+                    logSendAndTrackUpdate(update);
+                    if (update.signature?.value) {
+                        submittedSignature = Signature.from(update.signature.value).toThruFmt();
+                    }
+                    if (
+                        update.executionResult ||
+                        update.consensusStatus === ConsensusStatus.FINALIZED ||
+                        update.consensusStatus === ConsensusStatus.CLUSTER_EXECUTED
+                    ) {
+                        finalized = true;
+                        break;
+                    }
+                }
+                if (!finalized) {
+                    console.log(" - Transaction not finalized before timeout");
+                }
                 console.log(` - Submitted signature: ${submittedSignature}`);
                 return { submittedSignature };
             });
@@ -287,23 +314,6 @@ async function main(): Promise<void> {
 
             if (submittedSignature) {
                 sampleTransactionSignature = submittedSignature;
-
-                await runStep("Track account creation transaction", async () => {
-                    let finalized = false;
-                    for await (const update of sdk.transactions.track(submittedSignature, { timeoutMs: 30000 })) {
-                        logTrackUpdate(update);
-                        if (
-                            update.statusCode === ConsensusStatus.FINALIZED ||
-                            update.statusCode === ConsensusStatus.CLUSTER_EXECUTED
-                        ) {
-                            finalized = true;
-                            break;
-                        }
-                    }
-                    if (!finalized) {
-                        console.log(" - Transaction not finalized before timeout");
-                    }
-                });
 
                 await sleep(2000);
 

@@ -1,0 +1,6 @@
+/* Banner — full-width brick "wing" bar (clip-path slant set inline). */
+
+.tds-banner {
+  width: 100%;
+  background: var(--color-surface-brick);
+}

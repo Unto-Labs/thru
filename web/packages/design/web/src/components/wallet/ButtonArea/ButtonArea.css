@@ -1,0 +1,32 @@
+.tds-btn-area {
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  background: none;
+  border: none;
+  padding: 0;
+  outline-offset: 2px;
+  color: inherit;
+}
+.tds-btn-area:active {
+  transform: translateY(1px);
+}
+.tds-btn-area:disabled {
+  pointer-events: none;
+  opacity: 0.45;
+}
+.tds-btn-area:focus-visible {
+  outline: 2px solid var(--color-border-brand);
+}
+.tds-btn-area--filled {
+  background: var(--color-surface-lower-inverse);
+  color: var(--color-text-primary-inverse);
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-sans);
+  font-weight: var(--fw-semibold);
+  font-size: 13px;
+}
+.tds-btn-area--filled:hover {
+  background: var(--steel-800);
+}

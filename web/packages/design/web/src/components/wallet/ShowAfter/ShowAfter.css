@@ -1,0 +1,7 @@
+.tds-show-after {
+  opacity: 0;
+  transition: opacity var(--duration-slow) var(--ease-standard);
+}
+.tds-show-after[data-shown] {
+  opacity: 1;
+}

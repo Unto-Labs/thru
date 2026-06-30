@@ -1,0 +1,66 @@
+/* Switch — ported from thru-design app.css .switch, retargeted to tokens.
+   State via Base UI [data-checked] / [data-disabled]. */
+
+.tds-switch-field {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.tds-switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  width: 40px;
+  height: 22px;
+  flex: none;
+  background: var(--color-border-secondary);
+  border: none;
+  border-radius: var(--radius-pill);
+  padding: 0;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-standard);
+}
+
+.tds-switch[data-checked] {
+  background: var(--brick-400);
+}
+
+.tds-switch:focus-visible {
+  outline: 2px solid var(--brick-400);
+  outline-offset: 2px;
+}
+
+.tds-switch[data-disabled] {
+  background: var(--color-surface-disabled);
+  cursor: not-allowed;
+}
+
+.tds-switch__thumb {
+  display: block;
+  width: 18px;
+  height: 18px;
+  background: var(--color-surface-higher);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-sm);
+  transform: translateX(2px);
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+
+.tds-switch[data-checked] .tds-switch__thumb {
+  transform: translateX(20px);
+}
+
+.tds-switch__label {
+  line-height: 1;
+}
+
+.tds-switch-field:has(.tds-switch[data-disabled]) {
+  color: var(--color-text-disabled);
+  cursor: not-allowed;
+}

@@ -1,0 +1,72 @@
+/* Checkbox — ported from thru-design app.css .check, retargeted to tokens.
+   State via Base UI [data-checked] / [data-indeterminate] / [data-disabled]. */
+
+.tds-check {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  color: var(--color-text-primary);
+  cursor: pointer;
+  user-select: none;
+}
+
+.tds-check__box {
+  width: 17px;
+  height: 17px;
+  flex: none;
+  display: grid;
+  place-items: center;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface-higher);
+  border-radius: var(--radius-none);
+  color: var(--color-text-primary-inverse);
+  padding: 0;
+  cursor: pointer;
+  transition:
+    background var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+
+.tds-check__box[data-checked],
+.tds-check__box[data-indeterminate] {
+  background: var(--brick-400);
+  border-color: var(--brick-400);
+}
+
+.tds-check__box:focus-visible {
+  outline: 2px solid var(--brick-400);
+  outline-offset: 2px;
+}
+
+.tds-check__box[data-disabled] {
+  background: var(--color-surface-disabled);
+  border-color: var(--color-border-disabled);
+  color: var(--color-text-disabled);
+  cursor: not-allowed;
+}
+
+.tds-check__indicator {
+  display: inline-flex;
+  color: currentColor;
+}
+.tds-check__indicator[data-unchecked] {
+  visibility: hidden;
+}
+
+.tds-check__dash {
+  display: block;
+  width: 9px;
+  height: 2px;
+  background: currentColor;
+}
+
+.tds-check__label {
+  line-height: 1;
+}
+
+.tds-check:has(.tds-check__box[data-disabled]) {
+  color: var(--color-text-disabled);
+  cursor: not-allowed;
+}

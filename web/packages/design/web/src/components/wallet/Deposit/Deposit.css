@@ -1,0 +1,62 @@
+.tds-deposit {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-3);
+  border: 1px solid var(--color-border-tertiary);
+  background: var(--teal-100);
+  width: 100%;
+  border-radius: var(--radius-none);
+}
+
+.tds-deposit__qr {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  grid-template-rows: repeat(7, 1fr);
+  width: 46px;
+  height: 46px;
+  flex: none;
+  background: var(--color-surface-higher);
+  padding: var(--space-1);
+  gap: 1px;
+  border: 1px solid var(--color-border-strong);
+}
+.tds-deposit__qr-cell {
+  width: 100%;
+  height: 100%;
+  background: transparent;
+}
+.tds-deposit__qr-cell--on {
+  background: var(--color-surface-lower-inverse);
+}
+
+.tds-deposit__info {
+  flex: 1;
+  min-width: 0;
+}
+.tds-deposit__label {
+  font-size: 13px;
+  font-weight: var(--fw-medium);
+  color: var(--color-text-primary);
+}
+.tds-deposit__addr {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+  word-break: break-all;
+  max-width: 22ch;
+  line-height: 1.5;
+}
+
+.tds-deposit__copy {
+  flex: none;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-tertiary);
+  display: inline-flex;
+  padding: var(--space-2);
+}
+.tds-deposit__copy:hover {
+  color: var(--color-text-primary);
+}

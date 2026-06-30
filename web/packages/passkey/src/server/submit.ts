@@ -5,7 +5,7 @@ import {
   hexToBytes,
 } from '@thru/programs/passkey-manager';
 import type { AccountContext } from '@thru/programs/passkey-manager';
-import { trackTransaction, withSerializedFeePayer } from './utils';
+import { sendAndTrackTransaction, withSerializedFeePayer } from './utils';
 import type {
   BuiltPasskeyTransaction,
   PasskeySignaturePayload,
@@ -103,7 +103,6 @@ export async function submitPasskeyTransaction(opts: {
 } & PasskeySignaturePayload): Promise<TransactionResult> {
   return withSerializedFeePayer(opts.adminPublicKey, async () => {
     const { rawTransaction } = await buildPasskeyTransaction(opts);
-    const signature = await opts.client.transactions.send(rawTransaction);
-    return trackTransaction(opts.client, signature);
+    return sendAndTrackTransaction(opts.client, rawTransaction);
   });
 }

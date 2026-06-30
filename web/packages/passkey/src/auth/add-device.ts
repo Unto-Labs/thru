@@ -65,6 +65,8 @@ export interface AddDeviceParams {
       discoverable on subsequent sign-ins. */
   credentialId?: Uint8Array;
   walletName?: string;
+  /** Fee payer address to place at transaction account index 0. */
+  feePayerAddress: string;
   /** Existing-passkey challenge signer (web or mobile). */
   passkey: PasskeyChallengeSigner;
   /** Wallet transaction signer that returns base64(signed bytes). */
@@ -179,6 +181,7 @@ export async function addAuthorityToAccount(
     walletAddress: params.walletAddress,
     readWriteAccounts,
     readOnlyAccounts: params.credentialId ? [MULTICALL_PROGRAM_PUBKEY] : [],
+    feePayerAddress: params.feePayerAddress,
     programAddress: params.programAddress,
   });
 

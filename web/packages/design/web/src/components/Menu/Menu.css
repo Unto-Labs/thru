@@ -1,0 +1,52 @@
+/* Menu — actions menu popup. Popup/item/separator/label look modeled on
+   Select.css, ported from thru-design app.css (.popup, .item, .menu-sep,
+   .menu-label families), retargeted to the canonical tokens. */
+
+.tds-menu-popup {
+  background: var(--color-surface-higher);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-none);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-1);
+  min-width: var(--anchor-width);
+  max-height: var(--available-height);
+  overflow: auto;
+  outline: none;
+}
+
+.tds-menu-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  padding: var(--space-2) var(--space-3);
+  position: relative;
+  cursor: default;
+  color: var(--color-text-primary);
+  border-radius: var(--radius-none);
+  user-select: none;
+}
+.tds-menu-item[data-highlighted] {
+  background: var(--color-surface-lower-inverse);
+  color: var(--color-text-primary-inverse);
+}
+.tds-menu-item[data-disabled] {
+  color: var(--color-text-tertiary);
+  cursor: not-allowed;
+}
+
+.tds-menu-sep {
+  height: 1px;
+  background: var(--color-border-tertiary);
+  margin: var(--space-1) 0;
+}
+
+.tds-menu-label {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  padding: var(--space-2) var(--space-3) var(--space-1);
+}

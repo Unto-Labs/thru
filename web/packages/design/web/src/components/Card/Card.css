@@ -1,0 +1,22 @@
+/* Card — square-first surface dressed in tokens.
+   Mirrors the legacy design-system: white field, hairline border (default/elevated
+   use the soft border, outlined uses the strong border), elevated adds a shadow. */
+
+.tds-card {
+  padding: var(--space-5);
+  background: #ffffff;
+  border-radius: var(--radius-none);
+}
+
+.tds-card--default {
+  border: 1px solid var(--teal-300);
+}
+
+.tds-card--elevated {
+  border: 1px solid var(--teal-300);
+  box-shadow: 0 10px 15px -3px rgba(21, 30, 30, 0.1), 0 4px 6px -4px rgba(21, 30, 30, 0.1);
+}
+
+.tds-card--outlined {
+  border: 1px solid var(--teal-800);
+}

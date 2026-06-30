@@ -348,6 +348,7 @@ impl ProgramManager {
         // Create RPC client
         let rpc_url = config.get_grpc_url()?;
         let rpc_client = RpcClient::builder()
+            .insecure(config.insecure)
             .http_endpoint(rpc_url)
             .timeout(Duration::from_secs(config.timeout_seconds))
             .auth_token(config.auth_token.clone())
@@ -1935,6 +1936,7 @@ async fn get_program_status(
         println!("RPC endpoint: {}", rpc_url);
     }
     let client = RpcClient::builder()
+        .insecure(config.insecure)
         .http_endpoint(rpc_url.clone())
         .timeout(Duration::from_secs(config.timeout_seconds))
         .auth_token(config.auth_token.clone())

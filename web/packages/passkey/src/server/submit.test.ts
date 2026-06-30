@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import type { AccountContext } from '@thru/programs/passkey-manager';
+import { encodeSignature } from '@thru/sdk/helpers';
 import type { ThruClient } from './types';
 
 const passkeyManagerMocks = vi.hoisted(() => ({
@@ -29,9 +30,11 @@ const signaturePayload = {
 };
 
 function createClient() {
+  const signatureBytes = new Uint8Array(64).fill(7);
+  const rawTransaction = new Uint8Array(64).fill(9);
   const transaction = {
     sign: vi.fn(async () => {}),
-    toWire: vi.fn(() => new Uint8Array([9, 9, 9])),
+    toWire: vi.fn(() => rawTransaction),
   };
   const client = {
     transactions: {
@@ -46,15 +49,26 @@ function createClient() {
           },
         };
       }),
+      sendAndTrack: vi.fn(async function* () {
+        yield {
+          status: 2,
+          signature: { value: signatureBytes },
+          executionResult: {
+            userErrorCode: 0n,
+            vmError: 0,
+            executionResult: 0n,
+          },
+        };
+      }),
     },
   } as unknown as ThruClient;
 
-  return { client, transaction };
+  return { client, transaction, rawTransaction, signatureBytes };
 }
 
 describe('passkey submit', () => {
   it('builds and signs a passkey transaction with explicit header overrides', async () => {
-    const { client, transaction } = createClient();
+    const { client, rawTransaction, transaction } = createClient();
 
     const result = await buildPasskeyTransaction({
       client,
@@ -95,11 +109,11 @@ describe('passkey submit', () => {
       })
     );
     expect(transaction.sign).toHaveBeenCalledWith(new Uint8Array(32).fill(2));
-    expect(result.rawTransaction).toEqual(new Uint8Array([9, 9, 9]));
+    expect(result.rawTransaction).toEqual(rawTransaction);
   });
 
-  it('keeps submitPasskeyTransaction as a send and track convenience wrapper', async () => {
-    const { client } = createClient();
+  it('submits and tracks passkey transactions through one streaming RPC', async () => {
+    const { client, rawTransaction, signatureBytes } = createClient();
 
     await expect(submitPasskeyTransaction({
       client,
@@ -111,11 +125,15 @@ describe('passkey submit', () => {
       instructionData: new Uint8Array([3, 4]),
       ...signaturePayload,
     })).resolves.toEqual({
-      signature: 'tx-signature',
+      signature: encodeSignature(signatureBytes),
       status: 'finalized',
       errorCode: 0n,
     });
 
-    expect(client.transactions.send).toHaveBeenCalledWith(new Uint8Array([9, 9, 9]));
+    expect(client.transactions.sendAndTrack).toHaveBeenCalledWith(rawTransaction, {
+      timeoutMs: 5000,
+    });
+    expect(client.transactions.send).not.toHaveBeenCalled();
+    expect(client.transactions.track).not.toHaveBeenCalled();
   });
 });

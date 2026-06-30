@@ -1,0 +1,37 @@
+/* Skeleton — shimmering loading placeholder (square-first). */
+
+.tds-skeleton {
+  display: block;
+  position: relative;
+  overflow: hidden;
+  background: var(--color-surface-lower);
+  border-radius: var(--radius-none);
+}
+.tds-skeleton--rounded {
+  border-radius: var(--radius-md);
+}
+.tds-skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.45),
+    transparent
+  );
+  animation: tds-skeleton-shimmer 1.6s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes tds-skeleton-shimmer {
+  100% {
+    transform: translateX(100%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tds-skeleton::after {
+    animation: none;
+  }
+}

@@ -1,0 +1,80 @@
+/* Button — square-first, token-driven. Sizing + Outline (thru-design "ghost")
+   ported from thru-design app.css .btn. Font is sans (thru-web Button1 canon). */
+
+.tds-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  font-family: var(--font-sans);
+  font-weight: var(--fw-semibold);
+  line-height: 1;
+  border: 1px solid transparent;
+  border-radius: var(--radius-none);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    opacity var(--duration-fast) var(--ease-standard);
+}
+
+.tds-btn:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.tds-btn:focus-visible {
+  outline: 2px solid var(--color-border-brand);
+  outline-offset: 2px;
+}
+.tds-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+  transform: none;
+}
+
+/* Sizes (thru-design scale: md is the default, then sm, xs) */
+.tds-btn--md { padding: var(--space-2) var(--space-4); font-size: 13px; }
+.tds-btn--sm { padding: var(--space-2) var(--space-3); font-size: 12px; }
+.tds-btn--xs { padding: var(--space-1) var(--space-2);  font-size: 11px; }
+
+/* Variants */
+.tds-btn--primary {
+  background: var(--color-surface-lower-inverse);
+  color: var(--color-text-primary-inverse);
+}
+.tds-btn--primary:hover:not(:disabled),
+.tds-btn--primary:focus-visible {
+  background: var(--color-surface-higher-inverse);
+}
+
+.tds-btn--secondary {
+  background: var(--color-surface-brick);
+  color: var(--color-text-primary-inverse);
+}
+.tds-btn--secondary:hover:not(:disabled),
+.tds-btn--secondary:focus-visible {
+  opacity: 0.9;
+}
+
+/* Outline — thru-design "ghost": transparent with a strong hairline that
+   darkens to ink on hover with a faint fill. */
+.tds-btn--outline {
+  background: transparent;
+  color: var(--color-text-primary);
+  border-color: var(--color-border-strong);
+}
+.tds-btn--outline:hover:not(:disabled),
+.tds-btn--outline:focus-visible {
+  border-color: var(--color-text-primary);
+  background: var(--color-surface-primary);
+}
+
+/* Ghost — borderless text button. */
+.tds-btn--ghost {
+  background: transparent;
+  color: var(--color-text-primary);
+}
+.tds-btn--ghost:hover:not(:disabled),
+.tds-btn--ghost:focus-visible {
+  background: var(--color-surface-lower);
+}

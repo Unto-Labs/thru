@@ -1,7 +1,7 @@
 import { createThruClient } from "../client";
 import type { InstructionContext } from "../domain/transactions";
 import { ConsensusStatus, StateProofType } from "@thru/sdk/proto";
-import { Pubkey } from "../sdk";
+import { Pubkey, Signature } from "../sdk";
 
 const sdk = createThruClient({
     // Configure the SDK to connect to the desired Thru cluster
@@ -23,28 +23,41 @@ const DEFAULT_STATE_UNITS = 1;
 const DEFAULT_MEMORY_UNITS = 2;
 const DEFAULT_EXPIRY_AFTER = 100;
 
-async function trackTransactionSignature(signature: string | Uint8Array): Promise<void> {
+async function sendAndTrackRawTransaction(
+    rawTransaction: Uint8Array,
+    fallbackSignature: string,
+): Promise<string> {
+    let submittedSignature = fallbackSignature;
     let finalized = false;
+
     try {
-        for await (const update of sdk.transactions.track(signature, { timeoutMs: 60_000 })) {
-            const statusName = ConsensusStatus[update.statusCode];
+        for await (const update of sdk.transactions.sendAndTrack(rawTransaction, { timeoutMs: 60_000 })) {
+            if (update.signature?.value) {
+                submittedSignature = Signature.from(update.signature.value).toThruFmt();
+            }
+
             const consumed = update.executionResult?.consumedComputeUnits ?? 0;
-            console.log(`Track update: ${statusName} (consumed CU: ${consumed})`);
+            const statusKey = ConsensusStatus[update.consensusStatus];
+            console.log("Track update:", statusKey, "consumed CU:", consumed);
+
             if (
-                update.statusCode === ConsensusStatus.FINALIZED ||
-                update.statusCode === ConsensusStatus.CLUSTER_EXECUTED
+                update.executionResult ||
+                update.consensusStatus === ConsensusStatus.FINALIZED ||
+                update.consensusStatus === ConsensusStatus.CLUSTER_EXECUTED
             ) {
                 finalized = true;
                 break;
             }
         }
     } catch (err) {
-        console.warn("Track transaction stream ended with error:", err);
+        console.warn("Send and track stream ended with error:", err);
     }
 
     if (!finalized) {
         console.warn("Transaction not finalized before timeout");
     }
+
+    return submittedSignature;
 }
 
 // Turn an unsigned integer into a little-endian hex string padded to byteLength bytes
@@ -116,7 +129,6 @@ const incrementCounterAccountInstructionWithString = async (
     await transaction.sign(feePayerPrivateKey);
     const rawTransaction = transaction.toWire();
     const submittedSignature = await sdk.transactions.send(rawTransaction);
-    // await trackTransactionSignature(submittedSignature);
     return submittedSignature;
 }
 
@@ -190,7 +202,6 @@ const incrementCounterAccountInstructionWithFunction = async () => {
     const rawTransaction = transaction.toWire();
     const submittedSignature =  sdk.transactions.send(rawTransaction);
     console.log("Submitted transaction signature:", submittedSignature);
-    // await trackTransactionSignature(submittedSignature);
     // return submittedSignature;
 }
 
@@ -448,10 +459,8 @@ const createCounterAccountWithFunction = async (): Promise<string> => {
 
     console.log("Local signature:", signature.toThruFmt());
 
-    const submittedSignature = await sdk.transactions.send(rawTransaction);
+    const submittedSignature = await sendAndTrackRawTransaction(rawTransaction, signature.toThruFmt());
     console.log("Submitted transaction signature:", submittedSignature);
-
-    await trackTransactionSignature(submittedSignature);
 
     const transactionStatus = await sdk.transactions.getStatus(submittedSignature);
     console.log("Submitted transaction status:", transactionStatus);
@@ -507,30 +516,8 @@ const createCounterAccountWithString = async (): Promise<string> => {
 
     console.log("Local signature:", signature.toThruFmt());
 
-    const submittedSignature = await sdk.transactions.send(rawTransaction);
+    const submittedSignature = await sendAndTrackRawTransaction(rawTransaction, signature.toThruFmt());
     console.log("Submitted transaction signature:", submittedSignature);
-    await trackTransactionSignature(submittedSignature);
-
-    // Wait and track
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    let finalized = false;
-    try {
-        for await (const update of sdk.transactions.track(submittedSignature, { timeoutMs: 60000 })) {
-            const consumed = update.executionResult?.consumedComputeUnits ?? 0;
-            const statusKey = ConsensusStatus[update.statusCode];
-            console.log("Track update:", statusKey, "consumed CU:", consumed);
-            if (
-                update.statusCode === ConsensusStatus.FINALIZED ||
-                update.statusCode === ConsensusStatus.CLUSTER_EXECUTED
-            ) {
-                finalized = true;
-                break;
-            }
-        }
-    } catch (err) {
-        console.warn("Track transaction stream ended with error:", err);
-    }
 
     return submittedSignature;
 };

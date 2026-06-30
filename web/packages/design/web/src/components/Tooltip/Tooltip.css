@@ -1,0 +1,21 @@
+/* Tooltip — dark inverse surface, mono, ported from thru-design app.css. */
+
+.tds-tooltip {
+  background: var(--color-surface-lower-inverse);
+  color: var(--color-text-primary-inverse);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: var(--space-1) var(--space-2);
+  border-radius: var(--radius-none);
+  box-shadow: var(--shadow-md);
+  max-width: 240px;
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+.tds-tooltip[data-starting-style],
+.tds-tooltip[data-ending-style] {
+  opacity: 0;
+}
+
+.tds-tooltip__arrow svg {
+  fill: var(--color-surface-lower-inverse);
+}

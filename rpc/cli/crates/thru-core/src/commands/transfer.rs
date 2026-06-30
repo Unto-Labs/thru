@@ -189,6 +189,7 @@ fn create_rpc_client(config: &Config) -> Result<Client, CliError> {
     let timeout = Duration::from_secs(config.timeout_seconds);
 
     ClientBuilder::new()
+        .insecure(config.insecure)
         .http_endpoint(rpc_url)
         .timeout(timeout)
         .auth_token(config.auth_token.clone())

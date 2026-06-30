@@ -33,6 +33,7 @@ import {
   Account,
   Block,
   ChainEvent,
+  ConsensusStatus,
   Transaction,
   TransactionStatusSnapshot,
 } from "@thru/sdk";
@@ -51,19 +52,26 @@ const account: Account = await thru.accounts.get("taExampleAddress...");
 console.log(account.meta?.balance);
 
 // Build, sign, submit, and track a transaction
-const { rawTransaction, signature } = await thru.transactions.buildAndSign({
+const { rawTransaction } = await thru.transactions.buildAndSign({
   feePayer: {
     publicKey: "taFeePayerAddress...",
     privateKey: feePayerSecretKeyBytes,
   },
   program: programIdentifierBytes,
 });
-await thru.transactions.send(rawTransaction);
 
-// Track the transaction – emits domain snapshots
-for await (const update of thru.streaming.trackTransaction(signature)) {
+// Submit and track with one RPC so no live tracking update can be missed.
+for await (const update of thru.transactions.sendAndTrack(rawTransaction, {
+  timeoutMs: 60_000,
+})) {
   console.log(update.status, update.executionResult?.consumedComputeUnits);
-  if (update.statusCode === ConsensusStatus.FINALIZED) break;
+  if (
+    update.executionResult ||
+    update.consensusStatus === ConsensusStatus.FINALIZED ||
+    update.consensusStatus === ConsensusStatus.CLUSTER_EXECUTED
+  ) {
+    break;
+  }
 }
 ```
 
@@ -270,7 +278,8 @@ for await (const { event } of thru.streaming.streamEvents()) {
   console.log((event as ChainEvent).timestampNs);
 }
 
-// Transaction tracking
+// Transaction tracking for an existing signature. This is a live stream; when
+// submitting a raw transaction yourself, prefer transactions.sendAndTrack().
 for await (const update of thru.streaming.trackTransaction(signature)) {
   console.log(update.status, update.executionResult?.consumedComputeUnits);
 }

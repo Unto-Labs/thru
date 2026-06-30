@@ -1,0 +1,70 @@
+/* NavigationMenu — ported from thru-design app.css .navmenu, retargeted to tokens.
+   Popup enter/exit via Base UI's [data-starting-style] / [data-ending-style]. */
+
+.tds-navmenu__list {
+  display: flex;
+  gap: var(--space-1);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.tds-navmenu__trigger {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  padding: var(--space-2) var(--space-3);
+  background: none;
+  border: 1px solid transparent;
+  color: var(--color-text-tertiary);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.tds-navmenu__trigger:hover,
+.tds-navmenu__trigger[data-popup-open] {
+  color: var(--color-text-primary);
+  border-color: var(--color-border-strong);
+}
+
+.tds-navmenu__positioner {
+  z-index: 60;
+}
+
+.tds-navmenu__popup {
+  background: var(--color-surface-higher);
+  border: 1px solid var(--color-border-strong);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-3);
+  width: 280px;
+  border-radius: var(--radius-none);
+  transition:
+    opacity var(--duration-med) var(--ease-standard),
+    transform var(--duration-med) var(--ease-standard);
+}
+.tds-navmenu__popup[data-starting-style],
+.tds-navmenu__popup[data-ending-style] {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+.tds-navmenu__link {
+  display: block;
+  padding: var(--space-2);
+  font-size: 13px;
+  color: var(--color-text-primary);
+  text-decoration: none;
+}
+.tds-navmenu__link:hover {
+  background: var(--teal-100);
+  text-decoration: none;
+}
+.tds-navmenu__link b {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.tds-navmenu__link span {
+  color: var(--color-text-tertiary);
+  font-size: 12px;
+}

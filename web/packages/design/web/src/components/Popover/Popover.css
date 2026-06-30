@@ -1,0 +1,41 @@
+/* Popover / PreviewCard — ported from thru-design app.css, retargeted to tokens. */
+
+.tds-popover {
+  background: var(--color-surface-higher);
+  border: 1px solid var(--color-border-strong);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-4);
+  width: 268px;
+  border-radius: var(--radius-none);
+  transition:
+    opacity var(--duration-fast) var(--ease-standard),
+    transform var(--duration-fast) var(--ease-standard);
+}
+.tds-popover[data-starting-style],
+.tds-popover[data-ending-style] {
+  opacity: 0;
+  transform: scale(0.97);
+}
+
+.tds-popover__title {
+  margin: 0 0 var(--space-1);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: var(--fw-semibold);
+  color: var(--color-text-primary);
+}
+
+.tds-popover__desc {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+
+.tds-popover__arrow {
+  display: flex;
+}
+.tds-popover__arrow svg {
+  fill: var(--color-surface-higher);
+  stroke: var(--color-border-strong);
+}

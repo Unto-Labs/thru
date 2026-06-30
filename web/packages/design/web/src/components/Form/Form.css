@@ -1,0 +1,7 @@
+/* Form — thin layout wrapper. Mirrors the stacked Field layout. */
+
+.tds-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}

@@ -8,7 +8,7 @@ use tracing::{debug, error, warn};
 
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 
-/// Block format structures (from thru-uds/src/block_format.rs)
+/// Block format structures (mirror the on-wire block layout defined in C)
 pub type FdPubkey = [u8; 32];
 pub type FdSignature = [u8; 64];
 pub type FdBlake3Hash = [u8; 32];
@@ -304,67 +304,6 @@ impl BlockParser {
     /// Parse block footer from data with error conversion
     fn parse_footer_verified(data: &[u8]) -> Result<TnBlockFooter, BlockParseError> {
         Self::parse_footer(data).map_err(|e| BlockParseError::InvalidBlockStructure(e))
-    }
-
-    /// Legacy function for backward compatibility - will be removed after integration update
-    #[deprecated(note = "Use parse_block instead")]
-    pub fn parse_block_legacy(data: &[u8]) -> Result<Vec<Vec<u8>>, String> {
-        if data.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        debug!("Parsing block data of {} bytes", data.len());
-
-        // Block format: TnBlockHeader + Transactions + TnBlockFooter
-        let header_size = mem::size_of::<TnBlockHeader>();
-        let footer_size = mem::size_of::<TnBlockFooter>();
-
-        if data.len() < header_size + footer_size {
-            return Err(format!(
-                "Block too small: {} bytes, need at least {}",
-                data.len(),
-                header_size + footer_size
-            ));
-        }
-
-        // Parse TnBlockHeader from the beginning
-        let header = Self::parse_header(&data[..header_size])?;
-        debug!(
-            "Parsed block header: version={}, start_slot={}",
-            header.body.block_version, header.body.start_slot
-        );
-        if header.body.block_version != 1 {
-            return Err(format!(
-                "Unsupported block version: {}",
-                header.body.block_version
-            ));
-        }
-
-        // Parse TnBlockFooter from the end
-        let footer_start = data.len() - footer_size;
-        let footer = Self::parse_footer(&data[footer_start..])?;
-        debug!(
-            "Parsed block footer: attestor_payment={}",
-            footer.body.attestor_payment
-        );
-
-        // Extract transaction data between header and footer
-        let transactions_data = &data[header_size..footer_start];
-        debug!(
-            "Transaction data section: {} bytes",
-            transactions_data.len()
-        );
-
-        if transactions_data.is_empty() {
-            debug!("No transaction data in block");
-            return Ok(Vec::new());
-        }
-
-        // Parse individual transactions from the middle section
-        let transactions = Self::parse_transactions(transactions_data)?;
-        debug!("Extracted {} transactions from block", transactions.len());
-
-        Ok(transactions)
     }
 
     /// Parse block header from data

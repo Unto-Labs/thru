@@ -1,0 +1,50 @@
+/* Toolbar — a horizontal roving-focus bar grouping related controls.
+   Modeled on thru-design app.css's .row / .sep--v layout, retargeted to the
+   canonical tokens. Square-first (radius 0). */
+
+.tds-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.tds-toolbar-sep {
+  width: 1px;
+  height: 20px;
+  align-self: center;
+  background: var(--color-border-tertiary);
+  border: none;
+  flex: none;
+}
+
+.tds-toolbar-link {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  text-decoration: none;
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+.tds-toolbar-link:hover {
+  color: var(--color-text-primary);
+}
+.tds-toolbar-link:focus-visible {
+  outline: 2px solid var(--color-border-brand);
+  outline-offset: 2px;
+}
+
+.tds-toolbar-input {
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  background: var(--color-surface-higher);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-none);
+  padding: var(--space-2) var(--space-3);
+  outline: none;
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+.tds-toolbar-input:focus {
+  border-color: var(--brick-400);
+  box-shadow: inset 0 0 0 1px var(--brick-400);
+}

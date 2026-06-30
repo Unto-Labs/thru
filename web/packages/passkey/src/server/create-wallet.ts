@@ -13,7 +13,7 @@ import {
 import {
   toThruAddress,
   getStateProof,
-  trackTransaction,
+  sendAndTrackTransaction,
   withSerializedFeePayer,
 } from "./utils";
 import type { ThruClient } from "./types";
@@ -79,8 +79,11 @@ export async function createPasskeyWallet(opts: {
     });
 
     await transaction.sign(opts.adminPrivateKey);
-    const signature = await opts.client.transactions.send(transaction.toWire());
-    const result = await trackTransaction(opts.client, signature, 60000);
+    const result = await sendAndTrackTransaction(
+      opts.client,
+      transaction.toWire(),
+      60000,
+    );
     if (result.status !== "finalized") {
       throw new Error(
         `Wallet creation failed with status: ${result.status}${
@@ -144,10 +147,11 @@ export async function createPasskeyWallet(opts: {
         });
 
         await transaction.sign(opts.adminPrivateKey);
-        const signature = await opts.client.transactions.send(
+        const result = await sendAndTrackTransaction(
+          opts.client,
           transaction.toWire(),
+          60000,
         );
-        const result = await trackTransaction(opts.client, signature, 60000);
         if (result.status !== "finalized") {
           throw new Error(
             `Credential registration failed with status: ${result.status}${

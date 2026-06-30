@@ -2727,6 +2727,7 @@ dependencies = [
  "thru-base",
  "thru-grpc-client",
  "tokio",
+ "tokio-rustls",
  "tonic",
  "tonic-health",
  "url",

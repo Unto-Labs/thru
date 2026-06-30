@@ -1,0 +1,89 @@
+.tds-balance {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  height: 54px;
+  padding: 0 var(--space-4);
+  border: 1px solid var(--color-border-tertiary);
+  background: var(--color-surface-higher);
+  width: 100%;
+  border-radius: var(--radius-none);
+}
+.tds-balance--seamless {
+  border: none;
+}
+
+.tds-balance__icon {
+  position: relative;
+  flex: none;
+  width: 20px;
+  height: 20px;
+}
+.tds-balance__chain {
+  position: absolute;
+  right: -4px;
+  bottom: -4px;
+  display: inline-flex;
+  border-radius: var(--radius-pill);
+  box-shadow: 0 0 0 1.5px var(--color-surface-higher);
+}
+
+.tds-balance__info {
+  flex: 1;
+  min-width: 0;
+}
+.tds-balance__name {
+  font-size: 14px;
+  font-weight: var(--fw-medium);
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tds-balance__on {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+
+.tds-balance__fiat {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  color: var(--color-text-primary);
+}
+.tds-balance__fiat:disabled {
+  cursor: default;
+}
+.tds-balance__amount--warn {
+  color: var(--brick-400);
+}
+.tds-balance__refresh {
+  width: 20px;
+  height: 20px;
+  border-radius: var(--radius-pill);
+  background: var(--teal-100);
+  display: grid;
+  place-items: center;
+  color: var(--color-text-tertiary);
+}
+
+.tds-balance__spinner {
+  width: 13px;
+  height: 13px;
+  border-radius: var(--radius-pill);
+  border: 1.5px solid var(--color-border-secondary);
+  border-top-color: var(--color-text-tertiary);
+  animation: tds-balance-spin var(--duration-slow) linear infinite;
+}
+@keyframes tds-balance-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

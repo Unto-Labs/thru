@@ -25,6 +25,7 @@
 pub mod error;
 
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use base64::{Engine as _, engine::general_purpose};
@@ -66,6 +67,10 @@ pub struct ClientBuilder {
     endpoint: Endpoint,
     timeout: Duration,
     auth_token: Option<String>,
+    insecure: bool,
+    /// Whether the configured endpoint uses TLS (`https://`). TLS is applied in
+    /// [`build`](Self::build) so the builder methods are order-independent.
+    https: bool,
     announce_pending_signature: bool,
 }
 
@@ -78,24 +83,39 @@ impl ClientBuilder {
             endpoint: default_endpoint,
             timeout: Duration::from_secs(30),
             auth_token: None,
+            insecure: false,
+            https: false,
             announce_pending_signature: false,
         }
     }
 
+    /// Skip TLS certificate verification for HTTPS endpoints.
+    ///
+    /// When enabled, the server's certificate is accepted without validation.
+    /// This is required to reach nodes that present a self-signed or otherwise
+    /// non-publicly-trusted certificate (e.g. a validator's envoy reached
+    /// directly by IP rather than through the load balancer). It disables peer
+    /// authentication and exposes the connection to man-in-the-middle attacks,
+    /// so only use it against endpoints you trust by other means.
+    ///
+    /// Has no effect on plaintext (`http://`) endpoints. Order-independent with
+    /// respect to the other builder methods — TLS is configured in
+    /// [`build`](Self::build).
+    pub fn insecure(mut self, insecure: bool) -> Self {
+        self.insecure = insecure;
+        self
+    }
+
     /// Set the HTTP (gRPC) endpoint.
+    ///
+    /// TLS for `https://` endpoints is configured later, in [`build`](Self::build),
+    /// so this may be called before or after [`insecure`](Self::insecure).
     pub fn http_endpoint(mut self, url: url::Url) -> Self {
-        let mut endpoint = Endpoint::from_shared(url.to_string())
-            .expect("invalid gRPC endpoint URL provided to ClientBuilder");
-        endpoint = endpoint.timeout(self.timeout);
+        let endpoint = Endpoint::from_shared(url.to_string())
+            .expect("invalid gRPC endpoint URL provided to ClientBuilder")
+            .timeout(self.timeout);
 
-        // Enable TLS for HTTPS URLs
-        if url.scheme() == "https" {
-            let tls_config = ClientTlsConfig::new().with_enabled_roots();
-            endpoint = endpoint
-                .tls_config(tls_config)
-                .expect("failed to configure TLS for HTTPS endpoint");
-        }
-
+        self.https = url.scheme() == "https";
         self.endpoint = endpoint;
         self
     }
@@ -123,7 +143,28 @@ impl ClientBuilder {
 
     /// Build the client.
     pub fn build(self) -> Result<Client> {
-        let channel = self.endpoint.connect_lazy();
+        // Configure TLS here (not in `http_endpoint`) so `insecure` takes effect
+        // regardless of the order in which the builder methods were called.
+        let mut endpoint = self.endpoint;
+        if self.https {
+            endpoint = if self.insecure {
+                // Replace the default WebPKI verifier with one that accepts any
+                // certificate. See `ClientBuilder::insecure`.
+                endpoint
+                    .tls_config_with_verifier(ClientTlsConfig::new(), Arc::new(danger::NoCertVerifier))
+                    .map_err(|e| {
+                        ClientError::Validation(format!("failed to configure insecure TLS: {}", e))
+                    })?
+            } else {
+                endpoint
+                    .tls_config(ClientTlsConfig::new().with_enabled_roots())
+                    .map_err(|e| {
+                        ClientError::Validation(format!("failed to configure TLS: {}", e))
+                    })?
+            };
+        }
+
+        let channel = endpoint.connect_lazy();
 
         let auth_header =
             match self.auth_token {
@@ -148,6 +189,71 @@ impl ClientBuilder {
 impl Default for ClientBuilder {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// TLS verifier used only when [`ClientBuilder::insecure`] is enabled.
+mod danger {
+    use tokio_rustls::rustls::{
+        DigitallySignedStruct, Error as TlsError, SignatureScheme,
+        client::danger::{HandshakeSignatureValid, ServerCertVerified, ServerCertVerifier},
+        pki_types::{CertificateDer, ServerName, UnixTime},
+    };
+
+    /// A [`ServerCertVerifier`] that accepts any server certificate without
+    /// validation. Installed in place of the default WebPKI verifier when the
+    /// client is built with `insecure(true)`. This intentionally disables peer
+    /// authentication — never use it against an untrusted network.
+    #[derive(Debug)]
+    pub(super) struct NoCertVerifier;
+
+    impl ServerCertVerifier for NoCertVerifier {
+        fn verify_server_cert(
+            &self,
+            _end_entity: &CertificateDer<'_>,
+            _intermediates: &[CertificateDer<'_>],
+            _server_name: &ServerName<'_>,
+            _ocsp_response: &[u8],
+            _now: UnixTime,
+        ) -> Result<ServerCertVerified, TlsError> {
+            Ok(ServerCertVerified::assertion())
+        }
+
+        fn verify_tls12_signature(
+            &self,
+            _message: &[u8],
+            _cert: &CertificateDer<'_>,
+            _dss: &DigitallySignedStruct,
+        ) -> Result<HandshakeSignatureValid, TlsError> {
+            Ok(HandshakeSignatureValid::assertion())
+        }
+
+        fn verify_tls13_signature(
+            &self,
+            _message: &[u8],
+            _cert: &CertificateDer<'_>,
+            _dss: &DigitallySignedStruct,
+        ) -> Result<HandshakeSignatureValid, TlsError> {
+            Ok(HandshakeSignatureValid::assertion())
+        }
+
+        fn supported_verify_schemes(&self) -> Vec<SignatureScheme> {
+            // Mirror the schemes rustls' own WebPKI verifier advertises;
+            // deprecated SHA-1 schemes are intentionally omitted.
+            vec![
+                SignatureScheme::RSA_PKCS1_SHA256,
+                SignatureScheme::ECDSA_NISTP256_SHA256,
+                SignatureScheme::RSA_PKCS1_SHA384,
+                SignatureScheme::ECDSA_NISTP384_SHA384,
+                SignatureScheme::RSA_PKCS1_SHA512,
+                SignatureScheme::ECDSA_NISTP521_SHA512,
+                SignatureScheme::RSA_PSS_SHA256,
+                SignatureScheme::RSA_PSS_SHA384,
+                SignatureScheme::RSA_PSS_SHA512,
+                SignatureScheme::ED25519,
+                SignatureScheme::ED448,
+            ]
+        }
     }
 }
 

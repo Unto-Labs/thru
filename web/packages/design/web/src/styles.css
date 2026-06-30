@@ -1,0 +1,5 @@
+/* Foundation stylesheet for @thru/design web components.
+   Import ONCE per app (e.g. in the root layout) to install the design
+   tokens + typography. Components carry their own CSS, so importing a
+   component pulls its styles automatically. */
+@import "../../tokens/src/all.css";

@@ -1,0 +1,141 @@
+/* ============================================================
+   Thru Typography — canon: Unto-Labs/thru-web globals.css
+   Named, responsive type ramp. Headings/body in --font-sans,
+   ui-* (machine-facing) in --font-mono. Each has a -bold variant.
+   Breakpoints inlined (sm 600 / md 840 / lg 1200 / xl 1600) since
+   this package carries no Tailwind theme() context.
+   ============================================================ */
+
+.type-heading-1 {
+  font-family: var(--font-sans);
+  font-size: 2.5rem;
+  line-height: 2.5rem;
+  letter-spacing: -0.03125rem;
+  font-weight: 400;
+}
+@media (min-width: 600px) { .type-heading-1 { font-size: 3rem; line-height: 3rem; } }
+@media (min-width: 840px) { .type-heading-1 { font-size: 4rem; line-height: 4rem; } }
+.type-heading-1-bold { font-weight: 600; }
+
+.type-heading-2 {
+  font-family: var(--font-sans);
+  font-size: 2.5rem;
+  line-height: 2.5rem;
+  font-weight: 400;
+}
+@media (min-width: 600px) { .type-heading-2 { font-size: 2.75rem; line-height: 2.75rem; } }
+@media (min-width: 840px) { .type-heading-2 { font-size: 3rem; line-height: 3rem; } }
+.type-heading-2-bold { font-weight: 600; }
+
+.type-heading-3 {
+  font-family: var(--font-sans);
+  font-size: 2rem;
+  line-height: 2rem;
+  font-weight: 400;
+}
+@media (min-width: 600px) { .type-heading-3 { font-size: 2.25rem; line-height: 2.25rem; } }
+@media (min-width: 840px) { .type-heading-3 { font-size: 2.5rem; line-height: 2.5rem; } }
+.type-heading-3-bold { font-weight: 600; }
+
+.type-heading-4 {
+  font-family: var(--font-sans);
+  font-size: 1.75rem;
+  line-height: 2rem;
+  font-weight: 400;
+}
+@media (min-width: 840px) { .type-heading-4 { font-size: 2rem; line-height: 2.25rem; } }
+.type-heading-4-bold { font-weight: 600; }
+
+.type-heading-5 {
+  font-family: var(--font-sans);
+  font-size: 1.5rem;
+  line-height: 2rem;
+  font-weight: 400;
+}
+.type-heading-5-bold { font-weight: 600; }
+
+.type-body-1 {
+  font-family: var(--font-sans);
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+  font-weight: 400;
+}
+.type-body-1-bold { font-weight: 600; }
+
+.type-body-3 {
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 400;
+}
+@media (min-width: 1600px) { .type-body-3 { font-size: 1.125rem; line-height: 1.75rem; } }
+.type-body-3-bold { font-weight: 600; }
+
+.type-body-4 {
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 400;
+}
+@media (min-width: 1600px) { .type-body-4 { font-size: 1rem; line-height: 1.5rem; } }
+.type-body-4-bold { font-weight: 600; }
+
+.type-body-5 {
+  font-family: var(--font-sans);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 400;
+}
+@media (min-width: 1600px) { .type-body-5 { font-size: 0.875rem; line-height: 1.25rem; } }
+.type-body-5-bold { font-weight: 600; }
+
+.type-ui-1 {
+  font-family: var(--font-mono);
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+  font-weight: 400;
+  letter-spacing: -0.03125rem;
+}
+.type-ui-1-bold { font-weight: 700; }
+
+.type-ui-2 {
+  font-family: var(--font-mono);
+  font-size: 1.125rem;
+  line-height: 1.75rem;
+  font-weight: 400;
+  letter-spacing: -0.015625rem;
+}
+.type-ui-2-bold { font-weight: 700; }
+
+.type-ui-3 {
+  font-family: var(--font-mono);
+  font-size: 1rem;
+  line-height: 1.5rem;
+  font-weight: 400;
+}
+.type-ui-3-bold { font-weight: 700; }
+
+.type-ui-4 {
+  font-family: var(--font-mono);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 400;
+}
+.type-ui-4-bold { font-weight: 700; }
+
+.type-ui-5 {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1rem;
+  font-weight: 400;
+}
+@media (min-width: 1600px) { .type-ui-5 { font-size: 0.875rem; line-height: 1.25rem; } }
+.type-ui-5-bold { font-weight: 700; }
+
+.type-button-1 {
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  line-height: 1.25rem;
+  font-weight: 400;
+}
+.type-button-1-bold { font-weight: 600; }

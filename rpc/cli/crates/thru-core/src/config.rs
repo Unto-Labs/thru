@@ -256,6 +256,11 @@ pub struct Config {
     #[serde(default)]
     pub default_network: Option<String>,
 
+    /// Skip TLS certificate verification for HTTPS endpoints. Set per-invocation
+    /// from the global `--insecure` flag; never persisted to the config file.
+    #[serde(default, skip_serializing)]
+    pub insecure: bool,
+ 
     /// Runtime-only: whether transaction-submitting commands should print the
     /// pending signature to stderr before sending. Set from the CLI flags in
     /// `run` (enabled outside `--json`/`--quiet`); never persisted to disk.
@@ -298,6 +303,7 @@ impl Default for Config {
             github_repo: None,
             networks: HashMap::new(),
             default_network: None,
+            insecure: false,
             announce_pending_signature: false,
         }
     }

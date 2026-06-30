@@ -1,0 +1,27 @@
+/* Address — truncated mono identifier + inline copy + optional dotted link. */
+
+.tds-address {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  white-space: nowrap;
+}
+
+.tds-address__value--mono {
+  font-family: var(--font-mono);
+}
+
+.tds-address__link {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: var(--color-border-secondary);
+  text-decoration-thickness: 1px;
+  text-underline-offset: 3px;
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+.tds-address__link:hover,
+.tds-address__link:focus-visible {
+  color: var(--color-text-brand);
+  text-decoration-color: var(--color-text-brand);
+}

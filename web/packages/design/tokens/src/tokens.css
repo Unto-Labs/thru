@@ -1,0 +1,174 @@
+/* ============================================================
+   Thru Design Tokens
+   Canon: Unto-Labs/thru-web  src/app/globals.css
+   Raw palette + semantic layer are lifted verbatim from thru-web
+   (which the legacy design-system already matched byte-for-byte).
+   Structural primitives (space/radius/motion/type-detail) are
+   adopted from the thru-design Base UI gallery.
+
+   No Tailwind: every value is a plain CSS custom property so it
+   works under Base UI + hand-written CSS, and can be mirrored to
+   a TS object for the future React Native target (see index.ts).
+   ============================================================ */
+
+:root {
+  /* ─── Raw palette ─────────────────────────────────────────── */
+
+  /* Steel — cool neutral gray */
+  --steel-0:   #f7f8f8;
+  --steel-100: #eaeef0;
+  --steel-200: #cdd5db;
+  --steel-300: #a4b3bc;
+  --steel-400: #7e93a0;
+  --steel-500: #5b6f7b;
+  --steel-600: #43515b;
+  --steel-700: #2b353b;
+  --steel-800: #151b1e;
+
+  /* Teal — warm neutral */
+  --teal-0:   #f9fbfb;
+  --teal-100: #eaf2f2;
+  --teal-200: #d1e1e1;
+  --teal-300: #a9c3c5;
+  --teal-400: #81a7a7;
+  --teal-500: #5e8787;
+  --teal-600: #456063;
+  --teal-700: #2d3e3e;
+  --teal-800: #151e1e;
+
+  /* Brick — primary brand */
+  --brick-100: #fbdadc;
+  --brick-200: #f6acb0;
+  --brick-300: #ed787e;
+  --brick-400: #d33c43;
+
+  /* Accents */
+  --sky-100: #cfeffc;
+  --sky-200: #8cd4f2;
+  --sky-300: #28a3d7;
+  --sky-400: #0279b1;
+
+  --grass-100: #c2ebe8;
+  --grass-200: #75d1cc;
+  --grass-300: #239f97;
+  --grass-400: #0a766f;
+
+  --yellow-100: #fdefdd;
+  --yellow-200: #fde0ba;
+  --yellow-300: #fbc784;
+  --yellow-400: #ffad42;
+
+  --tan-100: #f6ebe5;
+  --tan-200: #ebd5c7;
+  --tan-300: #ddb8a0;
+  --tan-400: #c98f69;
+
+  /* sand is an alias of tan in thru-web (identical values) */
+  --sand-100: #f6ebe5;
+  --sand-200: #ebd5c7;
+  --sand-300: #ddb8a0;
+  --sand-400: #c98f69;
+
+  --golden: #ffffbd;
+
+  /* Signal reds — error / destructive, distinct from brand brick */
+  --red-bright: #ff4750;
+  --red-hot:    #ff3d3d;
+
+  /* ─── Semantic color tokens (light) ───────────────────────── */
+  --color-text-primary:            var(--steel-800);
+  --color-text-secondary:          var(--teal-600);
+  --color-text-tertiary:           var(--steel-400);
+  --color-text-brand:              var(--brick-400);
+  --color-text-disabled:           var(--steel-300);
+  --color-text-primary-inverse:    var(--teal-0);
+  --color-text-secondary-inverse:  var(--teal-200);
+  --color-text-tertiary-inverse:   var(--teal-400);
+  --color-text-disabled-inverse:   var(--steel-600);
+
+  --color-border-primary:    var(--teal-800);
+  --color-border-secondary:  var(--teal-400);
+  --color-border-tertiary:   var(--teal-200);
+  /* Strong, soft hairline — the standard form-control outline
+     (matches thru-design's --border-strong = stone-300). */
+  --color-border-strong:     var(--teal-300);
+  --color-border-brand:      var(--brick-400);
+  --color-border-disabled:   var(--steel-300);
+
+  /* Danger / error (signal red) */
+  --color-text-danger:    var(--red-hot);
+  --color-border-danger:  var(--red-bright);
+  --color-surface-danger: var(--red-bright);
+
+  --color-surface-higher:           var(--teal-0);
+  --color-surface-primary:          var(--teal-100);
+  --color-surface-lower:            var(--teal-200);
+  --color-surface-disabled:         var(--steel-100);
+  --color-surface-higher-inverse:   var(--teal-600);
+  --color-surface-primary-inverse:  var(--teal-700);
+  --color-surface-lower-inverse:    var(--steel-800);
+  --color-surface-brick:            var(--brick-400);
+  --color-surface-sky:              var(--sky-400);
+  --color-surface-grass:            var(--grass-400);
+  --color-surface-yellow:           var(--yellow-400);
+  --color-surface-tan:              var(--tan-400);
+  --color-surface-sand:             var(--sand-400);
+  --color-golden:                   var(--golden);
+
+  /* ─── Type families ───────────────────────────────────────── */
+  /* Set by next/font (or @font-face) in the host app; fall back to system. */
+  --font-sans: var(--font-inter-tight, "Inter Tight", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif);
+  --font-mono: var(--font-jetbrains-mono, "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace);
+
+  /* ─── Structural primitives (adopted from thru-design) ────── */
+
+  /* Spacing — 4px base */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 24px;
+  --space-6: 32px;
+  --space-7: 40px;
+  --space-8: 56px;
+  --space-9: 80px;
+  --space-10: 120px;
+
+  /* Radius */
+  --radius-none: 0;
+  --radius-xs:   2px;
+  --radius-sm:   4px;
+  --radius-md:   8px;
+  --radius-pill: 999px;
+
+  /* Font weights */
+  --fw-regular:   400;
+  --fw-medium:    500;
+  --fw-semibold:  600;
+  --fw-bold:      700;
+  --fw-extrabold: 800;
+
+  /* Line heights */
+  --lh-tight: 1.0;
+  --lh-snug:  1.1;
+  --lh-body:  1.4;
+  --lh-loose: 1.6;
+
+  /* Letter spacing */
+  --tracking-display: -0.5px;
+  --tracking-tight:   -0.25px;
+  --tracking-normal:  0;
+  --tracking-utility: 0.02em;
+
+  /* Motion */
+  --duration-fast: 120ms;
+  --duration-med:  200ms;
+  --duration-slow: 320ms;
+  --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-out:      cubic-bezier(0, 0, 0.2, 1);
+
+  /* Elevation — used sparingly (overlays only; the system favors hairlines) */
+  --shadow-sm: 0 1px 2px rgba(21, 30, 30, 0.08);
+  --shadow-md: 0 4px 12px rgba(21, 30, 30, 0.12);
+  --shadow-lg: 0 12px 32px rgba(21, 30, 30, 0.18);
+}

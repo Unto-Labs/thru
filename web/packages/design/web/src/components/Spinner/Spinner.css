@@ -1,0 +1,28 @@
+/* Spinner — CSS-only loading ring.
+   Ported from thru-design app.css .spinner, retargeted to canonical tokens. */
+
+.tds-spinner {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--color-border-secondary);
+  border-top-color: var(--color-surface-lower-inverse);
+  border-radius: var(--radius-pill);
+  animation: tds-spin 0.7s linear infinite;
+}
+
+.tds-spinner--neutral {
+  border-color: var(--color-border-secondary);
+  border-top-color: var(--color-surface-lower-inverse);
+}
+
+.tds-spinner--brick {
+  border-color: var(--brick-200);
+  border-top-color: var(--brick-400);
+}
+
+@keyframes tds-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

@@ -1,0 +1,32 @@
+/* ScrollArea — ported from thru-design app.css .scrollarea, retargeted to tokens. */
+
+.tds-scrollarea {
+  height: 140px;
+  width: 100%;
+  max-width: 280px;
+  border: 1px solid var(--color-border-tertiary);
+  overflow: hidden;
+}
+
+.tds-scrollarea__viewport {
+  height: 100%;
+  overscroll-behavior: contain;
+  padding: var(--space-3) var(--space-4);
+}
+.tds-scrollarea__viewport p {
+  font-size: 13px;
+  color: var(--color-text-tertiary);
+  margin: 0 0 var(--space-3);
+}
+
+.tds-scrollarea__scrollbar {
+  display: flex;
+  width: 8px;
+  padding: var(--space-1);
+  background: var(--teal-100);
+}
+
+.tds-scrollarea__thumb {
+  flex: 1;
+  background: var(--color-border-secondary);
+}

@@ -1,0 +1,18 @@
+/* Timestamp — absolute line + optional relative line. */
+
+.tds-timestamp {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.tds-timestamp__row {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.tds-timestamp__abs {
+  color: var(--color-text-primary);
+}
+.tds-timestamp__rel {
+  color: var(--color-text-tertiary);
+}

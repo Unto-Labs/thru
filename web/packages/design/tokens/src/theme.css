@@ -1,0 +1,195 @@
+/* ============================================================
+   @thru/design — Tailwind v4 @theme bridge.
+
+   Drop-in replacement for `the legacy design-system/tailwind.css`. Import in an
+   app's globals.css AFTER `@import "tailwindcss"`:
+
+       @import "tailwindcss";
+       @import "@thru/design/tokens/theme.css";
+
+   It brings every design token as a real :root custom property (via tokens.css,
+   so `var(--color-surface-lower)` etc. resolve and our plain-CSS components work)
+   AND registers the color/breakpoint/font tokens with Tailwind so the utilities
+   apps already use keep generating (bg-surface-*, text-text-*, font-sans, …).
+   The `.type-*` classes come from typography.css; the animations below are
+   carried over verbatim from the old design-system stylesheet.
+
+   Mirrors thru-web's globals.css architecture: raw palette in :root, semantic
+   tokens registered with `@theme inline` referencing the raw vars.
+   ============================================================ */
+
+@import "./tokens.css";
+@import "./typography.css";
+
+/* Back-compat: the old design-system aliased `stone` → teal. Keep it so any app
+   still using stone utilities or var(--color-stone-*) migrates without changes. */
+:root {
+  --color-stone-0: var(--teal-0);
+  --color-stone-100: var(--teal-100);
+  --color-stone-200: var(--teal-200);
+  --color-stone-300: var(--teal-300);
+  --color-stone-400: var(--teal-400);
+  --color-stone-600: var(--teal-600);
+  --color-stone-700: var(--teal-700);
+  --color-stone-800: var(--teal-800);
+}
+
+@theme inline {
+  /* Breakpoints */
+  --breakpoint-sm: 600px;
+  --breakpoint-md: 840px;
+  --breakpoint-lg: 1200px;
+  --breakpoint-xl: 1600px;
+
+  /* Fonts — apps set --font-inter-tight / --font-jetbrains-mono via next/font */
+  --font-sans: var(--font-inter-tight, "Inter Tight", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif);
+  --font-mono: var(--font-jetbrains-mono, "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace);
+
+  /* Raw color scales → color utilities (bg-steel-400, text-brick-400, …) */
+  --color-steel-0: var(--steel-0);
+  --color-steel-100: var(--steel-100);
+  --color-steel-200: var(--steel-200);
+  --color-steel-300: var(--steel-300);
+  --color-steel-400: var(--steel-400);
+  --color-steel-500: var(--steel-500);
+  --color-steel-600: var(--steel-600);
+  --color-steel-700: var(--steel-700);
+  --color-steel-800: var(--steel-800);
+
+  --color-teal-0: var(--teal-0);
+  --color-teal-100: var(--teal-100);
+  --color-teal-200: var(--teal-200);
+  --color-teal-300: var(--teal-300);
+  --color-teal-400: var(--teal-400);
+  --color-teal-500: var(--teal-500);
+  --color-teal-600: var(--teal-600);
+  --color-teal-700: var(--teal-700);
+  --color-teal-800: var(--teal-800);
+
+  /* stone alias (back-compat) */
+  --color-stone-0: var(--teal-0);
+  --color-stone-100: var(--teal-100);
+  --color-stone-200: var(--teal-200);
+  --color-stone-300: var(--teal-300);
+  --color-stone-400: var(--teal-400);
+  --color-stone-600: var(--teal-600);
+  --color-stone-700: var(--teal-700);
+  --color-stone-800: var(--teal-800);
+
+  --color-brick-100: var(--brick-100);
+  --color-brick-200: var(--brick-200);
+  --color-brick-300: var(--brick-300);
+  --color-brick-400: var(--brick-400);
+
+  /* legacy brick aliases (back-compat with old design-system) */
+  --color-brick: var(--brick-200);
+  --color-thru-brick: var(--brick-200);
+  --color-thru-brick-alt: var(--brick-100);
+
+  --color-sky-100: var(--sky-100);
+  --color-sky-200: var(--sky-200);
+  --color-sky-300: var(--sky-300);
+  --color-sky-400: var(--sky-400);
+
+  --color-grass-100: var(--grass-100);
+  --color-grass-200: var(--grass-200);
+  --color-grass-300: var(--grass-300);
+  --color-grass-400: var(--grass-400);
+
+  --color-yellow-100: var(--yellow-100);
+  --color-yellow-200: var(--yellow-200);
+  --color-yellow-300: var(--yellow-300);
+  --color-yellow-400: var(--yellow-400);
+
+  --color-tan-100: var(--tan-100);
+  --color-tan-200: var(--tan-200);
+  --color-tan-300: var(--tan-300);
+  --color-tan-400: var(--tan-400);
+
+  --color-sand-100: var(--sand-100);
+  --color-sand-200: var(--sand-200);
+  --color-sand-300: var(--sand-300);
+  --color-sand-400: var(--sand-400);
+
+  --color-golden: var(--golden);
+
+  /* Semantic tokens → bg-surface-*, text-text-*, border-* utilities */
+  --color-text-primary: var(--steel-800);
+  --color-text-secondary: var(--teal-600);
+  --color-text-tertiary: var(--steel-400);
+  --color-text-brand: var(--brick-400);
+  --color-text-disabled: var(--steel-300);
+  --color-text-primary-inverse: var(--teal-0);
+  --color-text-secondary-inverse: var(--teal-200);
+  --color-text-tertiary-inverse: var(--teal-400);
+  --color-text-disabled-inverse: var(--steel-600);
+
+  --color-border-primary: var(--teal-800);
+  --color-border-secondary: var(--teal-400);
+  --color-border-tertiary: var(--teal-200);
+  --color-border-strong: var(--teal-300);
+  --color-border-brand: var(--brick-400);
+  --color-border-disabled: var(--steel-300);
+
+  /* Signal reds + danger semantics */
+  --color-red-bright: var(--red-bright);
+  --color-red-hot: var(--red-hot);
+  --color-text-danger: var(--red-hot);
+  --color-border-danger: var(--red-bright);
+  --color-surface-danger: var(--red-bright);
+
+  --color-surface-higher: var(--teal-0);
+  --color-surface-primary: var(--teal-100);
+  --color-surface-lower: var(--teal-200);
+  --color-surface-disabled: var(--steel-100);
+  --color-surface-higher-inverse: var(--teal-600);
+  --color-surface-primary-inverse: var(--teal-700);
+  --color-surface-lower-inverse: var(--steel-800);
+  --color-surface-brick: var(--brick-400);
+  --color-surface-sky: var(--sky-400);
+  --color-surface-grass: var(--grass-400);
+  --color-surface-yellow: var(--yellow-400);
+  --color-surface-tan: var(--tan-400);
+  --color-surface-sand: var(--sand-400);
+}
+
+/* ── Utilities + animations carried over from the legacy design-system ── */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+
+.pressure-gauge {
+  animation: pressure-rise 2s ease-in-out 0.25s forwards;
+  transform-origin: 12.5px 43px;
+  transform: rotate(44deg);
+}
+@keyframes pressure-rise {
+  0% { transform: rotate(44deg); }
+  40% { transform: rotate(315deg); }
+  60% { transform: rotate(308deg); }
+  100% { transform: rotate(312deg); }
+}
+
+@keyframes slide-left-right {
+  0% { transform: translateX(0); }
+  50% { transform: translateX(4px); }
+  100% { transform: translateX(0); }
+}
+.animate-slide {
+  animation: slide-left-right 1.5s ease-in-out infinite;
+}
+.group:hover .group-hover\:animate-slide {
+  animation: slide-left-right 1.5s ease-in-out infinite;
+}
+
+@keyframes bounce-slow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+.animate-bounce-slow {
+  animation: bounce-slow 3s ease-in-out infinite;
+}

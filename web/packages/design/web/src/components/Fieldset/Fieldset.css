@@ -1,0 +1,19 @@
+/* Fieldset — ported from thru-design app.css .fieldset, retargeted to tokens. */
+
+.tds-fieldset {
+  border: 1px solid var(--color-border-strong);
+  padding: var(--space-4);
+  border-radius: var(--radius-none);
+  /* <fieldset> defaults to min-inline-size: min-content, which shrink-wraps it
+     oddly inside flex/grid; reset so it behaves like a normal block. */
+  min-inline-size: 0;
+}
+
+.tds-fieldset__legend {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+  padding: 0;
+}
