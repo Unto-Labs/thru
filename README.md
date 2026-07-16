@@ -15,12 +15,12 @@ Thru is a high-performance blockchain network implementation featuring a custom 
 
 To start developing programs for Thru, see our comprehensive guide:
 
-**[Setting Up Thru Devkit](https://docs.thru.org/program-development/setting-up-thru-devkit)**
+**[Setting Up Thru Devkit](https://thru.org/docs/program-development/setting-up-thru-devkit/)**
 
 ## Documentation
 
-- [Thru Documentation](https://docs.thru.org)
-- [Program Development Guide](https://docs.thru.org/program-development)
+- [Thru Documentation](https://thru.org/docs/)
+- [Program Development Quickstart](https://thru.org/docs/program-development/building-a-c-program/)
 
 ## License
 
