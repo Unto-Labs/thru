@@ -257,7 +257,9 @@ fn collect_field_value_refs_inner(expr: &ExprKind, refs: &mut Vec<String>) {
     match expr {
         ExprKind::FieldRef(field_ref) => {
             if let Some(head) = field_ref.path.first() {
-                refs.push(head.clone());
+                if head != "__buffer_size" {
+                    refs.push(head.clone());
+                }
             }
         }
         ExprKind::Add(e) => {
@@ -386,10 +388,17 @@ pub fn collect_field_ref_paths(expr: &ExprKind) -> Vec<Vec<String>> {
 pub fn sequential_size_expression(expr: &ExprKind) -> Option<String> {
     match expr {
         ExprKind::Literal(lit) => Some(literal_to_string(lit)),
-        ExprKind::FieldRef(field_ref) => field_ref
-            .path
-            .first()
-            .map(|seg| format!("Number(__tnFieldValue_{})", escape_ts_keyword(seg))),
+        ExprKind::FieldRef(field_ref) => {
+            let head = field_ref.path.first()?;
+            if head == "__buffer_size" {
+                Some("__tnLength".to_string())
+            } else {
+                Some(format!(
+                    "Number(__tnFieldValue_{})",
+                    escape_ts_keyword(head)
+                ))
+            }
+        }
         ExprKind::Add(e) => Some(format!(
             "({} + {})",
             sequential_size_expression(&e.left)?,

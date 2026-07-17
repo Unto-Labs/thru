@@ -43,6 +43,13 @@ pub fn emit_builder(resolved_type: &ResolvedType, type_ir: Option<&TypeIr>) -> O
         if supports_fam_struct(resolved_type, Some(ir), &fam_infos) {
             return Some(emit_fam_struct_builder(resolved_type, ir, fam_infos));
         }
+        if let Some(plan) = field_derived_tail_builder_plan(resolved_type, ir) {
+            return Some(emit_field_derived_tail_struct_builder(
+                resolved_type,
+                ir,
+                plan,
+            ));
+        }
         if supports_enum_struct(resolved_type, Some(ir)) {
             let code = emit_dynamic_struct_builder(resolved_type, ir);
             if !code.is_empty() {
@@ -183,6 +190,25 @@ struct JaggedTypeRefArrayPlan<'a> {
     target_ident: String,
     target_name: String,
     storage_ident: String,
+    prefix_size: u64,
+}
+
+/* FieldDerivedTailField describes one variable-size tail whose byte length is
+computed from fixed prefix fields already written by the builder. */
+#[derive(Clone)]
+struct FieldDerivedTailField<'a> {
+    field: &'a ResolvedField,
+    storage_ident: String,
+    writer_ident: String,
+    element_size: u64,
+}
+
+/* FieldDerivedTailPlan describes a fixed-size prefix followed by dynamic tail
+fields whose layout is derived from prefix values rather than writer input. */
+struct FieldDerivedTailPlan<'a> {
+    prefix_fields: Vec<&'a ResolvedField>,
+    tail_fields: Vec<FieldDerivedTailField<'a>>,
+    prefix_meta: BTreeMap<String, PrefixFieldMeta<'a>>,
     prefix_size: u64,
 }
 
@@ -379,6 +405,558 @@ fn fam_tail_typeref_builder_plan<'a>(
         prefix_size,
         first_dynamic_index,
     })
+}
+
+/* field_derived_tail_builder_plan detects ABI structs such as CLOB order
+instructions, where optional trailing bytes are controlled by prefix flags. */
+fn field_derived_tail_builder_plan<'a>(
+    resolved_type: &'a ResolvedType,
+    type_ir: &TypeIr,
+) -> Option<FieldDerivedTailPlan<'a>> {
+    let ResolvedTypeKind::Struct { fields, .. } = &resolved_type.kind else {
+        return None;
+    };
+
+    let mut prefix_fields = Vec::new();
+    let mut prefix_meta = BTreeMap::new();
+    let mut tail_fields = Vec::new();
+    let mut saw_variable = false;
+
+    for field in fields {
+        match &field.field_type.size {
+            Size::Const(_) if !saw_variable => {
+                if !field_has_const_layout(field) {
+                    return None;
+                }
+                let offset = field
+                    .offset
+                    .or_else(|| struct_field_const_offset(resolved_type, &field.name))
+                    .unwrap_or(0);
+                let Size::Const(size) = field.field_type.size else {
+                    return None;
+                };
+                prefix_meta.insert(
+                    field.name.clone(),
+                    PrefixFieldMeta {
+                        field,
+                        offset,
+                        size,
+                    },
+                );
+                prefix_fields.push(field);
+            }
+            Size::Const(_) => return None,
+            Size::Variable(_) => {
+                saw_variable = true;
+                let ResolvedTypeKind::Array {
+                    element_type,
+                    size_expression,
+                    ..
+                } = &field.field_type.kind
+                else {
+                    return None;
+                };
+                if size_expression.is_constant() {
+                    return None;
+                }
+                if !matches!(element_type.kind, ResolvedTypeKind::Primitive { .. }) {
+                    return None;
+                }
+                let Size::Const(element_size) = element_type.size else {
+                    return None;
+                };
+                let method = escape_ts_keyword(&field.name);
+                tail_fields.push(FieldDerivedTailField {
+                    field,
+                    storage_ident: format!("__tnTail_{}", method),
+                    writer_ident: format!("__tnTailWriter_{}", method),
+                    element_size,
+                });
+            }
+        }
+    }
+
+    if tail_fields.is_empty() {
+        return None;
+    }
+
+    let binding_table = collect_dynamic_param_bindings(resolved_type);
+    let binding_keys: Vec<String> = binding_table.keys().cloned().collect();
+    let bindings: Vec<_> = deduplicated_ts_parameter_bindings(type_ir)
+        .into_iter()
+        .filter(|binding| !binding.derived)
+        .collect();
+    if bindings.is_empty() {
+        return None;
+    }
+    for binding in &bindings {
+        let binding_key = resolve_param_binding(&binding.ts_name, &binding_keys)?;
+        let dyn_binding = binding_table.get(binding_key)?;
+        if field_derived_param_expression(&prefix_meta, dyn_binding).is_none() {
+            return None;
+        }
+    }
+
+    for tail in &tail_fields {
+        let ResolvedTypeKind::Array {
+            size_expression, ..
+        } = &tail.field.field_type.kind
+        else {
+            return None;
+        };
+        builder_count_expr(size_expression, &prefix_meta)?;
+    }
+
+    let prefix_size: u64 = prefix_fields
+        .iter()
+        .map(|field| match field.field_type.size {
+            Size::Const(sz) => sz,
+            _ => 0,
+        })
+        .sum();
+
+    Some(FieldDerivedTailPlan {
+        prefix_fields,
+        tail_fields,
+        prefix_meta,
+        prefix_size,
+    })
+}
+
+fn field_derived_param_expression(
+    prefix_meta: &BTreeMap<String, PrefixFieldMeta<'_>>,
+    dyn_binding: &DynamicBinding,
+) -> Option<String> {
+    let field_name = dyn_binding.path.split('.').last()?;
+    let meta = prefix_meta.get(field_name)?;
+    builder_prefix_read_expr(meta)
+}
+
+fn builder_prefix_read_expr(meta: &PrefixFieldMeta<'_>) -> Option<String> {
+    match &meta.field.field_type.kind {
+        ResolvedTypeKind::Primitive { prim_type } => {
+            let getter = primitive_to_dataview_getter(prim_type);
+            let needs_le = needs_endianness_arg(prim_type);
+            let read_expr = if needs_le {
+                format!("this.view.{}({}, true)", getter, meta.offset)
+            } else {
+                format!("this.view.{}({})", getter, meta.offset)
+            };
+            let value_expr = match prim_type {
+                PrimitiveType::Integral(_) => format!("__tnToBigInt({})", read_expr),
+                _ => read_expr,
+            };
+            Some(format!("(() => {{ return {}; }})()", value_expr))
+        }
+        _ => None,
+    }
+}
+
+fn builder_count_expr(
+    expr: &ExprKind,
+    prefix_meta: &BTreeMap<String, PrefixFieldMeta<'_>>,
+) -> Option<String> {
+    match expr {
+        ExprKind::Literal(lit) => match lit {
+            crate::abi::expr::LiteralExpr::U64(v) => Some(v.to_string()),
+            crate::abi::expr::LiteralExpr::U32(v) => Some(v.to_string()),
+            crate::abi::expr::LiteralExpr::U16(v) => Some(v.to_string()),
+            crate::abi::expr::LiteralExpr::U8(v) => Some(v.to_string()),
+            crate::abi::expr::LiteralExpr::I64(v) => Some(v.to_string()),
+            crate::abi::expr::LiteralExpr::I32(v) => Some(v.to_string()),
+            crate::abi::expr::LiteralExpr::I16(v) => Some(v.to_string()),
+            crate::abi::expr::LiteralExpr::I8(v) => Some(v.to_string()),
+        },
+        ExprKind::FieldRef(field_ref) => {
+            let field_name = field_ref.path.last()?;
+            let meta = prefix_meta.get(field_name)?;
+            match &meta.field.field_type.kind {
+                ResolvedTypeKind::Primitive { prim_type } => {
+                    let getter = primitive_to_dataview_getter(prim_type);
+                    let needs_le = needs_endianness_arg(prim_type);
+                    let read_expr = if needs_le {
+                        format!("this.view.{}({}, true)", getter, meta.offset)
+                    } else {
+                        format!("this.view.{}({})", getter, meta.offset)
+                    };
+                    if getter.contains("Big") {
+                        Some(format!(
+                            "__tnBigIntToNumber({}, \"{}Builder::{}\")",
+                            read_expr, meta.field.field_type.name, meta.field.name
+                        ))
+                    } else {
+                        Some(read_expr)
+                    }
+                }
+                _ => None,
+            }
+        }
+        ExprKind::Add(e) => Some(format!(
+            "({} + {})",
+            builder_count_expr(&e.left, prefix_meta)?,
+            builder_count_expr(&e.right, prefix_meta)?
+        )),
+        ExprKind::Sub(e) => Some(format!(
+            "({} - {})",
+            builder_count_expr(&e.left, prefix_meta)?,
+            builder_count_expr(&e.right, prefix_meta)?
+        )),
+        ExprKind::Mul(e) => Some(format!(
+            "({} * {})",
+            builder_count_expr(&e.left, prefix_meta)?,
+            builder_count_expr(&e.right, prefix_meta)?
+        )),
+        ExprKind::Div(e) => Some(format!(
+            "Math.trunc({} / {})",
+            builder_count_expr(&e.left, prefix_meta)?,
+            builder_count_expr(&e.right, prefix_meta)?
+        )),
+        ExprKind::Mod(e) => Some(format!(
+            "({} % {})",
+            builder_count_expr(&e.left, prefix_meta)?,
+            builder_count_expr(&e.right, prefix_meta)?
+        )),
+        ExprKind::BitAnd(e) => Some(format!(
+            "({} & {})",
+            builder_count_expr(&e.left, prefix_meta)?,
+            builder_count_expr(&e.right, prefix_meta)?
+        )),
+        ExprKind::BitOr(e) => Some(format!(
+            "({} | {})",
+            builder_count_expr(&e.left, prefix_meta)?,
+            builder_count_expr(&e.right, prefix_meta)?
+        )),
+        ExprKind::BitXor(e) => Some(format!(
+            "({} ^ {})",
+            builder_count_expr(&e.left, prefix_meta)?,
+            builder_count_expr(&e.right, prefix_meta)?
+        )),
+        ExprKind::LeftShift(e) => Some(format!(
+            "({} << {})",
+            builder_count_expr(&e.left, prefix_meta)?,
+            builder_count_expr(&e.right, prefix_meta)?
+        )),
+        ExprKind::RightShift(e) => Some(format!(
+            "({} >> {})",
+            builder_count_expr(&e.left, prefix_meta)?,
+            builder_count_expr(&e.right, prefix_meta)?
+        )),
+        ExprKind::Neg(e) => Some(format!(
+            "(-({}))",
+            builder_count_expr(&e.operand, prefix_meta)?
+        )),
+        _ => None,
+    }
+}
+
+fn tail_expected_bytes_expr(
+    tail: &FieldDerivedTailField<'_>,
+    plan: &FieldDerivedTailPlan<'_>,
+) -> String {
+    let ResolvedTypeKind::Array {
+        size_expression, ..
+    } = &tail.field.field_type.kind
+    else {
+        return "0".to_string();
+    };
+    let count =
+        builder_count_expr(size_expression, &plan.prefix_meta).unwrap_or_else(|| "0".to_string());
+    if tail.element_size == 1 {
+        count
+    } else {
+        format!("({}) * {}", count, tail.element_size)
+    }
+}
+
+fn emit_field_derived_tail_struct_builder(
+    resolved_type: &ResolvedType,
+    type_ir: &TypeIr,
+    plan: FieldDerivedTailPlan<'_>,
+) -> String {
+    let class_name = &resolved_type.name;
+    let builder_name = format!("{}Builder", class_name);
+    let binding_table = collect_dynamic_param_bindings(resolved_type);
+    let binding_keys: Vec<String> = binding_table.keys().cloned().collect();
+    let mut param_exprs = Vec::new();
+    for binding in deduplicated_ts_parameter_bindings(type_ir)
+        .into_iter()
+        .filter(|binding| !binding.derived)
+    {
+        let binding_key =
+            resolve_param_binding(&binding.ts_name, &binding_keys).unwrap_or_else(|| {
+                panic!(
+                    "ts_gen: unable to resolve param '{}' while emitting builder for {}",
+                    binding.ts_name, class_name
+                )
+            });
+        let dyn_binding = binding_table.get(binding_key).unwrap_or_else(|| {
+            panic!(
+                "ts_gen: missing dynamic binding '{}' in builder for {}",
+                binding_key, class_name
+            )
+        });
+        let expr =
+            field_derived_param_expression(&plan.prefix_meta, dyn_binding).unwrap_or_else(|| {
+                panic!(
+                    "ts_gen: unable to derive param '{}' from prefix fields in builder for {}",
+                    binding.ts_name, class_name
+                )
+            });
+        param_exprs.push((binding.ts_name, expr));
+    }
+
+    let mut out = String::new();
+    writeln!(out, "export class {} {{", builder_name).unwrap();
+    writeln!(out, "  private buffer: Uint8Array;").unwrap();
+    writeln!(out, "  private view: DataView;").unwrap();
+    writeln!(
+        out,
+        "  private __tnCachedParams: {}.Params | null = null;",
+        class_name
+    )
+    .unwrap();
+    writeln!(out, "  private __tnLastBuffer: Uint8Array | null = null;").unwrap();
+    writeln!(
+        out,
+        "  private __tnLastParams: {}.Params | null = null;",
+        class_name
+    )
+    .unwrap();
+    for tail in &plan.tail_fields {
+        writeln!(
+            out,
+            "  private {}: Uint8Array | null = null;",
+            tail.storage_ident
+        )
+        .unwrap();
+        writeln!(
+            out,
+            "  private {}?: __TnFamWriterResult<{}>;",
+            tail.writer_ident, builder_name
+        )
+        .unwrap();
+    }
+    writeln!(out, "\n  constructor() {{").unwrap();
+    writeln!(
+        out,
+        "    this.buffer = new Uint8Array({});",
+        plan.prefix_size
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);"
+    )
+    .unwrap();
+    writeln!(out, "  }}\n").unwrap();
+    writeln!(out, "  private __tnInvalidate(): void {{").unwrap();
+    writeln!(out, "    this.__tnCachedParams = null;").unwrap();
+    writeln!(out, "    this.__tnLastBuffer = null;").unwrap();
+    writeln!(out, "    this.__tnLastParams = null;").unwrap();
+    writeln!(out, "  }}\n").unwrap();
+
+    let setter_ctx = SetterContext {
+        buffer_ident: "this.buffer",
+        view_ident: "this.view",
+        invalidate: true,
+    };
+    for field in &plan.prefix_fields {
+        emit_const_field_setter(field, &setter_ctx, &mut out);
+    }
+
+    for tail in &plan.tail_fields {
+        let method = escape_ts_keyword(&tail.field.name);
+        writeln!(
+            out,
+            "  {}(): __TnFamWriterResult<{}> {{",
+            method, builder_name
+        )
+        .unwrap();
+        writeln!(out, "    if (!this.{}) {{", tail.writer_ident).unwrap();
+        writeln!(
+            out,
+            "      this.{} = __tnCreateFamWriter(this, \"{}\", (payload) => {{",
+            tail.writer_ident, method
+        )
+        .unwrap();
+        writeln!(out, "        const bytes = new Uint8Array(payload);").unwrap();
+        if tail.element_size > 1 {
+            writeln!(
+                out,
+                "        if (bytes.length % {} !== 0) throw new Error(\"{}Builder: {} length must be a multiple of {}\");",
+                tail.element_size,
+                class_name,
+                tail.field.name,
+                tail.element_size
+            )
+            .unwrap();
+        }
+        writeln!(out, "        this.{} = bytes;", tail.storage_ident).unwrap();
+        writeln!(out, "        this.__tnInvalidate();").unwrap();
+        writeln!(out, "      }});").unwrap();
+        writeln!(out, "    }}").unwrap();
+        writeln!(out, "    return this.{}!;", tail.writer_ident).unwrap();
+        writeln!(out, "  }}\n").unwrap();
+    }
+
+    writeln!(out, "  build(): Uint8Array {{").unwrap();
+    writeln!(out, "    const params = this.__tnComputeParams();").unwrap();
+    writeln!(
+        out,
+        "    const size = {}.footprintFromParams(params);",
+        class_name
+    )
+    .unwrap();
+    writeln!(out, "    const buffer = new Uint8Array(size);").unwrap();
+    writeln!(out, "    this.__tnWriteInto(buffer);").unwrap();
+    writeln!(out, "    this.__tnValidateOrThrow(buffer, params);").unwrap();
+    writeln!(out, "    return buffer;").unwrap();
+    writeln!(out, "  }}\n").unwrap();
+
+    writeln!(
+        out,
+        "  buildInto(target: Uint8Array, offset = 0): Uint8Array {{"
+    )
+    .unwrap();
+    writeln!(out, "    const params = this.__tnComputeParams();").unwrap();
+    writeln!(
+        out,
+        "    const size = {}.footprintFromParams(params);",
+        class_name
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    if (target.length - offset < size) throw new Error(\"{}Builder: target buffer too small\");",
+        class_name
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    const slice = target.subarray(offset, offset + size);"
+    )
+    .unwrap();
+    writeln!(out, "    this.__tnWriteInto(slice);").unwrap();
+    writeln!(out, "    this.__tnValidateOrThrow(slice, params);").unwrap();
+    writeln!(out, "    return target;").unwrap();
+    writeln!(out, "  }}\n").unwrap();
+
+    writeln!(out, "  finish(): {} {{", class_name).unwrap();
+    writeln!(out, "    const buffer = this.build();").unwrap();
+    writeln!(
+        out,
+        "    const params = this.__tnLastParams ?? this.__tnComputeParams();"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    const view = {}.from_array(buffer, {{ params }});",
+        class_name
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    if (!view) throw new Error(\"{}Builder: failed to finalize view\");",
+        class_name
+    )
+    .unwrap();
+    writeln!(out, "    return view;").unwrap();
+    writeln!(out, "  }}\n").unwrap();
+    writeln!(out, "  finishView(): {} {{", class_name).unwrap();
+    writeln!(out, "    return this.finish();").unwrap();
+    writeln!(out, "  }}\n").unwrap();
+    writeln!(out, "  dynamicParams(): {}.Params {{", class_name).unwrap();
+    writeln!(out, "    return this.__tnComputeParams();").unwrap();
+    writeln!(out, "  }}\n").unwrap();
+
+    writeln!(
+        out,
+        "  private __tnComputeParams(): {}.Params {{",
+        class_name
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    if (this.__tnCachedParams) return this.__tnCachedParams;"
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    const params = {}.Params.fromValues({{",
+        class_name
+    )
+    .unwrap();
+    for (name, expr) in &param_exprs {
+        writeln!(out, "      {}: {},", name, expr).unwrap();
+    }
+    writeln!(out, "    }});").unwrap();
+    writeln!(out, "    this.__tnCachedParams = params;").unwrap();
+    writeln!(out, "    return params;").unwrap();
+    writeln!(out, "  }}\n").unwrap();
+
+    writeln!(out, "  private __tnWriteInto(target: Uint8Array): void {{").unwrap();
+    writeln!(out, "    target.set(this.buffer, 0);").unwrap();
+    writeln!(out, "    let cursor = this.buffer.length;").unwrap();
+    for tail in &plan.tail_fields {
+        let local_ident = format!("__tnLocal_{}_bytes", escape_ts_keyword(&tail.field.name));
+        let expected_expr = tail_expected_bytes_expr(tail, &plan);
+        writeln!(
+            out,
+            "    const {} = this.{};",
+            local_ident, tail.storage_ident
+        )
+        .unwrap();
+        writeln!(
+            out,
+            "    const __tnExpected_{}_bytes = {};",
+            escape_ts_keyword(&tail.field.name),
+            expected_expr
+        )
+        .unwrap();
+        writeln!(
+            out,
+            "    if (__tnExpected_{}_bytes > 0 && !{}) throw new Error(\"{}Builder: field '{}' must be written before build\");",
+            escape_ts_keyword(&tail.field.name), local_ident, class_name, tail.field.name
+        )
+        .unwrap();
+        writeln!(
+            out,
+            "    if ({} && {}.length !== __tnExpected_{}_bytes) throw new Error(\"{}Builder: field '{}' length does not match dynamic layout\");",
+            local_ident, local_ident, escape_ts_keyword(&tail.field.name), class_name, tail.field.name
+        )
+        .unwrap();
+        writeln!(out, "    if ({}) {{", local_ident).unwrap();
+        writeln!(out, "      target.set({}, cursor);", local_ident).unwrap();
+        writeln!(out, "      cursor += {}.length;", local_ident).unwrap();
+        writeln!(out, "    }}").unwrap();
+    }
+    writeln!(out, "  }}\n").unwrap();
+
+    writeln!(
+        out,
+        "  private __tnValidateOrThrow(buffer: Uint8Array, params: {}.Params): void {{",
+        class_name
+    )
+    .unwrap();
+    writeln!(
+        out,
+        "    const result = {}.validate(buffer, {{ params }});",
+        class_name
+    )
+    .unwrap();
+    writeln!(out, "    if (!result.ok) {{").unwrap();
+    writeln!(
+        out,
+        "      throw new Error(`${{ {} }}Builder: builder produced invalid buffer (code=${{result.code ?? \"unknown\"}})`);",
+        class_name
+    )
+    .unwrap();
+    writeln!(out, "    }}").unwrap();
+    writeln!(out, "    this.__tnLastParams = result.params ?? params;").unwrap();
+    writeln!(out, "    this.__tnLastBuffer = buffer;").unwrap();
+    writeln!(out, "  }}").unwrap();
+    writeln!(out, "}}\n").unwrap();
+    out
 }
 
 fn jagged_typeref_array_builder_plan<'a>(
@@ -2369,6 +2947,26 @@ fn emit_enum_builder(
         .as_ref()
         .map(|field| format!("field '{}'", field.name))
         .unwrap_or_else(|| format!("computed tag for '{}'", info.enum_field.name));
+    let tag_prim_type = info.tag_field.as_ref().and_then(|tag_field| {
+        if let ResolvedTypeKind::Primitive { prim_type } = &tag_field.field_type.kind {
+            Some(prim_type)
+        } else {
+            None
+        }
+    });
+    let tag_storage_ts_type = tag_prim_type.map(primitive_to_ts_type).unwrap_or("number");
+    let tag_assign_ts_type = tag_prim_type
+        .map(|prim_type| {
+            if primitive_to_dataview_setter(prim_type).contains("Big") {
+                "number | bigint"
+            } else {
+                primitive_to_ts_type(prim_type)
+            }
+        })
+        .unwrap_or("number");
+    let tag_assign_value_expr = tag_prim_type
+        .map(|prim_type| primitive_setter_value_expr(prim_type, "value"))
+        .unwrap_or_else(|| "value".to_string());
 
     writeln!(out, "export class {} {{", builder_name).unwrap();
     if has_prefix {
@@ -2378,8 +2976,8 @@ fn emit_enum_builder(
     if has_physical_tag {
         writeln!(
             out,
-            "  private __tnField_{}: number | null = null;",
-            tag_ts_name
+            "  private __tnField_{}: {} | null = null;",
+            tag_ts_name, tag_storage_ts_type
         )
         .unwrap();
     }
@@ -2455,20 +3053,25 @@ fn emit_enum_builder(
     if has_physical_tag {
         writeln!(
             out,
-            "  private __tnAssign_{}(value: number): void {{",
-            info.tag_ts_name
+            "  private __tnAssign_{}(value: {}): void {{",
+            info.tag_ts_name, tag_assign_ts_type
         )
         .unwrap();
         writeln!(
             out,
-            "    this.__tnField_{} = value & 0xff;",
-            info.tag_ts_name
+            "    this.__tnField_{} = {};",
+            info.tag_ts_name, tag_assign_value_expr
         )
         .unwrap();
         writeln!(out, "    this.__tnInvalidate();").unwrap();
         writeln!(out, "  }}\n").unwrap();
 
-        writeln!(out, "  set_{}(value: number): this {{", info.tag_ts_name).unwrap();
+        writeln!(
+            out,
+            "  set_{}(value: {}): this {{",
+            info.tag_ts_name, tag_assign_ts_type
+        )
+        .unwrap();
         writeln!(out, "    this.__tnAssign_{}(value);", info.tag_ts_name).unwrap();
         writeln!(out, "    return this;\n  }}\n").unwrap();
     }
@@ -2682,7 +3285,14 @@ fn emit_enum_builder(
         } else {
             false
         };
-        (tag_offset, setter, needs_le)
+        let value_expr = if let ResolvedTypeKind::Primitive { prim_type } =
+            &tag_field.field_type.kind
+        {
+            primitive_setter_value_expr(prim_type, &format!("this.__tnField_{}", info.tag_ts_name))
+        } else {
+            format!("this.__tnField_{}", info.tag_ts_name)
+        };
+        (tag_offset, setter, needs_le, value_expr)
     });
 
     writeln!(out, "  private __tnWriteInto(target: Uint8Array): void {{").unwrap();
@@ -2708,21 +3318,16 @@ fn emit_enum_builder(
     if has_prefix {
         writeln!(out, "    target.set(this.__tnPrefixBuffer, 0);").unwrap();
     }
-    if let Some((tag_offset, setter, needs_le)) = tag_write {
+    if let Some((tag_offset, setter, needs_le, value_expr)) = tag_write {
         if needs_le {
             writeln!(
                 out,
-                "    view.{}({}, this.__tnField_{}, true);",
-                setter, tag_offset, info.tag_ts_name
+                "    view.{}({}, {}, true);",
+                setter, tag_offset, value_expr
             )
             .unwrap();
         } else {
-            writeln!(
-                out,
-                "    view.{}({}, this.__tnField_{});",
-                setter, tag_offset, info.tag_ts_name
-            )
-            .unwrap();
+            writeln!(out, "    view.{}({}, {});", setter, tag_offset, value_expr).unwrap();
         }
     }
     writeln!(

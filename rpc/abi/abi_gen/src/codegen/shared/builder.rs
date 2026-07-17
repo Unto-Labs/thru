@@ -750,6 +750,13 @@ impl<'a> IrBuilder<'a> {
             }
             ExprKind::FieldRef(field_ref) => {
                 let raw_path = field_ref.path.join(".");
+                if raw_path == "__buffer_size" {
+                    return Ok(IrNode::FieldRef(FieldRefNode {
+                        path: raw_path,
+                        parameter: None,
+                        meta: NodeMetadata::default(),
+                    }));
+                }
                 let path = Self::apply_path_prefix(path_prefix, &raw_path);
                 let param = params.lookup_name(owner, &path).ok_or_else(|| {
                     IrBuildError::MissingParameter {
@@ -764,30 +771,119 @@ impl<'a> IrBuilder<'a> {
                     meta: NodeMetadata::default(),
                 }))
             }
-            ExprKind::Add(expr) => {
-                let left = self.build_expr_ir(&expr.left, owner, params, type_name, path_prefix)?;
-                let right =
-                    self.build_expr_ir(&expr.right, owner, params, type_name, path_prefix)?;
-                Ok(IrNode::AddChecked(BinaryOpNode {
-                    left: Box::new(left),
-                    right: Box::new(right),
-                    meta: NodeMetadata::default(),
-                }))
-            }
-            ExprKind::Mul(expr) => {
-                let left = self.build_expr_ir(&expr.left, owner, params, type_name, path_prefix)?;
-                let right =
-                    self.build_expr_ir(&expr.right, owner, params, type_name, path_prefix)?;
-                Ok(IrNode::MulChecked(BinaryOpNode {
-                    left: Box::new(left),
-                    right: Box::new(right),
-                    meta: NodeMetadata::default(),
-                }))
-            }
+            ExprKind::Add(expr) => self.build_binary_expr_ir(
+                &expr.left,
+                &expr.right,
+                owner,
+                params,
+                type_name,
+                path_prefix,
+                IrNode::AddChecked,
+            ),
+            ExprKind::Sub(expr) => self.build_binary_expr_ir(
+                &expr.left,
+                &expr.right,
+                owner,
+                params,
+                type_name,
+                path_prefix,
+                IrNode::SubChecked,
+            ),
+            ExprKind::Mul(expr) => self.build_binary_expr_ir(
+                &expr.left,
+                &expr.right,
+                owner,
+                params,
+                type_name,
+                path_prefix,
+                IrNode::MulChecked,
+            ),
+            ExprKind::Div(expr) => self.build_binary_expr_ir(
+                &expr.left,
+                &expr.right,
+                owner,
+                params,
+                type_name,
+                path_prefix,
+                IrNode::DivChecked,
+            ),
+            ExprKind::Mod(expr) => self.build_binary_expr_ir(
+                &expr.left,
+                &expr.right,
+                owner,
+                params,
+                type_name,
+                path_prefix,
+                IrNode::ModChecked,
+            ),
+            ExprKind::BitAnd(expr) => self.build_binary_expr_ir(
+                &expr.left,
+                &expr.right,
+                owner,
+                params,
+                type_name,
+                path_prefix,
+                IrNode::BitAnd,
+            ),
+            ExprKind::BitOr(expr) => self.build_binary_expr_ir(
+                &expr.left,
+                &expr.right,
+                owner,
+                params,
+                type_name,
+                path_prefix,
+                IrNode::BitOr,
+            ),
+            ExprKind::BitXor(expr) => self.build_binary_expr_ir(
+                &expr.left,
+                &expr.right,
+                owner,
+                params,
+                type_name,
+                path_prefix,
+                IrNode::BitXor,
+            ),
+            ExprKind::LeftShift(expr) => self.build_binary_expr_ir(
+                &expr.left,
+                &expr.right,
+                owner,
+                params,
+                type_name,
+                path_prefix,
+                IrNode::LeftShift,
+            ),
+            ExprKind::RightShift(expr) => self.build_binary_expr_ir(
+                &expr.left,
+                &expr.right,
+                owner,
+                params,
+                type_name,
+                path_prefix,
+                IrNode::RightShift,
+            ),
             _ => Err(IrBuildError::UnsupportedExpression {
                 type_name: type_name.to_string(),
             }),
         }
+    }
+
+    fn build_binary_expr_ir(
+        &self,
+        left_expr: &ExprKind,
+        right_expr: &ExprKind,
+        owner: &str,
+        params: &ParameterRegistry,
+        type_name: &str,
+        path_prefix: &str,
+        build_node: fn(BinaryOpNode) -> IrNode,
+    ) -> Result<IrNode, IrBuildError> {
+        let left = self.build_expr_ir(left_expr, owner, params, type_name, path_prefix)?;
+        let right = self.build_expr_ir(right_expr, owner, params, type_name, path_prefix)?;
+        Ok(build_node(BinaryOpNode {
+            left: Box::new(left),
+            right: Box::new(right),
+            meta: NodeMetadata::default(),
+        }))
     }
 
     fn const_or_zero(value: u64, alignment: u64) -> IrNode {
@@ -1006,13 +1102,47 @@ pub enum IrBuildError {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::abi::expr::{ExprKind, FieldRefExpr};
+    use crate::abi::expr::{ExprKind, FieldRefExpr, LiteralExpr};
     use crate::abi::types::{
         ArrayType, EnumType, EnumVariant, IntegralType, PrimitiveType, SizeDiscriminatedUnionType,
         SizeDiscriminatedVariant, StructField, StructType, TypeDef, TypeKind, TypeRefType,
         UnionType, UnionVariant,
     };
     use crate::codegen::shared::serialization::{layout_ir_to_json, layout_ir_to_protobuf};
+
+    fn contains_node(node: &IrNode, pred: fn(&IrNode) -> bool) -> bool {
+        if pred(node) {
+            return true;
+        }
+        match node {
+            IrNode::ZeroSize { .. } | IrNode::Const(_) | IrNode::FieldRef(_) => false,
+            IrNode::AlignUp(node) => contains_node(&node.node, pred),
+            IrNode::Switch(node) => {
+                node.cases
+                    .iter()
+                    .any(|case| contains_node(&case.node, pred))
+                    || node
+                        .default
+                        .as_ref()
+                        .map(|default| contains_node(default, pred))
+                        .unwrap_or(false)
+            }
+            IrNode::CallNested(_) => false,
+            IrNode::AddChecked(node)
+            | IrNode::SubChecked(node)
+            | IrNode::MulChecked(node)
+            | IrNode::DivChecked(node)
+            | IrNode::ModChecked(node)
+            | IrNode::BitAnd(node)
+            | IrNode::BitOr(node)
+            | IrNode::BitXor(node)
+            | IrNode::LeftShift(node)
+            | IrNode::RightShift(node) => {
+                contains_node(&node.left, pred) || contains_node(&node.right, pred)
+            }
+            IrNode::SumOverArray(node) => contains_node(&node.count, pred),
+        }
+    }
 
     #[test]
     fn builder_emits_const_node_for_primitives() {
@@ -1139,6 +1269,70 @@ mod tests {
             },
             other => panic!("expected AlignUp node, got {:?}", other),
         }
+    }
+
+    #[test]
+    fn builder_lowers_flag_bit_dynamic_array_size() {
+        let mut resolver = TypeResolver::new();
+        resolver.add_typedef(TypeDef {
+            name: "FlaggedTail".into(),
+            format: None,
+            kind: TypeKind::Struct(StructType {
+                container_attributes: Default::default(),
+                fields: vec![
+                    StructField {
+                        name: "flags".into(),
+                        format: None,
+                        field_type: TypeKind::Primitive(PrimitiveType::Integral(IntegralType::U8)),
+                    },
+                    StructField {
+                        name: "tail".into(),
+                        format: None,
+                        field_type: TypeKind::Array(ArrayType {
+                            container_attributes: Default::default(),
+                            size: ExprKind::Mul(crate::abi::expr::MulExpr {
+                                left: Box::new(ExprKind::BitAnd(crate::abi::expr::BitAndExpr {
+                                    left: Box::new(ExprKind::RightShift(
+                                        crate::abi::expr::RightShiftExpr {
+                                            left: Box::new(ExprKind::FieldRef(FieldRefExpr {
+                                                path: vec!["flags".into()],
+                                            })),
+                                            right: Box::new(ExprKind::Literal(LiteralExpr::U8(6))),
+                                        },
+                                    )),
+                                    right: Box::new(ExprKind::Literal(LiteralExpr::U8(1))),
+                                })),
+                                right: Box::new(ExprKind::Literal(LiteralExpr::U64(16))),
+                            }),
+                            element_type: Box::new(TypeKind::Primitive(PrimitiveType::Integral(
+                                IntegralType::U8,
+                            ))),
+                            jagged: false,
+                        }),
+                    },
+                ],
+            }),
+        });
+        resolver.resolve_all().unwrap();
+
+        let builder = IrBuilder::new(&resolver);
+        let ir = builder.build_type_name("FlaggedTail").unwrap();
+        assert!(contains_node(&ir.root, |node| matches!(
+            node,
+            IrNode::RightShift(_)
+        )));
+        assert!(contains_node(&ir.root, |node| matches!(
+            node,
+            IrNode::BitAnd(_)
+        )));
+        assert!(contains_node(&ir.root, |node| matches!(
+            node,
+            IrNode::MulChecked(_)
+        )));
+
+        let json = layout_ir_to_json(&LayoutIr::new(vec![ir])).unwrap();
+        assert!(json.contains("right-shift"));
+        assert!(json.contains("bit-and"));
     }
 
     #[test]

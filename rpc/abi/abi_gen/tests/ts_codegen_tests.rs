@@ -1347,6 +1347,41 @@ fn test_ts_generated_code_has_no_todo_placeholders() {
 }
 
 #[test]
+fn test_ts_field_derived_dynamic_tail_builder_support() {
+    let test_dir = setup_test_dir("flag_tail_struct");
+    let abi_file = "tests/compliance_data/flag_tail_struct.abi.yaml";
+
+    generate_ts_code(abi_file, &test_dir).expect("Code generation failed");
+
+    let ts_file = test_dir.join("compliance/flag_tail/types.ts");
+    assert!(ts_file.exists(), "Generated TypeScript file missing");
+
+    let content = fs::read_to_string(&ts_file).expect("Failed to read flag-tail types.ts");
+    assert!(
+        content.contains("export class FlagTailInstructionBuilder"),
+        "field-derived dynamic tail structs should get builders"
+    );
+    assert!(
+        content.contains("client_id(): __TnFamWriterResult<FlagTailInstructionBuilder>"),
+        "builder should expose a low-level tail writer"
+    );
+    assert!(
+        content.contains("flags: (() => { return __tnToBigInt(this.view.getUint8(0)); })()"),
+        "builder params should be derived from the fixed prefix field"
+    );
+    assert!(
+        content.contains(
+            "const __tnExpected_client_id_bytes = (((this.view.getUint8(0) >> 6) & 1) * 16);"
+        ),
+        "builder should compute the expected tail byte length from flag bits"
+    );
+    assert!(
+        content.contains("field 'client_id' length does not match dynamic layout"),
+        "builder should reject tails that do not match the dynamic layout"
+    );
+}
+
+#[test]
 fn test_ts_flexible_array_builder_support() {
     let test_dir = setup_test_dir("fam_struct");
     let abi_file = "tests/compliance_data/fam_struct.abi.yaml";
@@ -1544,4 +1579,50 @@ fn test_ts_parent_tag_ref_enum_no_duplicate_params() {
         .expect("TypeScript compilation failed - likely duplicate parameter mismatch between Params type and __tnComputeParams");
 
     println!("✓ Parent tag-ref enum deduplication test passed");
+}
+
+#[test]
+fn test_ts_clob_program_compiles_with_u64_event_tag() {
+    let test_dir = setup_test_dir("clob_program_u64_event_tag");
+    let abi_file = "rpc/abi/type-library/tn_clob_program.abi.yaml";
+
+    generate_ts_code_with_includes(abi_file, &["rpc/abi/type-library"], &test_dir)
+        .expect("Code generation failed");
+
+    let ts_file = test_dir.join("thru/program/clob/types.ts");
+    assert!(ts_file.exists(), "Generated CLOB TypeScript file missing");
+
+    let content = fs::read_to_string(&ts_file).expect("Failed to read generated CLOB types.ts");
+
+    assert!(
+        content.contains("private __tnField_event_type: bigint | null = null;"),
+        "CLOB event_type tag should use bigint storage because the ABI declares it as u64"
+    );
+    assert!(
+        content.contains("set_event_type(value: number | bigint): this"),
+        "CLOB event_type setter should accept number or bigint input for ergonomic u64 assignment"
+    );
+    assert!(
+        content.contains("view.setBigUint64(0, __tnToBigInt(this.__tnField_event_type), true);"),
+        "CLOB event_type writer should convert the u64 tag before calling DataView.setBigUint64"
+    );
+    assert!(
+        content.contains("export class SeatArenaAccount"),
+        "CLOB TypeScript output should include the seat arena account decoder"
+    );
+    assert!(
+        content.contains("export class OrderArenaAccount"),
+        "CLOB TypeScript output should include the order arena account decoder"
+    );
+    assert!(
+        content.contains("export class CbookAccount"),
+        "CLOB TypeScript output should include the cbook account decoder"
+    );
+    assert!(
+        content.contains("this.buffer.length"),
+        "CLOB dynamic account tail lengths should derive from the input buffer size"
+    );
+
+    check_typescript_compilation(&ts_file)
+        .expect("TypeScript compilation failed for generated CLOB ABI with u64 event tag");
 }

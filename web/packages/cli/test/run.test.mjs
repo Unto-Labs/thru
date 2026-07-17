@@ -9,6 +9,54 @@ import { fileURLToPath } from "node:url";
 
 const packageRoot = path.resolve( path.dirname( fileURLToPath( import.meta.url ) ), ".." );
 const launcher = path.join( packageRoot, "bin", "thru.js" );
+const signalTestTimeoutMs = 5000;
+
+function killProcess( pid ) {
+  if( !pid ) return;
+
+  try {
+    process.kill( pid, "SIGKILL" );
+  } catch {
+    /* Process already exited. */
+  }
+}
+
+async function writeNodeFakeThru( fakeThru, body ) {
+  await writeFile(
+    fakeThru,
+    `#!/usr/bin/env node\n${body}`,
+    "utf8",
+  );
+  await chmod( fakeThru, 0o755 );
+}
+
+function waitForClose( child, label, cleanup = () => {} ) {
+  return new Promise( ( resolve, reject ) => {
+    let settled = false;
+    const finish = fn => {
+      if( settled ) return;
+      settled = true;
+      clearTimeout( timer );
+      child.off( "close", onClose );
+      child.off( "error", onError );
+      fn();
+    };
+    const onClose = ( code, signal ) => {
+      finish( () => resolve( { code, signal } ) );
+    };
+    const onError = error => {
+      finish( () => reject( error ) );
+    };
+    const timer = setTimeout( () => {
+      if( settled ) return;
+      cleanup();
+      finish( () => reject( new Error( `${label} timed out after ${signalTestTimeoutMs}ms` ) ) );
+    }, signalTestTimeoutMs );
+
+    child.once( "close", onClose );
+    child.once( "error", onError );
+  } );
+}
 
 function runLauncher( args, env ) {
   return new Promise( resolve => {
@@ -81,12 +129,13 @@ test(
     const fakeThru = path.join( tmp, "thru" );
     const pidFile = path.join( tmp, "child.pid" );
 
-    await writeFile(
-      fakeThru,
-      `#!/bin/sh\necho $$ > "${pidFile}"\ntrap 'exit 0' TERM\nwhile :; do sleep 0.1; done\n`,
-      "utf8",
-    );
-    await chmod( fakeThru, 0o755 );
+    await writeNodeFakeThru( fakeThru, `
+const { writeFileSync } = require( "node:fs" );
+
+process.on( "SIGTERM", () => process.exit( 0 ) );
+writeFileSync( ${JSON.stringify( pidFile )}, \`\${process.pid}\\n\` );
+setInterval( () => {}, 1000 );
+` );
 
     const launcherProc = spawn( process.execPath, [ launcher ], {
       env: { ...process.env, THRU_CLI_BIN: fakeThru },
@@ -94,28 +143,41 @@ test(
     } );
 
     let binaryPid = 0;
-    for( let attempt = 0; attempt < 100 && !binaryPid; attempt++ ) {
-      try {
-        binaryPid = Number.parseInt( await readFile( pidFile, "utf8" ), 10 ) || 0;
-      } catch {
-        await delay( 50 );
+    try {
+      for( let attempt = 0; attempt < 100 && !binaryPid; attempt++ ) {
+        try {
+          binaryPid = Number.parseInt( await readFile( pidFile, "utf8" ), 10 ) || 0;
+        } catch {
+          await delay( 50 );
+        }
       }
-    }
-    assert.ok( binaryPid > 0, "native binary never started" );
+      assert.ok( binaryPid > 0, "native binary never started" );
 
-    launcherProc.kill( "SIGTERM" );
-    await new Promise( resolve => launcherProc.on( "close", resolve ) );
+      const launcherClosed = waitForClose(
+        launcherProc,
+        "launcher close after forwarded SIGTERM",
+        () => {
+          killProcess( launcherProc.pid );
+          killProcess( binaryPid );
+        },
+      );
+      launcherProc.kill( "SIGTERM" );
+      await launcherClosed;
 
-    let alive = true;
-    for( let attempt = 0; attempt < 100 && alive; attempt++ ) {
-      try {
-        process.kill( binaryPid, 0 );
-        await delay( 50 );
-      } catch {
-        alive = false;
+      let alive = true;
+      for( let attempt = 0; attempt < 100 && alive; attempt++ ) {
+        try {
+          process.kill( binaryPid, 0 );
+          await delay( 50 );
+        } catch {
+          alive = false;
+        }
       }
+      assert.equal( alive, false, "native binary kept running after SIGTERM" );
+    } finally {
+      killProcess( launcherProc.pid );
+      killProcess( binaryPid );
     }
-    assert.equal( alive, false, "native binary kept running after SIGTERM" );
   },
 );
 
@@ -132,29 +194,49 @@ test(
        `docker stop`, and CI cancellation look like success. */
     const tmp = await mkdtemp( path.join( os.tmpdir(), "thru-cli-test-" ) );
     const fakeThru = path.join( tmp, "thru" );
+    const pidFile = path.join( tmp, "child.pid" );
 
-    await writeFile(
-      fakeThru,
-      "#!/bin/sh\necho started\nwhile :; do sleep 0.1; done\n",
-      "utf8",
-    );
-    await chmod( fakeThru, 0o755 );
+    await writeNodeFakeThru( fakeThru, `
+const { writeFileSync } = require( "node:fs" );
+
+writeFileSync( ${JSON.stringify( pidFile )}, \`\${process.pid}\\n\` );
+setInterval( () => {}, 1000 );
+` );
 
     const launcherProc = spawn( process.execPath, [ launcher ], {
       env: { ...process.env, THRU_CLI_BIN: fakeThru },
-      stdio: [ "ignore", "pipe", "ignore" ],
+      stdio: "ignore",
     } );
 
-    /* Wait until the native binary is running before signalling, so the
-       launcher's spawn + forwarding setup is complete. */
-    await new Promise( resolve => launcherProc.stdout.once( "data", resolve ) );
+    let binaryPid = 0;
+    try {
+      /* Wait until the native binary is running before signalling, so the
+         launcher's spawn + forwarding setup is complete. */
+      for( let attempt = 0; attempt < 100 && !binaryPid; attempt++ ) {
+        try {
+          binaryPid = Number.parseInt( await readFile( pidFile, "utf8" ), 10 ) || 0;
+        } catch {
+          await delay( 50 );
+        }
+      }
+      assert.ok( binaryPid > 0, "native binary never started" );
 
-    launcherProc.kill( "SIGTERM" );
-    const { code, signal } = await new Promise( resolve => {
-      launcherProc.on( "close", ( code, signal ) => resolve( { code, signal } ) );
-    } );
+      const launcherClosed = waitForClose(
+        launcherProc,
+        "launcher close after native signal death",
+        () => {
+          killProcess( launcherProc.pid );
+          killProcess( binaryPid );
+        },
+      );
+      launcherProc.kill( "SIGTERM" );
+      const { code, signal } = await launcherClosed;
 
-    assert.equal( signal, "SIGTERM", "launcher must die from the forwarded signal" );
-    assert.equal( code, null );
+      assert.equal( signal, "SIGTERM", "launcher must die from the forwarded signal" );
+      assert.equal( code, null );
+    } finally {
+      killProcess( launcherProc.pid );
+      killProcess( binaryPid );
+    }
   },
 );

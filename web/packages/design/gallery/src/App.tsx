@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   // Actions
   Button,
@@ -702,8 +702,46 @@ function DisplaySection() {
 
 const TA_ADDRESS = "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMD";
 
+function ThemeQaSection() {
+  return (
+    <Section title="Theme QA">
+      <div className="gallery-theme-grid">
+        {(["light", "dark"] as ColorScheme[]).map((scheme) => (
+          <div key={scheme} className="gallery-theme-panel" data-theme={scheme}>
+            <div className="gallery-theme-panel__head">
+              <Heading4>{scheme === "light" ? "Light" : "Dark"}</Heading4>
+              <Tag tone={scheme === "light" ? "neutral" : "dark"}>{scheme}</Tag>
+            </div>
+            <div className="gallery-theme-panel__body">
+              <Button>Primary</Button>
+              <Button variant="secondary">Secondary</Button>
+              <Button variant="outline">Outline</Button>
+              <Input label="RPC endpoint" placeholder="https://rpc.thru.org" />
+              <Card variant="default" style={{ padding: 16 }}>
+                <Ui3 as="div">Default card</Ui3>
+                <Body5>Semantic tokens drive this surface.</Body5>
+              </Card>
+              <div style={{ width: "100%" }}>
+                <Progress.Root value={62}>
+                  <Progress.Head>
+                    <Progress.Label>deploying</Progress.Label>
+                    <Progress.Value />
+                  </Progress.Head>
+                  <Progress.Track>
+                    <Progress.Indicator />
+                  </Progress.Track>
+                </Progress.Root>
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Section>
+  );
+}
+
 function WalletSection() {
-  const [scheme, setScheme] = useState<ColorScheme>("light");
+  const [walletScheme, setWalletScheme] = useState<ColorScheme>("light");
   const [preset, setPreset] = useState("50");
   const [fetching, setFetching] = useState<string | null>(null);
   const refetch = (k: string) => {
@@ -760,8 +798,8 @@ function WalletSection() {
       </Demo>
 
       <Demo label="ThemeSwitch">
-        <ThemeSwitch colorScheme={scheme} onChange={setScheme} />
-        <Ui4>current: {scheme}</Ui4>
+        <ThemeSwitch colorScheme={walletScheme} onChange={setWalletScheme} />
+        <Ui4>current: {walletScheme}</Ui4>
       </Demo>
 
       <Demo label="Balance (click the amount to refresh → spinner)">
@@ -888,32 +926,45 @@ function ToastDemo() {
 }
 
 export function App() {
+  const [galleryScheme, setGalleryScheme] = useState<ColorScheme>("light");
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = galleryScheme;
+    return () => {
+      delete document.documentElement.dataset.theme;
+    };
+  }, [galleryScheme]);
+
   return (
     <Toast.Provider>
-      <main
-        style={{
-          maxWidth: 960,
-          margin: "0 auto",
-          padding: "48px 24px 120px",
-        }}
-      >
-        <header style={{ marginBottom: 48 }}>
-          <Heading1>@thru/design — Visual QA Gallery</Heading1>
-          <Body3 style={{ opacity: 0.7, marginTop: 8 }}>
-            Every component exported from{" "}
-            <code>@thru/design/web</code>, grouped by section.
-          </Body3>
-        </header>
+      <div className="gallery-page" data-theme={galleryScheme}>
+        <main className="gallery-main">
+          <header className="gallery-header">
+            <div>
+              <Heading1>@thru/design - Visual QA Gallery</Heading1>
+              <Body3 style={{ opacity: 0.7, marginTop: 8 }}>
+                Every component exported from{" "}
+                <code>@thru/design/web</code>, grouped by section.
+              </Body3>
+            </div>
+            <div className="gallery-theme-control">
+              <Ui4>Theme</Ui4>
+              <ThemeSwitch colorScheme={galleryScheme} onChange={setGalleryScheme} />
+              <Ui4>{galleryScheme}</Ui4>
+            </div>
+          </header>
 
-        <ActionsSection />
-        <FormsSection />
-        <OverlaysSection />
-        <NavSection />
-        <DisplaySection />
-        <WalletSection />
-        <TypographySection />
-        <ToastDemo />
-      </main>
+          <ActionsSection />
+          <FormsSection />
+          <OverlaysSection />
+          <NavSection />
+          <DisplaySection />
+          <ThemeQaSection />
+          <WalletSection />
+          <TypographySection />
+          <ToastDemo />
+        </main>
+      </div>
       <Toast.Viewport />
     </Toast.Provider>
   );

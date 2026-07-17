@@ -30,7 +30,7 @@ import {
   closePopup,
 } from './popup';
 
-const WEB_AUTHN_FOCUS_RETRY_DELAYS_MS = [150, 300];
+const WEB_AUTHN_FOCUS_RETRY_DELAYS_MS = [150, 300, 600, 1000, 1500];
 
 /**
  * Sign a challenge with an existing passkey (by credential ID).
@@ -111,7 +111,10 @@ export async function signWithStoredPasskey(
           passkey: storedPasskey,
         };
       } catch (error) {
-        if (!allowDiscoverableFallback || !shouldFallbackToDiscoverable(error)) {
+        if (
+          !allowDiscoverableFallback ||
+          !shouldFallbackToDiscoverable(error)
+        ) {
           throw error;
         }
         return signWithDiscoverableStoredPasskey(

@@ -1138,6 +1138,9 @@ impl TypeResolver {
         match expr {
             ExprKind::FieldRef(field_ref) => {
                 let path_str = field_ref.path.join(".");
+                if path_str == "__buffer_size" {
+                    return Ok(());
+                }
                 if let Some(order) = field_order {
                     order.validate_reference(&path_str)?;
                 }

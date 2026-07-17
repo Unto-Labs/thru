@@ -286,7 +286,16 @@ impl Reflector {
         match node {
             IrNode::ZeroSize { .. } | IrNode::Const(_) | IrNode::FieldRef(_) => false,
             IrNode::AlignUp(node) => self.node_requires_byte_backed_validation(&node.node, visited),
-            IrNode::AddChecked(node) | IrNode::MulChecked(node) => {
+            IrNode::AddChecked(node)
+            | IrNode::SubChecked(node)
+            | IrNode::MulChecked(node)
+            | IrNode::DivChecked(node)
+            | IrNode::ModChecked(node)
+            | IrNode::BitAnd(node)
+            | IrNode::BitOr(node)
+            | IrNode::BitXor(node)
+            | IrNode::LeftShift(node)
+            | IrNode::RightShift(node) => {
                 self.node_requires_byte_backed_validation(&node.left, visited)
                     || self.node_requires_byte_backed_validation(&node.right, visited)
             }

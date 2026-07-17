@@ -53,9 +53,18 @@ option swift_prefix = "THUS";
 //   block.block.header.max_state_units, block.block.header.bond_amount_lock_up,
 //   block.block.header.producer, block.block.header.producer.value
 //
-// Available block footer fields:
-//   block.block.footer.status, block.block.footer.consumed_compute_units,
-//   block.block.footer.consumed_state_units, block.block.footer.attestor_payment
+// Available block footer fields (populated on the live stream):
+//   block.block.footer.signature, block.block.footer.attestor_payment
+//
+// NOT populated on this stream — do not filter on these here:
+//   block.block.footer.status is ALWAYS EXECUTION_STATUS_PENDING;
+//   block.block.footer.consumed_compute_units and
+//   block.block.footer.consumed_state_units are ALWAYS 0, because
+//   StreamBlocks emits blocks at observation time, before execution
+//   completes. The CEL engine accepts these paths, but filters on them
+//   never match meaningfully. For live per-block consumed units use
+//   StreamSlotMetrics; for the fully-populated, filterable footer use
+//   QueryService.GetBlock / ListBlocks.
 //
 // Available consensus status field:
 //   block.block.consensus_status
@@ -86,29 +95,25 @@ option swift_prefix = "THUS";
 // 7. Filter by bond amount lock-up:
 //    Expression: "block.block.header.bond_amount_lock_up >= uint(0)"
 //
-// 8. Filter by footer status:
-//    Expression: "has(block.block.footer) && block.block.footer.status == int(1)"
+// 8. Footer status is PENDING-only on this stream:
+//    block.block.footer.status is ALWAYS EXECUTION_STATUS_PENDING here, so a
+//    status filter can never select executed blocks. To filter on executed
+//    status use QueryService.GetBlock / ListBlocks instead.
 //    Note: EXECUTION_STATUS_PENDING = 1, EXECUTION_STATUS_EXECUTED = 2
 //
-// 9. Filter by consumed compute units:
-//    Expression: "has(block.block.footer) && block.block.footer.consumed_compute_units > uint(0)"
+// 9. Filter by consensus status:
+//    Expression: "block.block.consensus_status == int(2)"
+//    Note: CONSENSUS_STATUS_UNSPECIFIED = 0, CONSENSUS_STATUS_OBSERVED = 1,
+//          CONSENSUS_STATUS_INCLUDED = 2
 //
-// 10. Filter by consumed state units:
-//     Expression: "has(block.block.footer) && block.block.footer.consumed_state_units > uint(0)"
-//
-// 11. Filter by consensus status:
-//     Expression: "block.block.consensus_status == int(2)"
-//     Note: CONSENSUS_STATUS_UNSPECIFIED = 0, CONSENSUS_STATUS_OBSERVED = 1,
-//           CONSENSUS_STATUS_INCLUDED = 2
-//
-// 12. Check for optional fields presence:
+// 10. Check for optional fields presence:
 //     Expression: "has(block.block.header) && has(block.block.footer)"
 //
-// 13. Combined filters (multiple conditions):
-//     Expression: "block.block.header.slot >= params.min_slot && has(block.block.footer) && block.block.footer.consumed_compute_units > uint(0)"
+// 11. Combined filters (multiple conditions):
+//     Expression: "block.block.header.slot >= params.min_slot && has(block.block.footer) && block.block.footer.attestor_payment > uint(0)"
 //     Params: {"min_slot": 1000}
 //
-// 14. Numeric comparison with params:
+// 12. Numeric comparison with params:
 //     Expression: "block.block.header.max_compute_units > params.u64"
 //     Params: {"u64": 1000000}
 message StreamBlocksRequest {
@@ -597,6 +602,10 @@ message StreamSlotMetricsResponse {
   uint64 collected_fees = 4 [(google.api.field_behavior) = REQUIRED];
   // Block timestamp.
   google.protobuf.Timestamp block_timestamp = 5 [(google.api.field_behavior) = REQUIRED];
+  // Total compute units consumed across all transactions in this block.
+  uint64 consumed_compute_units = 6 [(google.api.field_behavior) = REQUIRED];
+  // Total state units consumed across all transactions in this block.
+  uint32 consumed_state_units = 7 [(google.api.field_behavior) = REQUIRED];
 }
 
 // StreamHeightRequest subscribes to real-time height updates.

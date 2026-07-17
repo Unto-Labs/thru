@@ -13,11 +13,30 @@ export { useWallet } from "./hooks/useWallet";
 
 export {
   BrowserSDK,
+  DepositTarget,
   ErrorCode,
+  ThruNetwork,
   type BrowserSDKConfig,
   type ConnectOptions,
+  type DepositDestination,
+  type DepositUiConfig,
+  type DepositRequestPayload,
+  type DepositResult,
+  type PrepareDepositPayload,
   type SDKEvent,
 } from "../index";
+
+export type {
+  DepositAccountState,
+  DepositsApi,
+  EnsureDepositAccountParams,
+  GetDepositAccountStateParams,
+  WaitForDepositBalanceParams,
+} from "../deposit";
+export {
+  DepositTransactionError,
+  formatDepositAmount,
+} from "../deposit";
 
 export type {
   ConnectResult,

@@ -34,13 +34,13 @@
     "@bufbuild/protobuf": "^2.12.0",
     "@connectrpc/connect": "^2.1.1",
     "@connectrpc/connect-node": "^2.1.1",
-    "ts-node": "^10.9.2",
-    "@thru/sdk": "workspace:*"
+    "@thru/sdk": "workspace:*",
+    "ts-node": "^10.9.2"
   },
   "devDependencies": {
     "@types/node": "^25.9.1",
     "tsup": "^8.5.1",
-    "tsx": "^4.22.3",
+    "tsx": "^4.23.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.7"
   }

@@ -24,6 +24,7 @@ pub async fn handle_uploader_command(
     match subcommand {
         UploaderCommands::Upload {
             uploader,
+            fee_payer,
             chunk_size,
             skip_elf_check,
             seed,
@@ -32,6 +33,7 @@ pub async fn handle_uploader_command(
             upload_program(
                 config,
                 uploader.as_deref(),
+                fee_payer.as_deref(),
                 &seed,
                 &program_file,
                 chunk_size,
@@ -40,8 +42,19 @@ pub async fn handle_uploader_command(
             )
             .await
         }
-        UploaderCommands::Cleanup { uploader, seed } => {
-            cleanup_program(config, uploader.as_deref(), &seed, json_format).await
+        UploaderCommands::Cleanup {
+            uploader,
+            fee_payer,
+            seed,
+        } => {
+            cleanup_program(
+                config,
+                uploader.as_deref(),
+                fee_payer.as_deref(),
+                &seed,
+                json_format,
+            )
+            .await
         }
         UploaderCommands::Status { uploader, seed } => {
             get_uploader_status(config, uploader.as_deref(), &seed, json_format).await
@@ -141,6 +154,21 @@ impl UploaderManager {
         config: &Config,
         fee_payer_name: Option<&str>,
     ) -> Result<Self, CliError> {
+        let fee_payer_key_hex = if let Some(name) = fee_payer_name {
+            config.keys.get_key(name)?
+        } else {
+            config.keys.get_default_key()?
+        };
+        let fee_payer_keypair = crypto::keypair_from_hex(fee_payer_key_hex)?;
+
+        Self::new_with_keypair(config, fee_payer_keypair).await
+    }
+
+    /// Create a new uploader manager with an already resolved fee payer.
+    pub async fn new_with_keypair(
+        config: &Config,
+        fee_payer_keypair: KeyPair,
+    ) -> Result<Self, CliError> {
         // Create RPC client
         let rpc_url = config.get_grpc_url()?;
         let rpc_client = RpcClient::builder()
@@ -153,13 +181,6 @@ impl UploaderManager {
 
         // Get uploader program public key
         let uploader_program_pubkey = config.get_uploader_pubkey()?;
-
-        let fee_payer_key_hex = if let Some(name) = fee_payer_name {
-            config.keys.get_key(name)?
-        } else {
-            config.keys.get_default_key()?
-        };
-        let fee_payer_keypair = crypto::keypair_from_hex(fee_payer_key_hex)?;
 
         let chain_info = rpc_client.get_chain_info().await.map_err(|e| {
             CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
@@ -1153,6 +1174,7 @@ impl UploaderManager {
 async fn upload_program(
     config: &Config,
     uploader_pubkey: Option<&str>,
+    fee_payer: Option<&str>,
     seed: &str,
     program_file: &str,
     chunk_size: usize,
@@ -1226,7 +1248,7 @@ async fn upload_program(
     }
 
     // Create uploader manager and execute upload
-    let uploader = UploaderManager::new(&cfg).await?;
+    let uploader = UploaderManager::new_with_fee_payer(&cfg, fee_payer).await?;
 
     match uploader
         .upload_program_with_options(seed, &program_data, chunk_size, skip_elf_check, json_format)
@@ -1275,6 +1297,7 @@ async fn upload_program(
 async fn cleanup_program(
     config: &Config,
     uploader_pubkey: Option<&str>,
+    fee_payer: Option<&str>,
     seed: &str,
     json_format: bool,
 ) -> Result<(), CliError> {
@@ -1299,7 +1322,7 @@ async fn cleanup_program(
     }
 
     // Create uploader manager and execute cleanup
-    let uploader = UploaderManager::new(&cfg).await?;
+    let uploader = UploaderManager::new_with_fee_payer(&cfg, fee_payer).await?;
 
     match uploader.cleanup_program(seed, json_format).await {
         Ok(()) => {
@@ -1553,6 +1576,7 @@ mod tests {
         let config = Config::default();
         let result = upload_program(
             &config,
+            None,
             None,
             "test_seed",
             "nonexistent_file.bin",

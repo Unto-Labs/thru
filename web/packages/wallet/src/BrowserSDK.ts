@@ -12,9 +12,28 @@ import { EmbeddedProvider } from './provider/EmbeddedProvider';
 import {
   DEFAULT_IFRAME_URL,
   EMBEDDED_PROVIDER_EVENTS,
+  DepositTarget,
   type ConnectMetadataInput,
+  type DepositDestination,
+  type DepositRequestPayload,
+  type DepositResult,
+  type DepositUiConfig,
   type ManageAccountsResult,
+  type PrepareDepositPayload,
+  type ThruNetwork,
 } from './protocol';
+import {
+  ensureDepositAccountForWallet,
+  formatDepositAmount,
+  getDepositAccountStateForWallet,
+  waitForDepositBalanceForWallet,
+  type DepositAccountState,
+  type DepositsApi,
+  type EnsureDepositAccountParams,
+  type GetDepositAccountStateParams,
+  type SignDepositTransactionPayload,
+  type WaitForDepositBalanceParams,
+} from './deposit';
 import {
   SigningSessionDescriptorStore,
   getDefaultBrowserSigningSessionStorage,
@@ -27,6 +46,8 @@ export interface BrowserSDKConfig {
   iframeUrl?: string;
   addressTypes?: AddressTypeValue[];
   rpcUrl?: string;
+  network?: ThruNetwork;
+  depositUiConfig?: DepositUiConfig;
   signingSessionStorage?: SigningSessionStorage | false;
   signingSessionStorageKey?: string;
 }
@@ -48,8 +69,19 @@ export class BrowserSDK {
   private eventListeners = new Map<SDKEvent, Set<EventCallback>>();
   private initialized = false;
   private thruClient: Thru;
+  private defaultNetwork?: ThruNetwork;
   private connectInFlight: Promise<ConnectResult> | null = null;
   private lastConnectResult: ConnectResult | null = null;
+
+  readonly deposits: DepositsApi = {
+    prepare: (targetOrPayload) => this.prepareDeposit(targetOrPayload),
+    ensureAccount: (params) => this.ensureDepositAccount(params),
+    open: (payload) => this.deposit(payload),
+    getAccountState: (params) => this.getDepositAccountState(params),
+    waitForBalance: (params) => this.waitForDepositBalance(params),
+    formatAmount: (amountRaw, destination) =>
+      this.formatDepositAmount(amountRaw, destination),
+  };
 
   constructor(config: BrowserSDKConfig = {}) {
     const iframeUrl = config.iframeUrl;
@@ -77,7 +109,10 @@ export class BrowserSDK {
       iframeUrl,
       addressTypes: config.addressTypes || [AddressType.THRU],
       signingSessions,
+      network: config.network,
+      depositUiConfig: config.depositUiConfig,
     });
+    this.defaultNetwork = config.network;
 
     this.thruClient = createThruClient({
       baseUrl: config.rpcUrl,
@@ -193,6 +228,99 @@ export class BrowserSDK {
     this.emit('accountChanged', result.selectedAccount);
     return result;
   }
+
+  /**
+   * Derive a canonical deposit destination for the configured provider network.
+   * The returned object can be independently polled by the dApp and must be
+   * passed unchanged to deposit().
+   *
+   * @deprecated Use `deposits.prepare()`.
+   */
+  async prepareDeposit(
+    depositTargetOrPayload?: PrepareDepositPayload['depositTarget'] | PrepareDepositPayload
+  ): Promise<DepositDestination> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+    const payload =
+      typeof depositTargetOrPayload === 'string'
+        ? { depositTarget: depositTargetOrPayload }
+        : depositTargetOrPayload ?? {};
+    return this.provider.prepareDeposit({
+      ...payload,
+      network: payload.network ?? this.defaultNetwork,
+    });
+  }
+
+  /**
+   * Open the wallet's Deposit ("Add funds") screen for a token account.
+   * Resolves with the terminal UX state once the user completes or cancels.
+   *
+   * @deprecated Use `deposits.open()`.
+   */
+  async deposit(payload: DepositRequestPayload): Promise<DepositResult> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+    return this.provider.deposit({
+      ...payload,
+      network: payload.network ?? this.defaultNetwork,
+    });
+  }
+
+  /** @deprecated Use `deposits.ensureAccount()`. */
+  async ensureDepositAccount(
+    params: EnsureDepositAccountParams = {}
+  ): Promise<DepositAccountState> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+    const { destination, walletAddress } =
+      await this.resolveDepositDestination(params.destination);
+    return ensureDepositAccountForWallet({
+      thru: this.thruClient,
+      walletAddress,
+      destination,
+      signTransaction: (payload) => this.signDepositTransaction(payload),
+    });
+  }
+
+  /** @deprecated Use `deposits.getAccountState()`. */
+  async getDepositAccountState(
+    params: GetDepositAccountStateParams = {}
+  ): Promise<DepositAccountState> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+    const { destination, walletAddress } =
+      await this.resolveDepositDestination(params.destination);
+    return getDepositAccountStateForWallet({
+      thru: this.thruClient,
+      walletAddress,
+      destination,
+    });
+  }
+
+  /** @deprecated Use `deposits.waitForBalance()`. */
+  async waitForDepositBalance(
+    params: WaitForDepositBalanceParams
+  ): Promise<DepositAccountState> {
+    if (!this.initialized) {
+      await this.initialize();
+    }
+    const { destination, walletAddress } =
+      await this.resolveDepositDestination(params.destination);
+    return waitForDepositBalanceForWallet({
+      thru: this.thruClient,
+      walletAddress,
+      destination,
+      minimumBalanceRaw: params.minimumBalanceRaw,
+      signature: params.signature,
+    });
+  }
+
+  /** @deprecated Use `deposits.formatAmount()`. */
+  formatDepositAmount = formatDepositAmount;
 
   /**
    * Get Thru chain API (iframe-backed signer)
@@ -332,6 +460,40 @@ export class BrowserSDK {
     return this.thruClient;
   }
 
+  private async resolveDepositDestination(
+    destination?: DepositDestination
+  ): Promise<{ destination: DepositDestination; walletAddress: string }> {
+    const selectedAccount = this.provider.getSelectedAccount();
+    if (!selectedAccount) {
+      throw new Error('Wallet not connected');
+    }
+    const expected = await this.prepareDeposit(
+      destination
+        ? {
+            network: destination.network,
+            depositTarget: destination.depositTarget,
+          }
+        : DepositTarget.Credits
+    );
+    if (destination) {
+      assertDepositDestinationMatches(destination, expected);
+    }
+    return { destination: expected, walletAddress: selectedAccount.address };
+  }
+
+  private signDepositTransaction(
+    payload: SignDepositTransactionPayload
+  ): Promise<string> {
+    return this.thru.signTransaction({
+      walletAddress: payload.walletAddress,
+      programAddress: payload.programAddress,
+      instructionData: payload.trailingInstructionData,
+      readWriteAddresses: payload.readWriteAddresses,
+      readOnlyAddresses: payload.readOnlyAddresses,
+      review: payload.review,
+    });
+  }
+
   private refreshCachedAccounts(accounts: WalletAccount[], selectedAccount?: WalletAccount | null): void {
     const active = normalizeActiveWalletAccounts(accounts, selectedAccount);
 
@@ -342,5 +504,18 @@ export class BrowserSDK {
         selectedAccount: active.selectedAccount,
       };
     }
+  }
+}
+
+function assertDepositDestinationMatches(
+  actual: DepositDestination,
+  expected: DepositDestination
+): void {
+  const mismatches = (Object.keys(expected) as Array<keyof DepositDestination>)
+    .filter((key) => actual[key] !== expected[key]);
+  if (mismatches.length > 0) {
+    throw new Error(
+      `Prepared deposit destination no longer matches wallet config: ${mismatches.join(', ')}`
+    );
   }
 }

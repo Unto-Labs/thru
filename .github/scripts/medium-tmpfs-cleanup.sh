@@ -2,6 +2,7 @@
 set -euo pipefail
 
 tmpfs_root="${MEDIUM_TMPFS_ROOT:-}"
+docker_tmpfs="${MEDIUM_TMPFS_DOCKER:-1}"
 
 if [ -z "${tmpfs_root}" ]; then
   echo "MEDIUM_TMPFS_ROOT is not set; nothing to clean up"
@@ -82,8 +83,12 @@ unmount_if_mounted() {
 echo "Cleaning medium-runner tmpfs offload at ${tmpfs_root}"
 cd /
 
-stop_docker_if_available
-trap start_docker_if_available EXIT
+if [ "${docker_tmpfs}" != "0" ]; then
+  stop_docker_if_available
+  trap start_docker_if_available EXIT
+else
+  echo "Docker tmpfs offload was disabled for this job; leaving Docker running"
+fi
 
 unmount_if_mounted /var/lib/docker
 unmount_if_mounted /var/cache/sccache

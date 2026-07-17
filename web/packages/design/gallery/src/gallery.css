@@ -1,11 +1,82 @@
-/* Gallery page chrome — light surface so the light-mode tokens read correctly
-   regardless of the browser's prefers-color-scheme. */
+/* Gallery page chrome. Theme values come from @thru/design tokens. */
 html,
-body {
+body,
+#root {
+  min-height: 100%;
   margin: 0;
 }
 body {
   background: var(--color-surface-higher);
   color: var(--color-text-primary);
   font-family: var(--font-sans);
+}
+
+.gallery-page {
+  min-height: 100vh;
+  background: var(--color-surface-higher);
+  color: var(--color-text-primary);
+  transition:
+    background var(--duration-med) var(--ease-standard),
+    color var(--duration-med) var(--ease-standard);
+}
+
+.gallery-main {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 48px 24px 120px;
+}
+
+.gallery-header {
+  display: flex;
+  gap: 24px;
+  align-items: flex-start;
+  justify-content: space-between;
+  margin-bottom: 48px;
+}
+
+.gallery-theme-control {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 40px;
+  padding: 8px 10px;
+  border: 1px solid var(--color-border-tertiary);
+  background: var(--color-surface-primary);
+}
+
+.gallery-theme-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.gallery-theme-panel {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--color-border-tertiary);
+  background: var(--color-surface-primary);
+  color: var(--color-text-primary);
+}
+
+.gallery-theme-panel__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.gallery-theme-panel__body {
+  display: grid;
+  gap: 12px;
+}
+
+@media (max-width: 720px) {
+  .gallery-header {
+    flex-direction: column;
+  }
+
+  .gallery-theme-grid {
+    grid-template-columns: 1fr;
+  }
 }

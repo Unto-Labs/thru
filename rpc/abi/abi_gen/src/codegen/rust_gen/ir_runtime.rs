@@ -100,7 +100,15 @@ fn eval_node(
             params(name).ok_or_else(|| IrError::missing_param(name))
         }
         IrNode::AddChecked(node) => combine_binary(node, params, nested, checked_add),
+        IrNode::SubChecked(node) => combine_binary(node, params, nested, checked_sub),
         IrNode::MulChecked(node) => combine_binary(node, params, nested, checked_mul),
+        IrNode::DivChecked(node) => combine_binary(node, params, nested, checked_div),
+        IrNode::ModChecked(node) => combine_binary(node, params, nested, checked_mod),
+        IrNode::BitAnd(node) => combine_binary(node, params, nested, bit_and),
+        IrNode::BitOr(node) => combine_binary(node, params, nested, bit_or),
+        IrNode::BitXor(node) => combine_binary(node, params, nested, bit_xor),
+        IrNode::LeftShift(node) => combine_binary(node, params, nested, checked_left_shift),
+        IrNode::RightShift(node) => combine_binary(node, params, nested, checked_right_shift),
         IrNode::AlignUp(node) => align_expr(node, params, nested),
         IrNode::CallNested(node) => call_nested(node, params, nested),
         IrNode::Switch(node) => switch_expr(node, params, nested),
@@ -129,8 +137,46 @@ fn checked_add(a: u64, b: u64) -> Result<u64, IrError> {
     a.checked_add(b).ok_or_else(IrError::overflow)
 }
 
+fn checked_sub(a: u64, b: u64) -> Result<u64, IrError> {
+    a.checked_sub(b).ok_or_else(IrError::overflow)
+}
+
 fn checked_mul(a: u64, b: u64) -> Result<u64, IrError> {
     a.checked_mul(b).ok_or_else(IrError::overflow)
+}
+
+fn checked_div(a: u64, b: u64) -> Result<u64, IrError> {
+    a.checked_div(b).ok_or_else(IrError::overflow)
+}
+
+fn checked_mod(a: u64, b: u64) -> Result<u64, IrError> {
+    a.checked_rem(b).ok_or_else(IrError::overflow)
+}
+
+fn bit_and(a: u64, b: u64) -> Result<u64, IrError> {
+    Ok(a & b)
+}
+
+fn bit_or(a: u64, b: u64) -> Result<u64, IrError> {
+    Ok(a | b)
+}
+
+fn bit_xor(a: u64, b: u64) -> Result<u64, IrError> {
+    Ok(a ^ b)
+}
+
+fn checked_left_shift(a: u64, b: u64) -> Result<u64, IrError> {
+    if b >= 64 {
+        return Err(IrError::overflow());
+    }
+    Ok(a << b)
+}
+
+fn checked_right_shift(a: u64, b: u64) -> Result<u64, IrError> {
+    if b >= 64 {
+        return Err(IrError::overflow());
+    }
+    Ok(a >> b)
 }
 
 fn align_expr(

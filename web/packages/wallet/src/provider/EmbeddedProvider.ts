@@ -15,8 +15,14 @@ import {
   createRequestId,
   type ConnectMetadataInput,
   type ConnectRequestPayload,
+  type DepositDestination,
+  type DepositRequestPayload,
+  type DepositResult,
+  type DepositUiConfig,
   type ManageAccountsResult,
+  type PrepareDepositPayload,
   type SelectAccountPayload,
+  type ThruNetwork,
 } from '../protocol';
 import { IframeManager } from './IframeManager';
 import { EmbeddedThruChain } from './chains/ThruChain';
@@ -26,6 +32,8 @@ export interface EmbeddedProviderConfig {
   iframeUrl?: string;
   addressTypes?: AddressTypeValue[];
   signingSessions?: SigningSessionDescriptorStore;
+  network?: ThruNetwork;
+  depositUiConfig?: DepositUiConfig;
 }
 
 export interface ConnectOptions {
@@ -44,9 +52,13 @@ export class EmbeddedProvider {
   private selectedAccount: WalletAccount | null = null;
   private eventListeners = new Map<string, Set<Function>>();
   private inlineMode = false;
+  private defaultNetwork?: ThruNetwork;
+  private depositUiConfig?: DepositUiConfig;
   constructor(config: EmbeddedProviderConfig) {
     const iframeUrl = config.iframeUrl || DEFAULT_IFRAME_URL;
     this.iframeManager = new IframeManager(iframeUrl);
+    this.defaultNetwork = config.network;
+    this.depositUiConfig = config.depositUiConfig;
 
     // Set up event forwarding from iframe
     this.iframeManager.onEvent = (eventType: string, payload: any) => {
@@ -253,6 +265,62 @@ export class EmbeddedProvider {
         });
       }
       return result;
+    } finally {
+      if (!this.inlineMode) {
+        this.iframeManager.hide();
+      }
+    }
+  }
+
+  /**
+   * Derive the deposit destination inside the wallet iframe, where the selected
+   * wallet account is authoritative.
+   */
+  async prepareDeposit(
+    depositTargetOrPayload?: PrepareDepositPayload['depositTarget'] | PrepareDepositPayload
+  ): Promise<DepositDestination> {
+    const payload =
+      typeof depositTargetOrPayload === 'string'
+        ? { depositTarget: depositTargetOrPayload }
+        : depositTargetOrPayload ?? {};
+    const response = await this.iframeManager.sendMessage({
+      id: createRequestId(),
+      type: POST_MESSAGE_REQUEST_TYPES.PREPARE_DEPOSIT,
+      payload: { ...payload, network: payload.network ?? this.defaultNetwork },
+      origin: window.location.origin,
+    });
+
+    return response.result;
+  }
+
+  /**
+   * Open the wallet's Deposit ("Add funds") screen for a token account and
+   * resolve once the user completes or cancels the flow. The wallet runs the
+   * third-party deposit widget; crediting is authoritative on the server
+   * webhook, so the returned result only reports the terminal UX state.
+   */
+  async deposit(payload: DepositRequestPayload): Promise<DepositResult> {
+    if (this.inlineMode) {
+      this.iframeManager.showInline();
+    } else {
+      this.iframeManager.showModal();
+    }
+
+    try {
+      const response = await this.iframeManager.sendMessage({
+        id: createRequestId(),
+        type: POST_MESSAGE_REQUEST_TYPES.DEPOSIT,
+        payload: {
+          ...payload,
+          network: payload.network ?? this.defaultNetwork,
+          ...(this.depositUiConfig
+            ? { resolvedDepositUiConfig: this.depositUiConfig }
+            : {}),
+        },
+        origin: window.location.origin,
+      });
+
+      return response.result;
     } finally {
       if (!this.inlineMode) {
         this.iframeManager.hide();

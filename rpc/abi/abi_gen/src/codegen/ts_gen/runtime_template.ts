@@ -8,7 +8,24 @@ type __TnIrNode =
       readonly right: __TnIrNode;
     }
   | {
+      readonly op: "sub";
+      readonly left: __TnIrNode;
+      readonly right: __TnIrNode;
+    }
+  | {
       readonly op: "mul";
+      readonly left: __TnIrNode;
+      readonly right: __TnIrNode;
+    }
+  | {
+      readonly op:
+        | "div"
+        | "mod"
+        | "bitAnd"
+        | "bitOr"
+        | "bitXor"
+        | "leftShift"
+        | "rightShift";
       readonly left: __TnIrNode;
       readonly right: __TnIrNode;
     }
@@ -309,6 +326,32 @@ function __tnCheckedAdd(lhs: bigint, rhs: bigint): bigint {
   return (sum as unknown) as bigint;
 }
 
+function __tnCheckedSub(lhs: bigint, rhs: bigint): bigint {
+  if (__tnHasNativeBigInt) {
+    const result = (lhs as bigint) - (rhs as bigint);
+    if (result < BigInt(0)) {
+      __tnRaiseIrError(
+        "tn.ir.overflow",
+        "IR runtime detected negative size via subtraction"
+      );
+    }
+    return result;
+  }
+  const left = lhs as unknown as number;
+  const right = rhs as unknown as number;
+  const diff = left - right;
+  if (diff < 0 || !Number.isFinite(diff)) {
+    __tnRaiseIrError(
+      "tn.ir.overflow",
+      "IR runtime detected invalid subtraction result"
+    );
+  }
+  if (!Number.isSafeInteger(diff)) {
+    __tnWarnOnce("[thru-net] Precision loss while polyfilling BigInt subtraction");
+  }
+  return (diff as unknown) as bigint;
+}
+
 function __tnCheckedMul(lhs: bigint, rhs: bigint): bigint {
   if (__tnHasNativeBigInt) {
     const result = (lhs as bigint) * (rhs as bigint);
@@ -335,6 +378,74 @@ function __tnCheckedMul(lhs: bigint, rhs: bigint): bigint {
     );
   }
   return (product as unknown) as bigint;
+}
+
+function __tnCheckedDiv(lhs: bigint, rhs: bigint): bigint {
+  if (__tnBigIntEquals(rhs, __tnToBigInt(0))) {
+    __tnRaiseIrError("tn.ir.overflow", "IR runtime division by zero");
+  }
+  if (__tnHasNativeBigInt) return (lhs as bigint) / (rhs as bigint);
+  const quotient = Math.floor((lhs as unknown as number) / (rhs as unknown as number));
+  return (quotient as unknown) as bigint;
+}
+
+function __tnCheckedMod(lhs: bigint, rhs: bigint): bigint {
+  if (__tnBigIntEquals(rhs, __tnToBigInt(0))) {
+    __tnRaiseIrError("tn.ir.overflow", "IR runtime modulo by zero");
+  }
+  if (__tnHasNativeBigInt) return (lhs as bigint) % (rhs as bigint);
+  return (((lhs as unknown as number) % (rhs as unknown as number)) as unknown) as bigint;
+}
+
+function __tnBitwise(
+  lhs: bigint,
+  rhs: bigint,
+  op: "and" | "or" | "xor"
+): bigint {
+  if (__tnHasNativeBigInt) {
+    if (op === "and") return (lhs as bigint) & (rhs as bigint);
+    if (op === "or") return (lhs as bigint) | (rhs as bigint);
+    return (lhs as bigint) ^ (rhs as bigint);
+  }
+  const left = lhs as unknown as number;
+  const right = rhs as unknown as number;
+  const maxU32 = 0xffffffff;
+  if (
+    !Number.isInteger(left) ||
+    !Number.isInteger(right) ||
+    left < 0 ||
+    right < 0 ||
+    left > maxU32 ||
+    right > maxU32
+  ) {
+    __tnRaiseIrError(
+      "tn.ir.overflow",
+      "IR runtime bitwise operation requires BigInt for values outside u32 range"
+    );
+  }
+  const result = op === "and" ? left & right : op === "or" ? left | right : left ^ right;
+  return ((result >>> 0) as unknown) as bigint;
+}
+
+function __tnCheckedShift(
+  lhs: bigint,
+  rhs: bigint,
+  direction: "left" | "right"
+): bigint {
+  const amount = __tnBigIntToNumber(rhs, "IR shift amount");
+  if (amount < 0 || amount >= 64 || !Number.isInteger(amount)) {
+    __tnRaiseIrError("tn.ir.overflow", "IR runtime invalid shift amount");
+  }
+  if (__tnHasNativeBigInt) {
+    const shift = BigInt(amount);
+    return direction === "left" ? (lhs as bigint) << shift : (lhs as bigint) >> shift;
+  }
+  const value = lhs as unknown as number;
+  const result = direction === "left" ? value * 2 ** amount : Math.floor(value / 2 ** amount);
+  if (!Number.isSafeInteger(result)) {
+    __tnWarnOnce("[thru-net] Precision loss while polyfilling BigInt shift");
+  }
+  return (result as unknown) as bigint;
 }
 
 function __tnAlign(value: bigint, alignment: number): bigint {
@@ -635,6 +746,9 @@ function __tnEvalIrNode(
     case "const":
       return node.value;
     case "field": {
+      if (node.param === "__buffer_size" && ctx.buffer) {
+        return __tnToBigInt(ctx.buffer.length);
+      }
       const val = ctx.params[node.param];
       if (val === undefined) {
         const prefix = ctx.typeName ? `${ctx.typeName}: ` : "";
@@ -655,10 +769,55 @@ function __tnEvalIrNode(
         );
         return __tnCheckedAdd(left, right);
       }
+    case "sub":
+      return __tnCheckedSub(
+        __tnEvalIrNode(node.left, ctx, baseOffset),
+        __tnEvalIrNode(node.right, ctx, baseOffset)
+      );
     case "mul":
       return __tnCheckedMul(
         __tnEvalIrNode(node.left, ctx, baseOffset),
         __tnEvalIrNode(node.right, ctx, baseOffset)
+      );
+    case "div":
+      return __tnCheckedDiv(
+        __tnEvalIrNode(node.left, ctx, baseOffset),
+        __tnEvalIrNode(node.right, ctx, baseOffset)
+      );
+    case "mod":
+      return __tnCheckedMod(
+        __tnEvalIrNode(node.left, ctx, baseOffset),
+        __tnEvalIrNode(node.right, ctx, baseOffset)
+      );
+    case "bitAnd":
+      return __tnBitwise(
+        __tnEvalIrNode(node.left, ctx, baseOffset),
+        __tnEvalIrNode(node.right, ctx, baseOffset),
+        "and"
+      );
+    case "bitOr":
+      return __tnBitwise(
+        __tnEvalIrNode(node.left, ctx, baseOffset),
+        __tnEvalIrNode(node.right, ctx, baseOffset),
+        "or"
+      );
+    case "bitXor":
+      return __tnBitwise(
+        __tnEvalIrNode(node.left, ctx, baseOffset),
+        __tnEvalIrNode(node.right, ctx, baseOffset),
+        "xor"
+      );
+    case "leftShift":
+      return __tnCheckedShift(
+        __tnEvalIrNode(node.left, ctx, baseOffset),
+        __tnEvalIrNode(node.right, ctx, baseOffset),
+        "left"
+      );
+    case "rightShift":
+      return __tnCheckedShift(
+        __tnEvalIrNode(node.left, ctx, baseOffset),
+        __tnEvalIrNode(node.right, ctx, baseOffset),
+        "right"
       );
     case "align":
       return __tnAlign(__tnEvalIrNode(node.node, ctx, baseOffset), node.alignment);

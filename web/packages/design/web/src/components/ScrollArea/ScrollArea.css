@@ -5,6 +5,7 @@
   width: 100%;
   max-width: 280px;
   border: 1px solid var(--color-border-tertiary);
+  background: var(--color-surface-higher);
   overflow: hidden;
 }
 
@@ -23,10 +24,10 @@
   display: flex;
   width: 8px;
   padding: var(--space-1);
-  background: var(--teal-100);
+  background: var(--color-surface-primary);
 }
 
 .tds-scrollarea__thumb {
   flex: 1;
-  background: var(--color-border-secondary);
+  background: color-mix(in srgb, var(--color-border-secondary) 70%, var(--color-surface-primary));
 }

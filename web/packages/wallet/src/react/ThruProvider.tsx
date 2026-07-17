@@ -6,9 +6,22 @@ import {
   type WalletAccount,
 } from '../interfaces';
 import { BrowserSDK, type BrowserSDKConfig } from '../BrowserSDK';
-import type { ManageAccountsResult } from '../protocol';
+import type {
+  DepositDestination,
+  DepositRequestPayload,
+  DepositResult,
+  ManageAccountsResult,
+  PrepareDepositPayload,
+} from '../protocol';
+import type {
+  DepositAccountState,
+  EnsureDepositAccountParams,
+  GetDepositAccountStateParams,
+  WaitForDepositBalanceParams,
+} from '../deposit';
+import { formatDepositAmount } from '../deposit';
 import type { Thru } from '@thru/sdk/client';
-import { ReactNode, useCallback, useEffect, useState } from 'react';
+import { ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
 import { ThruContext } from './ThruContext';
 
 export interface ThruProviderProps {
@@ -149,6 +162,106 @@ export function ThruProvider({ children, config }: ThruProviderProps) {
     }
   }, [sdk]);
 
+  const deposit = useCallback(
+    async (payload: DepositRequestPayload): Promise<DepositResult> => {
+      if (!sdk) {
+        throw new Error('BrowserSDK not initialized');
+      }
+
+      try {
+        return await sdk.deposit(payload);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to deposit'));
+        throw err;
+      }
+    },
+    [sdk]
+  );
+
+  const prepareDeposit = useCallback(
+    async (
+      depositTargetOrPayload?: PrepareDepositPayload['depositTarget'] | PrepareDepositPayload
+    ): Promise<DepositDestination> => {
+      if (!sdk) {
+        throw new Error('BrowserSDK not initialized');
+      }
+
+      try {
+        return await sdk.prepareDeposit(depositTargetOrPayload);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to prepare deposit'));
+        throw err;
+      }
+    },
+    [sdk]
+  );
+
+  const ensureDepositAccount = useCallback(
+    async (params: EnsureDepositAccountParams = {}): Promise<DepositAccountState> => {
+      if (!sdk) {
+        throw new Error('BrowserSDK not initialized');
+      }
+
+      try {
+        return await sdk.ensureDepositAccount(params);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to ensure deposit account'));
+        throw err;
+      }
+    },
+    [sdk]
+  );
+
+  const getDepositAccountState = useCallback(
+    async (params: GetDepositAccountStateParams = {}): Promise<DepositAccountState> => {
+      if (!sdk) {
+        throw new Error('BrowserSDK not initialized');
+      }
+
+      try {
+        return await sdk.getDepositAccountState(params);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to get deposit account state'));
+        throw err;
+      }
+    },
+    [sdk]
+  );
+
+  const waitForDepositBalance = useCallback(
+    async (params: WaitForDepositBalanceParams): Promise<DepositAccountState> => {
+      if (!sdk) {
+        throw new Error('BrowserSDK not initialized');
+      }
+
+      try {
+        return await sdk.waitForDepositBalance(params);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error('Failed to wait for deposit balance'));
+        throw err;
+      }
+    },
+    [sdk]
+  );
+
+  const deposits = useMemo(
+    () => ({
+      prepare: prepareDeposit,
+      ensureAccount: ensureDepositAccount,
+      open: deposit,
+      getAccountState: getDepositAccountState,
+      waitForBalance: waitForDepositBalance,
+      formatAmount: formatDepositAmount,
+    }),
+    [
+      deposit,
+      ensureDepositAccount,
+      getDepositAccountState,
+      prepareDeposit,
+      waitForDepositBalance,
+    ]
+  );
+
   return (
     <ThruContext.Provider
       value={{
@@ -161,6 +274,13 @@ export function ThruProvider({ children, config }: ThruProviderProps) {
         selectedAccount,
         selectAccount,
         manageAccounts,
+        prepareDeposit,
+        deposit,
+        ensureDepositAccount,
+        getDepositAccountState,
+        waitForDepositBalance,
+        formatDepositAmount,
+        deposits,
       }}
     >
       {children}

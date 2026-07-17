@@ -61,3 +61,13 @@
 .tds-input:disabled {
   cursor: not-allowed;
 }
+
+:where([data-theme="dark"], :root[data-theme="dark"]) .tds-input-wrap {
+  background: var(--color-surface-primary);
+  border-color: var(--color-border-secondary);
+}
+
+:where([data-theme="dark"], :root[data-theme="dark"]) .tds-input-wrap:focus-within {
+  border-color: var(--color-border-brand);
+  box-shadow: inset 0 0 0 1px var(--color-border-brand);
+}

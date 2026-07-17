@@ -72,9 +72,11 @@ export function ThruTransparentWalletBridge({
   }, []);
 
   const focusWebViewDocument = useCallback(() => {
-    const webView = webViewRef.current as (WebViewType & {
-      requestFocus?: () => void;
-    }) | null;
+    const webView = webViewRef.current as
+      | (WebViewType & {
+          requestFocus?: () => void;
+        })
+      | null;
     webView?.requestFocus?.();
     webViewRef.current?.injectJavaScript(
       "try { window.focus(); document.body && document.body.focus && document.body.focus(); } catch (_) {} true;",
@@ -127,9 +129,7 @@ export function ThruTransparentWalletBridge({
   }, [wallet]);
 
   const isDirectWalletSource = Boolean(
-    wallet &&
-      Platform.OS === "ios" &&
-      wallet.getIosWebViewMode() === "direct",
+    wallet && Platform.OS === "ios" && wallet.getIosWebViewMode() === "direct",
   );
 
   useEffect(() => {
@@ -173,22 +173,13 @@ export function ThruTransparentWalletBridge({
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {
       let shouldRefreshAfterBridgeReady = false;
-      let shouldCollapseFocusSurface = false;
       try {
         const data = JSON.parse(event.nativeEvent.data) as {
-          id?: unknown;
-          success?: unknown;
           type?: string;
         };
         shouldRefreshAfterBridgeReady = data.type === "iframe:ready";
-        shouldCollapseFocusSurface =
-          typeof data.id === "string" && typeof data.success === "boolean";
       } catch {
         /* Let the bridge ignore malformed messages. */
-      }
-
-      if (shouldCollapseFocusSurface) {
-        setIsFocusSurfaceActive(false);
       }
 
       wallet?.onMessage({

@@ -102,8 +102,32 @@ impl From<&IrNode> for ir_proto::IrNode {
             IrNode::AddChecked(node) => {
                 Kind::BinaryOp(convert_binary_op(node, ir_proto::BinaryOpKind::AddChecked))
             }
+            IrNode::SubChecked(node) => {
+                Kind::BinaryOp(convert_binary_op(node, ir_proto::BinaryOpKind::SubChecked))
+            }
             IrNode::MulChecked(node) => {
                 Kind::BinaryOp(convert_binary_op(node, ir_proto::BinaryOpKind::MulChecked))
+            }
+            IrNode::DivChecked(node) => {
+                Kind::BinaryOp(convert_binary_op(node, ir_proto::BinaryOpKind::DivChecked))
+            }
+            IrNode::ModChecked(node) => {
+                Kind::BinaryOp(convert_binary_op(node, ir_proto::BinaryOpKind::ModChecked))
+            }
+            IrNode::BitAnd(node) => {
+                Kind::BinaryOp(convert_binary_op(node, ir_proto::BinaryOpKind::BitAnd))
+            }
+            IrNode::BitOr(node) => {
+                Kind::BinaryOp(convert_binary_op(node, ir_proto::BinaryOpKind::BitOr))
+            }
+            IrNode::BitXor(node) => {
+                Kind::BinaryOp(convert_binary_op(node, ir_proto::BinaryOpKind::BitXor))
+            }
+            IrNode::LeftShift(node) => {
+                Kind::BinaryOp(convert_binary_op(node, ir_proto::BinaryOpKind::LeftShift))
+            }
+            IrNode::RightShift(node) => {
+                Kind::BinaryOp(convert_binary_op(node, ir_proto::BinaryOpKind::RightShift))
             }
             IrNode::SumOverArray(node) => Kind::SumOverArray(ir_proto::SumOverArrayNode {
                 count: Some(Box::new(ir_proto::IrNode::from(node.count.as_ref()))),

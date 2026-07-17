@@ -83,8 +83,24 @@ impl<'a> IrValidateEmitter<'a> {
                 Ok(var)
             }
             IrNode::FieldRef(field) => Ok(self.resolve_field_param(field)),
-            IrNode::AddChecked(add) => self.emit_binary(add, indent_lv, "tn_checked_add_u64", "3"),
-            IrNode::MulChecked(mul) => self.emit_binary(mul, indent_lv, "tn_checked_mul_u64", "3"),
+            IrNode::AddChecked(add) => {
+                self.emit_checked_binary(add, indent_lv, "tn_checked_add_u64", "3")
+            }
+            IrNode::SubChecked(sub) => {
+                self.emit_checked_binary(sub, indent_lv, "tn_checked_sub_u64", "3")
+            }
+            IrNode::MulChecked(mul) => {
+                self.emit_checked_binary(mul, indent_lv, "tn_checked_mul_u64", "3")
+            }
+            IrNode::DivChecked(div) => self.emit_guarded_binary(div, indent_lv, "/", Some("3")),
+            IrNode::ModChecked(modulo) => {
+                self.emit_guarded_binary(modulo, indent_lv, "%", Some("3"))
+            }
+            IrNode::BitAnd(bit_and) => self.emit_guarded_binary(bit_and, indent_lv, "&", None),
+            IrNode::BitOr(bit_or) => self.emit_guarded_binary(bit_or, indent_lv, "|", None),
+            IrNode::BitXor(bit_xor) => self.emit_guarded_binary(bit_xor, indent_lv, "^", None),
+            IrNode::LeftShift(left_shift) => self.emit_shift(left_shift, indent_lv, "<<"),
+            IrNode::RightShift(right_shift) => self.emit_shift(right_shift, indent_lv, ">>"),
             IrNode::AlignUp(node) => self.emit_align(node, indent_lv),
             IrNode::CallNested(node) => self.emit_call_nested(node, indent_lv),
             IrNode::Switch(node) => self.emit_switch(node, indent_lv),
@@ -102,7 +118,7 @@ impl<'a> IrValidateEmitter<'a> {
         Err(IrValidateError::UnsupportedNode)
     }
 
-    fn emit_binary(
+    fn emit_checked_binary(
         &mut self,
         node: &BinaryOpNode,
         indent_lv: usize,
@@ -128,6 +144,68 @@ impl<'a> IrValidateEmitter<'a> {
             right,
             var,
             err_code
+        )
+        .unwrap();
+        Ok(var)
+    }
+
+    fn emit_guarded_binary(
+        &mut self,
+        node: &BinaryOpNode,
+        indent_lv: usize,
+        op: &str,
+        zero_err_code: Option<&str>,
+    ) -> Result<String, IrValidateError> {
+        let left = self.emit_node(&node.left, indent_lv)?;
+        let right = self.emit_node(&node.right, indent_lv)?;
+        if let Some(err_code) = zero_err_code {
+            writeln!(
+                &mut self.output,
+                "{}if( {} == 0ULL ) return {};",
+                Self::indent(indent_lv),
+                right,
+                err_code
+            )
+            .unwrap();
+        }
+        let var = self.new_var();
+        writeln!(
+            &mut self.output,
+            "{}uint64_t {} = {} {} {};",
+            Self::indent(indent_lv),
+            var,
+            left,
+            op,
+            right
+        )
+        .unwrap();
+        Ok(var)
+    }
+
+    fn emit_shift(
+        &mut self,
+        node: &BinaryOpNode,
+        indent_lv: usize,
+        op: &str,
+    ) -> Result<String, IrValidateError> {
+        let left = self.emit_node(&node.left, indent_lv)?;
+        let right = self.emit_node(&node.right, indent_lv)?;
+        writeln!(
+            &mut self.output,
+            "{}if( {} >= 64ULL ) return 3;",
+            Self::indent(indent_lv),
+            right
+        )
+        .unwrap();
+        let var = self.new_var();
+        writeln!(
+            &mut self.output,
+            "{}uint64_t {} = {} {} {};",
+            Self::indent(indent_lv),
+            var,
+            left,
+            op,
+            right
         )
         .unwrap();
         Ok(var)
@@ -291,7 +369,9 @@ impl<'a> IrValidateEmitter<'a> {
     }
 
     fn resolve_field_param(&self, field: &crate::codegen::shared::ir::FieldRefNode) -> String {
-        if let Some(param) = &field.parameter {
+        if field.parameter.is_none() && field.path == "__buffer_size" {
+            "buf_sz".to_string()
+        } else if let Some(param) = &field.parameter {
             sanitize_symbol(&param.replace('.', "_"))
         } else {
             sanitize_symbol(&field.path.replace('.', "_"))

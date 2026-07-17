@@ -180,6 +180,18 @@ describe('WebViewBridge', () => {
     productionBridge.destroy();
   });
 
+  it('allows the staging wallet in production builds', () => {
+    process.env.NODE_ENV = 'production';
+
+    const stagingBridge = new WebViewBridge({
+      walletUrl: 'https://wallet.staging.web.5f1.net/embedded',
+    });
+    expect(stagingBridge.walletOrigin).toBe(
+      'https://wallet.staging.web.5f1.net'
+    );
+    stagingBridge.destroy();
+  });
+
   it('uses the React Native __DEV__ flag when present', () => {
     process.env.NODE_ENV = 'test';
     (globalThis as typeof globalThis & { __DEV__?: boolean }).__DEV__ = false;

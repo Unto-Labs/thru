@@ -628,15 +628,16 @@ pub fn print_info(message: &str) {
     println!("{}: {}", "Info".bold().blue(), message);
 }
 
-/// Create a JSON response for version information
-pub fn create_version_response(thru_node: &str, thru_rpc: &str) -> Value {
-    json!({
-        "getversion": {
-            "status": "success",
-            "thru-node": thru_node,
-            "thru-rpc": thru_rpc
-        }
-    })
+/// Create a JSON response for version information. Every entry returned by the
+/// gRPC `GetVersion` map is passed through; the caller sorts them by key so the
+/// output is stable/deterministic.
+pub fn create_version_response(entries: &[(&String, &String)]) -> Value {
+    let mut obj = serde_json::Map::new();
+    obj.insert("status".to_string(), json!("success"));
+    for (key, value) in entries {
+        obj.insert((*key).to_string(), json!(value));
+    }
+    json!({ "getversion": Value::Object(obj) })
 }
 
 /// Create a JSON response for health information

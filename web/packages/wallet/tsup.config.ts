@@ -2,8 +2,12 @@ import svgrPlugin from 'esbuild-plugin-svgr';
 import { defineConfig } from 'tsup';
 
 const sharedExternal = [
+    '@thru/programs',
+    '@thru/programs/passkey-manager',
+    '@thru/programs/token',
     '@thru/sdk',
     '@thru/sdk/client',
+    '@thru/sdk/helpers',
     'react',
     'react-dom',
     'crypto',
@@ -36,6 +40,7 @@ export default defineConfig([
       index: 'src/index.ts',
       react: 'src/react/index.ts',
       'react-ui': 'src/react-ui/index.ts',
+      'internal/deposit': 'src/internal/deposit.ts',
     },
     format: ['esm'],
     dts: true,

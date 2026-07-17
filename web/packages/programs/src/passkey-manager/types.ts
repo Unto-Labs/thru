@@ -115,6 +115,16 @@ export interface AccountContext {
   getAccountIndex: (pubkey: Uint8Array) => number;
 }
 
+/** Account indices for a wallet-wrapped target instruction whose fee payer is
+ * selected later by the wallet. Index 0 is reserved for that fee payer and
+ * index 1 for the wrapper program. */
+export interface WalletAccountContext {
+  readWriteAddresses: string[];
+  readOnlyAddresses: string[];
+  walletAccountIdx: number;
+  getAccountIndex: (pubkey: Uint8Array) => number;
+}
+
 export interface RegisterCredentialInstructionParams {
   walletAccountIdx: number;
   lookupAccountIdx: number;

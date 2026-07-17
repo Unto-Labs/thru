@@ -175,7 +175,16 @@ fn contains_sum_over_array(node: &IrNode) -> bool {
     match node {
         IrNode::ZeroSize { .. } | IrNode::Const(_) | IrNode::FieldRef(_) => false,
         IrNode::AlignUp(node) => contains_sum_over_array(&node.node),
-        IrNode::AddChecked(node) | IrNode::MulChecked(node) => {
+        IrNode::AddChecked(node)
+        | IrNode::SubChecked(node)
+        | IrNode::MulChecked(node)
+        | IrNode::DivChecked(node)
+        | IrNode::ModChecked(node)
+        | IrNode::BitAnd(node)
+        | IrNode::BitOr(node)
+        | IrNode::BitXor(node)
+        | IrNode::LeftShift(node)
+        | IrNode::RightShift(node) => {
             contains_sum_over_array(&node.left) || contains_sum_over_array(&node.right)
         }
         IrNode::Switch(node) => {

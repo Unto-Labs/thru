@@ -58,6 +58,14 @@ export { Tabs } from "./components/Tabs/Tabs";
 export { Accordion } from "./components/Accordion/Accordion";
 export { Collapsible } from "./components/Collapsible/Collapsible";
 export { NavigationMenu } from "./components/NavigationMenu/NavigationMenu";
+export { Navbar } from "./components/Navbar/Navbar";
+export type {
+  NavbarBrandProps,
+  NavbarItemProps,
+  NavbarStatusProps,
+  NavbarBurgerProps,
+  NavbarDrawerProps,
+} from "./components/Navbar/Navbar";
 export { ScrollArea } from "./components/ScrollArea/ScrollArea";
 
 // Display

@@ -33,9 +33,13 @@ impl<'a> IrInterpreter<'a> {
         buffer_len: usize,
         params: &ParamMap,
     ) -> ReflectResult<IrValidationResult> {
+        let mut effective_params = params.clone();
+        effective_params
+            .entry("__buffer_size".into())
+            .or_insert(buffer_len as u128);
         let ctx = EvalContext {
             type_name: &type_ir.type_name,
-            params,
+            params: &effective_params,
         };
         let required = self.eval_node(&type_ir.root, &ctx)?;
         let available = buffer_len as u64;
@@ -70,10 +74,50 @@ impl<'a> IrInterpreter<'a> {
                 let right = self.eval_node(&node.right, ctx)?;
                 checked_add(left, right, ctx.type_name)
             }
+            IrNode::SubChecked(node) => {
+                let left = self.eval_node(&node.left, ctx)?;
+                let right = self.eval_node(&node.right, ctx)?;
+                checked_sub(left, right, ctx.type_name)
+            }
             IrNode::MulChecked(node) => {
                 let left = self.eval_node(&node.left, ctx)?;
                 let right = self.eval_node(&node.right, ctx)?;
                 checked_mul(left, right, ctx.type_name)
+            }
+            IrNode::DivChecked(node) => {
+                let left = self.eval_node(&node.left, ctx)?;
+                let right = self.eval_node(&node.right, ctx)?;
+                checked_div(left, right, ctx.type_name)
+            }
+            IrNode::ModChecked(node) => {
+                let left = self.eval_node(&node.left, ctx)?;
+                let right = self.eval_node(&node.right, ctx)?;
+                checked_mod(left, right, ctx.type_name)
+            }
+            IrNode::BitAnd(node) => {
+                let left = self.eval_node(&node.left, ctx)?;
+                let right = self.eval_node(&node.right, ctx)?;
+                Ok(left & right)
+            }
+            IrNode::BitOr(node) => {
+                let left = self.eval_node(&node.left, ctx)?;
+                let right = self.eval_node(&node.right, ctx)?;
+                Ok(left | right)
+            }
+            IrNode::BitXor(node) => {
+                let left = self.eval_node(&node.left, ctx)?;
+                let right = self.eval_node(&node.right, ctx)?;
+                Ok(left ^ right)
+            }
+            IrNode::LeftShift(node) => {
+                let left = self.eval_node(&node.left, ctx)?;
+                let right = self.eval_node(&node.right, ctx)?;
+                checked_left_shift(left, right, ctx.type_name)
+            }
+            IrNode::RightShift(node) => {
+                let left = self.eval_node(&node.left, ctx)?;
+                let right = self.eval_node(&node.right, ctx)?;
+                checked_right_shift(left, right, ctx.type_name)
             }
             IrNode::AlignUp(node) => {
                 let inner = self.eval_node(&node.node, ctx)?;
@@ -175,11 +219,59 @@ fn checked_add(left: u128, right: u128, type_name: &str) -> ReflectResult<u128> 
         })
 }
 
+fn checked_sub(left: u128, right: u128, type_name: &str) -> ReflectResult<u128> {
+    left.checked_sub(right)
+        .ok_or_else(|| ReflectError::ArithmeticOverflow {
+            type_name: type_name.to_string(),
+            op: "subtraction",
+        })
+}
+
 fn checked_mul(left: u128, right: u128, type_name: &str) -> ReflectResult<u128> {
     left.checked_mul(right)
         .ok_or_else(|| ReflectError::ArithmeticOverflow {
             type_name: type_name.to_string(),
             op: "multiplication",
+        })
+}
+
+fn checked_div(left: u128, right: u128, type_name: &str) -> ReflectResult<u128> {
+    left.checked_div(right)
+        .ok_or_else(|| ReflectError::ArithmeticOverflow {
+            type_name: type_name.to_string(),
+            op: "division",
+        })
+}
+
+fn checked_mod(left: u128, right: u128, type_name: &str) -> ReflectResult<u128> {
+    left.checked_rem(right)
+        .ok_or_else(|| ReflectError::ArithmeticOverflow {
+            type_name: type_name.to_string(),
+            op: "modulo",
+        })
+}
+
+fn checked_left_shift(left: u128, right: u128, type_name: &str) -> ReflectResult<u128> {
+    let shift = u32::try_from(right).map_err(|_| ReflectError::ArithmeticOverflow {
+        type_name: type_name.to_string(),
+        op: "left shift",
+    })?;
+    left.checked_shl(shift)
+        .ok_or_else(|| ReflectError::ArithmeticOverflow {
+            type_name: type_name.to_string(),
+            op: "left shift",
+        })
+}
+
+fn checked_right_shift(left: u128, right: u128, type_name: &str) -> ReflectResult<u128> {
+    let shift = u32::try_from(right).map_err(|_| ReflectError::ArithmeticOverflow {
+        type_name: type_name.to_string(),
+        op: "right shift",
+    })?;
+    left.checked_shr(shift)
+        .ok_or_else(|| ReflectError::ArithmeticOverflow {
+            type_name: type_name.to_string(),
+            op: "right shift",
         })
 }
 
@@ -284,5 +376,77 @@ mod tests {
             .validate(&parent, 64, &params)
             .expect("validate");
         assert_eq!(result.bytes_consumed, 4 + 12);
+    }
+
+    #[test]
+    fn sub_checked_uses_runtime_params_and_rejects_underflow() {
+        let ty = TypeIr {
+            type_name: "Tail".into(),
+            alignment: 1,
+            root: IrNode::SubChecked(BinaryOpNode {
+                left: Box::new(IrNode::FieldRef(FieldRefNode {
+                    path: "__buffer_size".into(),
+                    parameter: Some("__buffer_size".into()),
+                    meta: NodeMetadata::default(),
+                })),
+                right: Box::new(IrNode::Const(ConstNode {
+                    value: 16,
+                    meta: NodeMetadata::default(),
+                })),
+                meta: NodeMetadata::default(),
+            }),
+            parameters: vec![IrParameter {
+                name: "__buffer_size".into(),
+                description: None,
+                derived: false,
+            }],
+        };
+
+        let (layout, index) = layout_with_types(vec![ty.clone()]);
+        let interpreter = IrInterpreter::new(&layout, &index);
+        let mut params = ParamMap::new();
+        params.insert("__buffer_size".into(), 32);
+        let result = interpreter.validate(&ty, 32, &params).expect("validate");
+        assert_eq!(result.bytes_consumed, 16);
+
+        params.insert("__buffer_size".into(), 8);
+        let err = interpreter
+            .validate(&ty, 32, &params)
+            .expect_err("underflow should fail");
+        assert!(matches!(err, ReflectError::ArithmeticOverflow { .. }));
+    }
+
+    #[test]
+    fn validate_injects_buffer_size_param() {
+        let ty = TypeIr {
+            type_name: "ArenaTail".into(),
+            alignment: 1,
+            root: IrNode::SubChecked(BinaryOpNode {
+                left: Box::new(IrNode::FieldRef(FieldRefNode {
+                    path: "__buffer_size".into(),
+                    parameter: None,
+                    meta: NodeMetadata::default(),
+                })),
+                right: Box::new(IrNode::Const(ConstNode {
+                    value: 16,
+                    meta: NodeMetadata::default(),
+                })),
+                meta: NodeMetadata::default(),
+            }),
+            parameters: vec![],
+        };
+
+        let (layout, index) = layout_with_types(vec![ty.clone()]);
+        let interpreter = IrInterpreter::new(&layout, &index);
+        let params = ParamMap::new();
+        let result = interpreter.validate(&ty, 32, &params).expect("validate");
+        assert_eq!(result.bytes_consumed, 16);
+
+        let mut params = ParamMap::new();
+        params.insert("__buffer_size".into(), 48);
+        let result = interpreter
+            .validate(&ty, 64, &params)
+            .expect("validate explicit override");
+        assert_eq!(result.bytes_consumed, 32);
     }
 }

@@ -16,9 +16,10 @@ import {
    iframe<->ReactNativeWebView postMessage traffic. This bridge only
    speaks the RN side: webView.injectJavaScript out, onMessage in. */
 
-const PRODUCTION_WALLET_ORIGINS = [
+const TRUSTED_WALLET_ORIGINS = [
   'https://app.tid.sh',
   'https://wallet.tid.sh',
+  'https://wallet.staging.web.5f1.net',
 ];
 
 function isDevelopmentBuild(): boolean {
@@ -81,11 +82,11 @@ function validateWalletOrigin(walletUrl: string): void {
   }
   const origin = url.origin;
   const isAllowed =
-    PRODUCTION_WALLET_ORIGINS.includes(origin) ||
+    TRUSTED_WALLET_ORIGINS.includes(origin) ||
     isAllowedDevelopmentOrigin(url);
   if (!isAllowed) {
     throw new Error(
-      `Untrusted wallet origin: ${origin}. Only trusted origins are allowed: ${PRODUCTION_WALLET_ORIGINS.join(', ')}. ` +
+      `Untrusted wallet origin: ${origin}. Only trusted origins are allowed: ${TRUSTED_WALLET_ORIGINS.join(', ')}. ` +
         'Development builds also allow localhost, LAN, and Tailscale wallet origins.'
     );
   }
@@ -117,6 +118,7 @@ const SLOW_REQUEST_TYPES: ReadonlySet<string> = new Set([
   POST_MESSAGE_REQUEST_TYPES.SIGN_TRANSACTION,
   POST_MESSAGE_REQUEST_TYPES.SIGN_PASSKEY_CHALLENGE,
   POST_MESSAGE_REQUEST_TYPES.MANAGE_ACCOUNTS,
+  POST_MESSAGE_REQUEST_TYPES.DEPOSIT,
   POST_MESSAGE_REQUEST_TYPES.CREATE_SIGNING_SESSION,
   POST_MESSAGE_REQUEST_TYPES.CREATE_SIGNING_SESSION_INSTRUCTION,
   POST_MESSAGE_REQUEST_TYPES.CONFIRM_SIGNING_SESSION,

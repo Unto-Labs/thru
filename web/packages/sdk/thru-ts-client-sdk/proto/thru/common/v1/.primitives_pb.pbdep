@@ -1,8 +1,8 @@
-libprotoc 35.0
+libprotoc 33.4
 proto/thru/common/v1/primitives.proto 7yHiC/ZU+OD48BI/hxM65nNYhy3otIBola4hhun5K9c=
-web/package.json zuIUzr+Bwk2C5KtZL+Dxwlc4vG6o9xaoy05FZ+4+3cM=
-web/pnpm-lock.yaml ZHsrzlky8hU0t/jKAvELsq0otfBgwvWrXDKKR8OIyXY=
-web/packages/sdk/package.json KbLix4gyi2MbMweZSRkdFfrKRP3Dqm3KPmcdxmVFKO8=
+web/package.json YKdJjHZ0vbw+5pIBbhWwKV8O7kE9UiuEgY5nVT5ndKo=
+web/pnpm-lock.yaml NPFNXT6LNnoCgZYHpEdsBw9ShtzaTB894FhUZDzigmA=
+web/packages/sdk/package.json HaD0u8tqreXRIAPZILm9iiPwhYacmGu0+XeMGyhRlhc=
 web/packages/sdk/buf.yaml SNRjMoMqNnzqEDMgSvyHDHxiAmkhAqb1hs2HzSbDNs8=
 web/packages/sdk/buf.gen.yaml PTN1wmrbpm9sJLB5JKB0tgryonAhTrgnKAp3SIa64SE=
 web/packages/sdk/buf.lock f9wohyxBxN3G611uIgIM81HU2tq08GqWwX5380RMg2Y=

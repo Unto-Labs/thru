@@ -20,11 +20,21 @@ impl<'a> IrFootprintEmitter<'a> {
     }
 
     pub fn emit(&self) -> Result<String, IrFootprintError> {
-        let params = format_ir_parameter_list(self.type_ir);
+        let mut params = format_ir_parameter_list(self.type_ir);
+        if contains_buffer_size_ref(&self.type_ir.root) {
+            if params == "void" {
+                params = "uint64_t buf_sz".to_string();
+            } else {
+                params = format!("uint64_t buf_sz, {}", params);
+            }
+        }
         let body = self.node_to_expr(&self.type_ir.root)?;
         let fn_name = sanitize_symbol(&format!("{}_footprint_ir", self.type_ir.type_name));
         Ok(format!(
-            "uint64_t {}( {} ) {{\n    return {};\n}}\n",
+            "uint64_t {}( {} ) {{
+    return {};
+}}
+",
             fn_name, params, body
         ))
     }
@@ -33,13 +43,25 @@ impl<'a> IrFootprintEmitter<'a> {
         match node {
             IrNode::Const(c) => Ok(format!("{}ULL", c.value)),
             IrNode::ZeroSize { .. } => Ok("0ULL".to_string()),
-            IrNode::FieldRef(field) => Ok(if let Some(param) = &field.parameter {
-                sanitize_symbol(param)
-            } else {
-                sanitize_symbol(&field.path)
-            }),
+            IrNode::FieldRef(field) => Ok(
+                if field.parameter.is_none() && field.path == "__buffer_size" {
+                    "buf_sz".to_string()
+                } else if let Some(param) = &field.parameter {
+                    sanitize_symbol(param)
+                } else {
+                    sanitize_symbol(&field.path)
+                },
+            ),
             IrNode::AddChecked(node) => self.combine_binary(node, "+"),
+            IrNode::SubChecked(node) => self.combine_binary(node, "-"),
             IrNode::MulChecked(node) => self.combine_binary(node, "*"),
+            IrNode::DivChecked(node) => self.combine_binary(node, "/"),
+            IrNode::ModChecked(node) => self.combine_binary(node, "%"),
+            IrNode::BitAnd(node) => self.combine_binary(node, "&"),
+            IrNode::BitOr(node) => self.combine_binary(node, "|"),
+            IrNode::BitXor(node) => self.combine_binary(node, "^"),
+            IrNode::LeftShift(node) => self.combine_binary(node, "<<"),
+            IrNode::RightShift(node) => self.combine_binary(node, ">>"),
             IrNode::AlignUp(node) => self.align_expr(node),
             IrNode::CallNested(node) => self.call_nested_expr(node),
             IrNode::Switch(node) => self.switch_expr(node),
@@ -119,6 +141,37 @@ impl<'a> IrFootprintEmitter<'a> {
         }
         writeln!(&mut out, "  }}\n  tn_result;\n}})").unwrap();
         Ok(out)
+    }
+}
+
+fn contains_buffer_size_ref(node: &IrNode) -> bool {
+    match node {
+        IrNode::FieldRef(field) => field.parameter.is_none() && field.path == "__buffer_size",
+        IrNode::AlignUp(node) => contains_buffer_size_ref(&node.node),
+        IrNode::Switch(node) => {
+            node.cases
+                .iter()
+                .any(|case| contains_buffer_size_ref(&case.node))
+                || node
+                    .default
+                    .as_ref()
+                    .map(|default| contains_buffer_size_ref(default))
+                    .unwrap_or(false)
+        }
+        IrNode::AddChecked(node)
+        | IrNode::SubChecked(node)
+        | IrNode::MulChecked(node)
+        | IrNode::DivChecked(node)
+        | IrNode::ModChecked(node)
+        | IrNode::BitAnd(node)
+        | IrNode::BitOr(node)
+        | IrNode::BitXor(node)
+        | IrNode::LeftShift(node)
+        | IrNode::RightShift(node) => {
+            contains_buffer_size_ref(&node.left) || contains_buffer_size_ref(&node.right)
+        }
+        IrNode::SumOverArray(node) => contains_buffer_size_ref(&node.count),
+        IrNode::ZeroSize { .. } | IrNode::Const(_) | IrNode::CallNested(_) => false,
     }
 }
 

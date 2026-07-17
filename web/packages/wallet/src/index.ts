@@ -28,4 +28,15 @@ export {
   ErrorCode,
 } from './protocol';
 export * from './protocol';
+export type {
+  DepositAccountState,
+  DepositsApi,
+  EnsureDepositAccountParams,
+  GetDepositAccountStateParams,
+  WaitForDepositBalanceParams,
+} from './deposit';
+export {
+  DepositTransactionError,
+  formatDepositAmount,
+} from './deposit';
 export type { SigningSessionStorage } from './signing-sessions';

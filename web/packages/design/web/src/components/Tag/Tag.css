@@ -8,10 +8,12 @@
   background: var(--color-surface-lower);
   color: var(--color-text-primary);
   padding: var(--space-1) var(--space-2);
+  border: 1px solid transparent;
   border-radius: var(--radius-none);
   display: inline-flex;
   align-items: center;
   gap: var(--space-1);
+  font-weight: var(--fw-semibold);
 }
 
 .tds-tag--neutral {
@@ -37,4 +39,34 @@
 .tds-tag--yellow {
   background: var(--yellow-100);
   color: var(--yellow-400);
+}
+
+:where([data-theme="dark"], :root[data-theme="dark"]) .tds-tag--neutral {
+  background: color-mix(in srgb, var(--teal-500) 18%, transparent);
+  color: var(--color-text-secondary);
+  border-color: color-mix(in srgb, var(--teal-400) 32%, transparent);
+}
+
+:where([data-theme="dark"], :root[data-theme="dark"]) .tds-tag--brick {
+  background: color-mix(in srgb, var(--brick-300) 20%, transparent);
+  color: var(--brick-100);
+  border-color: color-mix(in srgb, var(--brick-300) 42%, transparent);
+}
+
+:where([data-theme="dark"], :root[data-theme="dark"]) .tds-tag--sky {
+  background: color-mix(in srgb, var(--sky-300) 18%, transparent);
+  color: var(--sky-100);
+  border-color: color-mix(in srgb, var(--sky-300) 36%, transparent);
+}
+
+:where([data-theme="dark"], :root[data-theme="dark"]) .tds-tag--grass {
+  background: color-mix(in srgb, var(--grass-300) 22%, transparent);
+  color: var(--grass-100);
+  border-color: color-mix(in srgb, var(--grass-300) 42%, transparent);
+}
+
+:where([data-theme="dark"], :root[data-theme="dark"]) .tds-tag--yellow {
+  background: color-mix(in srgb, var(--yellow-300) 20%, transparent);
+  color: var(--yellow-100);
+  border-color: color-mix(in srgb, var(--yellow-300) 40%, transparent);
 }

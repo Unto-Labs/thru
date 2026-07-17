@@ -10,7 +10,7 @@ use crate::{
     tn_signature::{sign_transaction, verify_transaction},
     tn_state_proof::StateProof,
 };
-use bytemuck::{Pod, Zeroable, bytes_of, from_bytes};
+use bytemuck::{Pod, Zeroable, bytes_of, pod_read_unaligned};
 
 pub const TN_TXN_FLAG_HAS_FEE_PAYER_PROOF_BIT: u8 = 0; // Bit position (matching C #define TN_TXN_FLAG_HAS_FEE_PAYER_PROOF (0U))
 pub const TN_TXN_FLAG_MAY_COMPRESS_ACCOUNT_BIT: u8 = 1; // Bit position (matching C #define TN_TXN_FLAG_MAY_COMPRESS_ACCOUNT (1U))
@@ -37,6 +37,9 @@ pub enum RpcError {
     InvalidFlags,
     InvalidFeePayerStateProofType,
     InvalidChainId,
+    DuplicateAccount,
+    UnsortedReadwriteAccounts,
+    UnsortedReadonlyAccounts,
 }
 
 impl std::fmt::Display for RpcError {
@@ -84,9 +87,20 @@ impl std::fmt::Display for RpcError {
             RpcError::InvalidChainId => {
                 write!(f, "Invalid chain ID: chain_id cannot be zero")
             }
+            RpcError::DuplicateAccount => {
+                write!(f, "Duplicate account in transaction")
+            }
+            RpcError::UnsortedReadwriteAccounts => {
+                write!(f, "Read-write accounts are not strictly ascending")
+            }
+            RpcError::UnsortedReadonlyAccounts => {
+                write!(f, "Read-only accounts are not strictly ascending")
+            }
         }
     }
 }
+
+impl std::error::Error for RpcError {}
 
 impl RpcError {
     pub fn invalid_transaction_size(size: usize, max_size: usize) -> Self {
@@ -118,6 +132,15 @@ impl RpcError {
     }
     pub fn invalid_chain_id() -> Self {
         Self::InvalidChainId
+    }
+    pub fn duplicate_account() -> Self {
+        Self::DuplicateAccount
+    }
+    pub fn unsorted_readwrite_accounts() -> Self {
+        Self::UnsortedReadwriteAccounts
+    }
+    pub fn unsorted_readonly_accounts() -> Self {
+        Self::UnsortedReadonlyAccounts
     }
 }
 
@@ -153,6 +176,7 @@ pub struct WireTxnHdrV1 {
 
 /// Size of the signature in bytes (always at end of transaction)
 pub const TN_TXN_SIGNATURE_SZ: usize = 64;
+pub const TN_TXN_MAX_ACCOUNTS: usize = 1024;
 
 impl Default for WireTxnHdrV1 {
     fn default() -> Self {
@@ -386,13 +410,35 @@ impl Transaction {
         self
     }
 
-    /// Sign the transaction with a 32-byte Ed25519 private key
+    /// Sign the transaction with a 32-byte Ed25519 private key.
+    /// Validates the account layout first, so a transaction with duplicate,
+    /// unsorted, or too-many accounts is rejected before signing.
     pub fn sign(&mut self, private_key: &[u8; 32]) -> Result<(), Box<dyn std::error::Error>> {
+        self.validate()
+            .map_err(|e| Box::<dyn std::error::Error>::from(e))?;
+        self.sign_unchecked(private_key)
+    }
+
+    /// Sign WITHOUT validating the account layout. Intended for constructing
+    /// intentionally-invalid transactions (e.g. negative tests that submit a
+    /// malformed txn and expect the server to reject it). Production callers
+    /// should use `sign`, which validates first.
+    pub fn sign_unchecked(
+        &mut self,
+        private_key: &[u8; 32],
+    ) -> Result<(), Box<dyn std::error::Error>> {
         let wire_bytes = self.to_wire_for_signing();
         let sig = sign_transaction(&wire_bytes, &self.fee_payer, private_key)
             .map_err(|e| Box::<dyn std::error::Error>::from(e))?;
         self.signature = Some(sig);
         Ok(())
+    }
+
+    /// Validate account count and duplicate-account rules before signing or serialization.
+    pub fn validate(&self) -> Result<(), RpcError> {
+        let rw_accs = self.rw_accs.as_deref().unwrap_or(&[]);
+        let r_accs = self.r_accs.as_deref().unwrap_or(&[]);
+        validate_account_layout(rw_accs, r_accs, &self.fee_payer, &self.program)
     }
 
     /// Verify the transaction signature
@@ -457,9 +503,29 @@ impl Transaction {
         result
     }
 
-    /// Serialize to on-wire format (WireTxnHdrV1)
+    /// Serialize to on-wire format (WireTxnHdrV1).
     /// Wire format: header + accounts + instr_data + state_proof + account_meta + signature
+    ///
+    /// This is INFALLIBLE and does NOT validate account layout: it must remain
+    /// usable for re-serializing transactions that were ingested from the
+    /// network/block store (which may predate, or otherwise violate, the
+    /// duplicate-account rules — e.g. a stored poison transaction served via
+    /// getTransactionRaw). Validation is enforced at the construction boundary
+    /// (`sign`) and is available explicitly via `try_to_wire`.
     pub fn to_wire(&self) -> Vec<u8> {
+        self.serialize_wire()
+    }
+
+    /// Fallible serialization: validate account layout, then serialize.
+    /// Use this for newly-built transactions that must satisfy the
+    /// duplicate/sort/count rules before going on the wire.
+    pub fn try_to_wire(&self) -> Result<Vec<u8>, RpcError> {
+        self.validate()?;
+        Ok(self.serialize_wire())
+    }
+
+    /// Internal: pure serialization with no validation.
+    fn serialize_wire(&self) -> Vec<u8> {
         let mut wire = WireTxnHdrV1::default();
         wire.transaction_version = 1;
         wire.flags = self.flags;
@@ -525,7 +591,7 @@ impl Transaction {
             return None;
         }
 
-        let wire: &WireTxnHdrV1 = from_bytes(&bytes[0..core::mem::size_of::<WireTxnHdrV1>()]);
+        let wire: WireTxnHdrV1 = pod_read_unaligned(&bytes[0..core::mem::size_of::<WireTxnHdrV1>()]);
         let mut offset = core::mem::size_of::<WireTxnHdrV1>();
 
         let sig_start = bytes.len() - TN_TXN_SIGNATURE_SZ;
@@ -639,7 +705,7 @@ impl Transaction {
         if bytes.len() < core::mem::size_of::<WireTxnHdrV1>() + TN_TXN_SIGNATURE_SZ {
             return None;
         }
-        let wire: &WireTxnHdrV1 = from_bytes(&bytes[0..core::mem::size_of::<WireTxnHdrV1>()]);
+        let wire: WireTxnHdrV1 = pod_read_unaligned(&bytes[0..core::mem::size_of::<WireTxnHdrV1>()]);
         match field {
             "fee_payer_signature" => {
                 let sig_start = bytes.len() - TN_TXN_SIGNATURE_SZ;
@@ -792,6 +858,75 @@ pub fn tn_txn_size(bytes: &[u8]) -> Result<usize, RpcError> {
     Ok(offset)
 }
 
+/// Validate a transaction's account layout (count, duplicates, sort order).
+///
+/// Mirrors the C source of truth tn_validate_txn_accounts
+/// (src/thru/runtime/tn_txn_account_validate.c): a combined merge-walk detects
+/// sort-order violations, within-array duplicates, and cross-array (rw∩ro)
+/// duplicates in a single pass, with the same error precedence (unsorted before
+/// a fee_payer/program duplicate). The fee_payer/program-in-array check runs only
+/// after sort order is confirmed.
+pub fn validate_account_layout(
+    rw_accs: &[TnPubkey],
+    r_accs: &[TnPubkey],
+    fee_payer: &TnPubkey,
+    program: &TnPubkey,
+) -> Result<(), RpcError> {
+    let total_accounts = 2usize
+        .checked_add(rw_accs.len())
+        .and_then(|v| v.checked_add(r_accs.len()))
+        .ok_or_else(|| RpcError::too_many_accounts(usize::MAX, TN_TXN_MAX_ACCOUNTS))?;
+    if total_accounts > TN_TXN_MAX_ACCOUNTS {
+        return Err(RpcError::too_many_accounts(total_accounts, TN_TXN_MAX_ACCOUNTS));
+    }
+    if fee_payer == program {
+        return Err(RpcError::duplicate_account());
+    }
+
+    let (mut i, mut j) = (0usize, 0usize);
+    let mut prev_rw: Option<&[u8; 32]> = None;
+    let mut prev_ro: Option<&[u8; 32]> = None;
+    while i < rw_accs.len() || j < r_accs.len() {
+        let use_rw = j >= r_accs.len() || (i < rw_accs.len() && rw_accs[i] <= r_accs[j]);
+        if use_rw {
+            let key = &rw_accs[i];
+            if j < r_accs.len() && *key == r_accs[j] {
+                return Err(RpcError::duplicate_account());
+            }
+            if let Some(prev) = prev_rw {
+                if prev == key {
+                    return Err(RpcError::duplicate_account());
+                }
+                if prev > key {
+                    return Err(RpcError::unsorted_readwrite_accounts());
+                }
+            }
+            prev_rw = Some(key);
+            i += 1;
+        } else {
+            let key = &r_accs[j];
+            if let Some(prev) = prev_ro {
+                if prev == key {
+                    return Err(RpcError::duplicate_account());
+                }
+                if prev > key {
+                    return Err(RpcError::unsorted_readonly_accounts());
+                }
+            }
+            prev_ro = Some(key);
+            j += 1;
+        }
+    }
+
+    for account in rw_accs.iter().chain(r_accs.iter()) {
+        if account == fee_payer || account == program {
+            return Err(RpcError::duplicate_account());
+        }
+    }
+
+    Ok(())
+}
+
 /// Validate a wire-format transaction for protocol correctness (matching C tn_txn_parse_core).
 pub fn validate_wire_transaction(bytes: &[u8]) -> Result<(), RpcError> {
     const TN_TXN_MTU: usize = 32_768;
@@ -799,7 +934,7 @@ pub fn validate_wire_transaction(bytes: &[u8]) -> Result<(), RpcError> {
     const TN_TXN_VERSION_OFFSET: usize = 0;
     const TN_TXN_FLAGS_OFFSET: usize = 1;
 
-    use bytemuck::from_bytes;
+    use bytemuck::pod_read_unaligned;
 
     // 1. Check payload size
     if bytes.len() > TN_TXN_MTU {
@@ -827,7 +962,7 @@ pub fn validate_wire_transaction(bytes: &[u8]) -> Result<(), RpcError> {
     }
 
     // 5. Parse header
-    let hdr: &WireTxnHdrV1 = from_bytes(&bytes[0..core::mem::size_of::<WireTxnHdrV1>()]);
+    let hdr: WireTxnHdrV1 = pod_read_unaligned(&bytes[0..core::mem::size_of::<WireTxnHdrV1>()]);
     let mut offset = core::mem::size_of::<WireTxnHdrV1>();
 
     let sig_start = bytes.len() - TN_TXN_SIGNATURE_SZ;
@@ -858,15 +993,12 @@ pub fn validate_wire_transaction(bytes: &[u8]) -> Result<(), RpcError> {
             return Err(RpcError::invalid_format());
         }
 
-        // Calculate state proof footprint
         let state_proof_data = &bytes[offset..sig_start];
-        let state_proof_sz = calculate_state_proof_footprint(state_proof_data)?;
 
-        if offset + state_proof_sz > sig_start {
-            return Err(RpcError::invalid_format());
-        }
-
-        // Extract proof type and validate
+        // Extract and validate the proof type before using the footprint. Only
+        // EXISTING and CREATION are valid; UPDATING and out-of-range types (e.g.
+        // type 3) are rejected — matching C tn_txn_parse.c, where an invalid type
+        // yields a zero footprint and is rejected before further parsing.
         let type_slot = u64::from_le_bytes([
             state_proof_data[0],
             state_proof_data[1],
@@ -878,10 +1010,16 @@ pub fn validate_wire_transaction(bytes: &[u8]) -> Result<(), RpcError> {
             state_proof_data[7],
         ]);
         let proof_type = extract_state_proof_type(type_slot);
-
-        // Check that proof type is not UPDATING
-        if proof_type == TN_STATE_PROOF_TYPE_UPDATING {
+        if proof_type != TN_STATE_PROOF_TYPE_EXISTING && proof_type != TN_STATE_PROOF_TYPE_CREATION
+        {
             return Err(RpcError::invalid_fee_payer_state_proof_type());
+        }
+
+        // Calculate state proof footprint
+        let state_proof_sz = calculate_state_proof_footprint(state_proof_data)?;
+
+        if offset + state_proof_sz > sig_start {
+            return Err(RpcError::invalid_format());
         }
 
         offset += state_proof_sz;
@@ -901,6 +1039,37 @@ pub fn validate_wire_transaction(bytes: &[u8]) -> Result<(), RpcError> {
             offset + TN_TXN_SIGNATURE_SZ,
             bytes.len(),
         ));
+    }
+
+    // 9b. Account-layout validation (count, duplicates, sort order) runs after
+    // the whole wire structure is confirmed and before signature verification,
+    // matching the C/Go order. Keep in sync with
+    // src/thru/runtime/tn_txn_account_validate.c.
+    {
+        let accs_start = core::mem::size_of::<WireTxnHdrV1>();
+        let rw_cnt = hdr.readwrite_accounts_cnt as usize;
+        let ro_cnt = hdr.readonly_accounts_cnt as usize;
+        let mut rw_accs: Vec<TnPubkey> = Vec::with_capacity(rw_cnt);
+        for k in 0..rw_cnt {
+            let s = accs_start + k * 32;
+            let mut a = [0u8; 32];
+            a.copy_from_slice(&bytes[s..s + 32]);
+            rw_accs.push(a);
+        }
+        let ro_start = accs_start + rw_cnt * 32;
+        let mut ro_accs: Vec<TnPubkey> = Vec::with_capacity(ro_cnt);
+        for k in 0..ro_cnt {
+            let s = ro_start + k * 32;
+            let mut a = [0u8; 32];
+            a.copy_from_slice(&bytes[s..s + 32]);
+            ro_accs.push(a);
+        }
+        validate_account_layout(
+            &rw_accs,
+            &ro_accs,
+            &hdr.fee_payer_pubkey,
+            &hdr.program_pubkey,
+        )?;
     }
 
     // 10. Signature check
@@ -1034,6 +1203,34 @@ mod tests {
     fn test_valid_transaction() {
         let bytes = make_valid_txn_bytes();
         assert!(validate_wire_transaction(&bytes).is_ok());
+    }
+
+    #[test]
+    fn test_transaction_duplicate_accounts_rejected() {
+        let signing_key = SigningKey::from(&[1u8; 32]);
+        let fee = signing_key.verifying_key().to_bytes();
+        let program = [2u8; 32];
+        let a = [3u8; 32];
+        let b = [4u8; 32];
+
+        let cases = [
+            Transaction::new(fee, fee, 100, 42),
+            Transaction::new(fee, program, 100, 42).with_rw_accounts(vec![fee]),
+            Transaction::new(fee, program, 100, 42).with_r_accounts(vec![fee]),
+            Transaction::new(fee, program, 100, 42).with_rw_accounts(vec![program]),
+            Transaction::new(fee, program, 100, 42).with_r_accounts(vec![program]),
+            Transaction::new(fee, program, 100, 42).with_rw_accounts(vec![a, a]),
+            Transaction::new(fee, program, 100, 42).with_r_accounts(vec![a, a]),
+            Transaction::new(fee, program, 100, 42)
+                .with_rw_accounts(vec![a])
+                .with_r_accounts(vec![a, b]),
+        ];
+
+        for mut tx in cases {
+            assert!(matches!(tx.validate(), Err(RpcError::DuplicateAccount)));
+            assert!(matches!(tx.try_to_wire(), Err(RpcError::DuplicateAccount)));
+            assert!(tx.sign(&signing_key.to_bytes()).is_err());
+        }
     }
 
     #[test]

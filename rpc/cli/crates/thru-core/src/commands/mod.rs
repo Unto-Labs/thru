@@ -7,6 +7,7 @@ pub mod consensus_validator;
 pub mod debug;
 pub mod dev;
 pub mod faucet;
+pub mod feature_gates;
 pub mod keys;
 pub mod name_service;
 pub mod network;

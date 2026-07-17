@@ -1,0 +1,1232 @@
+abi:
+  package: thru.program.clob
+  name: "CLOB Program"
+  abi-version: 1
+  package-version: "0.1.0"
+  description: ABI for the Thru CLOB program instructions, account state, events, and errors
+  imports:
+    - type: onchain
+      address: ta1blxgaYR0dei5aldWJe1vbUtt-LkVEBOzNJtSRhHQcTG
+      target: abi
+      network: mainnet
+      revision: latest
+  options:
+    program-metadata:
+      root-types:
+        instruction-root: "ClobInstruction"
+        account-root: "ClobProgramAccount"
+        errors: "ClobError"
+        events: "ClobEvent"
+types:
+- name: ClientId
+  kind:
+    array:
+      packed: true
+      size:
+        literal:
+          u64: 16
+      element-type:
+        primitive: u8
+- name: MarketRecordInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: market_record_idx
+        field-type:
+          primitive: u8
+      - name: seat_arena_account_idx
+        field-type:
+          primitive: u16
+      - name: order_arena_account_idx
+        field-type:
+          primitive: u16
+      - name: bids_cbook_account_idx
+        field-type:
+          primitive: u16
+      - name: asks_cbook_account_idx
+        field-type:
+          primitive: u16
+      - name: seat_authority_account_idx
+        field-type:
+          primitive: u16
+      - name: seat_idx
+        field-type:
+          primitive: u32
+      - name: token_program_idx
+        field-type:
+          primitive: u16
+      - name: base_vault_account_idx
+        field-type:
+          primitive: u16
+      - name: quote_vault_account_idx
+        field-type:
+          primitive: u16
+      - name: market_authority_account_idx
+        field-type:
+          primitive: u16
+- name: TokenTransferInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: market_record_idx
+        field-type:
+          primitive: u8
+      - name: token_program_idx
+        field-type:
+          primitive: u16
+      - name: reserved0
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 4
+            element-type:
+              primitive: u8
+      - name: amount
+        field-type:
+          primitive: u64
+      - name: from_account_idx
+        field-type:
+          primitive: u16
+      - name: to_account_idx
+        field-type:
+          primitive: u16
+      - name: reserved1
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 4
+            element-type:
+              primitive: u8
+- name: SeatCreateInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: market_record_idx
+        field-type:
+          primitive: u8
+      - name: seat_authority_account_idx
+        field-type:
+          primitive: u16
+      - name: reserved0
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 4
+            element-type:
+              primitive: u8
+- name: CreateOrderEntryInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: instruction_flags
+        field-type:
+          primitive: u8
+      - name: market_record_idx
+        field-type:
+          primitive: u8
+      - name: reserved0
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 5
+            element-type:
+              primitive: u8
+      - name: price
+        field-type:
+          primitive: u64
+      - name: quantity
+        field-type:
+          primitive: u64
+      - name: exp_time
+        field-type:
+          primitive: i64
+      - name: client_id
+        field-type:
+          array:
+            size:
+              mul:
+                left:
+                  bit-and:
+                    left:
+                      right-shift:
+                        left:
+                          field-ref:
+                            path: ["instruction_flags"]
+                        right:
+                          literal:
+                            u8: 6
+                    right:
+                      literal:
+                        u8: 1
+                right:
+                  literal:
+                    u64: 16
+            element-type:
+              primitive: u8
+- name: CreateSeatlessOrderEntryInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: instruction_flags
+        field-type:
+          primitive: u8
+      - name: market_record_idx
+        field-type:
+          primitive: u8
+      - name: reserved0
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 5
+            element-type:
+              primitive: u8
+      - name: price
+        field-type:
+          primitive: u64
+      - name: quantity
+        field-type:
+          primitive: u64
+      - name: quote_wallet_idx
+        field-type:
+          primitive: u16
+      - name: base_wallet_idx
+        field-type:
+          primitive: u16
+      - name: reserved1
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 4
+            element-type:
+              primitive: u8
+      - name: client_id
+        field-type:
+          array:
+            size:
+              mul:
+                left:
+                  bit-and:
+                    left:
+                      right-shift:
+                        left:
+                          field-ref:
+                            path: ["instruction_flags"]
+                        right:
+                          literal:
+                            u8: 6
+                    right:
+                      literal:
+                        u8: 1
+                right:
+                  literal:
+                    u64: 16
+            element-type:
+              primitive: u8
+- name: ModifyOrderEntryInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: instruction_flags
+        field-type:
+          primitive: u8
+      - name: market_record_idx
+        field-type:
+          primitive: u8
+      - name: reserved0
+        field-type:
+          primitive: u8
+      - name: order_entry_idx
+        field-type:
+          primitive: u32
+      - name: quantity
+        field-type:
+          primitive: u64
+      - name: exp_time
+        field-type:
+          primitive: i64
+      - name: metadata
+        field-type:
+          array:
+            size:
+              add:
+                left:
+                  mul:
+                    left:
+                      bit-and:
+                        left:
+                          right-shift:
+                            left:
+                              field-ref:
+                                path: ["instruction_flags"]
+                            right:
+                              literal:
+                                u8: 1
+                        right:
+                          literal:
+                            u8: 1
+                    right:
+                      literal:
+                        u64: 16
+                right:
+                  mul:
+                    left:
+                      bit-and:
+                        left:
+                          right-shift:
+                            left:
+                              field-ref:
+                                path: ["instruction_flags"]
+                            right:
+                              literal:
+                                u8: 2
+                        right:
+                          literal:
+                            u8: 1
+                    right:
+                      literal:
+                        u64: 8
+            element-type:
+              primitive: u8
+- name: MarketCreateInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: market_record_idx
+        field-type:
+          primitive: u8
+      - name: reserved0
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 6
+            element-type:
+              primitive: u8
+      - name: lot_size
+        field-type:
+          primitive: u64
+      - name: tick_size
+        field-type:
+          primitive: u64
+      - name: token_program_idx
+        field-type:
+          primitive: u16
+      - name: base_mint_idx
+        field-type:
+          primitive: u16
+      - name: quote_mint_idx
+        field-type:
+          primitive: u16
+      - name: seat_arena_account_idx
+        field-type:
+          primitive: u16
+      - name: order_arena_account_idx
+        field-type:
+          primitive: u16
+      - name: bids_cbook_account_idx
+        field-type:
+          primitive: u16
+      - name: asks_cbook_account_idx
+        field-type:
+          primitive: u16
+      - name: base_vault_account_idx
+        field-type:
+          primitive: u16
+      - name: quote_vault_account_idx
+        field-type:
+          primitive: u16
+      - name: market_authority_account_idx
+        field-type:
+          primitive: u16
+      - name: proof_sz_seat_arena
+        field-type:
+          primitive: u32
+      - name: proof_sz_order_arena
+        field-type:
+          primitive: u32
+      - name: proof_sz_bids_cbook
+        field-type:
+          primitive: u32
+      - name: proof_sz_asks_cbook
+        field-type:
+          primitive: u32
+      - name: proof_sz_base_vault
+        field-type:
+          primitive: u32
+      - name: proof_sz_quote_vault
+        field-type:
+          primitive: u32
+      - name: reserved1
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 4
+            element-type:
+              primitive: u8
+      - name: proof_seat_arena
+        field-type:
+          array:
+            size:
+              field-ref:
+                path: ["proof_sz_seat_arena"]
+            element-type:
+              primitive: u8
+      - name: proof_order_arena
+        field-type:
+          array:
+            size:
+              field-ref:
+                path: ["proof_sz_order_arena"]
+            element-type:
+              primitive: u8
+      - name: proof_bids_cbook
+        field-type:
+          array:
+            size:
+              field-ref:
+                path: ["proof_sz_bids_cbook"]
+            element-type:
+              primitive: u8
+      - name: proof_asks_cbook
+        field-type:
+          array:
+            size:
+              field-ref:
+                path: ["proof_sz_asks_cbook"]
+            element-type:
+              primitive: u8
+      - name: proof_base_vault
+        field-type:
+          array:
+            size:
+              field-ref:
+                path: ["proof_sz_base_vault"]
+            element-type:
+              primitive: u8
+      - name: proof_quote_vault
+        field-type:
+          array:
+            size:
+              field-ref:
+                path: ["proof_sz_quote_vault"]
+            element-type:
+              primitive: u8
+- name: MarketSetStatusInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: market_record_idx
+        field-type:
+          primitive: u8
+      - name: status_flags
+        field-type:
+          primitive: u8
+      - name: reserved0
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 5
+            element-type:
+              primitive: u8
+- name: ClobInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: discriminant
+        field-type:
+          primitive: u8
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - discriminant
+            variants:
+            - name: market_record
+              tag-value: 0
+              variant-type:
+                type-ref:
+                  name: MarketRecordInstruction
+            - name: seat_create
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: SeatCreateInstruction
+            - name: token_deposit
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: TokenTransferInstruction
+            - name: token_withdraw
+              tag-value: 3
+              variant-type:
+                type-ref:
+                  name: TokenTransferInstruction
+            - name: create_order_entry
+              tag-value: 4
+              variant-type:
+                type-ref:
+                  name: CreateOrderEntryInstruction
+            - name: modify_order_entry
+              tag-value: 5
+              variant-type:
+                type-ref:
+                  name: ModifyOrderEntryInstruction
+            - name: market_set_status
+              tag-value: 8
+              variant-type:
+                type-ref:
+                  name: MarketSetStatusInstruction
+            - name: market_create
+              tag-value: 9
+              variant-type:
+                type-ref:
+                  name: MarketCreateInstruction
+            - name: create_seatless_order_entry
+              tag-value: 10
+              variant-type:
+                type-ref:
+                  name: CreateSeatlessOrderEntryInstruction
+- name: MarketAccount
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: magic
+        field-type:
+          primitive: u8
+      - name: status_flags
+        field-type:
+          primitive: u8
+      - name: reserved0
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 6
+            element-type:
+              primitive: u8
+      - name: lot_size
+        field-type:
+          primitive: u64
+      - name: tick_size
+        field-type:
+          primitive: u64
+      - name: next_order_id
+        field-type:
+          primitive: u64
+      - name: order_entry_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: bids_cbook_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: asks_cbook_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: token_program_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: base_vault_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: quote_vault_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: market_authority_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+- name: ArenaHeader
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: reserved0
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 52
+            element-type:
+              primitive: u8
+      - name: next_entry_idx
+        field-type:
+          primitive: u32
+      - name: free_magic
+        field-type:
+          primitive: u64
+- name: SeatEntry
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: seat_authority_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: quantity_base
+        field-type:
+          primitive: u64
+      - name: quantity_quote
+        field-type:
+          primitive: u64
+      - name: head_order_entry_idx
+        field-type:
+          primitive: u32
+      - name: reserved0
+        field-type:
+          primitive: u32
+      - name: non_nullable_reserved
+        field-type:
+          primitive: u64
+- name: OrderEntry
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: seat_ptrs
+        field-type:
+          primitive: u64
+      - name: level_ptrs
+        field-type:
+          primitive: u64
+      - name: qty_in_lots
+        field-type:
+          primitive: u64
+      - name: order_id
+        field-type:
+          primitive: u64
+      - name: reserved0
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 8
+            element-type:
+              primitive: u8
+      - name: client_id
+        field-type:
+          type-ref:
+            name: ClientId
+      - name: expiry
+        field-type:
+          primitive: i64
+- name: CbookHeader
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: reserved0
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 4
+            element-type:
+              primitive: u8
+      - name: best_level_idx
+        field-type:
+          primitive: u32
+      - name: best_price_in_ticks
+        field-type:
+          primitive: u64
+- name: CbookLevel
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: head_entry_idx
+        field-type:
+          primitive: u32
+      - name: tail_entry_idx
+        field-type:
+          primitive: u32
+- name: SeatArenaAccount
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: market
+        field-type:
+          type-ref:
+            name: MarketAccount
+      - name: header
+        field-type:
+          type-ref:
+            name: ArenaHeader
+      - name: entries
+        field-type:
+          array:
+            size:
+              div:
+                left:
+                  sub:
+                    left:
+                      field-ref:
+                        path: ["__buffer_size"]
+                    right:
+                      literal:
+                        u64: 320
+                right:
+                  literal:
+                    u64: 64
+            element-type:
+              type-ref:
+                name: SeatEntry
+- name: OrderArenaAccount
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: reserved_header
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 8
+            element-type:
+              primitive: u8
+      - name: header
+        field-type:
+          type-ref:
+            name: ArenaHeader
+      - name: entries
+        field-type:
+          array:
+            size:
+              div:
+                left:
+                  sub:
+                    left:
+                      field-ref:
+                        path: ["__buffer_size"]
+                    right:
+                      literal:
+                        u64: 72
+                right:
+                  literal:
+                    u64: 64
+            element-type:
+              type-ref:
+                name: OrderEntry
+- name: CbookAccount
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: header
+        field-type:
+          type-ref:
+            name: CbookHeader
+      - name: levels
+        field-type:
+          array:
+            size:
+              div:
+                left:
+                  sub:
+                    left:
+                      field-ref:
+                        path: ["__buffer_size"]
+                    right:
+                      literal:
+                        u64: 16
+                right:
+                  literal:
+                    u64: 8
+            element-type:
+              type-ref:
+                name: CbookLevel
+- name: ClobProgramAccount
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: market
+        field-type:
+          type-ref:
+            name: MarketAccount
+- name: ClobError
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: code
+        field-type:
+          primitive: u64
+- name: SeatAssignedEvent
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: seat_idx
+        field-type:
+          primitive: u32
+      - name: seat_authority
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: market
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+- name: MarketCreatedEvent
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: lot_size
+        field-type:
+          primitive: u64
+      - name: tick_size
+        field-type:
+          primitive: u64
+      - name: base_mint
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: quote_mint
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: market_authority
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: market
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: order_arena
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: bids_cbook
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: asks_cbook
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: base_vault
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: quote_vault
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+- name: OrderCancelledEvent
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: seat_idx
+        field-type:
+          primitive: u32
+      - name: side
+        field-type:
+          primitive: u8
+      - name: order_type
+        field-type:
+          primitive: u8
+      - name: reserved0
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 2
+            element-type:
+              primitive: u8
+      - name: price
+        field-type:
+          primitive: u64
+      - name: qty
+        field-type:
+          primitive: u64
+      - name: client_id
+        field-type:
+          type-ref:
+            name: ClientId
+      - name: market
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: seat_authority
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+- name: OrderFilledEvent
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: taker_seat_idx
+        field-type:
+          primitive: u32
+      - name: maker_seat_idx
+        field-type:
+          primitive: u32
+      - name: taker_side
+        field-type:
+          primitive: u8
+      - name: reserved0
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 3
+            element-type:
+              primitive: u8
+      - name: price
+        field-type:
+          primitive: u64
+      - name: qty
+        field-type:
+          primitive: u64
+      - name: maker_order_id
+        field-type:
+          primitive: u64
+      - name: maker_client_id
+        field-type:
+          type-ref:
+            name: ClientId
+      - name: market
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: taker_seat_authority
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: maker_seat_authority
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+- name: OrderPostedEvent
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: seat_idx
+        field-type:
+          primitive: u32
+      - name: side
+        field-type:
+          primitive: u8
+      - name: order_type
+        field-type:
+          primitive: u8
+      - name: reserved0
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 2
+            element-type:
+              primitive: u8
+      - name: price
+        field-type:
+          primitive: u64
+      - name: qty
+        field-type:
+          primitive: u64
+      - name: order_id
+        field-type:
+          primitive: u64
+      - name: client_id
+        field-type:
+          type-ref:
+            name: ClientId
+      - name: market
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: seat_authority
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+- name: OrderEntryRemovedEvent
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: seat_idx
+        field-type:
+          primitive: u32
+      - name: side
+        field-type:
+          primitive: u8
+      - name: reason
+        field-type:
+          primitive: u8
+      - name: reserved0
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 2
+            element-type:
+              primitive: u8
+      - name: price
+        field-type:
+          primitive: u64
+      - name: qty
+        field-type:
+          primitive: u64
+      - name: order_id
+        field-type:
+          primitive: u64
+      - name: client_id
+        field-type:
+          type-ref:
+            name: ClientId
+      - name: market
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: seat_authority
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+- name: OrderModifiedEvent
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: seat_idx
+        field-type:
+          primitive: u32
+      - name: side
+        field-type:
+          primitive: u8
+      - name: reserved0
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 3
+            element-type:
+              primitive: u8
+      - name: price
+        field-type:
+          primitive: u64
+      - name: qty
+        field-type:
+          primitive: u64
+      - name: order_id
+        field-type:
+          primitive: u64
+      - name: client_id
+        field-type:
+          type-ref:
+            name: ClientId
+      - name: exp_time
+        field-type:
+          primitive: i64
+      - name: market
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: seat_authority
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+- name: TokenBalanceEvent
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: seat_idx
+        field-type:
+          primitive: u32
+      - name: token_side
+        field-type:
+          primitive: u8
+      - name: reserved0
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 3
+            element-type:
+              primitive: u8
+      - name: amount
+        field-type:
+          primitive: u64
+      - name: quantity_base
+        field-type:
+          primitive: u64
+      - name: quantity_quote
+        field-type:
+          primitive: u64
+      - name: market
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: seat_authority
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: wallet
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: vault
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+- name: MarketStatusEvent
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: status_flags
+        field-type:
+          primitive: u8
+      - name: reserved0
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 7
+            element-type:
+              primitive: u8
+      - name: market
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: market_authority
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+- name: ClobEvent
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: event_type
+        field-type:
+          primitive: u64
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - event_type
+            variants:
+            - name: seat_assigned
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: SeatAssignedEvent
+            - name: order_cancelled
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: OrderCancelledEvent
+            - name: market_created
+              tag-value: 3
+              variant-type:
+                type-ref:
+                  name: MarketCreatedEvent
+            - name: order_filled
+              tag-value: 4
+              variant-type:
+                type-ref:
+                  name: OrderFilledEvent
+            - name: order_posted
+              tag-value: 5
+              variant-type:
+                type-ref:
+                  name: OrderPostedEvent
+            - name: order_entry_removed
+              tag-value: 6
+              variant-type:
+                type-ref:
+                  name: OrderEntryRemovedEvent
+            - name: order_modified
+              tag-value: 7
+              variant-type:
+                type-ref:
+                  name: OrderModifiedEvent
+            - name: token_deposit
+              tag-value: 8
+              variant-type:
+                type-ref:
+                  name: TokenBalanceEvent
+            - name: token_withdraw
+              tag-value: 9
+              variant-type:
+                type-ref:
+                  name: TokenBalanceEvent
+            - name: market_status
+              tag-value: 10
+              variant-type:
+                type-ref:
+                  name: MarketStatusEvent

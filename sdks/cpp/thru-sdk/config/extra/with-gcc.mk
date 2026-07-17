@@ -69,6 +69,17 @@ RANLIB := $(RISCV_TOOLCHAIN_PATH)/$(RISCV_PREFIX)ranlib
 CPPFLAGS += -isystem $(RISCV_SYSROOT)/include --sysroot=$(RISCV_SYSROOT)
 CXXFLAGS += --sysroot=$(RISCV_SYSROOT)
 
+# Some distro-provided riscv64-unknown-elf compilers do not ship libstdc++
+# headers in the compiler's built-in search path.  When the SDK sysroot has
+# a C++ include tree, add it explicitly.
+RISCV_CXX_INCLUDE_DIR := $(lastword $(sort $(wildcard $(RISCV_SYSROOT)/include/c++/*)))
+ifneq ($(RISCV_CXX_INCLUDE_DIR),)
+CPPFLAGS += -isystem $(RISCV_CXX_INCLUDE_DIR)
+ifneq ($(wildcard $(RISCV_CXX_INCLUDE_DIR)/$(RISCV_PREFIX:-=)),)
+CPPFLAGS += -isystem $(RISCV_CXX_INCLUDE_DIR)/$(RISCV_PREFIX:-=)
+endif
+endif
+
 # Verify toolchain is working by checking compiler version
 RISCV_CXX_VERSION := $(shell $(CXX) --version 2>/dev/null | head -1)
 ifeq ($(RISCV_CXX_VERSION),)
@@ -78,4 +89,4 @@ endif
 # Report what we found
 $(info Found RISC-V toolchain: $(RISCV_TOOLCHAIN_PATH))
 $(info Found RISC-V sysroot: $(RISCV_SYSROOT))
-$(info RISC-V compiler version: $(RISCV_CXX_VERSION)) 
+$(info RISC-V compiler version: $(RISCV_CXX_VERSION))

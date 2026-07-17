@@ -1,22 +1,33 @@
-/* Card — square-first surface dressed in tokens.
-   Mirrors the legacy design-system: white field, hairline border (default/elevated
-   use the soft border, outlined uses the strong border), elevated adds a shadow. */
+/* Card — square-first surface dressed in semantic tokens. */
 
 .tds-card {
   padding: var(--space-5);
-  background: #ffffff;
+  background: var(--color-surface-card);
+  color: var(--color-text-primary);
   border-radius: var(--radius-none);
 }
 
 .tds-card--default {
-  border: 1px solid var(--teal-300);
+  border: 1px solid var(--color-border-tertiary);
 }
 
 .tds-card--elevated {
-  border: 1px solid var(--teal-300);
-  box-shadow: 0 10px 15px -3px rgba(21, 30, 30, 0.1), 0 4px 6px -4px rgba(21, 30, 30, 0.1);
+  border: 1px solid var(--color-border-tertiary);
+  box-shadow: var(--shadow-md);
 }
 
 .tds-card--outlined {
-  border: 1px solid var(--teal-800);
+  border: 1px solid var(--color-border-strong);
+}
+
+:where([data-theme="dark"], :root[data-theme="dark"]) .tds-card--default,
+:where([data-theme="dark"], :root[data-theme="dark"]) .tds-card--elevated {
+  background: var(--color-surface-card);
+  border-color: var(--color-border-tertiary);
+}
+
+
+:where([data-theme="dark"], :root[data-theme="dark"]) .tds-card--outlined {
+  background: var(--color-surface-card);
+  border-color: var(--color-border-strong);
 }

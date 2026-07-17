@@ -409,6 +409,11 @@ pub fn tn_checked_add_u64(a: u64, b: u64) -> Result<u64, AbiIrValidateError> {
         .ok_or(AbiIrValidateError::ArithmeticOverflow)
 }
 
+pub fn tn_checked_sub_u64(a: u64, b: u64) -> Result<u64, AbiIrValidateError> {
+    a.checked_sub(b)
+        .ok_or(AbiIrValidateError::ArithmeticOverflow)
+}
+
 pub fn tn_checked_mul_u64(a: u64, b: u64) -> Result<u64, AbiIrValidateError> {
     a.checked_mul(b)
         .ok_or(AbiIrValidateError::ArithmeticOverflow)

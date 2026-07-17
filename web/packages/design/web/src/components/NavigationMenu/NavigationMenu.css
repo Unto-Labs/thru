@@ -33,7 +33,7 @@
 
 .tds-navmenu__popup {
   background: var(--color-surface-higher);
-  border: 1px solid var(--color-border-strong);
+  border: 1px solid var(--color-border-secondary);
   box-shadow: var(--shadow-md);
   padding: var(--space-3);
   width: 280px;
@@ -56,7 +56,7 @@
   text-decoration: none;
 }
 .tds-navmenu__link:hover {
-  background: var(--teal-100);
+  background: var(--color-surface-lower);
   text-decoration: none;
 }
 .tds-navmenu__link b {
@@ -68,3 +68,15 @@
   color: var(--color-text-tertiary);
   font-size: 12px;
 }
+
+:where([data-theme="dark"], :root[data-theme="dark"]) .tds-navmenu__trigger:hover,
+:where([data-theme="dark"], :root[data-theme="dark"]) .tds-navmenu__trigger[data-popup-open] {
+  background: var(--color-surface-higher);
+  border-color: var(--color-border-secondary);
+}
+
+:where([data-theme="dark"], :root[data-theme="dark"]) .tds-navmenu__popup {
+  border-color: var(--color-border-secondary);
+  color: var(--color-text-primary);
+}
+

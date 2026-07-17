@@ -271,8 +271,53 @@ fn emit_validate_method(resolved_type: &ResolvedType, type_ir: Option<&TypeIr>) 
             let extractor_available = !collect_dynamic_param_bindings(resolved_type).is_empty();
             emit_validate_with_params(resolved_type, ir, extractor_available)
         }
+        Some(_) if matches!(resolved_type.size, Size::Variable(_)) => {
+            emit_validate_ir_without_params(resolved_type)
+        }
         _ => emit_validate_const(resolved_type),
     }
+}
+
+fn emit_validate_ir_without_params(resolved_type: &ResolvedType) -> String {
+    let mut output = String::new();
+    writeln!(
+        &mut output,
+        "  static validate(buffer: Uint8Array, _opts?: {{ params?: never }}): {{ ok: boolean; code?: string; consumed?: number }} {{"
+    )
+    .unwrap();
+    writeln!(
+        &mut output,
+        "    if (!buffer || buffer.length === undefined) return {{ ok: false, code: \"tn.invalid_buffer\" }};"
+    )
+    .unwrap();
+    writeln!(
+        &mut output,
+        "    const irResult = this.__tnValidateInternal(buffer, Object.create(null));"
+    )
+    .unwrap();
+    writeln!(&mut output, "    if (!irResult.ok) {{").unwrap();
+    writeln!(
+        &mut output,
+        "      return {{ ok: false, code: irResult.code, consumed: irResult.consumed ? __tnBigIntToNumber(irResult.consumed, '{}::validate') : undefined }};",
+        resolved_type.name
+    )
+    .unwrap();
+    writeln!(&mut output, "    }}").unwrap();
+    writeln!(
+        &mut output,
+        "    const consumed = irResult.consumed ? __tnBigIntToNumber(irResult.consumed, '{}::validate') : undefined;",
+        resolved_type.name
+    )
+    .unwrap();
+    writeln!(&mut output, "    if (consumed !== buffer.length) return {{ ok: false, code: \"tn.trailing_bytes\", consumed }};").unwrap();
+    writeln!(&mut output, "    return {{ ok: true, consumed }};").unwrap();
+    writeln!(
+        &mut output,
+        "  }}
+"
+    )
+    .unwrap();
+    output
 }
 
 fn emit_validate_with_params(

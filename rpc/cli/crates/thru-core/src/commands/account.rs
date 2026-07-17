@@ -785,7 +785,11 @@ async fn decompress_with_uploader(
     // Create uploader manager for uploading decompression data
     let mut uploader_config = config.clone();
     uploader_config.uploader_program_public_key = uploader_program_pubkey.to_string();
-    let uploader = crate::commands::uploader::UploaderManager::new(&uploader_config).await?;
+    let uploader = crate::commands::uploader::UploaderManager::new_with_keypair(
+        &uploader_config,
+        fee_payer_keypair.clone(),
+    )
+    .await?;
 
     // Upload the decompression data using the uploader
     const CHUNK_SIZE: usize = 31 * 1024;
@@ -1018,7 +1022,11 @@ async fn decompress_with_uploader_huge(
     // Create uploader manager for uploading decompression data
     let mut uploader_config = config.clone();
     uploader_config.uploader_program_public_key = uploader_program_pubkey.to_string();
-    let uploader = crate::commands::uploader::UploaderManager::new(&uploader_config).await?;
+    let uploader = crate::commands::uploader::UploaderManager::new_with_keypair(
+        &uploader_config,
+        fee_payer_keypair.clone(),
+    )
+    .await?;
 
     // Split the data: first 64 bytes go to meta account, rest goes to buffer account
     if decomp_data.len() < TN_ACCOUNT_META_FOOTPRINT {
@@ -1051,7 +1059,11 @@ async fn decompress_with_uploader_huge(
     }
 
     // Create a separate uploader manager for the buffer data
-    let buffer_uploader = crate::commands::uploader::UploaderManager::new(&uploader_config).await?;
+    let buffer_uploader = crate::commands::uploader::UploaderManager::new_with_keypair(
+        &uploader_config,
+        fee_payer_keypair.clone(),
+    )
+    .await?;
 
     // Upload buffer data to buffer account using a different seed
     let _buffer_upload_session = buffer_uploader

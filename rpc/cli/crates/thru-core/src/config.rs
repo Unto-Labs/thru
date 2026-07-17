@@ -160,12 +160,7 @@ impl KeyManager {
         Ok(())
     }
 
-    fn validate_all_keys(&self, require_default_key: bool) -> Result<(), CliError> {
-        if require_default_key {
-            self.get_default_key()
-                .map_err(|e| ConfigError::InvalidPrivateKey(e.to_string()))?;
-        }
-
+    fn validate_all_keys(&self) -> Result<(), CliError> {
         for (name, key) in &self.keys {
             Self::validate_key_value(name, key)
                 .map_err(|e| ConfigError::InvalidPrivateKey(e.to_string()))?;
@@ -322,12 +317,10 @@ impl Config {
 
     /// Load configuration for key-management commands.
     ///
-    /// This keeps normal validation strict, but lets `thru keys` recover a
-    /// configuration where the default key was removed with `--force`.
+    /// Kept as a compatibility alias now that all configuration loading permits
+    /// a missing default key.
     pub async fn load_for_key_management() -> Result<Self, CliError> {
-        let config = Self::load_unvalidated().await?;
-        config.validate_for_key_management()?;
-        Ok(config)
+        Self::load().await
     }
 
     async fn load_unvalidated() -> Result<Self, CliError> {
@@ -416,15 +409,17 @@ impl Config {
 
     /// Validate the configuration
     pub fn validate(&self) -> Result<(), CliError> {
-        self.validate_with_options(true)
+        self.validate_common()
     }
 
-    /// Validate key-management configuration without requiring `keys.default`.
+    /// Validate key-management configuration.
+    ///
+    /// Kept as a compatibility alias for [`Self::validate`].
     pub fn validate_for_key_management(&self) -> Result<(), CliError> {
-        self.validate_with_options(false)
+        self.validate()
     }
 
-    fn validate_with_options(&self, require_default_key: bool) -> Result<(), CliError> {
+    fn validate_common(&self) -> Result<(), CliError> {
         // Validate URL
         Url::parse(&self.rpc_base_url).map_err(|e| ConfigError::InvalidUrl(e.to_string()))?;
 
@@ -434,7 +429,10 @@ impl Config {
                 .map_err(|e| ConfigError::InvalidUrl(format!("network '{}': {}", name, e)))?;
         }
 
-        self.keys.validate_all_keys(require_default_key)?;
+        // Validate every configured key, but only require `keys.default` when
+        // a command actually falls back to it. Explicit named-key operations
+        // must remain usable without an unrelated default key.
+        self.keys.validate_all_keys()?;
 
         // Validate uploader program public key
         Pubkey::new(self.uploader_program_public_key.clone())
@@ -678,11 +676,12 @@ mod tests {
     }
 
     #[test]
-    fn test_strict_config_validation_rejects_missing_default_key() {
+    fn test_config_validation_accepts_missing_default_key() {
         let mut config = Config::default();
         config.keys.remove_key("default").unwrap();
 
-        assert!(config.validate().is_err());
+        assert!(config.validate().is_ok());
+        assert!(config.keys.get_default_key().is_err());
     }
 
     #[test]

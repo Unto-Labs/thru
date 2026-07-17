@@ -12,25 +12,45 @@ import {
 } from "../interfaces";
 import {
   EMBEDDED_PROVIDER_EVENTS,
+  DepositTarget,
   ErrorCode,
   type ConnectMetadataInput,
   type ConnectRequestPayload,
   type CreateAccountResult,
+  type DepositDestination,
+  type DepositRequestPayload,
+  type DepositResult,
+  type DepositUiConfig,
   type GetConnectionStateResult,
   type ManageAccountsResult,
+  type PrepareDepositPayload,
   type SigningSessionDescriptorPayload,
+  type ThruNetwork,
   normalizeConnectionStateResult,
 } from "../protocol";
+import {
+  ensureDepositAccountForWallet,
+  formatDepositAmount,
+  getDepositAccountStateForWallet,
+  waitForDepositBalanceForWallet,
+  type DepositAccountState,
+  type DepositsApi,
+  type EnsureDepositAccountParams,
+  type GetDepositAccountStateParams,
+  type SignDepositTransactionPayload,
+  type WaitForDepositBalanceParams,
+} from "../deposit";
 import { NativeProvider } from "./provider/NativeProvider";
 import type {
   WebViewMessageEventLike,
   WebViewRefLike,
 } from "./provider/WebViewBridge";
-import { createThruClient, type Thru } from "@thru/sdk/client";
+import type { Thru } from "@thru/sdk/client";
 import {
   SigningSessionDescriptorStore,
   resolveSigningSessionStorageKey,
 } from "../signing-sessions";
+import { createNativeThruClient } from "./rpc";
 
 export type IosWebViewMode = "direct" | "shell-iframe";
 export type NativeWalletExperience = "standard" | "transparent";
@@ -84,6 +104,8 @@ export interface NativeSDKConfig {
   /** Default app metadata used for connection and transparent hydration. */
   metadata?: ConnectMetadataInput;
   rpcUrl?: string;
+  network?: ThruNetwork;
+  depositUiConfig?: DepositUiConfig;
   addressTypes?: AddressTypeValue[];
   /** iOS-only host mode. Shell iframe is the default; direct is kept
       as an escape hatch for real-device passkey/WebAuthn comparisons. */
@@ -116,7 +138,10 @@ export interface ConnectOptions {
 export interface CreateAccountOptions {
   accountName?: string;
   metadata?: ConnectMetadataInput;
-  createSigningSession?: Omit<ThruSigningSessionCreateOptions, "walletAddress" | "review">;
+  createSigningSession?: Omit<
+    ThruSigningSessionCreateOptions,
+    "walletAddress" | "review"
+  >;
 }
 
 export interface RestoreConnectionOptions {
@@ -222,7 +247,18 @@ export class NativeSDK {
   private readonly iosWebViewMode: IosWebViewMode;
   private readonly walletExperience: NativeWalletExperience;
   private readonly defaultMetadata?: ConnectMetadataInput;
+  private readonly defaultNetwork?: ThruNetwork;
   private readonly signingSessions?: SigningSessionDescriptorStore;
+
+  readonly deposits: DepositsApi = {
+    prepare: (targetOrPayload) => this.prepareDeposit(targetOrPayload),
+    ensureAccount: (params) => this.ensureDepositAccount(params),
+    open: (payload) => this.deposit(payload),
+    getAccountState: (params) => this.getDepositAccountState(params),
+    waitForBalance: (params) => this.waitForDepositBalance(params),
+    formatAmount: (amountRaw, destination) =>
+      this.formatDepositAmount(amountRaw, destination),
+  };
 
   constructor(config: NativeSDKConfig = {}) {
     this.origin = config.origin ?? "thru-mobile://app";
@@ -235,6 +271,7 @@ export class NativeSDK {
     this.iosWebViewMode = config.iosWebViewMode ?? "shell-iframe";
     this.walletExperience = config.walletExperience ?? "standard";
     this.defaultMetadata = config.metadata;
+    this.defaultNetwork = config.network;
     const walletUrl =
       config.walletUrl ??
       (this.walletExperience === "transparent"
@@ -263,6 +300,8 @@ export class NativeSDK {
       addressTypes: config.addressTypes ?? [AddressType.THRU],
       signingSessions,
       walletExperience: this.walletExperience,
+      network: config.network,
+      depositUiConfig: config.depositUiConfig,
     });
     this.setupEventForwarding();
   }
@@ -340,7 +379,8 @@ export class NativeSDK {
         const metadata = this.resolveMetadata(options?.metadata);
         const preferredAccountAddress = isAccountSwitch
           ? null
-          : options?.preferredAccountAddress ?? (await this.readSelectedAccountAddress());
+          : (options?.preferredAccountAddress ??
+            (await this.readSelectedAccountAddress()));
         const providerOptions =
           metadata || preferredAccountAddress || options?.intent
             ? {
@@ -554,6 +594,86 @@ export class NativeSDK {
     return activeResult;
   }
 
+  /** @deprecated Use `deposits.prepare()`. */
+  async prepareDeposit(
+    depositTargetOrPayload?:
+      | PrepareDepositPayload["depositTarget"]
+      | PrepareDepositPayload,
+  ): Promise<DepositDestination> {
+    if (!this.initialized) await this.initialize();
+    const payload =
+      typeof depositTargetOrPayload === "string"
+        ? { depositTarget: depositTargetOrPayload }
+        : (depositTargetOrPayload ?? {});
+    return this.provider.prepareDeposit({
+      ...payload,
+      network: payload.network ?? this.defaultNetwork,
+    });
+  }
+
+  /**
+   * Open the wallet's Deposit ("Add funds") screen for a token account.
+   * Mirror of `BrowserSDK.deposit`; delegates to the provider, which shows the
+   * wallet surface for the flow and tears it down afterward.
+   *
+   * @deprecated Use `deposits.open()`.
+   */
+  async deposit(payload: DepositRequestPayload): Promise<DepositResult> {
+    if (!this.initialized) await this.initialize();
+    return this.provider.deposit({
+      ...payload,
+      network: payload.network ?? this.defaultNetwork,
+    });
+  }
+
+  /** @deprecated Use `deposits.ensureAccount()`. */
+  async ensureDepositAccount(
+    params: EnsureDepositAccountParams = {},
+  ): Promise<DepositAccountState> {
+    if (!this.initialized) await this.initialize();
+    const { destination, walletAddress } =
+      await this.resolveDepositDestination(params.destination);
+    return ensureDepositAccountForWallet({
+      thru: this.getThru(),
+      walletAddress,
+      destination,
+      signTransaction: (payload) => this.signDepositTransaction(payload),
+    });
+  }
+
+  /** @deprecated Use `deposits.getAccountState()`. */
+  async getDepositAccountState(
+    params: GetDepositAccountStateParams = {},
+  ): Promise<DepositAccountState> {
+    if (!this.initialized) await this.initialize();
+    const { destination, walletAddress } =
+      await this.resolveDepositDestination(params.destination);
+    return getDepositAccountStateForWallet({
+      thru: this.getThru(),
+      walletAddress,
+      destination,
+    });
+  }
+
+  /** @deprecated Use `deposits.waitForBalance()`. */
+  async waitForDepositBalance(
+    params: WaitForDepositBalanceParams,
+  ): Promise<DepositAccountState> {
+    if (!this.initialized) await this.initialize();
+    const { destination, walletAddress } =
+      await this.resolveDepositDestination(params.destination);
+    return waitForDepositBalanceForWallet({
+      thru: this.getThru(),
+      walletAddress,
+      destination,
+      minimumBalanceRaw: params.minimumBalanceRaw,
+      signature: params.signature,
+    });
+  }
+
+  /** @deprecated Use `deposits.formatAmount()`. */
+  formatDepositAmount = formatDepositAmount;
+
   get thru(): IThruChain {
     return this.provider.thru;
   }
@@ -590,9 +710,43 @@ export class NativeSDK {
   /** Lazily-instantiated Thru chain client. */
   public getThru(): Thru {
     if (!this.thruClient) {
-      this.thruClient = createThruClient({ baseUrl: this.rpcUrl });
+      this.thruClient = createNativeThruClient(this.rpcUrl);
     }
     return this.thruClient;
+  }
+
+  private async resolveDepositDestination(
+    destination?: DepositDestination,
+  ): Promise<{ destination: DepositDestination; walletAddress: string }> {
+    const selectedAccount = this.provider.getSelectedAccount();
+    if (!selectedAccount) {
+      throw new Error("Wallet not connected");
+    }
+    const expected = await this.prepareDeposit(
+      destination
+        ? {
+            network: destination.network,
+            depositTarget: destination.depositTarget,
+          }
+        : DepositTarget.Credits,
+    );
+    if (destination) {
+      assertDepositDestinationMatches(destination, expected);
+    }
+    return { destination: expected, walletAddress: selectedAccount.address };
+  }
+
+  private signDepositTransaction(
+    payload: SignDepositTransactionPayload,
+  ): Promise<string> {
+    return this.thru.signTransaction({
+      walletAddress: payload.walletAddress,
+      programAddress: payload.programAddress,
+      instructionData: payload.trailingInstructionData,
+      readWriteAddresses: payload.readWriteAddresses,
+      readOnlyAddresses: payload.readOnlyAddresses,
+      review: payload.review,
+    });
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -647,7 +801,8 @@ export class NativeSDK {
       ? { metadata: this.resolveMetadata(metadata) }
       : undefined;
     const preferredAccountAddress =
-      options?.preferredAccountAddress ?? (await this.readSelectedAccountAddress());
+      options?.preferredAccountAddress ??
+      (await this.readSelectedAccountAddress());
     const nextProviderOptions =
       providerOptions || preferredAccountAddress
         ? {
@@ -849,6 +1004,19 @@ export class NativeSDK {
       }
       return null;
     }
+  }
+}
+
+function assertDepositDestinationMatches(
+  actual: DepositDestination,
+  expected: DepositDestination,
+): void {
+  const mismatches = (Object.keys(expected) as Array<keyof DepositDestination>)
+    .filter((key) => actual[key] !== expected[key]);
+  if (mismatches.length > 0) {
+    throw new Error(
+      `Prepared deposit destination no longer matches wallet config: ${mismatches.join(", ")}`,
+    );
   }
 }
 

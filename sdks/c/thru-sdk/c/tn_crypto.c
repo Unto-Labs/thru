@@ -84,19 +84,33 @@ tn_crypto_verify_signature( tn_bls_signature_t const * signature,
     return TN_CRYPTO_ERR_VERIFY_FAILED;
   }
 
-  /* Group check signature (as recommended by blst README) */
+  /* The pairing API lets us precompute the signature side once and then
+     verify the public-key/message side against it. */
   if( UNLIKELY( !blst_p2_affine_in_g2( signature ) ) ) {
     FD_LOG_WARNING(( "signature group check failed" ));
     return TN_CRYPTO_ERR_VERIFY_FAILED;
   }
 
-  /* Use blst core verify function */
-  BLST_ERROR err = blst_core_verify_pk_in_g1(
-      pubkey, signature, 1, (uchar const *)message, message_len,
-      TN_CONSENSUS_DST, sizeof( TN_CONSENSUS_DST ) - 1, NULL, 0 );
+  blst_fp12 gtsig;
+  blst_aggregated_in_g2( &gtsig, signature );
 
+  /* BLST's pairing API expects callers to reserve the pairing context.
+     Current builds use roughly 1.5 KiB here, so keep this path on normal
+     tile/application stacks and out of signal or tiny-stack contexts. */
+  blst_pairing * pairing = (blst_pairing *)__builtin_alloca( blst_pairing_sizeof() );
+  blst_pairing_init( pairing, 1, TN_CONSENSUS_DST, sizeof( TN_CONSENSUS_DST ) - 1 );
+
+  BLST_ERROR err = blst_pairing_aggregate_pk_in_g1(
+      pairing, pubkey, NULL, (uchar const *)message, message_len, NULL, 0 );
   if( UNLIKELY( err != BLST_SUCCESS ) ) {
-    FD_LOG_WARNING(( "blst_core_verify_pk_in_g1 failed: %d", (int)err ));
+    FD_LOG_WARNING(( "blst_pairing_aggregate_pk_in_g1 failed: %d", (int)err ));
+    return TN_CRYPTO_ERR_VERIFY_FAILED;
+  }
+
+  blst_pairing_commit( pairing );
+
+  if( UNLIKELY( !blst_pairing_finalverify( pairing, &gtsig ) ) ) {
+    FD_LOG_WARNING(( "blst_pairing_finalverify failed" ));
     return TN_CRYPTO_ERR_VERIFY_FAILED;
   }
 
@@ -111,13 +125,9 @@ tn_crypto_aggregate_signatures( tn_bls_signature_t *       aggregate,
     return TN_CRYPTO_ERR_INVALID_PARAM;
   }
 
-  /* Convert to projective coordinates */
-  blst_p2 p1, p2, result;
-  blst_p2_from_affine( &p1, sig1 );
-  blst_p2_from_affine( &p2, sig2 );
-
-  /* Add the points */
-  blst_p2_add( &result, &p1, &p2 );
+  blst_p2 result;
+  blst_p2_from_affine( &result, sig1 );
+  blst_p2_add_or_double_affine( &result, &result, sig2 );
 
   /* Convert back to affine */
   blst_p2_to_affine( aggregate, &result );
@@ -133,13 +143,9 @@ tn_crypto_aggregate_pubkeys( tn_bls_pubkey_t *       aggregate,
     return TN_CRYPTO_ERR_INVALID_PARAM;
   }
 
-  /* Convert to projective coordinates */
-  blst_p1 p1, p2, result;
-  blst_p1_from_affine( &p1, pk1 );
-  blst_p1_from_affine( &p2, pk2 );
-
-  /* Add the points */
-  blst_p1_add( &result, &p1, &p2 );
+  blst_p1 result;
+  blst_p1_from_affine( &result, pk1 );
+  blst_p1_add_or_double_affine( &result, &result, pk2 );
 
   /* Convert back to affine */
   blst_p1_to_affine( aggregate, &result );
@@ -212,13 +218,31 @@ tn_crypto_verify_aggregate_with_dst( tn_bls_signature_t const * aggregate_sig,
     return TN_CRYPTO_ERR_VERIFY_FAILED;
   }
 
-  /* Use blst core verify function for aggregate */
-  BLST_ERROR err = blst_core_verify_pk_in_g1(
-      aggregate_pk, aggregate_sig, 1, (uchar const *)message, message_len,
-      dst, dst_len, NULL, 0 );
+  if( UNLIKELY( !blst_p2_affine_in_g2( aggregate_sig ) ) ) {
+    FD_LOG_WARNING(( "aggregate signature group check failed" ));
+    return TN_CRYPTO_ERR_VERIFY_FAILED;
+  }
 
+  blst_fp12 gtsig;
+  blst_aggregated_in_g2( &gtsig, aggregate_sig );
+
+  /* BLST's pairing API expects callers to reserve the pairing context.
+     Current builds use roughly 1.5 KiB here, so keep this path on normal
+     tile/application stacks and out of signal or tiny-stack contexts. */
+  blst_pairing * pairing = (blst_pairing *)__builtin_alloca( blst_pairing_sizeof() );
+  blst_pairing_init( pairing, 1, dst, dst_len );
+
+  BLST_ERROR err = blst_pairing_aggregate_pk_in_g1(
+      pairing, aggregate_pk, NULL, (uchar const *)message, message_len, NULL, 0 );
   if( UNLIKELY( err != BLST_SUCCESS ) ) {
-    FD_LOG_WARNING(( "blst_core_verify_pk_in_g1 (aggregate) failed: %d", (int)err ));
+    FD_LOG_WARNING(( "blst_pairing_aggregate_pk_in_g1 (aggregate) failed: %d", (int)err ));
+    return TN_CRYPTO_ERR_VERIFY_FAILED;
+  }
+
+  blst_pairing_commit( pairing );
+
+  if( UNLIKELY( !blst_pairing_finalverify( pairing, &gtsig ) ) ) {
+    FD_LOG_WARNING(( "blst_pairing_finalverify (aggregate) failed" ));
     return TN_CRYPTO_ERR_VERIFY_FAILED;
   }
 
@@ -356,4 +380,3 @@ tn_crypto_deserialize_signature( tn_bls_signature_t *                signature,
 
   return TN_CRYPTO_SUCCESS;
 }
-

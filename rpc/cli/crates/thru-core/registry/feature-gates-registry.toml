@@ -1,0 +1,30 @@
+# On-chain feature gate / chain param registry.
+#
+# This file intentionally includes only values backed by the global on-chain
+# feature-gate account: feature gates and consensus-critical chain params.
+# Node-local chain params use a future separate registry/local-config path.
+
+[[entry]]
+index = 0
+name = "parallel_exec"
+kind = "feature-gate"
+description = "Reserved binary feature gate used by genesis tests."
+status = "reserved"
+tracking = "UNTO-1818"
+
+[[entry]]
+index = 1
+name = "compressed_account_growth_v2"
+kind = "feature-gate"
+description = "Reserved binary feature gate with a first-change lead window."
+status = "reserved"
+tracking = "UNTO-1818"
+
+[[entry]]
+index = 2
+name = "max_compute_units_per_txn"
+kind = "chain-param"
+description = "Reserved consensus-critical runtime parameter encoded as a u64."
+category = "consensus-critical"
+type = "u64"
+tracking = "UNTO-1818"

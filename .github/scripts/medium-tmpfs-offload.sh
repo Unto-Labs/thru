@@ -42,6 +42,7 @@ bind_dir() {
   local src="$1"
   local dst="$2"
 
+  mkdir -p "${src}"
   sudo mkdir -p "${dst}"
   sudo mount --bind "${src}" "${dst}"
 }
@@ -63,19 +64,23 @@ docker_daemon_running() {
 
 stop_docker_for_remount() {
   if docker_systemd_available; then
-    if systemd_unit_exists docker.service; then
-      sudo systemctl stop docker.service
-    fi
+    local stop_failed=0
     if systemd_unit_exists docker.socket; then
-      sudo systemctl stop docker.socket
+      sudo systemctl stop docker.socket || stop_failed=1
+    fi
+    if systemd_unit_exists docker.service; then
+      sudo systemctl stop docker.service || stop_failed=1
+    fi
+    if [ "${stop_failed}" != "0" ]; then
+      echo "Docker unit stop reported a failure; checking daemon state before remount" >&2
     fi
     if pgrep -x dockerd >/dev/null 2>&1; then
       echo "Docker daemon is still running after stopping docker units" >&2
-      exit 1
+      return 1
     fi
   elif docker_daemon_running; then
     echo "Docker is running but docker.service is not available to stop it" >&2
-    exit 1
+    return 1
   fi
 }
 
@@ -89,6 +94,17 @@ start_docker_after_remount() {
     fi
     sudo docker info >/dev/null
   fi
+}
+
+rollback_docker_tmpfs_offload() {
+  echo "Docker failed to start with tmpfs-backed /var/lib/docker; falling back to runner disk" >&2
+
+  stop_docker_for_remount
+  unmount_if_mounted /var/lib/docker
+  start_docker_after_remount
+
+  echo "MEDIUM_TMPFS_DOCKER=0" >> "${GITHUB_ENV}"
+  echo "Docker tmpfs offload disabled for this job; continuing with original /var/lib/docker" >&2
 }
 
 unmount_if_mounted() {
@@ -110,6 +126,9 @@ cleanup_partial_offload() {
   set +e
   echo "Medium tmpfs offload failed; cleaning partial mounts" >&2
   cd /
+  if mountpoint -q /var/lib/docker; then
+    stop_docker_for_remount || true
+  fi
   unmount_if_mounted "${GITHUB_WORKSPACE}" -l
   unmount_if_mounted /var/lib/docker
   unmount_if_mounted /var/cache/sccache
@@ -133,13 +152,18 @@ fi
 
 stop_docker_for_remount
 bind_dir "${tmpfs_root}/docker" /var/lib/docker
+if start_docker_after_remount; then
+  echo "MEDIUM_TMPFS_DOCKER=1" >> "${GITHUB_ENV}"
+else
+  rollback_docker_tmpfs_offload
+fi
+
 bind_dir "${tmpfs_root}/sccache" /var/cache/sccache
 if [ "${tmpfs_home_cache}" != "0" ]; then
   bind_dir "${tmpfs_root}/home-cache" /home/runner/.cache
 else
   echo "Leaving /home/runner/.cache on the runner disk for toolchain caches"
 fi
-start_docker_after_remount
 
 echo "Medium tmpfs offload mount state:"
 findmnt /dev/shm /var/lib/docker /var/cache/sccache || true

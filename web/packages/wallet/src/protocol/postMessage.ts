@@ -21,6 +21,8 @@ export const POST_MESSAGE_REQUEST_TYPES = {
   CREATE_SIGNING_SESSION_INSTRUCTION: "createSigningSessionInstruction",
   CONFIRM_SIGNING_SESSION: "confirmSigningSession",
   REVOKE_SIGNING_SESSION: "revokeSigningSession",
+  PREPARE_DEPOSIT: "prepareDeposit",
+  DEPOSIT: "deposit",
 } as const;
 
 export type RequestType =
@@ -133,6 +135,16 @@ export interface RevokeSigningSessionRequestMessage extends BaseRequest {
   payload: RevokeSigningSessionPayload;
 }
 
+export interface PrepareDepositRequestMessage extends BaseRequest {
+  type: typeof POST_MESSAGE_REQUEST_TYPES.PREPARE_DEPOSIT;
+  payload: PrepareDepositPayload;
+}
+
+export interface DepositRequestMessage extends BaseRequest {
+  type: typeof POST_MESSAGE_REQUEST_TYPES.DEPOSIT;
+  payload: DepositRequestMessagePayload;
+}
+
 export type PostMessageRequest =
   | ConnectRequestMessage
   | CreateAccountRequestMessage
@@ -148,7 +160,9 @@ export type PostMessageRequest =
   | CreateSigningSessionRequestMessage
   | CreateSigningSessionInstructionRequestMessage
   | ConfirmSigningSessionRequestMessage
-  | RevokeSigningSessionRequestMessage;
+  | RevokeSigningSessionRequestMessage
+  | PrepareDepositRequestMessage
+  | DepositRequestMessage;
 
 export interface DisconnectResult {
   // Empty object keeps compatibility with existing consumers expecting a success payload
@@ -217,6 +231,8 @@ type RequestResultMap = {
   [POST_MESSAGE_REQUEST_TYPES.CREATE_SIGNING_SESSION_INSTRUCTION]: CreateSigningSessionInstructionResult;
   [POST_MESSAGE_REQUEST_TYPES.CONFIRM_SIGNING_SESSION]: ConfirmSigningSessionResult;
   [POST_MESSAGE_REQUEST_TYPES.REVOKE_SIGNING_SESSION]: RevokeSigningSessionResult;
+  [POST_MESSAGE_REQUEST_TYPES.PREPARE_DEPOSIT]: DepositDestination;
+  [POST_MESSAGE_REQUEST_TYPES.DEPOSIT]: DepositResult;
 };
 
 interface ResponseErrorPayload {
@@ -381,6 +397,201 @@ export interface RevokeSigningSessionPayload {
 
 export interface RevokeSigningSessionResult {
   // Empty object keeps compatibility with existing consumers expecting a success payload
+}
+
+export enum ThruNetwork {
+  Alphanet = "alphanet",
+  Devnet = "devnet",
+  Sweepnet = "sweepnet",
+}
+
+export enum DepositTarget {
+  Credits = "credits",
+}
+
+export interface DepositDestination {
+  network: ThruNetwork;
+  depositTarget: DepositTarget;
+  tokenAccountAddress: string;
+  mintAddress: string;
+  tokenProgramAddress: string;
+  symbol: string;
+  decimals: number;
+}
+
+export type DepositUiThemeMode = "light" | "dark" | "auto";
+
+export interface DepositUiThemeColors {
+  background: string;
+  card: string;
+  cardHover: string;
+  foreground: string;
+  foregroundMuted: string;
+  foregroundSubtle: string;
+  border: string;
+  borderSecondary: string;
+  primary: string;
+  primaryForeground: string;
+  success: string;
+  successBackground: string;
+  warning: string;
+  warningBackground: string;
+  error: string;
+  errorBackground: string;
+  overlay: string;
+}
+
+export type DepositUiCustomThemeColors = Partial<DepositUiThemeColors>;
+
+export interface DepositUiThemeConfig {
+  light?: DepositUiCustomThemeColors;
+  dark?: DepositUiCustomThemeColors;
+}
+
+export interface DepositUiFontConfig {
+  regular?: string;
+  medium?: string;
+  semibold?: string;
+  bold?: string;
+}
+
+export interface DepositUiHeaderTokens {
+  titleColor: string;
+  buttonColor: string;
+}
+
+export interface DepositUiCardTokens {
+  backgroundColor: string;
+  titleColor: string;
+  subtitleColor: string;
+  labelColor: string;
+  headerColor: string;
+  labelRightColor: string;
+  labelHighlightRightColor: string;
+  textRightColor: string;
+  subtextRightColor: string;
+  rowLeftLabel: string;
+  rowRightLabel: string;
+  iconColor: string;
+  iconBackgroundColor: string;
+  actionColor: string;
+  actionIcon: string;
+  descriptionColor: string;
+  borderRadius: number;
+  borderWidth: number;
+  borderColor: string;
+}
+
+export interface DepositUiInputTokens {
+  backgroundColor: string;
+  textColor: string;
+  placeholderColor: string;
+  borderColor: string;
+  borderRadius: number;
+  borderWidth: number;
+}
+
+export interface DepositUiButtonTokens {
+  primaryBackground: string;
+  primaryText: string;
+  secondaryBackground: string;
+  secondaryText: string;
+  borderRadius: number;
+  borderWidth: number;
+  borderColor: string;
+}
+
+export interface DepositUiContainerTokens {
+  titleColor: string;
+  subtitleColor: string;
+  actionColor: string;
+  actionTitle: string;
+  buttonColor: string;
+  buttonTitleColor: string;
+  iconBackgroundColor: string;
+  iconColor: string;
+  borderRadius: number;
+}
+
+export interface DepositUiSearchTokens {
+  backgroundColor: string;
+  inputColor: string;
+  placeholderColor: string;
+}
+
+export interface DepositUiListTokens {
+  titleSectionColor: string;
+  rowBorderRadius: number;
+}
+
+export interface DepositUiComponentOverrides {
+  header?: Partial<DepositUiHeaderTokens>;
+  card?: Partial<DepositUiCardTokens>;
+  input?: Partial<DepositUiInputTokens>;
+  button?: Partial<DepositUiButtonTokens>;
+  container?: Partial<DepositUiContainerTokens>;
+  search?: Partial<DepositUiSearchTokens>;
+  list?: Partial<DepositUiListTokens>;
+}
+
+export interface DepositUiComponentConfig extends DepositUiComponentOverrides {
+  light?: DepositUiComponentOverrides;
+  dark?: DepositUiComponentOverrides;
+}
+
+export interface DepositUiConfig {
+  appearance?: DepositUiThemeMode;
+  accentColor?: string;
+  theme?: DepositUiThemeConfig;
+  fontFamily?: string;
+  fonts?: DepositUiFontConfig;
+  components?: DepositUiComponentConfig;
+}
+
+export interface PrepareDepositPayload {
+  /** Defaults to the configured credits target for the provider network. */
+  depositTarget?: DepositTarget;
+  /** Resolved provider network. SDK/provider code fills this before crossing the iframe bridge. */
+  network?: ThruNetwork;
+}
+
+/**
+ * Deposit ("Add funds") intent. The dApp asks the wallet to open its Deposit
+ * screen for a prepared token destination; the wallet validates that the
+ * destination still matches the provider network and configured mint before it
+ * runs Unifold. Crediting is authoritative on the server webhook — the result
+ * here only reports the terminal UX state.
+ */
+export interface DepositRequestPayload {
+  /** Destination returned by prepareDeposit. */
+  destination: DepositDestination;
+  /** Resolved provider network. SDK/provider code fills this before crossing the iframe bridge. */
+  network?: ThruNetwork;
+  /** Optional source-chain hint for the deposit widget (e.g. "base"). */
+  chainHint?: string;
+}
+
+export interface DepositRequestMessagePayload extends DepositRequestPayload {
+  /** Internal wallet bridge field resolved from provider mount-time config. */
+  resolvedDepositUiConfig?: DepositUiConfig;
+}
+
+export interface DepositResult {
+  /**
+   * Terminal UX state of the deposit:
+   * - "completed": the balance increase was observed; the deposit is credited.
+   * - "cancelled": the user dismissed the flow before committing funds; nothing
+   *   was deposited.
+   * - "pending": funds reached the treasury (the transfer committed) but the
+   *   balance increase wasn't observed before the wallet stopped waiting. The
+   *   server webhook still mints asynchronously, so the dApp should keep polling
+   *   its balance rather than treat this as a cancellation.
+   */
+  status: "completed" | "cancelled" | "pending";
+  /** Raw (base-unit) amount the balance increased by, when known. */
+  mintedAmountRaw?: string;
+  /** Thru mint transaction id, when surfaced to the client. */
+  signature?: string;
 }
 
 export interface TransactionReviewSimulation {

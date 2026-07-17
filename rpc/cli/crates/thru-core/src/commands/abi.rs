@@ -414,6 +414,18 @@ fn reject_unexpected_target_program(target_program: Option<&str>) -> Result<(), 
     Ok(())
 }
 
+fn create_rpc_client(config: &Config) -> Result<RpcClient, CliError> {
+    let rpc_url = config.get_grpc_url()?;
+    RpcClient::builder()
+        .insecure(config.insecure)
+        .http_endpoint(rpc_url)
+        .timeout(Duration::from_secs(config.timeout_seconds))
+        .auth_token(config.auth_token.clone())
+        .announce_pending_signature(config.announce_pending_signature)
+        .build()
+        .map_err(CliError::from)
+}
+
 struct AbiProgramManager {
     rpc_client: RpcClient,
     fee_payer_keypair: KeyPair,
@@ -424,14 +436,7 @@ struct AbiProgramManager {
 impl AbiProgramManager {
     /// Create new ABI program manager with optional fee payer override
     async fn new(config: &Config, fee_payer_name: Option<&str>) -> Result<Self, CliError> {
-        let rpc_url = config.get_grpc_url()?;
-        let rpc_client = RpcClient::builder()
-            .insecure(config.insecure)
-            .http_endpoint(rpc_url)
-            .timeout(Duration::from_secs(config.timeout_seconds))
-            .auth_token(config.auth_token.clone())
-            .announce_pending_signature(config.announce_pending_signature)
-            .build()?;
+        let rpc_client = create_rpc_client(config)?;
 
         // Ensure the configured manager program key is valid even if unused directly
         let _ = config.get_manager_pubkey()?;
@@ -675,18 +680,23 @@ fn derive_abi_account_seed_bytes(kind: u8, body: &[u8; ABI_META_BODY_LEN]) -> [u
 fn resolve_authority_pubkey(
     config: &Config,
     authority: Option<&str>,
+    fee_payer: Option<&str>,
 ) -> Result<[u8; 32], CliError> {
-    let authority_pubkey = if let Some(auth_name) = authority {
+    let fee_payer_name = fee_payer.unwrap_or("default");
+    let fee_payer_key = config.keys.get_key(fee_payer_name)?;
+    let fee_payer_keypair = crypto::keypair_from_hex(fee_payer_key)?;
+
+    if let Some(auth_name) = authority {
         let auth_key = config.keys.get_key(auth_name)?;
         let auth_keypair = crypto::keypair_from_hex(auth_key)?;
-        auth_keypair.public_key
-    } else {
-        let default_key = config.get_private_key_bytes()?;
-        let default_keypair = crypto::keypair_from_hex(&hex::encode(default_key))?;
-        default_keypair.public_key
-    };
+        if auth_keypair.public_key != fee_payer_keypair.public_key {
+            return Err(CliError::Validation(format!(
+                "ABI authority/publisher key '{auth_name}' must match fee payer key '{fee_payer_name}', as only the fee payer signature is included"
+            )));
+        }
+    }
 
-    Ok(authority_pubkey)
+    Ok(fee_payer_keypair.public_key)
 }
 
 fn resolve_target_program_bytes(target_program: Option<&str>) -> Result<[u8; 32], CliError> {
@@ -724,7 +734,7 @@ async fn create_abi_account_official(
 
     let manager_program_pubkey = config.get_manager_pubkey()?;
     let abi_manager_program_pubkey = config.get_abi_manager_pubkey()?;
-    let authority_pubkey = resolve_authority_pubkey(config, authority)?;
+    let authority_pubkey = resolve_authority_pubkey(config, authority, fee_payer)?;
 
     let (temp_seed, temp_seed_hashed) = seed_with_suffix(program_seed, "abi_temp");
     if !json_format {
@@ -1025,7 +1035,7 @@ async fn create_abi_account_external(
     }
 
     let abi_manager_program_pubkey = config.get_abi_manager_pubkey()?;
-    let authority_pubkey = resolve_authority_pubkey(config, authority)?;
+    let authority_pubkey = resolve_authority_pubkey(config, authority, fee_payer)?;
     let target_program_bytes = resolve_target_program_bytes(target_program)?;
     let external_seed = parse_external_seed(external_seed_input, seed_format)?;
 
@@ -1305,7 +1315,7 @@ async fn upgrade_abi_account_official(
 
     let manager_program_pubkey = config.get_manager_pubkey()?;
     let abi_manager_program_pubkey = config.get_abi_manager_pubkey()?;
-    let authority_pubkey = resolve_authority_pubkey(config, authority)?;
+    let authority_pubkey = resolve_authority_pubkey(config, authority, fee_payer)?;
 
     let (temp_seed, temp_seed_hashed) = seed_with_suffix(program_seed, "abi_upgrade");
     if !json_format {
@@ -1493,7 +1503,7 @@ async fn upgrade_abi_account_external(
     }
 
     let abi_manager_program_pubkey = config.get_abi_manager_pubkey()?;
-    let authority_pubkey = resolve_authority_pubkey(config, authority)?;
+    let authority_pubkey = resolve_authority_pubkey(config, authority, fee_payer)?;
     let target_program_bytes = resolve_target_program_bytes(target_program)?;
     let external_seed = parse_external_seed(external_seed_input, seed_format)?;
 
@@ -1653,7 +1663,7 @@ async fn finalize_abi_account_official(
 
     let manager_program_pubkey = config.get_manager_pubkey()?;
     let abi_manager_program_pubkey = config.get_abi_manager_pubkey()?;
-    let authority_pubkey = resolve_authority_pubkey(config, authority)?;
+    let authority_pubkey = resolve_authority_pubkey(config, authority, fee_payer)?;
 
     let mut config_with_manager = config.clone();
     config_with_manager.manager_program_public_key = manager_program_pubkey.to_string();
@@ -1765,7 +1775,7 @@ async fn finalize_abi_account_external(
     }
 
     let abi_manager_program_pubkey = config.get_abi_manager_pubkey()?;
-    let authority_pubkey = resolve_authority_pubkey(config, authority)?;
+    let authority_pubkey = resolve_authority_pubkey(config, authority, fee_payer)?;
     let target_program_bytes = resolve_target_program_bytes(target_program)?;
     let external_seed = parse_external_seed(external_seed_input, seed_format)?;
 
@@ -1859,7 +1869,7 @@ async fn close_abi_account_official(
 
     let manager_program_pubkey = config.get_manager_pubkey()?;
     let abi_manager_program_pubkey = config.get_abi_manager_pubkey()?;
-    let authority_pubkey = resolve_authority_pubkey(config, authority)?;
+    let authority_pubkey = resolve_authority_pubkey(config, authority, fee_payer)?;
 
     let mut config_with_manager = config.clone();
     config_with_manager.manager_program_public_key = manager_program_pubkey.to_string();
@@ -1971,7 +1981,7 @@ async fn close_abi_account_external(
     }
 
     let abi_manager_program_pubkey = config.get_abi_manager_pubkey()?;
-    let authority_pubkey = resolve_authority_pubkey(config, authority)?;
+    let authority_pubkey = resolve_authority_pubkey(config, authority, fee_payer)?;
     let target_program_bytes = resolve_target_program_bytes(target_program)?;
     let external_seed = parse_external_seed(external_seed_input, seed_format)?;
 
@@ -2057,13 +2067,12 @@ async fn get_abi_account_info(
     out_path: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
-    let abi_program_manager = AbiProgramManager::new(config, None).await?;
+    let rpc_client = create_rpc_client(config)?;
 
     let abi_account = Pubkey::new(abi_account_str.to_string())
         .map_err(|e| CliError::Validation(format!("Invalid ABI account public key: {}", e)))?;
 
-    let account_info_opt = abi_program_manager
-        .rpc_client()
+    let account_info_opt = rpc_client
         .get_account_info(&abi_account, None, None)
         .await
         .map_err(|e| CliError::Generic {
@@ -2178,4 +2187,40 @@ async fn get_abi_account_info(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn abi_actor_defaults_to_named_fee_payer_without_default_key() {
+        let mut config = Config::default();
+        let signer_key = hex::encode([1u8; 32]);
+        config.keys.add_key("signer", &signer_key, false).unwrap();
+        config.keys.remove_key("default").unwrap();
+
+        let actor = resolve_authority_pubkey(&config, None, Some("signer")).unwrap();
+        let expected = crypto::keypair_from_hex(&signer_key).unwrap().public_key;
+
+        assert_eq!(actor, expected);
+    }
+
+    #[test]
+    fn abi_actor_must_match_fee_payer() {
+        let mut config = Config::default();
+        config
+            .keys
+            .add_key("signer", &hex::encode([1u8; 32]), false)
+            .unwrap();
+        config
+            .keys
+            .add_key("other", &hex::encode([2u8; 32]), false)
+            .unwrap();
+
+        let error = resolve_authority_pubkey(&config, Some("other"), Some("signer"))
+            .expect_err("a separately supplied ABI actor cannot sign the transaction");
+
+        assert!(error.to_string().contains("must match fee payer"));
+    }
 }

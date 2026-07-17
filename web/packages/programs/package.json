@@ -22,6 +22,11 @@
       "types": "./dist/amm/index.d.ts",
       "import": "./dist/amm/index.js",
       "require": "./dist/amm/index.cjs"
+    },
+    "./clob": {
+      "types": "./dist/clob/index.d.ts",
+      "import": "./dist/clob/index.js",
+      "require": "./dist/clob/index.cjs"
     }
   },
   "scripts": {
@@ -35,6 +40,7 @@
     "@thru/sdk": "workspace:*"
   },
   "devDependencies": {
+    "@types/node": "^25.9.1",
     "tsup": "^8.5.1",
     "typescript": "^6.0.3"
   }

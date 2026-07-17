@@ -114,43 +114,45 @@
   --color-golden: var(--golden);
 
   /* Semantic tokens → bg-surface-*, text-text-*, border-* utilities */
-  --color-text-primary: var(--steel-800);
-  --color-text-secondary: var(--teal-600);
-  --color-text-tertiary: var(--steel-400);
-  --color-text-brand: var(--brick-400);
-  --color-text-disabled: var(--steel-300);
-  --color-text-primary-inverse: var(--teal-0);
-  --color-text-secondary-inverse: var(--teal-200);
-  --color-text-tertiary-inverse: var(--teal-400);
-  --color-text-disabled-inverse: var(--steel-600);
+  --color-text-primary: var(--tn-color-text-primary);
+  --color-text-secondary: var(--tn-color-text-secondary);
+  --color-text-tertiary: var(--tn-color-text-tertiary);
+  --color-text-brand: var(--tn-color-text-brand);
+  --color-text-disabled: var(--tn-color-text-disabled);
+  --color-text-primary-inverse: var(--tn-color-text-primary-inverse);
+  --color-text-secondary-inverse: var(--tn-color-text-secondary-inverse);
+  --color-text-tertiary-inverse: var(--tn-color-text-tertiary-inverse);
+  --color-text-disabled-inverse: var(--tn-color-text-disabled-inverse);
 
-  --color-border-primary: var(--teal-800);
-  --color-border-secondary: var(--teal-400);
-  --color-border-tertiary: var(--teal-200);
-  --color-border-strong: var(--teal-300);
-  --color-border-brand: var(--brick-400);
-  --color-border-disabled: var(--steel-300);
+  --color-border-primary: var(--tn-color-border-primary);
+  --color-border-secondary: var(--tn-color-border-secondary);
+  --color-border-tertiary: var(--tn-color-border-tertiary);
+  --color-border-strong: var(--tn-color-border-strong);
+  --color-border-brand: var(--tn-color-border-brand);
+  --color-border-disabled: var(--tn-color-border-disabled);
 
   /* Signal reds + danger semantics */
   --color-red-bright: var(--red-bright);
   --color-red-hot: var(--red-hot);
-  --color-text-danger: var(--red-hot);
-  --color-border-danger: var(--red-bright);
-  --color-surface-danger: var(--red-bright);
+  --color-text-danger: var(--tn-color-text-danger);
+  --color-border-danger: var(--tn-color-border-danger);
+  --color-surface-danger: var(--tn-color-surface-danger);
 
-  --color-surface-higher: var(--teal-0);
-  --color-surface-primary: var(--teal-100);
-  --color-surface-lower: var(--teal-200);
-  --color-surface-disabled: var(--steel-100);
-  --color-surface-higher-inverse: var(--teal-600);
-  --color-surface-primary-inverse: var(--teal-700);
-  --color-surface-lower-inverse: var(--steel-800);
-  --color-surface-brick: var(--brick-400);
-  --color-surface-sky: var(--sky-400);
-  --color-surface-grass: var(--grass-400);
-  --color-surface-yellow: var(--yellow-400);
-  --color-surface-tan: var(--tan-400);
-  --color-surface-sand: var(--sand-400);
+  --color-surface-higher: var(--tn-color-surface-higher);
+  --color-surface-primary: var(--tn-color-surface-primary);
+  --color-surface-card: var(--tn-color-surface-card);
+  --color-surface-lower: var(--tn-color-surface-lower);
+  --color-surface-disabled: var(--tn-color-surface-disabled);
+  --color-surface-higher-inverse: var(--tn-color-surface-higher-inverse);
+  --color-surface-primary-inverse: var(--tn-color-surface-primary-inverse);
+  --color-surface-lower-inverse: var(--tn-color-surface-lower-inverse);
+  --color-surface-brick: var(--tn-color-surface-brick);
+  --color-surface-sky: var(--tn-color-surface-sky);
+  --color-surface-grass: var(--tn-color-surface-grass);
+  --color-surface-yellow: var(--tn-color-surface-yellow);
+  --color-surface-tan: var(--tn-color-surface-tan);
+  --color-surface-sand: var(--tn-color-surface-sand);
+  --color-golden: var(--tn-color-golden);
 }
 
 /* ── Utilities + animations carried over from the legacy design-system ── */

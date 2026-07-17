@@ -61,21 +61,18 @@ pub async fn get_version(config: &Config, json_format: bool) -> Result<(), CliEr
     let client = create_rpc_client(config)?;
     let versions = client.get_version().await?;
 
-    let thru_node = versions
-        .get("thru-node")
-        .cloned()
-        .unwrap_or_else(|| "unknown".to_string());
-    let thru_rpc = versions
-        .get("thru-rpc")
-        .cloned()
-        .unwrap_or_else(|| "unknown".to_string());
+    // Pass through every entry from the gRPC GetVersion map, sorted by key so the
+    // output is stable regardless of the map's iteration order.
+    let mut entries: Vec<(&String, &String)> = versions.iter().collect();
+    entries.sort_by(|a, b| a.0.cmp(b.0));
 
     if json_format {
-        let response = output::create_version_response(&thru_node, &thru_rpc);
+        let response = output::create_version_response(&entries);
         output::print_output(response, true);
     } else {
-        println!("thru-node: {}", thru_node);
-        println!("thru-rpc: {}", thru_rpc);
+        for (key, value) in &entries {
+            println!("{key}: {value}");
+        }
     }
 
     Ok(())

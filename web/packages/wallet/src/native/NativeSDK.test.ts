@@ -138,6 +138,18 @@ describe("NativeSDK", () => {
     sdk.destroy();
   });
 
+  it("exposes the grouped deposit lifecycle API", () => {
+    expect(sdk.deposits.prepare).toBeTypeOf("function");
+    expect(sdk.deposits.ensureAccount).toBeTypeOf("function");
+    expect(sdk.deposits.open).toBeTypeOf("function");
+    expect(sdk.deposits.getAccountState).toBeTypeOf("function");
+    expect(sdk.deposits.waitForBalance).toBeTypeOf("function");
+    expect(sdk.deposits.formatAmount).toBeTypeOf("function");
+
+    expect(sdk.prepareDeposit).toBeTypeOf("function");
+    expect(sdk.deposit).toBeTypeOf("function");
+  });
+
   it("defaults iOS WebView mode to shell iframe", () => {
     expect(sdk.getIosWebViewMode()).toBe("shell-iframe");
   });

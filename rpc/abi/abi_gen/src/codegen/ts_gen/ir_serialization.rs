@@ -40,10 +40,50 @@ fn emit_ir_node(node: &IrNode, indent: usize) -> String {
             emit_ir_node(&add.left, indent),
             emit_ir_node(&add.right, indent)
         ),
+        IrNode::SubChecked(sub) => format!(
+            "{{ op: \"sub\", left: {}, right: {} }}",
+            emit_ir_node(&sub.left, indent),
+            emit_ir_node(&sub.right, indent)
+        ),
         IrNode::MulChecked(mul) => format!(
             "{{ op: \"mul\", left: {}, right: {} }}",
             emit_ir_node(&mul.left, indent),
             emit_ir_node(&mul.right, indent)
+        ),
+        IrNode::DivChecked(div) => format!(
+            "{{ op: \"div\", left: {}, right: {} }}",
+            emit_ir_node(&div.left, indent),
+            emit_ir_node(&div.right, indent)
+        ),
+        IrNode::ModChecked(modulo) => format!(
+            "{{ op: \"mod\", left: {}, right: {} }}",
+            emit_ir_node(&modulo.left, indent),
+            emit_ir_node(&modulo.right, indent)
+        ),
+        IrNode::BitAnd(bit_and) => format!(
+            "{{ op: \"bitAnd\", left: {}, right: {} }}",
+            emit_ir_node(&bit_and.left, indent),
+            emit_ir_node(&bit_and.right, indent)
+        ),
+        IrNode::BitOr(bit_or) => format!(
+            "{{ op: \"bitOr\", left: {}, right: {} }}",
+            emit_ir_node(&bit_or.left, indent),
+            emit_ir_node(&bit_or.right, indent)
+        ),
+        IrNode::BitXor(bit_xor) => format!(
+            "{{ op: \"bitXor\", left: {}, right: {} }}",
+            emit_ir_node(&bit_xor.left, indent),
+            emit_ir_node(&bit_xor.right, indent)
+        ),
+        IrNode::LeftShift(left_shift) => format!(
+            "{{ op: \"leftShift\", left: {}, right: {} }}",
+            emit_ir_node(&left_shift.left, indent),
+            emit_ir_node(&left_shift.right, indent)
+        ),
+        IrNode::RightShift(right_shift) => format!(
+            "{{ op: \"rightShift\", left: {}, right: {} }}",
+            emit_ir_node(&right_shift.left, indent),
+            emit_ir_node(&right_shift.right, indent)
         ),
         IrNode::AlignUp(align) => format!(
             "{{ op: \"align\", alignment: {}, node: {} }}",

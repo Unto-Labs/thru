@@ -10,6 +10,7 @@
   position: relative;
   display: flex;
   gap: 0;
+  border-bottom: 1px solid var(--color-border-secondary);
 }
 
 .tds-tabs__tab {
@@ -36,6 +37,10 @@
   border-color: var(--color-border-strong);
   color: var(--color-text-brand);
   font-weight: var(--fw-semibold);
+}
+
+.tds-tabs__tab[data-active] {
+  border-bottom: 1px solid var(--color-surface-higher);
 }
 
 /* The "hat" — a brick bar at the top, sliding to sit above the active tab.

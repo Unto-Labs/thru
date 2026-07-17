@@ -17,6 +17,10 @@
       "import": "./dist/react-ui.js",
       "types": "./dist/react-ui.d.ts"
     },
+    "./internal/deposit": {
+      "import": "./dist/internal/deposit.js",
+      "types": "./dist/internal/deposit.d.ts"
+    },
     "./native": {
       "types": "./dist/native.d.ts",
       "react-native": "./src/native/index.ts",
@@ -55,6 +59,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@thru/programs": "workspace:*",
     "@thru/sdk": "workspace:*"
   },
   "devDependencies": {

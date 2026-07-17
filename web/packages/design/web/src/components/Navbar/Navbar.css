@@ -1,0 +1,334 @@
+/* Navbar — the Thru "scan" top bar (Paper / thru.org palette). Light teal
+   ground, a constant brick identity circle, dark-teal wordmark, brick
+   active-underline, grass live signal. Built on existing tokens:
+   teal-200 ground, teal-300 hairline, teal-700 wordmark, brick-400 mark,
+   grass-300 signal. */
+
+.tds-navbar {
+  display: flex;
+  align-items: center;
+  gap: 40px;
+  height: 64px;
+  padding: 0 28px;
+  background: var(--teal-200);
+  border-bottom: 1px solid var(--teal-300);
+}
+
+/* ── Brand: "thru" logo lockup (or text wordmark) + a mono tag ──── */
+.tds-navbar__brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 13px;
+  text-decoration: none;
+}
+.tds-navbar__wordmark {
+  font-family: var(--font-sans);
+  font-weight: 800;
+  font-style: italic;
+  font-size: 24px;
+  letter-spacing: -1.1px;
+  color: var(--teal-700);
+}
+/* Logo lockup (img/svg) used in place of the text wordmark — the thru.org
+   docs lockup (brick circle + dove + wordmark), so it carries its own height. */
+.tds-navbar__logo {
+  display: block;
+  height: 32px;
+  width: auto;
+}
+.tds-navbar__tag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--teal-600);
+  border: 1px solid var(--teal-300);
+  border-radius: var(--radius-none);
+  padding: 4px 8px 3px;
+}
+
+/* ── Section nav with brick active-underline ──────────────────── */
+.tds-navbar__nav {
+  display: flex;
+  align-items: center;
+  gap: 30px;
+}
+.tds-navbar__item {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  margin: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-decoration: none;
+  font-family: var(--font-mono);
+  font-size: 15px;
+  color: var(--teal-600);
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+.tds-navbar__item::after {
+  content: "";
+  width: 100%;
+  height: 2px;
+  background: transparent;
+}
+.tds-navbar__item:hover {
+  color: var(--teal-800);
+}
+.tds-navbar__item[data-active] {
+  color: var(--teal-800);
+}
+.tds-navbar__item[data-active]::after {
+  background: var(--brick-400);
+}
+
+.tds-navbar__spacer {
+  flex: 1;
+}
+
+/* ── Status chip: pulsing live dot + network · slot ───────────── */
+.tds-navbar__status {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 14px;
+  margin: 0;
+  background: color-mix(in srgb, var(--teal-0) 55%, transparent);
+  border: 1px solid var(--teal-300);
+  border-radius: var(--radius-none);
+  cursor: default;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+button.tds-navbar__status {
+  cursor: pointer;
+}
+button.tds-navbar__status:hover,
+.tds-navbar__status[data-open] {
+  background: var(--teal-0);
+  border-color: var(--teal-400);
+}
+.tds-navbar__dot {
+  position: relative;
+  display: inline-flex;
+  width: 9px;
+  height: 9px;
+  flex: none;
+}
+.tds-navbar__dot-core {
+  position: relative;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--grass-300);
+  box-shadow: 0 0 8px color-mix(in srgb, var(--grass-300) 55%, transparent);
+}
+.tds-navbar__dot--off .tds-navbar__dot-core {
+  background: var(--teal-400);
+  box-shadow: none;
+}
+.tds-navbar__dot-pulse {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: var(--grass-300);
+  animation: tds-navbar-pulse 1.9s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+.tds-navbar__status-net {
+  font-size: 13px;
+  color: var(--teal-700);
+}
+.tds-navbar__status-slot {
+  font-size: 13px;
+  color: var(--teal-500);
+}
+
+:where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) .tds-navbar {
+  background: var(--color-surface-card);
+  border-bottom-color: var(--color-border-tertiary);
+}
+
+:where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) .tds-navbar__wordmark,
+:where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) .tds-navbar__item:hover,
+:where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) .tds-navbar__item[data-active],
+:where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) .tds-navbar__status-net {
+  color: var(--color-text-primary);
+}
+
+:where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) .tds-navbar__tag,
+:where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) .tds-navbar__status {
+  background: var(--color-surface-higher);
+  border-color: var(--color-border-secondary);
+  color: var(--color-text-primary);
+}
+
+:where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) .tds-navbar__item {
+  color: var(--color-text-tertiary);
+}
+
+:where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) .tds-navbar__item[data-active]::after {
+  background: var(--color-surface-brick);
+}
+
+:where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) .tds-navbar__status-slot {
+  color: var(--color-text-secondary);
+}
+
+:where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) .tds-navbar__dot--off .tds-navbar__dot-core {
+  background: var(--color-text-secondary);
+}
+
+:where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) button.tds-navbar__status:hover,
+:where([data-theme="dark"], [data-theme="light"] [data-theme="dark"]) .tds-navbar__status[data-open] {
+  background: var(--color-surface-card);
+  border-color: var(--color-border-strong);
+}
+
+@keyframes tds-navbar-pulse {
+  0% {
+    transform: scale(1);
+    opacity: 0.5;
+  }
+  70% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
+/* ── Hamburger (mobile only) ──────────────────────────────────────
+   thru.org-style toggle: a quiet 32px surface tile with a three-line glyph.
+   Hidden on desktop; the `@media` block below reveals it and hides the
+   inline nav. Render it as `Navbar.Drawer`'s `trigger`. */
+.tds-navbar__burger {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  margin: 0;
+  padding: 0;
+  background: var(--color-surface-higher);
+  border: none;
+  border-radius: var(--radius-none);
+  color: var(--color-text-primary);
+  cursor: pointer;
+  flex: none;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+.tds-navbar__burger:hover {
+  background: var(--color-surface-primary);
+}
+
+/* ── Mobile nav menu (design-system Dialog, thru.org dropdown skin) ──
+   A full-width panel that slides down from under the bar, over a light
+   blurred scrim — matching thru.org's mobile menu. The bar must sit above
+   both (explorer gives it z-40) so the panel emerges from beneath it. */
+.tds-navbar__scrim {
+  z-index: 30;
+  background: color-mix(in srgb, var(--color-surface-primary) 50%, transparent);
+  backdrop-filter: blur(4px);
+}
+.tds-navbar__drawer {
+  position: fixed;
+  top: 64px;
+  left: 0;
+  right: 0;
+  z-index: 35;
+  width: auto;
+  max-width: none;
+  max-height: calc(100dvh - 64px);
+  overflow-y: auto;
+  transform: none;
+  padding: 0;
+  background: var(--color-surface-primary);
+  border: none;
+  border-bottom: 1px solid var(--color-border-secondary);
+  box-shadow: none;
+  border-radius: var(--radius-none);
+  transition: none;
+}
+/* Slide via keyframes, not transitions: a keyframe animation always fires
+   `animationend` — even if interrupted mid-flight — so Base UI's
+   wait-for-animation unmount can never deadlock the way a no-op transition
+   (start value == end value) can. Neutralize the base dialog's fade/zoom
+   start/end styles; the keyframes own all motion. */
+.tds-navbar__drawer[data-starting-style],
+.tds-navbar__drawer[data-ending-style] {
+  opacity: 1;
+  transform: none;
+}
+.tds-navbar__drawer[data-open] {
+  animation: tds-navbar-menu-in 300ms ease-in-out;
+}
+.tds-navbar__drawer[data-ending-style] {
+  animation: tds-navbar-menu-out 300ms ease-in-out forwards;
+}
+@keyframes tds-navbar-menu-in {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(0); }
+}
+@keyframes tds-navbar-menu-out {
+  from { transform: translateY(0); }
+  to { transform: translateY(-100%); }
+}
+.tds-navbar__drawer-nav {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 0;
+}
+/* Reflow the desktop-tuned nav items into full-width drawer rows. */
+.tds-navbar__drawer-nav .tds-navbar__item {
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 0;
+  width: 100%;
+  padding: 14px 18px;
+  border-left: 2px solid transparent;
+  font-size: 17px;
+}
+.tds-navbar__drawer-nav .tds-navbar__item::after {
+  display: none;
+}
+.tds-navbar__drawer-nav .tds-navbar__item[data-active] {
+  color: var(--teal-800);
+  border-left-color: var(--brick-400);
+  background: var(--teal-0);
+}
+
+/* ── Mobile: collapse the bar to brand + status + burger ──────────── */
+@media (max-width: 640px) {
+  .tds-navbar {
+    gap: 12px;
+    padding: 0 14px;
+  }
+  .tds-navbar__nav {
+    display: none;
+  }
+  .tds-navbar__burger {
+    display: inline-flex;
+  }
+  /* Drop the decorative brand tag ("scan") — the logo already carries the
+     wordmark, and the row needs the width for the status chip + burger. */
+  .tds-navbar__tag {
+    display: none;
+  }
+  /* Compact the status chip so brand + chip + burger fit a phone width. */
+  .tds-navbar__status {
+    padding: 7px 10px;
+    gap: 7px;
+  }
+  .tds-navbar__status-slot {
+    display: none;
+  }
+}

@@ -148,6 +148,28 @@ fn seed_with_suffix(base_seed: &str, suffix: &str) -> (String, bool) {
     }
 }
 
+fn resolve_create_authority_pubkey(
+    config: &Config,
+    authority: Option<&str>,
+    fee_payer: Option<&str>,
+) -> Result<[u8; 32], CliError> {
+    let fee_payer_name = fee_payer.unwrap_or("default");
+    let fee_payer_key = config.keys.get_key(fee_payer_name)?;
+    let fee_payer_keypair = crypto::keypair_from_hex(fee_payer_key)?;
+
+    if let Some(authority_name) = authority {
+        let authority_key = config.keys.get_key(authority_name)?;
+        let authority_keypair = crypto::keypair_from_hex(authority_key)?;
+        if authority_keypair.public_key != fee_payer_keypair.public_key {
+            return Err(CliError::Validation(format!(
+                "Program authority key '{authority_name}' must match fee payer key '{fee_payer_name}', as only the fee payer signature is included"
+            )));
+        }
+    }
+
+    Ok(fee_payer_keypair.public_key)
+}
+
 /// Handle program subcommands
 pub async fn handle_program_command(
     config: &Config,
@@ -160,6 +182,7 @@ pub async fn handle_program_command(
             ephemeral,
             seed,
             authority,
+            fee_payer,
             program_file,
             skip_program_image_validation,
             chunk_size,
@@ -171,6 +194,7 @@ pub async fn handle_program_command(
                 ephemeral,
                 &seed,
                 authority.as_deref(),
+                fee_payer.as_deref(),
                 &program_file,
                 skip_program_image_validation,
                 chunk_size,
@@ -183,6 +207,7 @@ pub async fn handle_program_command(
             manager,
             ephemeral,
             seed,
+            fee_payer,
             program_file,
             skip_program_image_validation,
             chunk_size,
@@ -193,6 +218,7 @@ pub async fn handle_program_command(
                 manager.as_deref(),
                 &seed,
                 ephemeral,
+                fee_payer.as_deref(),
                 &program_file,
                 skip_program_image_validation,
                 chunk_size,
@@ -206,6 +232,7 @@ pub async fn handle_program_command(
             ephemeral,
             seed,
             paused,
+            fee_payer,
         } => {
             // Parse paused string to boolean
             let paused_bool = match paused.to_lowercase().as_str() {
@@ -234,6 +261,7 @@ pub async fn handle_program_command(
                 &seed,
                 ephemeral,
                 paused_bool,
+                fee_payer.as_deref(),
                 json_format,
             )
             .await
@@ -275,6 +303,7 @@ pub async fn handle_program_command(
             ephemeral,
             seed,
             authority_candidate,
+            fee_payer,
         } => {
             set_authority_program(
                 config,
@@ -282,6 +311,7 @@ pub async fn handle_program_command(
                 &seed,
                 ephemeral,
                 &authority_candidate,
+                fee_payer.as_deref(),
                 json_format,
             )
             .await
@@ -618,6 +648,7 @@ async fn create_program(
     ephemeral: bool,
     seed: &str,
     authority: Option<&str>,
+    fee_payer: Option<&str>,
     program_file: &str,
     skip_program_image_validation: bool,
     chunk_size: usize,
@@ -669,16 +700,10 @@ async fn create_program(
         config.get_manager_pubkey()?
     };
 
-    // Get authority public key
-    let authority_pubkey = if let Some(auth_name) = authority {
-        let auth_key = config.keys.get_key(auth_name)?;
-        let auth_keypair = crypto::keypair_from_hex(auth_key)?;
-        auth_keypair.public_key
-    } else {
-        let default_key = config.get_private_key_bytes()?;
-        let default_keypair = crypto::keypair_from_hex(&hex::encode(default_key))?;
-        default_keypair.public_key
-    };
+    // The selected transaction signer becomes the authority. An explicit
+    // authority is accepted only as a matching assertion because the wire
+    // transaction contains no separate authority signature.
+    let authority_pubkey = resolve_create_authority_pubkey(config, authority, fee_payer)?;
 
     // Step 1: Upload program to temporary buffer account
     let (temp_seed, temp_seed_hashed) = seed_with_suffix(seed, "temporary");
@@ -694,7 +719,7 @@ async fn create_program(
     }
 
     // Create uploader manager and upload the program
-    let uploader_manager = UploaderManager::new(config).await?;
+    let uploader_manager = UploaderManager::new_with_fee_payer(config, fee_payer).await?;
     let upload_session = uploader_manager
         .upload_program_with_options(
             &temp_seed,
@@ -725,7 +750,8 @@ async fn create_program(
     // Create program manager
     let mut config_with_manager = config.clone();
     config_with_manager.manager_program_public_key = manager_program_pubkey.to_string();
-    let program_manager = ProgramManager::new(&config_with_manager).await?;
+    let program_manager =
+        ProgramManager::new_with_fee_payer(&config_with_manager, fee_payer).await?;
 
     let nonce = program_manager.get_current_nonce().await?;
     let start_slot = program_manager.get_current_slot().await?;
@@ -887,6 +913,7 @@ async fn upgrade_program(
     manager_pubkey: Option<&str>,
     seed: &str,
     ephemeral: bool,
+    fee_payer: Option<&str>,
     program_file: &str,
     skip_program_image_validation: bool,
     chunk_size: usize,
@@ -951,7 +978,7 @@ async fn upgrade_program(
     }
 
     // Create uploader manager and upload the program
-    let uploader_manager = UploaderManager::new(config).await?;
+    let uploader_manager = UploaderManager::new_with_fee_payer(config, fee_payer).await?;
     let upload_session = uploader_manager
         .upload_program_with_options(
             &temp_seed,
@@ -982,7 +1009,8 @@ async fn upgrade_program(
     // Create program manager
     let mut config_with_manager = config.clone();
     config_with_manager.manager_program_public_key = manager_program_pubkey.to_string();
-    let program_manager = ProgramManager::new(&config_with_manager).await?;
+    let program_manager =
+        ProgramManager::new_with_fee_payer(&config_with_manager, fee_payer).await?;
 
     let nonce = program_manager.get_current_nonce().await?;
     let start_slot = program_manager.get_current_slot().await?;
@@ -1099,6 +1127,7 @@ async fn set_pause_program(
     seed: &str,
     ephemeral: bool,
     paused: bool,
+    fee_payer: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
     let manager_program_pubkey = if let Some(custom_manager) = manager_pubkey {
@@ -1124,7 +1153,8 @@ async fn set_pause_program(
 
     let mut config_with_manager = config.clone();
     config_with_manager.manager_program_public_key = manager_program_pubkey.to_string();
-    let program_manager = ProgramManager::new(&config_with_manager).await?;
+    let program_manager =
+        ProgramManager::new_with_fee_payer(&config_with_manager, fee_payer).await?;
 
     let nonce = program_manager.get_current_nonce().await?;
     let start_slot = program_manager.get_current_slot().await?;
@@ -1513,6 +1543,7 @@ async fn set_authority_program(
     seed: &str,
     ephemeral: bool,
     authority_candidate: &str,
+    fee_payer: Option<&str>,
     json_format: bool,
 ) -> Result<(), CliError> {
     let manager_program_pubkey = if let Some(custom_manager) = manager_pubkey {
@@ -1539,7 +1570,8 @@ async fn set_authority_program(
 
     let mut config_with_manager = config.clone();
     config_with_manager.manager_program_public_key = manager_program_pubkey.to_string();
-    let program_manager = ProgramManager::new(&config_with_manager).await?;
+    let program_manager =
+        ProgramManager::new_with_fee_payer(&config_with_manager, fee_payer).await?;
 
     let nonce = program_manager.get_current_nonce().await?;
     let start_slot = program_manager.get_current_slot().await?;
@@ -2156,6 +2188,36 @@ mod tests {
         data[PROGRAM_IMAGE_HEADER_SZ..PROGRAM_IMAGE_HEADER_SZ + PROGRAM_IMAGE_MIN_TEXT_SZ]
             .copy_from_slice(&[0x13, 0x00, 0x00, 0x00]);
         data
+    }
+
+    #[test]
+    fn test_create_authority_defaults_to_named_fee_payer_without_default_key() {
+        let mut config = Config::default();
+        let payer_key = hex::encode([1u8; 32]);
+        config.keys.add_key("payer", &payer_key, false).unwrap();
+        config.keys.remove_key("default").unwrap();
+
+        let authority = resolve_create_authority_pubkey(&config, None, Some("payer")).unwrap();
+        let expected = crypto::keypair_from_hex(&payer_key).unwrap().public_key;
+
+        assert_eq!(authority, expected);
+    }
+
+    #[test]
+    fn test_explicit_create_authority_must_match_fee_payer() {
+        let mut config = Config::default();
+        let payer_key = hex::encode([1u8; 32]);
+        let authority_key = hex::encode([2u8; 32]);
+        config.keys.add_key("payer", &payer_key, false).unwrap();
+        config
+            .keys
+            .add_key("authority", &authority_key, false)
+            .unwrap();
+
+        let error = resolve_create_authority_pubkey(&config, Some("authority"), Some("payer"))
+            .expect_err("a separately supplied program authority cannot sign the transaction");
+
+        assert!(error.to_string().contains("must match fee payer"));
     }
 
     #[test]

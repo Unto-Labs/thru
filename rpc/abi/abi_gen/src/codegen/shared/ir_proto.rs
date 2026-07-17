@@ -167,7 +167,15 @@ pub struct BinaryOpNode {
 #[repr(i32)]
 pub enum BinaryOpKind {
     AddChecked = 0,
+    SubChecked = 9,
     MulChecked = 1,
+    DivChecked = 2,
+    ModChecked = 3,
+    BitAnd = 4,
+    BitOr = 5,
+    BitXor = 6,
+    LeftShift = 7,
+    RightShift = 8,
 }
 
 #[derive(Clone, PartialEq, Message)]

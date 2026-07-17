@@ -17,6 +17,17 @@
   transform: scale(0.97);
 }
 
+/* Panel variant — no chrome of its own (width / padding / border / background
+   are owned by the consumer). Only the shared entrance/exit fade so app-owned
+   popover panels animate in consistently. */
+.tds-popover-panel {
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+.tds-popover-panel[data-starting-style],
+.tds-popover-panel[data-ending-style] {
+  opacity: 0;
+}
+
 .tds-popover__title {
   margin: 0 0 var(--space-1);
   font-family: var(--font-sans);

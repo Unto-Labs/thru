@@ -15,10 +15,16 @@ import {
   type ConnectRequestPayload,
   type CreateAccountPayload,
   type CreateAccountResult,
+  type DepositDestination,
+  type DepositRequestPayload,
+  type DepositResult,
+  type DepositUiConfig,
   type EmbeddedProviderEvent,
   type GetConnectionStateResult,
   type ManageAccountsResult,
+  type PrepareDepositPayload,
   type SelectAccountPayload,
+  type ThruNetwork,
   normalizeConnectionStateResult,
 } from "../../protocol";
 import { NativeThruChain } from "./chains/ThruChain";
@@ -47,6 +53,8 @@ export interface NativeProviderConfig {
   metadata?: ConnectMetadataInput;
   addressTypes?: AddressTypeValue[];
   signingSessions?: SigningSessionDescriptorStore;
+  network?: ThruNetwork;
+  depositUiConfig?: DepositUiConfig;
 }
 
 export interface ConnectOptions {
@@ -58,7 +66,10 @@ export interface ConnectOptions {
 export interface CreateAccountOptions {
   accountName?: string;
   metadata?: ConnectMetadataInput;
-  createSigningSession?: Omit<ThruSigningSessionCreateOptions, "walletAddress" | "review">;
+  createSigningSession?: Omit<
+    ThruSigningSessionCreateOptions,
+    "walletAddress" | "review"
+  >;
 }
 
 export type NativeProviderEvent = EmbeddedProviderEvent;
@@ -79,6 +90,8 @@ export class NativeProvider {
   private connected = false;
   private accounts: WalletAccount[] = [];
   private selectedAccount: WalletAccount | null = null;
+  private defaultNetwork?: ThruNetwork;
+  private depositUiConfig?: DepositUiConfig;
   private isSurfaceShown = false;
   private readonly eventListeners = new Map<
     string,
@@ -93,6 +106,8 @@ export class NativeProvider {
     const walletUrl = config.walletUrl ?? DEFAULT_WALLET_URL;
     this.origin = config.origin ?? DEFAULT_ORIGIN;
     this.transparent = config.walletExperience === "transparent";
+    this.defaultNetwork = config.network;
+    this.depositUiConfig = config.depositUiConfig;
     this.bridge = new WebViewBridge({ walletUrl });
 
     this.bridge.onEvent = (eventType, payload) => {
@@ -243,7 +258,9 @@ export class NativeProvider {
       if (options?.metadata) payload.metadata = options.metadata;
       if (options?.createSigningSession) {
         payload.createSigningSession = {
-          expiresAt: String(resolveSessionExpirySeconds(options.createSigningSession)),
+          expiresAt: String(
+            resolveSessionExpirySeconds(options.createSigningSession),
+          ),
         };
       }
 
@@ -417,6 +434,56 @@ export class NativeProvider {
       this.requestHide();
       this.emit(EMBEDDED_PROVIDER_EVENTS.ERROR, { error });
       throw error;
+    }
+  }
+
+  async prepareDeposit(
+    depositTargetOrPayload?:
+      | PrepareDepositPayload["depositTarget"]
+      | PrepareDepositPayload,
+  ): Promise<DepositDestination> {
+    const payload =
+      typeof depositTargetOrPayload === "string"
+        ? { depositTarget: depositTargetOrPayload }
+        : (depositTargetOrPayload ?? {});
+    const response = await this.bridge.sendMessage({
+      id: createRequestId(),
+      type: POST_MESSAGE_REQUEST_TYPES.PREPARE_DEPOSIT,
+      payload: { ...payload, network: payload.network ?? this.defaultNetwork },
+      origin: this.origin,
+    });
+    return response.result;
+  }
+
+  /**
+   * Open the wallet's Deposit ("Add funds") screen for a token account and
+   * resolve once the user completes or cancels. The wallet site runs the
+   * third-party deposit widget (Unifold); crediting is authoritative on the
+   * server webhook, so the result only reports the terminal UX state. Shows the
+   * (transparent) wallet surface for the duration of the flow, like
+   * manageAccounts().
+   */
+  async deposit(payload: DepositRequestPayload): Promise<DepositResult> {
+    try {
+      await this.requestShow();
+      const response = await this.bridge.sendMessage({
+        id: createRequestId(),
+        type: POST_MESSAGE_REQUEST_TYPES.DEPOSIT,
+        payload: {
+          ...payload,
+          network: payload.network ?? this.defaultNetwork,
+          ...(this.depositUiConfig
+            ? { resolvedDepositUiConfig: this.depositUiConfig }
+            : {}),
+        },
+        origin: this.origin,
+      });
+      return response.result;
+    } catch (error) {
+      this.emit(EMBEDDED_PROVIDER_EVENTS.ERROR, { error });
+      throw error;
+    } finally {
+      this.requestHide();
     }
   }
 

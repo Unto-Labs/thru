@@ -1,0 +1,52 @@
+abi:
+  package: "compliance.flag_tail"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Fixture exercising field-derived dynamic tail builders"
+
+types:
+  - name: "FlagTailInstruction"
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: "flags"
+            field-type:
+              primitive: u8
+          - name: "market"
+            field-type:
+              primitive: u8
+          - name: "reserved"
+            field-type:
+              array:
+                size:
+                  literal:
+                    u64: 2
+                element-type:
+                  primitive: u8
+          - name: "amount"
+            field-type:
+              primitive: u64
+          - name: "client_id"
+            field-type:
+              array:
+                size:
+                  mul:
+                    left:
+                      bit-and:
+                        left:
+                          right-shift:
+                            left:
+                              field-ref:
+                                path: ["flags"]
+                            right:
+                              literal:
+                                u64: 6
+                        right:
+                          literal:
+                            u64: 1
+                    right:
+                      literal:
+                        u64: 16
+                element-type:
+                  primitive: u8

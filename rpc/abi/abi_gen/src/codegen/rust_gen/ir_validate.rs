@@ -78,13 +78,41 @@ impl<'a> IrValidateEmitter<'a> {
                 .unwrap();
                 Ok(var)
             }
-            IrNode::FieldRef(field) => Ok(if let Some(param) = &field.parameter {
-                sanitize_param_name(param)
-            } else {
-                sanitize_param_name(&field.path)
-            }),
-            IrNode::AddChecked(node) => self.emit_binary(node, indent, "tn_checked_add_u64"),
-            IrNode::MulChecked(node) => self.emit_binary(node, indent, "tn_checked_mul_u64"),
+            IrNode::FieldRef(field) => Ok(
+                if field.parameter.is_none() && field.path == "__buffer_size" {
+                    "buf_sz".to_string()
+                } else if let Some(param) = &field.parameter {
+                    sanitize_param_name(param)
+                } else {
+                    sanitize_param_name(&field.path)
+                },
+            ),
+            IrNode::AddChecked(node) => {
+                self.emit_checked_binary(node, indent, "tn_checked_add_u64")
+            }
+            IrNode::SubChecked(node) => {
+                self.emit_checked_binary(node, indent, "tn_checked_sub_u64")
+            }
+            IrNode::MulChecked(node) => {
+                self.emit_checked_binary(node, indent, "tn_checked_mul_u64")
+            }
+            IrNode::DivChecked(node) => self.emit_guarded_binary(
+                node,
+                indent,
+                "/",
+                Some("AbiIrValidateError::ArithmeticOverflow"),
+            ),
+            IrNode::ModChecked(node) => self.emit_guarded_binary(
+                node,
+                indent,
+                "%",
+                Some("AbiIrValidateError::ArithmeticOverflow"),
+            ),
+            IrNode::BitAnd(node) => self.emit_guarded_binary(node, indent, "&", None),
+            IrNode::BitOr(node) => self.emit_guarded_binary(node, indent, "|", None),
+            IrNode::BitXor(node) => self.emit_guarded_binary(node, indent, "^", None),
+            IrNode::LeftShift(node) => self.emit_shift(node, indent, "<<"),
+            IrNode::RightShift(node) => self.emit_shift(node, indent, ">>"),
             IrNode::AlignUp(node) => self.emit_align(node, indent),
             IrNode::CallNested(node) => self.emit_call_nested(node, indent),
             IrNode::Switch(node) => self.emit_switch(node, indent),
@@ -103,7 +131,7 @@ impl<'a> IrValidateEmitter<'a> {
         Err(IrValidateError::UnsupportedNode)
     }
 
-    fn emit_binary(
+    fn emit_checked_binary(
         &mut self,
         node: &BinaryOpNode,
         indent: usize,
@@ -119,6 +147,68 @@ impl<'a> IrValidateEmitter<'a> {
             var,
             helper,
             left,
+            right
+        )
+        .unwrap();
+        Ok(var)
+    }
+
+    fn emit_guarded_binary(
+        &mut self,
+        node: &BinaryOpNode,
+        indent: usize,
+        op: &str,
+        zero_err: Option<&str>,
+    ) -> Result<String, IrValidateError> {
+        let left = self.emit_node(&node.left, indent)?;
+        let right = self.emit_node(&node.right, indent)?;
+        if let Some(err) = zero_err {
+            writeln!(
+                &mut self.output,
+                "{}if {} == 0 {{ return Err({}); }}",
+                Self::indent(indent),
+                right,
+                err
+            )
+            .unwrap();
+        }
+        let var = self.new_var();
+        writeln!(
+            &mut self.output,
+            "{}let {} = {} {} {};",
+            Self::indent(indent),
+            var,
+            left,
+            op,
+            right
+        )
+        .unwrap();
+        Ok(var)
+    }
+
+    fn emit_shift(
+        &mut self,
+        node: &BinaryOpNode,
+        indent: usize,
+        op: &str,
+    ) -> Result<String, IrValidateError> {
+        let left = self.emit_node(&node.left, indent)?;
+        let right = self.emit_node(&node.right, indent)?;
+        writeln!(
+            &mut self.output,
+            "{}if {} >= 64 {{ return Err(AbiIrValidateError::ArithmeticOverflow); }}",
+            Self::indent(indent),
+            right
+        )
+        .unwrap();
+        let var = self.new_var();
+        writeln!(
+            &mut self.output,
+            "{}let {} = {} {} {};",
+            Self::indent(indent),
+            var,
+            left,
+            op,
             right
         )
         .unwrap();

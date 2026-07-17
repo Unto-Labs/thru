@@ -55,8 +55,13 @@ export class Block {
             consensusStatus: proto.consensusStatus,
         });
 
-        // blockTimeNs is not part of the proto Block message, so it remains undefined
-        // It will only be set when parsing from wire format
+        // The proto block header carries block_time (epoch timestamp); surface it
+        // as blockTimeNs so list/stream consumers get it without a raw-block fetch.
+        // (fromWire sets blockTimeNs directly from the wire header instead.)
+        if (proto.header.blockTime) {
+            block.blockTimeNs = timestampToNanoseconds(proto.header.blockTime);
+        }
+
         block.attestorPayment = block.footer?.attestorPayment ?? 0n;
 
         return block;

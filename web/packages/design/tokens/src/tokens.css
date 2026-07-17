@@ -102,6 +102,7 @@
 
   --color-surface-higher:           var(--teal-0);
   --color-surface-primary:          var(--teal-100);
+  --color-surface-card:             #ffffff;
   --color-surface-lower:            var(--teal-200);
   --color-surface-disabled:         var(--steel-100);
   --color-surface-higher-inverse:   var(--teal-600);
@@ -114,6 +115,46 @@
   --color-surface-tan:              var(--tan-400);
   --color-surface-sand:             var(--sand-400);
   --color-golden:                   var(--golden);
+
+  /* Semantic aliases for Tailwind utilities. The @theme bridge points
+     utilities at these aliases so semantic classes (bg-surface-higher,
+     text-text-primary, border-border-tertiary, etc.) stay theme-aware. */
+  --tn-color-text-primary:            var(--color-text-primary);
+  --tn-color-text-secondary:          var(--color-text-secondary);
+  --tn-color-text-tertiary:           var(--color-text-tertiary);
+  --tn-color-text-brand:              var(--color-text-brand);
+  --tn-color-text-disabled:           var(--color-text-disabled);
+  --tn-color-text-primary-inverse:    var(--color-text-primary-inverse);
+  --tn-color-text-secondary-inverse:  var(--color-text-secondary-inverse);
+  --tn-color-text-tertiary-inverse:   var(--color-text-tertiary-inverse);
+  --tn-color-text-disabled-inverse:   var(--color-text-disabled-inverse);
+
+  --tn-color-border-primary:   var(--color-border-primary);
+  --tn-color-border-secondary: var(--color-border-secondary);
+  --tn-color-border-tertiary:  var(--color-border-tertiary);
+  --tn-color-border-strong:    var(--color-border-strong);
+  --tn-color-border-brand:     var(--color-border-brand);
+  --tn-color-border-disabled:  var(--color-border-disabled);
+
+  --tn-color-text-danger:    var(--color-text-danger);
+  --tn-color-border-danger:  var(--color-border-danger);
+  --tn-color-surface-danger: var(--color-surface-danger);
+
+  --tn-color-surface-higher:          var(--color-surface-higher);
+  --tn-color-surface-primary:         var(--color-surface-primary);
+  --tn-color-surface-card:            var(--color-surface-card);
+  --tn-color-surface-lower:           var(--color-surface-lower);
+  --tn-color-surface-disabled:        var(--color-surface-disabled);
+  --tn-color-surface-higher-inverse:  var(--color-surface-higher-inverse);
+  --tn-color-surface-primary-inverse: var(--color-surface-primary-inverse);
+  --tn-color-surface-lower-inverse:   var(--color-surface-lower-inverse);
+  --tn-color-surface-brick:           var(--color-surface-brick);
+  --tn-color-surface-sky:             var(--color-surface-sky);
+  --tn-color-surface-grass:           var(--color-surface-grass);
+  --tn-color-surface-yellow:          var(--color-surface-yellow);
+  --tn-color-surface-tan:             var(--color-surface-tan);
+  --tn-color-surface-sand:            var(--color-surface-sand);
+  --tn-color-golden:                  var(--color-golden);
 
   /* ─── Type families ───────────────────────────────────────── */
   /* Set by next/font (or @font-face) in the host app; fall back to system. */
@@ -168,6 +209,100 @@
   --ease-out:      cubic-bezier(0, 0, 0.2, 1);
 
   /* Elevation — used sparingly (overlays only; the system favors hairlines) */
+  --shadow-sm: 0 1px 2px rgba(21, 30, 30, 0.08);
+  --shadow-md: 0 4px 12px rgba(21, 30, 30, 0.12);
+  --shadow-lg: 0 12px 32px rgba(21, 30, 30, 0.18);
+}
+
+:root[data-theme="dark"],
+[data-theme="light"] [data-theme="dark"] {
+  color-scheme: dark;
+
+  /* Semantic color tokens (dark) */
+  --color-text-primary:            var(--teal-0);
+  --color-text-secondary:          var(--teal-100);
+  --color-text-tertiary:           var(--teal-300);
+  --color-text-brand:              var(--brick-200);
+  --color-text-disabled:           var(--steel-500);
+  --color-text-primary-inverse:    var(--steel-800);
+  --color-text-secondary-inverse:  var(--teal-700);
+  --color-text-tertiary-inverse:   var(--teal-600);
+  --color-text-disabled-inverse:   var(--steel-300);
+
+  --color-border-primary:    var(--teal-100);
+  --color-border-secondary:  var(--teal-500);
+  --color-border-tertiary:   color-mix(in srgb, var(--teal-500) 44%, var(--teal-800));
+  --color-border-strong:     var(--teal-500);
+  --color-border-brand:      var(--brick-200);
+  --color-border-disabled:   var(--steel-600);
+
+  --color-text-danger:    #ff8a8f;
+  --color-border-danger:  #ff6f76;
+  --color-surface-danger: #ff4750;
+
+  --color-surface-higher:           color-mix(in srgb, var(--teal-800) 88%, #000000);
+  --color-surface-primary:          var(--teal-800);
+  --color-surface-card:             color-mix(in srgb, var(--teal-700) 76%, var(--teal-800));
+  --color-surface-lower:            color-mix(in srgb, var(--teal-600) 36%, var(--teal-800));
+  --color-surface-disabled:         color-mix(in srgb, var(--steel-700) 70%, var(--teal-800));
+  --color-surface-higher-inverse:   var(--teal-0);
+  --color-surface-primary-inverse:  var(--teal-100);
+  --color-surface-lower-inverse:    var(--teal-200);
+  --color-surface-brick:            var(--brick-300);
+  --color-surface-sky:              var(--sky-300);
+  --color-surface-grass:            var(--grass-300);
+  --color-surface-yellow:           var(--yellow-300);
+  --color-surface-tan:              var(--tan-300);
+  --color-surface-sand:             var(--sand-300);
+  --color-golden:                   #f7f6a8;
+
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.72);
+  --shadow-md: 0 10px 28px rgba(0, 0, 0, 0.82);
+  --shadow-lg: 0 22px 56px rgba(0, 0, 0, 0.9);
+}
+
+:root[data-theme="light"],
+[data-theme="dark"] [data-theme="light"] {
+  color-scheme: light;
+
+  /* Semantic color tokens (light) */
+  --color-text-primary:            var(--steel-800);
+  --color-text-secondary:          var(--teal-600);
+  --color-text-tertiary:           var(--steel-400);
+  --color-text-brand:              var(--brick-400);
+  --color-text-disabled:           var(--steel-300);
+  --color-text-primary-inverse:    var(--teal-0);
+  --color-text-secondary-inverse:  var(--teal-200);
+  --color-text-tertiary-inverse:   var(--teal-400);
+  --color-text-disabled-inverse:   var(--steel-600);
+
+  --color-border-primary:    var(--teal-800);
+  --color-border-secondary:  var(--teal-400);
+  --color-border-tertiary:   var(--teal-200);
+  --color-border-strong:     var(--teal-300);
+  --color-border-brand:      var(--brick-400);
+  --color-border-disabled:   var(--steel-300);
+
+  --color-text-danger:    var(--red-hot);
+  --color-border-danger:  var(--red-bright);
+  --color-surface-danger: var(--red-bright);
+
+  --color-surface-higher:           var(--teal-0);
+  --color-surface-primary:          var(--teal-100);
+  --color-surface-card:             #ffffff;
+  --color-surface-lower:            var(--teal-200);
+  --color-surface-disabled:         var(--steel-100);
+  --color-surface-higher-inverse:   var(--teal-600);
+  --color-surface-primary-inverse:  var(--teal-700);
+  --color-surface-lower-inverse:    var(--steel-800);
+  --color-surface-brick:            var(--brick-400);
+  --color-surface-sky:              var(--sky-400);
+  --color-surface-grass:            var(--grass-400);
+  --color-surface-yellow:           var(--yellow-400);
+  --color-surface-tan:              var(--tan-400);
+  --color-surface-sand:             var(--sand-400);
+  --color-golden:                   var(--golden);
+
   --shadow-sm: 0 1px 2px rgba(21, 30, 30, 0.08);
   --shadow-md: 0 4px 12px rgba(21, 30, 30, 0.12);
   --shadow-lg: 0 12px 32px rgba(21, 30, 30, 0.18);

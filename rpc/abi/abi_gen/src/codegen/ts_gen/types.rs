@@ -37,7 +37,11 @@ fn size_expression_to_ts_getter_code(expr: &ExprKind) -> String {
         }
         ExprKind::FieldRef(field_ref) => {
             let dotted = field_ref.path.join(".");
-            format!("this.__tnResolveFieldRef(\"{}\")", dotted)
+            if dotted == "__buffer_size" {
+                "this.buffer.length".to_string()
+            } else {
+                format!("this.__tnResolveFieldRef(\"{}\")", dotted)
+            }
         }
         ExprKind::Add(e) => {
             format!(

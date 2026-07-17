@@ -29,7 +29,7 @@
   text-align: left;
 }
 .tds-acc__trigger:hover {
-  background: var(--teal-100);
+  background: color-mix(in srgb, var(--color-surface-primary) 72%, var(--color-surface-higher));
 }
 
 /* Chevron glyph rendered inside the trigger rotates when its panel opens. */

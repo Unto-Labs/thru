@@ -71,7 +71,7 @@
     "@noble/ed25519": "^3.1.0",
     "@noble/hashes": "^2.2.0",
     "@scure/bip39": "^2.2.0",
-    "micro-key-producer": "^0.8.6",
+    "micro-key-producer": "^0.9.0",
     "yaml": "^2.9.0"
   },
   "devDependencies": {
@@ -81,7 +81,7 @@
     "@vitest/coverage-v8": "^4.1.7",
     "jsdom": "^29.1.1",
     "ts-node": "^10.9.2",
-    "tsx": "^4.22.3",
+    "tsx": "^4.23.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.7"
   }

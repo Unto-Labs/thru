@@ -3,7 +3,7 @@
    bottom sheet is a separate component (<ThruWalletSheet>) the host
    composes alongside this provider. */
 
-import { type ReactNode, useCallback, useEffect, useState } from "react";
+import { type ReactNode, useCallback, useEffect, useMemo, useState } from "react";
 import {
   NativeSDK,
   type CreateAccountOptions,
@@ -11,7 +11,20 @@ import {
   type WalletAvailability,
 } from "../NativeSDK";
 import type { WalletAccount } from "../../interfaces";
-import type { CreateAccountResult } from "../../protocol";
+import type {
+  CreateAccountResult,
+  DepositDestination,
+  DepositRequestPayload,
+  DepositResult,
+  PrepareDepositPayload,
+} from "../../protocol";
+import type {
+  DepositAccountState,
+  EnsureDepositAccountParams,
+  GetDepositAccountStateParams,
+  WaitForDepositBalanceParams,
+} from "../../deposit";
+import { formatDepositAmount } from "../../deposit";
 import { CHECKING_WALLET_AVAILABILITY, ThruContext } from "./ThruContext";
 
 export interface ThruProviderProps {
@@ -149,6 +162,91 @@ export function ThruProvider({ children, config }: ThruProviderProps) {
     }
   }, [sdk]);
 
+  const deposit = useCallback(
+    async (payload: DepositRequestPayload): Promise<DepositResult> => {
+      if (!sdk) throw new Error("NativeSDK not initialized");
+      try {
+        return await sdk.deposit(payload);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error("deposit failed"));
+        throw err;
+      }
+    },
+    [sdk],
+  );
+
+  const prepareDeposit = useCallback(
+    async (
+      depositTargetOrPayload?: PrepareDepositPayload["depositTarget"] | PrepareDepositPayload,
+    ): Promise<DepositDestination> => {
+      if (!sdk) throw new Error("NativeSDK not initialized");
+      try {
+        return await sdk.prepareDeposit(depositTargetOrPayload);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error("prepareDeposit failed"));
+        throw err;
+      }
+    },
+    [sdk],
+  );
+
+  const ensureDepositAccount = useCallback(
+    async (params: EnsureDepositAccountParams = {}): Promise<DepositAccountState> => {
+      if (!sdk) throw new Error("NativeSDK not initialized");
+      try {
+        return await sdk.ensureDepositAccount(params);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error("ensureDepositAccount failed"));
+        throw err;
+      }
+    },
+    [sdk],
+  );
+
+  const getDepositAccountState = useCallback(
+    async (params: GetDepositAccountStateParams = {}): Promise<DepositAccountState> => {
+      if (!sdk) throw new Error("NativeSDK not initialized");
+      try {
+        return await sdk.getDepositAccountState(params);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error("getDepositAccountState failed"));
+        throw err;
+      }
+    },
+    [sdk],
+  );
+
+  const waitForDepositBalance = useCallback(
+    async (params: WaitForDepositBalanceParams): Promise<DepositAccountState> => {
+      if (!sdk) throw new Error("NativeSDK not initialized");
+      try {
+        return await sdk.waitForDepositBalance(params);
+      } catch (err) {
+        setError(err instanceof Error ? err : new Error("waitForDepositBalance failed"));
+        throw err;
+      }
+    },
+    [sdk],
+  );
+
+  const deposits = useMemo(
+    () => ({
+      prepare: prepareDeposit,
+      ensureAccount: ensureDepositAccount,
+      open: deposit,
+      getAccountState: getDepositAccountState,
+      waitForBalance: waitForDepositBalance,
+      formatAmount: formatDepositAmount,
+    }),
+    [
+      deposit,
+      ensureDepositAccount,
+      getDepositAccountState,
+      prepareDeposit,
+      waitForDepositBalance,
+    ],
+  );
+
   const createAccount = useCallback(
     async (options?: CreateAccountOptions): Promise<CreateAccountResult> => {
       if (!sdk) throw new Error("NativeSDK not initialized");
@@ -185,6 +283,13 @@ export function ThruProvider({ children, config }: ThruProviderProps) {
         selectAccount,
         createAccount,
         manageAccounts,
+        prepareDeposit,
+        deposit,
+        ensureDepositAccount,
+        getDepositAccountState,
+        waitForDepositBalance,
+        formatDepositAmount,
+        deposits,
       }}
     >
       {children}

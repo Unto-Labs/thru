@@ -26,6 +26,7 @@ export type {
   RemoveAuthorityInstructionParams,
   RegisterCredentialInstructionParams,
   AccountContext,
+  WalletAccountContext,
   WalletSigner,
   TransactionExecutionSummary,
   PasskeyMetadata,
@@ -61,7 +62,12 @@ export { createValidateChallenge, VALIDATE_CHALLENGE_DOMAIN } from './challenge'
 export { createWalletSeed, deriveWalletAddress, createCredentialLookupSeed, deriveCredentialLookupAddress } from './seeds';
 
 // Account context building
-export { buildAccountContext, buildPasskeyReadWriteAccounts } from './context';
+export {
+  assertWalletFeePayerCompatible,
+  buildAccountContext,
+  buildPasskeyReadWriteAccounts,
+  buildWalletAccountContext,
+} from './context';
 export { decodeAddress, encodeAddress } from '@thru/sdk/helpers';
 
 // Account parsing

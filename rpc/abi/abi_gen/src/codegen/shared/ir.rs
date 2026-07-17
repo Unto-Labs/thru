@@ -159,7 +159,15 @@ pub enum IrNode {
     Switch(SwitchNode),
     CallNested(CallNestedNode),
     AddChecked(BinaryOpNode),
+    SubChecked(BinaryOpNode),
     MulChecked(BinaryOpNode),
+    DivChecked(BinaryOpNode),
+    ModChecked(BinaryOpNode),
+    BitAnd(BinaryOpNode),
+    BitOr(BinaryOpNode),
+    BitXor(BinaryOpNode),
+    LeftShift(BinaryOpNode),
+    RightShift(BinaryOpNode),
     /// Sum of footprints over variable-size array elements (jagged arrays).
     SumOverArray(SumOverArrayNode),
 }
@@ -182,7 +190,16 @@ impl IrNode {
                         .unwrap_or(false)
             }
             IrNode::CallNested(_) => false,
-            IrNode::AddChecked(node) | IrNode::MulChecked(node) => {
+            IrNode::AddChecked(node)
+            | IrNode::SubChecked(node)
+            | IrNode::MulChecked(node)
+            | IrNode::DivChecked(node)
+            | IrNode::ModChecked(node)
+            | IrNode::BitAnd(node)
+            | IrNode::BitOr(node)
+            | IrNode::BitXor(node)
+            | IrNode::LeftShift(node)
+            | IrNode::RightShift(node) => {
                 node.left.contains_sum_over_array() || node.right.contains_sum_over_array()
             }
             IrNode::SumOverArray(_) => true,
@@ -203,7 +220,16 @@ impl IrNode {
                 }
             }
             IrNode::CallNested(node) => out.push(node.type_name.clone()),
-            IrNode::AddChecked(node) | IrNode::MulChecked(node) => {
+            IrNode::AddChecked(node)
+            | IrNode::SubChecked(node)
+            | IrNode::MulChecked(node)
+            | IrNode::DivChecked(node)
+            | IrNode::ModChecked(node)
+            | IrNode::BitAnd(node)
+            | IrNode::BitOr(node)
+            | IrNode::BitXor(node)
+            | IrNode::LeftShift(node)
+            | IrNode::RightShift(node) => {
                 node.left.collect_call_nested_type_names(out);
                 node.right.collect_call_nested_type_names(out);
             }

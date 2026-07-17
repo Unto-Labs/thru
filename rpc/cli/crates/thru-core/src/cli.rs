@@ -205,6 +205,17 @@ pub enum Commands {
         subcommand: ValidatorCommands,
     },
 
+    /// Feature gate / chain param commands
+    #[command(name = "feature-gates")]
+    FeatureGates {
+        /// Registry TOML path; defaults to specs/releases/feature-gates-registry.toml
+        #[arg(long)]
+        registry: Option<PathBuf>,
+
+        #[command(subcommand)]
+        subcommand: FeatureGatesCommands,
+    },
+
     /// Developer tools for toolchain and project management
     #[command(name = "dev")]
     Dev {
@@ -227,6 +238,128 @@ pub enum Commands {
     },
 }
 
+/// Feature gate / chain param subcommands
+#[derive(Subcommand)]
+pub enum FeatureGatesCommands {
+    /// List registry entries
+    List {
+        /// Filter entries by kind
+        #[arg(long, value_enum, default_value = "all")]
+        kind: FeatureGateListKind,
+    },
+
+    /// Show one registry entry by name or index
+    Show {
+        /// Registry name or numeric index
+        target: String,
+    },
+
+    /// Append the next registry entry to the on-chain account
+    CreateEntry {
+        /// Registry name or numeric index to create
+        target: String,
+
+        /// Initial value: active/inactive for gates; decimal for u8-u128 params; 0x hex for u256/u512 params
+        #[arg(long)]
+        value: String,
+
+        /// First-change stabilization lead slots
+        #[arg(long, default_value = "0")]
+        next_change_lead_slots: u64,
+
+        /// Fee payer key name; must be the creation admin signer
+        #[arg(long)]
+        fee_payer: Option<String>,
+    },
+
+    /// Arm a value transition at an activation slot
+    Arm {
+        /// Registry name or numeric index to arm
+        target: String,
+
+        /// Armed value: active/inactive for gates; decimal for u8-u128 params; 0x hex for u256/u512 params
+        #[arg(long)]
+        value: String,
+
+        /// Activation slot
+        #[arg(long)]
+        slot: u64,
+
+        /// Fee payer key name; must be the management admin signer
+        #[arg(long)]
+        fee_payer: Option<String>,
+    },
+
+    /// Cancel an armed transition
+    Disarm {
+        /// Registry name or numeric index to disarm
+        target: String,
+
+        /// Fee payer key name; must be the management admin signer
+        #[arg(long)]
+        fee_payer: Option<String>,
+    },
+
+    /// Update global timing knobs atomically
+    UpdateTimingKnobs {
+        #[arg(long)]
+        min_arming_lead_slots: u64,
+
+        #[arg(long)]
+        min_gap_between_armings_slots: u64,
+
+        #[arg(long)]
+        min_dwell_slots: u64,
+
+        #[arg(long)]
+        no_disarm_window_slots: u64,
+
+        /// Fee payer key name; must be the config admin signer
+        #[arg(long)]
+        fee_payer: Option<String>,
+    },
+
+    /// Propose a new admin for a role
+    ProposeAdmin {
+        /// Role to hand off
+        #[arg(long, value_enum)]
+        role: FeatureGateAdminRole,
+
+        /// New admin pubkey
+        #[arg(long)]
+        new_admin: String,
+
+        /// Fee payer key name; must be the current admin signer for the role
+        #[arg(long)]
+        fee_payer: Option<String>,
+    },
+
+    /// Accept a pending admin role handoff
+    AcceptAdmin {
+        /// Role to accept
+        #[arg(long, value_enum)]
+        role: FeatureGateAdminRole,
+
+        /// Fee payer key name; must be the pending admin signer for the role
+        #[arg(long)]
+        fee_payer: Option<String>,
+    },
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
+pub enum FeatureGateListKind {
+    All,
+    FeatureGate,
+    ChainParam,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, ValueEnum, Debug)]
+pub enum FeatureGateAdminRole {
+    Creation,
+    Management,
+    Config,
+}
+
 /// Program-related subcommands
 #[derive(Subcommand)]
 pub enum ProgramCommands {
@@ -243,9 +376,13 @@ pub enum ProgramCommands {
         /// Seed for meta account derivation
         seed: String,
 
-        /// Authority account name from config (optional, defaults to 'default')
+        /// Authority account name from config (optional, defaults to and must match the fee payer)
         #[arg(long)]
         authority: Option<String>,
+
+        /// Fee payer and transaction signer account name from config (optional, defaults to 'default')
+        #[arg(long)]
+        fee_payer: Option<String>,
 
         /// Program file to upload and create managed program from
         program_file: String,
@@ -275,6 +412,10 @@ pub enum ProgramCommands {
 
         /// Seed for meta and program account derivation
         seed: String,
+
+        /// Fee payer and current authority account name from config (optional, defaults to 'default')
+        #[arg(long)]
+        fee_payer: Option<String>,
 
         /// Program file to upload and upgrade managed program with
         program_file: String,
@@ -307,6 +448,10 @@ pub enum ProgramCommands {
 
         /// Set paused state (true to pause, false to unpause)
         paused: String,
+
+        /// Fee payer and current authority account name from config (optional, defaults to 'default')
+        #[arg(long)]
+        fee_payer: Option<String>,
     },
 
     /// Destroy a managed program and its meta account
@@ -322,7 +467,7 @@ pub enum ProgramCommands {
         /// Seed for meta and program account derivation
         seed: String,
 
-        /// Fee payer account name from config (optional, defaults to 'default')
+        /// Fee payer and current authority account name from config (optional, defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
     },
@@ -340,7 +485,7 @@ pub enum ProgramCommands {
         /// Seed for meta and program account derivation
         seed: String,
 
-        /// Fee payer account name from config (optional, defaults to 'default')
+        /// Fee payer and current authority account name from config (optional, defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
     },
@@ -360,6 +505,10 @@ pub enum ProgramCommands {
 
         /// New authority candidate public key
         authority_candidate: String,
+
+        /// Fee payer and current authority account name from config (optional, defaults to 'default')
+        #[arg(long)]
+        fee_payer: Option<String>,
     },
 
     /// Claim authority for a managed program
@@ -375,7 +524,7 @@ pub enum ProgramCommands {
         /// Seed for meta and program account derivation
         seed: String,
 
-        /// Fee payer account (optional, defaults to 'default')
+        /// Fee payer and authority candidate account name from config (optional, defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
     },
@@ -646,15 +795,15 @@ pub enum AbiAccountCommands {
         #[arg(long = "target-program")]
         target_program: Option<String>,
 
-        /// Fee payer account (optional, defaults to config default)
+        /// Fee payer and transaction signer key name (optional, defaults to config default)
         #[arg(long = "fee-payer")]
         fee_payer: Option<String>,
 
-        /// Authority account name from config (`program` only, accepted as alias for `publisher`)
+        /// Authority key name (`program` only; must match the fee payer)
         #[arg(long, conflicts_with = "publisher")]
         authority: Option<String>,
 
-        /// Publisher account name from config (`third-party` and `standalone` only)
+        /// Publisher key name (`third-party` and `standalone` only; must match the fee payer)
         #[arg(long, conflicts_with = "authority")]
         publisher: Option<String>,
 
@@ -676,12 +825,15 @@ pub enum AbiAccountCommands {
         #[arg(long = "target-program")]
         target_program: Option<String>,
 
+        /// Fee payer and transaction signer key name (defaults to config default)
         #[arg(long = "fee-payer")]
         fee_payer: Option<String>,
 
+        /// Authority key name (`program` only; must match the fee payer)
         #[arg(long, conflicts_with = "publisher")]
         authority: Option<String>,
 
+        /// Publisher key name (`third-party` and `standalone` only; must match the fee payer)
         #[arg(long, conflicts_with = "authority")]
         publisher: Option<String>,
 
@@ -700,12 +852,15 @@ pub enum AbiAccountCommands {
         #[arg(long = "target-program")]
         target_program: Option<String>,
 
+        /// Fee payer and transaction signer key name (defaults to config default)
         #[arg(long = "fee-payer")]
         fee_payer: Option<String>,
 
+        /// Authority key name (`program` only; must match the fee payer)
         #[arg(long, conflicts_with = "publisher")]
         authority: Option<String>,
 
+        /// Publisher key name (`third-party` and `standalone` only; must match the fee payer)
         #[arg(long, conflicts_with = "authority")]
         publisher: Option<String>,
 
@@ -723,12 +878,15 @@ pub enum AbiAccountCommands {
         #[arg(long = "target-program")]
         target_program: Option<String>,
 
+        /// Fee payer and transaction signer key name (defaults to config default)
         #[arg(long = "fee-payer")]
         fee_payer: Option<String>,
 
+        /// Authority key name (`program` only; must match the fee payer)
         #[arg(long, conflicts_with = "publisher")]
         authority: Option<String>,
 
+        /// Publisher key name (`third-party` and `standalone` only; must match the fee payer)
         #[arg(long, conflicts_with = "authority")]
         publisher: Option<String>,
 
@@ -773,6 +931,10 @@ pub enum UploaderCommands {
         #[arg(long)]
         uploader: Option<String>,
 
+        /// Fee payer and transaction signer account name from config (optional, defaults to 'default')
+        #[arg(long)]
+        fee_payer: Option<String>,
+
         /// Chunk size for upload transactions (1024-31000 bytes)
         #[arg(long, value_parser = parse_chunk_size, default_value = "30720")]
         chunk_size: usize,
@@ -794,6 +956,10 @@ pub enum UploaderCommands {
         /// Custom uploader program public key (optional)
         #[arg(long)]
         uploader: Option<String>,
+
+        /// Fee payer and transaction signer account name from config (optional, defaults to 'default')
+        #[arg(long)]
+        fee_payer: Option<String>,
 
         /// Seed for account derivation
         seed: String,
@@ -1087,7 +1253,7 @@ pub enum AccountCommands {
     Compress {
         /// Target account to compress (key name from config or ta... address)
         target_account: String,
-        /// Fee payer account (key name from config or ta... address, optional - defaults to 'default')
+        /// Fee payer key name from config (optional - defaults to 'default')
         fee_payer: Option<String>,
     },
 
@@ -1095,7 +1261,7 @@ pub enum AccountCommands {
     Decompress {
         /// Target account to decompress (key name from config or ta... address)
         target_account: String,
-        /// Fee payer account (key name from config or ta... address, optional - defaults to 'default')
+        /// Fee payer key name from config (optional - defaults to 'default')
         fee_payer: Option<String>,
     },
 
@@ -1176,7 +1342,7 @@ pub enum SignatureConvertCommands {
 pub enum TokenCommands {
     /// Initialize a new token mint
     InitializeMint {
-        /// Creator address (must be authorized to create)
+        /// Creator address (must match the selected fee payer)
         creator: String,
 
         /// Mint authority address (optional, defaults to creator)
@@ -1201,7 +1367,7 @@ pub enum TokenCommands {
         #[arg(long)]
         state_proof: Option<String>,
 
-        /// Fee payer account (optional, defaults to 'default')
+        /// Fee payer and creator signer account name (optional, defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
 
@@ -1262,13 +1428,13 @@ pub enum TokenCommands {
         /// Destination token account address
         to: String,
 
-        /// Mint authority address
+        /// Mint authority address (must match the selected fee payer)
         authority: String,
 
         /// Amount to mint
         amount: u64,
 
-        /// Fee payer account (optional, defaults to 'default')
+        /// Fee payer and mint-authority signer account name (optional, defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
 
@@ -1285,13 +1451,13 @@ pub enum TokenCommands {
         /// Mint account address
         mint: String,
 
-        /// Account authority address
+        /// Account authority address (must match the selected fee payer)
         authority: String,
 
         /// Amount to burn
         amount: u64,
 
-        /// Fee payer account (optional, defaults to 'default')
+        /// Fee payer and account-authority signer account name (optional, defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
 
@@ -1308,10 +1474,10 @@ pub enum TokenCommands {
         /// Destination for remaining balance
         destination: String,
 
-        /// Account authority address
+        /// Account authority address (must match the selected fee payer)
         authority: String,
 
-        /// Fee payer account (optional, defaults to 'default')
+        /// Fee payer and account-authority signer account name (optional, defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
 
@@ -1328,10 +1494,10 @@ pub enum TokenCommands {
         /// Mint account address
         mint: String,
 
-        /// Freeze authority address
+        /// Freeze authority address (must match the selected fee payer)
         authority: String,
 
-        /// Fee payer account (optional, defaults to 'default')
+        /// Fee payer and freeze-authority signer account name (optional, defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
 
@@ -1348,10 +1514,10 @@ pub enum TokenCommands {
         /// Mint account address
         mint: String,
 
-        /// Freeze authority address
+        /// Freeze authority address (must match the selected fee payer)
         authority: String,
 
-        /// Fee payer account (optional, defaults to 'default')
+        /// Fee payer and freeze-authority signer account name (optional, defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
 
@@ -2242,6 +2408,44 @@ mod tests {
     }
 
     #[test]
+    fn parses_uploader_fee_payer_overrides() {
+        let upload = Cli::try_parse_from([
+            "thru",
+            "uploader",
+            "upload",
+            "--fee-payer",
+            "deployer",
+            "my-seed",
+            "program.elf",
+        ])
+        .expect("uploader upload fee payer should parse");
+
+        match upload.command {
+            Commands::Uploader {
+                subcommand: UploaderCommands::Upload { fee_payer, .. },
+            } => assert_eq!(fee_payer.as_deref(), Some("deployer")),
+            _ => panic!("unexpected command"),
+        }
+
+        let cleanup = Cli::try_parse_from([
+            "thru",
+            "uploader",
+            "cleanup",
+            "--fee-payer",
+            "deployer",
+            "my-seed",
+        ])
+        .expect("uploader cleanup fee payer should parse");
+
+        match cleanup.command {
+            Commands::Uploader {
+                subcommand: UploaderCommands::Cleanup { fee_payer, .. },
+            } => assert_eq!(fee_payer.as_deref(), Some("deployer")),
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
     fn parses_program_create_skip_elf_check_flag() {
         let cli = Cli::try_parse_from([
             "thru",
@@ -2357,6 +2561,100 @@ mod tests {
                 assert_eq!(program_file, "empty.bin");
                 assert!(skip_program_image_validation);
             }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn parses_program_create_fee_payer_and_authority() {
+        let cli = Cli::try_parse_from([
+            "thru",
+            "program",
+            "create",
+            "--fee-payer",
+            "deployer",
+            "--authority",
+            "owner",
+            "my-seed",
+            "program.bin",
+        ])
+        .expect("program create key overrides should parse");
+
+        match cli.command {
+            Commands::Program {
+                subcommand:
+                    ProgramCommands::Create {
+                        fee_payer,
+                        authority,
+                        ..
+                    },
+            } => {
+                assert_eq!(fee_payer.as_deref(), Some("deployer"));
+                assert_eq!(authority.as_deref(), Some("owner"));
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn parses_program_upgrade_fee_payer() {
+        let cli = Cli::try_parse_from([
+            "thru",
+            "program",
+            "upgrade",
+            "--fee-payer",
+            "owner",
+            "my-seed",
+            "program.bin",
+        ])
+        .expect("program upgrade fee payer should parse");
+
+        match cli.command {
+            Commands::Program {
+                subcommand: ProgramCommands::Upgrade { fee_payer, .. },
+            } => assert_eq!(fee_payer.as_deref(), Some("owner")),
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn parses_program_set_pause_fee_payer() {
+        let cli = Cli::try_parse_from([
+            "thru",
+            "program",
+            "set-pause",
+            "--fee-payer",
+            "owner",
+            "my-seed",
+            "true",
+        ])
+        .expect("program set-pause fee payer should parse");
+
+        match cli.command {
+            Commands::Program {
+                subcommand: ProgramCommands::SetPause { fee_payer, .. },
+            } => assert_eq!(fee_payer.as_deref(), Some("owner")),
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn parses_program_set_authority_fee_payer() {
+        let cli = Cli::try_parse_from([
+            "thru",
+            "program",
+            "set-authority",
+            "--fee-payer",
+            "owner",
+            "my-seed",
+            "ta-candidate",
+        ])
+        .expect("program set-authority fee payer should parse");
+
+        match cli.command {
+            Commands::Program {
+                subcommand: ProgramCommands::SetAuthority { fee_payer, .. },
+            } => assert_eq!(fee_payer.as_deref(), Some("owner")),
             _ => panic!("unexpected command"),
         }
     }
@@ -2818,6 +3116,202 @@ mod tests {
                 assert!(include_account_data);
                 assert!(include_memory_dump);
             }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn parses_feature_gates_list_command() {
+        let cli = Cli::try_parse_from([
+            "thru",
+            "feature-gates",
+            "--registry",
+            "custom-registry.toml",
+            "list",
+            "--kind",
+            "chain-param",
+        ])
+        .expect("feature-gates list should parse");
+
+        match cli.command {
+            Commands::FeatureGates {
+                registry,
+                subcommand: FeatureGatesCommands::List { kind },
+            } => {
+                assert_eq!(registry.unwrap(), PathBuf::from("custom-registry.toml"));
+                assert_eq!(kind, FeatureGateListKind::ChainParam);
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn parses_feature_gates_show_command() {
+        let cli = Cli::try_parse_from(["thru", "feature-gates", "show", "parallel_exec"])
+            .expect("feature-gates show should parse");
+
+        match cli.command {
+            Commands::FeatureGates {
+                registry,
+                subcommand: FeatureGatesCommands::Show { target },
+            } => {
+                assert_eq!(registry, None);
+                assert_eq!(target, "parallel_exec");
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn parses_feature_gates_create_entry_command() {
+        let cli = Cli::try_parse_from([
+            "thru",
+            "feature-gates",
+            "create-entry",
+            "parallel_exec",
+            "--value",
+            "inactive",
+            "--next-change-lead-slots",
+            "12",
+            "--fee-payer",
+            "creation-admin",
+        ])
+        .expect("feature-gates create-entry should parse");
+
+        match cli.command {
+            Commands::FeatureGates {
+                subcommand:
+                    FeatureGatesCommands::CreateEntry {
+                        target,
+                        value,
+                        next_change_lead_slots,
+                        fee_payer,
+                    },
+                ..
+            } => {
+                assert_eq!(target, "parallel_exec");
+                assert_eq!(value, "inactive");
+                assert_eq!(next_change_lead_slots, 12);
+                assert_eq!(fee_payer.unwrap(), "creation-admin");
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn parses_feature_gates_arm_and_disarm_commands() {
+        let arm = Cli::try_parse_from([
+            "thru",
+            "feature-gates",
+            "arm",
+            "max_compute_units_per_txn",
+            "--value",
+            "1000",
+            "--slot",
+            "77",
+        ])
+        .expect("feature-gates arm should parse");
+        match arm.command {
+            Commands::FeatureGates {
+                subcommand:
+                    FeatureGatesCommands::Arm {
+                        target,
+                        value,
+                        slot,
+                        fee_payer,
+                    },
+                ..
+            } => {
+                assert_eq!(target, "max_compute_units_per_txn");
+                assert_eq!(value, "1000");
+                assert_eq!(slot, 77);
+                assert_eq!(fee_payer, None);
+            }
+            _ => panic!("unexpected command"),
+        }
+
+        let disarm = Cli::try_parse_from(["thru", "feature-gates", "disarm", "0"])
+            .expect("feature-gates disarm should parse");
+        match disarm.command {
+            Commands::FeatureGates {
+                subcommand: FeatureGatesCommands::Disarm { target, fee_payer },
+                ..
+            } => {
+                assert_eq!(target, "0");
+                assert_eq!(fee_payer, None);
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn parses_feature_gates_admin_and_timing_commands() {
+        let timing = Cli::try_parse_from([
+            "thru",
+            "feature-gates",
+            "update-timing-knobs",
+            "--min-arming-lead-slots",
+            "1",
+            "--min-gap-between-armings-slots",
+            "2",
+            "--min-dwell-slots",
+            "3",
+            "--no-disarm-window-slots",
+            "4",
+        ])
+        .expect("feature-gates update-timing-knobs should parse");
+        match timing.command {
+            Commands::FeatureGates {
+                subcommand:
+                    FeatureGatesCommands::UpdateTimingKnobs {
+                        min_arming_lead_slots,
+                        min_gap_between_armings_slots,
+                        min_dwell_slots,
+                        no_disarm_window_slots,
+                        ..
+                    },
+                ..
+            } => {
+                assert_eq!(min_arming_lead_slots, 1);
+                assert_eq!(min_gap_between_armings_slots, 2);
+                assert_eq!(min_dwell_slots, 3);
+                assert_eq!(no_disarm_window_slots, 4);
+            }
+            _ => panic!("unexpected command"),
+        }
+
+        let propose = Cli::try_parse_from([
+            "thru",
+            "feature-gates",
+            "propose-admin",
+            "--role",
+            "management",
+            "--new-admin",
+            &"11".repeat(32),
+        ])
+        .expect("feature-gates propose-admin should parse");
+        match propose.command {
+            Commands::FeatureGates {
+                subcommand:
+                    FeatureGatesCommands::ProposeAdmin {
+                        role, new_admin, ..
+                    },
+                ..
+            } => {
+                assert_eq!(role, FeatureGateAdminRole::Management);
+                assert_eq!(new_admin, "11".repeat(32));
+            }
+            _ => panic!("unexpected command"),
+        }
+
+        let accept =
+            Cli::try_parse_from(["thru", "feature-gates", "accept-admin", "--role", "config"])
+                .expect("feature-gates accept-admin should parse");
+        match accept.command {
+            Commands::FeatureGates {
+                subcommand: FeatureGatesCommands::AcceptAdmin { role, .. },
+                ..
+            } => assert_eq!(role, FeatureGateAdminRole::Config),
             _ => panic!("unexpected command"),
         }
     }

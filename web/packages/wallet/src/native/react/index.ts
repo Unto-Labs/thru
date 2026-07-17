@@ -37,4 +37,26 @@ export type {
   NativeWalletExperience,
   WalletAvailability,
 } from "../NativeSDK";
-export type { ManageAccountsResult } from "../../protocol";
+export type {
+  DepositDestination,
+  DepositRequestPayload,
+  DepositResult,
+  DepositUiConfig,
+  ManageAccountsResult,
+  PrepareDepositPayload,
+} from "../../protocol";
+export {
+  DepositTarget,
+  ThruNetwork,
+} from "../../protocol";
+export type {
+  DepositAccountState,
+  DepositsApi,
+  EnsureDepositAccountParams,
+  GetDepositAccountStateParams,
+  WaitForDepositBalanceParams,
+} from "../../deposit";
+export {
+  DepositTransactionError,
+  formatDepositAmount,
+} from "../../deposit";

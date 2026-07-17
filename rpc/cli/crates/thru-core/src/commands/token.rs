@@ -42,6 +42,24 @@ fn resolve_fee_payer_keypair(
         .map_err(|e| CliError::Crypto(format!("Failed to create fee payer keypair: {}", e)))
 }
 
+/// Resolve an on-chain actor that must have authorized the transaction.
+/// Thru transactions currently carry only the fee payer signature, so the
+/// supplied actor must be the fee payer's public key.
+fn resolve_authorized_actor(
+    actor: &str,
+    label: &str,
+    fee_payer_keypair: &KeyPair,
+) -> Result<[u8; 32], CliError> {
+    let actor_pubkey = validate_address_or_hex(actor)?;
+    if actor_pubkey != fee_payer_keypair.public_key {
+        let fee_payer_address = &fee_payer_keypair.address_string;
+        return Err(CliError::Validation(format!(
+            "{label} '{actor}' must match the fee payer ({fee_payer_address}), as only the fee payer signature is included"
+        )));
+    }
+    Ok(actor_pubkey)
+}
+
 /// Resolve the token program pubkey, optionally overriding with command-line input.
 fn resolve_token_program(
     config: &Config,
@@ -168,15 +186,12 @@ struct TransactionContext {
     pub timeout_seconds: u64,
 }
 
-/// Setup common transaction context (config, keypair, client, nonce, block height)
+/// Setup common transaction context after all local inputs have been resolved.
 async fn setup_transaction_context(
     config: &Config,
-    fee_payer: Option<&str>,
-    token_program: Option<&str>,
+    fee_payer_keypair: KeyPair,
+    token_program_bytes: [u8; 32],
 ) -> Result<TransactionContext, CliError> {
-    let (_token_program_pubkey, token_program_bytes) =
-        resolve_token_program(config, token_program)?;
-    let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
     let client = create_rpc_client(config)?;
 
     // Get current nonce and block height
@@ -516,17 +531,18 @@ async fn initialize_mint(
     // Parse seed
     let seed_bytes = parse_seed_bytes(seed)?;
 
-    // Resolve addresses
-    let creator_pubkey = validate_address_or_hex(creator)?;
+    // Resolve the token program and the only transaction signer first so the
+    // creator authorization can be validated before deriving or submitting.
+    let (token_program_pubkey, token_program_bytes) = resolve_token_program(config, token_program)?;
+    let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
+
+    // The creator is an authorized actor and must therefore be the fee payer.
+    let creator_pubkey = resolve_authorized_actor(creator, "Creator", &fee_payer_keypair)?;
     let mint_authority_pubkey = validate_address_or_hex(mint_authority_str)?;
     let freeze_authority_pubkey = match freeze_authority {
         Some(addr) => Some(validate_address_or_hex(addr)?),
         None => None,
     };
-
-    // Resolve token program and fee payer
-    let (token_program_pubkey, token_program_bytes) = resolve_token_program(config, token_program)?;
-    let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
 
     // Create RPC client
     let client = create_rpc_client(config)?;
@@ -845,8 +861,13 @@ async fn transfer(
     let from_pubkey = validate_address_or_hex(from)?;
     let to_pubkey = validate_address_or_hex(to)?;
 
+    // Resolve local transaction inputs before making RPC requests.
+    let (_token_program_pubkey, token_program_bytes) =
+        resolve_token_program(config, token_program)?;
+    let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
+
     // Setup transaction context
-    let context = setup_transaction_context(config, fee_payer, token_program)
+    let context = setup_transaction_context(config, fee_payer_keypair, token_program_bytes)
         .await
         .map_err(|e| handle_account_not_found_error(e, "token_transfer", json_format))?;
 
@@ -924,13 +945,19 @@ async fn mint_to(
         println!("  Amount: {}", amount);
     }
 
-    // Resolve mint, to, and authority addresses
+    // Resolve mint and destination addresses.
     let mint_pubkey = validate_address_or_hex(mint)?;
     let to_pubkey = validate_address_or_hex(to)?;
-    let authority_pubkey = validate_address_or_hex(authority)?;
+
+    // Resolve and validate every local transaction input before making RPC requests.
+    let (_token_program_pubkey, token_program_bytes) =
+        resolve_token_program(config, token_program)?;
+    let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
+    let authority_pubkey =
+        resolve_authorized_actor(authority, "Mint authority", &fee_payer_keypair)?;
 
     // Setup transaction context
-    let context = setup_transaction_context(config, fee_payer, token_program)
+    let context = setup_transaction_context(config, fee_payer_keypair, token_program_bytes)
         .await
         .map_err(|e| handle_account_not_found_error(e, "token_mint_to", json_format))?;
 
@@ -1011,12 +1038,13 @@ async fn burn(
     // Resolve addresses
     let account_pubkey = validate_address_or_hex(account)?;
     let mint_pubkey = validate_address_or_hex(mint)?;
-    let authority_pubkey = validate_address_or_hex(authority)?;
 
     // Resolve configuration
     let (_token_program_pubkey, token_program_bytes) =
         resolve_token_program(config, token_program)?;
     let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
+    let authority_pubkey =
+        resolve_authorized_actor(authority, "Burn authority", &fee_payer_keypair)?;
 
     // Create RPC client
     let client = create_rpc_client(config)?;
@@ -1118,12 +1146,13 @@ async fn close_account(
     // Resolve addresses
     let account_pubkey = validate_address_or_hex(account)?;
     let destination_pubkey = validate_address_or_hex(destination)?;
-    let authority_pubkey = validate_address_or_hex(authority)?;
 
     // Resolve configuration
     let (_token_program_pubkey, token_program_bytes) =
         resolve_token_program(config, token_program)?;
     let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
+    let authority_pubkey =
+        resolve_authorized_actor(authority, "Close authority", &fee_payer_keypair)?;
 
     // Create RPC client
     let client = create_rpc_client(config)?;
@@ -1222,12 +1251,13 @@ async fn freeze_account(
     // Resolve addresses
     let account_pubkey = validate_address_or_hex(account)?;
     let mint_pubkey = validate_address_or_hex(mint)?;
-    let authority_pubkey = validate_address_or_hex(authority)?;
 
     // Resolve configuration
     let (_token_program_pubkey, token_program_bytes) =
         resolve_token_program(config, token_program)?;
     let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
+    let authority_pubkey =
+        resolve_authorized_actor(authority, "Freeze authority", &fee_payer_keypair)?;
 
     // Create RPC client
     let client = create_rpc_client(config)?;
@@ -1326,12 +1356,13 @@ async fn thaw_account(
     // Resolve addresses
     let account_pubkey = validate_address_or_hex(account)?;
     let mint_pubkey = validate_address_or_hex(mint)?;
-    let authority_pubkey = validate_address_or_hex(authority)?;
 
     // Resolve configuration
     let (_token_program_pubkey, token_program_bytes) =
         resolve_token_program(config, token_program)?;
     let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
+    let authority_pubkey =
+        resolve_authorized_actor(authority, "Thaw authority", &fee_payer_keypair)?;
 
     // Create RPC client
     let client = create_rpc_client(config)?;
@@ -1849,6 +1880,50 @@ mod tests {
      * Declared locally in the tests as the fixture contract; production code
      * derives the size from the ABI via reflection, not this constant. */
     const TOKEN_ACCOUNT_WIRE_LEN: usize = 32 + 32 + 8 + 1;
+
+    #[test]
+    fn authorized_actor_must_match_fee_payer() {
+        let signer = KeyPair::from_hex_private_key("signer", hex::encode([1u8; 32])).unwrap();
+        let other = KeyPair::from_hex_private_key("other", hex::encode([2u8; 32])).unwrap();
+
+        let actor =
+            resolve_authorized_actor(signer.address_string.as_str(), "Authority", &signer).unwrap();
+        assert_eq!(actor, signer.public_key);
+
+        let error = resolve_authorized_actor(other.address_string.as_str(), "Authority", &signer)
+            .expect_err("a separately supplied token authority cannot sign the transaction");
+        assert!(error.to_string().contains("must match the fee payer"));
+    }
+
+    #[tokio::test]
+    async fn mint_to_rejects_mismatched_authority_before_rpc_setup() {
+        let mut config = Config {
+            rpc_base_url: "not a valid RPC URL".to_string(),
+            ..Config::default()
+        };
+        config
+            .keys
+            .add_key("default", &hex::encode([1u8; 32]), true)
+            .unwrap();
+
+        let signer = KeyPair::from_hex_private_key("signer", hex::encode([1u8; 32])).unwrap();
+        let other = KeyPair::from_hex_private_key("other", hex::encode([2u8; 32])).unwrap();
+
+        let error = mint_to(
+            &config,
+            signer.address_string.as_str(),
+            signer.address_string.as_str(),
+            other.address_string.as_str(),
+            1,
+            None,
+            None,
+            true,
+        )
+        .await
+        .expect_err("mismatched authority must fail before the invalid RPC URL is used");
+
+        assert!(error.to_string().contains("must match the fee payer"));
+    }
 
     fn build_token_account_blob(
         mint: [u8; 32],

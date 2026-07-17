@@ -13,6 +13,8 @@ pub mod commands;
 pub mod config;
 pub mod crypto;
 pub mod error;
+pub mod feature_gate_account;
+pub mod feature_gate_registry;
 pub mod output;
 pub mod utils;
 pub mod version_check;
@@ -34,12 +36,9 @@ pub async fn run() -> anyhow::Result<()> {
         version_check::check_and_notify().await;
     }
 
-    // Load configuration
-    let mut config = if matches!(&cli.command, Commands::Keys { .. }) {
-        Config::load_for_key_management().await?
-    } else {
-        Config::load().await?
-    };
+    // Load configuration. A default key is resolved lazily by commands that
+    // omit an explicit named signer.
+    let mut config = Config::load().await?;
 
     // Announce the pending transaction signature before sending, except in
     // machine-readable (`--json`) or `--quiet` modes. This works in scripts,
@@ -130,6 +129,18 @@ pub async fn run() -> anyhow::Result<()> {
         Commands::Validator { subcommand } => {
             commands::consensus_validator::handle_validator_command(&config, subcommand, cli.json)
                 .await
+        }
+        Commands::FeatureGates {
+            registry,
+            subcommand,
+        } => {
+            commands::feature_gates::handle_feature_gates_command(
+                &config,
+                registry.as_deref(),
+                subcommand,
+                cli.json,
+            )
+            .await
         }
         Commands::Uploader { subcommand } => {
             commands::uploader::handle_uploader_command(&config, subcommand, cli.json).await

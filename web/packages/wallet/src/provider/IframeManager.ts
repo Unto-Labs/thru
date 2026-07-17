@@ -16,9 +16,10 @@ import {
  * Development builds additionally allow localhost, LAN, and Tailscale
  * origins so local HTTPS RP-ID testing can use the hosted wallet path.
  */
-const PRODUCTION_IFRAME_ORIGINS = [
+const TRUSTED_IFRAME_ORIGINS = [
   'https://app.tid.sh',
   'https://wallet.tid.sh',
+  'https://wallet.staging.web.5f1.net',
 ];
 
 const SLOW_REQUEST_TIMEOUT_MS = 5 * 60 * 1000;
@@ -34,6 +35,7 @@ const SLOW_REQUEST_TYPES: ReadonlySet<string> = new Set([
   POST_MESSAGE_REQUEST_TYPES.CREATE_SIGNING_SESSION,
   POST_MESSAGE_REQUEST_TYPES.CREATE_SIGNING_SESSION_INSTRUCTION,
   POST_MESSAGE_REQUEST_TYPES.CONFIRM_SIGNING_SESSION,
+  POST_MESSAGE_REQUEST_TYPES.DEPOSIT,
 ]);
 
 function isPrivateIpv4Host(hostname: string): boolean {
@@ -92,12 +94,12 @@ function validateIframeOrigin(iframeUrl: string): void {
 
   const origin = url.origin;
   const isAllowed =
-    PRODUCTION_IFRAME_ORIGINS.includes(origin) || isAllowedDevelopmentOrigin(url);
+    TRUSTED_IFRAME_ORIGINS.includes(origin) || isAllowedDevelopmentOrigin(url);
 
   if (!isAllowed) {
     throw new Error(
       `Untrusted iframe origin: ${origin}. ` +
-        `Only trusted wallet origins are allowed: ${PRODUCTION_IFRAME_ORIGINS.join(', ')}. ` +
+        `Only trusted wallet origins are allowed: ${TRUSTED_IFRAME_ORIGINS.join(', ')}. ` +
         `Development builds also allow localhost, LAN, and Tailscale wallet origins. ` +
         `This security check prevents malicious websites from loading unauthorized wallet iframes.`
     );
