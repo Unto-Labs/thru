@@ -55,7 +55,7 @@ thru program create <seed> build/thruvm/bin/{{PROGRAM_NAME}}_c.bin
 Edit `examples/{{PROGRAM_NAME}}.c` to modify your program logic.
 
 For more information on the Thru C SDK, see the SDK documentation at:
-https://docs.thru.org/program-development/setting-up-thru-devkit
+https://thru.org/docs/program-development/setting-up-thru-devkit/
 
 ## License
 
