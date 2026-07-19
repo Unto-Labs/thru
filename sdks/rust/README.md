@@ -121,7 +121,7 @@ If you prefer to run the dependency installation manually:
 
 ```bash
 # Install Rust and RISC-V target
-./deps.sh --thru-dir $HOME install-rust
+../deps.sh --thru-dir $HOME install-rust
 
 # Source Rust environment
 source $HOME/.cargo/env
