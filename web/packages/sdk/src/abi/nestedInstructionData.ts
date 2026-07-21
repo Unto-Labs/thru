@@ -1,6 +1,8 @@
 import type { FormattedReflection } from "./types";
 
 export const MAX_NESTED_INSTRUCTION_DEPTH = 15;
+const ABI_UNAVAILABLE_DECODE_HINT =
+  "This transaction executed, but the instruction data could not be decoded because no matching ABI was available for this program.";
 
 export interface NestedInstructionDecodeOptions {
   maxDepth?: number;
@@ -70,6 +72,7 @@ async function resolveInstructionDataValue(
   maxDepth: number,
 ): Promise<void> {
   delete value.decodeError;
+  delete value.decodeHint;
   delete value.decodedInstruction;
   delete value.programAddress;
 
@@ -99,7 +102,11 @@ async function resolveInstructionDataValue(
   try {
     const decoded = await decoder(programAddress, data);
     if (!decoded) {
-      insertError(value, `ABI unavailable for program ${programAddress}`);
+      insertError(
+        value,
+        `ABI unavailable for program ${programAddress}`,
+        ABI_UNAVAILABLE_DECODE_HINT,
+      );
       return;
     }
 
@@ -125,8 +132,13 @@ function isInstructionDataValue(value: JsonObject): boolean {
   );
 }
 
-function insertError(value: JsonObject, message: string): void {
+function insertError(value: JsonObject, message: string, hint?: string): void {
   value.decodeError = message;
+  if (hint) {
+    value.decodeHint = hint;
+  } else {
+    delete value.decodeHint;
+  }
 }
 
 function parseHexBytes(value: string): Uint8Array {

@@ -2,6 +2,8 @@ use crate::formatter::FormattedReflection;
 use serde_json::{Map, Value as JsonValue};
 
 pub const MAX_NESTED_INSTRUCTION_DEPTH: usize = 15;
+const ABI_UNAVAILABLE_DECODE_HINT: &str =
+    "This transaction executed, but the instruction data could not be decoded because no matching ABI was available for this program.";
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct NestedInstructionDecodeOptions {
@@ -115,6 +117,7 @@ fn resolve_instruction_data_value<A, F>(
     F: FnMut(&str, &[u8]) -> Result<Option<FormattedReflection>, String>,
 {
     map.remove("decodeError");
+    map.remove("decodeHint");
     map.remove("decodedInstruction");
     map.remove("programAddress");
 
@@ -176,9 +179,10 @@ fn resolve_instruction_data_value<A, F>(
             }
         }
         Ok(None) => {
-            insert_error(
+            insert_error_with_hint(
                 map,
                 format!("ABI unavailable for program {program_address}"),
+                Some(ABI_UNAVAILABLE_DECODE_HINT),
             );
         }
         Err(err) => {
@@ -197,7 +201,20 @@ fn is_instruction_data_value(map: &Map<String, JsonValue>) -> bool {
 }
 
 fn insert_error(map: &mut Map<String, JsonValue>, message: impl Into<String>) {
+    insert_error_with_hint(map, message, None);
+}
+
+fn insert_error_with_hint(
+    map: &mut Map<String, JsonValue>,
+    message: impl Into<String>,
+    hint: Option<&'static str>,
+) {
     map.insert("decodeError".to_string(), JsonValue::String(message.into()));
+    if let Some(hint) = hint {
+        map.insert("decodeHint".to_string(), JsonValue::String(hint.to_string()));
+    } else {
+        map.remove("decodeHint");
+    }
 }
 
 fn parse_hex_bytes(value: &str) -> Result<Vec<u8>, String> {
@@ -392,6 +409,10 @@ mod tests {
         assert_eq!(
             invoke.get("decodeError").and_then(JsonValue::as_str),
             Some("ABI unavailable for program token")
+        );
+        assert_eq!(
+            invoke.get("decodeHint").and_then(JsonValue::as_str),
+            Some("This transaction executed, but the instruction data could not be decoded because no matching ABI was available for this program.")
         );
     }
 

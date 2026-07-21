@@ -105,6 +105,9 @@ describe("resolveNestedInstructionData", () => {
     expect(missingAbi.value.invoke.decodeError).toBe(
       "ABI unavailable for program token",
     );
+    expect(missingAbi.value.invoke.decodeHint).toBe(
+      "This transaction executed, but the instruction data could not be decoded because no matching ABI was available for this program.",
+    );
   });
 
   it("ignores lookalike objects that were not marked by the InstructionData handler", async () => {
