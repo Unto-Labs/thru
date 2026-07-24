@@ -18,6 +18,7 @@ import {
 
 const TRUSTED_WALLET_ORIGINS = [
   'https://app.tid.sh',
+  'https://staging-app.tid.sh',
   'https://wallet.tid.sh',
   'https://wallet.staging.web.5f1.net',
 ];

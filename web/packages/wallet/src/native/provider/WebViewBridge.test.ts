@@ -180,8 +180,24 @@ describe('WebViewBridge', () => {
     productionBridge.destroy();
   });
 
+  it('allows staging-app.tid.sh in production builds', () => {
+    process.env.NODE_ENV = 'production';
+
+    const stagingBridge = new WebViewBridge({
+      walletUrl: 'https://staging-app.tid.sh/embedded/native/transparent',
+    });
+    expect(stagingBridge.walletOrigin).toBe('https://staging-app.tid.sh');
+    stagingBridge.destroy();
+  });
+
   it('allows the staging wallet in production builds', () => {
     process.env.NODE_ENV = 'production';
+
+    const stagingAppBridge = new WebViewBridge({
+      walletUrl: 'https://staging-app.tid.sh/embedded',
+    });
+    expect(stagingAppBridge.walletOrigin).toBe('https://staging-app.tid.sh');
+    stagingAppBridge.destroy();
 
     const stagingBridge = new WebViewBridge({
       walletUrl: 'https://wallet.staging.web.5f1.net/embedded',

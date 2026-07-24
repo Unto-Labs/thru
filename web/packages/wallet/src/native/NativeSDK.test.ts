@@ -915,6 +915,24 @@ describe("NativeSDK", () => {
     await expect(promise).resolves.toEqual(state);
     expect(sdk.isConnected()).toBe(true);
     expect(sdk.getAccounts()).toEqual(state.accounts);
+
+    const reconnectPromise = sdk.connect();
+    await flush();
+
+    const reconnectRequest = parseInjectedRequest(webView.injected[1]);
+    expect(reconnectRequest.type).toBe(POST_MESSAGE_REQUEST_TYPES.CONNECT);
+    sdk.onMessage(
+      responseMessage(frameId, reconnectRequest.id, {
+        accounts: state.accounts,
+        selectedAccount: state.selectedAccount,
+        status: "completed",
+        metadata: state.metadata,
+      }),
+    );
+    await expect(reconnectPromise).resolves.toMatchObject({
+      status: "completed",
+      selectedAccount: state.selectedAccount,
+    });
   });
 
   it("reports wallet availability without hydrating unauthorized accounts", async () => {

@@ -402,6 +402,7 @@ export interface RevokeSigningSessionResult {
 export enum ThruNetwork {
   Alphanet = "alphanet",
   Devnet = "devnet",
+  SweepsStagingNet = "sweeps-staging-net",
   Sweepnet = "sweepnet",
 }
 
@@ -555,14 +556,9 @@ export interface PrepareDepositPayload {
   network?: ThruNetwork;
 }
 
-/**
- * Deposit ("Add funds") intent. The dApp asks the wallet to open its Deposit
- * screen for a prepared token destination; the wallet validates that the
- * destination still matches the provider network and configured mint before it
- * runs Unifold. Crediting is authoritative on the server webhook — the result
- * here only reports the terminal UX state.
- */
-export interface DepositRequestPayload {
+/** Existing Unifold deposit intent for a prepared token destination. */
+export interface PreparedDepositRequestPayload {
+  method?: "unifold";
   /** Destination returned by prepareDeposit. */
   destination: DepositDestination;
   /** Resolved provider network. SDK/provider code fills this before crossing the iframe bridge. */
@@ -571,10 +567,26 @@ export interface DepositRequestPayload {
   chainHint?: string;
 }
 
-export interface DepositRequestMessagePayload extends DepositRequestPayload {
+/** Wallet-owned Coinbase headless onramp intent. No prepared Thru destination is required. */
+export interface CoinbaseDepositRequestPayload {
+  method: "coinbase";
+  /** Resolved provider network. SDK/provider code fills this before crossing the iframe bridge. */
+  network?: ThruNetwork;
+}
+
+/**
+ * Deposit ("Add funds") intent. Prepared destinations use the existing
+ * Unifold path. Coinbase is an explicit wallet-owned flow rendered inside the
+ * wallet WebView.
+ */
+export type DepositRequestPayload =
+  | PreparedDepositRequestPayload
+  | CoinbaseDepositRequestPayload;
+
+export type DepositRequestMessagePayload = DepositRequestPayload & {
   /** Internal wallet bridge field resolved from provider mount-time config. */
   resolvedDepositUiConfig?: DepositUiConfig;
-}
+};
 
 export interface DepositResult {
   /**

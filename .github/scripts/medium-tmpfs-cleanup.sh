@@ -90,7 +90,9 @@ else
   echo "Docker tmpfs offload was disabled for this job; leaving Docker running"
 fi
 
-unmount_if_mounted /var/lib/docker
+if [ "${docker_tmpfs}" != "0" ]; then
+  unmount_if_mounted /var/lib/docker
+fi
 unmount_if_mounted /var/cache/sccache
 unmount_if_mounted /home/runner/.cache
 unmount_if_mounted "${GITHUB_WORKSPACE}" -l

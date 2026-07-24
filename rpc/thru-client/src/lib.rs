@@ -50,6 +50,7 @@ use thru_grpc_client::thru::{
     services::v1::{
         self as servicesv1, command_service_client::CommandServiceClient,
         debug_service_client::DebugServiceClient, query_service_client::QueryServiceClient,
+        streaming_service_client::StreamingServiceClient,
     },
 };
 
@@ -1071,6 +1072,90 @@ impl Client {
         Ok(signature_bytes)
     }
 
+    /// Submit many pre-signed transactions in a single request **without**
+    /// waiting for confirmation.
+    ///
+    /// Returns `(signature, accepted)` for each transaction, in the same order
+    /// as `transactions`. `accepted` reflects whether the forwarder took the
+    /// transaction (via UDS); `num_retries` controls how many times the server
+    /// retries UDS acceptance per transaction. Use [`Client::stream_confirmations`]
+    /// to observe when the accepted transactions actually land on-chain.
+    pub async fn batch_send_transactions(
+        &self,
+        transactions: &[Vec<u8>],
+        num_retries: i32,
+    ) -> Result<Vec<([u8; 64], bool)>> {
+        let mut client = CommandServiceClient::new(self.channel.clone())
+            .max_decoding_message_size(128 * 1024 * 1024) /* 128 MB */
+            .max_encoding_message_size(128 * 1024 * 1024); /* 128 MB */
+        let mut grpc_request = Request::new(servicesv1::BatchSendTransactionsRequest {
+            raw_transactions: transactions.to_vec(),
+            num_retries,
+        });
+        self.apply_metadata(&mut grpc_request);
+        grpc_request.set_timeout(self.timeout);
+
+        let response = client
+            .batch_send_transactions(grpc_request)
+            .await?
+            .into_inner();
+
+        let accepted = response.accepted;
+        let mut out = Vec::with_capacity(response.signatures.len());
+        for (i, sig) in response.signatures.into_iter().enumerate() {
+            let sig_bytes =
+                array_from_vec::<64>(sig.value, "signature").map_err(ClientError::Validation)?;
+            out.push((sig_bytes, accepted.get(i).copied().unwrap_or(false)));
+        }
+        Ok(out)
+    }
+
+    /// Open a live server stream of `INCLUDED` transaction confirmations paid
+    /// for by `fee_payer`.
+    ///
+    /// This lets a caller track many in-flight transactions over a single
+    /// connection instead of one tracking stream per transaction. The returned
+    /// [`ConfirmationStream`] yields a [`Confirmation`] per matching transaction
+    /// as it is included on-chain.
+    pub async fn stream_confirmations(&self, fee_payer: &Pubkey) -> Result<ConfirmationStream> {
+        let mut client = StreamingServiceClient::new(self.channel.clone())
+            .max_decoding_message_size(128 * 1024 * 1024) /* 128 MB */
+            .max_encoding_message_size(128 * 1024 * 1024); /* 128 MB */
+
+        let fee_payer_bytes = pubkey_bytes(fee_payer)?;
+        let mut params = HashMap::new();
+        params.insert(
+            "fee_payer".to_string(),
+            commonv1::FilterParamValue {
+                kind: Some(commonv1::filter_param_value::Kind::BytesValue(
+                    fee_payer_bytes.to_vec(),
+                )),
+            },
+        );
+
+        let request = servicesv1::StreamTransactionsRequest {
+            filter: Some(commonv1::Filter {
+                expression: Some(
+                    "has(transaction.header.fee_payer_pubkey) && \
+                     transaction.header.fee_payer_pubkey.value == params.fee_payer"
+                        .to_string(),
+                ),
+                params,
+            }),
+            min_consensus: Some(commonv1::ConsensusStatus::Included as i32),
+        };
+
+        let mut grpc_request = Request::new(request);
+        self.apply_metadata(&mut grpc_request);
+        /* No per-request timeout: this is a long-lived subscription. */
+
+        let stream = client
+            .stream_transactions(grpc_request)
+            .await?
+            .into_inner();
+        Ok(ConfirmationStream { inner: stream })
+    }
+
     async fn fetch_transaction_details(
         &self,
         signature: &[u8; 64],
@@ -1404,6 +1489,97 @@ fn is_possibly_submitted_tracking_error(err: &ClientError) -> bool {
         }
         _ => false,
     }
+}
+
+/// A single confirmed transaction observed on a [`Client::stream_confirmations`]
+/// stream.
+#[derive(Debug, Clone)]
+pub struct Confirmation {
+    /// The transaction's signature.
+    pub signature: [u8; 64],
+    /// VM error code (`0` == success).
+    pub vm_error: i32,
+    /// Runtime execution result (`0` == success).
+    pub execution_result: u64,
+    /// Slot the transaction was included in.
+    pub slot: u64,
+}
+
+/// A live stream of transaction confirmations for a fee payer.
+///
+/// Returned by [`Client::stream_confirmations`]. Drop it to unsubscribe.
+pub struct ConfirmationStream {
+    inner: tonic::codec::Streaming<servicesv1::StreamTransactionsResponse>,
+}
+
+impl ConfirmationStream {
+    /// Await the next confirmation.
+    ///
+    /// - `Ok(Some(c))` — a confirmed transaction arrived.
+    /// - `Ok(None)`    — no confirmation arrived within `timeout`; the caller may
+    ///   keep waiting or resend outstanding transactions.
+    /// - `Err(_)`      — the underlying stream ended or errored.
+    pub async fn next(&mut self, timeout: Duration) -> Result<Option<Confirmation>> {
+        /* One deadline for the whole call: `timeout` bounds the total wait, not
+           each individual `message()` fetch. Without this, a steady trickle of
+           not-yet-includable messages would restart the budget every iteration and
+           block far longer than the caller asked — unbounded in the worst case.
+           The `while Instant::now() < deadline` guard also guarantees termination
+           even if such messages arrive already-ready (a zero `remaining` would let
+           `time::timeout` return the ready value rather than elapse). */
+        let deadline = Instant::now() + timeout;
+        while Instant::now() < deadline {
+            let remaining = deadline.saturating_duration_since(Instant::now());
+            match time::timeout(remaining, self.inner.message()).await {
+                Ok(Ok(Some(resp))) => {
+                    if let Some(tx) = resp.transaction {
+                        if let Some(c) = confirmation_from_transaction(&tx) {
+                            return Ok(Some(c));
+                        }
+                        /* Not yet includable (no slot/sig) — keep reading. */
+                    }
+                }
+                Ok(Ok(None)) => {
+                    return Err(ClientError::TransactionVerification(
+                        "confirmation stream closed by server".to_string(),
+                    ));
+                }
+                Ok(Err(status)) => return Err(ClientError::Rpc(status.to_string())),
+                Err(_) => return Ok(None), /* timed out waiting for a message */
+            }
+        }
+        Ok(None) /* deadline reached without a confirmation */
+    }
+}
+
+fn confirmation_from_transaction(tx: &corev1::Transaction) -> Option<Confirmation> {
+    let slot = tx.slot.unwrap_or(0);
+    if slot == 0 {
+        return None;
+    }
+    let sig = tx.signature.as_ref()?;
+    let signature = <[u8; 64]>::try_from(sig.value.as_slice()).ok()?;
+    /* Require an execution result before reporting a confirmation. The same
+       stream also carries block-inclusion copies (consensus INCLUDED) that have
+       a slot and signature but no execution result yet; those must NOT be
+       collapsed into a `(vm_error, execution_result) == (0, 0)` success, which
+       `Confirmation` documents as executed-successfully. Treat the absent result
+       like the not-yet-includable case above and keep reading — the executed
+       copy (consensus CLUSTER_EXECUTED) carries the real outcome. */
+    let result = tx.execution_result.as_ref()?;
+    let (vm_error, execution_result) = (result.vm_error, result.execution_result);
+    Some(Confirmation {
+        signature,
+        vm_error,
+        execution_result,
+        slot,
+    })
+}
+
+/// Extract the fee-payer signature (trailing 64 bytes) from a signed wire
+/// transaction produced by `Transaction::to_wire`.
+pub fn signature_from_wire(transaction: &[u8]) -> Result<[u8; 64]> {
+    transaction_signature_from_wire(transaction)
 }
 
 fn transaction_signature_from_wire(transaction: &[u8]) -> Result<[u8; 64]> {
@@ -1781,5 +1957,71 @@ impl Default for PrepareAccountDecompressionResponse {
             account_data: String::new(),
             state_proof: String::new(),
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn signature() -> commonv1::Signature {
+        commonv1::Signature {
+            value: vec![7u8; 64],
+        }
+    }
+
+    /// A transaction that is only block-included (consensus INCLUDED) arrives on
+    /// the confirmation stream with a slot and signature but no execution result.
+    /// It must NOT be reported as an executed confirmation — otherwise the absent
+    /// result would be indistinguishable from a `(vm_error, execution_result) ==
+    /// (0, 0)` success.
+    #[test]
+    fn confirmation_absent_execution_result_is_not_a_confirmation() {
+        let tx = corev1::Transaction {
+            signature: Some(signature()),
+            slot: Some(42),
+            execution_result: None,
+            ..Default::default()
+        };
+        assert!(confirmation_from_transaction(&tx).is_none());
+    }
+
+    /// The executed copy (consensus CLUSTER_EXECUTED) carries the real result and
+    /// converts to a `Confirmation` reflecting that outcome.
+    #[test]
+    fn confirmation_present_execution_result_converts() {
+        let tx = corev1::Transaction {
+            signature: Some(signature()),
+            slot: Some(42),
+            execution_result: Some(corev1::TransactionExecutionResult {
+                vm_error: 0,
+                execution_result: 0,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let c = confirmation_from_transaction(&tx).expect("executed txn should convert");
+        assert_eq!(c.slot, 42);
+        assert_eq!(c.vm_error, 0);
+        assert_eq!(c.execution_result, 0);
+        assert_eq!(c.signature, [7u8; 64]);
+    }
+
+    /// A failed execution result is preserved (not masked as success).
+    #[test]
+    fn confirmation_preserves_failed_execution_result() {
+        let tx = corev1::Transaction {
+            signature: Some(signature()),
+            slot: Some(42),
+            execution_result: Some(corev1::TransactionExecutionResult {
+                vm_error: 2,
+                execution_result: 7,
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let c = confirmation_from_transaction(&tx).expect("executed txn should convert");
+        assert_eq!(c.vm_error, 2);
+        assert_eq!(c.execution_result, 7);
     }
 }

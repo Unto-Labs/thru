@@ -2,7 +2,7 @@
 
 use std::fs;
 use std::path::Path;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use thru_base::tn_tools::{KeyPair, Pubkey};
 use thru_base::txn_lib::Transaction;
 use thru_base::txn_tools::{TransactionBuilder, UploaderWriteOptions};
@@ -628,153 +628,407 @@ impl UploaderManager {
         Ok(())
     }
 
-    /// Execute WRITE phase
+    /// Execute WRITE phase (writes every chunk from the start).
     async fn execute_write_phase(
         &self,
         session: &mut UploadSession,
         program_data: &[u8],
-        mut nonce: u64,
+        nonce: u64,
         start_slot: u64,
         skip_elf_check: bool,
         json_format: bool,
     ) -> Result<(), CliError> {
-        let total_chunks = (program_data.len() + session.chunk_size - 1) / session.chunk_size;
-
-        for (chunk_idx, chunk) in program_data.chunks(session.chunk_size).enumerate() {
-            session.progress.current_phase = UploadPhase::Writing {
-                chunk: chunk_idx + 1,
-                total_chunks,
-            };
-
-            let offset = (chunk_idx * session.chunk_size) as u32;
-
-            if !json_format {
-                output::print_info(&format!(
-                    "Writing chunk {}/{} ({} bytes) at offset {}",
-                    chunk_idx + 1,
-                    total_chunks,
-                    chunk.len(),
-                    offset
-                ));
-            }
-
-            let transaction = TransactionBuilder::build_uploader_write_with_options(
-                self.fee_payer_keypair.public_key,
-                self.uploader_program_pubkey
-                    .to_bytes()
-                    .map_err(|e| CliError::Crypto(e.to_string()))?,
-                session
-                    .meta_account
-                    .to_bytes()
-                    .map_err(|e| CliError::Crypto(e.to_string()))?,
-                session
-                    .buffer_account
-                    .to_bytes()
-                    .map_err(|e| CliError::Crypto(e.to_string()))?,
-                chunk,
-                offset,
-                0, // fee
-                nonce,
-                start_slot,
-                UploaderWriteOptions { skip_elf_check },
-            )
-            .map_err(|e| CliError::ProgramUpload(e.to_string()))?;
-
-            // Set chain ID and sign transaction
-            let mut transaction = transaction.with_chain_id(self.chain_id);
-            transaction
-                .sign(&self.fee_payer_keypair.private_key)
-                .map_err(|e| CliError::Crypto(e.to_string()))?;
-
-            // Execute transaction and wait for completion
-            session.progress.current_phase = UploadPhase::Verifying {
-                phase: format!("WRITE chunk {}/{}", chunk_idx + 1, total_chunks),
-            };
-            self.execute_transaction(&transaction, json_format).await?;
-
-            session.progress.completed_transactions += 1;
-            session.progress.bytes_uploaded += chunk.len();
-            nonce += 1;
-        }
-
-        Ok(())
+        self.execute_write_phase_batched(
+            session,
+            program_data,
+            0,
+            nonce,
+            start_slot,
+            skip_elf_check,
+            json_format,
+        )
+        .await
     }
 
-    /// Execute WRITE phase from a specific position (for resume)
+    /// Execute WRITE phase from a specific position (for resume).
     async fn execute_write_phase_from_position(
         &self,
         session: &mut UploadSession,
         program_data: &[u8],
         start_chunk_index: usize,
-        mut nonce: u64,
+        nonce: u64,
         start_slot: u64,
         skip_elf_check: bool,
         json_format: bool,
     ) -> Result<(), CliError> {
-        let total_chunks = (program_data.len() + session.chunk_size - 1) / session.chunk_size;
-        let chunk_start_byte = start_chunk_index * session.chunk_size;
-        let remaining_data = &program_data[chunk_start_byte..];
+        self.execute_write_phase_batched(
+            session,
+            program_data,
+            start_chunk_index,
+            nonce,
+            start_slot,
+            skip_elf_check,
+            json_format,
+        )
+        .await
+    }
 
-        for (chunk_idx, chunk) in remaining_data.chunks(session.chunk_size).enumerate() {
-            let actual_chunk_idx = start_chunk_index + chunk_idx;
+    /// Shared batched WRITE implementation.
+    ///
+    /// Pre-signs every remaining chunk, fires them at the node with
+    /// `BatchSendTransactions` under a bounded in-flight window, and tracks
+    /// landing over a single `StreamTransactions` confirmation stream instead of
+    /// waiting for each chunk serially. Dropped or nonce-gapped chunks are
+    /// resent until confirmed.
+    ///
+    /// `start_chunk_index` is the first chunk to write; `nonce_base` is the
+    /// fee-payer nonce for that chunk (each subsequent chunk uses
+    /// `nonce_base + 1`, `nonce_base + 2`, ... — the sequential-nonce ordering
+    /// the runtime enforces).
+    async fn execute_write_phase_batched(
+        &self,
+        session: &mut UploadSession,
+        program_data: &[u8],
+        start_chunk_index: usize,
+        nonce_base: u64,
+        start_slot: u64,
+        skip_elf_check: bool,
+        json_format: bool,
+    ) -> Result<(), CliError> {
+        /* WINDOW bounds in-flight txns so the node's dedup->pack queue (depth
+           128) isn't overrun; BATCH is the max per BatchSendTransactions call. */
+        /* Keep in-flight comfortably under the node's dedup->pack queue depth
+           (128) so our writes don't overflow it and get dropped — especially
+           when sharing the queue with other traffic. Dropped writes still
+           recover (see the re-sign step below), but staying under the limit
+           avoids the stalls in the first place. */
+        const WINDOW: usize = 64;
+        const BATCH: usize = 32;
+        const NUM_RETRIES: i32 = 5;
+        let poll = Duration::from_millis(300);
+        let stall_resend_after = Duration::from_secs(4);
+        let overall_deadline =
+            Instant::now() + Duration::from_secs(self.config.timeout_seconds.max(300));
 
-            session.progress.current_phase = UploadPhase::Writing {
-                chunk: actual_chunk_idx + 1,
-                total_chunks,
-            };
+        let chunk_size = session.chunk_size;
+        let total_chunks = (program_data.len() + chunk_size - 1) / chunk_size;
+        let n = total_chunks - start_chunk_index;
+        if n == 0 {
+            return Ok(());
+        }
 
-            let offset = (actual_chunk_idx * session.chunk_size) as u32;
+        /* Account pubkeys are constant across every write; resolve once. */
+        let uploader_bytes = self
+            .uploader_program_pubkey
+            .to_bytes()
+            .map_err(|e| CliError::Crypto(e.to_string()))?;
+        let meta_bytes = session
+            .meta_account
+            .to_bytes()
+            .map_err(|e| CliError::Crypto(e.to_string()))?;
+        let buffer_bytes = session
+            .buffer_account
+            .to_bytes()
+            .map_err(|e| CliError::Crypto(e.to_string()))?;
 
-            if !json_format {
-                output::print_info(&format!(
-                    "Writing chunk {}/{} ({} bytes) at offset {} [RESUME]",
-                    actual_chunk_idx + 1,
-                    total_chunks,
-                    chunk.len(),
-                    offset
-                ));
-            }
-
+        /* Sign the write for phase-position `p` (global chunk
+           `start_chunk_index + p`) at an explicit `nonce` and `slot`. Re-signing
+           at a fresh slot yields a NEW signature — needed to get a dropped write
+           past the node's dedup tile, which permanently rejects a signature it
+           has already seen even for a transaction that never entered a block. */
+        let sign_pos = move |p: usize, nonce: u64, slot: u64| -> Result<Vec<u8>, CliError> {
+            let off = (start_chunk_index + p) * chunk_size;
+            let end = std::cmp::min(off + chunk_size, program_data.len());
+            let chunk = &program_data[off..end];
             let transaction = TransactionBuilder::build_uploader_write_with_options(
                 self.fee_payer_keypair.public_key,
-                self.uploader_program_pubkey
-                    .to_bytes()
-                    .map_err(|e| CliError::Crypto(e.to_string()))?,
-                session
-                    .meta_account
-                    .to_bytes()
-                    .map_err(|e| CliError::Crypto(e.to_string()))?,
-                session
-                    .buffer_account
-                    .to_bytes()
-                    .map_err(|e| CliError::Crypto(e.to_string()))?,
+                uploader_bytes,
+                meta_bytes,
+                buffer_bytes,
                 chunk,
-                offset,
+                off as u32,
                 0, // fee
                 nonce,
-                start_slot,
+                slot,
                 UploaderWriteOptions { skip_elf_check },
             )
             .map_err(|e| CliError::ProgramUpload(e.to_string()))?;
-
-            // Set chain ID and sign transaction
             let mut transaction = transaction.with_chain_id(self.chain_id);
             transaction
                 .sign(&self.fee_payer_keypair.private_key)
                 .map_err(|e| CliError::Crypto(e.to_string()))?;
+            Ok(transaction.to_wire())
+        };
 
-            // Execute transaction and wait for completion
-            session.progress.current_phase = UploadPhase::Verifying {
-                phase: format!("WRITE chunk {}/{}", actual_chunk_idx + 1, total_chunks),
-            };
-            self.execute_transaction(&transaction, json_format).await?;
-
-            session.progress.completed_transactions += 1;
-            session.progress.bytes_uploaded += chunk.len();
-            nonce += 1;
+        if !json_format {
+            output::print_info(&format!(
+                "Writing {} chunks via batched submit (window {}, {} bytes/chunk)...",
+                n, WINDOW, chunk_size
+            ));
         }
 
+        let buffer_account = session.buffer_account.clone();
+
+        /* `frontier` is the phase-position of the first chunk NOT yet confirmed
+           *written in the buffer* — i.e. global chunk start_chunk_index + frontier.
+           Each round submits [frontier..n) paced by the fee-payer nonce, then reads
+           the buffer back to learn what actually landed. This matters because a
+           reverted write (finalized meta, wrong authority, ...) still advances the
+           nonce, so the nonce alone can report "done" while the buffer has gaps —
+           only the buffer content is authoritative. */
+        let mut frontier = 0usize;
+        let mut stuck = 0usize;
+        let mut last_report = 0usize;
+        let mut first_round = true;
+
+        /* Keep the phase state machine honest during the write — it is maintained
+           for every other phase, so leaving only Writing unset would freeze any
+           progress consumer at the prior (CREATE-verification) phase. `chunk`
+           tracks buffer-verified progress, refreshed as the frontier advances. */
+        session.progress.current_phase = UploadPhase::Writing {
+            chunk: start_chunk_index,
+            total_chunks,
+        };
+
+        while frontier < n {
+            if Instant::now() >= overall_deadline {
+                return Err(CliError::TransactionSubmission(format!(
+                    "WRITE phase timed out: {}/{} chunks written to buffer",
+                    start_chunk_index + frontier,
+                    total_chunks
+                )));
+            }
+
+            /* Nonce/slot baseline for this round: honour the caller's values the
+               first time, otherwise re-read them (reverted writes bumped the
+               nonce, and a fresh slot keeps signatures live). */
+            let is_first = first_round;
+            first_round = false;
+            let base_nonce = if is_first {
+                nonce_base
+            } else {
+                self.get_current_nonce().await?
+            };
+            let round_slot = if is_first {
+                start_slot
+            } else {
+                self.get_current_slot().await?
+            };
+
+            /* Sign [frontier..n) with sequential nonces from base_nonce. */
+            let count = n - frontier;
+            let mut wires: Vec<Vec<u8>> = Vec::with_capacity(count);
+            for i in 0..count {
+                wires.push(sign_pos(frontier + i, base_nonce + i as u64, round_slot)?);
+            }
+
+            /* Windowed submit, paced by the committed nonce (a fast proxy for
+               "included"; the buffer read below is the real check). */
+            let mut next = 0usize;
+            let mut included = 0usize;
+            let mut last_progress = Instant::now();
+
+            while included < count {
+                if Instant::now() >= overall_deadline {
+                    return Err(CliError::TransactionSubmission(format!(
+                        "WRITE phase timed out: {}/{} chunks written to buffer",
+                        start_chunk_index + frontier,
+                        total_chunks
+                    )));
+                }
+
+                while (next - included) < WINDOW && next < count {
+                    let space = WINDOW - (next - included);
+                    let take = std::cmp::min(BATCH, std::cmp::min(space, count - next));
+                    let batch: Vec<Vec<u8>> = wires[next..next + take].to_vec();
+                    let acks = self
+                        .rpc_client
+                        .batch_send_transactions(&batch, NUM_RETRIES)
+                        .await?;
+                    /* Advance `next` only past the contiguous accepted prefix.
+                       Writes are nonce-sequential, so the first entry the node
+                       rejects (submit queue full, or a refused write) blocks every
+                       later entry regardless — anything accepted past that gap is
+                       re-sent next tick as a signature dedup no-op. A rejection
+                       means the node is back-pressured, so stop filling the window
+                       and let the poll below pace the retry instead of spinning on
+                       a saturated queue. Discarding these flags is what made a full
+                       queue look like 64 in-flight writes and stall silently for
+                       `stall_resend_after` before recovering. */
+                    let good = acks.iter().take_while(|&&(_, ok)| ok).count();
+                    next += good;
+                    if good < take {
+                        let rejected = acks.iter().filter(|&&(_, ok)| !ok).count();
+                        if !json_format {
+                            output::print_warning(&format!(
+                                "   node rejected {}/{} writes at chunk {} (submit queue full?), pacing retry...",
+                                rejected,
+                                take,
+                                start_chunk_index + next
+                            ));
+                        }
+                        break;
+                    }
+                }
+
+                tokio::time::sleep(poll).await;
+
+                let cur_nonce = self.get_current_nonce().await?;
+                let new_included =
+                    std::cmp::min(cur_nonce.saturating_sub(base_nonce) as usize, count);
+
+                if new_included > included {
+                    included = new_included;
+                    last_progress = Instant::now();
+                    if !json_format && frontier + included >= last_report + 64 {
+                        output::print_info(&format!(
+                            "   ~{}/{} chunks included",
+                            frontier + included,
+                            n
+                        ));
+                        last_report = frontier + included;
+                    }
+                } else if last_progress.elapsed() >= stall_resend_after {
+                    /* Stalled: the lowest un-included write was dropped and
+                       resubmitting its bytes is a dedup no-op. Re-sign the blocked
+                       range at a fresh slot (new signatures) and resubmit.
+
+                       Bound by `count`, not `next`: a fully back-pressured round
+                       accepts nothing, leaving `next == included`, but the whole
+                       point of this path is to push a fresh-slot batch from the
+                       confirmed frontier so a `round_slot` that has since expired
+                       stops blocking progress. The `included < count` loop invariant
+                       makes this range non-empty (a `next`-bound made it empty here,
+                       which both skipped the re-sign and sent an empty batch that the
+                       node rejects with InvalidArgument). */
+                    let fresh_slot = self.get_current_slot().await?;
+                    let resend_end = std::cmp::min(included + BATCH, count);
+                    for i in included..resend_end {
+                        wires[i] = sign_pos(frontier + i, base_nonce + i as u64, fresh_slot)?;
+                    }
+                    if !json_format {
+                        output::print_info(&format!(
+                            "   re-signing {} stalled chunks from {} at fresh slot...",
+                            resend_end - included,
+                            frontier + included
+                        ));
+                    }
+                    let batch: Vec<Vec<u8>> = wires[included..resend_end].to_vec();
+                    let acks = self
+                        .rpc_client
+                        .batch_send_transactions(&batch, NUM_RETRIES)
+                        .await?;
+                    /* If even the re-signed lowest un-included writes are refused the
+                       node is still back-pressured; surface it instead of silently
+                       waiting out another `stall_resend_after`. Control flow is
+                       unchanged — resetting `last_progress` backs off a full interval
+                       before the next attempt rather than hammering a full queue. */
+                    if !json_format && !acks.is_empty() && acks.iter().all(|&(_, ok)| !ok) {
+                        output::print_warning(&format!(
+                            "   resend of {} chunks at chunk {} was rejected (submit queue full?)",
+                            resend_end - included,
+                            start_chunk_index + included
+                        ));
+                    }
+                    last_progress = Instant::now();
+                }
+            }
+
+            /* Every write this round is included per the nonce. Read the buffer
+               back to see how many chunks are ACTUALLY written (contiguously from
+               the file start) — the real, revert-proof progress. */
+            let written = self
+                .count_written_chunks(&buffer_account, program_data, chunk_size)
+                .await?;
+            let new_frontier = std::cmp::min(written.saturating_sub(start_chunk_index), n);
+
+            if new_frontier > frontier {
+                for p in frontier..new_frontier {
+                    let off = (start_chunk_index + p) * chunk_size;
+                    session.progress.completed_transactions += 1;
+                    session.progress.bytes_uploaded +=
+                        std::cmp::min(chunk_size, program_data.len() - off);
+                }
+                frontier = new_frontier;
+                session.progress.current_phase = UploadPhase::Writing {
+                    chunk: start_chunk_index + frontier,
+                    total_chunks,
+                };
+                stuck = 0;
+                if !json_format && frontier < n {
+                    output::print_warning(&format!(
+                        "   buffer verified {}/{} chunks; some writes reverted, retrying the rest",
+                        start_chunk_index + frontier,
+                        total_chunks
+                    ));
+                }
+            } else {
+                /* Nonce said done but the buffer did not advance: the writes are
+                   reverting (finalized meta, wrong authority, ...). Retry a few
+                   times, then fail with an actionable message. */
+                stuck += 1;
+                if stuck >= 3 {
+                    return Err(CliError::TransactionVerification(format!(
+                        "WRITE phase stuck: only {}/{} chunks are actually in the buffer after {} \
+                         retries — writes are being reverted (the upload account may be finalized \
+                         or owned by a different fee payer). Run `thru-cli uploader cleanup <seed>` \
+                         and retry.",
+                        start_chunk_index + frontier,
+                        total_chunks,
+                        stuck
+                    )));
+                }
+                if !json_format {
+                    output::print_warning(&format!(
+                        "   writes not landing in buffer (stuck at chunk {}), retry {}/3...",
+                        start_chunk_index + frontier,
+                        stuck
+                    ));
+                }
+            }
+        }
+
+        if !json_format {
+            output::print_success(&format!("   all {} chunks verified in buffer", n));
+        }
         Ok(())
+    }
+
+    /// Count how many chunks (from the start of the file) are actually written in
+    /// the buffer account, by fetching it and byte-comparing against the payload.
+    ///
+    /// This is the authoritative measure of write progress: unlike the fee-payer
+    /// nonce (which advances even for a reverted transaction), it reflects only
+    /// data that truly landed on-chain. Returns the count of contiguously-correct
+    /// chunks from the file start.
+    async fn count_written_chunks(
+        &self,
+        buffer_account: &Pubkey,
+        program_data: &[u8],
+        chunk_size: usize,
+    ) -> Result<usize, CliError> {
+        let account = self
+            .rpc_client
+            .get_account_info(buffer_account, None, Some(VersionContext::Current))
+            .await
+            .map_err(|e| CliError::TransactionVerification(e.to_string()))?;
+        let buf = match account {
+            Some(a) => self.decode_account_data(&a.data)?,
+            None => return Ok(0),
+        };
+
+        let total_chunks = (program_data.len() + chunk_size - 1) / chunk_size;
+        let mut written = 0usize;
+        for c in 0..total_chunks {
+            let off = c * chunk_size;
+            let end = std::cmp::min(off + chunk_size, program_data.len());
+            if end <= buf.len() && buf[off..end] == program_data[off..end] {
+                written = c + 1;
+            } else {
+                break;
+            }
+        }
+        Ok(written)
     }
 
     /// Execute FINALIZE phase
@@ -885,61 +1139,67 @@ impl UploaderManager {
                     Ok(_) => {
                         if !json_format {
                             output::print_success("   ✓ File hash matches stored hash");
-                            // output::print_success("   ✓ Meta account is still open");
                             output::print_success("   ✓ Buffer data integrity verified");
-                            output::print_info("📊 Calculating resume position...");
                         }
 
-                        let action = self
-                            .calculate_resume_position(
-                                &upload_state.buffer_account_data,
-                                program_data,
-                                chunk_size,
-                            )
-                            .await?;
-
-                        let mut all_done = false;
-
-                        match &action {
-                            ResumeAction::ResumeFromPosition(calc) => {
-                                if !json_format {
-                                    let percentage = (calc.bytes_completed as f64
-                                        / program_data.len() as f64)
-                                        * 100.0;
-                                    output::print_success(&format!(
-                                        "   ✓ Found {}/{} chunks already uploaded ({:.1}%)",
-                                        calc.completed_chunks,
-                                        calc.completed_chunks + calc.remaining_chunks,
-                                        percentage
-                                    ));
-                                    output::print_success(&format!(
-                                        "   ✓ {} chunks remaining ({} bytes to upload)",
-                                        calc.remaining_chunks, calc.bytes_remaining
-                                    ));
-                                }
+                        // A finalized meta account is immutable: every write to it
+                        // reverts with ACCOUNT_NOT_OPEN. And because a reverted
+                        // transaction still advances the fee-payer nonce, the write
+                        // phase cannot detect the failure — it would "confirm" every
+                        // chunk and then fail cryptically at FINALIZE. The stored
+                        // hash already matches this file, so the upload is complete:
+                        // report done rather than attempting a doomed resume. (To
+                        // force a fresh upload, run `uploader cleanup <seed>`.)
+                        if upload_state.is_finalized {
+                            if !json_format {
+                                output::print_success(
+                                    "   ✓ Upload already finalized — nothing to do",
+                                );
                             }
-                            ResumeAction::FinalizeOnly => {
-                                if !json_format {
-                                    if upload_state.is_finalized {
-                                        output::print_success(
-                                            "   ✓ All data uploaded and meta is finalized, all done",
-                                        );
-                                        all_done = true;
-                                    } else {
+                            (ResumeAction::FinalizeOnly, true)
+                        } else {
+                            if !json_format {
+                                output::print_info("📊 Calculating resume position...");
+                            }
+
+                            let action = self
+                                .calculate_resume_position(
+                                    &upload_state.buffer_account_data,
+                                    program_data,
+                                    chunk_size,
+                                )
+                                .await?;
+
+                            if !json_format {
+                                match &action {
+                                    ResumeAction::ResumeFromPosition(calc) => {
+                                        let percentage = (calc.bytes_completed as f64
+                                            / program_data.len() as f64)
+                                            * 100.0;
+                                        output::print_success(&format!(
+                                            "   ✓ Found {}/{} chunks already uploaded ({:.1}%)",
+                                            calc.completed_chunks,
+                                            calc.completed_chunks + calc.remaining_chunks,
+                                            percentage
+                                        ));
+                                        output::print_success(&format!(
+                                            "   ✓ {} chunks remaining ({} bytes to upload)",
+                                            calc.remaining_chunks, calc.bytes_remaining
+                                        ));
+                                    }
+                                    ResumeAction::FinalizeOnly => {
                                         output::print_success(
                                             "   ✓ All data uploaded, only finalization needed",
                                         );
                                     }
+                                    ResumeAction::StartFresh => {
+                                        output::print_info("   ℹ No valid resume state found");
+                                    }
                                 }
                             }
-                            ResumeAction::StartFresh => {
-                                if !json_format {
-                                    output::print_info("   ℹ No valid resume state found");
-                                }
-                            }
-                        }
 
-                        (action, all_done)
+                            (action, false)
+                        }
                     }
                     Err(e) => {
                         // For hash mismatch and meta account closed errors, fail completely
@@ -1205,6 +1465,31 @@ async fn upload_program(
             program_file,
             program_data.len()
         ));
+    }
+
+    // Enforce the on-chain account size limit up front. An uploader buffer holds
+    // the entire payload in ONE account, and the runtime caps account data at
+    // TN_ACCOUNT_DATA_SZ_MAX (16 MiB); a larger payload makes the CREATE
+    // transaction revert with a cryptic account-resize error (VM_REVERT, user
+    // error -12). Fail early with an actionable message instead.
+    const MAX_PAYLOAD_BYTES: usize = 16 * 1024 * 1024; // TN_ACCOUNT_DATA_SZ_MAX
+    if program_data.len() > MAX_PAYLOAD_BYTES {
+        let error_msg = format!(
+            "Upload file is {:.2} MiB ({} bytes), which exceeds the {} MiB maximum on-chain \
+             account size — it cannot fit in a single uploader buffer account. Use a smaller \
+             file (note the {} MiB cap applies to the .thruwad payload, wrapper included).",
+            program_data.len() as f64 / (1024.0 * 1024.0),
+            program_data.len(),
+            MAX_PAYLOAD_BYTES / (1024 * 1024),
+            MAX_PAYLOAD_BYTES / (1024 * 1024),
+        );
+        if json_format {
+            let error_response = serde_json::json!({ "error": error_msg });
+            output::print_output(error_response, true);
+        } else {
+            output::print_error(&error_msg);
+        }
+        return Err(CliError::Generic { message: error_msg });
     }
 
     // Calculate payload hash

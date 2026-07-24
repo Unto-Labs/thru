@@ -20,21 +20,33 @@
       "types": "./web/src/index.ts",
       "import": "./web/src/index.ts"
     },
-    "./web/styles.css": "./web/src/styles.css"
+    "./web/styles.css": "./web/src/styles.css",
+    "./mobile": {
+      "types": "./mobile/src/index.ts",
+      "import": "./mobile/src/index.ts"
+    }
   },
   "files": [
     "tokens/src",
-    "web/src"
+    "web/src",
+    "mobile/src"
   ],
+  "scripts": {
+    "typecheck": "tsc --noEmit && tsc --noEmit -p mobile/tsconfig.json"
+  },
   "peerDependencies": {
     "@base-ui/react": "^1.6.0",
     "react": "^18.0.0 || ^19.0.0",
-    "react-dom": "^18.0.0 || ^19.0.0"
+    "react-dom": "^18.0.0 || ^19.0.0",
+    "react-native": ">=0.79.0",
+    "react-native-svg": ">=15.0.0"
   },
   "peerDependenciesMeta": {
     "@base-ui/react": { "optional": true },
     "react": { "optional": true },
-    "react-dom": { "optional": true }
+    "react-dom": { "optional": true },
+    "react-native": { "optional": true },
+    "react-native-svg": { "optional": true }
   },
   "devDependencies": {
     "@base-ui/react": "^1.6.0",
@@ -42,6 +54,8 @@
     "@types/react-dom": "^19.2.3",
     "react": "19.2.6",
     "react-dom": "19.2.6",
+    "react-native": "0.83.6",
+    "react-native-svg": "15.15.5",
     "typescript": "^6.0.3"
   }
 }

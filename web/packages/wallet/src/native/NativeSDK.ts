@@ -166,8 +166,8 @@ export interface NativeSDKStorage {
 }
 
 export interface NativeSDKUiHandlers {
-  onShowRequested?: () => void;
-  onHideRequested?: () => void;
+  onShowRequested?: (reason?: string) => void;
+  onHideRequested?: (reason?: string) => void;
 }
 
 const DEFAULT_STORAGE_KEY = "thru.native-sdk.connection.v1";
@@ -364,7 +364,8 @@ export class NativeSDK {
     if (
       !isAccountSwitch &&
       this.lastConnectResult &&
-      this.provider.isConnected()
+      this.provider.isConnected() &&
+      this.walletAvailability.isUnlocked
     ) {
       return this.lastConnectResult;
     }
@@ -373,7 +374,6 @@ export class NativeSDK {
 
     const inFlight = (async () => {
       try {
-        await this.provider.requestShow();
         if (!this.initialized) await this.initialize();
 
         const metadata = this.resolveMetadata(options?.metadata);
@@ -414,7 +414,6 @@ export class NativeSDK {
         this.emit("connect", activeResult);
         return activeResult;
       } catch (error) {
-        this.provider.requestHide();
         if (isUserRejectedError(error) && !isAccountSwitch) {
           this.provider.clearConnection();
           this.lastConnectResult = null;
@@ -446,7 +445,6 @@ export class NativeSDK {
     this.emit("connect", { status: "connecting" });
 
     try {
-      await this.provider.requestShow();
       if (!this.initialized) await this.initialize();
 
       const metadata = this.resolveMetadata(options.metadata);
@@ -490,7 +488,6 @@ export class NativeSDK {
       this.emit("accountChanged", activeResult.selectedAccount);
       return activeResult;
     } catch (error) {
-      this.provider.requestHide();
       this.emit("error", error);
       throw error;
     }
@@ -597,8 +594,7 @@ export class NativeSDK {
   /** @deprecated Use `deposits.prepare()`. */
   async prepareDeposit(
     depositTargetOrPayload?:
-      | PrepareDepositPayload["depositTarget"]
-      | PrepareDepositPayload,
+      PrepareDepositPayload["depositTarget"] | PrepareDepositPayload,
   ): Promise<DepositDestination> {
     if (!this.initialized) await this.initialize();
     const payload =
@@ -631,8 +627,9 @@ export class NativeSDK {
     params: EnsureDepositAccountParams = {},
   ): Promise<DepositAccountState> {
     if (!this.initialized) await this.initialize();
-    const { destination, walletAddress } =
-      await this.resolveDepositDestination(params.destination);
+    const { destination, walletAddress } = await this.resolveDepositDestination(
+      params.destination,
+    );
     return ensureDepositAccountForWallet({
       thru: this.getThru(),
       walletAddress,
@@ -646,8 +643,9 @@ export class NativeSDK {
     params: GetDepositAccountStateParams = {},
   ): Promise<DepositAccountState> {
     if (!this.initialized) await this.initialize();
-    const { destination, walletAddress } =
-      await this.resolveDepositDestination(params.destination);
+    const { destination, walletAddress } = await this.resolveDepositDestination(
+      params.destination,
+    );
     return getDepositAccountStateForWallet({
       thru: this.getThru(),
       walletAddress,
@@ -660,8 +658,9 @@ export class NativeSDK {
     params: WaitForDepositBalanceParams,
   ): Promise<DepositAccountState> {
     if (!this.initialized) await this.initialize();
-    const { destination, walletAddress } =
-      await this.resolveDepositDestination(params.destination);
+    const { destination, walletAddress } = await this.resolveDepositDestination(
+      params.destination,
+    );
     return waitForDepositBalanceForWallet({
       thru: this.getThru(),
       walletAddress,
@@ -1011,8 +1010,9 @@ function assertDepositDestinationMatches(
   actual: DepositDestination,
   expected: DepositDestination,
 ): void {
-  const mismatches = (Object.keys(expected) as Array<keyof DepositDestination>)
-    .filter((key) => actual[key] !== expected[key]);
+  const mismatches = (
+    Object.keys(expected) as Array<keyof DepositDestination>
+  ).filter((key) => actual[key] !== expected[key]);
   if (mismatches.length > 0) {
     throw new Error(
       `Prepared deposit destination no longer matches wallet config: ${mismatches.join(", ")}`,

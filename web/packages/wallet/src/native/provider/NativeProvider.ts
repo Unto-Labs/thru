@@ -93,14 +93,16 @@ export class NativeProvider {
   private defaultNetwork?: ThruNetwork;
   private depositUiConfig?: DepositUiConfig;
   private isSurfaceShown = false;
+  private transparentSurfaceRequestCount = 0;
+  private connectionRevision = 0;
   private readonly eventListeners = new Map<
     string,
     Set<NativeProviderEventCallback>
   >();
 
   /** Set by the host bottom sheet to react to UI_SHOW / completion. */
-  public onShowRequested?: () => void;
-  public onHideRequested?: () => void;
+  public onShowRequested?: (reason?: string) => void;
+  public onHideRequested?: (reason?: string) => void;
 
   constructor(config: NativeProviderConfig = {}) {
     const walletUrl = config.walletUrl ?? DEFAULT_WALLET_URL;
@@ -118,7 +120,7 @@ export class NativeProvider {
       this.emit(eventType as NativeProviderEvent, payload);
 
       if (eventType === EMBEDDED_PROVIDER_EVENTS.UI_SHOW) {
-        this.requestShow();
+        this.requestShow(eventType);
         return;
       }
 
@@ -127,7 +129,7 @@ export class NativeProvider {
         eventType === EMBEDDED_PROVIDER_EVENTS.LOCK
       ) {
         this.clearConnection();
-        this.requestHide();
+        this.requestHide(eventType);
         return;
       }
 
@@ -185,11 +187,12 @@ export class NativeProvider {
   /** Open or focus the wallet host surface. Transparent hosts use this
       to give WKWebView a focused document for WebAuthn without showing
       wallet UI. */
-  async requestShow(): Promise<void> {
+  async requestShow(reason = "request-started"): Promise<void> {
     if (this.transparent) {
-      if (!this.isSurfaceShown) {
+      this.transparentSurfaceRequestCount++;
+      if (this.transparentSurfaceRequestCount === 1) {
         this.isSurfaceShown = true;
-        this.onShowRequested?.();
+        this.onShowRequested?.(reason);
       }
       await new Promise((resolve) =>
         setTimeout(resolve, TRANSPARENT_FOCUS_SETTLE_MS),
@@ -198,13 +201,21 @@ export class NativeProvider {
     }
     if (this.isSurfaceShown) return;
     this.isSurfaceShown = true;
-    this.onShowRequested?.();
+    this.onShowRequested?.(reason);
   }
 
   /** Close the wallet UI (called internally; also exposed for host). */
-  requestHide(): void {
+  requestHide(reason = "request-completed"): void {
+    if (this.transparent) {
+      if (this.transparentSurfaceRequestCount > 0) {
+        this.transparentSurfaceRequestCount--;
+      }
+      if (this.transparentSurfaceRequestCount > 0 || !this.isSurfaceShown) {
+        return;
+      }
+    }
     this.isSurfaceShown = false;
-    this.onHideRequested?.();
+    this.onHideRequested?.(reason);
   }
 
   /** Reject pending requests after a user-driven native sheet dismiss. */
@@ -215,7 +226,7 @@ export class NativeProvider {
   async connect(options?: ConnectOptions): Promise<ConnectResult> {
     this.emit(EMBEDDED_PROVIDER_EVENTS.CONNECT_START, {});
     try {
-      await this.requestShow();
+      await this.requestShow("connect-open");
       const payload: ConnectRequestPayload = {};
       if (options?.metadata) payload.metadata = options.metadata;
       if (options?.preferredAccountAddress) {
@@ -234,15 +245,13 @@ export class NativeProvider {
       if (!result.selectedAccount) {
         throw new Error("Wallet did not return an account");
       }
-      this.connected = true;
-      this.accounts = result.accounts;
-      this.selectedAccount = result.selectedAccount;
+      this.hydrateConnection(result, result.selectedAccount.address);
 
       this.emit(EMBEDDED_PROVIDER_EVENTS.CONNECT, result);
-      this.requestHide();
+      this.requestHide("connect-settled");
       return result;
     } catch (error) {
-      this.requestHide();
+      this.requestHide("connect-error");
       this.emit(EMBEDDED_PROVIDER_EVENTS.CONNECT_ERROR, { error });
       throw error;
     }
@@ -252,7 +261,7 @@ export class NativeProvider {
     options?: CreateAccountOptions,
   ): Promise<CreateAccountResult> {
     try {
-      await this.requestShow();
+      await this.requestShow("create-account-open");
       const payload: CreateAccountPayload = {};
       if (options?.accountName) payload.accountName = options.accountName;
       if (options?.metadata) payload.metadata = options.metadata;
@@ -286,9 +295,7 @@ export class NativeProvider {
         selectedAccount,
         account: selectedAccount,
       };
-      this.connected = true;
-      this.accounts = result.accounts;
-      this.selectedAccount = result.selectedAccount;
+      this.hydrateConnection(result, result.selectedAccount.address);
 
       this.emit(EMBEDDED_PROVIDER_EVENTS.CONNECT, {
         accounts: result.accounts,
@@ -299,10 +306,10 @@ export class NativeProvider {
       this.emit(EMBEDDED_PROVIDER_EVENTS.ACCOUNT_CHANGED, {
         account: result.selectedAccount,
       });
-      this.requestHide();
+      this.requestHide("create-account-settled");
       return result;
     } catch (error) {
-      this.requestHide();
+      this.requestHide("create-account-error");
       this.emit(EMBEDDED_PROVIDER_EVENTS.ERROR, { error });
       throw error;
     }
@@ -348,20 +355,21 @@ export class NativeProvider {
   }
 
   async disconnect(): Promise<void> {
+    const connectionRevision = this.connectionRevision;
     try {
       await this.bridge.sendMessage({
         id: createRequestId(),
         type: POST_MESSAGE_REQUEST_TYPES.DISCONNECT,
         origin: this.origin,
       });
+      if (connectionRevision !== this.connectionRevision) return;
       this.clearConnection();
       this.emit(EMBEDDED_PROVIDER_EVENTS.DISCONNECT, {});
     } catch (error) {
-      this.clearConnection();
-      this.emit(EMBEDDED_PROVIDER_EVENTS.ERROR, { error });
+      if (connectionRevision === this.connectionRevision) {
+        this.emit(EMBEDDED_PROVIDER_EVENTS.ERROR, { error });
+      }
       throw error;
-    } finally {
-      this.requestHide();
     }
   }
 
@@ -385,6 +393,7 @@ export class NativeProvider {
     this.connected = true;
     this.accounts = normalized.accounts;
     this.selectedAccount = normalized.selectedAccount;
+    this.connectionRevision++;
   }
 
   clearConnection(): void {
@@ -418,7 +427,7 @@ export class NativeProvider {
   async manageAccounts(): Promise<ManageAccountsResult> {
     if (!this.connected) throw new Error("Wallet not connected");
     try {
-      await this.requestShow();
+      await this.requestShow("manage-accounts-open");
       const response = await this.bridge.sendMessage({
         id: createRequestId(),
         type: POST_MESSAGE_REQUEST_TYPES.MANAGE_ACCOUNTS,
@@ -428,10 +437,10 @@ export class NativeProvider {
       const result = normalizeWalletAccountResult(response.result);
       this.accounts = result.accounts;
       this.selectedAccount = result.selectedAccount;
-      this.requestHide();
+      this.requestHide("manage-accounts-settled");
       return result;
     } catch (error) {
-      this.requestHide();
+      this.requestHide("manage-accounts-error");
       this.emit(EMBEDDED_PROVIDER_EVENTS.ERROR, { error });
       throw error;
     }
@@ -439,8 +448,7 @@ export class NativeProvider {
 
   async prepareDeposit(
     depositTargetOrPayload?:
-      | PrepareDepositPayload["depositTarget"]
-      | PrepareDepositPayload,
+      PrepareDepositPayload["depositTarget"] | PrepareDepositPayload,
   ): Promise<DepositDestination> {
     const payload =
       typeof depositTargetOrPayload === "string"
@@ -465,7 +473,7 @@ export class NativeProvider {
    */
   async deposit(payload: DepositRequestPayload): Promise<DepositResult> {
     try {
-      await this.requestShow();
+      await this.requestShow("deposit-open");
       const response = await this.bridge.sendMessage({
         id: createRequestId(),
         type: POST_MESSAGE_REQUEST_TYPES.DEPOSIT,
@@ -483,7 +491,7 @@ export class NativeProvider {
       this.emit(EMBEDDED_PROVIDER_EVENTS.ERROR, { error });
       throw error;
     } finally {
-      this.requestHide();
+      this.requestHide("deposit-settled");
     }
   }
 

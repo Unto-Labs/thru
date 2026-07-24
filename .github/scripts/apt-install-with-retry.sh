@@ -5,6 +5,8 @@ set -euo pipefail
 LOCK_TIMEOUT_SECONDS="${APT_LOCK_TIMEOUT_SECONDS:-20}"
 LOCK_GRACE_SECONDS="${APT_LOCK_GRACE_SECONDS:-20}"
 KILL_LOCK_HOLDERS="${APT_KILL_LOCK_HOLDERS:-1}"
+COMMAND_TIMEOUT_SECONDS="${APT_COMMAND_TIMEOUT_SECONDS:-180}"
+COMMAND_KILL_GRACE_SECONDS="${APT_COMMAND_KILL_GRACE_SECONDS:-10}"
 UPDATE_ONLY=0
 
 if [ "${1:-}" = "--update-only" ]; then
@@ -17,12 +19,35 @@ if [ "$UPDATE_ONLY" -eq 0 ] && [ "$#" -eq 0 ]; then
   exit 2
 fi
 
+case "$COMMAND_TIMEOUT_SECONDS" in
+  ''|*[!0-9]*|0*)
+    echo "APT command timeout must be a positive integer" >&2
+    exit 2
+    ;;
+esac
+
+case "$COMMAND_KILL_GRACE_SECONDS" in
+  ''|*[!0-9]*|0*)
+    echo "APT command kill grace must be a positive integer" >&2
+    exit 2
+    ;;
+esac
+
 lock_files=(
   /var/cache/apt/archives/lock
   /var/lib/apt/lists/lock
   /var/lib/dpkg/lock
   /var/lib/dpkg/lock-frontend
 )
+
+apt_command() {
+  timeout --kill-after="${COMMAND_KILL_GRACE_SECONDS}s" "${COMMAND_TIMEOUT_SECONDS}s" "$@"
+  rc=$?
+  if [ "$rc" -eq 124 ] || [ "$rc" -eq 137 ]; then
+    echo "apt command timed out after ${COMMAND_TIMEOUT_SECONDS}s: $*" >&2
+  fi
+  return "$rc"
+}
 
 log_lock_holders() {
   echo "apt lock diagnostics:" >&2
@@ -141,8 +166,8 @@ wait_for_or_kill_lock_holders() {
     sudo kill -KILL $still_alive 2>/dev/null || true
   fi
 
-  sudo dpkg --configure -a || true
-  sudo DEBIAN_FRONTEND=noninteractive apt-get -o "DPkg::Lock::Timeout=${LOCK_TIMEOUT_SECONDS}" -f install -y || true
+  apt_command sudo dpkg --configure -a || true
+  apt_command sudo env DEBIAN_FRONTEND=noninteractive apt-get -o "DPkg::Lock::Timeout=${LOCK_TIMEOUT_SECONDS}" -f install -y || true
 }
 
 for attempt in 1 2 3 4 5; do
@@ -150,9 +175,9 @@ for attempt in 1 2 3 4 5; do
     wait_for_or_kill_lock_holders
   fi
 
-  if sudo apt-get -o "DPkg::Lock::Timeout=${LOCK_TIMEOUT_SECONDS}" update; then
+  if apt_command sudo apt-get -o "DPkg::Lock::Timeout=${LOCK_TIMEOUT_SECONDS}" update; then
     if [ "$UPDATE_ONLY" -eq 1 ] ||
-       sudo DEBIAN_FRONTEND=noninteractive apt-get -o "DPkg::Lock::Timeout=${LOCK_TIMEOUT_SECONDS}" install -y "$@"; then
+       apt_command sudo env DEBIAN_FRONTEND=noninteractive apt-get -o "DPkg::Lock::Timeout=${LOCK_TIMEOUT_SECONDS}" install -y "$@"; then
       exit 0
     fi
   fi

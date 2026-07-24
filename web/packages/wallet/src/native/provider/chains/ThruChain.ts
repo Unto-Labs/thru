@@ -110,7 +110,7 @@ export class NativeThruChain implements IThruChain {
       : null;
     const shouldShowWallet = !signingSessionId;
     if (shouldShowWallet) {
-      await this.provider.requestShow();
+      await this.provider.requestShow("sign-transaction-open");
     }
     try {
       const response = await this.bridge.sendMessage({
@@ -130,7 +130,7 @@ export class NativeThruChain implements IThruChain {
       return response.result.signedTransaction;
     } finally {
       if (shouldShowWallet) {
-        this.provider.requestHide();
+        this.provider.requestHide("sign-transaction-settled");
       }
     }
   }
@@ -141,7 +141,7 @@ export class NativeThruChain implements IThruChain {
     if (!this.provider.isConnected() && !this.provider.isTransparent()) {
       throw new Error("Wallet not connected");
     }
-    await this.provider.requestShow();
+    await this.provider.requestShow("sign-passkey-challenge-open");
     try {
       const response = await this.bridge.sendMessage({
         id: createRequestId(),
@@ -154,7 +154,7 @@ export class NativeThruChain implements IThruChain {
       });
       return response.result;
     } finally {
-      this.provider.requestHide();
+      this.provider.requestHide("sign-passkey-challenge-settled");
     }
   }
 
@@ -169,7 +169,7 @@ export class NativeThruChain implements IThruChain {
     }
 
     const expiresAt = resolveSessionExpirySeconds(options);
-    await this.provider.requestShow();
+    await this.provider.requestShow("create-signing-session-open");
     try {
       const response = await this.bridge.sendMessage({
         id: createRequestId(),
@@ -185,7 +185,7 @@ export class NativeThruChain implements IThruChain {
       await this.signingSessions.saveReplacingWalletSessions(descriptor);
       return this.toSigningSession(descriptor);
     } finally {
-      this.provider.requestHide();
+      this.provider.requestHide("create-signing-session-settled");
     }
   }
 
