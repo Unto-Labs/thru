@@ -1,11 +1,12 @@
 import { describe, expect, it } from "vitest";
+import { getPublicKeyAsync } from "@noble/ed25519";
 
 import { Transaction } from "../Transaction";
 import { buildCreationProof, buildExistingProof } from "./helpers";
 
-function createTransaction(): Transaction {
+function createTransaction(feePayer?: Uint8Array): Transaction {
     return new Transaction({
-        feePayer: new Uint8Array(Array.from({ length: 32 }, (_, i) => i + 1)),
+        feePayer: feePayer ?? new Uint8Array(Array.from({ length: 32 }, (_, i) => i + 1)),
         program: new Uint8Array(Array.from({ length: 32 }, (_, i) => 200 - i)),
         header: {
             fee: 123n,
@@ -146,7 +147,11 @@ describe("Transaction wire format", () => {
         const privateKey = new Uint8Array(32);
         privateKey.fill(0x42);
 
-        const tx = createTransaction();
+        // The fee payer must be the public key derived from the signing key, or
+        // Transaction.sign rejects the mismatch (the sig is verified against the
+        // fee payer on chain).
+        const feePayer = await getPublicKeyAsync(privateKey);
+        const tx = createTransaction(feePayer);
         await tx.sign(privateKey);
 
         const wire = tx.toWire();

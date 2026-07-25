@@ -1,5 +1,6 @@
 import { create } from "@bufbuild/protobuf";
 import { describe, expect, it, vi } from "vitest";
+import { getPublicKeyAsync } from "@noble/ed25519";
 import {
     createMockAccount,
     createMockContext,
@@ -481,10 +482,12 @@ describe("transactions", () => {
       vi.spyOn(ctx.query, "getAccount").mockResolvedValue(mockAccount);
       vi.spyOn(ctx.query, "getHeight").mockResolvedValue(mockHeight);
       
-      const publicKey = generateTestPubkey(0x01);
       const privateKey = new Uint8Array(32);
       privateKey.fill(0x42);
-      
+      // Fee-payer public key must be derived from the signing key (see
+      // domain-signing.signWithDomain), else the mismatch is rejected.
+      const publicKey = await getPublicKeyAsync(privateKey);
+
       const result = await buildAndSignTransaction(ctx, {
         feePayer: {
           publicKey,

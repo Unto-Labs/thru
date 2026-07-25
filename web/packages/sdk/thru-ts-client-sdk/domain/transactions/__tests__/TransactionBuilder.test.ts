@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { getPublicKeyAsync } from "@noble/ed25519";
 import { generateTestAddress, generateTestPubkey } from "../../../__tests__/helpers/test-utils";
 import { Transaction } from "../Transaction";
 import { TransactionBuilder } from "../TransactionBuilder";
@@ -458,7 +459,7 @@ describe("TransactionBuilder", () => {
     it("should build and sign transaction", async () => {
       const builder = createBuilder();
       const privateKey = createPrivateKey();
-      const publicKey = generateTestPubkey(0x01);
+      const publicKey = await getPublicKeyAsync(privateKey);
       const params: BuildTransactionParams = {
         feePayer: {
           publicKey,
@@ -496,7 +497,7 @@ describe("TransactionBuilder", () => {
     it("should include signature in raw transaction", async () => {
       const builder = createBuilder();
       const privateKey = createPrivateKey();
-      const publicKey = generateTestPubkey(0x01);
+      const publicKey = await getPublicKeyAsync(privateKey);
       const params: BuildTransactionParams = {
         feePayer: {
           publicKey,
@@ -520,7 +521,7 @@ describe("TransactionBuilder", () => {
     it("should create valid wire format", async () => {
       const builder = createBuilder();
       const privateKey = createPrivateKey();
-      const publicKey = generateTestPubkey(0x01);
+      const publicKey = await getPublicKeyAsync(privateKey);
       const params: BuildTransactionParams = {
         feePayer: {
           publicKey,

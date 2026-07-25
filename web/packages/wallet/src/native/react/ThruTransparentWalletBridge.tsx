@@ -12,10 +12,8 @@ import {
   type ComponentProps,
 } from "react";
 import {
-  Pressable,
   Platform,
   StyleSheet,
-  Text,
   View,
   type LayoutChangeEvent,
   type StyleProp,
@@ -33,15 +31,17 @@ import type { WebViewRefLike } from "../provider/WebViewBridge";
 import { enableWebAuthnSupport } from "./android-webauthn";
 import {
   isTrustedCoinbasePaymentUrl,
-  parseCoinbaseEventName,
+  parseCoinbaseWebViewEvent,
   shouldCloseCoinbasePayment,
   supportsCoinbaseApplePay,
 } from "./coinbase-webview";
+import { ApplePayWidget } from "./ApplePayWidget";
 import { ThruContext } from "./ThruContext";
 
 const NATIVE_COINBASE_PAYMENT_MESSAGE = "wallet:coinbase-payment";
 const NATIVE_DEPOSIT_LIFECYCLE_MESSAGE = "wallet:deposit-lifecycle";
 const NATIVE_COINBASE_PAYMENT_EVENT = "thru:coinbase-onramp-event";
+const NATIVE_PLATFORM_SEARCH_PARAM = "tn_native_platform";
 
 type WebViewLoadEndEvent = Parameters<
   NonNullable<ComponentProps<typeof WebView>["onLoadEnd"]>
@@ -64,6 +64,7 @@ export function ThruTransparentWalletBridge({
   const webViewRef = useRef<WebViewType | null>(null);
   const webViewNativeTagRef = useRef<number | null>(null);
   const didRefreshWalletAvailabilityRef = useRef(false);
+  const coinbasePaymentCommittedRef = useRef(false);
   const [isFocusSurfaceActive, setIsFocusSurfaceActive] = useState(false);
   const [coinbasePaymentUrl, setCoinbasePaymentUrl] = useState<string | null>(
     null,
@@ -123,6 +124,7 @@ export function ThruTransparentWalletBridge({
             reason,
           });
         }
+        coinbasePaymentCommittedRef.current = false;
         setCoinbasePaymentUrl(null);
         setIsFocusSurfaceActive(false);
       },
@@ -144,12 +146,15 @@ export function ThruTransparentWalletBridge({
 
   const webViewSource = useMemo(() => {
     if (!wallet) return null;
+    const walletFrameUrl = new URL(wallet.getIframeSrc());
+    walletFrameUrl.searchParams.set(NATIVE_PLATFORM_SEARCH_PARAM, Platform.OS);
+    const walletFrameSrc = walletFrameUrl.toString();
     if (Platform.OS === "ios" && wallet.getIosWebViewMode() === "direct") {
-      return { uri: wallet.getIframeSrc() };
+      return { uri: walletFrameSrc };
     }
     return {
       html: getShellHtml({
-        walletUrl: wallet.getIframeSrc(),
+        walletUrl: walletFrameSrc,
         walletOrigin: wallet.getWalletOrigin(),
       }),
       baseUrl: wallet.getWalletOrigin(),
@@ -199,9 +204,20 @@ export function ThruTransparentWalletBridge({
   );
 
   const forwardCoinbaseEvent = useCallback((rawData: string) => {
-    const script = `window.dispatchEvent(new CustomEvent(${JSON.stringify(
-      NATIVE_COINBASE_PAYMENT_EVENT,
-    )}, { detail: ${JSON.stringify(rawData)} })); true;`;
+    const relayMessage = {
+      type: NATIVE_COINBASE_PAYMENT_EVENT,
+      data: rawData,
+    };
+    const script = `(function () {
+      var message = ${JSON.stringify(relayMessage)};
+      if (typeof window.__pushIn === 'function') {
+        window.__pushIn(message);
+      } else {
+        window.dispatchEvent(new CustomEvent(${JSON.stringify(
+          NATIVE_COINBASE_PAYMENT_EVENT,
+        )}, { detail: message.data }));
+      }
+    })(); true;`;
     webViewRef.current?.injectJavaScript(script);
   }, []);
 
@@ -219,19 +235,28 @@ export function ThruTransparentWalletBridge({
             typeof paymentUrl === "string" &&
             isTrustedCoinbasePaymentUrl(paymentUrl)
           ) {
-            if (!supportsCoinbaseApplePay(Platform.OS, Platform.Version)) {
+            if (
+              Platform.OS !== "ios" ||
+              !supportsCoinbaseApplePay(Platform.OS, Platform.Version)
+            ) {
               forwardCoinbaseEvent(
                 JSON.stringify({
                   eventName: "onramp_api.load_error",
                   data: {
-                    errorCode: "IOS_VERSION_UNSUPPORTED",
+                    errorCode:
+                      Platform.OS === "ios"
+                        ? "IOS_VERSION_UNSUPPORTED"
+                        : "APPLE_PAY_PLATFORM_UNSUPPORTED",
                     errorMessage:
-                      "Coinbase Apple Pay requires iOS 16 or later.",
+                      Platform.OS === "ios"
+                        ? "Coinbase Apple Pay requires iOS 16 or later."
+                        : "Coinbase Apple Pay is only available in the iOS wallet.",
                   },
                 }),
               );
               return;
             }
+            coinbasePaymentCommittedRef.current = false;
             setCoinbasePaymentUrl(paymentUrl);
           } else {
             console.warn(
@@ -276,6 +301,7 @@ export function ThruTransparentWalletBridge({
   );
 
   const closeCoinbasePayment = useCallback(() => {
+    if (coinbasePaymentCommittedRef.current) return;
     const rawData = JSON.stringify({
       eventName: "onramp_api.cancel",
       data: {},
@@ -288,32 +314,31 @@ export function ThruTransparentWalletBridge({
     (event: WebViewMessageEvent) => {
       const rawData = event.nativeEvent.data;
       if (!isTrustedCoinbasePaymentUrl(event.nativeEvent.url)) return;
-      const eventName = parseCoinbaseEventName(rawData);
-      if (!eventName) return;
+      const payload = parseCoinbaseWebViewEvent(rawData);
+      if (!payload) return;
+      const { eventName, data } = payload;
+      const errorCode =
+        typeof data.errorCode === "string"
+          ? data.errorCode.slice(0, 128)
+          : undefined;
+      const errorMessage =
+        typeof data.errorMessage === "string"
+          ? data.errorMessage.slice(0, 512)
+          : undefined;
+      const normalizedRawData = JSON.stringify(payload);
       if (__DEV__) {
-        let errorCode: string | undefined;
-        let errorMessage: string | undefined;
-        try {
-          const payload = JSON.parse(rawData) as {
-            data?: { errorCode?: unknown; errorMessage?: unknown };
-          };
-          if (typeof payload.data?.errorCode === "string") {
-            errorCode = payload.data.errorCode.slice(0, 128);
-          }
-          if (typeof payload.data?.errorMessage === "string") {
-            errorMessage = payload.data.errorMessage.slice(0, 512);
-          }
-        } catch {
-          /* parseCoinbaseEventName already validated the event envelope. */
-        }
         console.info("[ThruTransparentWalletBridge] Coinbase payment event", {
           eventName,
           errorCode,
           errorMessage,
         });
       }
-      forwardCoinbaseEvent(rawData);
+      if (eventName === "onramp_api.commit_success") {
+        coinbasePaymentCommittedRef.current = true;
+      }
+      forwardCoinbaseEvent(normalizedRawData);
       if (shouldCloseCoinbasePayment(eventName)) {
+        coinbasePaymentCommittedRef.current = false;
         setCoinbasePaymentUrl(null);
       }
     },
@@ -328,6 +353,7 @@ export function ThruTransparentWalletBridge({
           data: { errorCode, errorMessage: message },
         }),
       );
+      coinbasePaymentCommittedRef.current = false;
       setCoinbasePaymentUrl(null);
     },
     [forwardCoinbaseEvent],
@@ -396,67 +422,15 @@ export function ThruTransparentWalletBridge({
         ]}
       />
       {coinbasePaymentUrl ? (
-        <View
-          style={[
-            styles.coinbasePaymentOverlay,
-            { paddingTop: Math.max(safeAreaInsets.top, 12) },
-          ]}
-        >
-          <View style={styles.coinbasePaymentHeader}>
-            <Text style={styles.coinbasePaymentTitle}>Coinbase sandbox</Text>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel="Cancel Coinbase payment"
-              hitSlop={8}
-              onPress={closeCoinbasePayment}
-              style={styles.coinbaseCancelButton}
-            >
-              <Text style={styles.coinbaseCancelText}>Cancel</Text>
-            </Pressable>
-          </View>
-          <WebView
-            source={{ uri: coinbasePaymentUrl }}
-            originWhitelist={["*"]}
-            javaScriptEnabled
-            javaScriptCanOpenWindowsAutomatically
-            domStorageEnabled
-            webviewDebuggingEnabled={__DEV__}
-            sharedCookiesEnabled
-            thirdPartyCookiesEnabled
-            setSupportMultipleWindows={false}
-            paymentRequestEnabled={Platform.OS === "android"}
-            limitsNavigationsToAppBoundDomains={Platform.OS === "ios"}
-            onShouldStartLoadWithRequest={(request) => {
-              if (
-                request.isTopFrame === false ||
-                request.url === "about:blank"
-              ) {
-                return true;
-              }
-              return isTrustedCoinbasePaymentUrl(request.url);
-            }}
-            onMessage={handleCoinbaseMessage}
-            onError={() =>
-              forwardCoinbaseLoadError(
-                "The Coinbase payment view could not be loaded.",
-                "WEBVIEW_ERROR",
-              )
-            }
-            onHttpError={({ nativeEvent }) =>
-              forwardCoinbaseLoadError(
-                `Coinbase returned HTTP ${nativeEvent.statusCode}. Try again.`,
-                "WEBVIEW_HTTP_ERROR",
-              )
-            }
-            onContentProcessDidTerminate={() =>
-              forwardCoinbaseLoadError(
-                "The Coinbase payment view was interrupted. Try again.",
-                "WEBVIEW_TERMINATED",
-              )
-            }
-            style={styles.coinbasePaymentWebView}
-          />
-        </View>
+        <ApplePayWidget
+          key={coinbasePaymentUrl}
+          paymentUrl={coinbasePaymentUrl}
+          topInset={Math.max(safeAreaInsets.top, 12)}
+          hideApplePayButton
+          onCancel={closeCoinbasePayment}
+          onCoinbaseMessage={handleCoinbaseMessage}
+          onLoadError={forwardCoinbaseLoadError}
+        />
       ) : null}
     </View>
   );
@@ -489,39 +463,5 @@ const styles = StyleSheet.create({
     flex: 1,
     height: "100%",
     width: "100%",
-  },
-  coinbasePaymentOverlay: {
-    ...StyleSheet.absoluteFill,
-    backgroundColor: "#ffffff",
-    zIndex: 2,
-  },
-  coinbasePaymentHeader: {
-    alignItems: "center",
-    borderBottomColor: "#d8dfe3",
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    minHeight: 52,
-    paddingHorizontal: 16,
-  },
-  coinbasePaymentTitle: {
-    color: "#151b1e",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  coinbaseCancelButton: {
-    alignItems: "center",
-    justifyContent: "center",
-    minHeight: 44,
-    minWidth: 64,
-  },
-  coinbaseCancelText: {
-    color: "#b52f36",
-    fontSize: 16,
-    fontWeight: "600",
-  },
-  coinbasePaymentWebView: {
-    backgroundColor: "#ffffff",
-    flex: 1,
   },
 });
