@@ -1,4 +1,5 @@
 import { signWithDomain, SignatureDomain } from "./domain-signing";
+import * as legacySigning from "./domain-signing-legacy";
 import {
     TransactionVmError,
     type Transaction as CoreTransaction,
@@ -473,6 +474,40 @@ export class Transaction {
         
         if (signature.length !== SIGNATURE_SIZE) {
             throw new Error("ed25519 signing produced an invalid signature");
+        }
+        this.signature = Signature.from(signature);
+        return this.signature;
+    }
+
+    /**
+     * Sign using the pre-RFC-8032 Thru transaction scheme.
+     *
+     * This compatibility method is only for networks that have not completed
+     * the coordinated signing cutover. New integrations must use {@link sign}.
+     */
+    async legacySign(privateKey: Uint8Array): Promise<Signature> {
+        if (privateKey.length !== 32) {
+            throw new Error("Fee payer private key must contain 32 bytes");
+        }
+        const payload = this.toWireForSigning();
+        const publicKey = this.feePayer.toBytes();
+        const signature = await legacySigning.signWithDomain(
+            payload,
+            privateKey,
+            publicKey,
+            legacySigning.SignatureDomain.TXN,
+        );
+
+        if (
+            signature.length !== SIGNATURE_SIZE ||
+            !(await legacySigning.verifyWithDomain(
+                signature,
+                payload,
+                publicKey,
+                legacySigning.SignatureDomain.TXN,
+            ))
+        ) {
+            throw new Error("legacy ed25519 signing produced an invalid signature");
         }
         this.signature = Signature.from(signature);
         return this.signature;

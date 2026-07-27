@@ -6,6 +6,10 @@ import type {
     TransactionAccountsInput,
 } from "./types";
 import { createInstructionContext, normalizeAccountList, parseInstructionData } from "./utils";
+import {
+    resolveTransactionSigningScheme,
+    TransactionSigningScheme,
+} from "./transaction-signing-scheme";
 
 const FLAG_HAS_FEE_PAYER_PROOF = 1 << 0;
 
@@ -56,7 +60,11 @@ export class TransactionBuilder {
             throw new Error("Fee payer private key is required to sign the transaction");
         }
         const transaction = this.build(params);
-        const signature = await transaction.sign(params.feePayer.privateKey);
+        const scheme = resolveTransactionSigningScheme(params.transactionSigningScheme);
+        const signature =
+            scheme === TransactionSigningScheme.Legacy
+                ? await transaction.legacySign(params.feePayer.privateKey)
+                : await transaction.sign(params.feePayer.privateKey);
         const rawTransaction = transaction.toWire();
         return { transaction, signature, rawTransaction };
     }

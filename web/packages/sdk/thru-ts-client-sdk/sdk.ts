@@ -31,7 +31,11 @@ export { HeightSnapshot } from "./domain/height";
 export { PageRequest, PageResponse } from "./domain/pagination";
 export { Pubkey, Signature } from "./domain/primitives";
 export { StateProof } from "./domain/proofs";
-export { Transaction, TransactionStatusSnapshot } from "./domain/transactions";
+export {
+  Transaction,
+  TransactionSigningScheme,
+  TransactionStatusSnapshot
+} from "./domain/transactions";
 export { VersionInfo } from "./domain/version";
 export {
   deriveAddress,

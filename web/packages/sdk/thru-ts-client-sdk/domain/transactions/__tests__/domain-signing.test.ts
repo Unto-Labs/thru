@@ -5,6 +5,7 @@ import {
     signWithDomain,
     verifyWithDomain,
 } from "../domain-signing.js";
+import * as legacySigning from "../domain-signing-legacy.js";
 
 function hexToBytes(hex: string): Uint8Array {
     const out = new Uint8Array(hex.length / 2);
@@ -45,5 +46,63 @@ describe("domain-signing (RFC-8032 + DST)", () => {
         const bad = Uint8Array.from(sig);
         bad[40] ^= 1;
         expect(await verifyWithDomain(bad, body, pubkey, SignatureDomain.TXN)).toBe(false);
+    });
+});
+
+describe("legacy domain signing", () => {
+    const seed = hexToBytes("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60");
+    const pubkey = hexToBytes("d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a");
+    const body = new TextEncoder().encode("Thru golden1");
+    const legacySigExpected =
+        "29fce282f37f766863a1e38bbeb1e174eccde185f1fec157ca47e83bf79452b64902b007a185fcc7213e58cdeb51d587aee8b08f7d862059f3d5455c6f09a204";
+
+    it("matches the pre-cutover transaction signature vector", async () => {
+        const signature = await legacySigning.signWithDomain(
+            body,
+            seed,
+            pubkey,
+            legacySigning.SignatureDomain.TXN,
+        );
+        expect(bytesToHex(signature)).toBe(legacySigExpected);
+        expect(
+            await legacySigning.verifyWithDomain(
+                signature,
+                body,
+                pubkey,
+                legacySigning.SignatureDomain.TXN,
+            ),
+        ).toBe(true);
+    });
+
+    it("is not interchangeable with RFC-8032 transaction signing", async () => {
+        const legacySignature = await legacySigning.signWithDomain(
+            body,
+            seed,
+            pubkey,
+            legacySigning.SignatureDomain.TXN,
+        );
+        const currentSignature = await signWithDomain(
+            body,
+            seed,
+            pubkey,
+            SignatureDomain.TXN,
+        );
+
+        expect(
+            await verifyWithDomain(
+                legacySignature,
+                body,
+                pubkey,
+                SignatureDomain.TXN,
+            ),
+        ).toBe(false);
+        expect(
+            await legacySigning.verifyWithDomain(
+                currentSignature,
+                body,
+                pubkey,
+                legacySigning.SignatureDomain.TXN,
+            ),
+        ).toBe(false);
     });
 });

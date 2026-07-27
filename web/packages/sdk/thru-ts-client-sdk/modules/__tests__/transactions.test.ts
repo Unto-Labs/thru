@@ -15,6 +15,9 @@ import { PageRequest } from "../../domain/pagination";
 import { Signature } from "../../domain/primitives";
 import { TransactionStatusSnapshot } from "../../domain/transactions";
 import { Transaction } from "../../domain/transactions/Transaction";
+import { SignatureDomain, verifyWithDomain } from "../../domain/transactions/domain-signing";
+import * as legacySigning from "../../domain/transactions/domain-signing-legacy";
+import { TransactionSigningScheme } from "../../domain/transactions/transaction-signing-scheme";
 import type { InstructionContext } from "../../domain/transactions/types";
 import { ConsensusStatus } from "@thru/sdk/proto";
 import { TrackTransactionResponseSchema, TransactionExecutionResultSchema, TransactionSchema, TransactionView } from "@thru/sdk/proto";
@@ -523,6 +526,65 @@ describe("transactions", () => {
           program: generateTestPubkey(0x02),
         } as any)
       ).rejects.toThrow("Fee payer private key is required to sign the transaction");
+    });
+
+    it("uses the client legacy signing default", async () => {
+      const ctx = createMockContext({
+        transactionSigningScheme: TransactionSigningScheme.Legacy,
+      });
+      vi.spyOn(ctx.query, "getAccount").mockResolvedValue(
+        createMockAccount({ meta: { nonce: 5n } }),
+      );
+      vi.spyOn(ctx.query, "getHeight").mockResolvedValue(
+        createMockHeightResponse({ finalized: 1000n }),
+      );
+      const privateKey = new Uint8Array(32).fill(0x42);
+      const publicKey = await getPublicKeyAsync(privateKey);
+
+      const result = await buildAndSignTransaction(ctx, {
+        feePayer: { publicKey, privateKey },
+        program: generateTestPubkey(0x02),
+      });
+      const payload = result.transaction.toWireForSigning();
+
+      expect(
+        await legacySigning.verifyWithDomain(
+          result.signature.toBytes(),
+          payload,
+          publicKey,
+          legacySigning.SignatureDomain.TXN,
+        ),
+      ).toBe(true);
+    });
+
+    it("lets a per-call RFC-8032 scheme override a legacy client default", async () => {
+      const ctx = createMockContext({
+        transactionSigningScheme: TransactionSigningScheme.Legacy,
+      });
+      vi.spyOn(ctx.query, "getAccount").mockResolvedValue(
+        createMockAccount({ meta: { nonce: 5n } }),
+      );
+      vi.spyOn(ctx.query, "getHeight").mockResolvedValue(
+        createMockHeightResponse({ finalized: 1000n }),
+      );
+      const privateKey = new Uint8Array(32).fill(0x42);
+      const publicKey = await getPublicKeyAsync(privateKey);
+
+      const result = await buildAndSignTransaction(ctx, {
+        feePayer: { publicKey, privateKey },
+        program: generateTestPubkey(0x02),
+        transactionSigningScheme: TransactionSigningScheme.Rfc8032,
+      });
+      const payload = result.transaction.toWireForSigning();
+
+      expect(
+        await verifyWithDomain(
+          result.signature.toBytes(),
+          payload,
+          publicKey,
+          SignatureDomain.TXN,
+        ),
+      ).toBe(true);
     });
   });
 

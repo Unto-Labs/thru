@@ -2,6 +2,7 @@ import { create } from "@bufbuild/protobuf";
 import { encodeAddress, encodeSignature } from "@thru/sdk/helpers";
 import { vi } from "vitest";
 import type { ThruClientContext } from "../../core/client";
+import { TransactionSigningScheme } from "../../domain/transactions/transaction-signing-scheme";
 import type { Account, AccountFlags, AccountMeta } from "@thru/sdk/proto";
 import { AccountFlagsSchema, AccountMetaSchema, AccountSchema } from "@thru/sdk/proto";
 import type { Block, BlockHeader } from "@thru/sdk/proto";
@@ -49,6 +50,8 @@ export function createMockContext(overrides: Partial<ThruClientContext> = {}): T
       ...overrides.streaming,
     } as any,
     callOptions: overrides.callOptions,
+    transactionSigningScheme:
+      overrides.transactionSigningScheme ?? TransactionSigningScheme.Rfc8032,
     ...overrides,
   };
 }

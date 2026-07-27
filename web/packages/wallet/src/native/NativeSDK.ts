@@ -51,6 +51,10 @@ import {
   resolveSigningSessionStorageKey,
 } from "../signing-sessions";
 import { createNativeThruClient } from "./rpc";
+import {
+  type TransactionSigningScheme,
+  withTransactionSigningScheme,
+} from "../transaction-signing-scheme";
 
 export type IosWebViewMode = "direct" | "shell-iframe";
 export type NativeWalletExperience = "standard" | "transparent";
@@ -119,6 +123,7 @@ export interface NativeSDKConfig {
   selectedAccountStorageKey?: string;
   /** Override the key used for app-local signing session descriptors. */
   signingSessionStorageKey?: string;
+  transactionSigningScheme?: TransactionSigningScheme;
 }
 
 export interface SignInOptions {
@@ -272,11 +277,13 @@ export class NativeSDK {
     this.walletExperience = config.walletExperience ?? "standard";
     this.defaultMetadata = config.metadata;
     this.defaultNetwork = config.network;
-    const walletUrl =
+    const walletUrl = withTransactionSigningScheme(
       config.walletUrl ??
-      (this.walletExperience === "transparent"
-        ? DEFAULT_TRANSPARENT_WALLET_URL
-        : DEFAULT_NATIVE_WALLET_URL);
+        (this.walletExperience === "transparent"
+          ? DEFAULT_TRANSPARENT_WALLET_URL
+          : DEFAULT_NATIVE_WALLET_URL),
+      config.transactionSigningScheme,
+    );
     const walletOrigin = new URL(walletUrl).origin;
     const signingSessions = this.storage
       ? new SigningSessionDescriptorStore(

@@ -98,6 +98,28 @@ const thru = createThruClient({
 - `interceptors` let you append cross-cutting logic (auth, metrics) without re-implementing transports.
 - `callOptions` act as defaults for **every** RPC. You can set timeouts, headers, or a shared `AbortSignal`, and each module call merges in per-request overrides.
 
+### Legacy transaction signing
+
+RFC-8032 is always the default. Networks that have not completed the signing
+cutover can opt into the pre-cutover outer-transaction signature scheme:
+
+```ts
+import {
+  createThruClient,
+  TransactionSigningScheme,
+} from "@thru/sdk";
+
+const thru = createThruClient({
+  baseUrl: "https://legacy-rpc.example",
+  transactionSigningScheme: TransactionSigningScheme.Legacy,
+});
+```
+
+For manually built transactions, `transaction.legacySign(privateKey)` is the
+explicit compatibility equivalent of the RFC-8032-only
+`transaction.sign(privateKey)`. The schemes are not interchangeable, and the
+SDK never retries with legacy signing automatically.
+
 ## Domain Models
 
 The SDK revolves around immutable domain classes. They copy mutable buffers, expose clear invariants, and provide conversion helpers where needed.

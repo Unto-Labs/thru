@@ -7,6 +7,7 @@ import {
   POST_MESSAGE_REQUEST_TYPES,
 } from "../protocol";
 import { NativeSDK } from "./NativeSDK";
+import { TransactionSigningScheme } from "../transaction-signing-scheme";
 import type { WebViewMessageEventLike } from "./provider/WebViewBridge";
 
 class MockWebView {
@@ -175,6 +176,22 @@ describe("NativeSDK", () => {
     expect(iframeUrl.pathname).toBe("/embedded/native/transparent");
 
     transparentSdk.destroy();
+  });
+
+  it("propagates an explicit legacy signing scheme to the wallet URL", () => {
+    const legacySdk = new NativeSDK({
+      walletUrl: "http://localhost:3000/embedded?existing=1",
+      origin: "thru-mobile://token-dummy",
+      transactionSigningScheme: TransactionSigningScheme.Legacy,
+    });
+    const iframeUrl = new URL(legacySdk.getIframeSrc());
+
+    expect(iframeUrl.searchParams.get("existing")).toBe("1");
+    expect(
+      iframeUrl.searchParams.get("tn_transaction_signing_scheme"),
+    ).toBe("legacy");
+
+    legacySdk.destroy();
   });
 
   it("requests a transparent focus surface for transparent connect", async () => {

@@ -2,6 +2,10 @@ import { CallOptions, Interceptor, Transport, createClient } from "@connectrpc/c
 import { GrpcWebTransportOptions, createGrpcWebTransport } from "@connectrpc/connect-web";
 
 import { DEFAULT_HOST } from "../defaults";
+import {
+    resolveTransactionSigningScheme,
+    TransactionSigningScheme,
+} from "../domain/transactions/transaction-signing-scheme";
 import { CommandService, QueryService, StreamingService } from "@thru/sdk/proto";
 
 type PartialTransportOptions = Partial<GrpcWebTransportOptions>;
@@ -12,6 +16,7 @@ export interface ThruClientConfig {
     transportOptions?: PartialTransportOptions;
     interceptors?: Interceptor[];
     callOptions?: CallOptions;
+    transactionSigningScheme?: TransactionSigningScheme;
 }
 
 type QueryClient = ReturnType<typeof createClient<typeof QueryService>>;
@@ -25,6 +30,7 @@ export interface ThruClientContext {
     command: CommandClient;
     streaming: StreamingClient;
     callOptions?: CallOptions;
+    transactionSigningScheme: TransactionSigningScheme;
 }
 
 export function createThruClientContext(config: ThruClientConfig = {}): ThruClientContext {
@@ -50,6 +56,9 @@ export function createThruClientContext(config: ThruClientConfig = {}): ThruClie
         command: createClient(CommandService, transport),
         streaming: createClient(StreamingService, transport),
         callOptions: config.callOptions,
+        transactionSigningScheme: resolveTransactionSigningScheme(
+            config.transactionSigningScheme,
+        ),
     };
 }
 

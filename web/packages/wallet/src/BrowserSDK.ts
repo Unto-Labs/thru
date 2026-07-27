@@ -41,6 +41,10 @@ import {
   type SigningSessionStorage,
 } from './signing-sessions';
 import { createThruClient, Thru } from '@thru/sdk/client';
+import {
+  type TransactionSigningScheme,
+  withTransactionSigningScheme,
+} from './transaction-signing-scheme';
 
 export interface BrowserSDKConfig {
   iframeUrl?: string;
@@ -50,6 +54,7 @@ export interface BrowserSDKConfig {
   depositUiConfig?: DepositUiConfig;
   signingSessionStorage?: SigningSessionStorage | false;
   signingSessionStorageKey?: string;
+  transactionSigningScheme?: TransactionSigningScheme;
 }
 
 export interface ConnectOptions {
@@ -84,8 +89,11 @@ export class BrowserSDK {
   };
 
   constructor(config: BrowserSDKConfig = {}) {
-    const iframeUrl = config.iframeUrl;
-    const walletOrigin = new URL(iframeUrl ?? DEFAULT_IFRAME_URL).origin;
+    const iframeUrl = withTransactionSigningScheme(
+      config.iframeUrl ?? DEFAULT_IFRAME_URL,
+      config.transactionSigningScheme,
+    );
+    const walletOrigin = new URL(iframeUrl).origin;
     const appOrigin =
       typeof window !== 'undefined' && window.location.origin
         ? window.location.origin

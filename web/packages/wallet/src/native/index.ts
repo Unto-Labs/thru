@@ -1,4 +1,9 @@
 export { NativeSDK } from './NativeSDK';
+export {
+  TRANSACTION_SIGNING_SCHEME_SEARCH_PARAM,
+  TransactionSigningScheme,
+  withTransactionSigningScheme,
+} from '../transaction-signing-scheme';
 export type {
   EventCallback,
   ConnectOptions,

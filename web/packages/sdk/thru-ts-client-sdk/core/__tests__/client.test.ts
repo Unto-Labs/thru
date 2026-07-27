@@ -6,6 +6,7 @@ vi.mock("@connectrpc/connect-web", () => ({
 
 import * as connectWeb from "@connectrpc/connect-web";
 import { DEFAULT_HOST } from "../../defaults";
+import { TransactionSigningScheme } from "../../domain/transactions/transaction-signing-scheme";
 import { createThruClientContext, withCallOptions } from "../client";
 
 afterEach(() => {
@@ -21,6 +22,22 @@ describe("createThruClientContext", () => {
     expect(ctx.query).toBeDefined();
     expect(ctx.command).toBeDefined();
     expect(ctx.streaming).toBeDefined();
+    expect(ctx.transactionSigningScheme).toBe(TransactionSigningScheme.Rfc8032);
+  });
+
+  it("stores an explicit legacy transaction signing default", () => {
+    const ctx = createThruClientContext({
+      transactionSigningScheme: TransactionSigningScheme.Legacy,
+    });
+    expect(ctx.transactionSigningScheme).toBe(TransactionSigningScheme.Legacy);
+  });
+
+  it("rejects an invalid transaction signing scheme", () => {
+    expect(() =>
+      createThruClientContext({
+        transactionSigningScheme: "future" as TransactionSigningScheme,
+      }),
+    ).toThrow("Invalid transaction signing scheme: future");
   });
 
   it("should create context with custom baseUrl", () => {
@@ -116,4 +133,3 @@ describe("createThruClientContext", () => {
     ]);
   });
 });
-
