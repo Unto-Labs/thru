@@ -19,7 +19,7 @@
 // Schema Builder
 // ============================================================
 
-export { t, columnBuilder, type ColumnBuilder } from "./schema";
+export { t, columnBuilder, type ColumnBuilder, type TableIndexDefinition } from "./schema";
 export type {
   ColumnDef,
   AnyColumnDef,

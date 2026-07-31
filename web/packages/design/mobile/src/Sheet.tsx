@@ -4,7 +4,8 @@
  */
 import { type ReactNode, useEffect, useRef, useState } from "react";
 import { Animated, Easing, Modal, Pressable, StyleSheet, Text, View } from "react-native";
-import { color, font, radius, text, touch } from "./tokens";
+import { font, radius, text, touch } from "./tokens";
+import { makeStyles } from "./theme";
 import { IconClose } from "./Icons";
 
 export function Sheet({
@@ -18,6 +19,7 @@ export function Sheet({
   onClose: () => void;
   children: ReactNode;
 }) {
+  const styles = useStyles();
   const [mounted, setMounted] = useState(visible);
   const progress = useRef(new Animated.Value(0)).current;
 
@@ -66,21 +68,21 @@ export function Sheet({
           </Pressable>
         </View>
         {children}
-        <View style={{ height: 34 }} />
+        <View style={styles.bottomInset} />
       </Animated.View>
     </Modal>
   );
 }
 
-const styles = StyleSheet.create({
-  scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: color.scrim },
+const useStyles = makeStyles((c) => ({
+  scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: c.scrim },
   scrimPressable: { flex: 1 },
   panel: {
     position: "absolute",
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: color.bg,
+    backgroundColor: c.bg,
     borderTopLeftRadius: radius.sheet,
     borderTopRightRadius: radius.sheet,
     paddingTop: 4,
@@ -92,6 +94,7 @@ const styles = StyleSheet.create({
     paddingLeft: touch.screenX,
     paddingRight: 6,
   },
-  title: { flex: 1, fontFamily: font.sansSemiBold, fontSize: text.md, color: color.fg },
+  title: { flex: 1, fontFamily: font.sansSemiBold, fontSize: text.md, color: c.fg },
   close: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
-});
+  bottomInset: { height: 34 },
+}));

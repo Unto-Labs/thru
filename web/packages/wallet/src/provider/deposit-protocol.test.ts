@@ -103,6 +103,7 @@ describe('deposit protocol round-trip', () => {
       depositUiConfig: DEPOSIT_UI_CONFIG,
     });
     const result = await provider.deposit({
+      providerId: 'unifold',
       destination: DESTINATION,
     });
 
@@ -110,8 +111,8 @@ describe('deposit protocol round-trip', () => {
     expect(captured!.type).toBe(POST_MESSAGE_REQUEST_TYPES.DEPOSIT);
     expect(captured!.origin).toBe(APP_ORIGIN);
     expect(captured!.payload).toEqual({
+      providerId: 'unifold',
       destination: DESTINATION,
-      network: ThruNetwork.Alphanet,
       resolvedDepositUiConfig: DEPOSIT_UI_CONFIG,
     });
     expect(result).toEqual({
@@ -123,6 +124,51 @@ describe('deposit protocol round-trip', () => {
     expect(showModal).toHaveBeenCalledOnce();
     expect(hide).toHaveBeenCalledOnce();
     expect(sendMessage).toHaveBeenCalledOnce();
+  });
+
+  it('passes a prepared Coinbase deposit through to the wallet', async () => {
+    let captured: PostMessageRequest | null = null;
+    vi.spyOn(IframeManager.prototype, 'sendMessage').mockImplementation(
+      async (request: PostMessageRequest) => {
+        captured = request;
+        return {
+          id: request.id,
+          success: true,
+          result: { status: 'cancelled' },
+        } as never;
+      },
+    );
+    vi.spyOn(IframeManager.prototype, 'showModal').mockImplementation(() => {});
+    vi.spyOn(IframeManager.prototype, 'hide').mockImplementation(() => {});
+
+    const provider = new EmbeddedProvider({
+      iframeUrl: WALLET_URL,
+      network: ThruNetwork.Alphanet,
+    });
+    await provider.deposit({
+      providerId: 'coinbase',
+      destination: DESTINATION,
+      paymentAmount: '20.00',
+      customer: {
+        email: 'person@example.com',
+        phoneNumber: '+12055550123',
+        phoneNumberVerifiedAt: '2026-07-30T12:00:00.000Z',
+        agreementAcceptedAt: '2026-07-30T12:00:00.000Z',
+      },
+    });
+
+    expect(captured).not.toBeNull();
+    expect(captured!.payload).toEqual({
+      providerId: 'coinbase',
+      destination: DESTINATION,
+      paymentAmount: '20.00',
+      customer: {
+        email: 'person@example.com',
+        phoneNumber: '+12055550123',
+        phoneNumberVerifiedAt: '2026-07-30T12:00:00.000Z',
+        agreementAcceptedAt: '2026-07-30T12:00:00.000Z',
+      },
+    });
   });
 
   it('round-trips a cancelled result and hides the modal', async () => {
@@ -141,6 +187,7 @@ describe('deposit protocol round-trip', () => {
 
     const provider = new EmbeddedProvider({ iframeUrl: WALLET_URL });
     const result = await provider.deposit({
+      providerId: 'unifold',
       destination: DESTINATION,
     });
 
@@ -160,6 +207,7 @@ describe('deposit protocol round-trip', () => {
     const provider = new EmbeddedProvider({ iframeUrl: WALLET_URL });
     await expect(
       provider.deposit({
+        providerId: 'unifold',
         destination: DESTINATION,
       }),
     ).rejects.toThrow('wallet exploded');

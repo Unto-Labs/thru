@@ -1,12 +1,11 @@
 /**
  * Small kit pieces: Field (48pt mono input), Cell (56pt list row), Badge
  * (11pt mono chip), BalanceHero (11 mono label over 44pt display), Card
- * (hairline panel), SectionLabel.
+ * (hairline panel), SectionLabel. All colors follow the active theme.
  */
 import type { ReactNode } from "react";
 import {
   Pressable,
-  StyleSheet,
   Text,
   TextInput,
   View,
@@ -16,14 +15,17 @@ import {
   type TextInputProps,
   type ViewStyle,
 } from "react-native";
-import { color, font, palette, text, touch } from "./tokens";
+import { font, text, touch } from "./tokens";
+import { makeStyles, useThemeColors, type ThemeColors } from "./theme";
 import { IconChevronRight } from "./Icons";
 
-export function Card({ children, style }: { children: ReactNode; style?: object }) {
+export function Card({ children, style }: { children: ReactNode; style?: StyleProp<ViewStyle> }) {
+  const styles = useStyles();
   return <View style={[styles.card, style]}>{children}</View>;
 }
 
 export function SectionLabel({ children }: { children: ReactNode }) {
+  const styles = useStyles();
   return <Text style={styles.sectionLabel}>{children}</Text>;
 }
 
@@ -35,6 +37,7 @@ export interface SkeletonProps {
 
 /** Layout-preserving placeholder for content that has not loaded yet. */
 export function Skeleton({ height, width = "100%", style }: SkeletonProps) {
+  const styles = useStyles();
   return (
     <View
       accessible={false}
@@ -46,15 +49,17 @@ export function Skeleton({ height, width = "100%", style }: SkeletonProps) {
 }
 
 export function Field(props: TextInputProps & { error?: boolean }) {
+  const styles = useStyles();
+  const colors = useThemeColors();
   const { accessibilityHint, error, style, ...rest } = props;
   return (
     <TextInput
-      placeholderTextColor={color.fgSubtle}
+      placeholderTextColor={colors.fgSubtle}
       autoCapitalize="none"
       autoCorrect={false}
       {...rest}
       accessibilityHint={error ? `Invalid input${accessibilityHint ? `. ${accessibilityHint}` : ""}` : accessibilityHint}
-      style={[styles.field, error ? { borderColor: color.error } : null, style]}
+      style={[styles.field, error ? { borderColor: colors.error } : null, style]}
     />
   );
 }
@@ -84,6 +89,8 @@ export function Cell({
   disabled,
   onPress,
 }: CellProps) {
+  const styles = useStyles();
+  const colors = useThemeColors();
   const interactive = Boolean(onPress);
   return (
     <Pressable
@@ -100,7 +107,7 @@ export function Cell({
       style={({ pressed }) => [
         styles.cell,
         subtitle ? { height: touch.cellHLg } : null,
-        pressed && onPress && !disabled ? { backgroundColor: color.bgMuted } : null,
+        pressed && onPress && !disabled ? { backgroundColor: colors.bgMuted } : null,
         disabled ? { opacity: 0.5 } : null,
       ]}
     >
@@ -123,15 +130,22 @@ export function Cell({
 
 export type BadgeTone = "neutral" | "success" | "warn" | "brand";
 
-const BADGE_TONES: Record<BadgeTone, { bg: string; fg: string }> = {
-  neutral: { bg: palette.stone[100], fg: palette.stone[600] },
-  success: { bg: palette.forest[100], fg: palette.forest[400] },
-  warn: { bg: palette.saffron[100], fg: "#8A5A00" },
-  brand: { bg: palette.brick[100], fg: palette.brick[500] },
-};
+function badgeTone(c: ThemeColors, tone: BadgeTone): { bg: string; fg: string } {
+  switch (tone) {
+    case "success":
+      return { bg: c.forestSoft, fg: c.forest };
+    case "warn":
+      return { bg: c.saffronSoft, fg: c.saffron };
+    case "brand":
+      return { bg: c.brickSoft, fg: c.accent };
+    default:
+      return { bg: c.bgMuted, fg: c.fgMuted };
+  }
+}
 
 export function Badge({ tone = "neutral", children }: { tone?: BadgeTone; children: ReactNode }) {
-  const t = BADGE_TONES[tone];
+  const styles = useStyles();
+  const t = badgeTone(useThemeColors(), tone);
   return (
     <View style={[styles.badge, { backgroundColor: t.bg }]}>
       <Text style={[styles.badgeText, { color: t.fg }]}>{children}</Text>
@@ -150,6 +164,7 @@ export function BalanceHero({
   chips?: ReactNode;
   style?: StyleProp<ViewStyle>;
 }) {
+  const styles = useStyles();
   return (
     <View style={[styles.hero, style]}>
       <Text style={styles.heroLabel}>{label}</Text>
@@ -162,35 +177,95 @@ export function BalanceHero({
 }
 
 export function StatusText({ kind = "muted", children }: { kind?: "muted" | "ok" | "err"; children: ReactNode }) {
-  const c = kind === "ok" ? palette.forest[400] : kind === "err" ? color.destructive : color.fgMuted;
+  const styles = useStyles();
+  const colors = useThemeColors();
+  const c = kind === "ok" ? colors.forest : kind === "err" ? colors.destructive : colors.fgMuted;
   return <Text style={[styles.status, { color: c }]}>{children}</Text>;
 }
 
-const styles = StyleSheet.create({
+export interface SegmentedOption<T extends string> {
+  label: string;
+  value: T;
+}
+
+export interface SegmentedProps<T extends string> {
+  accessibilityLabel?: string;
+  options: readonly SegmentedOption<T>[];
+  value: T;
+  onChange: (value: T) => void;
+  disabled?: boolean;
+  style?: StyleProp<ViewStyle>;
+}
+
+/**
+ * One square group with shared hairlines — not N separate boxes. The selected
+ * segment inverts to the foreground fill; 44pt tall so every segment is a
+ * full hit target.
+ */
+export function Segmented<T extends string>({
+  accessibilityLabel,
+  options,
+  value,
+  onChange,
+  disabled,
+  style,
+}: SegmentedProps<T>) {
+  const styles = useStyles();
+  const colors = useThemeColors();
+  return (
+    <View accessibilityLabel={accessibilityLabel} accessibilityRole="tablist" style={[styles.segmented, style]}>
+      {options.map((option, index) => {
+        const selected = option.value === value;
+        return (
+          <Pressable
+            key={option.value}
+            accessibilityRole="tab"
+            accessibilityState={{ selected, disabled: Boolean(disabled) }}
+            disabled={disabled}
+            onPress={() => onChange(option.value)}
+            style={({ pressed }) => [
+              styles.segment,
+              index > 0 ? styles.segmentDivided : null,
+              selected ? { backgroundColor: colors.fg } : null,
+              !selected && pressed ? { backgroundColor: colors.bgMuted } : null,
+              disabled ? { opacity: 0.5 } : null,
+            ]}
+          >
+            <Text style={[styles.segmentText, { color: selected ? colors.bg : colors.fgMuted }]} numberOfLines={1}>
+              {option.label}
+            </Text>
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
+const useStyles = makeStyles((c) => ({
   card: {
-    backgroundColor: color.bg,
+    backgroundColor: c.bg,
     borderWidth: 1,
-    borderColor: color.border,
+    borderColor: c.border,
   },
   sectionLabel: {
     fontFamily: font.mono,
     fontSize: text.xxs,
     letterSpacing: 1,
     textTransform: "uppercase",
-    color: color.fgSubtle,
+    color: c.fgSubtle,
   },
   skeleton: {
-    backgroundColor: color.bgInset,
+    backgroundColor: c.bgInset,
   },
   field: {
     height: touch.controlMd,
     paddingHorizontal: 14,
     fontFamily: font.mono,
     fontSize: text.base,
-    color: color.fg,
-    backgroundColor: color.bg,
+    color: c.fg,
+    backgroundColor: c.bg,
     borderWidth: 1,
-    borderColor: color.borderStrong,
+    borderColor: c.borderStrong,
     borderRadius: 0,
   },
   cell: {
@@ -202,17 +277,37 @@ const styles = StyleSheet.create({
   },
   cellIcon: { width: 24, alignItems: "center" },
   cellBody: { flex: 1, gap: 2 },
-  cellTitle: { fontFamily: font.sansMedium, fontSize: text.base, color: color.fg },
-  cellSubtitle: { fontFamily: font.mono, fontSize: text.sm, color: color.fgMuted },
+  cellTitle: { fontFamily: font.sansMedium, fontSize: text.base, color: c.fg },
+  cellSubtitle: { fontFamily: font.mono, fontSize: text.sm, color: c.fgMuted },
   badge: { paddingHorizontal: 8, paddingVertical: 4, alignSelf: "flex-start" },
   badgeText: { fontFamily: font.monoMedium, fontSize: text.xxs, letterSpacing: 0.5, textTransform: "uppercase" },
+  segmented: {
+    flexDirection: "row",
+    borderWidth: 1,
+    borderColor: c.borderStrong,
+  },
+  segment: {
+    flex: 1,
+    height: touch.hitMin,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 4,
+  },
+  segmentDivided: {
+    borderLeftWidth: 1,
+    borderLeftColor: c.borderStrong,
+  },
+  segmentText: {
+    fontFamily: font.mono,
+    fontSize: text.sm,
+  },
   hero: { paddingHorizontal: touch.screenX, paddingTop: 24 },
   heroLabel: {
     fontFamily: font.mono,
     fontSize: text.xxs,
     letterSpacing: 1.2,
     textTransform: "uppercase",
-    color: color.fgSubtle,
+    color: c.fgSubtle,
     marginBottom: 8,
   },
   heroValue: {
@@ -220,8 +315,8 @@ const styles = StyleSheet.create({
     fontSize: text.display,
     letterSpacing: -1,
     lineHeight: 48,
-    color: color.fg,
+    color: c.fg,
   },
   heroChips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 },
   status: { fontFamily: font.mono, fontSize: text.sm, minHeight: 20 },
-});
+}));

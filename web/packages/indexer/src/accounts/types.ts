@@ -5,6 +5,7 @@
 import type { AccountState } from "@thru/replay";
 import type { PgTableWithColumns } from "drizzle-orm/pg-core";
 import type { SchemaDefinition, InferRow, Columns } from "../schema/types";
+import type { TableIndexDefinition } from "../schema/table";
 import type { ApiConfig } from "../types";
 
 /**
@@ -60,6 +61,9 @@ export interface AccountStreamDefinition<TSchema extends SchemaDefinition> {
    * ```
    */
   schema: TSchema;
+
+  /** Composite database indexes for multi-column lookup paths. */
+  indexes?: readonly TableIndexDefinition<TSchema>[];
 
   /**
    * Parse account state into a table row.

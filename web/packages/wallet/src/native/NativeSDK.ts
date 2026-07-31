@@ -124,6 +124,9 @@ export interface NativeSDKConfig {
   /** Override the key used for app-local signing session descriptors. */
   signingSessionStorageKey?: string;
   transactionSigningScheme?: TransactionSigningScheme;
+  deposits?: {
+    providers: string[];
+  };
 }
 
 export interface SignInOptions {
@@ -253,12 +256,14 @@ export class NativeSDK {
   private readonly walletExperience: NativeWalletExperience;
   private readonly defaultMetadata?: ConnectMetadataInput;
   private readonly defaultNetwork?: ThruNetwork;
+  private readonly depositProviders: ReadonlySet<string>;
   private readonly signingSessions?: SigningSessionDescriptorStore;
 
   readonly deposits: DepositsApi = {
     prepare: (targetOrPayload) => this.prepareDeposit(targetOrPayload),
     ensureAccount: (params) => this.ensureDepositAccount(params),
     open: (payload) => this.deposit(payload),
+    getProviders: async () => [...this.depositProviders],
     getAccountState: (params) => this.getDepositAccountState(params),
     waitForBalance: (params) => this.waitForDepositBalance(params),
     formatAmount: (amountRaw, destination) =>
@@ -277,6 +282,7 @@ export class NativeSDK {
     this.walletExperience = config.walletExperience ?? "standard";
     this.defaultMetadata = config.metadata;
     this.defaultNetwork = config.network;
+    this.depositProviders = new Set(config.deposits?.providers ?? ['unifold']);
     const walletUrl = withTransactionSigningScheme(
       config.walletUrl ??
         (this.walletExperience === "transparent"
@@ -623,10 +629,11 @@ export class NativeSDK {
    */
   async deposit(payload: DepositRequestPayload): Promise<DepositResult> {
     if (!this.initialized) await this.initialize();
-    return this.provider.deposit({
-      ...payload,
-      network: payload.network ?? this.defaultNetwork,
-    });
+    const providerId = payload.providerId ?? 'unifold';
+    if (!this.depositProviders.has(providerId)) {
+      throw new Error(`Deposit provider is not configured: ${providerId}`);
+    }
+    return this.provider.deposit({ ...payload, providerId });
   }
 
   /** @deprecated Use `deposits.ensureAccount()`. */

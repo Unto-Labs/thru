@@ -2,7 +2,9 @@
  * Account Replay - streaming account state with backfill reconciliation.
  *
  * This module provides account state streaming with:
- * - Page assembly for large accounts (>4KB)
+ * - Page-delta overlay for large accounts (>4KB): the server streams only
+ *   the pages a transaction modified, so deltas are overlaid onto cached
+ *   full data and flushed at block boundaries
  * - Sequence number tracking for ordering
  * - Backfill reconciliation with live updates
  * - Block boundary detection via BlockFinished messages
@@ -16,6 +18,7 @@ import {
   FilterParamValueSchema,
   PageRequestSchema,
   PubkeySchema,
+  VersionContextSchema,
 } from "@thru/sdk/proto";
 import type {
   StreamAccountUpdatesRequest,
@@ -27,7 +30,8 @@ import type {
   FilterParamValue,
 } from "@thru/sdk/proto";
 import type { AccountSource } from "./chain-client";
-import { PageAssembler, type AssembledAccount } from "./page-assembler";
+import { AccountPageCache } from "./account-page-cache";
+import type { AssembledAccount } from "./page-assembler";
 import {
   abortableDelay,
   DEFAULT_RETRY_CONFIG,
@@ -40,7 +44,64 @@ import { closeIfCloseable, resolveClient } from "./types";
 import { NOOP_LOGGER } from "./logger";
 
 const DEFAULT_RECONNECT_CLEANUP_TIMEOUT_MS = 30_000;
+const DEFAULT_QUEUE_WARNING_THRESHOLD = 1_000;
+const DEFAULT_HEALTH_LOG_INTERVAL_MS = 300_000;
 const REPLAY_IDLE_TIMEOUT_ERROR = "ReplayIdleTimeoutError";
+
+type ReplayQueueName = "stream" | "deferred" | "fetch";
+
+class ReplayQueueGrowthLogger {
+  private readonly nextWarningSize: Record<ReplayQueueName, number>;
+
+  constructor(
+    private readonly warningThreshold: number,
+    private readonly logger: ReplayLogger
+  ) {
+    this.nextWarningSize = {
+      stream: warningThreshold,
+      deferred: warningThreshold,
+      fetch: warningThreshold,
+    };
+  }
+
+  observe(queue: ReplayQueueName, size: number): void {
+    if (size < this.warningThreshold) {
+      this.nextWarningSize[queue] = this.warningThreshold;
+      return;
+    }
+
+    const nextWarningSize = this.nextWarningSize[queue];
+    if (size < nextWarningSize) {
+      return;
+    }
+
+    this.logger.warn("Replay queue is growing", {
+      event: "replay.queue.growing",
+      queue,
+      queue_size: size,
+      warning_threshold: this.warningThreshold,
+    });
+    this.nextWarningSize[queue] = Math.min(
+      Number.MAX_SAFE_INTEGER,
+      nextWarningSize * 2
+    );
+  }
+}
+
+interface DeferredAccountFetchFailure {
+  addressHex: string;
+  error: unknown;
+}
+
+class DeferredAccountFetchError extends Error {
+  readonly failures: DeferredAccountFetchFailure[];
+
+  constructor(scope: string, failures: DeferredAccountFetchFailure[]) {
+    super(scope + " failed to fetch " + failures.length.toString() + " account" + (failures.length === 1 ? "" : "s"));
+    this.name = "DeferredAccountFetchError";
+    this.failures = failures;
+  }
+}
 
 function createIdleTimeoutError(timeoutMs: number): Error {
   const error = new Error(`Operation timed out after ${timeoutMs}ms`);
@@ -204,14 +265,18 @@ export interface AccountReplayOptions {
     params?: { [key: string]: { kind: { case: string; value: unknown } } };
   };
 
-  /** Page assembler options */
+  /** @deprecated Unused since streamed page deltas are overlaid onto cached
+      full data instead of assembled into complete page sets. */
   pageAssemblerOptions?: {
     assemblyTimeout?: number;
     maxPendingPerAddress?: number;
   };
 
-  /** Cleanup interval for page assembler (default: 10000ms) */
+  /** @deprecated Unused; there are no partial page assemblies to clean up. */
   cleanupInterval?: number;
+
+  /** Logger for debug/info/warn/error messages (default: NOOP_LOGGER) */
+  logger?: ReplayLogger;
 }
 
 /**
@@ -243,13 +308,14 @@ export interface AccountsByOwnerReplayOptions {
   /** Max retries for GetAccount failures (default: 3) */
   maxRetries?: number;
 
-  /** Page assembler options for streaming phase */
+  /** @deprecated Unused since streamed page deltas are overlaid onto cached
+      full data instead of assembled into complete page sets. */
   pageAssemblerOptions?: {
     assemblyTimeout?: number;
     maxPendingPerAddress?: number;
   };
 
-  /** Cleanup interval for page assembler (default: 10000ms) */
+  /** @deprecated Unused; there are no partial page assemblies to clean up. */
   cleanupInterval?: number;
 
   /** Maximum time to wait for stale reconnect cleanup before creating a fresh stream. */
@@ -263,6 +329,12 @@ export interface AccountsByOwnerReplayOptions {
 
   /** Logger for debug/info/warn/error messages (default: NOOP_LOGGER) */
   logger?: ReplayLogger;
+
+  /** Queue size that triggers growth warnings (default: 1,000 events). */
+  queueWarningThreshold?: number;
+
+  /** Health summary interval in milliseconds (default: 300,000; 0 disables). */
+  healthLogIntervalMs?: number;
 
   /** Optional signal to stop backfill/streaming without reconnecting. */
   signal?: AbortSignal;
@@ -411,13 +483,13 @@ export async function* createAccountsByOwnerReplay(
     minUpdatedSlot,
     pageSize = 100,
     maxRetries = 3,
-    pageAssemblerOptions,
-    cleanupInterval = 10000,
     reconnectCleanupTimeoutMs = DEFAULT_RECONNECT_CLEANUP_TIMEOUT_MS,
     retryConfig = DEFAULT_RETRY_CONFIG,
     onBackfillComplete,
     clientFactory,
     logger = NOOP_LOGGER,
+    queueWarningThreshold = DEFAULT_QUEUE_WARNING_THRESHOLD,
+    healthLogIntervalMs = DEFAULT_HEALTH_LOG_INTERVAL_MS,
     signal,
   } = options;
   const shouldStop = (err?: unknown): boolean => signal?.aborted === true || isAbortError(err);
@@ -430,15 +502,18 @@ export async function* createAccountsByOwnerReplay(
   const seenFromStream = new Set<string>();
 
   // Queue of addresses to fetch via GetAccount
-  const fetchQueue: Uint8Array[] = [];
+  const fetchQueue: Array<{ address: Uint8Array; slot?: bigint }> = [];
 
   // Highest slot seen (for checkpoint callback)
   let highestSlotSeen = minUpdatedSlot ?? 0n;
   const lastEmittedAccounts = new Map<string, { slot: bigint; seq: bigint }>();
 
-  // Page assembler for streaming
-  const assembler = new PageAssembler(pageAssemblerOptions);
-  let cleanupTimer: ReturnType<typeof setInterval> | null = null;
+  /* Delta overlay cache for streamed page updates. The server streams only
+     the pages a transaction modified, so full account data is reconstructed
+     by overlaying deltas onto data seeded from backfill/catch-up/snapshot
+     fetches and flushed at block boundaries. */
+  const pageCache = new AccountPageCache({ logger });
+  const resyncInFlight = new Set<string>();
 
   // Buffer for stream events
   const streamBuffer: AccountReplayEvent[] = [];
@@ -452,6 +527,60 @@ export async function* createAccountsByOwnerReplay(
   let retryAttempt = 0;
   let pendingCatchUpFromSlot: bigint | null = null;
   const pendingCleanupTasks = new Set<Promise<void>>();
+  const normalizedQueueWarningThreshold = Math.max(
+    1,
+    Math.floor(queueWarningThreshold)
+  );
+  const queueGrowthLogger = new ReplayQueueGrowthLogger(
+    normalizedQueueWarningThreshold,
+    logger
+  );
+  let fetchQueueProcessed = 0;
+  let resyncFailuresTotal = 0;
+  let fetchFailuresTotal = 0;
+  let healthTimer: ReturnType<typeof setInterval> | null = null;
+  let healthAbortListener: (() => void) | null = null;
+
+  const fetchQueueSize = (): number => fetchQueue.length - fetchQueueProcessed;
+
+  const logHealth = (): void => {
+    const cacheStats = pageCache.getStats();
+    logger.info("Replay health summary", {
+      event: "replay.health",
+      cache_bytes: cacheStats.cacheBytes,
+      cache_max_bytes: cacheStats.cacheMaxBytes,
+      cache_usage_percent: cacheStats.cacheUsagePercent,
+      cached_accounts: cacheStats.cachedAccounts,
+      dirty_accounts: cacheStats.dirtyAccounts,
+      stream_queue_size: streamBuffer.length,
+      deferred_queue_size: deferredStreamBuffer.length,
+      fetch_queue_size: fetchQueueSize(),
+      evictions_total: cacheStats.evictionsTotal,
+      dirty_evictions_total: cacheStats.dirtyEvictionsTotal,
+      resync_failures_total: resyncFailuresTotal,
+      fetch_failures_total: fetchFailuresTotal,
+    });
+  };
+
+  const stopHealthLogging = (): void => {
+    if (healthTimer) {
+      clearInterval(healthTimer);
+      healthTimer = null;
+    }
+    if (signal && healthAbortListener) {
+      signal.removeEventListener("abort", healthAbortListener);
+      healthAbortListener = null;
+    }
+  };
+
+  if (healthLogIntervalMs > 0 && !signal?.aborted) {
+    healthTimer = setInterval(logHealth, healthLogIntervalMs);
+    healthTimer.unref?.();
+    if (signal) {
+      healthAbortListener = stopHealthLogging;
+      signal.addEventListener("abort", healthAbortListener, { once: true });
+    }
+  }
 
   const shouldEmitAccountState = (account: AccountState): boolean => {
     const previous = lastEmittedAccounts.get(account.addressHex);
@@ -481,20 +610,67 @@ export async function* createAccountsByOwnerReplay(
       seenFromStream.add(event.account.addressHex);
     }
     streamBuffer.push(event);
+    queueGrowthLogger.observe("stream", streamBuffer.length);
     return true;
   };
 
   const queueStreamEvent = (event: AccountReplayEvent): boolean => {
     if (pendingCatchUpFromSlot !== null) {
       deferredStreamBuffer.push(event);
+      queueGrowthLogger.observe("deferred", deferredStreamBuffer.length);
       return true;
     }
     return queueReplayEvent(event);
   };
 
+  /* Refetch an account the overlay cache cannot reconstruct (never seeded,
+     data grew, page out of bounds). Single-flight per address; a failure
+     leaves the account uncached so its next delta triggers another attempt. */
+  const scheduleResync = (address: Uint8Array): void => {
+    const addressHex = bytesToHex(address);
+    if (resyncInFlight.has(addressHex)) return;
+    resyncInFlight.add(addressHex);
+    void (async () => {
+      try {
+        for (let attempt = 0; attempt < maxRetries; attempt++) {
+          if (shouldStop()) return;
+          try {
+            const account = await client.getAccount({
+              address: create(PubkeySchema, { value: address }),
+              view: AccountView.FULL,
+            });
+            const state = getAccountToState(account);
+            if (state) {
+              state.source = "stream";
+              pageCache.seed(state);
+              queueStreamEvent({ type: "account", account: state });
+            }
+            return;
+          } catch (err) {
+            if (shouldStop(err)) return;
+            if (attempt === maxRetries - 1) {
+              resyncFailuresTotal++;
+              logger.error("Replay account resync failed", {
+                event: "replay.account.resync_failed",
+                address: addressHex,
+                attempts: maxRetries,
+                error: err,
+              });
+            } else {
+              await abortableDelay(100 * (attempt + 1), signal);
+            }
+          }
+        }
+      } finally {
+        resyncInFlight.delete(addressHex);
+      }
+    })();
+  };
+
   const flushDeferredStreamEvents = (): void => {
     while (deferredStreamBuffer.length > 0) {
       const event = deferredStreamBuffer.shift()!;
+      queueGrowthLogger.observe("deferred", deferredStreamBuffer.length);
       queueReplayEvent(event);
     }
   };
@@ -665,8 +841,11 @@ export async function* createAccountsByOwnerReplay(
               duration_ms: Date.now() - streamStartedAtMs,
             });
           }
-          const event = processResponseMulti(response, assembler);
-          if (event) {
+          const result = processResponseMulti(response, pageCache);
+          for (const resyncAddress of result.resyncAddresses) {
+            scheduleResync(resyncAddress);
+          }
+          for (const event of result.events) {
             queueStreamEvent(event);
           }
         }
@@ -697,6 +876,7 @@ export async function* createAccountsByOwnerReplay(
     let accountsFetched = 0;
     let accountsQueued = 0;
     let accountsSkipped = 0;
+    const fetchFailures: DeferredAccountFetchFailure[] = [];
 
     logger.info("Replay stream reconnect catch-up started", {
       event: "replay.stream.reconnect.catch_up_started",
@@ -771,12 +951,29 @@ export async function* createAccountsByOwnerReplay(
             account = await client.getAccount({
               address: create(PubkeySchema, { value: address }),
               view: AccountView.FULL,
+              versionContext: listedAccount.meta?.lastUpdatedSlot !== undefined
+                ? create(VersionContextSchema, {
+                    version: {
+                      case: "slot",
+                      value: listedAccount.meta.lastUpdatedSlot,
+                    },
+                  })
+                : undefined,
             });
             break;
           } catch (err) {
             if (shouldStop(err)) return accountsQueued;
             if (attempt === maxRetries - 1) {
-              logger.error(`[catch-up] failed to fetch account ${addressHex} after ${maxRetries} attempts`, { error: err });
+              fetchFailuresTotal++;
+              logger.error("Replay account fetch failed", {
+                event: "replay.account.fetch_failed",
+                phase: "catch_up",
+                address: addressHex,
+                slot: (listedAccount.meta?.lastUpdatedSlot ?? fromSlot).toString(),
+                attempts: maxRetries,
+                error: err,
+              });
+              fetchFailures.push({ addressHex, error: err });
             } else {
               await abortableDelay(100 * (attempt + 1), signal);
             }
@@ -795,6 +992,7 @@ export async function* createAccountsByOwnerReplay(
           continue;
         }
 
+        pageCache.seed(state);
         if (queueReplayEvent({ type: "account", account: state })) {
           accountsQueued++;
         } else {
@@ -804,6 +1002,10 @@ export async function* createAccountsByOwnerReplay(
 
       pageToken = response.page?.nextPageToken;
     } while (pageToken);
+
+    if (fetchFailures.length > 0) {
+      throw new DeferredAccountFetchError("Replay stream reconnect catch-up", fetchFailures);
+    }
 
     logger.info("Replay stream reconnect catch-up completed", {
       event: "replay.stream.reconnect.catch_up_completed",
@@ -831,7 +1033,12 @@ export async function* createAccountsByOwnerReplay(
       flushDeferredStreamEvents();
     } catch (err) {
       if (shouldStop(err)) return;
-      deferredStreamBuffer.length = 0;
+      if (err instanceof DeferredAccountFetchError) {
+        flushDeferredStreamEvents();
+      } else {
+        deferredStreamBuffer.length = 0;
+        queueGrowthLogger.observe("deferred", deferredStreamBuffer.length);
+      }
       logger.warn("Replay stream reconnect catch-up failed", {
         event: "replay.stream.reconnect.catch_up_failed",
         reason,
@@ -846,12 +1053,6 @@ export async function* createAccountsByOwnerReplay(
   try {
     if (shouldStop()) return;
 
-    // Set up periodic cleanup for page assembler
-    cleanupTimer = setInterval(() => {
-      assembler.cleanup();
-    }, cleanupInterval);
-    cleanupTimer.unref?.();
-
     // Start streaming FIRST (concurrent with backfill)
     createStreamProcessor();
 
@@ -859,6 +1060,7 @@ export async function* createAccountsByOwnerReplay(
     const yieldStreamBuffer = function* (): Generator<AccountReplayEvent> {
       while (streamBuffer.length > 0) {
         const event = streamBuffer.shift()!;
+        queueGrowthLogger.observe("stream", streamBuffer.length);
         yield event;
       }
     };
@@ -866,6 +1068,7 @@ export async function* createAccountsByOwnerReplay(
     // ListAccounts with META_ONLY view to get addresses (no data)
     const backfillFilter = buildListAccountsOwnerFilter(owner, dataSizes, minUpdatedSlot);
     let pageToken: string | undefined;
+    const fetchFailures: DeferredAccountFetchFailure[] = [];
 
     do {
       if (shouldStop()) return;
@@ -890,7 +1093,11 @@ export async function* createAccountsByOwnerReplay(
       // Queue addresses for GetAccount
       for (const account of response.accounts) {
         if (account.address?.value) {
-          fetchQueue.push(account.address.value);
+          fetchQueue.push({
+            address: account.address.value,
+            slot: account.meta?.lastUpdatedSlot,
+          });
+          queueGrowthLogger.observe("fetch", fetchQueueSize());
         }
       }
 
@@ -901,8 +1108,10 @@ export async function* createAccountsByOwnerReplay(
     } while (pageToken);
 
     // Process fetch queue with GetAccount (sequential)
-    for (const address of fetchQueue) {
+    for (const { address, slot } of fetchQueue) {
       if (shouldStop()) return;
+      fetchQueueProcessed++;
+      queueGrowthLogger.observe("fetch", fetchQueueSize());
 
       const addressHex = bytesToHex(address);
 
@@ -926,12 +1135,26 @@ export async function* createAccountsByOwnerReplay(
           account = await client.getAccount({
             address: create(PubkeySchema, { value: address }),
             view: AccountView.FULL,
+            versionContext: slot !== undefined
+              ? create(VersionContextSchema, {
+                  version: { case: "slot", value: slot },
+                })
+              : undefined,
           });
           break;
         } catch (err) {
           if (shouldStop(err)) return;
           if (attempt === maxRetries - 1) {
-            logger.error(`[backfill] failed to fetch account ${addressHex} after ${maxRetries} attempts`, { error: err });
+            fetchFailuresTotal++;
+            logger.error("Replay account fetch failed", {
+              event: "replay.account.fetch_failed",
+              phase: "backfill",
+              address: addressHex,
+              slot: slot?.toString() ?? "unknown",
+              attempts: maxRetries,
+              error: err,
+            });
+            fetchFailures.push({ addressHex, error: err });
           } else {
             // Brief delay before retry
             await abortableDelay(100 * (attempt + 1), signal);
@@ -941,10 +1164,18 @@ export async function* createAccountsByOwnerReplay(
 
       if (account) {
         const state = getAccountToState(account);
-        if (state && shouldEmitAccountState(state)) {
-          yield { type: "account", account: state };
+        if (state) {
+          pageCache.seed(state);
+          if (shouldEmitAccountState(state)) {
+            yield { type: "account", account: state };
+          }
         }
       }
+    }
+
+    if (fetchFailures.length > 0) {
+      yield* yieldStreamBuffer();
+      throw new DeferredAccountFetchError("Backfill", fetchFailures);
     }
 
     // Signal backfill queue drained
@@ -1013,6 +1244,7 @@ export async function* createAccountsByOwnerReplay(
           streamDone = false;
           streamError = null;
           streamBuffer.length = 0;
+          queueGrowthLogger.observe("stream", streamBuffer.length);
           lastActivityTime = Date.now();
 
           createFreshClient();
@@ -1038,6 +1270,7 @@ export async function* createAccountsByOwnerReplay(
           streamDone = false;
           streamError = null;
           streamBuffer.length = 0;
+          queueGrowthLogger.observe("stream", streamBuffer.length);
           lastActivityTime = Date.now();
           createFreshClient();
           createStreamProcessor("reconnect", reconnectFromSlot > 0n ? reconnectFromSlot : undefined);
@@ -1051,9 +1284,7 @@ export async function* createAccountsByOwnerReplay(
       await abortableDelay(10, signal);
     }
   } finally {
-    if (cleanupTimer) {
-      clearInterval(cleanupTimer);
-    }
+    stopHealthLogging();
     const retired = retireActiveStream();
     if (ownsClient) {
       closeIfCloseable(client);
@@ -1062,7 +1293,7 @@ export async function* createAccountsByOwnerReplay(
     if (pendingCleanupTasks.size > 0) {
       await Promise.allSettled([...pendingCleanupTasks]);
     }
-    assembler.clear();
+    pageCache.clear();
   }
 }
 
@@ -1142,20 +1373,39 @@ export async function* createAccountReplay(
     address,
     view = AccountView.FULL,
     filter,
-    pageAssemblerOptions,
-    cleanupInterval = 10000,
+    logger = NOOP_LOGGER,
   } = options;
 
-  const assembler = new PageAssembler(pageAssemblerOptions);
-  let cleanupTimer: ReturnType<typeof setInterval> | null = null;
+  const pageCache = new AccountPageCache({ logger });
+  const addressHex = bytesToHex(address);
+
+  /* Refetch full data when the overlay cache cannot reconstruct it (first
+     delta before any snapshot, or the account grew). Serialized by the
+     stream loop, so no single-flight tracking is needed. */
+  const resync = async (): Promise<AccountReplayEvent | null> => {
+    try {
+      const account = await client.getAccount({
+        address: create(PubkeySchema, { value: address }),
+        view: AccountView.FULL,
+      });
+      const state = getAccountToState(account);
+      if (state) {
+        state.source = "stream";
+        pageCache.seed(state);
+        return { type: "account", account: state };
+      }
+    } catch (err) {
+      logger.error("Replay account resync failed", {
+        event: "replay.account.resync_failed",
+        address: addressHex,
+        attempts: 1,
+        error: err,
+      });
+    }
+    return null;
+  };
 
   try {
-    // Set up periodic cleanup
-    cleanupTimer = setInterval(() => {
-      assembler.cleanup();
-    }, cleanupInterval);
-    cleanupTimer.unref?.();
-
     // Build request with address filter
     const filterParams: { [key: string]: FilterParamValue } = {
       address: create(FilterParamValueSchema, { kind: { case: "bytesValue", value: new Uint8Array(address) } }),
@@ -1180,97 +1430,87 @@ export async function* createAccountReplay(
     const stream = client.streamAccountUpdates(request);
 
     for await (const response of stream) {
-      const event = processResponse(response, address, assembler);
-      if (event) {
+      /* The subscription is scoped to one address; tolerate updates that
+         omit it by attributing them to the subscribed account. */
+      if (response.message.case === "update" && !response.message.value.address?.value) {
+        response.message.value.address = create(PubkeySchema, { value: new Uint8Array(address) });
+      }
+      const result = processResponseMulti(response, pageCache);
+      if (result.resyncAddresses.length > 0) {
+        const event = await resync();
+        if (event) {
+          yield event;
+        }
+      }
+      for (const event of result.events) {
         yield event;
       }
     }
   } finally {
-    // Cleanup
-    if (cleanupTimer) {
-      clearInterval(cleanupTimer);
-    }
-    assembler.clear();
+    pageCache.clear();
   }
 }
 
 /**
- * Process a streaming response and return an event if available
- */
-function processResponse(
-  response: StreamAccountUpdatesResponse,
-  address: Uint8Array,
-  assembler: PageAssembler
-): AccountReplayEvent | null {
-  switch (response.message.case) {
-    case "snapshot": {
-      const state = snapshotToState(response.message.value);
-      if (state) {
-        return { type: "account", account: state };
-      }
-      return null;
-    }
-
-    case "update": {
-      const assembled = assembler.processUpdate(address, response.message.value);
-      if (assembled) {
-        return { type: "account", account: assembledToState(assembled) };
-      }
-      return null;
-    }
-
-    case "finished": {
-      return {
-        type: "blockFinished",
-        block: { slot: BigInt(response.message.value.slot.toString()) },
-      };
-    }
-
-    default:
-      return null;
-  }
-}
-
-/**
- * Process a streaming response for multi-account streams (gets address from response)
+ * Process a streaming response for multi-account streams (gets address from
+ * the message). Page deltas are overlaid into the cache and surface as
+ * account events when the block boundary (`finished`) flushes them; accounts
+ * the cache cannot reconstruct are returned as resync requests for the
+ * caller to refetch via GetAccount.
  */
 function processResponseMulti(
   response: StreamAccountUpdatesResponse,
-  assembler: PageAssembler
-): AccountReplayEvent | null {
+  cache: AccountPageCache
+): { events: AccountReplayEvent[]; resyncAddresses: Uint8Array[] } {
   switch (response.message.case) {
     case "snapshot": {
       const state = snapshotToState(response.message.value);
       if (state) {
-        return { type: "account", account: state };
+        cache.seed(state);
+        return { events: [{ type: "account", account: state }], resyncAddresses: [] };
       }
-      return null;
+      return { events: [], resyncAddresses: [] };
     }
 
     case "update": {
       const update = response.message.value;
-      // Get address from the update message
       const address = update.address?.value;
       if (!address) {
         // No address in update, cannot process
-        return null;
+        return { events: [], resyncAddresses: [] };
       }
-      const assembled = assembler.processUpdate(address, update);
-      if (assembled) {
-        return { type: "account", account: assembledToState(assembled) };
+      const result = cache.applyUpdate(address, bytesToHex(address), update);
+      switch (result.kind) {
+        case "emit":
+          return {
+            events: [{ type: "account", account: assembledToState(result.account) }],
+            resyncAddresses: [],
+          };
+        case "resync":
+          return { events: [], resyncAddresses: [address] };
+        case "buffered":
+        case "stale":
+          return { events: [], resyncAddresses: [] };
       }
-      return null;
+      /* Unreachable, but keeps exhaustiveness obvious to the reader. */
+      return { events: [], resyncAddresses: [] };
     }
 
     case "finished": {
-      return {
+      /* Flush dirtied accounts before the block marker so consumers observe
+         account state followed by the boundary that produced it. */
+      const events: AccountReplayEvent[] = cache
+        .flushDirty()
+        .map((account) => ({ type: "account", account: assembledToState(account) }));
+      events.push({
         type: "blockFinished",
         block: { slot: BigInt(response.message.value.slot.toString()) },
-      };
+      });
+      return { events, resyncAddresses: [] };
     }
 
     default:
-      return null;
+      return { events: [], resyncAddresses: [] };
   }
 }
 

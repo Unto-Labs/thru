@@ -143,12 +143,26 @@ describe("NativeSDK", () => {
     expect(sdk.deposits.prepare).toBeTypeOf("function");
     expect(sdk.deposits.ensureAccount).toBeTypeOf("function");
     expect(sdk.deposits.open).toBeTypeOf("function");
+    expect(sdk.deposits.getProviders).toBeTypeOf("function");
     expect(sdk.deposits.getAccountState).toBeTypeOf("function");
     expect(sdk.deposits.waitForBalance).toBeTypeOf("function");
     expect(sdk.deposits.formatAmount).toBeTypeOf("function");
 
     expect(sdk.prepareDeposit).toBeTypeOf("function");
     expect(sdk.deposit).toBeTypeOf("function");
+  });
+
+  it("returns only the dapp-configured deposit provider IDs", async () => {
+    const configured = new NativeSDK({
+      walletUrl: "http://localhost:3000/embedded",
+      origin: "thru-mobile://token-dummy",
+      deposits: { providers: ["unifold", "coinbase"] },
+    });
+    expect(await configured.deposits.getProviders()).toEqual([
+      "unifold",
+      "coinbase",
+    ]);
+    configured.destroy();
   });
 
   it("defaults iOS WebView mode to shell iframe", () => {
@@ -411,6 +425,117 @@ describe("NativeSDK", () => {
     ]);
   });
 
+  it("prepares a signing-session refresh while transparently disconnected", async () => {
+    sdk.destroy();
+    const storage = new MockStorage();
+    sdk = new NativeSDK({
+      walletUrl: "http://localhost:3000/embedded/native/transparent",
+      walletExperience: "transparent",
+      origin: "thru-mobile://token-dummy",
+      storage,
+    });
+    webView = new MockWebView();
+    sdk.attachWebView(webView);
+    const expiresAt = 1_900_000_000;
+
+    const frameId = frameIdFor(sdk);
+    const promise = sdk.thru.createSigningSessionInstruction({
+      walletAddress: "thru_test_address",
+      expiresAt,
+      walletAccountIdx: 2,
+    });
+
+    sdk.onMessage(readyMessage(frameId));
+    const request = parseInjectedRequest(await waitForInjectedRequest(webView));
+    expect(request.type).toBe(
+      POST_MESSAGE_REQUEST_TYPES.CREATE_SIGNING_SESSION_INSTRUCTION,
+    );
+    expect(request.payload).toEqual({
+      walletAddress: "thru_test_address",
+      expiresAt: String(expiresAt),
+      walletAccountIdx: 2,
+    });
+
+    sdk.onMessage(
+      responseMessage(frameId, request.id, {
+        session: {
+          id: "session_refresh",
+          walletAddress: "thru_test_address",
+          publicKey: "thru_refresh_address",
+          authIdx: -1,
+          expiresAt: String(expiresAt),
+          createdAt: String(expiresAt - 120),
+        },
+        programAddress: "thru_passkey_manager",
+        instructionData: "AQID",
+      }),
+    );
+
+    await expect(promise).resolves.toEqual({
+      session: expect.objectContaining({
+        id: "session_refresh",
+        walletAddress: "thru_test_address",
+        publicKey: "thru_refresh_address",
+        authIdx: -1,
+        expiresAt,
+        createdAt: expiresAt - 120,
+      }),
+      programAddress: "thru_passkey_manager",
+      instructionData: new Uint8Array([1, 2, 3]),
+    });
+    expect(sdk.isConnected()).toBe(false);
+  });
+
+  it("confirms a signing-session refresh while transparently disconnected", async () => {
+    sdk.destroy();
+    const storage = new MockStorage();
+    sdk = new NativeSDK({
+      walletUrl: "http://localhost:3000/embedded/native/transparent",
+      walletExperience: "transparent",
+      origin: "thru-mobile://token-dummy",
+      storage,
+    });
+    webView = new MockWebView();
+    sdk.attachWebView(webView);
+    const expiresAt = 1_900_000_000;
+
+    const frameId = frameIdFor(sdk);
+    const promise = sdk.thru.confirmSigningSession("session_refresh");
+
+    sdk.onMessage(readyMessage(frameId));
+    const request = parseInjectedRequest(await waitForInjectedRequest(webView));
+    expect(request.type).toBe(
+      POST_MESSAGE_REQUEST_TYPES.CONFIRM_SIGNING_SESSION,
+    );
+    expect(request.payload).toEqual({ sessionId: "session_refresh" });
+
+    const session = {
+      id: "session_refresh",
+      walletAddress: "thru_test_address",
+      publicKey: "thru_refresh_address",
+      authIdx: 2,
+      expiresAt: String(expiresAt),
+      createdAt: String(expiresAt - 120),
+    };
+    sdk.onMessage(responseMessage(frameId, request.id, { session }));
+
+    await expect(promise).resolves.toEqual(
+      expect.objectContaining({
+        ...session,
+        expiresAt,
+        createdAt: expiresAt - 120,
+      }),
+    );
+    await expect(sdk.thru.getSigningSessions()).resolves.toEqual([
+      expect.objectContaining({
+        id: "session_refresh",
+        walletAddress: "thru_test_address",
+        authIdx: 2,
+      }),
+    ]);
+    expect(sdk.isConnected()).toBe(false);
+  });
+
   it("sends transparent passkey challenge signing requests through the wallet WebView", async () => {
     sdk.destroy();
     sdk = new NativeSDK({
@@ -435,7 +560,9 @@ describe("NativeSDK", () => {
 
     expect(onShowRequested).toHaveBeenCalledTimes(1);
     const request = parseInjectedRequest(await waitForInjectedRequest(webView));
-    expect(request.type).toBe(POST_MESSAGE_REQUEST_TYPES.SIGN_PASSKEY_CHALLENGE);
+    expect(request.type).toBe(
+      POST_MESSAGE_REQUEST_TYPES.SIGN_PASSKEY_CHALLENGE,
+    );
     expect(request.payload).toEqual({
       challenge: "challenge_base64url",
       walletAddress: "thru_test_address",

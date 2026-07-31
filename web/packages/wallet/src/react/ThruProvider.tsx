@@ -249,6 +249,7 @@ export function ThruProvider({ children, config }: ThruProviderProps) {
       prepare: prepareDeposit,
       ensureAccount: ensureDepositAccount,
       open: deposit,
+      getProviders: () => sdk?.deposits.getProviders() ?? Promise.resolve([]),
       getAccountState: getDepositAccountState,
       waitForBalance: waitForDepositBalance,
       formatAmount: formatDepositAmount,
@@ -258,6 +259,7 @@ export function ThruProvider({ children, config }: ThruProviderProps) {
       ensureDepositAccount,
       getDepositAccountState,
       prepareDeposit,
+      sdk,
       waitForDepositBalance,
     ]
   );

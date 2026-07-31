@@ -479,7 +479,6 @@ export class NativeProvider {
         type: POST_MESSAGE_REQUEST_TYPES.DEPOSIT,
         payload: {
           ...payload,
-          network: payload.network ?? this.defaultNetwork,
           ...(this.depositUiConfig
             ? { resolvedDepositUiConfig: this.depositUiConfig }
             : {}),

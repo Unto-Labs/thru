@@ -2,10 +2,11 @@
  * Kit buttons: JetBrains Mono 600 15, square corners, 48pt default (56 CTA,
  * 36 compact). Variants from the Actions sheet: primary (stone-800), brand
  * (brick), outline (stone-300 border), danger-outline (brick-200 border,
- * brick text), ghost.
+ * brick text), ghost. Colors follow the active theme.
  */
-import { ActivityIndicator, Pressable, StyleSheet, Text, type ViewStyle } from "react-native";
-import { color, font, palette, text, touch } from "./tokens";
+import { ActivityIndicator, Pressable, Text, type ViewStyle } from "react-native";
+import { font, text, touch } from "./tokens";
+import { makeStyles, useThemeColors, type ThemeColors } from "./theme";
 
 export type ButtonVariant = "primary" | "brand" | "outline" | "outlineInverse" | "dangerOutline" | "ghost";
 export type ButtonSize = "lg" | "md" | "sm";
@@ -22,8 +23,39 @@ export interface ButtonProps {
 
 const HEIGHTS: Record<ButtonSize, number> = { lg: touch.controlLg, md: touch.controlMd, sm: touch.controlSm };
 
+type VariantStyle = { container: ViewStyle; text: { color: string } };
+
+/* Two themes, so a keyed cache keeps the variant objects referentially stable
+   across renders instead of rebuilding six style objects each time. */
+const variantCache = new WeakMap<ThemeColors, Record<ButtonVariant, VariantStyle>>();
+
+function variants(c: ThemeColors): Record<ButtonVariant, VariantStyle> {
+  const cached = variantCache.get(c);
+  if (cached) return cached;
+  const built: Record<ButtonVariant, VariantStyle> = {
+    primary: { container: { backgroundColor: c.bgInverse }, text: { color: c.fgInverse } },
+    brand: { container: { backgroundColor: c.accent }, text: { color: c.onBrand } },
+    outline: {
+      container: { backgroundColor: "transparent", borderWidth: 1, borderColor: c.borderStrong },
+      text: { color: c.fg },
+    },
+    outlineInverse: {
+      container: { backgroundColor: "transparent", borderWidth: 1, borderColor: c.fgMuted },
+      text: { color: c.bgMuted },
+    },
+    dangerOutline: {
+      container: { backgroundColor: "transparent", borderWidth: 1, borderColor: c.brickStrong },
+      text: { color: c.destructive },
+    },
+    ghost: { container: { backgroundColor: "transparent" }, text: { color: c.fgMuted } },
+  };
+  variantCache.set(c, built);
+  return built;
+}
+
 export function Button({ label, onPress, variant = "primary", size = "md", disabled, loading, style }: ButtonProps) {
-  const v = VARIANTS[variant];
+  const styles = useStyles();
+  const v = variants(useThemeColors())[variant];
   const busy = Boolean(disabled || loading);
   return (
     <Pressable
@@ -56,25 +88,7 @@ export function Button({ label, onPress, variant = "primary", size = "md", disab
   );
 }
 
-const VARIANTS: Record<ButtonVariant, { container: ViewStyle; text: { color: string } }> = {
-  primary: { container: { backgroundColor: color.bgInverse }, text: { color: color.fgInverse } },
-  brand: { container: { backgroundColor: color.accent }, text: { color: color.fgInverse } },
-  outline: {
-    container: { backgroundColor: "transparent", borderWidth: 1, borderColor: color.borderStrong },
-    text: { color: color.fg },
-  },
-  outlineInverse: {
-    container: { backgroundColor: "transparent", borderWidth: 1, borderColor: palette.stone[600] },
-    text: { color: palette.stone[100] },
-  },
-  dangerOutline: {
-    container: { backgroundColor: "transparent", borderWidth: 1, borderColor: palette.brick[200] },
-    text: { color: color.destructive },
-  },
-  ghost: { container: { backgroundColor: "transparent" }, text: { color: color.fgMuted } },
-};
-
-const styles = StyleSheet.create({
+const useStyles = makeStyles(() => ({
   base: {
     flexDirection: "row",
     alignItems: "center",
@@ -84,4 +98,4 @@ const styles = StyleSheet.create({
     borderRadius: 0,
   },
   label: { fontFamily: font.monoSemiBold, fontSize: text.base },
-});
+}));

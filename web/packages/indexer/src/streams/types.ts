@@ -5,6 +5,7 @@
 import type { Event, Filter } from "@thru/replay";
 import type { PgTableWithColumns } from "drizzle-orm/pg-core";
 import type { SchemaDefinition, InferRow, Columns } from "../schema/types";
+import type { TableIndexDefinition } from "../schema/table";
 import type { ApiConfig, StreamBatch, HookContext } from "../types";
 
 /**
@@ -12,11 +13,14 @@ import type { ApiConfig, StreamBatch, HookContext } from "../types";
  * This is what users pass to defineEventStream().
  */
 export interface EventStreamDefinition<TSchema extends SchemaDefinition> {
-  /** Unique stream name (used for table name, checkpointing) */
+  /** Unique stream name (used for checkpointing and the default table name) */
   name: string;
 
   /** Human-readable description */
   description?: string;
+
+  /** Explicit physical table name. Defaults to a name derived from `name`. */
+  tableName?: string;
 
   /**
    * Schema definition using the column builder.
@@ -32,6 +36,9 @@ export interface EventStreamDefinition<TSchema extends SchemaDefinition> {
    * ```
    */
   schema: TSchema;
+
+  /** Composite database indexes for multi-column lookup paths. */
+  indexes?: readonly TableIndexDefinition<TSchema>[];
 
   /**
    * CEL filter for @thru/replay.

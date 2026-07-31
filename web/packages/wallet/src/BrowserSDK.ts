@@ -55,6 +55,9 @@ export interface BrowserSDKConfig {
   signingSessionStorage?: SigningSessionStorage | false;
   signingSessionStorageKey?: string;
   transactionSigningScheme?: TransactionSigningScheme;
+  deposits?: {
+    providers: string[];
+  };
 }
 
 export interface ConnectOptions {
@@ -75,6 +78,7 @@ export class BrowserSDK {
   private initialized = false;
   private thruClient: Thru;
   private defaultNetwork?: ThruNetwork;
+  private depositProviders: ReadonlySet<string>;
   private connectInFlight: Promise<ConnectResult> | null = null;
   private lastConnectResult: ConnectResult | null = null;
 
@@ -82,6 +86,7 @@ export class BrowserSDK {
     prepare: (targetOrPayload) => this.prepareDeposit(targetOrPayload),
     ensureAccount: (params) => this.ensureDepositAccount(params),
     open: (payload) => this.deposit(payload),
+    getProviders: async () => [...this.depositProviders],
     getAccountState: (params) => this.getDepositAccountState(params),
     waitForBalance: (params) => this.waitForDepositBalance(params),
     formatAmount: (amountRaw, destination) =>
@@ -121,6 +126,7 @@ export class BrowserSDK {
       depositUiConfig: config.depositUiConfig,
     });
     this.defaultNetwork = config.network;
+    this.depositProviders = new Set(config.deposits?.providers ?? ['unifold']);
 
     this.thruClient = createThruClient({
       baseUrl: config.rpcUrl,
@@ -270,10 +276,11 @@ export class BrowserSDK {
     if (!this.initialized) {
       await this.initialize();
     }
-    return this.provider.deposit({
-      ...payload,
-      network: payload.network ?? this.defaultNetwork,
-    });
+    const providerId = payload.providerId ?? 'unifold';
+    if (!this.depositProviders.has(providerId)) {
+      throw new Error(`Deposit provider is not configured: ${providerId}`);
+    }
+    return this.provider.deposit({ ...payload, providerId });
   }
 
   /** @deprecated Use `deposits.ensureAccount()`. */

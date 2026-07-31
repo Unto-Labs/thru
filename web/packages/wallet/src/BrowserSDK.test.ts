@@ -24,6 +24,17 @@ beforeEach(() => {
 });
 
 describe("BrowserSDK transaction signing scheme", () => {
+  it("returns only the dapp-configured deposit provider IDs", async () => {
+    const sdk = new BrowserSDK({
+      iframeUrl: "https://app.tid.sh/embedded",
+      signingSessionStorage: false,
+      deposits: { providers: ["unifold", "coinbase"] },
+    });
+
+    expect(await sdk.deposits.getProviders()).toEqual(["unifold", "coinbase"]);
+    sdk.destroy();
+  });
+
   it("propagates legacy mode to the hosted-wallet URL", () => {
     const sdk = new BrowserSDK({
       iframeUrl: "https://app.tid.sh/embedded?existing=1",

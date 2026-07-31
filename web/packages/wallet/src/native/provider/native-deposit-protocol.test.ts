@@ -108,6 +108,7 @@ describe("native deposit protocol round-trip", () => {
     provider.onHideRequested = (reason) => surface.push(`hide:${reason}`);
 
     const result = await provider.deposit({
+      providerId: "unifold",
       destination: DESTINATION,
     });
 
@@ -115,8 +116,8 @@ describe("native deposit protocol round-trip", () => {
     expect(captured!.type).toBe(POST_MESSAGE_REQUEST_TYPES.DEPOSIT);
     expect(captured!.origin).toBe(APP_ORIGIN);
     expect(captured!.payload).toEqual({
+      providerId: "unifold",
       destination: DESTINATION,
-      network: ThruNetwork.Alphanet,
       resolvedDepositUiConfig: DEPOSIT_UI_CONFIG,
     });
     expect(result).toEqual({
@@ -163,13 +164,18 @@ describe("native deposit protocol round-trip", () => {
     provider.onShowRequested = () => surface.push(true);
     provider.onHideRequested = () => surface.push(false);
 
-    const result = await provider.deposit({ method: "coinbase" });
+    const result = await provider.deposit({
+      providerId: "coinbase",
+      destination: DESTINATION,
+      paymentAmount: "20.00",
+    });
 
     expect(captured).not.toBeNull();
     expect(captured!.type).toBe(POST_MESSAGE_REQUEST_TYPES.DEPOSIT);
     expect(captured!.payload).toEqual({
-      method: "coinbase",
-      network: ThruNetwork.Alphanet,
+      providerId: "coinbase",
+      destination: DESTINATION,
+      paymentAmount: "20.00",
       resolvedDepositUiConfig: DEPOSIT_UI_CONFIG,
     });
     expect(result).toEqual({ status: "cancelled" });
@@ -198,6 +204,7 @@ describe("native deposit protocol round-trip", () => {
     };
 
     const result = await provider.deposit({
+      providerId: "unifold",
       destination: DESTINATION,
     });
 
@@ -221,6 +228,7 @@ describe("native deposit protocol round-trip", () => {
 
     await expect(
       provider.deposit({
+        providerId: "unifold",
         destination: DESTINATION,
       }),
     ).rejects.toThrow("wallet exploded");
@@ -248,7 +256,10 @@ describe("native deposit protocol round-trip", () => {
     provider.onShowRequested = (reason) => surface.push(`show:${reason}`);
     provider.onHideRequested = (reason) => surface.push(`hide:${reason}`);
 
-    const depositPromise = provider.deposit({ destination: DESTINATION });
+    const depositPromise = provider.deposit({
+      providerId: "unifold",
+      destination: DESTINATION,
+    });
     const signingPromise = provider.thru.signPasskeyChallenge({
       challenge: "challenge_base64url",
       walletAddress: "thru_test_address",
@@ -334,7 +345,10 @@ describe("native deposit protocol round-trip", () => {
       status: "completed",
     });
 
-    const depositPromise = provider.deposit({ destination: DESTINATION });
+    const depositPromise = provider.deposit({
+      providerId: "unifold",
+      destination: DESTINATION,
+    });
     await vi.waitFor(() => {
       expect(pending.has(POST_MESSAGE_REQUEST_TYPES.DEPOSIT)).toBe(true);
     });

@@ -15,6 +15,13 @@ import {
 } from "drizzle-orm/pg-core";
 import type { AnyColumnDef, ColumnType, SchemaDefinition } from "./types";
 
+export interface TableIndexDefinition<TSchema extends SchemaDefinition> {
+  /** Optional database index name. A deterministic name is generated when omitted. */
+  name?: string;
+  /** Schema fields included in the index, in query-prefix order. */
+  columns: readonly (keyof TSchema & string)[];
+}
+
 // ============================================================
 // Internal Types
 // ============================================================
@@ -65,7 +72,8 @@ function camelToSnake(str: string): string {
  */
 export function buildDrizzleTable<TSchema extends SchemaDefinition>(
   tableName: string,
-  schema: TSchema
+  schema: TSchema,
+  compositeIndexes: readonly TableIndexDefinition<TSchema>[] = []
 ): PgTableWithColumns<any> {
   // Build column definitions
   const columns: Record<string, PgColumnBuilderBase> = {};
@@ -126,6 +134,25 @@ export function buildDrizzleTable<TSchema extends SchemaDefinition>(
         index(`${tableName}_${snakeName}_idx`).on(table[name])
       );
     }
+  }
+
+  for (const definition of compositeIndexes) {
+    if (definition.columns.length < 2) {
+      throw new Error(`Composite index on "${tableName}" must include at least two columns`);
+    }
+
+    for (const columnName of definition.columns) {
+      if (!(columnName in schema)) {
+        throw new Error(`Composite index on "${tableName}" references unknown column "${columnName}"`);
+      }
+    }
+
+    const indexName = definition.name
+      ?? `${tableName}_${definition.columns.map(camelToSnake).join("_")}_idx`;
+    indices.push((table: any) => {
+      const indexColumns = definition.columns.map((columnName) => table[columnName]) as [any, ...any[]];
+      return index(indexName).on(...indexColumns);
+    });
   }
 
   // Create the table

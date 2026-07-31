@@ -254,8 +254,7 @@ type ErrorResponse = {
 };
 
 export type PostMessageResponse<TType extends RequestType = RequestType> =
-  | SuccessResponse<TType>
-  | ErrorResponse;
+  SuccessResponse<TType> | ErrorResponse;
 
 export type SuccessfulPostMessageResponse<
   TType extends RequestType = RequestType,
@@ -350,6 +349,10 @@ export interface SignPasskeyChallengeResult {
   signatureS: string;
   authenticatorData: string;
   clientDataJSON: string;
+  /** Active on-chain passkey authority used for this assertion. */
+  authIdx: number;
+  /** WebAuthn relying-party id bound into authenticatorData. */
+  rpId: string;
 }
 
 export interface CreateSigningSessionPayload {
@@ -556,33 +559,32 @@ export interface PrepareDepositPayload {
   network?: ThruNetwork;
 }
 
-/** Existing Unifold deposit intent for a prepared token destination. */
-export interface PreparedDepositRequestPayload {
-  method?: "unifold";
-  /** Destination returned by prepareDeposit. */
-  destination: DepositDestination;
-  /** Resolved provider network. SDK/provider code fills this before crossing the iframe bridge. */
-  network?: ThruNetwork;
-  /** Optional source-chain hint for the deposit widget (e.g. "base"). */
-  chainHint?: string;
+export interface CoinbaseDepositCustomerInput {
+  email: string;
+  phoneNumber: string;
+  phoneNumberVerifiedAt: string;
+  agreementAcceptedAt: string;
 }
 
-/** Wallet-owned Coinbase headless onramp intent. No prepared Thru destination is required. */
-export interface CoinbaseDepositRequestPayload {
-  method: "coinbase";
-  /** Resolved provider network. SDK/provider code fills this before crossing the iframe bridge. */
-  network?: ThruNetwork;
+/** Provider-neutral request for a prepared token destination. */
+export interface DepositRequestPayload {
+  /** Defaults to Unifold so existing `deposits.open({ destination })` callers keep working. */
+  providerId?: string;
+  destination: DepositDestination;
+  paymentAmount?: string;
+  customer?: CoinbaseDepositCustomerInput;
 }
 
 /**
- * Deposit ("Add funds") intent. Prepared destinations use the existing
- * Unifold path. Coinbase is an explicit wallet-owned flow rendered inside the
- * wallet WebView.
+ * Coinbase-compatible contact details. Kept as a standalone public type for
+ * callers that validate contact input before constructing a richer customer
+ * payload.
  */
-export type DepositRequestPayload =
-  | PreparedDepositRequestPayload
-  | CoinbaseDepositRequestPayload;
-
+export interface CoinbaseOnrampContact {
+  email: string;
+  /** E.164 phone number, for example "+12055555555". */
+  phoneNumber: string;
+}
 export type DepositRequestMessagePayload = DepositRequestPayload & {
   /** Internal wallet bridge field resolved from provider mount-time config. */
   resolvedDepositUiConfig?: DepositUiConfig;

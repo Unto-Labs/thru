@@ -3,8 +3,9 @@
  * TabBar (56pt items, icon + 10pt mono label, brick indicator when active).
  */
 import type { ComponentType, ReactNode } from "react";
-import { Pressable, SafeAreaView, ScrollView, StyleSheet, Text, View } from "react-native";
-import { color, font, text, touch } from "./tokens";
+import { Pressable, SafeAreaView, ScrollView, Text, View } from "react-native";
+import { font, text, touch } from "./tokens";
+import { makeStyles, useThemeColors } from "./theme";
 
 export function Screen({
   children,
@@ -15,6 +16,7 @@ export function Screen({
   scroll?: boolean;
   hasTabBar?: boolean;
 }) {
+  const styles = useStyles();
   return (
     <SafeAreaView style={styles.screen}>
       {scroll ? (
@@ -32,10 +34,11 @@ export function Screen({
   );
 }
 
-export function NavBar({ title, right }: { title: string; right?: ReactNode }) {
+export function NavBar({ title, left, right }: { title: string; left?: ReactNode; right?: ReactNode }) {
+  const styles = useStyles();
   return (
     <View style={styles.nav}>
-      <View style={styles.navSide} />
+      <View style={styles.navSide}>{left}</View>
       <Text style={styles.navTitle}>{title}</Text>
       <View style={styles.navSide}>{right}</View>
     </View>
@@ -57,11 +60,13 @@ export function TabBar<K extends string>({
   active: K;
   onChange: (t: K) => void;
 }) {
+  const styles = useStyles();
+  const colors = useThemeColors();
   return (
     <View style={styles.tabBar}>
       {items.map(({ key, label, Icon }) => {
         const isActive = key === active;
-        const tint = isActive ? color.accent : color.fgSubtle;
+        const tint = isActive ? colors.accent : colors.fgSubtle;
         return (
           <Pressable
             key={key}
@@ -83,8 +88,8 @@ export function TabBar<K extends string>({
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: color.bg },
+const useStyles = makeStyles((c) => ({
+  screen: { flex: 1, backgroundColor: c.bg },
   scroll: { flex: 1 },
   scrollContentWithTabBar: { paddingBottom: touch.tabH + 24 },
   nav: {
@@ -93,8 +98,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 6,
     borderBottomWidth: 1,
-    borderBottomColor: color.border,
-    backgroundColor: color.bg,
+    borderBottomColor: c.border,
+    backgroundColor: c.bg,
   },
   navSide: { width: 44, alignItems: "center", justifyContent: "center" },
   navTitle: {
@@ -102,13 +107,13 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontFamily: font.sansSemiBold,
     fontSize: text.md,
-    color: color.fg,
+    color: c.fg,
   },
   tabBar: {
     flexDirection: "row",
     borderTopWidth: 1,
-    borderTopColor: color.border,
-    backgroundColor: color.bg,
+    borderTopColor: c.border,
+    backgroundColor: c.bg,
   },
   tabItem: {
     flex: 1,
@@ -123,8 +128,8 @@ const styles = StyleSheet.create({
     left: 14,
     right: 14,
     height: 2,
-    backgroundColor: color.accent,
+    backgroundColor: c.accent,
   },
   tabLabel: { fontFamily: font.mono, fontSize: 10, letterSpacing: 0.8, textTransform: "uppercase" },
   tabLabelActive: { fontFamily: font.monoSemiBold },
-});
+}));

@@ -118,6 +118,9 @@ export const CLOB_STATUS_FLAG_POST_ONLY = 1 << 1;
 export const CLOB_STATUS_FLAG_WITHDRAWALS_FROZEN = 1 << 2;
 export const CLOB_STATUS_FLAG_DEPOSITS_FROZEN = 1 << 3;
 
+export const CLOB_PROGRAM_ADDRESS =
+  'tamjQOFxFORIZhqbJjN83oAkRmSbKhLmULpvSHblK4GGIg';
+
 export const CLOB_ORDER_TYPE_GTC = 0;
 export const CLOB_ORDER_TYPE_MTL = 1;
 export const CLOB_ORDER_TYPE_ALO = 2;

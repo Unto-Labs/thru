@@ -99,6 +99,19 @@ describe("defineEventStream", () => {
       expect(getTableName(stream.table)).toBe("deposit_events");
     });
 
+    it("uses an explicit physical table name when provided", () => {
+      const stream = defineEventStream({
+        name: "market_status",
+        tableName: "market_status_events",
+        schema: testSchema,
+        filter: mockFilter as any,
+        parse: mockParse,
+      });
+
+      expect(getTableName(stream.table)).toBe("market_status_events");
+      expect(stream.name).toBe("market_status");
+    });
+
     it("creates table with correct columns", () => {
       const stream = defineEventStream({
         name: "test",

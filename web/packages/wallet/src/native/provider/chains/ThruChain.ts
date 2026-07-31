@@ -192,9 +192,9 @@ export class NativeThruChain implements IThruChain {
   async createSigningSessionInstruction(
     options: ThruSigningSessionInstructionCreateOptions,
   ): Promise<ThruSigningSessionInstruction> {
-    if (!this.provider.isConnected()) {
-      throw new Error("Wallet not connected");
-    }
+    // Refresh preparation is non-interactive and must keep working after the
+    // wallet auto-locks. The existing session still authorizes the resulting
+    // add-authority transaction before this candidate session is confirmed.
     if (!this.signingSessions) {
       throw new Error("NativeSDKStorage is required for signing sessions");
     }
@@ -220,9 +220,8 @@ export class NativeThruChain implements IThruChain {
   }
 
   async confirmSigningSession(id: string): Promise<ThruSigningSession> {
-    if (!this.provider.isConnected()) {
-      throw new Error("Wallet not connected");
-    }
+    // Confirmation only persists a session whose add-authority transaction has
+    // already succeeded, so it does not require an active wallet connection.
     if (!this.signingSessions) {
       throw new Error("NativeSDKStorage is required for signing sessions");
     }
