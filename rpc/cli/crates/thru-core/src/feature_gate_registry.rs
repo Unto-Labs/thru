@@ -339,10 +339,8 @@ tracking = "UNTO-1818"
 "#;
 
     fn checked_in_registry() -> FeatureGateRegistry {
-        parse_feature_gate_registry(include_str!(
-            "../../../../../specs/releases/feature-gates-registry.toml"
-        ))
-        .expect("checked-in registry parses")
+        parse_feature_gate_registry(include_str!("../registry/feature-gates-registry.toml"))
+            .expect("checked-in registry parses")
     }
 
     #[test]
