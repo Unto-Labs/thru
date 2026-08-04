@@ -1,0 +1,477 @@
+abi:
+  package: thru.program.oracle
+  name: "Oracle Program"
+  abi-version: 1
+  package-version: 0.1.0
+  description: ABI for the Thru oracle program instructions, feed accounts, events, and errors
+  imports:
+    # thru_primitives
+    - type: onchain
+      address: ta1blxgaYR0dei5aldWJe1vbUtt-LkVEBOzNJtSRhHQcTG
+      target: abi
+      network: alphanet
+      revision: latest
+  options:
+    program-metadata:
+      root-types:
+        instruction-root: "OracleInstruction"
+        account-root: "OracleFeedAccount"
+        errors: "OracleError"
+        events: "OracleEvent"
+
+types:
+# ── Shared types ──
+
+- name: Seed32
+  kind:
+    array:
+      packed: true
+      size:
+        literal:
+          u64: 32
+      element-type:
+        primitive: u8
+
+# Feed names are NUL-terminated UTF-8 stored in a fixed 64-byte field.
+- name: FeedName64
+  format: text
+  kind:
+    array:
+      packed: true
+      size:
+        literal:
+          u64: 64
+      element-type:
+        primitive: u8
+
+# ── Create-feed instruction ──
+
+# PRICE feed type-specific data (feed_type=1, type_specific_size=8).
+- name: CreatePriceFeedData
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: max_variance_bps
+        field-type:
+          primitive: u32
+      - name: exponent
+        field-type:
+          primitive: i32
+
+# BOOLEAN feed type-specific data (feed_type=2, type_specific_size=0).
+- name: CreateBooleanFeedData
+  kind:
+    struct:
+      packed: true
+      fields: []
+
+# Wire layout after the instruction discriminant:
+# [fixed fields][type_specific payload selected by feed_type][proof bytes].
+# proof_size and type_specific_size are carried as u64 values by the C program.
+# The program additionally enforces type_specific_size=8 for PRICE and 0 for
+# BOOLEAN and rejects a zero-length proof.
+# SDK implementation note: generated TypeScript enum builders do not currently
+# emit sibling flexible arrays that follow the enum. Until generic support lands:
+# - hand-encode only the CREATE_FEED payload; generated helpers remain suitable
+#   for the other oracle instructions
+# - derive proof_size and type_specific_size rather than accepting caller values
+# - preserve the packed little-endian fields and account-index ordering
+# - reject empty proofs and roundtrip PRICE and BOOLEAN goldens through this ABI
+- name: CreateFeedArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: max_staleness_ns
+        field-type:
+          primitive: u64
+      - name: proof_size
+        field-type:
+          primitive: u64
+      - name: type_specific_size
+        field-type:
+          primitive: u64
+      - name: admin_account_idx
+        field-type:
+          primitive: u16
+      - name: reporter_account_idx
+        field-type:
+          primitive: u16
+      - name: feed_account_idx
+        field-type:
+          primitive: u16
+      - name: feed_type
+        field-type:
+          primitive: u8
+      - name: feed_account_seed
+        field-type:
+          type-ref:
+            name: Seed32
+      - name: feed_name
+        field-type:
+          type-ref:
+            name: FeedName64
+      - name: type_specific
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - feed_type
+            variants:
+            - name: price
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: CreatePriceFeedData
+            - name: boolean
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: CreateBooleanFeedData
+      - name: proof
+        field-type:
+          array:
+            size:
+              field-ref:
+                path:
+                - proof_size
+            element-type:
+              primitive: u8
+
+# ── Update and administration instructions ──
+
+- name: PostPriceUpdateArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: price
+        field-type:
+          primitive: u64
+      - name: timestamp_ns
+        field-type:
+          primitive: u64
+      - name: feed_account_idx
+        field-type:
+          primitive: u16
+
+- name: PostBooleanUpdateArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: value
+        field-type:
+          primitive: u8
+      - name: timestamp_ns
+        field-type:
+          primitive: u64
+      - name: feed_account_idx
+        field-type:
+          primitive: u16
+
+# POST_UPDATE has one top-level discriminant. The C program selects PRICE or
+# BOOLEAN from the remaining payload size rather than from a second tag.
+- name: PostUpdateArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: update
+        field-type:
+          size-discriminated-union:
+            packed: true
+            variants:
+            - name: price
+              expected-size: 18
+              variant-type:
+                type-ref:
+                  name: PostPriceUpdateArgs
+            - name: boolean
+              expected-size: 11
+              variant-type:
+                type-ref:
+                  name: PostBooleanUpdateArgs
+
+- name: SetParamsArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: max_staleness_ns
+        field-type:
+          primitive: u64
+      - name: max_variance_bps
+        field-type:
+          primitive: u32
+      - name: feed_account_idx
+        field-type:
+          primitive: u16
+
+- name: SetAdminArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: feed_account_idx
+        field-type:
+          primitive: u16
+      - name: new_admin_account_idx
+        field-type:
+          primitive: u16
+
+- name: SetReporterArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: feed_account_idx
+        field-type:
+          primitive: u16
+      - name: new_reporter_account_idx
+        field-type:
+          primitive: u16
+
+# Instruction discriminants:
+#   0 CREATE_FEED
+#   1 POST_UPDATE
+#   2 SET_PARAMS
+#   3 SET_ADMIN
+#   4 SET_REPORTER
+- name: OracleInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: discriminant
+        field-type:
+          primitive: u32
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - discriminant
+            variants:
+            - name: create_feed
+              tag-value: 0
+              variant-type:
+                type-ref:
+                  name: CreateFeedArgs
+            - name: post_update
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: PostUpdateArgs
+            - name: set_params
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: SetParamsArgs
+            - name: set_admin
+              tag-value: 3
+              variant-type:
+                type-ref:
+                  name: SetAdminArgs
+            - name: set_reporter
+              tag-value: 4
+              variant-type:
+                type-ref:
+                  name: SetReporterArgs
+
+# ── Feed accounts ──
+
+# Common feed data following the leading feed_type byte.
+- name: OracleFeedCommonData
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: max_staleness_ns
+        field-type:
+          primitive: u64
+      - name: last_update_ns
+        field-type:
+          primitive: u64
+      - name: admin_address
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: reporter_address
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: feed_name
+        field-type:
+          type-ref:
+            name: FeedName64
+
+- name: OraclePriceFeedData
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: common
+        field-type:
+          type-ref:
+            name: OracleFeedCommonData
+      - name: price
+        field-type:
+          primitive: u64
+      - name: max_variance_bps
+        field-type:
+          primitive: u32
+      - name: exponent
+        field-type:
+          primitive: i32
+
+- name: OracleBooleanFeedData
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: common
+        field-type:
+          type-ref:
+            name: OracleFeedCommonData
+      - name: value
+        field-type:
+          primitive: u8
+
+# feed_type=1 is PRICE (161 bytes total); feed_type=2 is BOOLEAN (146 bytes).
+- name: OracleFeedAccount
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: feed_type
+        field-type:
+          primitive: u8
+      - name: data
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - feed_type
+            variants:
+            - name: price
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: OraclePriceFeedData
+            - name: boolean
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: OracleBooleanFeedData
+
+# ── Events ──
+
+- name: PriceUpdateEventData
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: feed_name
+        field-type:
+          type-ref:
+            name: FeedName64
+      - name: feed_address
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: old_price
+        field-type:
+          primitive: u64
+      - name: new_price
+        field-type:
+          primitive: u64
+      - name: timestamp_ns
+        field-type:
+          primitive: u64
+
+- name: BooleanUpdateEventData
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: feed_name
+        field-type:
+          type-ref:
+            name: FeedName64
+      - name: feed_address
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: old_value
+        field-type:
+          primitive: u8
+      - name: new_value
+        field-type:
+          primitive: u8
+      - name: timestamp_ns
+        field-type:
+          primitive: u64
+
+# event_type=1 is PRICE_UPDATE; event_type=2 is BOOL_UPDATE.
+- name: OracleEvent
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: event_type
+        field-type:
+          primitive: u8
+      - name: data
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - event_type
+            variants:
+            - name: price_update
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: PriceUpdateEventData
+            - name: boolean_update
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: BooleanUpdateEventData
+
+# ── Errors ──
+
+# Error codes:
+#   1  INVALID_INSTRUCTION_DATA_SIZE
+#   2  INVALID_INSTRUCTION
+#   3  UNAUTHORIZED_OPERATION
+#   4  FEED_ALREADY_EXISTS
+#   5  INVALID_FEED_ACCOUNT
+#   6  INVALID_ACCOUNT_IDX
+#   7  INVALID_FEED_NAME_LENGTH
+#   8  INVALID_FEED_TYPE
+#   9  UPDATE_TOO_STALE
+#   10 FEED_TYPE_MISMATCH
+#   11 INVALID_BOOL_VALUE
+- name: OracleError
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: code
+        field-type:
+          primitive: u64

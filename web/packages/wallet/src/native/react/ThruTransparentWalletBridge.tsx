@@ -42,6 +42,10 @@ const NATIVE_COINBASE_PAYMENT_MESSAGE = "wallet:coinbase-payment";
 const NATIVE_DEPOSIT_LIFECYCLE_MESSAGE = "wallet:deposit-lifecycle";
 const NATIVE_COINBASE_PAYMENT_EVENT = "thru:coinbase-onramp-event";
 const NATIVE_PLATFORM_SEARCH_PARAM = "tn_native_platform";
+/* The transparent WebView covers the full screen, so the wallet page cannot
+   derive the home-indicator inset itself (env(safe-area-inset-*) is 0 without
+   viewport-fit=cover). Hand it over explicitly, as ThruWalletSheet does. */
+const NATIVE_BOTTOM_INSET_SEARCH_PARAM = "tn_native_bottom_inset";
 
 type WebViewLoadEndEvent = Parameters<
   NonNullable<ComponentProps<typeof WebView>["onLoadEnd"]>
@@ -148,6 +152,10 @@ export function ThruTransparentWalletBridge({
     if (!wallet) return null;
     const walletFrameUrl = new URL(wallet.getIframeSrc());
     walletFrameUrl.searchParams.set(NATIVE_PLATFORM_SEARCH_PARAM, Platform.OS);
+    walletFrameUrl.searchParams.set(
+      NATIVE_BOTTOM_INSET_SEARCH_PARAM,
+      String(Math.max(0, Math.ceil(safeAreaInsets.bottom))),
+    );
     const walletFrameSrc = walletFrameUrl.toString();
     if (Platform.OS === "ios" && wallet.getIosWebViewMode() === "direct") {
       return { uri: walletFrameSrc };
@@ -159,7 +167,7 @@ export function ThruTransparentWalletBridge({
       }),
       baseUrl: wallet.getWalletOrigin(),
     };
-  }, [wallet]);
+  }, [safeAreaInsets.bottom, wallet]);
 
   const isDirectWalletSource = Boolean(
     wallet && Platform.OS === "ios" && wallet.getIosWebViewMode() === "direct",
@@ -426,6 +434,7 @@ export function ThruTransparentWalletBridge({
           key={coinbasePaymentUrl}
           paymentUrl={coinbasePaymentUrl}
           topInset={Math.max(safeAreaInsets.top, 12)}
+          bottomInset={safeAreaInsets.bottom}
           hideApplePayButton
           onCancel={closeCoinbasePayment}
           onCoinbaseMessage={handleCoinbaseMessage}

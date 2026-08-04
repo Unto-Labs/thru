@@ -8,5 +8,7 @@ export * from "./Button";
 export * from "./Chrome";
 export * from "./Bits";
 export * from "./Sheet";
+export * from "./loading/HairlineGrid";
+export * from "./loading/MarkDrawOn";
 export * from "./loading/SlotTicker";
 export * from "./loading/ThroughputMeter";

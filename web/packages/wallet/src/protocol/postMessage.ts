@@ -566,12 +566,25 @@ export interface CoinbaseDepositCustomerInput {
   agreementAcceptedAt: string;
 }
 
+/**
+ * Optional prefill for the contact details an onramp provider collects. Each
+ * field stands alone: a dApp that only knows the user's email may send just
+ * that, and the wallet still asks for whatever is missing.
+ */
+export interface DepositContactPrefill {
+  email?: string;
+  /** E.164 US phone number, for example "+12055555555". */
+  phoneNumber?: string;
+}
+
 /** Provider-neutral request for a prepared token destination. */
 export interface DepositRequestPayload {
   /** Defaults to Unifold so existing `deposits.open({ destination })` callers keep working. */
   providerId?: string;
   destination: DepositDestination;
   paymentAmount?: string;
+  /** Prefills the onramp screen; the user can still edit every value. */
+  contact?: DepositContactPrefill;
   customer?: CoinbaseDepositCustomerInput;
 }
 

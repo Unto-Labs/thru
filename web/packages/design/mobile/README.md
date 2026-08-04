@@ -51,6 +51,20 @@ step.
   meters for loading states. `SegmentBar` sweeps a band when indeterminate and
   latches cells when given `progress`; omitting a row's `readout` prints an
   em-dash, so a caller cannot accidentally render a latency of `0ms`
+- **`GridLoader` / `HairlineGrid`** — a full-bleed 1px grid whose cells fill on
+  a diagonal wave, with the brand mark knocked out of the centre. `mark`
+  chooses `"tile"` (default) or `"wings"`, and the knockout is derived from
+  that choice so the hole always matches the mark. Renders as a single SVG
+  tree, not one view per cell. `progress` makes it determinate; omit it to
+  loop. Fill and hairline tones are selected per theme — the Stone ramp aliases
+  `border` to `bgInset` in light but `bgMuted` in dark, so one pair cannot
+  serve both
+- **`SplashState` / `MarkDraw` / `Spinner`** — the wings mark strokes itself on
+  and fills, over a single line of sentence copy. `SplashState` owns the
+  escalation ladder: an accent orbit arc once the wait passes `orbitAfterMs`
+  (2.4s), then swapped copy and an optional retry at `escalateAfterMs` (8s).
+  `Spinner` is the orbit arc on its own; note its stroke is a fixed 2pt tuned
+  for the 120pt orbit, so it reads heavy much below that
 
 ## Usage
 

@@ -99,6 +99,25 @@ fn size_expr_matches_len_field(expr: &ExprKind, field_name: &str) -> bool {
     false
 }
 
+/* Return the wrapper type emitted for a size-discriminated union variant. */
+fn size_discriminated_variant_type_name(
+    parent_type_name: &str,
+    field_name: &str,
+    variant_name: &str,
+    variant_type: &ResolvedType,
+) -> String {
+    match &variant_type.kind {
+        ResolvedTypeKind::TypeRef { target_name, .. } => target_name.replace("::", "_"),
+        _ => format!("{}_{}_{}", parent_type_name, field_name, variant_name),
+    }
+}
+
+/* Generated layout helpers use a reserved prefix so they cannot collide with
+ * ABI field accessors such as `type_specific_size()`. */
+fn enum_size_method_name(field_name: &str) -> String {
+    format!("__thru_abi_enum_size_{}", field_name)
+}
+
 /* Convert expression to Rust code that reads from data array using field_offsets map */
 fn expression_to_rust_data_read(
     expr: &ExprKind,
@@ -448,6 +467,64 @@ pub fn emit_opaque_functions(
     let mut output = String::new();
 
     match &resolved_type.kind {
+        ResolvedTypeKind::Array { .. } => {
+            let type_name = resolved_type.name.replace("::", "_");
+            let crate::abi::resolved::Size::Const(size) = resolved_type.size else {
+                return output;
+            };
+
+            write!(output, "impl<'a> {}<'a> {{\n", type_name).unwrap();
+            write!(
+                output,
+                "    pub fn from_slice(data: &'a [u8]) -> Result<Self, &'static str> {{\n"
+            )
+            .unwrap();
+            write!(output, "        Self::validate(data)?;\n").unwrap();
+            write!(output, "        Ok(Self {{ data }})\n").unwrap();
+            write!(output, "    }}\n\n").unwrap();
+            write!(
+                output,
+                "    pub fn validate(data: &[u8]) -> Result<usize, &'static str> {{\n"
+            )
+            .unwrap();
+            write!(
+                output,
+                "        if data.len() != {} {{ return Err(\"Invalid array length\"); }}\n",
+                size
+            )
+            .unwrap();
+            write!(output, "        Ok({})\n", size).unwrap();
+            write!(output, "    }}\n\n").unwrap();
+            write!(
+                output,
+                "    pub fn as_bytes(&self) -> &[u8] {{ self.data }}\n"
+            )
+            .unwrap();
+            write!(output, "    pub fn size(&self) -> usize {{ {} }}\n", size).unwrap();
+            write!(output, "}}\n\n").unwrap();
+
+            write!(output, "impl<'a> {}Mut<'a> {{\n", type_name).unwrap();
+            write!(
+                output,
+                "    pub fn from_slice_mut(data: &'a mut [u8]) -> Result<Self, &'static str> {{\n"
+            )
+            .unwrap();
+            write!(output, "        {}::validate(data)?;\n", type_name).unwrap();
+            write!(output, "        Ok(Self {{ data }})\n").unwrap();
+            write!(output, "    }}\n\n").unwrap();
+            write!(
+                output,
+                "    pub fn as_bytes(&self) -> &[u8] {{ self.data }}\n"
+            )
+            .unwrap();
+            write!(
+                output,
+                "    pub fn as_bytes_mut(&mut self) -> &mut [u8] {{ self.data }}\n"
+            )
+            .unwrap();
+            write!(output, "    pub fn size(&self) -> usize {{ {} }}\n", size).unwrap();
+            write!(output, "}}\n").unwrap();
+        }
         ResolvedTypeKind::Struct { fields, .. } => {
             /* Convert type name from "Parent::nested" to "Parent_nested" for Rust syntax */
             let type_name = resolved_type.name.replace("::", "_");
@@ -1004,7 +1081,13 @@ pub fn emit_opaque_functions(
                                         .unwrap();
                                     }
                                     ResolvedTypeKind::Enum { .. } => {
-                                        write!(output, "        offset += self.{}_size(); // {} (variable size)\n", prev_field.name, prev_field.name).unwrap();
+                                        write!(
+                                            output,
+                                            "        offset += self.{}(); // {} (variable size)\n",
+                                            enum_size_method_name(&prev_field.name),
+                                            prev_field.name
+                                        )
+                                        .unwrap();
                                     }
                                     ResolvedTypeKind::Array {
                                         element_type,
@@ -1068,7 +1151,8 @@ pub fn emit_opaque_functions(
                         ..
                     } => {
                         // Generate size helper for this enum
-                        write!(output, "    fn {}_size(&self) -> usize {{\n", field.name).unwrap();
+                        let size_method = enum_size_method_name(&field.name);
+                        write!(output, "    fn {}(&self) -> usize {{\n", size_method).unwrap();
 
                         // Generate tag expression code using getter methods
                         let tag_expr = size_expression_to_rust_getter_code(tag_expression, "self");
@@ -1114,7 +1198,13 @@ pub fn emit_opaque_functions(
                                         .unwrap();
                                     }
                                     ResolvedTypeKind::Enum { .. } => {
-                                        write!(output, "        offset += self.{}_size(); // {} (variable size)\n", prev_field.name, prev_field.name).unwrap();
+                                        write!(
+                                            output,
+                                            "        offset += self.{}(); // {} (variable size)\n",
+                                            enum_size_method_name(&prev_field.name),
+                                            prev_field.name
+                                        )
+                                        .unwrap();
                                     }
                                     ResolvedTypeKind::Array {
                                         element_type,
@@ -1161,7 +1251,7 @@ pub fn emit_opaque_functions(
                             }
                         }
 
-                        write!(output, "        let size = self.{}_size();\n", field.name).unwrap();
+                        write!(output, "        let size = self.{}();\n", size_method).unwrap();
                         write!(output, "        &self.data[offset..offset + size]\n").unwrap();
                         write!(output, "    }}\n\n").unwrap();
                     }
@@ -1194,7 +1284,13 @@ pub fn emit_opaque_functions(
                                         .unwrap();
                                     }
                                     ResolvedTypeKind::Enum { .. } => {
-                                        write!(output, "        offset += self.{}_size(); // {} (variable size)\n", prev_field.name, prev_field.name).unwrap();
+                                        write!(
+                                            output,
+                                            "        offset += self.{}(); // {} (variable size)\n",
+                                            enum_size_method_name(&prev_field.name),
+                                            prev_field.name
+                                        )
+                                        .unwrap();
                                     }
                                     ResolvedTypeKind::SizeDiscriminatedUnion { .. } => {
                                         write!(output, "        offset += self.{}_size(); // {} (variable size)\n", prev_field.name, prev_field.name).unwrap();
@@ -1282,8 +1378,12 @@ pub fn emit_opaque_functions(
                             let variant_name_snake = variant.name.to_lowercase().replace("-", "_");
                             // Type name format matches collect_nested_type_definitions: {parent}_{field}_inner_{variant}_inner
                             // But for opaque wrappers, it's just {parent}_{field}_{variant}
-                            let variant_type_name =
-                                format!("{}_{}_{}", type_name, field.name, variant.name);
+                            let variant_type_name = size_discriminated_variant_type_name(
+                                &type_name,
+                                &field.name,
+                                &variant.name,
+                                &variant.variant_type,
+                            );
 
                             write!(
                                 output,
@@ -1311,7 +1411,7 @@ pub fn emit_opaque_functions(
                                             .unwrap();
                                         }
                                         ResolvedTypeKind::Enum { .. } => {
-                                            write!(output, "        offset += self.{}_size(); // {} (variable size)\n", prev_field.name, prev_field.name).unwrap();
+                                            write!(output, "        offset += self.{}(); // {} (variable size)\n", enum_size_method_name(&prev_field.name), prev_field.name).unwrap();
                                         }
                                         ResolvedTypeKind::SizeDiscriminatedUnion { .. } => {
                                             write!(output, "        offset += self.{}_size(); // {} (variable size)\n", prev_field.name, prev_field.name).unwrap();
@@ -1403,7 +1503,7 @@ pub fn emit_opaque_functions(
                                                 .unwrap();
                                             }
                                             ResolvedTypeKind::Enum { .. } => {
-                                                write!(output, "        offset += self.{}_size(); // {} (variable size)\n", prev_field.name, prev_field.name).unwrap();
+                                                write!(output, "        offset += self.{}(); // {} (variable size)\n", enum_size_method_name(&prev_field.name), prev_field.name).unwrap();
                                             }
                                             ResolvedTypeKind::SizeDiscriminatedUnion { .. } => {
                                                 write!(output, "        offset += self.{}_size(); // {} (variable size)\n", prev_field.name, prev_field.name).unwrap();
@@ -1511,7 +1611,7 @@ pub fn emit_opaque_functions(
                                                     .unwrap();
                                                 }
                                                 ResolvedTypeKind::Enum { .. } => {
-                                                    write!(output, "        base_offset += self.{}_size(); // {} (variable size)\n", prev_field.name, prev_field.name).unwrap();
+                                                    write!(output, "        base_offset += self.{}(); // {} (variable size)\n", enum_size_method_name(&prev_field.name), prev_field.name).unwrap();
                                                 }
                                                 ResolvedTypeKind::Array { .. } => {
                                                     if let crate::abi::resolved::Size::Const(size) =
@@ -1592,7 +1692,7 @@ pub fn emit_opaque_functions(
                                                         .unwrap();
                                                     }
                                                     ResolvedTypeKind::Enum { .. } => {
-                                                        write!(output, "        base_offset += self.{}_size(); // {} (variable size)\n", prev_field.name, prev_field.name).unwrap();
+                                                        write!(output, "        base_offset += self.{}(); // {} (variable size)\n", enum_size_method_name(&prev_field.name), prev_field.name).unwrap();
                                                     }
                                                     ResolvedTypeKind::Array { .. } => {
                                                         if let crate::abi::resolved::Size::Const(
@@ -1670,7 +1770,7 @@ pub fn emit_opaque_functions(
                                                         .unwrap();
                                                     }
                                                     ResolvedTypeKind::Enum { .. } => {
-                                                        writeln!(offset_setup, "        offset += self.{}_size(); // {} (variable size)", prev_field.name, prev_field.name).unwrap();
+                                                        writeln!(offset_setup, "        offset += self.{}(); // {} (variable size)", enum_size_method_name(&prev_field.name), prev_field.name).unwrap();
                                                     }
                                                     ResolvedTypeKind::Array {
                                                         jagged: prev_jagged,
@@ -1730,7 +1830,7 @@ pub fn emit_opaque_functions(
                                                     .unwrap();
                                                 }
                                                 ResolvedTypeKind::Enum { .. } => {
-                                                    write!(output, "        base_offset += self.{}_size(); // {} (variable size)\n", prev_field.name, prev_field.name).unwrap();
+                                                    write!(output, "        base_offset += self.{}(); // {} (variable size)\n", enum_size_method_name(&prev_field.name), prev_field.name).unwrap();
                                                 }
                                                 ResolvedTypeKind::Array {
                                                     size_expression: prev_size_expr,
@@ -2042,7 +2142,13 @@ pub fn emit_opaque_functions(
                                         .unwrap();
                                     }
                                     ResolvedTypeKind::Enum { .. } => {
-                                        write!(output, "        offset += self.{}_size(); // {} (variable size)\n", prev_field.name, prev_field.name).unwrap();
+                                        write!(
+                                            output,
+                                            "        offset += self.{}(); // {} (variable size)\n",
+                                            enum_size_method_name(&prev_field.name),
+                                            prev_field.name
+                                        )
+                                        .unwrap();
                                     }
                                     ResolvedTypeKind::Array {
                                         element_type,
@@ -2208,7 +2314,7 @@ pub fn emit_opaque_functions(
                                         .unwrap();
                                     }
                                     ResolvedTypeKind::Enum { .. } => {
-                                        write!(output, "        offset += self.{}_size(); /* {} (variable size) */\n", prev_field.name, prev_field.name).unwrap();
+                                        write!(output, "        offset += self.{}(); /* {} (variable size) */\n", enum_size_method_name(&prev_field.name), prev_field.name).unwrap();
                                     }
                                     ResolvedTypeKind::Array {
                                         element_type,
@@ -2989,8 +3095,9 @@ pub fn emit_opaque_functions(
                                 ResolvedTypeKind::Enum { .. } => {
                                     write!(
                                         output,
-                                        "        offset += self.{}_size(); // {} (variable size)\n",
-                                        prev_field.name, prev_field.name
+                                        "        offset += self.{}(); // {} (variable size)\n",
+                                        enum_size_method_name(&prev_field.name),
+                                        prev_field.name
                                     )
                                     .unwrap();
                                 }
@@ -3169,7 +3276,8 @@ pub fn emit_opaque_functions(
                 } = &field.field_type.kind
                 {
                     // Generate size helper for this enum
-                    write!(output, "    fn {}_size(&self) -> usize {{\n", field.name).unwrap();
+                    let size_method = enum_size_method_name(&field.name);
+                    write!(output, "    fn {}(&self) -> usize {{\n", size_method).unwrap();
 
                     // Generate tag expression code using getter methods
                     let tag_expr = size_expression_to_rust_getter_code(tag_expression, "self");
@@ -3244,7 +3352,7 @@ pub fn emit_opaque_functions(
                                     ResolvedTypeKind::Enum { .. } => {
                                         // For enum fields, we need to calculate size dynamically
                                         // This requires creating an immutable reference to read the tag
-                                        write!(output, "        offset += ({{ let temp = {} {{ data: &self.data }}; temp.{}_size() }}); // {} (variable size)\n", type_name, prev_field.name, prev_field.name).unwrap();
+                                        write!(output, "        offset += ({{ let temp = {} {{ data: &self.data }}; temp.{}() }}); // {} (variable size)\n", type_name, enum_size_method_name(&prev_field.name), prev_field.name).unwrap();
                                     }
                                     ResolvedTypeKind::Array {
                                         element_type,
@@ -3314,7 +3422,12 @@ pub fn emit_opaque_functions(
                             type_name
                         )
                         .unwrap();
-                        write!(output, "            temp.{}_size()\n", field.name).unwrap();
+                        write!(
+                            output,
+                            "            temp.{}()\n",
+                            enum_size_method_name(&field.name)
+                        )
+                        .unwrap();
                         write!(output, "        }};\n\n").unwrap();
 
                         write!(output, "        if body.len() != expected_size {{\n").unwrap();
@@ -3341,7 +3454,7 @@ pub fn emit_opaque_functions(
                                         .unwrap();
                                     }
                                     ResolvedTypeKind::Enum { .. } => {
-                                        write!(output, "        offset += ({{ let temp = {} {{ data: &self.data }}; temp.{}_size() }}); // {} (variable size)\n", type_name, prev_field.name, prev_field.name).unwrap();
+                                        write!(output, "        offset += ({{ let temp = {} {{ data: &self.data }}; temp.{}() }}); // {} (variable size)\n", type_name, enum_size_method_name(&prev_field.name), prev_field.name).unwrap();
                                     }
                                     ResolvedTypeKind::SizeDiscriminatedUnion { .. } => {
                                         write!(output, "        offset += ({{ let temp = {} {{ data: &self.data }}; temp.{}_size() }}); // {} (variable size)\n", type_name, prev_field.name, prev_field.name).unwrap();
@@ -3401,8 +3514,12 @@ pub fn emit_opaque_functions(
                             let variant_name_snake = variant.name.to_lowercase().replace("-", "_");
                             // Type name format matches collect_nested_type_definitions: {parent}_{field}_inner_{variant}_inner
                             // But for opaque wrappers, it's just {parent}_{field}_{variant}
-                            let variant_type_name =
-                                format!("{}_{}_{}", type_name, field.name, variant.name);
+                            let variant_type_name = size_discriminated_variant_type_name(
+                                &type_name,
+                                &field.name,
+                                &variant.name,
+                                &variant.variant_type,
+                            );
 
                             write!(output, "    pub fn {}_set_{}(&mut self, value: &{}<'_>) -> Result<(), &'static str> {{\n", 
                                    field.name, variant_name_snake, variant_type_name).unwrap();
@@ -3426,7 +3543,7 @@ pub fn emit_opaque_functions(
                                             .unwrap();
                                         }
                                         ResolvedTypeKind::Enum { .. } => {
-                                            write!(output, "        offset += ({{ let temp = {} {{ data: &self.data }}; temp.{}_size() }}); // {} (variable size)\n", type_name, prev_field.name, prev_field.name).unwrap();
+                                            write!(output, "        offset += ({{ let temp = {} {{ data: &self.data }}; temp.{}() }}); // {} (variable size)\n", type_name, enum_size_method_name(&prev_field.name), prev_field.name).unwrap();
                                         }
                                         ResolvedTypeKind::SizeDiscriminatedUnion { .. } => {
                                             write!(output, "        offset += ({{ let temp = {} {{ data: &self.data }}; temp.{}_size() }}); // {} (variable size)\n", type_name, prev_field.name, prev_field.name).unwrap();
@@ -3570,7 +3687,7 @@ pub fn emit_opaque_functions(
                                                     .unwrap();
                                                 }
                                                 ResolvedTypeKind::Enum { .. } => {
-                                                    write!(output, "        offset += ({{ let temp = {} {{ data: &self.data }}; temp.{}_size() }}); // {} (variable size)\n", type_name, prev_field.name, prev_field.name).unwrap();
+                                                    write!(output, "        offset += ({{ let temp = {} {{ data: &self.data }}; temp.{}() }}); // {} (variable size)\n", type_name, enum_size_method_name(&prev_field.name), prev_field.name).unwrap();
                                                 }
                                                 ResolvedTypeKind::Array { .. } => {
                                                     if let crate::abi::resolved::Size::Const(size) =
@@ -3625,7 +3742,7 @@ pub fn emit_opaque_functions(
                                                     .unwrap();
                                                 }
                                                 ResolvedTypeKind::Enum { .. } => {
-                                                    write!(output, "        base_offset += ({{ let temp = {} {{ data: &self.data }}; temp.{}_size() }}); // {} (variable size)\n", type_name, prev_field.name, prev_field.name).unwrap();
+                                                    write!(output, "        base_offset += ({{ let temp = {} {{ data: &self.data }}; temp.{}() }}); // {} (variable size)\n", type_name, enum_size_method_name(&prev_field.name), prev_field.name).unwrap();
                                                 }
                                                 ResolvedTypeKind::Array { .. } => {
                                                     if let crate::abi::resolved::Size::Const(size) =
@@ -3692,7 +3809,7 @@ pub fn emit_opaque_functions(
                                                     .unwrap();
                                                 }
                                                 ResolvedTypeKind::Enum { .. } => {
-                                                    write!(output, "        base_offset += ({{ let temp = {} {{ data: &self.data }}; temp.{}_size() }}); // {} (variable size)\n", type_name, prev_field.name, prev_field.name).unwrap();
+                                                    write!(output, "        base_offset += ({{ let temp = {} {{ data: &self.data }}; temp.{}() }}); // {} (variable size)\n", type_name, enum_size_method_name(&prev_field.name), prev_field.name).unwrap();
                                                 }
                                                 ResolvedTypeKind::Array { .. } => {
                                                     if let crate::abi::resolved::Size::Const(size) =
@@ -3756,7 +3873,7 @@ pub fn emit_opaque_functions(
                                                     .unwrap();
                                                 }
                                                 ResolvedTypeKind::Enum { .. } => {
-                                                    write!(output, "        base_offset += ({{ let temp = {} {{ data: &self.data }}; temp.{}_size() }}); // {} (variable size)\n", type_name, prev_field.name, prev_field.name).unwrap();
+                                                    write!(output, "        base_offset += ({{ let temp = {} {{ data: &self.data }}; temp.{}() }}); // {} (variable size)\n", type_name, enum_size_method_name(&prev_field.name), prev_field.name).unwrap();
                                                 }
                                                 ResolvedTypeKind::Array { .. } => {
                                                     if let crate::abi::resolved::Size::Const(size) =
@@ -3999,7 +4116,7 @@ pub fn emit_opaque_functions(
                                             .unwrap();
                                         }
                                         ResolvedTypeKind::Enum { .. } => {
-                                            write!(output, "        offset += ({{ let temp = {} {{ data: &self.data }}; temp.{}_size() }}); // {} (variable size)\n", type_name, prev_field.name, prev_field.name).unwrap();
+                                            write!(output, "        offset += ({{ let temp = {} {{ data: &self.data }}; temp.{}() }}); // {} (variable size)\n", type_name, enum_size_method_name(&prev_field.name), prev_field.name).unwrap();
                                         }
                                         ResolvedTypeKind::Array { .. } => {
                                             if let crate::abi::resolved::Size::Const(size) =
@@ -4068,7 +4185,7 @@ pub fn emit_opaque_functions(
                                             .unwrap();
                                         }
                                         ResolvedTypeKind::Enum { .. } => {
-                                            write!(output, "        offset += ({{ let temp = {} {{ data: &self.data }}; temp.{}_size() }}); /* {} (variable size) */\n", type_name, prev_field.name, prev_field.name).unwrap();
+                                            write!(output, "        offset += ({{ let temp = {} {{ data: &self.data }}; temp.{}() }}); /* {} (variable size) */\n", type_name, enum_size_method_name(&prev_field.name), prev_field.name).unwrap();
                                         }
                                         ResolvedTypeKind::Array { .. } => {
                                             if let crate::abi::resolved::Size::Const(size) =
@@ -4124,7 +4241,7 @@ pub fn emit_opaque_functions(
                                             .unwrap();
                                         }
                                         ResolvedTypeKind::Enum { .. } => {
-                                            write!(output, "        offset += ({{ let temp = {} {{ data: &self.data }}; temp.{}_size() }}); /* {} (variable size) */\n", type_name, prev_field.name, prev_field.name).unwrap();
+                                            write!(output, "        offset += ({{ let temp = {} {{ data: &self.data }}; temp.{}() }}); /* {} (variable size) */\n", type_name, enum_size_method_name(&prev_field.name), prev_field.name).unwrap();
                                         }
                                         ResolvedTypeKind::Array { .. } => {
                                             if let crate::abi::resolved::Size::Const(size) =

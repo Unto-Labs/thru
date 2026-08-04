@@ -45,6 +45,8 @@ type WebViewShouldStartRequest = Parameters<
 interface ApplePayWidgetProps {
   paymentUrl: string;
   topInset: number;
+  /** Home-indicator inset; keeps Coinbase's own pay button off the edge. */
+  bottomInset?: number;
   hideApplePayButton?: boolean;
   onCancel: () => void;
   onCoinbaseMessage: (event: WebViewMessageEvent) => void;
@@ -54,6 +56,7 @@ interface ApplePayWidgetProps {
 export function ApplePayWidget({
   paymentUrl,
   topInset,
+  bottomInset = 0,
   hideApplePayButton = true,
   onCancel,
   onCoinbaseMessage,
@@ -159,10 +162,12 @@ export function ApplePayWidget({
   );
 
   return (
-    <View style={[styles.overlay, { paddingTop: topInset }]}>
+    <View
+      style={[styles.overlay, { paddingTop: topInset, paddingBottom: bottomInset }]}
+    >
       <View style={styles.header}>
         <Text style={styles.title}>
-          {hasCommitted ? "Coinbase processing" : "Coinbase sandbox"}
+          {hasCommitted ? "Processing" : "Apple Pay"}
         </Text>
         {!hasCommitted ? (
           <Pressable
@@ -185,7 +190,7 @@ export function ApplePayWidget({
           >
             <ActivityIndicator size="small" color="#b52f36" />
             <Text style={styles.openingText}>
-              {hasCommitted ? "Confirming your payment…" : "Opening Apple Pay…"}
+              {hasCommitted ? "Processing…" : "Opening Apple Pay…"}
             </Text>
           </View>
         ) : null}

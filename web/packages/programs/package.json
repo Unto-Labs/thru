@@ -27,6 +27,11 @@
       "types": "./dist/clob/index.d.ts",
       "import": "./dist/clob/index.js",
       "require": "./dist/clob/index.cjs"
+    },
+    "./oracle": {
+      "types": "./dist/oracle/index.d.ts",
+      "import": "./dist/oracle/index.js",
+      "require": "./dist/oracle/index.cjs"
     }
   },
   "scripts": {

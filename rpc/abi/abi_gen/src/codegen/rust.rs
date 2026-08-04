@@ -76,7 +76,7 @@ impl<'a> RustCodeGenerator<'a> {
             for dep_package in &dependencies {
                 if dep_package != current_package {
                     let use_path = self.get_rust_use_path(current_package, dep_package);
-                    types_output.push_str(&format!("use {}::*;\n", use_path));
+                    types_output.push_str(&format!("pub use {}::*;\n", use_path));
                 }
             }
 
@@ -299,14 +299,11 @@ impl<'a> RustCodeGenerator<'a> {
         /* Build use path */
         let mut path_parts = Vec::new();
 
-        /* Go up to common ancestor */
-        if from_parts.len() > common_len {
+        /* Generated imports are emitted from the package's `types` module, so
+         * walk up once for `types` plus once per package component after the
+         * common ancestor. */
+        for _ in common_len..=from_parts.len() {
             path_parts.push("super".to_string());
-            for _ in (common_len + 1)..from_parts.len() {
-                path_parts.push("super".to_string());
-            }
-        } else {
-            path_parts.push("crate".to_string());
         }
 
         /* Add the unique parts of to_package */
@@ -655,11 +652,13 @@ fn emit_recursive_types(resolved_type: &ResolvedType, output: &mut String) {
         _ => {}
     }
 
-    /* Then emit this type if it's a struct/union/sdu (not primitive, TypeRef, or Enum) */
+    /* Then emit this type if it has a concrete Rust representation. */
     /* Skip enums - they're ghost fields in opaque wrapper approach */
     /* Skip size-discriminated unions - they're ghost fields in opaque wrapper approach */
     match &resolved_type.kind {
-        ResolvedTypeKind::Struct { .. } | ResolvedTypeKind::Union { .. } => {
+        ResolvedTypeKind::Struct { .. }
+        | ResolvedTypeKind::Union { .. }
+        | ResolvedTypeKind::Array { .. } => {
             output.push_str(&emit_single_type(resolved_type));
             output.push('\n');
         }
@@ -703,6 +702,20 @@ fn emit_single_type(resolved_type: &ResolvedType) -> String {
             output.push_str("}\n\n");
 
             /* Mutable wrapper */
+            output.push_str("#[allow(non_camel_case_types, non_snake_case)]\n");
+            output.push_str(&format!("pub struct {}Mut<'a> {{\n", type_name));
+            output.push_str("    pub(crate) data: &'a mut [u8],\n");
+            output.push_str("}\n");
+        }
+        ResolvedTypeKind::Array { .. } => {
+            /* Arrays use the same zero-copy byte-view representation as structs.
+             * This keeps named ABI arrays usable through TypeRef fields. */
+            output.push_str("#[allow(non_camel_case_types, non_snake_case)]\n");
+            output.push_str("#[derive(Copy, Clone)]\n");
+            output.push_str(&format!("pub struct {}<'a> {{\n", type_name));
+            output.push_str("    pub(crate) data: &'a [u8],\n");
+            output.push_str("}\n\n");
+
             output.push_str("#[allow(non_camel_case_types, non_snake_case)]\n");
             output.push_str(&format!("pub struct {}Mut<'a> {{\n", type_name));
             output.push_str("    pub(crate) data: &'a mut [u8],\n");

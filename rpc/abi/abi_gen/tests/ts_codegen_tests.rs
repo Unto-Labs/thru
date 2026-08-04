@@ -1626,3 +1626,54 @@ fn test_ts_clob_program_compiles_with_u64_event_tag() {
     check_typescript_compilation(&ts_file)
         .expect("TypeScript compilation failed for generated CLOB ABI with u64 event tag");
 }
+
+#[test]
+fn test_ts_oracle_create_feed_uses_raw_payload_path() {
+    let test_dir = setup_test_dir("oracle_create_feed_raw_payload");
+    let abi_file = "rpc/abi/type-library/tn_oracle_program.abi.yaml";
+
+    generate_ts_code_with_includes(abi_file, &["rpc/abi/type-library"], &test_dir)
+        .expect("Code generation failed");
+
+    let ts_file = test_dir.join("thru/program/oracle/types.ts");
+    assert!(ts_file.exists(), "Generated Oracle TypeScript file missing");
+
+    let content = fs::read_to_string(&ts_file).expect("Failed to read generated Oracle types.ts");
+    assert!(
+        !content.contains("export class CreateFeedArgsBuilder"),
+        "CreateFeedArgsBuilder should not be emitted until enum-plus-tail-FAM builders are supported"
+    );
+    assert!(
+        !content.contains("static builder(): CreateFeedArgsBuilder"),
+        "CreateFeedArgs should not expose a static builder for the unsupported trailing-proof layout"
+    );
+
+    let descriptor_start = content
+        .find("name: \"create_feed\"")
+        .expect("OracleInstruction create_feed descriptor missing");
+    let descriptor_end = (descriptor_start + 500).min(content.len());
+    let descriptor = &content[descriptor_start..descriptor_end];
+    assert!(
+        descriptor.contains("payloadSize: null"),
+        "create_feed should remain a dynamically sized raw payload"
+    );
+    assert!(
+        descriptor.contains("payloadType: \"OracleInstruction::payload::create_feed\""),
+        "create_feed descriptor should keep the generated nested variant label"
+    );
+    assert!(
+        content.contains("export class CreateFeedArgs"),
+        "CreateFeedArgs should still be emitted as a decoder"
+    );
+    assert!(
+        descriptor.contains("createPayloadBuilder: () => null"),
+        "create_feed descriptor should force SDKs onto the raw payload path"
+    );
+    assert!(
+        content.contains("export class OracleInstructionBuilder"),
+        "OracleInstructionBuilder should still be emitted for wrapping raw create_feed bytes"
+    );
+
+    check_typescript_compilation(&ts_file)
+        .expect("TypeScript compilation failed for generated Oracle ABI");
+}
