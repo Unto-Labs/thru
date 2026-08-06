@@ -21,8 +21,8 @@ echo ""
 echo "Installing Rust SDK to: $THRU_DIR/.thru/sdk/rust"
 mkdir -p "$THRU_DIR/.thru/sdk/rust"
 # Copy Rust SDK files if they exist
-if [ -d "thru-sdk" ]; then
-    cp -r thru-sdk/* "$THRU_DIR/.thru/sdk/rust/"
+if [ -d "$SCRIPT_DIR/thru-sdk" ]; then
+    cp -r "$SCRIPT_DIR/thru-sdk/"* "$THRU_DIR/.thru/sdk/rust/"
 fi
 
 echo ""
