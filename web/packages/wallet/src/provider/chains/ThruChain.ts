@@ -100,10 +100,14 @@ export class EmbeddedThruChain implements IThruChain {
       throw new Error("Wallet not connected");
     }
 
-    const session = signingSessionId
-      ? await this.requireSigningSession(signingSessionId)
-      : null;
-    const shouldShowWallet = !signingSessionId;
+    const session =
+      signingSessionId && this.signingSessions
+        ? await this.signingSessions.get(signingSessionId)
+        : null;
+    // A missing local descriptor can mean the session expired or was revoked
+    // after the caller retained its session object. Let the wallet make the
+    // authoritative decision and expose its passkey fallback UI.
+    const shouldShowWallet = !signingSessionId || !session;
     if (shouldShowWallet) {
       this.iframeManager.show();
     }
@@ -258,19 +262,6 @@ export class EmbeddedThruChain implements IThruChain {
     } finally {
       await this.signingSessions?.remove(id);
     }
-  }
-
-  private async requireSigningSession(
-    id: string,
-  ): Promise<ThruSigningSessionDescriptor> {
-    if (!this.signingSessions) {
-      throw new Error("Signing session storage is not available");
-    }
-    const session = await this.signingSessions.get(id);
-    if (!session) {
-      throw new Error("Signing session is not known to this app");
-    }
-    return session;
   }
 
   private toSigningSession(

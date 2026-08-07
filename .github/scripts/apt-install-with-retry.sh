@@ -7,6 +7,10 @@ LOCK_GRACE_SECONDS="${APT_LOCK_GRACE_SECONDS:-20}"
 KILL_LOCK_HOLDERS="${APT_KILL_LOCK_HOLDERS:-1}"
 COMMAND_TIMEOUT_SECONDS="${APT_COMMAND_TIMEOUT_SECONDS:-180}"
 COMMAND_KILL_GRACE_SECONDS="${APT_COMMAND_KILL_GRACE_SECONDS:-10}"
+MIRROR_FALLBACK="${APT_MIRROR_FALLBACK:-1}"
+FALLBACK_MIRROR="${APT_FALLBACK_MIRROR:-http://archive.ubuntu.com/ubuntu}"
+SOURCES_LIST="${APT_SOURCES_LIST:-/etc/apt/sources.list}"
+SOURCES_PARTS_DIR="${APT_SOURCES_PARTS_DIR:-/etc/apt/sources.list.d}"
 UPDATE_ONLY=0
 
 if [ "${1:-}" = "--update-only" ]; then
@@ -170,6 +174,80 @@ wait_for_or_kill_lock_holders() {
   apt_command sudo env DEBIAN_FRONTEND=noninteractive apt-get -o "DPkg::Lock::Timeout=${LOCK_TIMEOUT_SECONDS}" -f install -y || true
 }
 
+# Matches the EC2 region-local Ubuntu archive mirrors, e.g.
+# http://us-east-1.ec2.archive.ubuntu.com/ubuntu.  The region is not
+# hardcoded.  security.ubuntu.com and every other host deliberately do not
+# match, so they are never rewritten.
+ec2_mirror_pattern='https?://[a-z0-9-]+\.ec2\.archive\.ubuntu\.com(/ubuntu)?'
+mirror_fallback_applied=0
+
+# Emits every apt source file that actually exists, covering both the legacy
+# one-line format (/etc/apt/sources.list, *.list) and the deb822 format
+# (*.sources) that Ubuntu 24.04 uses by default.  Unmatched globs are skipped
+# rather than passed through literally.
+apt_source_files() {
+  local candidate
+  for candidate in "$SOURCES_LIST" "$SOURCES_PARTS_DIR"/*.list "$SOURCES_PARTS_DIR"/*.sources; do
+    if [ -f "$candidate" ]; then
+      printf '%s\n' "$candidate"
+    fi
+  done
+}
+
+# Repoints the configured apt sources from the EC2 regional mirror at
+# FALLBACK_MIRROR.  The EC2 mirror is region-local and much faster when it is
+# healthy, so this only runs after an attempt has already failed.  It is a
+# no-op when no EC2 mirror is configured and when it has already run.
+use_fallback_apt_mirror() {
+  [ "$mirror_fallback_applied" -eq 0 ] || return 0
+  mirror_fallback_applied=1
+
+  if [ "$MIRROR_FALLBACK" != "1" ]; then
+    echo "apt mirror fallback is disabled (APT_MIRROR_FALLBACK=${MIRROR_FALLBACK})" >&2
+    return 0
+  fi
+
+  case "$FALLBACK_MIRROR" in
+    http://*|https://*) ;;
+    *)
+      echo "refusing to use APT_FALLBACK_MIRROR='${FALLBACK_MIRROR}': not an http(s) URL" >&2
+      return 0
+      ;;
+  esac
+
+  case "$FALLBACK_MIRROR" in
+    *[\|\&\\]*)
+      echo "refusing to use APT_FALLBACK_MIRROR='${FALLBACK_MIRROR}': unsafe in a sed replacement" >&2
+      return 0
+      ;;
+  esac
+
+  local source_file rewritten=0
+  while IFS= read -r source_file; do
+    if ! grep -Eq "$ec2_mirror_pattern" "$source_file"; then
+      continue
+    fi
+
+    echo "rewriting EC2 regional apt mirror in ${source_file} (backup: ${source_file}.bak)" >&2
+    grep -En "$ec2_mirror_pattern" "$source_file" | sed 's/^/  before: /' >&2 || true
+
+    if ! sudo sed -E -i.bak "s|${ec2_mirror_pattern}|${FALLBACK_MIRROR}|g" "$source_file"; then
+      echo "failed to rewrite ${source_file}; leaving it unchanged" >&2
+      continue
+    fi
+
+    grep -Fn -- "$FALLBACK_MIRROR" "$source_file" | sed 's/^/  after:  /' >&2 || true
+    rewritten=$((rewritten + 1))
+  done < <(apt_source_files)
+
+  if [ "$rewritten" -eq 0 ]; then
+    echo "no EC2 regional apt mirror configured under ${SOURCES_LIST} or ${SOURCES_PARTS_DIR}; apt sources left unchanged" >&2
+    return 0
+  fi
+
+  echo "apt mirror fallback applied to ${rewritten} file(s); remaining attempts use ${FALLBACK_MIRROR}" >&2
+}
+
 for attempt in 1 2 3 4 5; do
   if [ "$attempt" -eq 1 ]; then
     wait_for_or_kill_lock_holders
@@ -187,6 +265,11 @@ for attempt in 1 2 3 4 5; do
   if [ "$attempt" -eq 5 ]; then
     exit 1
   fi
+
+  # The attempt failed.  If it was the region-local EC2 mirror stalling, more
+  # retries against the same mirror cannot help, so switch mirrors before the
+  # next one.
+  use_fallback_apt_mirror
 
   sleep $((attempt * 10))
 done

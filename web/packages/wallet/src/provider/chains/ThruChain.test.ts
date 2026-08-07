@@ -21,7 +21,60 @@ class MemoryStorage {
 
 describe("EmbeddedThruChain signing-session refresh", () => {
   afterEach(() => {
+    vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it("shows the wallet when a retained signing session has expired locally", async () => {
+    vi.stubGlobal("window", {
+      location: { origin: "https://app.example" },
+    });
+    const nowSeconds = 1_900_000_000;
+    const nowSpy = vi.spyOn(Date, "now").mockReturnValue(nowSeconds * 1_000);
+    const signingSessions = new SigningSessionDescriptorStore(
+      new MemoryStorage(),
+      "sessions",
+    );
+    await signingSessions.save({
+      id: "session_expiring",
+      walletAddress: "thru_test_address",
+      publicKey: "thru_session_address",
+      authIdx: 2,
+      expiresAt: nowSeconds + 60,
+      createdAt: nowSeconds,
+    });
+    const show = vi.fn();
+    const hide = vi.fn();
+    const sendMessage = vi.fn(async () => ({
+      result: { signedTransaction: "passkey_signed_transaction" },
+    }));
+    const chain = new EmbeddedThruChain(
+      { sendMessage, show, hide } as never,
+      { isConnected: () => false } as never,
+      signingSessions,
+    );
+    const retainedSession = await chain.getSigningSession("session_expiring");
+    expect(retainedSession).not.toBeNull();
+
+    nowSpy.mockReturnValue((nowSeconds + 61) * 1_000);
+    await expect(
+      retainedSession!.signTransaction({
+        programAddress: "thru_program",
+        instructionData: "AQID",
+      }),
+    ).resolves.toBe("passkey_signed_transaction");
+
+    expect(show).toHaveBeenCalledOnce();
+    expect(hide).toHaveBeenCalledOnce();
+    expect(sendMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        type: POST_MESSAGE_REQUEST_TYPES.SIGN_TRANSACTION,
+        payload: expect.objectContaining({
+          walletAddress: "thru_test_address",
+          signingSessionId: "session_expiring",
+        }),
+      }),
+    );
   });
 
   it("prepares and confirms a refresh while disconnected", async () => {

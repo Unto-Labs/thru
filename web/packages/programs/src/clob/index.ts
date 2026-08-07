@@ -1160,3 +1160,4 @@ function bytesFromView(value: unknown): Uint8Array {
 }
 
 export * from './exchange';
+export * from './exchange-client';

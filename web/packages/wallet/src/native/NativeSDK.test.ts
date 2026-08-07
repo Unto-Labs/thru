@@ -425,6 +425,72 @@ describe("NativeSDK", () => {
     ]);
   });
 
+  it("creates a signing session while transparently disconnected", async () => {
+    sdk.destroy();
+    const storage = new MockStorage();
+    sdk = new NativeSDK({
+      walletUrl: "http://localhost:3000/embedded/native/transparent",
+      walletExperience: "transparent",
+      origin: "thru-mobile://token-dummy",
+      storage,
+    });
+    webView = new MockWebView();
+    sdk.attachWebView(webView);
+    const onShowRequested = vi.fn();
+    const onHideRequested = vi.fn();
+    sdk.setUiHandlers({ onShowRequested, onHideRequested });
+    const expiresAt = 1_900_000_000;
+
+    const frameId = frameIdFor(sdk);
+    const promise = sdk.thru.createSigningSession({
+      walletAddress: "thru_test_address",
+      expiresAt,
+    });
+
+    expect(sdk.isConnected()).toBe(false);
+    sdk.onMessage(readyMessage(frameId));
+    const request = parseInjectedRequest(await waitForInjectedRequest(webView));
+    expect(request.type).toBe(POST_MESSAGE_REQUEST_TYPES.CREATE_SIGNING_SESSION);
+    expect(request.payload).toEqual({
+      walletAddress: "thru_test_address",
+      expiresAt: String(expiresAt),
+    });
+    expect(onShowRequested).toHaveBeenCalledTimes(1);
+
+    sdk.onMessage(
+      responseMessage(frameId, request.id, {
+        session: {
+          id: "session_replacement",
+          walletAddress: "thru_test_address",
+          publicKey: "thru_session_address",
+          authIdx: 1,
+          expiresAt: String(expiresAt),
+          createdAt: String(expiresAt - 120),
+        },
+      }),
+    );
+
+    await expect(promise).resolves.toEqual(
+      expect.objectContaining({
+        id: "session_replacement",
+        walletAddress: "thru_test_address",
+        expiresAt,
+      }),
+    );
+    expect(onHideRequested).toHaveBeenCalledTimes(1);
+    expect(sdk.isConnected()).toBe(false);
+  });
+
+  it("still requires a connection to create a non-transparent signing session", async () => {
+    const promise = sdk.thru.createSigningSession({
+      walletAddress: "thru_test_address",
+      expiresAt: 1_900_000_000,
+    });
+
+    await expect(promise).rejects.toThrow("Wallet not connected");
+    expect(webView.injected).toEqual([]);
+  });
+
   it("prepares a signing-session refresh while transparently disconnected", async () => {
     sdk.destroy();
     const storage = new MockStorage();

@@ -5,9 +5,9 @@
   "packageManager": "pnpm@10.33.4",
   "scripts": {
     "build": "pnpm -r build",
-    "test": "pnpm -r --if-present --filter './packages/*' --filter './packages-private/*' --filter './clob/packages/*' --filter './clob/apps/*' --filter './wallet/frontend/packages/*' --filter './wallet/packages/*' test:run",
-    "test:watch": "pnpm -r --if-present --filter './packages/*' --filter './packages-private/*' --filter './clob/packages/*' --filter './clob/apps/*' --filter './wallet/frontend/packages/*' --filter './wallet/packages/*' test:watch",
-    "test:coverage": "pnpm -r --if-present --filter './packages/*' --filter './packages-private/*' --filter './clob/packages/*' --filter './clob/apps/*' --filter './wallet/frontend/packages/*' --filter './wallet/packages/*' test:coverage",
+    "test": "pnpm -r --if-present --filter './packages/*' --filter './packages-private/*' --filter './clob/packages/*' --filter './clob/apps/*' --filter './wallet/admin' --filter './wallet/frontend/packages/*' --filter './wallet/packages/*' --filter './faucet' test:run",
+    "test:watch": "pnpm -r --if-present --filter './packages/*' --filter './packages-private/*' --filter './clob/packages/*' --filter './clob/apps/*' --filter './wallet/admin' --filter './wallet/frontend/packages/*' --filter './wallet/packages/*' test:watch",
+    "test:coverage": "pnpm -r --if-present --filter './packages/*' --filter './packages-private/*' --filter './clob/packages/*' --filter './clob/apps/*' --filter './wallet/admin' --filter './wallet/frontend/packages/*' --filter './wallet/packages/*' test:coverage",
     "test:wallet": "pnpm --filter thru-wallet test",
     "test:sdk": "pnpm --filter @thru/sdk test"
   },

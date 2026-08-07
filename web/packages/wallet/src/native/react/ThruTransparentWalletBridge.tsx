@@ -43,9 +43,10 @@ const NATIVE_DEPOSIT_LIFECYCLE_MESSAGE = "wallet:deposit-lifecycle";
 const NATIVE_COINBASE_PAYMENT_EVENT = "thru:coinbase-onramp-event";
 const NATIVE_PLATFORM_SEARCH_PARAM = "tn_native_platform";
 /* The transparent WebView covers the full screen, so the wallet page cannot
-   derive the home-indicator inset itself (env(safe-area-inset-*) is 0 without
-   viewport-fit=cover). Hand it over explicitly, as ThruWalletSheet does. */
+   derive the system insets itself (env(safe-area-inset-*) is 0 without
+   viewport-fit=cover). Hand them over explicitly. */
 const NATIVE_BOTTOM_INSET_SEARCH_PARAM = "tn_native_bottom_inset";
+const NATIVE_TOP_INSET_SEARCH_PARAM = "tn_native_top_inset";
 
 type WebViewLoadEndEvent = Parameters<
   NonNullable<ComponentProps<typeof WebView>["onLoadEnd"]>
@@ -156,6 +157,10 @@ export function ThruTransparentWalletBridge({
       NATIVE_BOTTOM_INSET_SEARCH_PARAM,
       String(Math.max(0, Math.ceil(safeAreaInsets.bottom))),
     );
+    walletFrameUrl.searchParams.set(
+      NATIVE_TOP_INSET_SEARCH_PARAM,
+      String(Math.max(0, Math.ceil(safeAreaInsets.top))),
+    );
     const walletFrameSrc = walletFrameUrl.toString();
     if (Platform.OS === "ios" && wallet.getIosWebViewMode() === "direct") {
       return { uri: walletFrameSrc };
@@ -167,7 +172,7 @@ export function ThruTransparentWalletBridge({
       }),
       baseUrl: wallet.getWalletOrigin(),
     };
-  }, [safeAreaInsets.bottom, wallet]);
+  }, [safeAreaInsets.bottom, safeAreaInsets.top, wallet]);
 
   const isDirectWalletSource = Boolean(
     wallet && Platform.OS === "ios" && wallet.getIosWebViewMode() === "direct",
