@@ -11,6 +11,12 @@ const TEST_SHELL_OPTIONS = {
 };
 
 describe('native shell HTML', () => {
+  it('does not delegate payment permission to the wallet iframe', () => {
+    const html = getShellHtml(TEST_SHELL_OPTIONS);
+
+    expect(html).not.toContain('payment *');
+  });
+
   it('forwards WKWebView iframe messages when event.source is unavailable', () => {
     const html = getShellHtml(TEST_SHELL_OPTIONS);
 

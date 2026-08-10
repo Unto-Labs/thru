@@ -1,10 +1,8 @@
-libprotoc 33.4
-web/package.json YKdJjHZ0vbw+5pIBbhWwKV8O7kE9UiuEgY5nVT5ndKo=
-web/pnpm-lock.yaml NPFNXT6LNnoCgZYHpEdsBw9ShtzaTB894FhUZDzigmA=
-web/packages/sdk/package.json HaD0u8tqreXRIAPZILm9iiPwhYacmGu0+XeMGyhRlhc=
+libprotoc 3.21.12
+web/packages/proto-toolchain/package.json YzDLTH4AVsA+JhVcxDSHyK1euWy6ZEVNRu2yywY1P2Q=
 web/packages/sdk/buf.yaml SNRjMoMqNnzqEDMgSvyHDHxiAmkhAqb1hs2HzSbDNs8=
 web/packages/sdk/buf.gen.yaml PTN1wmrbpm9sJLB5JKB0tgryonAhTrgnKAp3SIa64SE=
-web/packages/sdk/buf.lock f9wohyxBxN3G611uIgIM81HU2tq08GqWwX5380RMg2Y=
-scripts/gen-web-proto.sh 938YzF2NIA4rUoFKQKZ7J/IRYQkbWv5YcNSYzOKRE5E=
-scripts/gen-pbdeps.py I34fWaeZ7cWGFQP9QDDMj4m5laQ/IVl6nk5DU1G/3mM=
+web/packages/sdk/buf.lock TECtzQqbl8d7xq04z5zhEa4fappBQHsl9rwk9uKw/B0=
+scripts/gen-web-proto.sh uStLeLdYCslwPOW3vCqGB6XfOtCe50Pee0TxCORtzNg=
+scripts/gen-pbdeps.py OE53a33Lyt5hZwdrIC7GWux9KPEwvZJVWcO5MQPQjoc=
 web/packages/sdk/src/proto/gen/google/api/launch_stage_pb.ts arkpWF/bK/lMIEkKXxjhwL8tSqplljPf9TCRcYvrfqE=

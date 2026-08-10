@@ -32,6 +32,18 @@ describe("runAccountStreamProcessor", () => {
     checkpointMocks.updateCheckpoint.mockResolvedValue(undefined);
   });
 
+  function sqlText(node: unknown): string {
+    if (node === null || node === undefined) return "";
+    if (typeof node === "string") return node;
+    if (typeof node === "bigint" || typeof node === "number") return node.toString();
+    if (Array.isArray(node)) return node.map(sqlText).join("");
+    const record = node as { queryChunks?: unknown[]; value?: unknown[]; name?: string };
+    if (record.queryChunks) return record.queryChunks.map(sqlText).join("");
+    if (record.value) return record.value.join("");
+    if (record.name) return record.name;
+    return "";
+  }
+
   function createStream(overrides: Record<string, unknown> = {}) {
     return {
       name: "test-accounts",
@@ -79,6 +91,37 @@ describe("runAccountStreamProcessor", () => {
     );
   });
 
+  it("delegates idle recovery to one replay instance", async () => {
+    let resumeReplay!: () => void;
+    const replayResumed = new Promise<void>((resolve) => {
+      resumeReplay = resolve;
+    });
+    replayMocks.createAccountsByOwnerReplay.mockImplementation(() => ({
+      [Symbol.asyncIterator]: async function* () {
+        await replayResumed;
+        yield { type: "blockFinished", block: { slot: 10n } };
+      },
+    }));
+
+    const processing = runAccountStreamProcessor(
+      createStream(),
+      {
+        clientFactory: vi.fn(),
+        db: {} as any,
+        logLevel: "error",
+      }
+    );
+
+    await vi.waitFor(() => {
+      expect(replayMocks.createAccountsByOwnerReplay).toHaveBeenCalledTimes(1);
+    });
+    resumeReplay();
+    await processing;
+
+    expect(replayMocks.createAccountsByOwnerReplay).toHaveBeenCalledTimes(1);
+    expect(checkpointMocks.updateCheckpoint).not.toHaveBeenCalled();
+  });
+
   it("does not log that a checkpoint was saved when no accounts were handled", async () => {
     replayMocks.events = [{ type: "blockFinished", block: { slot: 10n } }];
     const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
@@ -99,7 +142,92 @@ describe("runAccountStreamProcessor", () => {
     logSpy.mockRestore();
   });
 
-  it("persists the last handled account slot at block boundaries, not the block slot", async () => {
+  it("persists the last upserted account slot at block boundaries, not the block slot", async () => {
+    replayMocks.events = [
+      {
+        type: "account",
+        account: {
+          address: new Uint8Array([1]),
+          addressHex: "01",
+          data: new Uint8Array([1]),
+          isDelete: false,
+          slot: 5n,
+        },
+      },
+      { type: "blockFinished", block: { slot: 10n } },
+    ];
+    const returning = vi.fn(async () => [{ address: "account-1" }]);
+    const onConflictDoUpdate = vi.fn(() => ({ returning }));
+    const values = vi.fn(() => ({ onConflictDoUpdate }));
+    const insert = vi.fn(() => ({ values }));
+
+    await runAccountStreamProcessor(
+      createStream({
+        table: { address: { name: "address" }, slot: { name: "slot" } },
+        api: { idField: "address" },
+        parse: vi.fn(() => ({ address: "account-1", slot: 5n })),
+      }),
+      {
+        clientFactory: vi.fn(),
+        db: { insert } as any,
+        logLevel: "error",
+      }
+    );
+
+    expect(checkpointMocks.updateCheckpoint).toHaveBeenCalledWith(
+      expect.anything(),
+      "account:test-accounts",
+      5n,
+      null
+    );
+    expect(checkpointMocks.updateCheckpoint).not.toHaveBeenCalledWith(
+      expect.anything(),
+      "account:test-accounts",
+      10n,
+      expect.anything()
+    );
+  });
+
+  it("orders same-slot upserts by sequence", async () => {
+    replayMocks.events = [{
+      type: "account",
+      account: {
+        address: new Uint8Array([1]),
+        addressHex: "01",
+        data: new Uint8Array([1]),
+        isDelete: false,
+        slot: 5n,
+        seq: 2n,
+      },
+    }];
+    const returning = vi.fn(async () => [{ address: "account-1" }]);
+    const onConflictDoUpdate = vi.fn(() => ({ returning }));
+    const values = vi.fn(() => ({ onConflictDoUpdate }));
+    const insert = vi.fn(() => ({ values }));
+
+    await runAccountStreamProcessor(
+      createStream({
+        table: {
+          address: { name: "address" },
+          slot: { name: "slot" },
+          seq: { name: "seq" },
+        },
+        api: { idField: "address" },
+        parse: vi.fn(() => ({ address: "account-1", slot: 5n, seq: 2n })),
+      }),
+      {
+        clientFactory: vi.fn(),
+        db: { insert } as any,
+        logLevel: "error",
+      }
+    );
+
+    const conflict = (onConflictDoUpdate.mock.calls as unknown[][])[0]?.[0] as { where: unknown };
+    expect(sqlText(conflict.where)).toContain("slot");
+    expect(sqlText(conflict.where)).toContain("seq");
+  });
+
+  it("does not advance the checkpoint for parser-null accounts", async () => {
     replayMocks.events = [
       {
         type: "account",
@@ -123,18 +251,7 @@ describe("runAccountStreamProcessor", () => {
       }
     );
 
-    expect(checkpointMocks.updateCheckpoint).toHaveBeenCalledWith(
-      expect.anything(),
-      "account:test-accounts",
-      5n,
-      null
-    );
-    expect(checkpointMocks.updateCheckpoint).not.toHaveBeenCalledWith(
-      expect.anything(),
-      "account:test-accounts",
-      10n,
-      expect.anything()
-    );
+    expect(checkpointMocks.updateCheckpoint).not.toHaveBeenCalled();
   });
 
   it("does not advance the checkpoint when a slot-guarded upsert affects no rows", async () => {

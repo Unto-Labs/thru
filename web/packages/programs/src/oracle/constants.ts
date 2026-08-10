@@ -1,0 +1,7 @@
+export const ORACLE_FEED_TYPE_PRICE = 1;
+export const ORACLE_FEED_TYPE_BOOLEAN = 2;
+
+export const ORACLE_EVENT_TYPE_PRICE_UPDATE = 1;
+export const ORACLE_EVENT_TYPE_BOOLEAN_UPDATE = 2;
+
+export const ORACLE_FEED_SEED_LENGTH = 32;

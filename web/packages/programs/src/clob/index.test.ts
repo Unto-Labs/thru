@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { encodeAddress } from '@thru/sdk/helpers';
 import {
+  CLOB_INSTRUCTION_MARKET_RECORD,
+  CLOB_NULL_INDEX,
   CLOB_INSTRUCTION_CREATE_ORDER_ENTRY,
   CLOB_INSTRUCTION_CREATE_SEATLESS_ORDER_ENTRY,
   CLOB_CBOOK_MAX_PRICE_IN_TICKS,
@@ -18,6 +20,7 @@ import {
   OrderFilledEventBuilder,
   SeatEntryBuilder,
   buildOrderBookSnapshot,
+  createMarketRecordInstruction,
   createOrderEntryInstruction,
   createSeatlessOrderEntryInstruction,
   encodeOrderFlags,
@@ -44,6 +47,35 @@ function context(indexes: Record<string, number>) {
 }
 
 describe('clob helpers', () => {
+  it('validates market-record seat indices before ABI serialization', async () => {
+    const accounts = Array.from({ length: 7 }, (_, index) => key(index + 1));
+    const args = {
+      marketRecordIndex: 1,
+      seatArenaAccountBytes: accounts[0],
+      orderArenaAccountBytes: accounts[1],
+      bidsCbookAccountBytes: accounts[2],
+      asksCbookAccountBytes: accounts[3],
+      tokenProgramAccountBytes: accounts[4],
+      baseVaultAccountBytes: accounts[5],
+      quoteVaultAccountBytes: accounts[6],
+    };
+    const lookup = context(Object.fromEntries(
+      accounts.map((account, index) => [bytesToHex(account), index + 2])
+    ));
+
+    const anonymous = await createMarketRecordInstruction(args)(lookup);
+    const active = await createMarketRecordInstruction({ ...args, seatIndex: 2 })(lookup);
+    expect(anonymous[0]).toBe(CLOB_INSTRUCTION_MARKET_RECORD);
+    expect(new DataView(anonymous.buffer).getUint32(12, true)).toBe(CLOB_NULL_INDEX);
+    expect(new DataView(active.buffer).getUint32(12, true)).toBe(2);
+
+    for (const seatIndex of [0, 1, 1.5, CLOB_NULL_INDEX, 0x1_0000_0002]) {
+      expect(() => createMarketRecordInstruction({ ...args, seatIndex })).toThrowError(
+        /seatIndex must be an integer/
+      );
+    }
+  });
+
   it('encodes order flags with C program bit semantics', () => {
     expect(encodeOrderFlags({ side: 'buy', orderType: 'gtc' })).toBe(
       CLOB_ORDER_FLAG_BUY | (CLOB_ORDER_TYPE_GTC << 1)

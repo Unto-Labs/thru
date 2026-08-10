@@ -2839,7 +2839,11 @@ fn emit_dynamic_struct_builder(resolved_type: &ResolvedType, type_ir: &TypeIr) -
         .collect();
     if !builder_enum_infos.is_empty() {
         if builder_enum_infos.len() == 1 {
-            return emit_enum_builder(resolved_type, type_ir, builder_enum_infos[0].clone());
+            let info = builder_enum_infos[0].clone();
+            if !info.is_tail {
+                return String::new();
+            }
+            return emit_enum_builder(resolved_type, type_ir, info);
         }
         let physical_infos: Vec<_> = builder_enum_infos
             .iter()

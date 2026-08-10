@@ -40,3 +40,8 @@ export {
   formatDepositAmount,
 } from './deposit';
 export type { SigningSessionStorage } from './signing-sessions';
+export {
+  TRANSACTION_SIGNING_SCHEME_SEARCH_PARAM,
+  TransactionSigningScheme,
+  withTransactionSigningScheme,
+} from './transaction-signing-scheme';

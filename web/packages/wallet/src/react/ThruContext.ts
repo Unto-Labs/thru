@@ -77,6 +77,7 @@ const defaultContextValue: ThruContextValue = {
             throw new Error("BrowserSDK not initialized");
         },
         open: async () => ({ status: "cancelled" }),
+        getProviders: async () => [],
         getAccountState: async () => {
             throw new Error("BrowserSDK not initialized");
         },

@@ -5,6 +5,9 @@ tmpfs_size="${MEDIUM_TMPFS_SIZE:-20G}"
 tmpfs_key="${MEDIUM_TMPFS_KEY:-default}"
 tmpfs_workspace="${MEDIUM_TMPFS_WORKSPACE:-0}"
 tmpfs_home_cache="${MEDIUM_TMPFS_HOME_CACHE:-0}"
+tmpfs_docker="${MEDIUM_TMPFS_DOCKER:-1}"
+docker_tmpfs_mounted=0
+docker_restart_on_error=0
 tmpfs_key="$(printf '%s' "${tmpfs_key}" | tr -c 'A-Za-z0-9_.-' '-')"
 tmpfs_root="/dev/shm/thru-medium-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB_JOB}-${tmpfs_key}"
 
@@ -101,7 +104,9 @@ rollback_docker_tmpfs_offload() {
 
   stop_docker_for_remount
   unmount_if_mounted /var/lib/docker
+  docker_tmpfs_mounted=0
   start_docker_after_remount
+  docker_restart_on_error=0
 
   echo "MEDIUM_TMPFS_DOCKER=0" >> "${GITHUB_ENV}"
   echo "Docker tmpfs offload disabled for this job; continuing with original /var/lib/docker" >&2
@@ -126,15 +131,17 @@ cleanup_partial_offload() {
   set +e
   echo "Medium tmpfs offload failed; cleaning partial mounts" >&2
   cd /
-  if mountpoint -q /var/lib/docker; then
+  if [ "${docker_tmpfs_mounted}" != "0" ] && mountpoint -q /var/lib/docker; then
     stop_docker_for_remount || true
+    unmount_if_mounted /var/lib/docker
   fi
   unmount_if_mounted "${GITHUB_WORKSPACE}" -l
-  unmount_if_mounted /var/lib/docker
   unmount_if_mounted /var/cache/sccache
   unmount_if_mounted /home/runner/.cache
   sudo rm -rf "${tmpfs_root}"
-  start_docker_after_remount >/dev/null 2>&1
+  if [ "${docker_tmpfs_mounted}" != "0" ] || [ "${docker_restart_on_error}" != "0" ]; then
+    start_docker_after_remount >/dev/null 2>&1
+  fi
   exit "${status}"
 }
 
@@ -150,12 +157,20 @@ else
   echo "Skipping workspace bind mount for this job"
 fi
 
-stop_docker_for_remount
-bind_dir "${tmpfs_root}/docker" /var/lib/docker
-if start_docker_after_remount; then
-  echo "MEDIUM_TMPFS_DOCKER=1" >> "${GITHUB_ENV}"
+if [ "${tmpfs_docker}" != "0" ]; then
+  stop_docker_for_remount
+  docker_restart_on_error=1
+  bind_dir "${tmpfs_root}/docker" /var/lib/docker
+  docker_tmpfs_mounted=1
+  if start_docker_after_remount; then
+    docker_restart_on_error=0
+    echo "MEDIUM_TMPFS_DOCKER=1" >> "${GITHUB_ENV}"
+  else
+    rollback_docker_tmpfs_offload
+  fi
 else
-  rollback_docker_tmpfs_offload
+  echo "Skipping Docker tmpfs offload for this job"
+  echo "MEDIUM_TMPFS_DOCKER=0" >> "${GITHUB_ENV}"
 fi
 
 bind_dir "${tmpfs_root}/sccache" /var/cache/sccache

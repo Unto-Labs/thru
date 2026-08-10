@@ -49,7 +49,7 @@
     "create-account": "tsx --tsconfig tsconfig.json thru-ts-client-sdk/test-scripts/create-account.ts",
     "smoketest": "tsx --tsconfig tsconfig.json thru-ts-client-sdk/test-scripts/smoketest.ts",
     "test-token-events": "tsx --tsconfig tsconfig.json thru-ts-client-sdk/test-scripts/test-token-events.ts",
-    "generate": "buf dep update && buf generate --include-imports",
+    "generate": "../../../scripts/gen-web-proto.sh --update-deps",
     "protobufs:generate": "pnpm run generate",
     "prebuild": "node ./scripts/proto/prebuild.mjs",
     "build:wasm": "node ./scripts/abi/build-wasm.mjs",
@@ -75,8 +75,6 @@
     "yaml": "^2.9.0"
   },
   "devDependencies": {
-    "@bufbuild/buf": "latest",
-    "@bufbuild/protoc-gen-es": "^2.12.0",
     "@types/node": "^25.9.1",
     "@vitest/coverage-v8": "^4.1.7",
     "jsdom": "^29.1.1",

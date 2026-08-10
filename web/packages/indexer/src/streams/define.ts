@@ -79,11 +79,13 @@ export function defineEventStream<TSchema extends SchemaDefinition>(
     throw new Error(`Stream "${definition.name}" must provide either filter or filterFactory`);
   }
 
-  // Build table name (e.g., "transfers" -> "transfer_events")
-  const tableName = `${definition.name.replace(/s$/, "")}_events`;
+  // Build table name (e.g., "transfers" -> "transfer_events"), unless the
+  // caller needs to preserve an irregular plural such as "status".
+  const tableName =
+    definition.tableName ?? `${definition.name.replace(/s$/, "")}_events`;
 
   // Build Drizzle table from schema
-  const table = buildDrizzleTable(tableName, definition.schema);
+  const table = buildDrizzleTable(tableName, definition.schema, definition.indexes);
 
   // Lazy filter resolution (cached after first call)
   let cachedFilter: Filter | null = definition.filter ?? null;

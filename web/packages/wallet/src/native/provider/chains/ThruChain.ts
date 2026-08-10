@@ -105,12 +105,16 @@ export class NativeThruChain implements IThruChain {
       throw new Error("Wallet not connected");
     }
 
-    const session = signingSessionId
-      ? await this.requireSigningSession(signingSessionId)
-      : null;
-    const shouldShowWallet = !signingSessionId;
+    const session =
+      signingSessionId && this.signingSessions
+        ? await this.signingSessions.get(signingSessionId)
+        : null;
+    // A missing local descriptor can mean the session expired or was revoked
+    // after the caller retained its session object. Let the wallet make the
+    // authoritative decision and expose its passkey fallback UI.
+    const shouldShowWallet = !signingSessionId || !session;
     if (shouldShowWallet) {
-      await this.provider.requestShow();
+      await this.provider.requestShow("sign-transaction-open");
     }
     try {
       const response = await this.bridge.sendMessage({
@@ -130,7 +134,7 @@ export class NativeThruChain implements IThruChain {
       return response.result.signedTransaction;
     } finally {
       if (shouldShowWallet) {
-        this.provider.requestHide();
+        this.provider.requestHide("sign-transaction-settled");
       }
     }
   }
@@ -141,7 +145,7 @@ export class NativeThruChain implements IThruChain {
     if (!this.provider.isConnected() && !this.provider.isTransparent()) {
       throw new Error("Wallet not connected");
     }
-    await this.provider.requestShow();
+    await this.provider.requestShow("sign-passkey-challenge-open");
     try {
       const response = await this.bridge.sendMessage({
         id: createRequestId(),
@@ -154,14 +158,14 @@ export class NativeThruChain implements IThruChain {
       });
       return response.result;
     } finally {
-      this.provider.requestHide();
+      this.provider.requestHide("sign-passkey-challenge-settled");
     }
   }
 
   async createSigningSession(
     options: ThruSigningSessionCreateOptions,
   ): Promise<ThruSigningSession> {
-    if (!this.provider.isConnected()) {
+    if (!this.provider.isConnected() && !this.provider.isTransparent()) {
       throw new Error("Wallet not connected");
     }
     if (!this.signingSessions) {
@@ -169,7 +173,7 @@ export class NativeThruChain implements IThruChain {
     }
 
     const expiresAt = resolveSessionExpirySeconds(options);
-    await this.provider.requestShow();
+    await this.provider.requestShow("create-signing-session-open");
     try {
       const response = await this.bridge.sendMessage({
         id: createRequestId(),
@@ -185,16 +189,16 @@ export class NativeThruChain implements IThruChain {
       await this.signingSessions.saveReplacingWalletSessions(descriptor);
       return this.toSigningSession(descriptor);
     } finally {
-      this.provider.requestHide();
+      this.provider.requestHide("create-signing-session-settled");
     }
   }
 
   async createSigningSessionInstruction(
     options: ThruSigningSessionInstructionCreateOptions,
   ): Promise<ThruSigningSessionInstruction> {
-    if (!this.provider.isConnected()) {
-      throw new Error("Wallet not connected");
-    }
+    // Refresh preparation is non-interactive and must keep working after the
+    // wallet auto-locks. The existing session still authorizes the resulting
+    // add-authority transaction before this candidate session is confirmed.
     if (!this.signingSessions) {
       throw new Error("NativeSDKStorage is required for signing sessions");
     }
@@ -220,9 +224,8 @@ export class NativeThruChain implements IThruChain {
   }
 
   async confirmSigningSession(id: string): Promise<ThruSigningSession> {
-    if (!this.provider.isConnected()) {
-      throw new Error("Wallet not connected");
-    }
+    // Confirmation only persists a session whose add-authority transaction has
+    // already succeeded, so it does not require an active wallet connection.
     if (!this.signingSessions) {
       throw new Error("NativeSDKStorage is required for signing sessions");
     }
@@ -262,19 +265,6 @@ export class NativeThruChain implements IThruChain {
     } finally {
       await this.signingSessions?.remove(id);
     }
-  }
-
-  private async requireSigningSession(
-    id: string,
-  ): Promise<ThruSigningSessionDescriptor> {
-    if (!this.signingSessions) {
-      throw new Error("NativeSDKStorage is required for signing sessions");
-    }
-    const session = await this.signingSessions.get(id);
-    if (!session) {
-      throw new Error("Signing session is not known to this app");
-    }
-    return session;
   }
 
   private toSigningSession(

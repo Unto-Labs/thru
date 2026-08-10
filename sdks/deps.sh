@@ -91,7 +91,10 @@ set_riscv_submodule_urls () {
   git submodule set-url binutils https://gnu.googlesource.com/binutils-gdb.git
   git submodule set-url gdb https://gnu.googlesource.com/binutils-gdb.git
   git submodule set-url gcc https://github.com/gcc-mirror/gcc.git
-  git submodule set-url newlib https://cygwin.com/git/newlib-cygwin.git
+  # cygwin.com intermittently returns HTTP 429 during parallel runner-image
+  # bakes.  This mirror carries the pinned commit and is verified by Git's
+  # submodule SHA check before it is used.
+  git submodule set-url newlib https://github.com/RTEMS/sourceware-mirror-newlib-cygwin.git
 }
 
 riscv_submodules_ready () {
@@ -102,7 +105,20 @@ riscv_submodules_ready () {
   done
 }
 
+reset_riscv_submodules () {
+  local module
+  for module in "${RISCV_GNU_TOOLCHAIN_SUBMODULES[@]}"; do
+    git submodule deinit -f -- "$module" >/dev/null 2>&1 || true
+    rm -rf "$module" ".git/modules/$module"
+  done
+}
+
 prepare_riscv_source () {
+  local max_attempts="${TN_SDK_SUBMODULE_FETCH_ATTEMPTS:-8}"
+  local delay_secs="${TN_SDK_SUBMODULE_FETCH_RETRY_DELAY_SECS:-5}"
+  local max_delay_secs="${TN_SDK_SUBMODULE_FETCH_MAX_RETRY_DELAY_SECS:-60}"
+  local attempt rc
+
   echo "[+] Preparing riscv-gnu-toolchain submodules"
   set_riscv_submodule_urls
 
@@ -111,12 +127,28 @@ prepare_riscv_source () {
     return
   fi
 
-  if git submodule update --depth 1 --init --recursive "${RISCV_GNU_TOOLCHAIN_SUBMODULES[@]}"; then
-    return
-  fi
+  for (( attempt=1; attempt<=max_attempts; attempt++ )); do
+    if git submodule sync -- "${RISCV_GNU_TOOLCHAIN_SUBMODULES[@]}" &&
+       git submodule update --depth 1 --init --recursive "${RISCV_GNU_TOOLCHAIN_SUBMODULES[@]}"; then
+      return
+    else
+      rc=$?
+    fi
 
-  sdk_warning "Failed to fetch riscv-gnu-toolchain submodules from upstream"
-  exit 1
+    if (( attempt < max_attempts )); then
+      sdk_warning "Failed to fetch riscv-gnu-toolchain submodules from upstream (attempt $attempt/$max_attempts); retrying in ${delay_secs}s"
+      reset_riscv_submodules
+      sleep "$delay_secs"
+      delay_secs=$(( delay_secs * 2 ))
+      if (( delay_secs > max_delay_secs )); then
+        delay_secs=$max_delay_secs
+      fi
+      continue
+    fi
+
+    sdk_warning "Failed to fetch riscv-gnu-toolchain submodules from upstream after $max_attempts attempts"
+    exit "$rc"
+  done
 }
 
 default_binary_cache_dir () {

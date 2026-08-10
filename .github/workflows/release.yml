@@ -53,7 +53,17 @@ jobs:
         cd ..
         mv sdk-artifact/thru-program-sdk-${{ matrix.sdk }}-${TAG_NAME}.zip .
 
-    - name: Upload SDK artifacts
+    - name: Upload SDK artifacts to release
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh release upload "${TAG_NAME}" \
+          thru-program-sdk-${{ matrix.sdk }}-${TAG_NAME}.tar.gz \
+          thru-program-sdk-${{ matrix.sdk }}-${TAG_NAME}.zip \
+          --repo "${GITHUB_REPOSITORY}" \
+          --clobber
+
+    - name: Upload SDK artifacts to workflow
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
       with:
         name: sdk-${{ matrix.sdk }}
@@ -65,7 +75,7 @@ jobs:
   # Build toolchain for Linux and macOS
   build-toolchain:
     permissions:
-      contents: read
+      contents: write
       actions: read
     runs-on: ${{ matrix.os }}
     timeout-minutes: 120
@@ -78,9 +88,9 @@ jobs:
         os: [ubuntu-large, macos-latest-xlarge]
         include:
           - os: ubuntu-large
-            arch: x86_64
+            asset_platform: Linux-x86_64
           - os: macos-latest-xlarge
-            arch: arm64
+            asset_platform: Darwin-arm64
 
     steps:
     - name: Checkout code
@@ -122,7 +132,17 @@ jobs:
       run: |
         if [[ ! -x "${GITHUB_WORKSPACE}/.thru/sdk/toolchain/bin/riscv64-unknown-elf-gcc" ]] ||
            [[ ! -x "${GITHUB_WORKSPACE}/.thru/sdk/toolchain/bin/riscv64-unknown-elf-g++" ]]; then
-          TN_AUTO_INSTALL_PACKAGES=1 ./sdks/deps.sh --thru-dir "${GITHUB_WORKSPACE}" fetch check install-c
+          for attempt in 1 2 3; do
+            if TN_AUTO_INSTALL_PACKAGES=1 ./sdks/deps.sh --thru-dir "${GITHUB_WORKSPACE}" fetch check install-c; then
+              break
+            fi
+            if [[ "${attempt}" == 3 ]]; then
+              echo "Failed to install toolchain dependencies after ${attempt} attempts" >&2
+              exit 1
+            fi
+            echo "Toolchain dependency install attempt ${attempt} failed; retrying in 10 seconds" >&2
+            sleep 10
+          done
         fi
         rm -rf "${GITHUB_WORKSPACE}/.thru/sdk/toolchain/git"
 
@@ -139,18 +159,14 @@ jobs:
       run: |
         cd ${GITHUB_WORKSPACE}/.thru/sdk/
 
-        # Detect OS and architecture
-        OS_NAME=$(uname -s)
-        ARCH_NAME=$(uname -m)
-
         # Create a minimal toolchain directory with the final archive name
-        mkdir -p thru-toolchain-${OS_NAME}-${ARCH_NAME}-${TAG_NAME}
+        mkdir -p thru-toolchain-${{ matrix.asset_platform }}-${TAG_NAME}
 
         # Copy only the essential directories
         for dir in bin include lib libexec picolibc riscv64-unknown-elf share; do
           if [ -d "toolchain/$dir" ]; then
             echo "Copying toolchain/$dir..."
-            cp -r "toolchain/$dir" thru-toolchain-${OS_NAME}-${ARCH_NAME}-${TAG_NAME}/
+            cp -r "toolchain/$dir" thru-toolchain-${{ matrix.asset_platform }}-${TAG_NAME}/
           else
             echo "Warning: toolchain/$dir not found, skipping"
           fi
@@ -158,121 +174,64 @@ jobs:
 
         # Display what we're packaging
         echo "Toolchain package contents:"
-        ls -la thru-toolchain-${OS_NAME}-${ARCH_NAME}-${TAG_NAME}/
+        ls -la thru-toolchain-${{ matrix.asset_platform }}-${TAG_NAME}/
         echo "Total size:"
-        du -sh thru-toolchain-${OS_NAME}-${ARCH_NAME}-${TAG_NAME}/
+        du -sh thru-toolchain-${{ matrix.asset_platform }}-${TAG_NAME}/
 
     - name: Package toolchain as tar.gz
       run: |
         cd ${GITHUB_WORKSPACE}/.thru/sdk/
-        OS_NAME=$(uname -s)
-        ARCH_NAME=$(uname -m)
-        tar -czf thru-toolchain-${OS_NAME}-${ARCH_NAME}-${TAG_NAME}.tar.gz thru-toolchain-${OS_NAME}-${ARCH_NAME}-${TAG_NAME}/
-        ls -la thru-toolchain-${OS_NAME}-${ARCH_NAME}-${TAG_NAME}.tar.gz
+        tar -czf thru-toolchain-${{ matrix.asset_platform }}-${TAG_NAME}.tar.gz thru-toolchain-${{ matrix.asset_platform }}-${TAG_NAME}/
+        ls -la thru-toolchain-${{ matrix.asset_platform }}-${TAG_NAME}.tar.gz
 
-    - name: Package toolchain as zip
+    - name: Upload toolchain artifact to release
+      env:
+        GH_TOKEN: ${{ github.token }}
       run: |
-        cd ${GITHUB_WORKSPACE}/.thru/sdk/
-        OS_NAME=$(uname -s)
-        ARCH_NAME=$(uname -m)
-        zip -r thru-toolchain-${OS_NAME}-${ARCH_NAME}-${TAG_NAME}.zip thru-toolchain-${OS_NAME}-${ARCH_NAME}-${TAG_NAME}/
-        ls -la thru-toolchain-${OS_NAME}-${ARCH_NAME}-${TAG_NAME}.zip
+        gh release upload "${TAG_NAME}" \
+          ".thru/sdk/thru-toolchain-${{ matrix.asset_platform }}-${TAG_NAME}.tar.gz" \
+          --repo "${GITHUB_REPOSITORY}" \
+          --clobber
 
-    - name: Upload toolchain artifacts
-      run: |
-        OS_NAME=$(uname -s)
-        ARCH_NAME=$(uname -m)
-        echo "os_name=${OS_NAME}" >> $GITHUB_OUTPUT
-        echo "arch_name=${ARCH_NAME}" >> $GITHUB_OUTPUT
-      id: detect-platform
-
-    - name: Upload toolchain artifacts to workflow
+    - name: Upload toolchain artifact to workflow
       uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
       with:
-        name: toolchain-${{ steps.detect-platform.outputs.os_name }}-${{ steps.detect-platform.outputs.arch_name }}
-        path: |
-          .thru/sdk/thru-toolchain-${{ steps.detect-platform.outputs.os_name }}-${{ steps.detect-platform.outputs.arch_name }}-${{ github.event.release.tag_name }}.tar.gz
-          .thru/sdk/thru-toolchain-${{ steps.detect-platform.outputs.os_name }}-${{ steps.detect-platform.outputs.arch_name }}-${{ github.event.release.tag_name }}.zip
+        name: toolchain-${{ matrix.asset_platform }}
+        path: .thru/sdk/thru-toolchain-${{ matrix.asset_platform }}-${{ github.event.release.tag_name }}.tar.gz
         retention-days: 90
 
-  # Upload all artifacts to existing release
-  upload-release-artifacts:
+  # Verify the release after every build has reached a terminal state. Each
+  # successful matrix leg uploads independently, so one platform failure does
+  # not suppress artifacts built by the others.
+  verify-release-artifacts:
     needs: [build-sdk-artifacts, build-toolchain]
+    if: ${{ always() && !cancelled() }}
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 10
     env:
       TAG_NAME: ${{ github.event.release.tag_name }}
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
-
-    - name: Download all artifacts
-      uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
-      with:
-        path: release-artifacts
-
-    - name: Display downloaded artifacts
+    - name: Verify expected release artifacts
+      env:
+        GH_TOKEN: ${{ github.token }}
       run: |
-        echo "Downloaded artifacts:"
-        find release-artifacts -type f
+        assets=$(gh release view "${TAG_NAME}" \
+          --repo "${GITHUB_REPOSITORY}" \
+          --json assets \
+          --jq '.assets[].name')
 
-    - name: Upload C SDK tar.gz
-      uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5 # v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ./release-artifacts/sdk-c/thru-program-sdk-c-${{ github.event.release.tag_name }}.tar.gz
-        asset_name: thru-program-sdk-c-${{ github.event.release.tag_name }}.tar.gz
-        asset_content_type: application/gzip
-
-    - name: Upload C SDK zip
-      uses: actions/upload-release-asset@e8f9f06c4b078e705bd2ea027f0926603fc9b4d5 # v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ github.event.release.upload_url }}
-        asset_path: ./release-artifacts/sdk-c/thru-program-sdk-c-${{ github.event.release.tag_name }}.zip
-        asset_name: thru-program-sdk-c-${{ github.event.release.tag_name }}.zip
-        asset_content_type: application/zip
-
-    - name: Upload Toolchain artifacts
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      run: |
-        # Find all toolchain artifacts and upload them
-        for artifact_dir in release-artifacts/toolchain-*; do
-          if [ -d "$artifact_dir" ]; then
-            echo "Processing $artifact_dir"
-            for file in "$artifact_dir"/*; do
-              if [ -f "$file" ]; then
-                filename=$(basename "$file")
-                echo "Uploading $filename"
-
-                # Determine content type
-                if [[ "$filename" == *.tar.gz ]]; then
-                  content_type="application/gzip"
-                elif [[ "$filename" == *.zip ]]; then
-                  content_type="application/zip"
-                else
-                  content_type="application/octet-stream"
-                fi
-
-                # Upload using GitHub CLI
-                gh release upload "${TAG_NAME}" "$file" --repo "${{ github.repository }}" --clobber
-              fi
-            done
+        missing=0
+        for expected in \
+          "thru-program-sdk-c-${TAG_NAME}.tar.gz" \
+          "thru-program-sdk-c-${TAG_NAME}.zip" \
+          "thru-toolchain-Linux-x86_64-${TAG_NAME}.tar.gz" \
+          "thru-toolchain-Darwin-arm64-${TAG_NAME}.tar.gz"; do
+          if grep -Fxq "${expected}" <<<"${assets}"; then
+            echo "Found ${expected}"
+          else
+            echo "Missing required release artifact: ${expected}" >&2
+            missing=1
           fi
         done
-
-    - name: Release Summary
-      run: |
-        echo "✅ Successfully uploaded artifacts to release ${TAG_NAME}!"
-        echo ""
-        echo "Uploaded artifacts:"
-        echo "- C SDK (tar.gz, zip)"
-        echo "- Toolchains for detected platforms (tar.gz, zip)"
-        echo ""
-        echo "Toolchain artifacts:"
-        find release-artifacts/toolchain-* -type f -exec basename {} \; 2>/dev/null | sort || echo "  No toolchain artifacts found"
+        exit "${missing}"

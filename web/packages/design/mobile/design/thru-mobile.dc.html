@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Thru Mobile — Design System</title>
+<style>
+@font-face{font-family:'Inter Tight';src:url('fonts/InterTight-VariableFont_wght.ttf') format('truetype-variations');font-weight:100 900;font-style:normal;font-display:swap;}
+@font-face{font-family:'Inter Tight';src:url('fonts/InterTight-Italic-VariableFont_wght.ttf') format('truetype-variations');font-weight:100 900;font-style:italic;font-display:swap;}
+@font-face{font-family:'JetBrains Mono';src:url('fonts/JetBrainsMono-VariableFont_wght.ttf') format('truetype-variations');font-weight:100 900;font-style:normal;font-display:swap;}
+@font-face{font-family:'JetBrains Mono';src:url('fonts/JetBrainsMono-Italic-VariableFont_wght.ttf') format('truetype-variations');font-weight:100 900;font-style:italic;font-display:swap;}
+html{-webkit-font-smoothing:antialiased;}
+body{margin:0;font-family:'Inter Tight',system-ui,sans-serif;color:#181B1B;background:#F9FBFB repeating-linear-gradient(0deg,transparent,transparent 31px,#EAF2F2 31px,#EAF2F2 32px) fixed;}
+a{color:#D33C43;text-decoration:none;}
+a:hover{text-decoration:underline;text-underline-offset:3px;}
+::selection{background:#D33C43;color:#F9FBFB;}
+input::placeholder{color:#81A7A7;}
+@keyframes tm-spin{to{transform:rotate(360deg);}}
+@keyframes tm-toastbar{from{transform:scaleX(1);}to{transform:scaleX(0);}}
+@keyframes tm-sheet-in{from{transform:translateY(100%);}to{transform:translateY(0);}}
+@keyframes tm-fade-in{from{opacity:0;}to{opacity:1;}}
+@keyframes tm-ptr{0%,12%{transform:translateY(0);}30%,62%{transform:translateY(72px);}80%,100%{transform:translateY(0);}}
+</style>
+</helmet>
+<div id="tm-root" style="min-height:100vh">
+<div style="max-width:1240px;margin:0 auto;background:#F9FBFB;border-left:1px solid #D1E1E1;border-right:1px solid #D1E1E1">
+
+<!-- ── Top bar ─────────────────────────────────────────── -->
+<header style="position:sticky;top:0;z-index:100;display:flex;align-items:center;gap:18px;padding:13px 24px;background:#181B1B;color:#F9FBFB;border-bottom:1px solid #334747;flex-wrap:wrap">
+  <div style="display:flex;align-items:center;gap:10px">
+    <div style="width:30px;height:30px;border-radius:50%;background:#D33C43;padding:6px;box-sizing:border-box;display:grid;place-items:center"><img src="assets/logomark-white.svg" alt="Thru" style="width:100%;height:100%;display:block"></div>
+    <div style="font-weight:700;letter-spacing:-0.4px;font-size:20px">thru<span style="color:#729D9D;font-weight:500;margin:0 8px">/</span><span style="color:#B6CECE;font-weight:500;font-size:15px">mobile</span></div>
+  </div>
+  <nav style="display:flex;align-items:center;gap:14px;margin-left:auto;flex-wrap:wrap">
+    <a href="#s1" style="color:#B6CECE;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase" style-hover="color:#F9FBFB">Foundations</a>
+    <a href="#s2" style="color:#B6CECE;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase" style-hover="color:#F9FBFB">Actions</a>
+    <a href="#s3" style="color:#B6CECE;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase" style-hover="color:#F9FBFB">Forms</a>
+    <a href="#s4" style="color:#B6CECE;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase" style-hover="color:#F9FBFB">Nav</a>
+    <a href="#s5" style="color:#B6CECE;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase" style-hover="color:#F9FBFB">Cells</a>
+    <a href="#s6" style="color:#B6CECE;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase" style-hover="color:#F9FBFB">Overlays</a>
+    <a href="#s7" style="color:#B6CECE;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase" style-hover="color:#F9FBFB">Screens</a>
+  </nav>
+  <a href="thru-mobile-tokens.css" style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#EAF2F2;background:#334747;padding:4px 9px;letter-spacing:0.02em" style-hover="background:#436465">tokens.css ↓</a>
+</header>
+
+<!-- ── Intro ───────────────────────────────────────────── -->
+<section style="padding:44px 40px 34px;border-bottom:1px solid #D1E1E1" data-screen-label="Intro">
+  <div style="font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;color:#436465;margin-bottom:16px">Thru design system · mobile kit v0.1</div>
+  <h1 style="margin:0 0 16px;font-size:46px;line-height:1;letter-spacing:-1px;font-weight:700">One system, <em style="color:#D33C43">thru</em> to mobile.</h1>
+  <p style="margin:0;font-size:16px;line-height:1.5;color:#436465;max-width:64ch">The web system's Stone neutrals, Brick punctuation, hairline rules and square corners — re-scaled for touch. Type tightens to an 11–44 ramp, controls grow to a 44px minimum hit target, and navigation moves to the thumb zone. Values below are exact and ready to port.</p>
+  <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:20px">
+    <span style="font-family:'JetBrains Mono',monospace;font-size:11px;background:#EAF2F2;padding:4px 8px;letter-spacing:0.02em">1PX = 1PT (IOS) = 1DP (ANDROID)</span>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:11px;background:#EAF2F2;padding:4px 8px;letter-spacing:0.02em">TYPE 11–44</span>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:11px;background:#EAF2F2;padding:4px 8px;letter-spacing:0.02em">4PX GRID</span>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:11px;background:#EAF2F2;padding:4px 8px;letter-spacing:0.02em">HIT ≥ 44</span>
+    <span style="font-family:'JetBrains Mono',monospace;font-size:11px;background:#EAF2F2;padding:4px 8px;letter-spacing:0.02em">RADIUS 0</span>
+  </div>
+</section>
+
+<!-- ── 01 Foundations ──────────────────────────────────── -->
+<section id="s1" data-screen-label="01 Foundations" style="border-bottom:1px solid #D1E1E1">
+  <div style="display:flex;align-items:baseline;gap:14px;padding:40px 40px 18px;flex-wrap:wrap">
+    <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#D33C43;letter-spacing:0.04em">01</span>
+    <h2 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.4px">Foundations</h2>
+    <p style="margin:0 0 0 auto;font-size:13px;color:#436465;max-width:42ch;text-align:right">Tokens as they ship. Tap any swatch to copy its hex.</p>
+  </div>
+  <div style="padding:8px 40px 40px;display:grid;grid-template-columns:1fr;gap:16px">
+
+    <figure style="margin:0;border:1px solid #D1E1E1;background:#F9FBFB;display:flex;flex-direction:column">
+      <div style="padding:22px;display:flex;flex-direction:column;gap:16px">
+        <div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#81A7A7;margin-bottom:6px">Stone — neutrals</div>
+          <div style="display:grid;grid-template-columns:repeat(9,1fr);border:1px solid #D1E1E1">
+            <button onClick="{{ copyHex }}" data-hex="#F9FBFB" data-name="stone-0" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;border-right:1px solid rgba(24,27,27,0.07);background:#F9FBFB;color:#181B1B"><span style="font-size:11px">0</span><span style="font-size:10px;opacity:0.72">F9FBFB</span></button>
+            <button onClick="{{ copyHex }}" data-hex="#EAF2F2" data-name="stone-100" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;border-right:1px solid rgba(24,27,27,0.07);background:#EAF2F2;color:#181B1B"><span style="font-size:11px">100</span><span style="font-size:10px;opacity:0.72">EAF2F2</span></button>
+            <button onClick="{{ copyHex }}" data-hex="#D1E1E1" data-name="stone-200" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;border-right:1px solid rgba(24,27,27,0.07);background:#D1E1E1;color:#181B1B"><span style="font-size:11px">200</span><span style="font-size:10px;opacity:0.72">D1E1E1</span></button>
+            <button onClick="{{ copyHex }}" data-hex="#B6CECE" data-name="stone-300" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;border-right:1px solid rgba(24,27,27,0.07);background:#B6CECE;color:#181B1B"><span style="font-size:11px">300</span><span style="font-size:10px;opacity:0.72">B6CECE</span></button>
+            <button onClick="{{ copyHex }}" data-hex="#81A7A7" data-name="stone-400" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;border-right:1px solid rgba(24,27,27,0.07);background:#81A7A7;color:#181B1B"><span style="font-size:11px">400</span><span style="font-size:10px;opacity:0.72">81A7A7</span></button>
+            <button onClick="{{ copyHex }}" data-hex="#729D9D" data-name="stone-500" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;border-right:1px solid rgba(24,27,27,0.07);background:#729D9D;color:#F9FBFB"><span style="font-size:11px">500</span><span style="font-size:10px;opacity:0.72">729D9D</span></button>
+            <button onClick="{{ copyHex }}" data-hex="#436465" data-name="stone-600" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;border-right:1px solid rgba(24,27,27,0.07);background:#436465;color:#F9FBFB"><span style="font-size:11px">600</span><span style="font-size:10px;opacity:0.72">436465</span></button>
+            <button onClick="{{ copyHex }}" data-hex="#334747" data-name="stone-700" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;border-right:1px solid rgba(24,27,27,0.07);background:#334747;color:#F9FBFB"><span style="font-size:11px">700</span><span style="font-size:10px;opacity:0.72">334747</span></button>
+            <button onClick="{{ copyHex }}" data-hex="#181B1B" data-name="stone-800" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;background:#181B1B;color:#F9FBFB"><span style="font-size:11px">800</span><span style="font-size:10px;opacity:0.72">181B1B</span></button>
+          </div>
+        </div>
+        <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px 24px">
+          <div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#81A7A7;margin-bottom:6px">Brick — primary</div>
+            <div style="display:grid;grid-template-columns:repeat(5,1fr);border:1px solid #D1E1E1">
+              <button onClick="{{ copyHex }}" data-hex="#FADFE1" data-name="brick-100" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;border-right:1px solid rgba(24,27,27,0.07);background:#FADFE1;color:#181B1B"><span style="font-size:11px">100</span><span style="font-size:10px;opacity:0.72">FADFE1</span></button>
+              <button onClick="{{ copyHex }}" data-hex="#F6ACB0" data-name="brick-200" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;border-right:1px solid rgba(24,27,27,0.07);background:#F6ACB0;color:#181B1B"><span style="font-size:11px">200</span><span style="font-size:10px;opacity:0.72">F6ACB0</span></button>
+              <button onClick="{{ copyHex }}" data-hex="#ED787E" data-name="brick-300" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;border-right:1px solid rgba(24,27,27,0.07);background:#ED787E;color:#F9FBFB"><span style="font-size:11px">300</span><span style="font-size:10px;opacity:0.72">ED787E</span></button>
+              <button onClick="{{ copyHex }}" data-hex="#D33C43" data-name="brick-400" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;border-right:1px solid rgba(24,27,27,0.07);background:#D33C43;color:#F9FBFB"><span style="font-size:11px">400 ●</span><span style="font-size:10px;opacity:0.72">D33C43</span></button>
+              <button onClick="{{ copyHex }}" data-hex="#BE2E35" data-name="brick-500" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;background:#BE2E35;color:#F9FBFB"><span style="font-size:11px">500</span><span style="font-size:10px;opacity:0.72">BE2E35</span></button>
+            </div>
+          </div>
+          <div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#81A7A7;margin-bottom:6px">Saffron</div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);border:1px solid #D1E1E1">
+              <button onClick="{{ copyHex }}" data-hex="#FEF4E7" data-name="saffron-100" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;border-right:1px solid rgba(24,27,27,0.07);background:#FEF4E7;color:#181B1B"><span style="font-size:11px">100</span><span style="font-size:10px;opacity:0.72">FEF4E7</span></button>
+              <button onClick="{{ copyHex }}" data-hex="#FCD9B0" data-name="saffron-200" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;border-right:1px solid rgba(24,27,27,0.07);background:#FCD9B0;color:#181B1B"><span style="font-size:11px">200</span><span style="font-size:10px;opacity:0.72">FCD9B0</span></button>
+              <button onClick="{{ copyHex }}" data-hex="#FFC377" data-name="saffron-300" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;border-right:1px solid rgba(24,27,27,0.07);background:#FFC377;color:#181B1B"><span style="font-size:11px">300</span><span style="font-size:10px;opacity:0.72">FFC377</span></button>
+              <button onClick="{{ copyHex }}" data-hex="#FFAD42" data-name="saffron-400" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;background:#FFAD42;color:#181B1B"><span style="font-size:11px">400</span><span style="font-size:10px;opacity:0.72">FFAD42</span></button>
+            </div>
+          </div>
+          <div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#81A7A7;margin-bottom:6px">Ocean</div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);border:1px solid #D1E1E1">
+              <button onClick="{{ copyHex }}" data-hex="#DDF4FD" data-name="ocean-100" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;border-right:1px solid rgba(24,27,27,0.07);background:#DDF4FD;color:#181B1B"><span style="font-size:11px">100</span><span style="font-size:10px;opacity:0.72">DDF4FD</span></button>
+              <button onClick="{{ copyHex }}" data-hex="#8CD4F2" data-name="ocean-200" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;border-right:1px solid rgba(24,27,27,0.07);background:#8CD4F2;color:#181B1B"><span style="font-size:11px">200</span><span style="font-size:10px;opacity:0.72">8CD4F2</span></button>
+              <button onClick="{{ copyHex }}" data-hex="#2EA0C8" data-name="ocean-300" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;border-right:1px solid rgba(24,27,27,0.07);background:#2EA0C8;color:#F9FBFB"><span style="font-size:11px">300</span><span style="font-size:10px;opacity:0.72">2EA0C8</span></button>
+              <button onClick="{{ copyHex }}" data-hex="#0279B1" data-name="ocean-400" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;background:#0279B1;color:#F9FBFB"><span style="font-size:11px">400</span><span style="font-size:10px;opacity:0.72">0279B1</span></button>
+            </div>
+          </div>
+          <div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#81A7A7;margin-bottom:6px">Forest</div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);border:1px solid #D1E1E1">
+              <button onClick="{{ copyHex }}" data-hex="#D9F2F1" data-name="forest-100" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;border-right:1px solid rgba(24,27,27,0.07);background:#D9F2F1;color:#181B1B"><span style="font-size:11px">100</span><span style="font-size:10px;opacity:0.72">D9F2F1</span></button>
+              <button onClick="{{ copyHex }}" data-hex="#75D1CC" data-name="forest-200" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;border-right:1px solid rgba(24,27,27,0.07);background:#75D1CC;color:#181B1B"><span style="font-size:11px">200</span><span style="font-size:10px;opacity:0.72">75D1CC</span></button>
+              <button onClick="{{ copyHex }}" data-hex="#239F97" data-name="forest-300" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;border-right:1px solid rgba(24,27,27,0.07);background:#239F97;color:#F9FBFB"><span style="font-size:11px">300</span><span style="font-size:10px;opacity:0.72">239F97</span></button>
+              <button onClick="{{ copyHex }}" data-hex="#0A766F" data-name="forest-400" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;background:#0A766F;color:#F9FBFB"><span style="font-size:11px">400</span><span style="font-size:10px;opacity:0.72">0A766F</span></button>
+            </div>
+          </div>
+          <div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#81A7A7;margin-bottom:6px">Sand</div>
+            <div style="display:grid;grid-template-columns:repeat(4,1fr);border:1px solid #D1E1E1">
+              <button onClick="{{ copyHex }}" data-hex="#F6E6D4" data-name="sand-100" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;border-right:1px solid rgba(24,27,27,0.07);background:#F6E6D4;color:#181B1B"><span style="font-size:11px">100</span><span style="font-size:10px;opacity:0.72">F6E6D4</span></button>
+              <button onClick="{{ copyHex }}" data-hex="#E2C5A4" data-name="sand-200" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;border-right:1px solid rgba(24,27,27,0.07);background:#E2C5A4;color:#181B1B"><span style="font-size:11px">200</span><span style="font-size:10px;opacity:0.72">E2C5A4</span></button>
+              <button onClick="{{ copyHex }}" data-hex="#C98F69" data-name="sand-300" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;border-right:1px solid rgba(24,27,27,0.07);background:#C98F69;color:#F9FBFB"><span style="font-size:11px">300</span><span style="font-size:10px;opacity:0.72">C98F69</span></button>
+              <button onClick="{{ copyHex }}" data-hex="#DDB8A0" data-name="sand-400" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;background:#DDB8A0;color:#181B1B"><span style="font-size:11px">400</span><span style="font-size:10px;opacity:0.72">DDB8A0</span></button>
+            </div>
+          </div>
+          <div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#81A7A7;margin-bottom:6px">Signal</div>
+            <div style="display:grid;grid-template-columns:repeat(2,1fr);border:1px solid #D1E1E1">
+              <button onClick="{{ copyHex }}" data-hex="#FF4750" data-name="red-bright" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;border-right:1px solid rgba(24,27,27,0.07);background:#FF4750;color:#F9FBFB"><span style="font-size:11px">red-bright</span><span style="font-size:10px;opacity:0.72">FF4750</span></button>
+              <button onClick="{{ copyHex }}" data-hex="#FF3D3D" data-name="red-hot" style="border:none;cursor:pointer;height:64px;display:flex;flex-direction:column;justify-content:flex-end;align-items:flex-start;padding:8px;text-align:left;font-family:'JetBrains Mono',monospace;background:#FF3D3D;color:#F9FBFB"><span style="font-size:11px">red-hot</span><span style="font-size:10px;opacity:0.72">FF3D3D</span></button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <figcaption style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.04em;color:#729D9D;padding:7px 12px;border-top:1px solid #D1E1E1;background:#EAF2F2;display:var(--spec-display,block)">palette identical to web · Brick is punctuation, never a large flat field · tap to copy</figcaption>
+    </figure>
+
+    <figure style="margin:0;border:1px solid #D1E1E1;background:#F9FBFB;display:flex;flex-direction:column">
+      <div style="padding:10px 22px 14px">
+        <div style="display:flex;align-items:baseline;gap:16px;padding:9px 0;border-bottom:1px solid #EAF2F2"><span style="flex:none;width:104px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#81A7A7">--text-2xs</span><span style="flex:none;width:76px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#436465">11 / 500</span><span style="flex:1;font-size:11px;font-weight:500;letter-spacing:0.06em;text-transform:uppercase;font-family:'JetBrains Mono',monospace;white-space:nowrap;overflow:hidden">Move value thru</span><span style="flex:none;width:220px;text-align:right;font-size:12px;color:#81A7A7">micro labels · tab labels (mono)</span></div>
+        <div style="display:flex;align-items:baseline;gap:16px;padding:9px 0;border-bottom:1px solid #EAF2F2"><span style="flex:none;width:104px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#81A7A7">--text-xs</span><span style="flex:none;width:76px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#436465">12 / 400</span><span style="flex:1;font-size:12px;white-space:nowrap;overflow:hidden">Move value thru.</span><span style="flex:none;width:220px;text-align:right;font-size:12px;color:#81A7A7">captions · legal · toast body</span></div>
+        <div style="display:flex;align-items:baseline;gap:16px;padding:9px 0;border-bottom:1px solid #EAF2F2"><span style="flex:none;width:104px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#81A7A7">--text-sm</span><span style="flex:none;width:76px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#436465">13 / 400</span><span style="flex:1;font-size:13px;white-space:nowrap;overflow:hidden">Move value thru.</span><span style="flex:none;width:220px;text-align:right;font-size:12px;color:#81A7A7">secondary · cell subtitles</span></div>
+        <div style="display:flex;align-items:baseline;gap:16px;padding:9px 0;border-bottom:1px solid #EAF2F2"><span style="flex:none;width:104px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#81A7A7">--text-base</span><span style="flex:none;width:76px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#436465">15 / 400</span><span style="flex:1;font-size:15px;white-space:nowrap;overflow:hidden">Move value thru.</span><span style="flex:none;width:220px;text-align:right;font-size:12px;color:#81A7A7">body · cell titles · buttons</span></div>
+        <div style="display:flex;align-items:baseline;gap:16px;padding:9px 0;border-bottom:1px solid #EAF2F2"><span style="flex:none;width:104px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#81A7A7">--text-md</span><span style="flex:none;width:76px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#436465">17 / 600</span><span style="flex:1;font-size:17px;font-weight:600;white-space:nowrap;overflow:hidden">Move value thru.</span><span style="flex:none;width:220px;text-align:right;font-size:12px;color:#81A7A7">nav bar &amp; sheet titles</span></div>
+        <div style="display:flex;align-items:baseline;gap:16px;padding:9px 0;border-bottom:1px solid #EAF2F2"><span style="flex:none;width:104px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#81A7A7">--text-lg</span><span style="flex:none;width:76px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#436465">20 / 600</span><span style="flex:1;font-size:20px;font-weight:600;letter-spacing:-0.25px;white-space:nowrap;overflow:hidden">Move value thru.</span><span style="flex:none;width:220px;text-align:right;font-size:12px;color:#81A7A7">section headers</span></div>
+        <div style="display:flex;align-items:baseline;gap:16px;padding:9px 0;border-bottom:1px solid #EAF2F2"><span style="flex:none;width:104px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#81A7A7">--text-xl</span><span style="flex:none;width:76px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#436465">24 / 600</span><span style="flex:1;font-size:24px;font-weight:600;letter-spacing:-0.25px;white-space:nowrap;overflow:hidden">Move value thru.</span><span style="flex:none;width:220px;text-align:right;font-size:12px;color:#81A7A7">screen titles</span></div>
+        <div style="display:flex;align-items:baseline;gap:16px;padding:9px 0;border-bottom:1px solid #EAF2F2"><span style="flex:none;width:104px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#81A7A7">--text-2xl</span><span style="flex:none;width:76px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#436465">28 / 700</span><span style="flex:1;font-size:28px;font-weight:700;letter-spacing:-0.5px;white-space:nowrap;overflow:hidden">Move value thru.</span><span style="flex:none;width:220px;text-align:right;font-size:12px;color:#81A7A7">large titles</span></div>
+        <div style="display:flex;align-items:baseline;gap:16px;padding:9px 0;border-bottom:1px solid #EAF2F2"><span style="flex:none;width:104px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#81A7A7">--text-3xl</span><span style="flex:none;width:76px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#436465">34 / 700</span><span style="flex:1;font-size:34px;font-weight:700;letter-spacing:-0.5px;line-height:1.1;white-space:nowrap;overflow:hidden">Move value thru.</span><span style="flex:none;width:220px;text-align:right;font-size:12px;color:#81A7A7">onboarding display</span></div>
+        <div style="display:flex;align-items:baseline;gap:16px;padding:9px 0;border-bottom:1px solid #EAF2F2"><span style="flex:none;width:104px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#81A7A7">--text-4xl</span><span style="flex:none;width:76px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#436465">44 / 700</span><span style="flex:1;font-size:44px;font-weight:700;letter-spacing:-1px;line-height:1.05;white-space:nowrap;overflow:hidden">$2,304.18</span><span style="flex:none;width:220px;text-align:right;font-size:12px;color:#81A7A7">balance display · mobile max</span></div>
+        <div style="display:flex;align-items:baseline;gap:16px;padding:9px 0"><span style="flex:none;width:104px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#81A7A7">mono values</span><span style="flex:none;width:76px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#436465">11–14</span><span style="flex:1;font-family:'JetBrains Mono',monospace;font-size:14px;white-space:nowrap;overflow:hidden">$1,204.10 · ts1kq…8fq2 · slot 84,102</span><span style="flex:none;width:220px;text-align:right;font-size:12px;color:#81A7A7">machine-facing surface — always mono</span></div>
+      </div>
+      <figcaption style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.04em;color:#729D9D;padding:7px 12px;border-top:1px solid #D1E1E1;background:#EAF2F2;display:var(--spec-display,block)">Inter Tight for headings/prose · JetBrains Mono for labels + values · web display tiers 56–104 do not ship on mobile</figcaption>
+    </figure>
+
+    <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px">
+      <figure style="margin:0;border:1px solid #D1E1E1;background:#F9FBFB;display:flex;flex-direction:column">
+        <div style="flex:1;padding:22px">
+          <div style="display:flex;align-items:baseline;gap:14px;padding:6px 0;border-bottom:1px solid #EAF2F2"><span style="flex:none;width:96px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#81A7A7">--space-1</span><span style="flex:none;width:36px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#436465">4</span><span style="display:inline-block;width:4px;height:10px;background:#181B1B"></span></div>
+          <div style="display:flex;align-items:baseline;gap:14px;padding:6px 0;border-bottom:1px solid #EAF2F2"><span style="flex:none;width:96px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#81A7A7">--space-2</span><span style="flex:none;width:36px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#436465">8</span><span style="display:inline-block;width:8px;height:10px;background:#181B1B"></span></div>
+          <div style="display:flex;align-items:baseline;gap:14px;padding:6px 0;border-bottom:1px solid #EAF2F2"><span style="flex:none;width:96px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#81A7A7">--space-3</span><span style="flex:none;width:36px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#436465">12</span><span style="display:inline-block;width:12px;height:10px;background:#181B1B"></span></div>
+          <div style="display:flex;align-items:baseline;gap:14px;padding:6px 0;border-bottom:1px solid #EAF2F2"><span style="flex:none;width:96px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#81A7A7">--space-4</span><span style="flex:none;width:36px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#436465">16</span><span style="display:inline-block;width:16px;height:10px;background:#181B1B"></span></div>
+          <div style="display:flex;align-items:baseline;gap:14px;padding:6px 0;border-bottom:1px solid #EAF2F2"><span style="flex:none;width:96px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#81A7A7">--space-5</span><span style="flex:none;width:36px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#436465">24</span><span style="display:inline-block;width:24px;height:10px;background:#181B1B"></span></div>
+          <div style="display:flex;align-items:baseline;gap:14px;padding:6px 0;border-bottom:1px solid #EAF2F2"><span style="flex:none;width:96px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#81A7A7">--space-6</span><span style="flex:none;width:36px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#436465">32</span><span style="display:inline-block;width:32px;height:10px;background:#181B1B"></span></div>
+          <div style="display:flex;align-items:baseline;gap:14px;padding:6px 0;border-bottom:1px solid #EAF2F2"><span style="flex:none;width:96px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#81A7A7">--space-7</span><span style="flex:none;width:36px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#436465">40</span><span style="display:inline-block;width:40px;height:10px;background:#181B1B"></span></div>
+          <div style="display:flex;align-items:baseline;gap:14px;padding:6px 0"><span style="flex:none;width:96px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#81A7A7">--space-8</span><span style="flex:none;width:36px;font-family:'JetBrains Mono',monospace;font-size:11px;color:#436465">56</span><span style="display:inline-block;width:56px;height:10px;background:#181B1B"></span></div>
+        </div>
+        <figcaption style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.04em;color:#729D9D;padding:7px 12px;border-top:1px solid #D1E1E1;background:#EAF2F2;display:var(--spec-display,block)">4px base · layout: screen-x 16 · gutter 12 · safe-top 62 · safe-bottom 34</figcaption>
+      </figure>
+      <figure style="margin:0;border:1px solid #D1E1E1;background:#F9FBFB;display:flex;flex-direction:column">
+        <div style="flex:1;padding:22px;display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:8px"><div style="width:36px;height:36px;border:1px solid #B6CECE;background:#EAF2F2;display:grid;place-items:center;font-family:'JetBrains Mono',monospace;font-size:10px;color:#436465">36</div><span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.06em;color:#81A7A7">SM — INLINE</span></div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:8px"><div style="width:44px;height:44px;border:1px solid #D33C43;background:#FADFE1;display:grid;place-items:center;font-family:'JetBrains Mono',monospace;font-size:10px;color:#BE2E35">44</div><span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.06em;color:#81A7A7">MINIMUM</span></div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:8px"><div style="width:48px;height:48px;border:1px solid #B6CECE;background:#EAF2F2;display:grid;place-items:center;font-family:'JetBrains Mono',monospace;font-size:10px;color:#436465">48</div><span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.06em;color:#81A7A7">DEFAULT</span></div>
+          <div style="display:flex;flex-direction:column;align-items:center;gap:8px"><div style="width:56px;height:56px;border:1px solid #B6CECE;background:#EAF2F2;display:grid;place-items:center;font-family:'JetBrains Mono',monospace;font-size:10px;color:#436465">56</div><span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.06em;color:#81A7A7">PRIMARY</span></div>
+        </div>
+        <figcaption style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.04em;color:#729D9D;padding:7px 12px;border-top:1px solid #D1E1E1;background:#EAF2F2;display:var(--spec-display,block)">nothing interactive below 44×44 · 36px controls pad their hit area to 44</figcaption>
+      </figure>
+      <figure style="margin:0;border:1px solid #D1E1E1;background:#F9FBFB;display:flex;flex-direction:column">
+        <div style="flex:1;padding:22px;display:flex;flex-direction:column;gap:14px">
+          <div><div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#81A7A7;margin-bottom:4px">Radius</div><p style="margin:0;font-size:13px;color:#436465;line-height:1.45">0 everywhere. The only circles: switch thumb, avatars, status dots. Sheets may take <span style="font-family:'JetBrains Mono',monospace;font-size:12px">--radius-tune</span> (0–12) on top corners.</p></div>
+          <div><div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#81A7A7;margin-bottom:4px">Elevation</div><p style="margin:0;font-size:13px;color:#436465;line-height:1.45">Hairlines, not shadows. Scrim rgba(24,27,27,0.64) + shadow reserved for sheets and toasts only.</p></div>
+          <div><div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#81A7A7;margin-bottom:4px">Motion</div><p style="margin:0;font-size:13px;color:#436465;line-height:1.45">fast 120 · med 200 · slow 320 · sheet 360 — cubic-bezier(0.2, 0.8, 0.2, 1). Press feedback ≤ 120ms, background shift not translate.</p></div>
+        </div>
+        <figcaption style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.04em;color:#729D9D;padding:7px 12px;border-top:1px solid #D1E1E1;background:#EAF2F2;display:var(--spec-display,block)">square-first survives the port — rounding is a dial, not a default</figcaption>
+      </figure>
+    </div>
+  </div>
+</section>
+
+<!-- ── 02 Actions ──────────────────────────────────────── -->
+<section id="s2" data-screen-label="02 Actions" style="border-bottom:1px solid #D1E1E1">
+  <div style="display:flex;align-items:baseline;gap:14px;padding:40px 40px 18px;flex-wrap:wrap">
+    <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#D33C43;letter-spacing:0.04em">02</span>
+    <h2 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.4px">Actions</h2>
+    <p style="margin:0 0 0 auto;font-size:13px;color:#436465;max-width:42ch;text-align:right">Ink-first. Press feedback is a background shift, never a translate.</p>
+  </div>
+  <div style="padding:8px 40px 40px;display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px">
+    <figure style="margin:0;border:1px solid #D1E1E1;background:#F9FBFB;display:flex;flex-direction:column">
+      <div style="flex:1;padding:22px;display:flex;flex-direction:column;gap:10px;align-items:flex-start">
+        <button style="width:100%;max-width:358px;height:48px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:none;cursor:pointer;background:var(--action-bg,#181B1B);color:#F9FBFB;font-family:var(--ui-font,'JetBrains Mono'),monospace;font-weight:600;font-size:15px;border-radius:var(--radius-tune,0px)" style-active="background:var(--action-bg-active,#000000)">Continue</button>
+        <button style="width:100%;max-width:358px;height:48px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:none;cursor:pointer;background:#D33C43;color:#F9FBFB;font-family:var(--ui-font,'JetBrains Mono'),monospace;font-weight:600;font-size:15px;border-radius:var(--radius-tune,0px)" style-active="background:#BE2E35">Send</button>
+        <button style="width:100%;max-width:358px;height:48px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid #B6CECE;cursor:pointer;background:transparent;color:#181B1B;font-family:var(--ui-font,'JetBrains Mono'),monospace;font-weight:600;font-size:15px;border-radius:var(--radius-tune,0px)" style-active="background:#EAF2F2">Receive</button>
+        <button style="width:100%;max-width:358px;height:48px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid #F6ACB0;cursor:pointer;background:transparent;color:#D33C43;font-family:var(--ui-font,'JetBrains Mono'),monospace;font-weight:600;font-size:15px;border-radius:var(--radius-tune,0px)" style-active="background:#FADFE1">Sign out</button>
+      </div>
+      <figcaption style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.04em;color:#729D9D;padding:7px 12px;border-top:1px solid #D1E1E1;background:#EAF2F2;display:var(--spec-display,block)">action / brick / ghost / destructive · h48 · text 15/600 · press: bg −1 step</figcaption>
+    </figure>
+    <figure style="margin:0;border:1px solid #D1E1E1;background:#F9FBFB;display:flex;flex-direction:column">
+      <div style="flex:1;padding:22px;display:flex;align-items:center;align-content:center;gap:12px;flex-wrap:wrap">
+        <button style="height:56px;padding:0 24px;display:inline-flex;align-items:center;justify-content:center;border:none;cursor:pointer;background:var(--action-bg,#181B1B);color:#F9FBFB;font-family:var(--ui-font,'JetBrains Mono'),monospace;font-weight:600;font-size:16px;border-radius:var(--radius-tune,0px)" style-active="background:var(--action-bg-active,#000000)">Large 56</button>
+        <button style="height:48px;padding:0 20px;display:inline-flex;align-items:center;justify-content:center;border:none;cursor:pointer;background:var(--action-bg,#181B1B);color:#F9FBFB;font-family:var(--ui-font,'JetBrains Mono'),monospace;font-weight:600;font-size:15px;border-radius:var(--radius-tune,0px)" style-active="background:var(--action-bg-active,#000000)">Default 48</button>
+        <button style="height:36px;padding:0 14px;display:inline-flex;align-items:center;justify-content:center;border:none;cursor:pointer;background:var(--action-bg,#181B1B);color:#F9FBFB;font-family:var(--ui-font,'JetBrains Mono'),monospace;font-weight:600;font-size:13px;border-radius:var(--radius-tune,0px)" style-active="background:var(--action-bg-active,#000000)">Small 36</button>
+      </div>
+      <figcaption style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.04em;color:#729D9D;padding:7px 12px;border-top:1px solid #D1E1E1;background:#EAF2F2;display:var(--spec-display,block)">lg 56/16 · md 48/15 · sm 36/13 (inline only — pad hit to 44)</figcaption>
+    </figure>
+    <figure style="margin:0;border:1px solid #D1E1E1;background:#F9FBFB;display:flex;flex-direction:column">
+      <div style="flex:1;padding:22px;display:flex;align-items:center;align-content:center;gap:12px;flex-wrap:wrap">
+        <button disabled="{{ true }}" style="height:48px;padding:0 20px;display:inline-flex;align-items:center;justify-content:center;border:none;background:#181B1B;color:#F9FBFB;font-family:var(--ui-font,'JetBrains Mono'),monospace;font-weight:600;font-size:15px;opacity:0.45;cursor:not-allowed;border-radius:var(--radius-tune,0px)">Disabled</button>
+        <button style="height:48px;padding:0 20px;display:inline-flex;align-items:center;justify-content:center;gap:10px;border:none;cursor:progress;background:#181B1B;color:#F9FBFB;font-family:var(--ui-font,'JetBrains Mono'),monospace;font-weight:600;font-size:15px;border-radius:var(--radius-tune,0px)"><span style="width:16px;height:16px;border-radius:50%;border:2px solid rgba(249,251,251,0.35);border-top-color:#F9FBFB;animation:tm-spin 0.7s linear infinite"></span>Sending…</button>
+        <button style="width:48px;height:48px;display:inline-flex;align-items:center;justify-content:center;border:1px solid #B6CECE;cursor:pointer;background:transparent;color:#181B1B;border-radius:var(--radius-tune,0px)" style-active="background:#EAF2F2" aria-label="Scan"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter"><path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5"></path><path d="M7 12h10"></path></svg></button>
+        <button style="width:48px;height:48px;display:inline-flex;align-items:center;justify-content:center;border:none;cursor:pointer;background:var(--action-bg,#181B1B);color:#F9FBFB;border-radius:var(--radius-tune,0px)" style-active="background:var(--action-bg-active,#000000)" aria-label="Send"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter"><path d="M7 17 17 7M8 7h9v9"></path></svg></button>
+      </div>
+      <figcaption style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.04em;color:#729D9D;padding:7px 12px;border-top:1px solid #D1E1E1;background:#EAF2F2;display:var(--spec-display,block)">disabled 45% · busy: 16 spinner · icon button 48×48, icon 20</figcaption>
+    </figure>
+    <figure style="margin:0;border:1px solid #D1E1E1;background:#F9FBFB;display:flex;flex-direction:column">
+      <div style="flex:1;padding:22px;display:flex;flex-direction:column;gap:10px;align-items:flex-start">
+        <div style="display:flex;gap:12px;width:100%;max-width:358px">
+          <button style="flex:1;height:48px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:none;cursor:pointer;background:var(--action-bg,#181B1B);color:#F9FBFB;font-family:var(--ui-font,'JetBrains Mono'),monospace;font-weight:600;font-size:15px;border-radius:var(--radius-tune,0px)" style-active="background:var(--action-bg-active,#000000)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter"><path d="M12 3v13M6 11l6 6 6-6"></path></svg>Deposit</button>
+          <button style="flex:1;height:48px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid #B6CECE;cursor:pointer;background:transparent;color:#181B1B;font-family:var(--ui-font,'JetBrains Mono'),monospace;font-weight:600;font-size:15px;border-radius:var(--radius-tune,0px)" style-active="background:#EAF2F2"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter"><path d="M7 17 17 7M8 7h9v9"></path></svg>Send</button>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:4px;width:100%;max-width:358px">
+          <button style="width:100%;height:56px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:none;cursor:pointer;background:var(--action-bg,#181B1B);color:#F9FBFB;font-family:var(--ui-font,'JetBrains Mono'),monospace;font-weight:600;font-size:16px;border-radius:var(--radius-tune,0px)" style-active="background:var(--action-bg-active,#000000)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter"><path d="M12 3l7 2.6v5.6c0 4.4-2.8 7.3-7 8.8-4.2-1.5-7-4.4-7-8.8V5.6L12 3Z"></path></svg>Continue with passkey</button>
+          <button style="width:100%;height:44px;display:inline-flex;align-items:center;justify-content:center;border:none;cursor:pointer;background:none;color:#436465;font-family:'JetBrains Mono',monospace;font-size:13px;letter-spacing:0.02em" style-active="color:#181B1B">Restore from recovery</button>
+        </div>
+      </div>
+      <figcaption style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.04em;color:#729D9D;padding:7px 12px;border-top:1px solid #D1E1E1;background:#EAF2F2;display:var(--spec-display,block)">paired 50/50, gutter 12 · stacked CTA: lg 56 + text button h44</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ── 03 Forms ────────────────────────────────────────── -->
+<section id="s3" data-screen-label="03 Forms" style="border-bottom:1px solid #D1E1E1">
+  <div style="display:flex;align-items:baseline;gap:14px;padding:40px 40px 18px;flex-wrap:wrap">
+    <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#0279B1;letter-spacing:0.04em">03</span>
+    <h2 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.4px">Forms</h2>
+    <p style="margin:0 0 0 auto;font-size:13px;color:#436465;max-width:42ch;text-align:right">48px controls, mono values, Brick focus ring.</p>
+  </div>
+  <div style="padding:8px 40px 40px;display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px">
+    <figure style="margin:0;border:1px solid #D1E1E1;background:#F9FBFB;display:flex;flex-direction:column">
+      <div style="flex:1;padding:22px;display:flex;flex-direction:column;gap:16px;align-items:flex-start">
+        <div style="display:flex;flex-direction:column;gap:6px;width:100%;max-width:358px">
+          <label style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.04em;text-transform:uppercase;color:#81A7A7">Recipient</label>
+          <input type="text" placeholder="ta1kq…" style="width:100%;height:48px;box-sizing:border-box;padding:0 14px;font-family:'JetBrains Mono',monospace;font-size:15px;color:#181B1B;background:#F9FBFB;border:1px solid #B6CECE;border-radius:var(--radius-tune,0px);outline:none" style-focus="border-color:#D33C43;box-shadow:inset 0 0 0 1px #D33C43">
+        </div>
+        <div style="display:flex;flex-direction:column;gap:6px;width:100%;max-width:358px">
+          <label style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.04em;text-transform:uppercase;color:#81A7A7">Amount</label>
+          <input type="text" value="9,000.00" style="width:100%;height:48px;box-sizing:border-box;padding:0 14px;font-family:'JetBrains Mono',monospace;font-size:15px;color:#181B1B;background:#F9FBFB;border:1px solid #FF4750;border-radius:var(--radius-tune,0px);outline:none">
+          <span style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.04em;color:#FF4750">AMOUNT EXCEEDS BALANCE</span>
+        </div>
+      </div>
+      <figcaption style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.04em;color:#729D9D;padding:7px 12px;border-top:1px solid #D1E1E1;background:#EAF2F2;display:var(--spec-display,block)">h48 · mono 15 · label mono 11 up · focus: Brick border + 1px inset · error: red-bright</figcaption>
+    </figure>
+    <figure style="margin:0;border:1px solid #D1E1E1;background:#F9FBFB;display:flex;flex-direction:column">
+      <div style="flex:1;padding:22px;display:flex;flex-direction:column;gap:14px;align-items:flex-start">
+        <div style="display:flex;align-items:center;gap:10px;width:100%;max-width:358px">
+          <div style="position:relative;flex:1">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#81A7A7" stroke-width="1.5" stroke-linecap="square" style="position:absolute;left:12px;top:13px;pointer-events:none"><circle cx="11" cy="11" r="7"></circle><path d="m21 21-4.3-4.3"></path></svg>
+            <input type="text" placeholder="ta… address · ts… sig · slot" style="width:100%;height:44px;box-sizing:border-box;padding:0 12px 0 38px;font-family:'JetBrains Mono',monospace;font-size:14px;color:#181B1B;background:#F9FBFB;border:1px solid #B6CECE;border-radius:var(--radius-tune,0px);outline:none" style-focus="border-color:#D33C43;box-shadow:inset 0 0 0 1px #D33C43">
+          </div>
+          <button style="border:none;background:none;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:13px;color:#D33C43;padding:4px 2px;height:44px" style-active="color:#BE2E35">Cancel</button>
+        </div>
+        <div style="position:relative;width:100%;max-width:358px">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#81A7A7" stroke-width="1.5" stroke-linecap="square" style="position:absolute;left:12px;top:13px;pointer-events:none"><circle cx="11" cy="11" r="7"></circle><path d="m21 21-4.3-4.3"></path></svg>
+          <input type="text" placeholder="Search tokens" style="width:100%;height:44px;box-sizing:border-box;padding:0 12px 0 38px;font-family:'JetBrains Mono',monospace;font-size:14px;color:#181B1B;background:#EAF2F2;border:1px solid transparent;border-radius:var(--radius-tune,0px);outline:none" style-focus="box-shadow:inset 0 0 0 1px #D33C43;border-color:#D33C43">
+        </div>
+      </div>
+      <figcaption style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.04em;color:#729D9D;padding:7px 12px;border-top:1px solid #D1E1E1;background:#EAF2F2;display:var(--spec-display,block)">search · VAR A hairline + cancel / VAR B filled stone-100 · h44 · icon 18</figcaption>
+    </figure>
+    <figure style="margin:0;border:1px solid #D1E1E1;background:#F9FBFB;display:flex;flex-direction:column">
+      <div style="flex:1;padding:22px;display:flex;flex-direction:column;gap:16px;align-items:flex-start">
+        <div style="display:flex;width:100%;max-width:358px;border:1px solid #B6CECE;border-radius:var(--radius-tune,0px);overflow:hidden">
+          <sc-for list="{{ segItems }}" as="o" hint-placeholder-count="3">
+            <button onClick="{{ o.sel }}" style="flex:1;height:38px;border:none;border-right:1px solid #B6CECE;cursor:pointer;background:{{ o.bg }};color:{{ o.color }};font-family:var(--ui-font,'JetBrains Mono'),monospace;font-size:12px;letter-spacing:0.04em;text-transform:uppercase;transition:background 120ms,color 120ms">{{ o.label }}</button>
+          </sc-for>
+        </div>
+        <div style="display:inline-flex;border:1px solid #B6CECE;border-radius:var(--radius-tune,0px)">
+          <button onClick="{{ stepDown }}" style="width:44px;height:44px;border:none;border-right:1px solid #B6CECE;background:#F9FBFB;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:17px;color:#181B1B" style-active="background:#EAF2F2">−</button>
+          <span style="width:56px;height:44px;display:inline-grid;place-items:center;font-family:'JetBrains Mono',monospace;font-size:15px">{{ stepVal }}</span>
+          <button onClick="{{ stepUp }}" style="width:44px;height:44px;border:none;border-left:1px solid #B6CECE;background:#F9FBFB;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:17px;color:#181B1B" style-active="background:#EAF2F2">+</button>
+        </div>
+      </div>
+      <figcaption style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.04em;color:#729D9D;padding:7px 12px;border-top:1px solid #D1E1E1;background:#EAF2F2;display:var(--spec-display,block)">segmented h40, equal cols, active ink fill · stepper h44, buttons 44×44</figcaption>
+    </figure>
+    <figure style="margin:0;border:1px solid #D1E1E1;background:#F9FBFB;display:flex;flex-direction:column">
+      <div style="flex:1;padding:22px;display:flex;flex-direction:column;gap:6px;align-items:flex-start">
+        <div style="display:flex;align-items:center;gap:12px;min-height:44px">
+          <button onClick="{{ tSw1 }}" style="position:relative;width:51px;height:31px;border-radius:999px;border:none;cursor:pointer;background:{{ sw1Bg }};transition:background 120ms;flex:none;padding:0" aria-label="Testnet mode">
+            <span style="position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#F9FBFB;box-shadow:0 1px 2px rgba(24,27,27,0.25);transform:{{ sw1Th }};transition:transform 120ms cubic-bezier(0.2,0.8,0.2,1)"></span>
+          </button>
+          <span style="font-size:15px">Testnet mode</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:12px;min-height:44px">
+          <button onClick="{{ tCb }}" style="width:22px;height:22px;border:1px solid {{ cbBorder }};background:{{ cbBg }};cursor:pointer;display:grid;place-items:center;padding:0;color:#F9FBFB;transition:background 120ms,border-color 120ms;border-radius:var(--radius-tune,0px)" aria-label="Save address">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" style="opacity:{{ cbOp }}"><path d="M20 6 9 17l-5-5"></path></svg>
+          </button>
+          <span style="font-size:15px">Save address to contacts</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:24px;min-height:44px;flex-wrap:wrap">
+          <span style="display:inline-flex;align-items:center;gap:10px">
+            <button onClick="{{ pick0 }}" style="width:22px;height:22px;border-radius:50%;border:1px solid {{ r0B }};background:#F9FBFB;cursor:pointer;display:grid;place-items:center;padding:0;transition:border-color 120ms" aria-label="Standard fee"><span style="width:10px;height:10px;border-radius:50%;background:#D33C43;transform:{{ r0S }};transition:transform 120ms cubic-bezier(0.2,0.8,0.2,1)"></span></button>
+            <span style="font-size:15px">Standard fee</span>
+          </span>
+          <span style="display:inline-flex;align-items:center;gap:10px">
+            <button onClick="{{ pick1 }}" style="width:22px;height:22px;border-radius:50%;border:1px solid {{ r1B }};background:#F9FBFB;cursor:pointer;display:grid;place-items:center;padding:0;transition:border-color 120ms" aria-label="Priority fee"><span style="width:10px;height:10px;border-radius:50%;background:#D33C43;transform:{{ r1S }};transition:transform 120ms cubic-bezier(0.2,0.8,0.2,1)"></span></button>
+            <span style="font-size:15px">Priority</span>
+          </span>
+        </div>
+      </div>
+      <figcaption style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.04em;color:#729D9D;padding:7px 12px;border-top:1px solid #D1E1E1;background:#EAF2F2;display:var(--spec-display,block)">switch 51×31 (pill exception) · check/radio 22 · row hit ≥44 · on-state: Brick</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ── 04 Navigation ───────────────────────────────────── -->
+<section id="s4" data-screen-label="04 Navigation" style="border-bottom:1px solid #D1E1E1">
+  <div style="display:flex;align-items:baseline;gap:14px;padding:40px 40px 18px;flex-wrap:wrap">
+    <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#FFAD42;letter-spacing:0.04em">04</span>
+    <h2 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.4px">Navigation</h2>
+    <p style="margin:0 0 0 auto;font-size:13px;color:#436465;max-width:42ch;text-align:right">Top bar for context, tab bar in the thumb zone. Try tapping the tabs.</p>
+  </div>
+  <div style="padding:8px 40px 40px;display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px">
+    <figure style="margin:0;border:1px solid #D1E1E1;background:#F9FBFB;display:flex;flex-direction:column">
+      <div style="flex:1;padding:22px;display:flex;flex-direction:column;gap:18px;align-items:flex-start">
+        <div style="width:100%;max-width:390px;border:1px solid #EAF2F2">
+          <div style="display:grid;grid-template-columns:44px 1fr 44px;align-items:center;height:56px;padding:0 6px;border-bottom:1px solid #D1E1E1;background:#F9FBFB">
+            <button style="width:44px;height:44px;display:grid;place-items:center;border:none;background:none;cursor:pointer;color:#181B1B" aria-label="Back"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square"><path d="m15 6-6 6 6 6"></path></svg></button>
+            <span style="text-align:center;font-size:17px;font-weight:600;letter-spacing:-0.25px">Send</span>
+            <button style="width:44px;height:44px;display:grid;place-items:center;border:none;background:none;cursor:pointer;color:#181B1B" aria-label="Scan"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square"><path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5"></path><path d="M7 12h10"></path></svg></button>
+          </div>
+        </div>
+        <div style="width:100%;max-width:390px;border:1px solid #EAF2F2">
+          <div style="background:#F9FBFB;border-bottom:1px solid #D1E1E1">
+            <div style="display:flex;justify-content:flex-end;gap:2px;height:44px;align-items:center;padding:0 6px">
+              <button style="width:44px;height:44px;display:grid;place-items:center;border:none;background:none;cursor:pointer;color:#181B1B" aria-label="Search"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square"><circle cx="11" cy="11" r="7"></circle><path d="m21 21-4.3-4.3"></path></svg></button>
+              <button style="width:44px;height:44px;display:grid;place-items:center;border:none;background:none;cursor:pointer;color:#181B1B" aria-label="Scan"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square"><path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5"></path><path d="M7 12h10"></path></svg></button>
+            </div>
+            <div style="padding:0 16px 12px;font-size:28px;font-weight:700;letter-spacing:-0.5px">Activity</div>
+          </div>
+        </div>
+      </div>
+      <figcaption style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.04em;color:#729D9D;padding:7px 12px;border-top:1px solid #D1E1E1;background:#EAF2F2;display:var(--spec-display,block)">nav bar h56 · title 17/600 centered · large title 28/700 left · hits 44 · hairline bottom</figcaption>
+    </figure>
+    <figure style="margin:0;border:1px solid #D1E1E1;background:#F9FBFB;display:flex;flex-direction:column">
+      <div style="flex:1;padding:22px;display:flex;flex-direction:column;gap:18px;align-items:flex-start">
+        <div style="width:100%;max-width:390px;background:#F9FBFB;border:1px solid #EAF2F2">
+          <div style="display:flex;position:relative;border-top:1px solid #D1E1E1">
+            <sc-for list="{{ tabsA }}" as="t" hint-placeholder-count="3">
+              <button onClick="{{ t.go }}" style="position:relative;flex:1;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:none;border:none;cursor:pointer;color:{{ t.color }};transition:color 120ms">
+                <span style="position:absolute;top:-1px;left:14px;right:14px;height:2px;background:#181B1B;opacity:{{ t.ind }};transition:opacity 120ms"></span>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter"><path d="{{ t.d1 }}"></path><path d="{{ t.d2 }}"></path></svg>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;font-weight:{{ t.w }}">{{ t.label }}</span>
+              </button>
+            </sc-for>
+          </div>
+          <div style="height:24px;display:flex;align-items:flex-start;justify-content:center;padding-top:8px"><span style="width:120px;height:4px;border-radius:999px;background:#D1E1E1"></span></div>
+        </div>
+      </div>
+      <figcaption style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.04em;color:#729D9D;padding:7px 12px;border-top:1px solid #D1E1E1;background:#EAF2F2;display:var(--spec-display,block)">tab bar VAR A ink · h56 + safe 34 · indicator 2px top · icon 22 · label mono 10 up</figcaption>
+    </figure>
+    <figure style="margin:0;border:1px solid #D1E1E1;background:#F9FBFB;display:flex;flex-direction:column">
+      <div style="flex:1;padding:22px;display:flex;flex-direction:column;gap:18px;align-items:flex-start">
+        <div style="width:100%;max-width:390px;background:#F9FBFB;border:1px solid #EAF2F2">
+          <div style="display:flex;position:relative;border-top:1px solid #D1E1E1">
+            <sc-for list="{{ tabsB }}" as="t" hint-placeholder-count="3">
+              <button onClick="{{ t.go }}" style="position:relative;flex:1;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;background:none;border:none;cursor:pointer;color:{{ t.color }};transition:color 120ms">
+                <span style="position:absolute;top:7px;left:calc(50% + 8px);min-width:15px;height:15px;padding:0 3px;box-sizing:border-box;background:#D33C43;color:#F9FBFB;font-family:'JetBrains Mono',monospace;font-size:9px;font-weight:600;display:grid;place-items:center;opacity:{{ t.badgeOp }}">{{ t.badge }}</span>
+                <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter"><path d="{{ t.d1 }}"></path><path d="{{ t.d2 }}"></path></svg>
+                <span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;font-weight:{{ t.w }}">{{ t.label }}</span>
+                <span style="position:absolute;bottom:4px;width:4px;height:4px;background:#D33C43;opacity:{{ t.dot }};transition:opacity 120ms"></span>
+              </button>
+            </sc-for>
+          </div>
+          <div style="height:24px;display:flex;align-items:flex-start;justify-content:center;padding-top:8px"><span style="width:120px;height:4px;border-radius:999px;background:#D1E1E1"></span></div>
+        </div>
+      </div>
+      <figcaption style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.04em;color:#729D9D;padding:7px 12px;border-top:1px solid #D1E1E1;background:#EAF2F2;display:var(--spec-display,block)">tab bar VAR B brick · active Brick + 4px dot · badge 15 square, mono 9</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ── 05 Cells ────────────────────────────────────────── -->
+<section id="s5" data-screen-label="05 Cells" style="border-bottom:1px solid #D1E1E1">
+  <div style="display:flex;align-items:baseline;gap:14px;padding:40px 40px 18px;flex-wrap:wrap">
+    <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#C98F69;letter-spacing:0.04em">05</span>
+    <h2 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.4px">Cells</h2>
+    <p style="margin:0 0 0 auto;font-size:13px;color:#436465;max-width:42ch;text-align:right">The mobile workhorse — every list is hairline rows.</p>
+  </div>
+  <div style="padding:8px 40px 40px;display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px">
+    <figure style="margin:0;border:1px solid #D1E1E1;background:#F9FBFB;display:flex;flex-direction:column">
+      <div style="flex:1;padding:22px 0;display:flex;flex-direction:column">
+        <div style="width:100%;border-top:1px solid #D1E1E1;border-bottom:1px solid #D1E1E1">
+          <div style="display:flex;align-items:center;gap:12px;height:56px;padding:0 16px"><span style="font-size:15px">Passkeys</span><span style="flex:1"></span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#81A7A7">2 KEYS</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#81A7A7" stroke-width="1.5" stroke-linecap="square"><path d="m9 6 6 6-6 6"></path></svg></div>
+          <div style="height:1px;background:#EAF2F2;margin-left:16px"></div>
+          <div style="display:flex;align-items:center;gap:12px;height:56px;padding:0 16px"><span style="font-size:15px">Network</span><span style="flex:1"></span><span style="width:7px;height:7px;border-radius:50%;background:#239F97"></span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#436465">THRU-ALPHANET</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#81A7A7" stroke-width="1.5" stroke-linecap="square"><path d="m9 6 6 6-6 6"></path></svg></div>
+          <div style="height:1px;background:#EAF2F2;margin-left:16px"></div>
+          <div style="display:flex;align-items:center;gap:12px;height:56px;padding:0 16px"><span style="font-size:15px">Require biometrics</span><span style="flex:1"></span>
+            <button onClick="{{ tSw2 }}" style="position:relative;width:51px;height:31px;border-radius:999px;border:none;cursor:pointer;background:{{ sw2Bg }};transition:background 120ms;flex:none;padding:0" aria-label="Require biometrics"><span style="position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#F9FBFB;box-shadow:0 1px 2px rgba(24,27,27,0.25);transform:{{ sw2Th }};transition:transform 120ms cubic-bezier(0.2,0.8,0.2,1)"></span></button>
+          </div>
+          <div style="height:1px;background:#EAF2F2;margin-left:16px"></div>
+          <div style="display:flex;align-items:center;gap:12px;height:64px;padding:0 16px">
+            <span style="width:28px;height:28px;border-radius:50%;background:#D33C43;color:#F9FBFB;display:grid;place-items:center;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;flex:none">TH</span>
+            <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px"><span style="font-size:15px;font-weight:500">Thru</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.06em;color:#81A7A7">ON THRU-ALPHANET</span></span>
+            <span style="display:flex;flex-direction:column;align-items:flex-end;gap:1px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px">$1,204.10</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#81A7A7">8,402.33 THRU</span></span>
+          </div>
+          <div style="height:1px;background:#EAF2F2;margin-left:16px"></div>
+          <div style="display:flex;align-items:center;gap:12px;height:56px;padding:0 16px">
+            <span style="width:8px;height:8px;background:#239F97;flex:none"></span>
+            <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px"><span style="font-size:14px;font-weight:500">Received THRU</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.04em;color:#81A7A7">TS1KQ…8FQ2 · SLOT 84,102</span></span>
+            <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#0A766F">+12.40</span>
+          </div>
+        </div>
+      </div>
+      <figcaption style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.04em;color:#729D9D;padding:7px 12px;border-top:1px solid #D1E1E1;background:#EAF2F2;display:var(--spec-display,block)">VAR A full-bleed · nav / value / toggle h56 · balance h64 · separators inset 16</figcaption>
+    </figure>
+    <figure style="margin:0;border:1px solid #D1E1E1;background:#EAF2F2;display:flex;flex-direction:column">
+      <div style="flex:1;padding:22px 16px">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#81A7A7;padding:0 0 6px">Security</div>
+        <div style="background:#F9FBFB;border:1px solid #D1E1E1;border-radius:var(--radius-tune,0px);overflow:hidden">
+          <div style="display:flex;align-items:center;gap:12px;height:52px;padding:0 14px"><span style="font-size:15px">Passkeys</span><span style="flex:1"></span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#81A7A7">2 KEYS</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#81A7A7" stroke-width="1.5" stroke-linecap="square"><path d="m9 6 6 6-6 6"></path></svg></div>
+          <div style="height:1px;background:#EAF2F2;margin-left:14px"></div>
+          <div style="display:flex;align-items:center;gap:12px;height:52px;padding:0 14px"><span style="font-size:15px">Recovery contacts</span><span style="flex:1"></span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#81A7A7" stroke-width="1.5" stroke-linecap="square"><path d="m9 6 6 6-6 6"></path></svg></div>
+          <div style="height:1px;background:#EAF2F2;margin-left:14px"></div>
+          <div style="display:flex;align-items:center;gap:12px;height:52px;padding:0 14px"><span style="font-size:15px">Require biometrics</span><span style="flex:1"></span>
+            <button onClick="{{ tSw3 }}" style="position:relative;width:51px;height:31px;border-radius:999px;border:none;cursor:pointer;background:{{ sw3Bg }};transition:background 120ms;flex:none;padding:0" aria-label="Require biometrics"><span style="position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#F9FBFB;box-shadow:0 1px 2px rgba(24,27,27,0.25);transform:{{ sw3Th }};transition:transform 120ms cubic-bezier(0.2,0.8,0.2,1)"></span></button>
+          </div>
+        </div>
+      </div>
+      <figcaption style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.04em;color:#729D9D;padding:7px 12px;border-top:1px solid #D1E1E1;background:#F9FBFB;display:var(--spec-display,block)">VAR B inset group · margin 16 · card hairline on stone-100 · h52 · section label mono 11</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ── 06 Overlays & feedback ──────────────────────────── -->
+<section id="s6" data-screen-label="06 Overlays" style="border-bottom:1px solid #D1E1E1">
+  <div style="display:flex;align-items:baseline;gap:14px;padding:40px 40px 18px;flex-wrap:wrap">
+    <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#0A766F;letter-spacing:0.04em">06</span>
+    <h2 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.4px">Overlays &amp; feedback</h2>
+    <p style="margin:0 0 0 auto;font-size:13px;color:#436465;max-width:42ch;text-align:right">The only shadows in the system live here.</p>
+  </div>
+  <div style="padding:8px 40px 40px;display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:14px">
+    <figure style="margin:0;border:1px solid #D1E1E1;background:#F9FBFB;display:flex;flex-direction:column">
+      <div style="flex:1;padding:22px;display:flex;gap:16px;flex-wrap:wrap;justify-content:center">
+        <div style="width:280px;height:430px;border:1px solid #D1E1E1;position:relative;overflow:hidden;background:#F9FBFB;flex:none">
+          <div style="display:flex;align-items:center;gap:8px;height:44px;padding:0 14px;border-bottom:1px solid #EAF2F2"><span style="width:20px;height:20px;border-radius:50%;background:#D1E1E1"></span><span style="width:80px;height:8px;background:#D1E1E1"></span></div>
+          <div style="padding:16px 14px;display:flex;flex-direction:column;gap:10px"><span style="width:100%;height:8px;background:#EAF2F2"></span><span style="width:70%;height:8px;background:#EAF2F2"></span>
+            <button onClick="{{ openA }}" style="margin-top:10px;height:40px;padding:0 16px;align-self:flex-start;display:inline-flex;align-items:center;border:none;cursor:pointer;background:var(--action-bg,#181B1B);color:#F9FBFB;font-family:var(--ui-font,'JetBrains Mono'),monospace;font-weight:600;font-size:13px;border-radius:var(--radius-tune,0px)" style-active="background:var(--action-bg-active,#000000)">Present sheet A</button>
+          </div>
+          <sc-if value="{{ sheetA }}" hint-placeholder-val="{{ false }}">
+            <div onClick="{{ closeA }}" style="position:absolute;inset:0;background:rgba(24,27,27,0.64);animation:tm-fade-in 200ms cubic-bezier(0,0,0.2,1);cursor:pointer"></div>
+            <div style="position:absolute;left:0;right:0;bottom:0;background:#F9FBFB;border-top:1px solid #B6CECE;animation:tm-sheet-in 360ms cubic-bezier(0.2,0.8,0.2,1)">
+              <div style="display:flex;align-items:center;height:52px;padding:0 4px 0 16px;border-bottom:1px solid #D1E1E1"><span style="font-size:17px;font-weight:600;letter-spacing:-0.25px">Send options</span><span style="flex:1"></span><button onClick="{{ closeA }}" style="width:44px;height:44px;display:grid;place-items:center;border:none;background:none;cursor:pointer;color:#436465" aria-label="Close"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></div>
+              <button style="display:flex;align-items:center;gap:12px;height:52px;padding:0 16px;width:100%;border:none;background:none;cursor:pointer;font-size:15px;color:#181B1B;font-family:inherit;text-align:left" style-active="background:#EAF2F2"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#436465" stroke-width="1.5" stroke-linecap="square"><path d="M7 17 17 7M8 7h9v9"></path></svg>Send to address</button>
+              <div style="height:1px;background:#EAF2F2;margin-left:16px"></div>
+              <button style="display:flex;align-items:center;gap:12px;height:52px;padding:0 16px;width:100%;border:none;background:none;cursor:pointer;font-size:15px;color:#181B1B;font-family:inherit;text-align:left" style-active="background:#EAF2F2"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#436465" stroke-width="1.5" stroke-linecap="square"><rect x="9" y="9" width="11" height="11"></rect><path d="M5 15V5h10"></path></svg>Send via link</button>
+              <div style="height:1px;background:#EAF2F2;margin-left:16px"></div>
+              <button style="display:flex;align-items:center;gap:12px;height:52px;padding:0 16px;width:100%;border:none;background:none;cursor:pointer;font-size:15px;color:#181B1B;font-family:inherit;text-align:left" style-active="background:#EAF2F2"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#436465" stroke-width="1.5" stroke-linecap="square"><path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5"></path><path d="M7 12h10"></path></svg>Scan QR code</button>
+              <button onClick="{{ closeA }}" style="display:block;width:100%;height:52px;border:none;border-top:1px solid #D1E1E1;background:none;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:13px;letter-spacing:0.04em;text-transform:uppercase;color:#436465" style-active="background:#EAF2F2">Cancel</button>
+              <div style="height:16px"></div>
+            </div>
+          </sc-if>
+        </div>
+        <div style="width:280px;height:430px;border:1px solid #D1E1E1;position:relative;overflow:hidden;background:#F9FBFB;flex:none">
+          <div style="display:flex;align-items:center;gap:8px;height:44px;padding:0 14px;border-bottom:1px solid #EAF2F2"><span style="width:20px;height:20px;border-radius:50%;background:#D1E1E1"></span><span style="width:80px;height:8px;background:#D1E1E1"></span></div>
+          <div style="padding:16px 14px;display:flex;flex-direction:column;gap:10px"><span style="width:100%;height:8px;background:#EAF2F2"></span><span style="width:70%;height:8px;background:#EAF2F2"></span>
+            <button onClick="{{ openB }}" style="margin-top:10px;height:40px;padding:0 16px;align-self:flex-start;display:inline-flex;align-items:center;border:1px solid #B6CECE;cursor:pointer;background:transparent;color:#181B1B;font-family:var(--ui-font,'JetBrains Mono'),monospace;font-weight:600;font-size:13px;border-radius:var(--radius-tune,0px)" style-active="background:#EAF2F2">Present sheet B</button>
+          </div>
+          <sc-if value="{{ sheetB }}" hint-placeholder-val="{{ false }}">
+            <div onClick="{{ closeB }}" style="position:absolute;inset:0;background:rgba(24,27,27,0.64);animation:tm-fade-in 200ms cubic-bezier(0,0,0.2,1);cursor:pointer"></div>
+            <div style="position:absolute;left:0;right:0;bottom:0;background:#F9FBFB;border-radius:12px 12px 0 0;box-shadow:0 -20px 48px rgba(24,27,27,0.18);animation:tm-sheet-in 360ms cubic-bezier(0.2,0.8,0.2,1)">
+              <div style="display:flex;justify-content:center;padding:8px 0 4px"><span style="width:36px;height:4px;border-radius:999px;background:#B6CECE"></span></div>
+              <div style="text-align:center;font-size:17px;font-weight:600;letter-spacing:-0.25px;padding:4px 16px 10px">Send options</div>
+              <div style="height:1px;background:#EAF2F2"></div>
+              <button style="display:flex;align-items:center;gap:12px;height:52px;padding:0 16px;width:100%;border:none;background:none;cursor:pointer;font-size:15px;color:#181B1B;font-family:inherit;text-align:left" style-active="background:#EAF2F2"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#436465" stroke-width="1.5" stroke-linecap="square"><path d="M7 17 17 7M8 7h9v9"></path></svg>Send to address</button>
+              <div style="height:1px;background:#EAF2F2;margin-left:16px"></div>
+              <button style="display:flex;align-items:center;gap:12px;height:52px;padding:0 16px;width:100%;border:none;background:none;cursor:pointer;font-size:15px;color:#181B1B;font-family:inherit;text-align:left" style-active="background:#EAF2F2"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#436465" stroke-width="1.5" stroke-linecap="square"><path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5"></path><path d="M7 12h10"></path></svg>Scan QR code</button>
+              <button onClick="{{ closeB }}" style="display:block;width:100%;height:52px;border:none;border-top:1px solid #D1E1E1;background:none;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:13px;letter-spacing:0.04em;text-transform:uppercase;color:#436465" style-active="background:#EAF2F2">Cancel</button>
+              <div style="height:16px"></div>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+      <figcaption style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.04em;color:#729D9D;padding:7px 12px;border-top:1px solid #D1E1E1;background:#EAF2F2;display:var(--spec-display,block)">bottom sheet · VAR A flush hairline / VAR B handle + radius 12 · rows h52 · in 360ms · scrim 64%</figcaption>
+    </figure>
+    <figure style="margin:0;border:1px solid #D1E1E1;background:#F9FBFB;display:flex;flex-direction:column">
+      <div style="flex:1;padding:22px;display:flex;flex-direction:column;gap:14px;align-items:center">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:center">
+          <button onClick="{{ fSuccess }}" style="height:36px;padding:0 12px;border:1px solid #B6CECE;background:transparent;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:12px;color:#0A766F" style-active="background:#EAF2F2">Success</button>
+          <button onClick="{{ fError }}" style="height:36px;padding:0 12px;border:1px solid #B6CECE;background:transparent;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:12px;color:#D33C43" style-active="background:#EAF2F2">Error</button>
+          <button onClick="{{ fInfo }}" style="height:36px;padding:0 12px;border:1px solid #B6CECE;background:transparent;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:12px;color:#0279B1" style-active="background:#EAF2F2">Info</button>
+          <button onClick="{{ fWarn }}" style="height:36px;padding:0 12px;border:1px solid #B6CECE;background:transparent;cursor:pointer;font-family:'JetBrains Mono',monospace;font-size:12px;color:#9a6200" style-active="background:#EAF2F2">Warn</button>
+        </div>
+        <div style="width:340px;max-width:100%;height:264px;border:1px solid #D1E1E1;position:relative;overflow:hidden;background:#F9FBFB">
+          <div style="padding:16px 14px;display:flex;flex-direction:column;gap:10px"><span style="width:100%;height:8px;background:#EAF2F2"></span><span style="width:64%;height:8px;background:#EAF2F2"></span><span style="width:82%;height:8px;background:#EAF2F2"></span></div>
+          <div style="position:absolute;left:0;right:0;bottom:0;background:#F9FBFB">
+            <div style="display:flex;border-top:1px solid #D1E1E1">
+              <span style="position:relative;flex:1;height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#181B1B"><span style="position:absolute;top:-1px;left:14px;right:14px;height:2px;background:#181B1B"></span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter"><path d="M3 11 12 3l9 8"></path><path d="M5 9.5V21h14V9.5"></path></svg><span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.08em;text-transform:uppercase;font-weight:600">Home</span></span>
+              <span style="flex:1;height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#81A7A7"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter"><path d="M2 12h4l3-8 5 16 3-8h5"></path></svg><span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.08em;text-transform:uppercase">Activity</span></span>
+              <span style="flex:1;height:52px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;color:#81A7A7"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"></path></svg><span style="font-family:'JetBrains Mono',monospace;font-size:9px;letter-spacing:0.08em;text-transform:uppercase">Settings</span></span>
+            </div>
+            <div style="height:20px;display:flex;align-items:flex-start;justify-content:center;padding-top:6px"><span style="width:110px;height:4px;border-radius:999px;background:#D1E1E1"></span></div>
+          </div>
+          <sc-if value="{{ vOn }}" hint-placeholder-val="{{ false }}">
+            <div style="position:absolute;left:12px;right:12px;bottom:86px;display:flex;gap:12px;align-items:flex-start;background:#181B1B;color:#EAF2F2;border-left:3px solid {{ vC }};padding:12px 34px 13px 14px;box-shadow:0 20px 48px rgba(24,27,27,0.28);overflow:hidden;animation:tm-fade-in 200ms cubic-bezier(0,0,0.2,1)">
+              <span style="flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:{{ vIconBg }};color:{{ vC }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><path d="{{ vP }}"></path></svg></span>
+              <span style="flex:1;min-width:0"><span style="display:block;font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:0.04em;color:#F9FBFB">{{ vT }}</span><span style="display:block;font-size:12px;color:#B6CECE;margin-top:2px">{{ vD }}</span></span>
+              <button onClick="{{ hideV }}" style="position:absolute;top:6px;right:6px;width:24px;height:24px;display:grid;place-items:center;border:none;background:none;cursor:pointer;color:#81A7A7" aria-label="Dismiss"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+              <span style="position:absolute;left:0;bottom:0;height:2px;width:100%;background:{{ vC }};transform-origin:left;animation:tm-toastbar 4.2s linear forwards"></span>
+            </div>
+          </sc-if>
+        </div>
+      </div>
+      <figcaption style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.04em;color:#729D9D;padding:7px 12px;border-top:1px solid #D1E1E1;background:#EAF2F2;display:var(--spec-display,block)">snackbar above tab bar · inset 12 · accent bar 3 · title mono 12 · timeout bar 2px / 4s</figcaption>
+    </figure>
+    <figure style="margin:0;border:1px solid #D1E1E1;background:#F9FBFB;display:flex;flex-direction:column">
+      <div style="flex:1;padding:22px;display:flex;gap:24px;align-items:center;flex-wrap:wrap;justify-content:center">
+        <div style="width:280px;height:216px;border:1px solid #D1E1E1;overflow:hidden;background:#F9FBFB;flex:none">
+          <div style="animation:tm-ptr 3.6s cubic-bezier(0.2,0.8,0.2,1) infinite">
+            <div style="height:72px;margin-top:-72px;display:flex;align-items:center;justify-content:center;gap:10px"><span style="width:18px;height:18px;border-radius:50%;border:2px solid #D1E1E1;border-top-color:#181B1B;animation:tm-spin 0.7s linear infinite"></span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#729D9D">Updating…</span></div>
+            <div style="display:flex;align-items:center;gap:10px;height:48px;padding:0 16px;border-bottom:1px solid #EAF2F2"><span style="width:8px;height:8px;background:#239F97"></span><span style="width:110px;height:8px;background:#D1E1E1"></span><span style="flex:1"></span><span style="width:40px;height:8px;background:#EAF2F2"></span></div>
+            <div style="display:flex;align-items:center;gap:10px;height:48px;padding:0 16px;border-bottom:1px solid #EAF2F2"><span style="width:8px;height:8px;background:#D33C43"></span><span style="width:90px;height:8px;background:#D1E1E1"></span><span style="flex:1"></span><span style="width:52px;height:8px;background:#EAF2F2"></span></div>
+            <div style="display:flex;align-items:center;gap:10px;height:48px;padding:0 16px;border-bottom:1px solid #EAF2F2"><span style="width:8px;height:8px;background:#239F97"></span><span style="width:120px;height:8px;background:#D1E1E1"></span><span style="flex:1"></span><span style="width:44px;height:8px;background:#EAF2F2"></span></div>
+            <div style="display:flex;align-items:center;gap:10px;height:48px;padding:0 16px"><span style="width:8px;height:8px;background:#239F97"></span><span style="width:100px;height:8px;background:#D1E1E1"></span><span style="flex:1"></span><span style="width:48px;height:8px;background:#EAF2F2"></span></div>
+          </div>
+        </div>
+        <div style="display:flex;flex-direction:column;gap:18px;align-items:flex-start">
+          <div style="display:flex;gap:16px;align-items:center">
+            <span style="width:16px;height:16px;border-radius:50%;border:2px solid #D1E1E1;border-top-color:#181B1B;animation:tm-spin 0.7s linear infinite"></span>
+            <span style="width:20px;height:20px;border-radius:50%;border:2px solid #D1E1E1;border-top-color:#181B1B;animation:tm-spin 0.7s linear infinite"></span>
+            <span style="width:24px;height:24px;border-radius:50%;border:2px solid #F6ACB0;border-top-color:#D33C43;animation:tm-spin 0.7s linear infinite"></span>
+          </div>
+          <div style="width:200px;display:flex;flex-direction:column;gap:7px">
+            <div style="display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.04em;text-transform:uppercase;color:#81A7A7"><span>Syncing</span><span>64%</span></div>
+            <div style="width:100%;height:6px;background:#D1E1E1"><div style="width:64%;height:100%;background:#181B1B"></div></div>
+          </div>
+        </div>
+      </div>
+      <figcaption style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.04em;color:#729D9D;padding:7px 12px;border-top:1px solid #D1E1E1;background:#EAF2F2;display:var(--spec-display,block)">pull-to-refresh: threshold 72, spinner 18, release 360ms std · spinner 16/20/24 · progress h6</figcaption>
+    </figure>
+  </div>
+</section>
+
+<!-- ── 07 Screens ──────────────────────────────────────── -->
+<section id="s7" data-screen-label="07 Screens">
+  <div style="display:flex;align-items:baseline;gap:14px;padding:40px 40px 18px;flex-wrap:wrap">
+    <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#D33C43;letter-spacing:0.04em">07</span>
+    <h2 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.4px">Screens</h2>
+    <p style="margin:0 0 0 auto;font-size:13px;color:#436465;max-width:42ch;text-align:right">The kit assembled — wallet, onboarding (dark surface), settings.</p>
+  </div>
+  <div style="padding:8px 40px 48px;display:flex;flex-wrap:wrap;gap:28px;justify-content:center">
+
+    <div style="width:342px;flex:none" data-screen-label="Wallet home">
+      <div style="width:342px;height:744px;overflow:hidden"><div style="transform:scale(0.85);transform-origin:top left;width:402px;height:874px">
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+        <div style="min-height:100%;display:flex;flex-direction:column;background:#F9FBFB;padding-top:62px;box-sizing:border-box;font-family:'Inter Tight',system-ui,sans-serif;color:#181B1B">
+          <div style="display:flex;align-items:center;gap:10px;padding:8px 16px">
+            <span style="width:32px;height:32px;border-radius:50%;background:#D1E1E1;display:grid;place-items:center;font-family:'JetBrains Mono',monospace;font-size:11px;color:#436465;flex:none">TA</span>
+            <span style="display:inline-flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:12px;background:#EAF2F2;color:#436465;padding:5px 8px">ta1kq…9fq2<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#81A7A7" stroke-width="1.5" stroke-linecap="square"><rect x="9" y="9" width="11" height="11"></rect><path d="M5 15V5h10"></path></svg></span>
+            <span style="flex:1"></span>
+            <span style="width:44px;height:44px;display:grid;place-items:center;color:#181B1B"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square"><path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5"></path><path d="M7 12h10"></path></svg></span>
+          </div>
+          <div style="padding:20px 16px 0">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#81A7A7;margin-bottom:6px">Total balance</div>
+            <div style="font-size:44px;font-weight:700;letter-spacing:-1px;line-height:1.05">$2,304.18</div>
+            <div style="display:flex;gap:8px;margin-top:10px"><span style="font-family:'JetBrains Mono',monospace;font-size:11px;background:#D9F2F1;color:#0A766F;padding:3px 7px;letter-spacing:0.02em">+$23.40 · 24H</span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;background:#EAF2F2;color:#436465;padding:3px 7px;letter-spacing:0.02em">3 TOKENS</span></div>
+          </div>
+          <div style="display:flex;gap:12px;padding:20px 16px 0">
+            <span style="flex:1;height:48px;display:inline-flex;align-items:center;justify-content:center;gap:8px;background:var(--action-bg,#181B1B);color:#F9FBFB;font-family:var(--ui-font,'JetBrains Mono'),monospace;font-weight:600;font-size:15px;border-radius:var(--radius-tune,0px)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square"><path d="M12 3v13M6 11l6 6 6-6"></path></svg>Deposit</span>
+            <span style="flex:1;height:48px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid #B6CECE;color:#181B1B;font-family:var(--ui-font,'JetBrains Mono'),monospace;font-weight:600;font-size:15px;box-sizing:border-box;border-radius:var(--radius-tune,0px)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square"><path d="M7 17 17 7M8 7h9v9"></path></svg>Send</span>
+            <span style="width:48px;height:48px;display:inline-flex;align-items:center;justify-content:center;border:1px solid #B6CECE;color:#181B1B;box-sizing:border-box;border-radius:var(--radius-tune,0px)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square"><path d="M7 4v13M3 8l4-4 4 4M17 20V7M13 16l4 4 4-4"></path></svg></span>
+          </div>
+          <div style="display:flex;align-items:baseline;padding:28px 16px 8px"><span style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#81A7A7">Balances</span><span style="flex:1"></span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#81A7A7">USD</span></div>
+          <div style="border-top:1px solid #D1E1E1;border-bottom:1px solid #D1E1E1">
+            <div style="display:flex;align-items:center;gap:12px;height:64px;padding:0 16px">
+              <span style="width:28px;height:28px;border-radius:50%;background:#D33C43;padding:6px;box-sizing:border-box;display:grid;place-items:center;flex:none"><img src="assets/logomark-white.svg" alt="" style="width:100%;height:100%;display:block"></span>
+              <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px"><span style="font-size:15px;font-weight:500">Thru</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.06em;color:#81A7A7">ON THRU-ALPHANET</span></span>
+              <span style="display:flex;flex-direction:column;align-items:flex-end;gap:1px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px">$1,204.10</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#81A7A7">8,402.33 THRU</span></span>
+            </div>
+            <div style="height:1px;background:#EAF2F2;margin-left:16px"></div>
+            <div style="display:flex;align-items:center;gap:12px;height:64px;padding:0 16px">
+              <span style="width:28px;height:28px;border-radius:50%;background:#DDF4FD;color:#0279B1;display:grid;place-items:center;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;flex:none">US</span>
+              <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px"><span style="font-size:15px;font-weight:500">USD Coin</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.06em;color:#81A7A7">ON THRU-ALPHANET</span></span>
+              <span style="display:flex;flex-direction:column;align-items:flex-end;gap:1px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px">$860.00</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#81A7A7">860.00 USDC</span></span>
+            </div>
+            <div style="height:1px;background:#EAF2F2;margin-left:16px"></div>
+            <div style="display:flex;align-items:center;gap:12px;height:64px;padding:0 16px">
+              <span style="width:28px;height:28px;border-radius:50%;background:#181B1B;color:#F9FBFB;display:grid;place-items:center;font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;flex:none">ET</span>
+              <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px"><span style="font-size:15px;font-weight:500">Ether</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.06em;color:#81A7A7">BRIDGED</span></span>
+              <span style="display:flex;flex-direction:column;align-items:flex-end;gap:1px"><span style="font-family:'JetBrains Mono',monospace;font-size:14px">$240.08</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;color:#81A7A7">0.062 ETH</span></span>
+            </div>
+          </div>
+          <div style="display:flex;align-items:baseline;padding:24px 16px 8px"><span style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#81A7A7">Recent activity</span><span style="flex:1"></span><span style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#D33C43">VIEW ALL →</span></div>
+          <div style="border-top:1px solid #D1E1E1">
+            <div style="display:flex;align-items:center;gap:12px;height:56px;padding:0 16px">
+              <span style="width:8px;height:8px;background:#239F97;flex:none"></span>
+              <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px"><span style="font-size:14px;font-weight:500">Received THRU</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.04em;color:#81A7A7">TS1KQ…8FQ2 · SLOT 84,102</span></span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#0A766F">+12.40</span>
+            </div>
+            <div style="height:1px;background:#EAF2F2;margin-left:16px"></div>
+            <div style="display:flex;align-items:center;gap:12px;height:56px;padding:0 16px">
+              <span style="width:8px;height:8px;background:#D33C43;flex:none"></span>
+              <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px"><span style="font-size:14px;font-weight:500">Send failed</span><span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.04em;color:#81A7A7">VM ERROR · COMPUTE EXCEEDED</span></span>
+              <span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#436465">−3.10</span>
+            </div>
+          </div>
+          <div style="margin-top:auto;background:#F9FBFB">
+            <div style="display:flex;border-top:1px solid #D1E1E1">
+              <span style="position:relative;flex:1;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:#181B1B"><span style="position:absolute;top:-1px;left:14px;right:14px;height:2px;background:#181B1B"></span><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter"><path d="M3 11 12 3l9 8"></path><path d="M5 9.5V21h14V9.5"></path></svg><span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;font-weight:600">Home</span></span>
+              <span style="flex:1;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:#81A7A7"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter"><path d="M2 12h4l3-8 5 16 3-8h5"></path></svg><span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase">Activity</span></span>
+              <span style="flex:1;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:#81A7A7"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"></path></svg><span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase">Settings</span></span>
+            </div>
+            <div style="height:30px"></div>
+          </div>
+        </div>
+      </x-import>
+      </div></div>
+      <div style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#729D9D;padding-top:12px">Wallet home · VAR A tabs · full-bleed cells</div>
+    </div>
+
+    <div style="width:342px;flex:none" data-screen-label="Onboarding">
+      <div style="width:342px;height:744px;overflow:hidden"><div style="transform:scale(0.85);transform-origin:top left;width:402px;height:874px">
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" dark="{{ true }}" hint-size="402px,874px">
+        <div style="min-height:100%;display:flex;flex-direction:column;background:#181B1B;padding-top:62px;box-sizing:border-box;font-family:'Inter Tight',system-ui,sans-serif;color:#F9FBFB">
+          <div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;padding:0 28px;text-align:center">
+            <span style="width:72px;height:72px;border-radius:50%;background:#D33C43;padding:16px;box-sizing:border-box;display:grid;place-items:center"><img src="assets/logomark-white.svg" alt="Thru" style="width:100%;height:100%;display:block"></span>
+            <div style="font-size:34px;font-weight:700;letter-spacing:-0.5px;line-height:1.1">Move value <em style="color:#ED787E">thru</em>.</div>
+            <p style="margin:0;font-size:15px;line-height:1.5;color:#B6CECE;max-width:28ch">One balance across chains. Deposit, send and swap on thru-alphanet.</p>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:10px;padding:0 16px 56px">
+            <span style="width:100%;height:56px;display:inline-flex;align-items:center;justify-content:center;gap:10px;background:#F9FBFB;color:#181B1B;font-family:var(--ui-font,'JetBrains Mono'),monospace;font-weight:600;font-size:16px;border-radius:var(--radius-tune,0px)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square"><path d="M12 3l7 2.6v5.6c0 4.4-2.8 7.3-7 8.8-4.2-1.5-7-4.4-7-8.8V5.6L12 3Z"></path></svg>Continue with passkey</span>
+            <span style="width:100%;height:48px;display:inline-flex;align-items:center;justify-content:center;border:1px solid #436465;color:#EAF2F2;font-family:var(--ui-font,'JetBrains Mono'),monospace;font-weight:600;font-size:15px;box-sizing:border-box;border-radius:var(--radius-tune,0px)">Restore from recovery</span>
+            <span style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#729D9D;padding-top:10px">Thru-alphanet · node v0.2.26</span>
+          </div>
+        </div>
+      </x-import>
+      </div></div>
+      <div style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#729D9D;padding-top:12px">Onboarding · dark surface · stacked CTA</div>
+    </div>
+
+    <div style="width:342px;flex:none" data-screen-label="Settings">
+      <div style="width:342px;height:744px;overflow:hidden"><div style="transform:scale(0.85);transform-origin:top left;width:402px;height:874px">
+      <x-import component-from-global-scope="IOSDevice" from="./ios-frame.jsx" hint-size="402px,874px">
+        <div style="min-height:100%;display:flex;flex-direction:column;background:#EAF2F2;padding-top:62px;box-sizing:border-box;font-family:'Inter Tight',system-ui,sans-serif;color:#181B1B">
+          <div style="display:flex;align-items:center;padding:12px 16px 10px"><span style="font-size:28px;font-weight:700;letter-spacing:-0.5px">Settings</span><span style="flex:1"></span><span style="width:32px;height:32px;border-radius:50%;background:#D1E1E1;display:grid;place-items:center;font-family:'JetBrains Mono',monospace;font-size:11px;color:#436465">TA</span></div>
+          <div style="padding:6px 16px 0">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#81A7A7;padding:10px 0 6px">Security</div>
+            <div style="background:#F9FBFB;border:1px solid #D1E1E1;border-radius:var(--radius-tune,0px);overflow:hidden">
+              <div style="display:flex;align-items:center;gap:12px;height:52px;padding:0 14px"><span style="font-size:15px">Passkeys</span><span style="flex:1"></span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#81A7A7">2 KEYS</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#81A7A7" stroke-width="1.5" stroke-linecap="square"><path d="m9 6 6 6-6 6"></path></svg></div>
+              <div style="height:1px;background:#EAF2F2;margin-left:14px"></div>
+              <div style="display:flex;align-items:center;gap:12px;height:52px;padding:0 14px"><span style="font-size:15px">Recovery contacts</span><span style="flex:1"></span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#81A7A7" stroke-width="1.5" stroke-linecap="square"><path d="m9 6 6 6-6 6"></path></svg></div>
+              <div style="height:1px;background:#EAF2F2;margin-left:14px"></div>
+              <div style="display:flex;align-items:center;gap:12px;height:52px;padding:0 14px"><span style="font-size:15px">Require biometrics</span><span style="flex:1"></span><span style="position:relative;width:51px;height:31px;border-radius:999px;background:#D33C43;flex:none;display:inline-block"><span style="position:absolute;top:2px;left:22px;width:27px;height:27px;border-radius:50%;background:#F9FBFB;box-shadow:0 1px 2px rgba(24,27,27,0.25)"></span></span></div>
+            </div>
+            <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:#81A7A7;padding:18px 0 6px">Preferences</div>
+            <div style="background:#F9FBFB;border:1px solid #D1E1E1;border-radius:var(--radius-tune,0px);overflow:hidden">
+              <div style="display:flex;align-items:center;gap:12px;height:52px;padding:0 14px"><span style="font-size:15px">Currency</span><span style="flex:1"></span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#436465">USD</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#81A7A7" stroke-width="1.5" stroke-linecap="square"><path d="m9 6 6 6-6 6"></path></svg></div>
+              <div style="height:1px;background:#EAF2F2;margin-left:14px"></div>
+              <div style="display:flex;align-items:center;gap:12px;height:52px;padding:0 14px"><span style="font-size:15px">Network</span><span style="flex:1"></span><span style="width:7px;height:7px;border-radius:50%;background:#239F97"></span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#436465">THRU-ALPHANET</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#81A7A7" stroke-width="1.5" stroke-linecap="square"><path d="m9 6 6 6-6 6"></path></svg></div>
+              <div style="height:1px;background:#EAF2F2;margin-left:14px"></div>
+              <div style="display:flex;align-items:center;gap:12px;height:52px;padding:0 14px"><span style="font-size:15px">Appearance</span><span style="flex:1"></span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#436465">AUTO</span><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#81A7A7" stroke-width="1.5" stroke-linecap="square"><path d="m9 6 6 6-6 6"></path></svg></div>
+              <div style="height:1px;background:#EAF2F2;margin-left:14px"></div>
+              <div style="display:flex;align-items:center;gap:12px;height:52px;padding:0 14px"><span style="font-size:15px">Push notifications</span><span style="flex:1"></span><span style="position:relative;width:51px;height:31px;border-radius:999px;background:#B6CECE;flex:none;display:inline-block"><span style="position:absolute;top:2px;left:2px;width:27px;height:27px;border-radius:50%;background:#F9FBFB;box-shadow:0 1px 2px rgba(24,27,27,0.25)"></span></span></div>
+            </div>
+            <div style="background:#F9FBFB;border:1px solid #D1E1E1;border-radius:var(--radius-tune,0px);overflow:hidden;margin-top:18px">
+              <div style="display:flex;align-items:center;height:52px;padding:0 14px"><span style="font-size:15px;font-weight:500;color:#D33C43">Sign out</span></div>
+            </div>
+            <div style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:#81A7A7;padding:16px 0 8px">Thru mobile v0.1.0 · build 42</div>
+          </div>
+          <div style="margin-top:auto;background:#F9FBFB">
+            <div style="display:flex;border-top:1px solid #D1E1E1">
+              <span style="flex:1;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:#81A7A7"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter"><path d="M3 11 12 3l9 8"></path><path d="M5 9.5V21h14V9.5"></path></svg><span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase">Home</span></span>
+              <span style="flex:1;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:#81A7A7"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter"><path d="M2 12h4l3-8 5 16 3-8h5"></path></svg><span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase">Activity</span></span>
+              <span style="position:relative;flex:1;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:#181B1B"><span style="position:absolute;top:-1px;left:14px;right:14px;height:2px;background:#181B1B"></span><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"></path></svg><span style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;font-weight:600">Settings</span></span>
+            </div>
+            <div style="height:30px"></div>
+          </div>
+        </div>
+      </x-import>
+      </div></div>
+      <div style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:#729D9D;padding-top:12px">Settings · VAR B inset cells · grouped on stone-100</div>
+    </div>
+  </div>
+</section>
+
+<!-- ── Footer ──────────────────────────────────────────── -->
+<footer style="border-top:1px solid #D1E1E1;padding:18px 40px;display:flex;gap:16px;flex-wrap:wrap;align-items:baseline;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:0.04em;color:#729D9D">
+  <span>THRU MOBILE V0.1 · TOKENS → <a href="thru-mobile-tokens.css" style="color:#D33C43">thru-mobile-tokens.css</a></span>
+  <span style="margin-left:auto">1PX = 1PT (IOS) = 1DP (ANDROID) · INTER TIGHT + JETBRAINS MONO</span>
+</footer>
+</div>
+
+<sc-if value="{{ gOn }}" hint-placeholder-val="{{ false }}">
+  <div style="position:fixed;left:50%;transform:translateX(-50%);bottom:24px;width:360px;max-width:calc(100vw - 32px);z-index:300;display:flex;gap:12px;align-items:flex-start;background:#181B1B;color:#EAF2F2;border-left:3px solid {{ gC }};padding:12px 34px 13px 14px;box-shadow:0 20px 48px rgba(24,27,27,0.28);overflow:hidden;animation:tm-fade-in 160ms cubic-bezier(0,0,0.2,1);box-sizing:border-box">
+    <span style="flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:{{ gIconBg }};color:{{ gC }}"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square"><path d="{{ gP }}"></path></svg></span>
+    <span style="flex:1;min-width:0"><span style="display:block;font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:0.04em;color:#F9FBFB">{{ gT }}</span><span style="display:block;font-family:'JetBrains Mono',monospace;font-size:11px;color:#B6CECE;margin-top:2px">{{ gD }}</span></span>
+    <button onClick="{{ hideG }}" style="position:absolute;top:6px;right:6px;width:24px;height:24px;display:grid;place-items:center;border:none;background:none;cursor:pointer;color:#81A7A7" aria-label="Dismiss"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+    <span style="position:absolute;left:0;bottom:0;height:2px;width:100%;background:{{ gC }};transform-origin:left;animation:tm-toastbar 3s linear forwards"></span>
+  </div>
+</sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;look&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;refined&quot;,&quot;classic&quot;],&quot;default&quot;:&quot;refined&quot;,&quot;tsType&quot;:&quot;'refined' | 'classic'&quot;,&quot;section&quot;:&quot;System&quot;},&quot;radius&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;min&quot;:0,&quot;max&quot;:12,&quot;step&quot;:1,&quot;unit&quot;:&quot;px&quot;,&quot;default&quot;:0,&quot;section&quot;:&quot;System&quot;},&quot;showSpecs&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;section&quot;:&quot;Gallery&quot;}}">
+class Component extends DCLogic {
+  state = {
+    tabA: 0, tabB: 1, seg: 0,
+    sw1: true, sw2: true, sw3: false,
+    cb: true, radio: 0, step: 1,
+    sheetA: false, sheetB: false,
+    vToast: null, gToast: null,
+  };
+
+  componentDidMount() { this.applyTunes(); }
+  componentDidUpdate() { this.applyTunes(); }
+
+  applyTunes() {
+    const root = document.getElementById('tm-root');
+    if (!root) return;
+    const classic = (this.props.look ?? 'refined') === 'classic';
+    root.style.setProperty('--action-bg', classic ? '#D33C43' : '#181B1B');
+    root.style.setProperty('--action-bg-active', classic ? '#BE2E35' : '#000000');
+    root.style.setProperty('--ui-font', classic ? "'Inter Tight'" : "'JetBrains Mono'");
+    root.style.setProperty('--radius-tune', (this.props.radius ?? 0) + 'px');
+    root.style.setProperty('--spec-display', (this.props.showSpecs ?? true) ? 'block' : 'none');
+  }
+
+  showToast(key, cfg, dur) {
+    clearTimeout(this['_a' + key]); clearTimeout(this['_b' + key]);
+    this.setState({ [key]: null });
+    this['_a' + key] = setTimeout(() => {
+      this.setState({ [key]: cfg });
+      this['_b' + key] = setTimeout(() => this.setState({ [key]: null }), dur);
+    }, 40);
+  }
+
+  fire(kind) {
+    const cfg = {
+      success: { c: '#239F97', p: 'M20 6 9 17l-5-5', t: 'TRANSACTION CONFIRMED', d: '12.40 THRU received in slot 84,102.' },
+      error:   { c: '#ED787E', p: 'M18 6 6 18M6 6l12 12', t: 'TRANSACTION FAILED', d: 'VM error · compute budget exceeded.' },
+      info:    { c: '#2EA0C8', p: 'M12 8h.01M12 11v5', t: 'NETWORK UPDATED', d: 'Connected to thru-alphanet.' },
+      warn:    { c: '#FFAD42', p: 'M12 3 2 20h20L12 3ZM12 10v4M12 17h.01', t: 'LOW BALANCE', d: 'Fee may exceed remaining THRU.' },
+    }[kind];
+    this.showToast('vToast', cfg, 4200);
+  }
+
+  copyHex = (e) => {
+    const el = e.currentTarget;
+    const hex = el.dataset.hex || '';
+    const name = (el.dataset.name || 'token').toUpperCase();
+    try { if (navigator.clipboard) navigator.clipboard.writeText(hex); } catch (err) {}
+    this.showToast('gToast', { c: '#239F97', p: 'M20 6 9 17l-5-5', t: name + ' COPIED', d: hex }, 3000);
+  };
+
+  renderVals() {
+    const s = this.state;
+    const ink = '#181B1B', sub = '#81A7A7', brick = '#D33C43';
+    const tabs = [
+      { label: 'Home', d1: 'M3 11 12 3l9 8', d2: 'M5 9.5V21h14V9.5' },
+      { label: 'Activity', d1: 'M2 12h4l3-8 5 16 3-8h5' },
+      { label: 'Settings', d1: 'M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4' },
+    ];
+    const mk = (key, activeColor, kind) => tabs.map((t, i) => ({
+      label: t.label, d1: t.d1, d2: t.d2,
+      badge: kind === 'dot' && i === 1 ? '3' : '',
+      badgeOp: kind === 'dot' && i === 1 ? 1 : 0,
+      color: s[key] === i ? activeColor : sub,
+      w: s[key] === i ? 600 : 500,
+      ind: kind === 'ind' && s[key] === i ? 1 : 0,
+      dot: kind === 'dot' && s[key] === i ? 1 : 0,
+      go: () => this.setState({ [key]: i }),
+    }));
+    const swBg = v => v ? brick : '#B6CECE';
+    const swTh = v => v ? 'translateX(20px)' : 'translateX(0px)';
+    const v = s.vToast || {}, g = s.gToast || {};
+    return {
+      tabsA: mk('tabA', ink, 'ind'),
+      tabsB: mk('tabB', brick, 'dot'),
+      segItems: ['Tokens', 'Collectibles', 'Activity'].map((label, i) => ({
+        label,
+        bg: s.seg === i ? ink : 'transparent',
+        color: s.seg === i ? '#F9FBFB' : '#436465',
+        sel: () => this.setState({ seg: i }),
+      })),
+      sw1Bg: swBg(s.sw1), sw1Th: swTh(s.sw1), tSw1: () => this.setState({ sw1: !s.sw1 }),
+      sw2Bg: swBg(s.sw2), sw2Th: swTh(s.sw2), tSw2: () => this.setState({ sw2: !s.sw2 }),
+      sw3Bg: swBg(s.sw3), sw3Th: swTh(s.sw3), tSw3: () => this.setState({ sw3: !s.sw3 }),
+      cbBg: s.cb ? brick : '#F9FBFB', cbBorder: s.cb ? brick : '#B6CECE', cbOp: s.cb ? 1 : 0,
+      tCb: () => this.setState({ cb: !s.cb }),
+      r0B: s.radio === 0 ? brick : '#B6CECE', r0S: s.radio === 0 ? 'scale(1)' : 'scale(0)',
+      r1B: s.radio === 1 ? brick : '#B6CECE', r1S: s.radio === 1 ? 'scale(1)' : 'scale(0)',
+      pick0: () => this.setState({ radio: 0 }), pick1: () => this.setState({ radio: 1 }),
+      stepVal: s.step,
+      stepUp: () => this.setState({ step: Math.min(99, s.step + 1) }),
+      stepDown: () => this.setState({ step: Math.max(0, s.step - 1) }),
+      sheetA: s.sheetA, openA: () => this.setState({ sheetA: true }), closeA: () => this.setState({ sheetA: false }),
+      sheetB: s.sheetB, openB: () => this.setState({ sheetB: true }), closeB: () => this.setState({ sheetB: false }),
+      vOn: !!s.vToast, vC: v.c, vP: v.p, vT: v.t, vD: v.d, vIconBg: (v.c || '#239F97') + '33',
+      gOn: !!s.gToast, gC: g.c, gP: g.p, gT: g.t, gD: g.d, gIconBg: (g.c || '#239F97') + '33',
+      fSuccess: () => this.fire('success'), fError: () => this.fire('error'),
+      fInfo: () => this.fire('info'), fWarn: () => this.fire('warn'),
+      hideV: () => this.setState({ vToast: null }), hideG: () => this.setState({ gToast: null }),
+      copyHex: this.copyHex,
+    };
+  }
+}
+</script>
+</body>
+</html>

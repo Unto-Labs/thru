@@ -18,6 +18,7 @@ import {
  */
 const TRUSTED_IFRAME_ORIGINS = [
   'https://app.tid.sh',
+  'https://staging-app.tid.sh',
   'https://wallet.tid.sh',
   'https://wallet.staging.web.5f1.net',
 ];
@@ -25,6 +26,8 @@ const TRUSTED_IFRAME_ORIGINS = [
 const SLOW_REQUEST_TIMEOUT_MS = 5 * 60 * 1000;
 const FAST_REQUEST_TIMEOUT_MS = 30 * 1000;
 const PARENT_ORIGIN_SEARCH_PARAM = 'tn_parent_origin';
+export const WALLET_IFRAME_ALLOW =
+  'publickey-credentials-get; publickey-credentials-create; payment *';
 
 const SLOW_REQUEST_TYPES: ReadonlySet<string> = new Set([
   POST_MESSAGE_REQUEST_TYPES.CONNECT,
@@ -174,8 +177,9 @@ export class IframeManager {
       if (!this.iframe) {
         this.iframe = document.createElement('iframe');
         this.iframe.src = this.getIframeSrc();
-        /* Allow WebAuthn in cross-origin iframe for passkey auth. */
-        this.iframe.allow = 'publickey-credentials-get; publickey-credentials-create';
+        /* Delegate WebAuthn for passkey auth and Payment Request for the
+           wallet-owned Coinbase Apple Pay iframe. */
+        this.iframe.allow = WALLET_IFRAME_ALLOW;
         this.applyIframeStyles();
         /* Keep hidden (but still load) until the wallet asks to show UI. */
         this.setVisibility(false);

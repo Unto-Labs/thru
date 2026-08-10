@@ -421,6 +421,33 @@ fn build_transfer_instruction(
     Ok(instruction)
 }
 
+/// ASCII domain-separation tag for the EOA create authorization message.
+pub const EOA_CREATE_MSG_TAG: &[u8; 16] = b"tn_eoa_create_v1";
+
+/// Total size of the EOA create authorization message: tag(16) + chain_id(2)
+/// + fee_payer(32) + eoa(32).
+pub const EOA_CREATE_MSG_SZ: usize = 16 + 2 + 32 + 32;
+
+/// Build the canonical domain-separated EOA create authorization message:
+/// `"tn_eoa_create_v1" || chain_id || fee_payer_pubkey || eoa_pubkey`.
+///
+/// `chain_id` is encoded little-endian. Byte-identical to what the runtime
+/// constructs in `tn_vm_syscall_account_create_eoa` and to the Go/TS builders.
+/// The EOA's private key signs this message; the resulting signature is embedded
+/// in the create instruction. (Replaces the previous "sign 32 zero bytes".)
+pub fn build_eoa_create_message(
+    chain_id: u16,
+    fee_payer: &TnPubkey,
+    eoa: &TnPubkey,
+) -> [u8; EOA_CREATE_MSG_SZ] {
+    let mut msg = [0u8; EOA_CREATE_MSG_SZ];
+    msg[0..16].copy_from_slice(EOA_CREATE_MSG_TAG);
+    msg[16..18].copy_from_slice(&chain_id.to_le_bytes());
+    msg[18..50].copy_from_slice(fee_payer);
+    msg[50..82].copy_from_slice(eoa);
+    msg
+}
+
 /// ASCII domain-separation tag for the EOA delete authorization message.
 pub const EOA_DELETE_MSG_TAG: &[u8; 16] = b"tn_eoa_delete_v1";
 

@@ -24,6 +24,7 @@ import {
     type TransactionAccountsInput,
     TransactionBuilder,
     type TransactionHeaderInput,
+    type TransactionSigningScheme,
     TransactionStatusSnapshot
 } from "../domain/transactions";
 import { normalizeAccountList, parseInstructionData } from "../domain/transactions/utils";
@@ -96,6 +97,7 @@ export interface BuildTransactionOptions {
 
 export interface BuildAndSignTransactionOptions extends BuildTransactionOptions {
     feePayer: TransactionFeePayerConfig & { privateKey: Uint8Array };
+    transactionSigningScheme?: TransactionSigningScheme;
 }
 
 export interface TransactionQueryOptions {
@@ -488,7 +490,9 @@ function createTransactionBuilder(): TransactionBuilder {
 
 async function createBuildParams(
     ctx: ThruClientContext,
-    options: BuildTransactionOptions,
+    options: BuildTransactionOptions & {
+        transactionSigningScheme?: TransactionSigningScheme;
+    },
 ): Promise<BuildTransactionParams> {
     const feePayerPublicKey = Pubkey.from(options.feePayer.publicKey).toBytes();
     const program = Pubkey.from(options.program).toBytes();
@@ -512,6 +516,8 @@ async function createBuildParams(
         accounts,
         instructionData,
         proofs,
+        transactionSigningScheme:
+            options.transactionSigningScheme ?? ctx.transactionSigningScheme,
     };
 }
 

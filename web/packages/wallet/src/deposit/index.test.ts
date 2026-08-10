@@ -56,14 +56,25 @@ const RUNTIME_CONFIG: DepositRuntimeConfig = {
   defaultNetwork: "devnet",
   networkConfigJson: JSON.stringify({
     devnet: {
-      unifold_project: {
-        project_id: "project_devnet",
-        publishable_key: "pk_devnet",
-        treasury_address: "treasury_devnet",
-        destination_token_address: "usdc_devnet",
-      },
+      rpc_url: "https://rpc.devnet.example",
       default_deposit_target: "credits",
-      deposit_targets: {
+      providers: {
+        unifold: {
+          orders_enabled: true,
+          public: {
+            project_id: "project_devnet",
+            publishable_key: "pk_devnet",
+          },
+          settlement_network: "solana-mainnet",
+          settlement_asset: "USDC",
+          settlement_asset_address: "usdc_devnet",
+          settlement_treasury: "treasury_devnet",
+        },
+        coinbase: {
+          orders_enabled: true,
+        },
+      },
+      targets: {
         credits: {
           mint_address: "ta_mint",
           token_program_address: "ta_token_program",
@@ -143,7 +154,12 @@ describe("wallet deposit account helpers", () => {
     const depositConfig = createDepositConfig(RUNTIME_CONFIG);
     const config = depositConfig.getNetwork("devnet");
 
-    expect(config.unifoldProject.projectId).toBe("project_devnet");
+    expect(config.unifoldProject?.projectId).toBe("project_devnet");
+    expect(config.providers.get("coinbase")).toEqual({
+      kind: "coinbase_headless",
+      enabled: true,
+      public: {},
+    });
     expect(depositConfig.getTarget("devnet", "credits").mintAddress).toBe(
       "ta_mint",
     );

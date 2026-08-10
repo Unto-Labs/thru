@@ -6,7 +6,6 @@ use std::{collections::HashSet, mem};
 use tracing::{debug, error, warn};
 // use base64::prelude::*;
 
-use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 
 /// Block format structures (mirror the on-wire block layout defined in C)
 pub type FdPubkey = [u8; 32];
@@ -211,6 +210,21 @@ impl BlockParser {
             ));
         }
 
+        // Mirror C consensus (src/thru/block/tn_block.c): the block-header body's
+        // padding[5] and reserved[4] fields are part of the signed region and
+        // MUST be zero. A non-zero value would make the C node reject the block
+        // while accepting it here would silently split client and node views.
+        if header.body.padding.iter().any(|&b| b != 0) {
+            return Err(BlockParseError::HeaderSignatureInvalid(
+                "non-zero header body padding".to_string(),
+            ));
+        }
+        if header.body.reserved.iter().any(|&b| b != 0) {
+            return Err(BlockParseError::HeaderSignatureInvalid(
+                "non-zero header body reserved".to_string(),
+            ));
+        }
+
         // Sign/verify only the header body, excluding the signature field
         // This matches C implementation: fd_ed25519_verify((uchar const *)&header->body, ...)
         let body_size = mem::size_of::<TnBlockHeaderBody>();
@@ -224,25 +238,15 @@ impl BlockParser {
             body_bytes.len()
         );
 
-        // Convert signature and public key to ed25519-dalek types
-        let signature = match Signature::from_slice(&header.block_header_sig) {
-            Ok(sig) => sig,
-            Err(e) => {
-                error!("Invalid header signature format: {}", e);
-                return Err(BlockParseError::HeaderSignatureInvalid(format!(
-                    "Signature format error: {}",
-                    e
-                )));
-            }
-        };
-
-        let verifying_key = VerifyingKey::from_bytes(&header.body.block_producer).map_err(|e| {
-            error!("Invalid producer public key format: {}", e);
-            BlockParseError::Ed25519KeyError(format!("Invalid producer public key: {}", e))
-        })?;
-
-        // Verify the signature against the header body
-        verifying_key.verify(body_bytes, &signature).map_err(|e| {
+        // Verify the header-body signature under the standardized block-header
+        // domain: M = DST_blkhdr ‖ header_body, strict/canonical Ed25519.
+        crate::tn_signature::verify(
+            crate::tn_signature::SignatureDomain::BlockHeader,
+            body_bytes,
+            &header.block_header_sig,
+            &header.body.block_producer,
+        )
+        .map_err(|e| {
             error!("Header signature verification failed: {}", e);
             BlockParseError::HeaderSignatureInvalid(format!("Verification failed: {}", e))
         })?;
@@ -269,25 +273,15 @@ impl BlockParser {
 
         debug!("Verifying block signature against computed hash");
 
-        // Convert signature and public key to ed25519-dalek types
-        let signature = match Signature::from_slice(&footer.block_sig) {
-            Ok(sig) => sig,
-            Err(e) => {
-                error!("Invalid block signature format: {}", e);
-                return Err(BlockParseError::BlockSignatureInvalid(format!(
-                    "Signature format error: {}",
-                    e
-                )));
-            }
-        };
-
-        let verifying_key = VerifyingKey::from_bytes(producer_key).map_err(|e| {
-            error!("Invalid producer public key for block verification: {}", e);
-            BlockParseError::Ed25519KeyError(format!("Invalid producer public key: {}", e))
-        })?;
-
-        // Verify the signature against the block hash
-        verifying_key.verify(block_hash, &signature).map_err(|e| {
+        // Verify the block signature under the standardized block domain:
+        // M = DST_block ‖ block_hash, strict/canonical Ed25519.
+        crate::tn_signature::verify(
+            crate::tn_signature::SignatureDomain::Block,
+            block_hash,
+            &footer.block_sig,
+            producer_key,
+        )
+        .map_err(|e| {
             error!("Block signature verification failed: {}", e);
             BlockParseError::BlockSignatureInvalid(format!("Verification failed: {}", e))
         })?;

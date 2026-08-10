@@ -2,6 +2,7 @@
    Expo can load it from a clean workspace before package build artifacts exist. */
 
 const DEFAULT_RP_DOMAIN = "app.tid.sh";
+const COINBASE_APP_BOUND_DOMAIN = "coinbase.com";
 const APP_BOUND_DOMAIN_CAP = 10;
 const MIN_ANDROID_SDK_FOR_PASSKEYS = 28;
 const ANDROID_SYSTEM_BRIGHTNESS_PERMISSION =
@@ -38,17 +39,23 @@ function withThruWalletNative(config, opts = {}) {
   )
     ? config.ios.infoPlist.WKAppBoundDomains
     : [];
-  if (!existingAppBoundDomains.includes(rpDomain)) {
-    if (existingAppBoundDomains.length >= APP_BOUND_DOMAIN_CAP) {
-      throw new Error(
-        `[@thru/wallet/native/plugin] WKAppBoundDomains is capped at ${APP_BOUND_DOMAIN_CAP} entries; cannot add ${rpDomain}. Drop an unused domain from your Info.plist before adding the wallet.`,
-      );
-    }
-    config.ios.infoPlist.WKAppBoundDomains = [
-      ...existingAppBoundDomains,
-      rpDomain,
-    ];
+  const missingAppBoundDomains = [rpDomain, COINBASE_APP_BOUND_DOMAIN].filter(
+    (domain, index, requiredDomains) =>
+      requiredDomains.indexOf(domain) === index &&
+      !existingAppBoundDomains.includes(domain),
+  );
+  if (
+    existingAppBoundDomains.length + missingAppBoundDomains.length >
+    APP_BOUND_DOMAIN_CAP
+  ) {
+    throw new Error(
+      `[@thru/wallet/native/plugin] WKAppBoundDomains is capped at ${APP_BOUND_DOMAIN_CAP} entries; cannot add ${missingAppBoundDomains.join(", ")}. Drop unused domains from your Info.plist before adding the wallet.`,
+    );
   }
+  config.ios.infoPlist.WKAppBoundDomains = [
+    ...existingAppBoundDomains,
+    ...missingAppBoundDomains,
+  ];
 
   const webCredentialsDomain = associatedDomainMode
     ? `webcredentials:${rpDomain}?mode=${associatedDomainMode}`

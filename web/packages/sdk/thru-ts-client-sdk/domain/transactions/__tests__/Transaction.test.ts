@@ -1,11 +1,14 @@
 import { describe, expect, it } from "vitest";
+import { getPublicKeyAsync } from "@noble/ed25519";
 
 import { Transaction } from "../Transaction";
+import { SignatureDomain, verifyWithDomain } from "../domain-signing";
+import * as legacySigning from "../domain-signing-legacy";
 import { buildCreationProof, buildExistingProof } from "./helpers";
 
-function createTransaction(): Transaction {
+function createTransaction(feePayer?: Uint8Array): Transaction {
     return new Transaction({
-        feePayer: new Uint8Array(Array.from({ length: 32 }, (_, i) => i + 1)),
+        feePayer: feePayer ?? new Uint8Array(Array.from({ length: 32 }, (_, i) => i + 1)),
         program: new Uint8Array(Array.from({ length: 32 }, (_, i) => 200 - i)),
         header: {
             fee: 123n,
@@ -142,18 +145,63 @@ describe("Transaction wire format", () => {
         expect(signingBytes).toEqual(wire.slice(0, -64));
     });
 
-    it("signs transaction with ed25519 key", async () => {
+    it("sign remains RFC-8032-only", async () => {
         const privateKey = new Uint8Array(32);
         privateKey.fill(0x42);
 
-        const tx = createTransaction();
-        await tx.sign(privateKey);
+        // The fee payer must be the public key derived from the signing key, or
+        // Transaction.sign rejects the mismatch (the sig is verified against the
+        // fee payer on chain).
+        const feePayer = await getPublicKeyAsync(privateKey);
+        const tx = createTransaction(feePayer);
+        const signature = await tx.sign(privateKey);
+        const payload = tx.toWireForSigning();
 
         const wire = tx.toWire();
         const parsed = Transaction.fromWire(wire);
 
         expect(parsed.getSignature()).toBeDefined();
+        expect(
+            await verifyWithDomain(
+                signature.toBytes(),
+                payload,
+                feePayer,
+                SignatureDomain.TXN,
+            ),
+        ).toBe(true);
+        expect(
+            await legacySigning.verifyWithDomain(
+                signature.toBytes(),
+                payload,
+                feePayer,
+                legacySigning.SignatureDomain.TXN,
+            ),
+        ).toBe(false);
+    });
+
+    it("legacySign produces only a legacy-valid transaction signature", async () => {
+        const privateKey = new Uint8Array(32);
+        privateKey.fill(0x42);
+        const feePayer = await getPublicKeyAsync(privateKey);
+        const tx = createTransaction(feePayer);
+        const signature = await tx.legacySign(privateKey);
+        const payload = tx.toWireForSigning();
+
+        expect(
+            await legacySigning.verifyWithDomain(
+                signature.toBytes(),
+                payload,
+                feePayer,
+                legacySigning.SignatureDomain.TXN,
+            ),
+        ).toBe(true);
+        expect(
+            await verifyWithDomain(
+                signature.toBytes(),
+                payload,
+                feePayer,
+                SignatureDomain.TXN,
+            ),
+        ).toBe(false);
     });
 });
-
-

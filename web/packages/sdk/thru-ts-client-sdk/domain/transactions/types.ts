@@ -1,4 +1,5 @@
 import { Pubkey, PubkeyInput, Signature } from "../primitives";
+import type { TransactionSigningScheme } from "./transaction-signing-scheme";
 
 export interface ResourceLimits {
     computeUnits?: number;
@@ -76,6 +77,7 @@ export interface BuildTransactionParams {
      */
     buildInstructionData?: InstructionDataBuilder;
     proofs?: OptionalProofs;
+    transactionSigningScheme?: TransactionSigningScheme;
 }
 
 export interface BuiltTransactionResult {

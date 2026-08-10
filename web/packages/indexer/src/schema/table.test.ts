@@ -4,6 +4,7 @@
 
 import { describe, it, expect } from "vitest";
 import { getTableColumns, getTableName } from "drizzle-orm";
+import { getTableConfig } from "drizzle-orm/pg-core";
 import { buildDrizzleTable } from "./table";
 import { t } from "./builder";
 
@@ -31,6 +32,37 @@ describe("buildDrizzleTable", () => {
       expect(columns.id).toBeDefined();
       expect(columns.name).toBeDefined();
       expect(columns.count).toBeDefined();
+    });
+  });
+
+  describe("composite indexes", () => {
+    it("builds ordered multi-column indexes", () => {
+      const schema = {
+        id: t.text().primaryKey(),
+        owner: t.text().notNull(),
+        market: t.text().notNull(),
+        seatIndex: t.integer().notNull(),
+      };
+      const table = buildDrizzleTable("balances", schema, [{
+        name: "balances_owner_market_seat_idx",
+        columns: ["owner", "market", "seatIndex"],
+      }]);
+
+      const composite = getTableConfig(table).indexes.find(
+        (candidate) => candidate.config.name === "balances_owner_market_seat_idx"
+      );
+      expect(composite?.config.columns.map((column: any) => column.name)).toEqual([
+        "owner",
+        "market",
+        "seat_index",
+      ]);
+    });
+
+    it("rejects invalid composite index definitions", () => {
+      const schema = { id: t.text().primaryKey(), owner: t.text().notNull() };
+      expect(() => buildDrizzleTable("balances", schema, [{ columns: ["owner"] }])).toThrow(
+        "must include at least two columns"
+      );
     });
   });
 

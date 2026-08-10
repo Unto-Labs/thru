@@ -3,7 +3,9 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
   AccountDataSchema,
   AccountMetaSchema,
+  AccountPageSchema,
   AccountSchema,
+  AccountUpdateSchema,
   BlockFinishedSchema,
   ListAccountsResponseSchema,
   PubkeySchema,
@@ -14,6 +16,7 @@ import {
   type StreamAccountUpdatesResponse,
 } from "@thru/sdk/proto";
 import { createAccountsByOwnerReplay } from "./account-replay";
+import { PAGE_SIZE } from "./page-assembler";
 import type { AccountSource } from "./chain-client";
 import type { RetryConfig } from "./retry";
 import type { ReplayLogger } from "./types";
@@ -195,12 +198,116 @@ describe("account-owner replay reconnect cleanup", () => {
         }),
       })
     );
+    expect(client2.getAccount).toHaveBeenCalledWith(
+      expect.objectContaining({
+        versionContext: expect.objectContaining({
+          version: { case: "slot", value: 101n },
+        }),
+      })
+    );
     expect(logger.info).toHaveBeenCalledWith(
       "Replay stream reconnect catch-up completed",
       expect.objectContaining({
         event: "replay.stream.reconnect.catch_up_completed",
         from_slot: "100",
         accounts_queued: 1,
+      })
+    );
+
+    const close = iterator.return?.();
+    await vi.advanceTimersByTimeAsync(5000);
+    await close;
+  });
+
+  test("catch-up getAccount failures still emit readable deferred accounts", async () => {
+    const owner = bytes(33);
+    const firstAccount = makeAccount(bytes(34), owner, 100n, 1n);
+    const failedCatchUpAccount = makeAccount(bytes(35), owner, 101n, 2n);
+    const readableCatchUpAccount = makeAccount(bytes(36), owner, 102n, 3n);
+    const staleStream = createSnapshotThenHangingStream(accountToSnapshot(firstAccount));
+    const freshStream = createHangingStream();
+    const client1 = createMockClient(staleStream.iterable);
+    const client2 = createMockClient(freshStream.iterable);
+    client2.listAccounts.mockResolvedValue(
+      create(ListAccountsResponseSchema, { accounts: [failedCatchUpAccount, readableCatchUpAccount] })
+    );
+    client2.getAccount.mockImplementation(async (request) => {
+      if (request.address?.value[0] === 35) throw new Error("seq mismatch");
+      return readableCatchUpAccount;
+    });
+    const clients = [client1, client2];
+    const clientFactory = vi.fn(() => clients.shift() ?? client2);
+    const logger = createMockLogger();
+
+    const replay = createAccountsByOwnerReplay({
+      clientFactory,
+      owner,
+      logger,
+      retryConfig: SLOW_BACKOFF_RETRY_CONFIG,
+      maxRetries: 2,
+      reconnectCleanupTimeoutMs: 1000,
+      healthLogIntervalMs: 50,
+      cleanupInterval: 1000,
+    });
+    const iterator = replay[Symbol.asyncIterator]();
+
+    const firstEvent = iterator.next();
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(10);
+    await expect(firstEvent).resolves.toMatchObject({
+      done: false,
+      value: {
+        type: "account",
+        account: {
+          addressHex: "22",
+          slot: 100n,
+          source: "stream",
+        },
+      },
+    });
+
+    const readableCatchUpEvent = iterator.next();
+    await vi.advanceTimersByTimeAsync(SLOW_BACKOFF_RETRY_CONFIG.connectionTimeoutMs + 11);
+    await vi.advanceTimersByTimeAsync(100);
+
+    await expect(readableCatchUpEvent).resolves.toMatchObject({
+      done: false,
+      value: {
+        type: "account",
+        account: {
+          addressHex: "24",
+          slot: 102n,
+          source: "backfill",
+        },
+      },
+    });
+
+    expect(client2.getAccount).toHaveBeenCalledTimes(3);
+    expect(logger.error).toHaveBeenCalledWith(
+      "Replay account fetch failed",
+      expect.objectContaining({
+        event: "replay.account.fetch_failed",
+        phase: "catch_up",
+        address: "23",
+        slot: "101",
+        attempts: 2,
+        error: expect.any(Error),
+      })
+    );
+    expect(logger.warn).toHaveBeenCalledWith(
+      "Replay stream reconnect catch-up failed",
+      expect.objectContaining({
+        event: "replay.stream.reconnect.catch_up_failed",
+        error: expect.objectContaining({ name: "DeferredAccountFetchError" }),
+      })
+    );
+
+    await vi.advanceTimersByTimeAsync(50);
+    expect(logger.info).toHaveBeenCalledWith(
+      "Replay health summary",
+      expect.objectContaining({
+        event: "replay.health",
+        fetch_failures_total: 1,
       })
     );
 
@@ -336,6 +443,72 @@ describe("account-owner replay reconnect cleanup", () => {
     await close;
   });
 
+  test("backfill getAccount failures reject after readable accounts are emitted", async () => {
+    const owner = bytes(30);
+    const failedAccount = makeAccount(bytes(31), owner, 50n, 1n);
+    const readableAccount = makeAccount(bytes(32), owner, 51n, 1n);
+    const client = createMockClient(createEndingStream().iterable);
+    client.listAccounts.mockResolvedValue(
+      create(ListAccountsResponseSchema, { accounts: [failedAccount, readableAccount] })
+    );
+    client.getAccount.mockImplementation(async (request) => {
+      if (request.address?.value[0] === 31) throw new Error("seq mismatch");
+      return readableAccount;
+    });
+    const logger = createMockLogger();
+
+    const replay = createAccountsByOwnerReplay({
+      client,
+      owner,
+      logger,
+      maxRetries: 2,
+      cleanupInterval: 1000,
+    });
+    const iterator = replay[Symbol.asyncIterator]();
+
+    const readableEvent = iterator.next();
+    await vi.advanceTimersByTimeAsync(100);
+
+    await expect(readableEvent).resolves.toMatchObject({
+      done: false,
+      value: {
+        type: "account",
+        account: {
+          addressHex: "20",
+          slot: 51n,
+          source: "backfill",
+        },
+      },
+    });
+
+    const deferredFailure = expect(iterator.next()).rejects.toThrow("Backfill failed to fetch 1 account");
+    await vi.advanceTimersByTimeAsync(100);
+    await deferredFailure;
+
+    expect(client.getAccount).toHaveBeenCalledTimes(3);
+    expect(client.getAccount).toHaveBeenCalledWith(
+      expect.objectContaining({
+        address: expect.objectContaining({ value: bytes(32) }),
+        versionContext: expect.objectContaining({
+          version: { case: "slot", value: 51n },
+        }),
+      })
+    );
+    expect(logger.error).toHaveBeenCalledWith(
+      "Replay account fetch failed",
+      expect.objectContaining({
+        event: "replay.account.fetch_failed",
+        phase: "backfill",
+        address: "1f",
+        slot: "50",
+        attempts: 2,
+        error: expect.any(Error),
+      })
+    );
+
+    await iterator.return?.();
+  });
+
   test("stream-ended reconnect increments attempts until a stream message arrives", async () => {
     const owner = bytes(11);
     const liveStream = createSnapshotThenClosableStream(makeSnapshot(bytes(12), owner, 200n));
@@ -431,6 +604,488 @@ describe("account-owner replay reconnect cleanup", () => {
     expect(client2.streamAccountUpdates).toHaveBeenCalledTimes(1);
   });
 });
+
+describe("account replay operational logging", () => {
+  const OPERATIONAL_RETRY_CONFIG: RetryConfig = {
+    initialDelayMs: 5,
+    maxDelayMs: 5,
+    connectionTimeoutMs: 60_000,
+  };
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  test("queue warnings fire at the threshold, on doubling, and after reset", async () => {
+    const owner = bytes(30);
+    const stream = createPushableStream();
+    const client = createMockClient(stream.iterable);
+    const logger = createMockLogger();
+    const replay = createAccountsByOwnerReplay({
+      client,
+      owner,
+      logger,
+      queueWarningThreshold: 2,
+      healthLogIntervalMs: 0,
+      retryConfig: OPERATIONAL_RETRY_CONFIG,
+    });
+    const iterator = replay[Symbol.asyncIterator]();
+    const firstEvent = iterator.next();
+
+    await vi.advanceTimersByTimeAsync(0);
+    for (let slot = 1n; slot <= 4n; slot++) {
+      stream.push(makeBlockFinished(slot));
+    }
+    await vi.advanceTimersByTimeAsync(20);
+    await expect(firstEvent).resolves.toMatchObject({ done: false });
+
+    const queueWarnings = () =>
+      vi.mocked(logger.warn).mock.calls.filter(([, meta]) =>
+        meta?.event === "replay.queue.growing"
+      );
+    expect(queueWarnings()).toEqual([
+      [
+        "Replay queue is growing",
+        {
+          event: "replay.queue.growing",
+          queue: "stream",
+          queue_size: 2,
+          warning_threshold: 2,
+        },
+      ],
+      [
+        "Replay queue is growing",
+        {
+          event: "replay.queue.growing",
+          queue: "stream",
+          queue_size: 4,
+          warning_threshold: 2,
+        },
+      ],
+    ]);
+
+    await iterator.next();
+    await iterator.next();
+    stream.push(makeBlockFinished(5n));
+    stream.push(makeBlockFinished(6n));
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(queueWarnings()).toHaveLength(3);
+    expect(queueWarnings()[2]).toEqual([
+      "Replay queue is growing",
+      {
+        event: "replay.queue.growing",
+        queue: "stream",
+        queue_size: 2,
+        warning_threshold: 2,
+      },
+    ]);
+
+    await iterator.return?.();
+  });
+
+  test("periodic health summary contains every operational field and stops on exit", async () => {
+    const owner = bytes(31);
+    const stream = createSnapshotThenClosableStream(makeSnapshot(bytes(32), owner, 42n));
+    const client = createMockClient(stream.iterable);
+    const logger = createMockLogger();
+    const replay = createAccountsByOwnerReplay({
+      client,
+      owner,
+      logger,
+      healthLogIntervalMs: 50,
+      retryConfig: OPERATIONAL_RETRY_CONFIG,
+    });
+    const iterator = replay[Symbol.asyncIterator]();
+    const firstEvent = iterator.next();
+
+    await vi.advanceTimersByTimeAsync(0);
+    await expect(firstEvent).resolves.toMatchObject({
+      done: false,
+      value: { type: "account", account: { addressHex: "20" } },
+    });
+    await vi.advanceTimersByTimeAsync(50);
+
+    const healthCalls = () =>
+      vi.mocked(logger.info).mock.calls.filter(([, meta]) =>
+        meta?.event === "replay.health"
+      );
+    expect(healthCalls()).toEqual([
+      [
+        "Replay health summary",
+        {
+          event: "replay.health",
+          cache_bytes: 1,
+          cache_max_bytes: 256 * 1024 * 1024,
+          cache_usage_percent: 0,
+          cached_accounts: 1,
+          dirty_accounts: 0,
+          stream_queue_size: 0,
+          deferred_queue_size: 0,
+          fetch_queue_size: 0,
+          evictions_total: 0,
+          dirty_evictions_total: 0,
+          resync_failures_total: 0,
+          fetch_failures_total: 0,
+        },
+      ],
+    ]);
+
+    const returnPromise = iterator.return?.();
+    await vi.advanceTimersByTimeAsync(0);
+    await returnPromise;
+    const healthCountAfterReturn = healthCalls().length;
+    await vi.advanceTimersByTimeAsync(500);
+    expect(healthCalls()).toHaveLength(healthCountAfterReturn);
+  });
+
+  test("health logging can be disabled", async () => {
+    const owner = bytes(33);
+    const stream = createSnapshotThenClosableStream(makeSnapshot(bytes(34), owner, 43n));
+    const client = createMockClient(stream.iterable);
+    const logger = createMockLogger();
+    const replay = createAccountsByOwnerReplay({
+      client,
+      owner,
+      logger,
+      healthLogIntervalMs: 0,
+      retryConfig: OPERATIONAL_RETRY_CONFIG,
+    });
+    const iterator = replay[Symbol.asyncIterator]();
+    const firstEvent = iterator.next();
+
+    await vi.advanceTimersByTimeAsync(0);
+    await expect(firstEvent).resolves.toMatchObject({ done: false });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(vi.mocked(logger.info).mock.calls).not.toEqual(
+      expect.arrayContaining([
+        expect.arrayContaining([
+          expect.any(String),
+          expect.objectContaining({ event: "replay.health" }),
+        ]),
+      ])
+    );
+
+    const returnPromise = iterator.return?.();
+    await vi.advanceTimersByTimeAsync(0);
+    await returnPromise;
+  });
+
+  test("abort stops the health timer immediately", async () => {
+    const owner = bytes(35);
+    const controller = new AbortController();
+    const stream = createHangingStream();
+    const client = createMockClient(stream.iterable);
+    const logger = createMockLogger();
+    const replay = createAccountsByOwnerReplay({
+      client,
+      owner,
+      logger,
+      signal: controller.signal,
+      healthLogIntervalMs: 25,
+      retryConfig: OPERATIONAL_RETRY_CONFIG,
+    });
+    const iterator = replay[Symbol.asyncIterator]();
+    const nextEvent = iterator.next();
+
+    await vi.advanceTimersByTimeAsync(25);
+    const healthCallCount = () =>
+      vi.mocked(logger.info).mock.calls.filter(([, meta]) =>
+        meta?.event === "replay.health"
+      ).length;
+    expect(healthCallCount()).toBe(1);
+
+    controller.abort();
+    await vi.advanceTimersByTimeAsync(0);
+    await expect(nextEvent).resolves.toEqual({ done: true, value: undefined });
+    const healthCountAfterAbort = healthCallCount();
+    await vi.advanceTimersByTimeAsync(5_000);
+    expect(healthCallCount()).toBe(healthCountAfterAbort);
+  });
+
+  test("terminal resync failures are structured and counted in health logs", async () => {
+    const owner = bytes(36);
+    const address = bytes(37);
+    const controller = new AbortController();
+    const stream = createPushableStream();
+    const client = createMockClient(stream.iterable);
+    const logger = createMockLogger();
+    const fetchError = new Error("resync unavailable");
+    client.getAccount.mockRejectedValue(fetchError);
+    const replay = createAccountsByOwnerReplay({
+      client,
+      owner,
+      logger,
+      signal: controller.signal,
+      maxRetries: 1,
+      healthLogIntervalMs: 20,
+      retryConfig: OPERATIONAL_RETRY_CONFIG,
+    });
+    const iterator = replay[Symbol.asyncIterator]();
+    const nextEvent = iterator.next();
+
+    await vi.advanceTimersByTimeAsync(0);
+    stream.push(
+      makeDeltaResponse(address, owner, 50n, 1n, 2 * PAGE_SIZE, 0, 7)
+    );
+    await vi.advanceTimersByTimeAsync(0);
+
+    expect(logger.error).toHaveBeenCalledWith(
+      "Replay account resync failed",
+      {
+        event: "replay.account.resync_failed",
+        address: "25",
+        attempts: 1,
+        error: fetchError,
+      }
+    );
+    const failureMetadata = vi.mocked(logger.error).mock.calls[0]?.[1];
+    expect(failureMetadata).not.toHaveProperty("data");
+
+    await vi.advanceTimersByTimeAsync(20);
+    expect(logger.info).toHaveBeenCalledWith(
+      "Replay health summary",
+      expect.objectContaining({
+        event: "replay.health",
+        resync_failures_total: 1,
+      })
+    );
+
+    controller.abort();
+    await vi.advanceTimersByTimeAsync(0);
+    await expect(nextEvent).resolves.toEqual({ done: true, value: undefined });
+  });
+});
+
+describe("page-delta overlay (live tail)", () => {
+  /* Real timers: the only internal delay is the generator's 10ms poll, and
+     a long connectionTimeoutMs keeps the idle-reconnect path quiet. */
+  const OVERLAY_RETRY_CONFIG: RetryConfig = {
+    initialDelayMs: 5,
+    maxDelayMs: 5,
+    connectionTimeoutMs: 60_000,
+  };
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  function pull(iterator: AsyncIterator<unknown>): Promise<IteratorResult<unknown>> {
+    return iterator.next();
+  }
+
+  test("partial page deltas assemble against backfilled data and flush at block boundary", async () => {
+    const owner = bytes(21);
+    const address = bytes(22);
+    const account = makeMultiPageAccount(address, owner, 100n, 1n, 3 * PAGE_SIZE, 1);
+    const stream = createPushableStream();
+    const client = createMockClient(stream.iterable);
+    client.listAccounts.mockResolvedValue(
+      create(ListAccountsResponseSchema, { accounts: [metaOnly(account)] })
+    );
+    client.getAccount.mockResolvedValue(account);
+
+    const replay = createAccountsByOwnerReplay({ client, owner, retryConfig: OVERLAY_RETRY_CONFIG });
+    const iterator = replay[Symbol.asyncIterator]();
+
+    /* Backfill emits the seeded full account. */
+    await expect(pull(iterator)).resolves.toMatchObject({
+      done: false,
+      value: { type: "account", account: { addressHex: "16", slot: 100n, seq: 1n } },
+    });
+
+    /* A transaction touches only page 1 of 3 — the case the old
+       complete-page-set assembler could never emit. */
+    stream.push(makeDeltaResponse(address, owner, 101n, 2n, 3 * PAGE_SIZE, 1, 2));
+    stream.push(makeBlockFinished(101n));
+
+    const flushedResult = await pull(iterator);
+    expect(flushedResult.done).toBe(false);
+    const flushed = (flushedResult as IteratorResult<{ type: string; account: { slot: bigint; seq: bigint; data: Uint8Array } }>)
+      .value;
+    expect(flushed.type).toBe("account");
+    expect(flushed.account.slot).toBe(101n);
+    expect(flushed.account.seq).toBe(2n);
+    expect(flushed.account.data[0]).toBe(1); /* page 0: backfilled */
+    expect(flushed.account.data[PAGE_SIZE]).toBe(2); /* page 1: overlaid */
+    expect(flushed.account.data[2 * PAGE_SIZE]).toBe(1); /* page 2: backfilled */
+
+    await expect(pull(iterator)).resolves.toMatchObject({
+      done: false,
+      value: { type: "blockFinished", block: { slot: 101n } },
+    });
+
+    /* No resync was needed — backfill seeded the cache. */
+    expect(client.getAccount).toHaveBeenCalledTimes(1);
+
+    await iterator.return?.();
+  });
+
+  test("delta for an account backfill never saw triggers a GetAccount resync", async () => {
+    const owner = bytes(23);
+    const address = bytes(24);
+    const stream = createPushableStream();
+    const client = createMockClient(stream.iterable);
+    client.listAccounts.mockResolvedValue(create(ListAccountsResponseSchema, { accounts: [] }));
+    const fetched = makeMultiPageAccount(address, owner, 102n, 3n, 2 * PAGE_SIZE, 5);
+    client.getAccount.mockResolvedValue(fetched);
+
+    const replay = createAccountsByOwnerReplay({ client, owner, retryConfig: OVERLAY_RETRY_CONFIG });
+    const iterator = replay[Symbol.asyncIterator]();
+
+    stream.push(makeDeltaResponse(address, owner, 102n, 3n, 2 * PAGE_SIZE, 0, 9));
+
+    await expect(pull(iterator)).resolves.toMatchObject({
+      done: false,
+      value: { type: "account", account: { addressHex: "18", slot: 102n, seq: 3n, source: "stream" } },
+    });
+    expect(client.getAccount).toHaveBeenCalledTimes(1);
+
+    /* The resync seeded the cache: the next delta overlays without refetch. */
+    stream.push(makeDeltaResponse(address, owner, 103n, 4n, 2 * PAGE_SIZE, 1, 7));
+    stream.push(makeBlockFinished(103n));
+
+    const overlaid = await pull(iterator);
+    expect(overlaid.done).toBe(false);
+    const overlaidAccount = (overlaid as IteratorResult<{ account: { data: Uint8Array } }>).value.account;
+    expect(overlaidAccount.data[0]).toBe(5); /* from resync fetch */
+    expect(overlaidAccount.data[PAGE_SIZE]).toBe(7); /* from delta */
+    expect(client.getAccount).toHaveBeenCalledTimes(1);
+
+    await iterator.return?.();
+  });
+
+  test("heartbeat-only stream emits block markers and no account events", async () => {
+    const owner = bytes(25);
+    const stream = createPushableStream();
+    const client = createMockClient(stream.iterable);
+    client.listAccounts.mockResolvedValue(create(ListAccountsResponseSchema, { accounts: [] }));
+
+    const replay = createAccountsByOwnerReplay({ client, owner, retryConfig: OVERLAY_RETRY_CONFIG });
+    const iterator = replay[Symbol.asyncIterator]();
+
+    stream.push(makeBlockFinished(50n));
+    stream.push(makeBlockFinished(51n));
+
+    await expect(pull(iterator)).resolves.toMatchObject({
+      done: false,
+      value: { type: "blockFinished", block: { slot: 50n } },
+    });
+    await expect(pull(iterator)).resolves.toMatchObject({
+      done: false,
+      value: { type: "blockFinished", block: { slot: 51n } },
+    });
+    expect(client.getAccount).not.toHaveBeenCalled();
+
+    await iterator.return?.();
+  });
+});
+
+function createPushableStream(): {
+  iterable: AsyncIterable<StreamAccountUpdatesResponse>;
+  push: (response: StreamAccountUpdatesResponse) => void;
+} {
+  const pending: StreamAccountUpdatesResponse[] = [];
+  let closed = false;
+  let wake: (() => void) | null = null;
+  const wakeUp = () => {
+    wake?.();
+    wake = null;
+  };
+  return {
+    push(response) {
+      pending.push(response);
+      wakeUp();
+    },
+    iterable: {
+      [Symbol.asyncIterator]() {
+        return {
+          async next(): Promise<IteratorResult<StreamAccountUpdatesResponse>> {
+            while (pending.length === 0 && !closed) {
+              await new Promise<void>((resolve) => {
+                wake = resolve;
+              });
+            }
+            if (pending.length === 0) {
+              return { done: true, value: undefined };
+            }
+            return { done: false, value: pending.shift()! };
+          },
+          /* Must release any in-flight next() so the replay generator's
+             final cleanup does not block on its 30s drain timeout. */
+          return(): Promise<IteratorResult<StreamAccountUpdatesResponse>> {
+            closed = true;
+            wakeUp();
+            return Promise.resolve({ done: true, value: undefined });
+          },
+        };
+      },
+    },
+  };
+}
+
+function makeMultiPageAccount(
+  address: Uint8Array,
+  owner: Uint8Array,
+  slot: bigint,
+  seq: bigint,
+  dataSize: number,
+  fill: number
+): Account {
+  return create(AccountSchema, {
+    address: create(PubkeySchema, { value: address }),
+    meta: create(AccountMetaSchema, {
+      owner: create(PubkeySchema, { value: owner }),
+      seq,
+      lastUpdatedSlot: slot,
+      dataSize,
+    }),
+    data: create(AccountDataSchema, { data: new Uint8Array(dataSize).fill(fill) }),
+    versionContext: create(VersionContextMetadataSchema, { slot }),
+  });
+}
+
+function metaOnly(account: Account): Account {
+  return create(AccountSchema, {
+    address: account.address,
+    meta: account.meta,
+  });
+}
+
+function makeDeltaResponse(
+  address: Uint8Array,
+  owner: Uint8Array,
+  slot: bigint,
+  seq: bigint,
+  dataSize: number,
+  pageIdx: number,
+  fill: number
+): StreamAccountUpdatesResponse {
+  return create(StreamAccountUpdatesResponseSchema, {
+    message: {
+      case: "update",
+      value: create(AccountUpdateSchema, {
+        slot,
+        address: create(PubkeySchema, { value: address }),
+        meta: create(AccountMetaSchema, {
+          owner: create(PubkeySchema, { value: owner }),
+          seq,
+          dataSize,
+        }),
+        page: create(AccountPageSchema, {
+          pageIdx,
+          pageSize: PAGE_SIZE,
+          pageData: new Uint8Array(PAGE_SIZE).fill(fill),
+        }),
+      }),
+    },
+  });
+}
 
 function createMockLogger(): ReplayLogger {
   return {

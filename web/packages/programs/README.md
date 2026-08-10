@@ -1,18 +1,123 @@
-# @thru/programs/token
+# @thru/programs
 
-TypeScript bindings for the Thru on-chain token program. Provides instruction builders, account parsers, address derivation, and formatting utilities for creating and managing tokens on the Thru network.
+TypeScript bindings and helpers for Thru on-chain programs.
 
-## Installation
+## Oracle read SDK
+
+`@thru/programs/oracle` provides typed, ABI-backed helpers for applications that
+read Oracle feeds. It supports deterministic feed-address derivation, price and
+boolean feed decoding, update-event decoding, and program-error mapping.
+
+The TypeScript API is read-only. Oracle reporters and other services that submit
+updates should use the Rust SDK.
+
+### Installation
 
 ```bash
-pnpm add @thru/programs/token
+pnpm add @thru/programs @thru/sdk
 ```
 
-Peer dependencies: `@thru/sdk/helpers`, `@thru/sdk`.
+### Derive and read a feed
 
-## Basic Usage
+```typescript
+import { createThruClient } from "@thru/sdk/client";
+import {
+  deriveOracleFeedAddress,
+  parseOracleFeedAccount,
+} from "@thru/programs/oracle";
 
-### Create a new token mint
+const thru = createThruClient({
+  baseUrl: "https://rpc.alphanet.thru.org",
+});
+const oracleProgramAddress =
+  "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgI";
+
+const { address: feedAddress } = deriveOracleFeedAddress(
+  thru,
+  oracleProgramAddress,
+  "btc-usd:ticker@coinbase",
+);
+
+const account = await thru.accounts.get(feedAddress);
+const feed = parseOracleFeedAccount(account);
+
+if (feed.kind === "price") {
+  console.log({
+    name: feed.common.feedName,
+    price: feed.price,
+    exponent: feed.exponent,
+    lastUpdateNs: feed.common.lastUpdateNs,
+  });
+} else {
+  console.log({
+    name: feed.common.feedName,
+    value: feed.value,
+    lastUpdateNs: feed.common.lastUpdateNs,
+  });
+}
+```
+
+Prices and nanosecond timestamps are returned as `bigint`. A price's decimal
+value is `price * 10^exponent`; callers should retain integer arithmetic until
+formatting the value for display.
+
+### Decode an update event
+
+Pass the raw event payload returned by the transaction or event API:
+
+```typescript
+import { parseOracleEvent } from "@thru/programs/oracle";
+
+const update = parseOracleEvent(eventData);
+
+if (update.kind === "priceUpdate") {
+  console.log(update.feedAddress, update.oldPrice, update.newPrice);
+} else {
+  console.log(update.feedAddress, update.oldValue, update.newValue);
+}
+```
+
+### Decode a program error
+
+```typescript
+import {
+  OracleProgramError,
+  oracleProgramErrorFromCode,
+} from "@thru/programs/oracle";
+
+const error = oracleProgramErrorFromCode(userErrorCode);
+if (error === OracleProgramError.UpdateTooStale) {
+  // Reject or retry the stale update according to the application policy.
+}
+```
+
+Unknown error codes return `null`.
+
+### API reference
+
+| Export | Description |
+|---|---|
+| `deriveOracleFeedAddress(thru, programAddress, seed)` | Derive a permanent Oracle feed address and return its normalized seed |
+| `normalizeOracleFeedSeed(seed)` | Convert a string or byte array to the 32-byte seed used by the program |
+| `parseOracleFeedAccount(account)` | Decode an SDK `Account` or raw account bytes into a typed price or boolean feed |
+| `parseOracleEvent(data)` | Decode raw event bytes into a typed price or boolean update event |
+| `oracleProgramErrorFromCode(code)` | Map a numeric user-error code to `OracleProgramError`, or return `null` |
+
+String seeds are UTF-8 encoded, truncated to 32 bytes, and zero-padded when
+shorter. Feed and event parsers require the complete raw payload and reject
+unknown feed types, malformed lengths, and invalid boolean values.
+
+## Token SDK
+
+### Installation
+
+```bash
+pnpm add @thru/programs @thru/sdk
+```
+
+### Basic Usage
+
+#### Create a new token mint
 
 ```typescript
 import {
@@ -36,7 +141,7 @@ const instruction = createInitializeMintInstruction({
 });
 ```
 
-### Initialize a token account
+#### Initialize a token account
 
 ```typescript
 import {
@@ -59,7 +164,7 @@ const instruction = createInitializeAccountInstruction({
 });
 ```
 
-### Transfer tokens
+#### Transfer tokens
 
 ```typescript
 import { createTransferInstruction } from '@thru/programs/token';
@@ -71,7 +176,7 @@ const instruction = createTransferInstruction({
 });
 ```
 
-### Parse on-chain account data
+#### Parse on-chain account data
 
 ```typescript
 import { parseMintAccountData, parseTokenAccountData } from '@thru/programs/token';
@@ -83,7 +188,7 @@ const tokenInfo = parseTokenAccountData(account);
 // { mint, owner, amount, isFrozen }
 ```
 
-### Format token amounts for display
+#### Format token amounts for display
 
 ```typescript
 import { formatRawAmount } from '@thru/programs/token';
@@ -92,7 +197,7 @@ formatRawAmount(1_500_000n, 6); // "1.5"
 formatRawAmount(1_000_000n, 6); // "1"
 ```
 
-## Key Capabilities
+### Key Capabilities
 
 - **Instruction builders** -- `createInitializeMintInstruction`, `createInitializeAccountInstruction`, `createMintToInstruction`, `createTransferInstruction`
 - **Address derivation** -- `deriveMintAddress`, `deriveTokenAccountAddress`, `deriveWalletSeed`
@@ -100,9 +205,9 @@ formatRawAmount(1_000_000n, 6); // "1"
 - **Formatting utilities** -- `formatRawAmount`, `bytesToHex`, `hexToBytes`
 - **ABI codegen** -- instruction payloads are built using auto-generated builders from the token program ABI
 
-## API Reference
+### API Reference
 
-### Instructions
+#### Instructions
 
 Each instruction builder returns an `InstructionData` function that accepts an `AccountLookupContext` and resolves to the serialized instruction bytes.
 
@@ -114,7 +219,7 @@ Each instruction builder returns an `InstructionData` function that accepts an `
 | `createTransferInstruction(args)` | Transfer tokens between accounts |
 | `buildTokenInstructionBytes(variant, payload)` | Low-level helper to wrap a payload in a token instruction envelope |
 
-### Derivation
+#### Derivation
 
 | Function | Description |
 |---|---|
@@ -122,7 +227,7 @@ Each instruction builder returns an `InstructionData` function that accepts an `
 | `deriveTokenAccountAddress(owner, mint, programAddress, seed?)` | Derive the deterministic address for a token account |
 | `deriveWalletSeed(walletAddress, extraSeeds?)` | Derive a seed from a wallet address |
 
-### Account Parsing
+#### Account Parsing
 
 | Function | Description |
 |---|---|
@@ -130,7 +235,7 @@ Each instruction builder returns an `InstructionData` function that accepts an `
 | `parseTokenAccountData(account)` | Parse raw account data into `TokenAccountInfo` |
 | `isAccountNotFoundError(err)` | Check if an error represents a missing account (code 5) |
 
-### Types
+#### Types
 
 ```typescript
 interface MintAccountInfo {

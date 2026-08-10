@@ -118,6 +118,9 @@ export const CLOB_STATUS_FLAG_POST_ONLY = 1 << 1;
 export const CLOB_STATUS_FLAG_WITHDRAWALS_FROZEN = 1 << 2;
 export const CLOB_STATUS_FLAG_DEPOSITS_FROZEN = 1 << 3;
 
+export const CLOB_PROGRAM_ADDRESS =
+  'tamjQOFxFORIZhqbJjN83oAkRmSbKhLmULpvSHblK4GGIg';
+
 export const CLOB_ORDER_TYPE_GTC = 0;
 export const CLOB_ORDER_TYPE_MTL = 1;
 export const CLOB_ORDER_TYPE_ALO = 2;
@@ -174,10 +177,11 @@ export interface MarketRecordArgs {
   tokenProgramAccountBytes: Uint8Array;
   baseVaultAccountBytes: Uint8Array;
   quoteVaultAccountBytes: Uint8Array;
-  marketAuthorityAccountBytes: Uint8Array;
+  marketAuthorityAccountBytes?: Uint8Array;
 }
 
 export interface MarketCreateArgs extends MarketRecordArgs {
+  marketAuthorityAccountBytes: Uint8Array;
   lotSize: bigint;
   tickSize: bigint;
   baseMintAccountBytes: Uint8Array;
@@ -438,6 +442,9 @@ export type ParsedClobEvent =
     });
 
 export function createMarketRecordInstruction(args: MarketRecordArgs): InstructionData {
+  const seatIndex = args.seatIndex === undefined
+    ? CLOB_NULL_INDEX
+    : assertClobActiveSeatIndex(args.seatIndex);
   return async (context) => {
     const payload = new MarketRecordInstructionBuilder()
       .set_market_record_idx(assertU8(args.marketRecordIndex, 'marketRecordIndex'))
@@ -446,11 +453,11 @@ export function createMarketRecordInstruction(args: MarketRecordArgs): Instructi
       .set_bids_cbook_account_idx(accountIndex(context, args.bidsCbookAccountBytes))
       .set_asks_cbook_account_idx(accountIndex(context, args.asksCbookAccountBytes))
       .set_seat_authority_account_idx(optionalAccountIndex(context, args.seatAuthorityAccountBytes))
-      .set_seat_idx(args.seatIndex ?? CLOB_NULL_INDEX)
+      .set_seat_idx(seatIndex)
       .set_token_program_idx(accountIndex(context, args.tokenProgramAccountBytes))
       .set_base_vault_account_idx(accountIndex(context, args.baseVaultAccountBytes))
       .set_quote_vault_account_idx(accountIndex(context, args.quoteVaultAccountBytes))
-      .set_market_authority_account_idx(accountIndex(context, args.marketAuthorityAccountBytes))
+      .set_market_authority_account_idx(optionalAccountIndex(context, args.marketAuthorityAccountBytes))
       .build();
     return buildClobInstruction('market_record', payload);
   };
@@ -1083,6 +1090,13 @@ function assertU16(value: number, label: string): number {
   return value;
 }
 
+export function assertClobActiveSeatIndex(value: number, label = 'seatIndex'): number {
+  if (!Number.isSafeInteger(value) || value < 2 || value >= CLOB_NULL_INDEX) {
+    throw new Error(`${label} must be an integer between 2 and ${CLOB_NULL_INDEX - 1}`);
+  }
+  return value;
+}
+
 function assertU64(value: bigint, label: string): void {
   if (value < 0n || value > 0xffffffffffffffffn) {
     throw new Error(`${label} must be between 0 and 18446744073709551615`);
@@ -1144,3 +1158,6 @@ function bytesFromView(value: unknown): Uint8Array {
   if (value instanceof Pubkey) return value.toBytes();
   throw new Error('generated view did not expose a byte buffer');
 }
+
+export * from './exchange';
+export * from './exchange-client';

@@ -107,11 +107,18 @@ export interface DepositUnifoldProjectConfig {
   destinationTokenSymbol: string;
 }
 
+export interface DepositProviderConfig {
+  kind: string;
+  enabled: boolean;
+  public: Readonly<Record<string, string>>;
+}
+
 export interface DepositNetworkConfig {
   network: string;
-  unifoldProject: DepositUnifoldProjectConfig;
+  unifoldProject?: DepositUnifoldProjectConfig;
   defaultDepositTarget: string;
   depositTargets: Map<string, DepositTargetConfig>;
+  providers: Map<string, DepositProviderConfig>;
 }
 
 export interface DepositAccountState {
@@ -143,6 +150,8 @@ export interface DepositsApi {
     params?: EnsureDepositAccountParams,
   ): Promise<DepositAccountState>;
   open(payload: DepositRequestPayload): Promise<DepositResult>;
+  /** Return every deposit provider enabled by this SDK instance. */
+  getProviders(): Promise<string[]>;
   getAccountState(
     params?: GetDepositAccountStateParams,
   ): Promise<DepositAccountState>;
@@ -188,17 +197,20 @@ type RawDepositTargetConfig = {
 type RawNetworkConfig = Record<
   string,
   {
-    unifold_project?: {
-      project_id?: string;
-      publishable_key?: string;
-      treasury_address?: string;
-      destination_chain_type?: string;
-      destination_chain_id?: string;
-      destination_token_address?: string;
-      destination_token_symbol?: string;
-    };
+    rpc_url?: string;
     default_deposit_target?: string;
-    deposit_targets?: Record<string, RawDepositTargetConfig>;
+    targets?: Record<string, RawDepositTargetConfig>;
+    providers?: Record<
+      string,
+      {
+        orders_enabled?: boolean;
+        public?: Record<string, unknown>;
+        settlement_network?: string;
+        settlement_asset?: string;
+        settlement_asset_address?: string;
+        settlement_treasury?: string;
+      }
+    >;
   }
 >;
 
@@ -284,33 +296,17 @@ function parseDepositNetworkConfigs(
   const parsed = JSON.parse(normalizedJson) as RawNetworkConfig;
   return new Map(
     Object.entries(parsed).map(([network, value]) => {
-      const project = value.unifold_project;
-      if (!project?.project_id) {
+      if (!value.rpc_url) {
         throw new Error(
-          `Deposit config for network ${network} is missing unifold_project.project_id`,
-        );
-      }
-      if (!project.publishable_key) {
-        throw new Error(
-          `Deposit config for network ${network} is missing unifold_project.publishable_key`,
-        );
-      }
-      if (!project.treasury_address) {
-        throw new Error(
-          `Deposit config for network ${network} is missing unifold_project.treasury_address`,
-        );
-      }
-      if (!project.destination_token_address) {
-        throw new Error(
-          `Deposit config for network ${network} is missing unifold_project.destination_token_address`,
+          `Deposit config for network ${network} is missing rpc_url`,
         );
       }
 
-      const rawTargets = value.deposit_targets ?? {};
+      const rawTargets = value.targets ?? {};
       const targetEntries = Object.entries(rawTargets);
       if (targetEntries.length === 0) {
         throw new Error(
-          `Deposit config for network ${network} must contain deposit_targets`,
+          `Deposit config for network ${network} must contain targets`,
         );
       }
 
@@ -328,7 +324,7 @@ function parseDepositNetworkConfigs(
             {
               network,
               depositTarget,
-              rpcUrl: target.rpc_url,
+              rpcUrl: value.rpc_url,
               mintAddress: target.mint_address,
               symbol: target.symbol || DEFAULT_DEPOSIT_SYMBOL,
               decimals:
@@ -347,21 +343,71 @@ function parseDepositNetworkConfigs(
         );
       }
 
+      const providers = new Map<string, DepositProviderConfig>();
+      for (const [providerName, provider] of Object.entries(
+        value.providers ?? {},
+      )) {
+        const publicConfig: Record<string, string> = {};
+        for (const [key, publicValue] of Object.entries(
+          provider.public ?? {},
+        )) {
+          if (typeof publicValue !== "string") {
+            throw new Error(
+              `Deposit config for network ${network} provider ${providerName} public.${key} must be a string`,
+            );
+          }
+          publicConfig[key] = publicValue;
+        }
+        providers.set(providerName, {
+          kind: providerName === "coinbase" ? "coinbase_headless" : providerName,
+          enabled: provider.orders_enabled === true,
+          public: Object.freeze(publicConfig),
+        });
+      }
+      if (providers.size === 0) {
+        throw new Error(
+          `Deposit config for network ${network} must contain providers`,
+        );
+      }
+
+      const rawUnifold = value.providers?.unifold;
+      let unifoldProject: DepositUnifoldProjectConfig | undefined;
+      if (rawUnifold) {
+        const projectId = rawUnifold.public?.project_id;
+        const publishableKey = rawUnifold.public?.publishable_key;
+        const settlementNetwork = rawUnifold.settlement_network;
+        if (
+          typeof projectId !== "string" ||
+          typeof publishableKey !== "string" ||
+          !rawUnifold.settlement_treasury ||
+          !settlementNetwork ||
+          !rawUnifold.settlement_asset_address
+        ) {
+          throw new Error(
+            `Deposit config for network ${network} has an invalid Unifold provider`,
+          );
+        }
+        const separator = settlementNetwork.indexOf("-");
+        unifoldProject = {
+          projectId,
+          publishableKey,
+          treasuryAddress: rawUnifold.settlement_treasury,
+          destinationChainType:
+            separator > 0 ? settlementNetwork.slice(0, separator) : settlementNetwork,
+          destinationChainId:
+            separator > 0 ? settlementNetwork.slice(separator + 1) : "mainnet",
+          destinationTokenAddress: rawUnifold.settlement_asset_address,
+          destinationTokenSymbol: rawUnifold.settlement_asset || "USDC",
+        };
+      }
       return [
         network,
         {
           network,
-          unifoldProject: {
-            projectId: project.project_id,
-            publishableKey: project.publishable_key,
-            treasuryAddress: project.treasury_address,
-            destinationChainType: project.destination_chain_type || "solana",
-            destinationChainId: project.destination_chain_id || "mainnet",
-            destinationTokenAddress: project.destination_token_address,
-            destinationTokenSymbol: project.destination_token_symbol || "USDC",
-          },
+          ...(unifoldProject ? { unifoldProject } : {}),
           defaultDepositTarget,
           depositTargets,
+          providers,
         },
       ] as const;
     }),

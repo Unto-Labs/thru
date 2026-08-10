@@ -17,6 +17,9 @@ export * as slots from "./modules/slots";
 export * as streaming from "./modules/streaming";
 export * as transactions from "./modules/transactions";
 
+// Built-in program instruction / authorization-message builders.
+export * as eoa from "./domain/programs/eoa";
+
 // ============================================================================
 // Value Exports (classes, enums, functions)
 // ============================================================================
@@ -28,7 +31,11 @@ export { HeightSnapshot } from "./domain/height";
 export { PageRequest, PageResponse } from "./domain/pagination";
 export { Pubkey, Signature } from "./domain/primitives";
 export { StateProof } from "./domain/proofs";
-export { Transaction, TransactionStatusSnapshot } from "./domain/transactions";
+export {
+  Transaction,
+  TransactionSigningScheme,
+  TransactionStatusSnapshot
+} from "./domain/transactions";
 export { VersionInfo } from "./domain/version";
 export {
   deriveAddress,
@@ -48,7 +55,24 @@ export {
   TransactionVmError
 } from "@thru/sdk/proto";
 export { TransactionBuilder };
-export { signWithDomain, verifyWithDomain, SignatureDomain } from "./domain/transactions/domain-signing";
+export {
+    signWithDomain,
+    verifyWithDomain,
+    SignatureDomain,
+    signatureDomainDST,
+    buildSignedMessage,
+    attachSignature,
+    TransactionSigningMessage,
+    buildTransactionSigningMessage,
+    attachTransactionSignature,
+    signMessage,
+    verifyMessage,
+} from "./domain/transactions/domain-signing";
+
+// Legacy (pre-RFC-8032) signing scheme, for downstream forks on their own
+// upgrade path. Namespaced to avoid colliding with the current signWithDomain /
+// verifyWithDomain / SignatureDomain above. New code must NOT use this.
+export * as legacySigning from "./domain/transactions/domain-signing-legacy";
 
 // ============================================================================
 // Type Exports - Common Types

@@ -51,6 +51,10 @@ import {
   resolveSigningSessionStorageKey,
 } from "../signing-sessions";
 import { createNativeThruClient } from "./rpc";
+import {
+  type TransactionSigningScheme,
+  withTransactionSigningScheme,
+} from "../transaction-signing-scheme";
 
 export type IosWebViewMode = "direct" | "shell-iframe";
 export type NativeWalletExperience = "standard" | "transparent";
@@ -119,6 +123,10 @@ export interface NativeSDKConfig {
   selectedAccountStorageKey?: string;
   /** Override the key used for app-local signing session descriptors. */
   signingSessionStorageKey?: string;
+  transactionSigningScheme?: TransactionSigningScheme;
+  deposits?: {
+    providers: string[];
+  };
 }
 
 export interface SignInOptions {
@@ -166,8 +174,8 @@ export interface NativeSDKStorage {
 }
 
 export interface NativeSDKUiHandlers {
-  onShowRequested?: () => void;
-  onHideRequested?: () => void;
+  onShowRequested?: (reason?: string) => void;
+  onHideRequested?: (reason?: string) => void;
 }
 
 const DEFAULT_STORAGE_KEY = "thru.native-sdk.connection.v1";
@@ -248,12 +256,14 @@ export class NativeSDK {
   private readonly walletExperience: NativeWalletExperience;
   private readonly defaultMetadata?: ConnectMetadataInput;
   private readonly defaultNetwork?: ThruNetwork;
+  private readonly depositProviders: ReadonlySet<string>;
   private readonly signingSessions?: SigningSessionDescriptorStore;
 
   readonly deposits: DepositsApi = {
     prepare: (targetOrPayload) => this.prepareDeposit(targetOrPayload),
     ensureAccount: (params) => this.ensureDepositAccount(params),
     open: (payload) => this.deposit(payload),
+    getProviders: async () => [...this.depositProviders],
     getAccountState: (params) => this.getDepositAccountState(params),
     waitForBalance: (params) => this.waitForDepositBalance(params),
     formatAmount: (amountRaw, destination) =>
@@ -272,11 +282,14 @@ export class NativeSDK {
     this.walletExperience = config.walletExperience ?? "standard";
     this.defaultMetadata = config.metadata;
     this.defaultNetwork = config.network;
-    const walletUrl =
+    this.depositProviders = new Set(config.deposits?.providers ?? ['unifold']);
+    const walletUrl = withTransactionSigningScheme(
       config.walletUrl ??
-      (this.walletExperience === "transparent"
-        ? DEFAULT_TRANSPARENT_WALLET_URL
-        : DEFAULT_NATIVE_WALLET_URL);
+        (this.walletExperience === "transparent"
+          ? DEFAULT_TRANSPARENT_WALLET_URL
+          : DEFAULT_NATIVE_WALLET_URL),
+      config.transactionSigningScheme,
+    );
     const walletOrigin = new URL(walletUrl).origin;
     const signingSessions = this.storage
       ? new SigningSessionDescriptorStore(
@@ -364,7 +377,8 @@ export class NativeSDK {
     if (
       !isAccountSwitch &&
       this.lastConnectResult &&
-      this.provider.isConnected()
+      this.provider.isConnected() &&
+      this.walletAvailability.isUnlocked
     ) {
       return this.lastConnectResult;
     }
@@ -373,7 +387,6 @@ export class NativeSDK {
 
     const inFlight = (async () => {
       try {
-        await this.provider.requestShow();
         if (!this.initialized) await this.initialize();
 
         const metadata = this.resolveMetadata(options?.metadata);
@@ -414,7 +427,6 @@ export class NativeSDK {
         this.emit("connect", activeResult);
         return activeResult;
       } catch (error) {
-        this.provider.requestHide();
         if (isUserRejectedError(error) && !isAccountSwitch) {
           this.provider.clearConnection();
           this.lastConnectResult = null;
@@ -446,7 +458,6 @@ export class NativeSDK {
     this.emit("connect", { status: "connecting" });
 
     try {
-      await this.provider.requestShow();
       if (!this.initialized) await this.initialize();
 
       const metadata = this.resolveMetadata(options.metadata);
@@ -490,7 +501,6 @@ export class NativeSDK {
       this.emit("accountChanged", activeResult.selectedAccount);
       return activeResult;
     } catch (error) {
-      this.provider.requestHide();
       this.emit("error", error);
       throw error;
     }
@@ -597,8 +607,7 @@ export class NativeSDK {
   /** @deprecated Use `deposits.prepare()`. */
   async prepareDeposit(
     depositTargetOrPayload?:
-      | PrepareDepositPayload["depositTarget"]
-      | PrepareDepositPayload,
+      PrepareDepositPayload["depositTarget"] | PrepareDepositPayload,
   ): Promise<DepositDestination> {
     if (!this.initialized) await this.initialize();
     const payload =
@@ -620,10 +629,11 @@ export class NativeSDK {
    */
   async deposit(payload: DepositRequestPayload): Promise<DepositResult> {
     if (!this.initialized) await this.initialize();
-    return this.provider.deposit({
-      ...payload,
-      network: payload.network ?? this.defaultNetwork,
-    });
+    const providerId = payload.providerId ?? 'unifold';
+    if (!this.depositProviders.has(providerId)) {
+      throw new Error(`Deposit provider is not configured: ${providerId}`);
+    }
+    return this.provider.deposit({ ...payload, providerId });
   }
 
   /** @deprecated Use `deposits.ensureAccount()`. */
@@ -631,8 +641,9 @@ export class NativeSDK {
     params: EnsureDepositAccountParams = {},
   ): Promise<DepositAccountState> {
     if (!this.initialized) await this.initialize();
-    const { destination, walletAddress } =
-      await this.resolveDepositDestination(params.destination);
+    const { destination, walletAddress } = await this.resolveDepositDestination(
+      params.destination,
+    );
     return ensureDepositAccountForWallet({
       thru: this.getThru(),
       walletAddress,
@@ -646,8 +657,9 @@ export class NativeSDK {
     params: GetDepositAccountStateParams = {},
   ): Promise<DepositAccountState> {
     if (!this.initialized) await this.initialize();
-    const { destination, walletAddress } =
-      await this.resolveDepositDestination(params.destination);
+    const { destination, walletAddress } = await this.resolveDepositDestination(
+      params.destination,
+    );
     return getDepositAccountStateForWallet({
       thru: this.getThru(),
       walletAddress,
@@ -660,8 +672,9 @@ export class NativeSDK {
     params: WaitForDepositBalanceParams,
   ): Promise<DepositAccountState> {
     if (!this.initialized) await this.initialize();
-    const { destination, walletAddress } =
-      await this.resolveDepositDestination(params.destination);
+    const { destination, walletAddress } = await this.resolveDepositDestination(
+      params.destination,
+    );
     return waitForDepositBalanceForWallet({
       thru: this.getThru(),
       walletAddress,
@@ -1011,8 +1024,9 @@ function assertDepositDestinationMatches(
   actual: DepositDestination,
   expected: DepositDestination,
 ): void {
-  const mismatches = (Object.keys(expected) as Array<keyof DepositDestination>)
-    .filter((key) => actual[key] !== expected[key]);
+  const mismatches = (
+    Object.keys(expected) as Array<keyof DepositDestination>
+  ).filter((key) => actual[key] !== expected[key]);
   if (mismatches.length > 0) {
     throw new Error(
       `Prepared deposit destination no longer matches wallet config: ${mismatches.join(", ")}`,

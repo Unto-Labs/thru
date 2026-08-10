@@ -254,8 +254,7 @@ type ErrorResponse = {
 };
 
 export type PostMessageResponse<TType extends RequestType = RequestType> =
-  | SuccessResponse<TType>
-  | ErrorResponse;
+  SuccessResponse<TType> | ErrorResponse;
 
 export type SuccessfulPostMessageResponse<
   TType extends RequestType = RequestType,
@@ -350,6 +349,10 @@ export interface SignPasskeyChallengeResult {
   signatureS: string;
   authenticatorData: string;
   clientDataJSON: string;
+  /** Active on-chain passkey authority used for this assertion. */
+  authIdx: number;
+  /** WebAuthn relying-party id bound into authenticatorData. */
+  rpId: string;
 }
 
 export interface CreateSigningSessionPayload {
@@ -402,6 +405,7 @@ export interface RevokeSigningSessionResult {
 export enum ThruNetwork {
   Alphanet = "alphanet",
   Devnet = "devnet",
+  SweepsStagingNet = "sweeps-staging-net",
   Sweepnet = "sweepnet",
 }
 
@@ -555,26 +559,49 @@ export interface PrepareDepositPayload {
   network?: ThruNetwork;
 }
 
-/**
- * Deposit ("Add funds") intent. The dApp asks the wallet to open its Deposit
- * screen for a prepared token destination; the wallet validates that the
- * destination still matches the provider network and configured mint before it
- * runs Unifold. Crediting is authoritative on the server webhook — the result
- * here only reports the terminal UX state.
- */
-export interface DepositRequestPayload {
-  /** Destination returned by prepareDeposit. */
-  destination: DepositDestination;
-  /** Resolved provider network. SDK/provider code fills this before crossing the iframe bridge. */
-  network?: ThruNetwork;
-  /** Optional source-chain hint for the deposit widget (e.g. "base"). */
-  chainHint?: string;
+export interface CoinbaseDepositCustomerInput {
+  email: string;
+  phoneNumber: string;
+  phoneNumberVerifiedAt: string;
+  agreementAcceptedAt: string;
 }
 
-export interface DepositRequestMessagePayload extends DepositRequestPayload {
+/**
+ * Optional prefill for the contact details an onramp provider collects. Each
+ * field stands alone: a dApp that only knows the user's email may send just
+ * that, and the wallet still asks for whatever is missing.
+ */
+export interface DepositContactPrefill {
+  email?: string;
+  /** E.164 US phone number, for example "+12055555555". */
+  phoneNumber?: string;
+}
+
+/** Provider-neutral request for a prepared token destination. */
+export interface DepositRequestPayload {
+  /** Defaults to Unifold so existing `deposits.open({ destination })` callers keep working. */
+  providerId?: string;
+  destination: DepositDestination;
+  paymentAmount?: string;
+  /** Prefills the onramp screen; the user can still edit every value. */
+  contact?: DepositContactPrefill;
+  customer?: CoinbaseDepositCustomerInput;
+}
+
+/**
+ * Coinbase-compatible contact details. Kept as a standalone public type for
+ * callers that validate contact input before constructing a richer customer
+ * payload.
+ */
+export interface CoinbaseOnrampContact {
+  email: string;
+  /** E.164 phone number, for example "+12055555555". */
+  phoneNumber: string;
+}
+export type DepositRequestMessagePayload = DepositRequestPayload & {
   /** Internal wallet bridge field resolved from provider mount-time config. */
   resolvedDepositUiConfig?: DepositUiConfig;
-}
+};
 
 export interface DepositResult {
   /**

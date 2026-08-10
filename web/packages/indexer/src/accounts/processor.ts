@@ -5,7 +5,7 @@
  * with slot-aware upserts and checkpointing.
  */
 
-import { eq, sql } from "drizzle-orm";
+import { and, eq, lt, lte, or } from "drizzle-orm";
 import type { ChainClientFactory, ReplayLogger } from "@thru/replay";
 import { createAccountsByOwnerReplay, AccountView } from "@thru/replay";
 import { encodeAddress } from "@thru/sdk/helpers";
@@ -42,6 +42,16 @@ export interface AccountProcessorStats {
   accountsUpdated: number;
   /** Total accounts deleted */
   accountsDeleted: number;
+}
+
+function versionIsAtMost(table: any, row: any) {
+  if (table.seq && row.seq !== undefined) {
+    return or(
+      lt(table.slot, row.slot),
+      and(eq(table.slot, row.slot), lte(table.seq, row.seq))
+    );
+  }
+  return lte(table.slot, row.slot);
 }
 
 // ============================================================
@@ -174,7 +184,7 @@ export async function runAccountStreamProcessor(
           continue;
         }
 
-        // Parse using stream's parser
+        // Parse using stream's parser.
         let parsed;
         try {
           parsed = stream.parse(account);
@@ -189,9 +199,6 @@ export async function runAccountStreamProcessor(
             "debug",
             `Skipped account ${account.addressHex} - parser returned null (dataLen=${account.data.length})`
           );
-          if (account.slot > lastProcessedSlot) {
-            lastProcessedSlot = account.slot;
-          }
           continue;
         }
 
@@ -201,11 +208,9 @@ export async function runAccountStreamProcessor(
           if (!validation.success) {
             observer?.onParseValidationError?.(validation.error);
             log("error", validation.error);
-            continue; // Skip invalid accounts
+            continue;
           }
         }
-
-        // Slot-aware upsert: only update if incoming slot >= existing slot
 
         let upserted = false;
         try {
@@ -215,7 +220,7 @@ export async function runAccountStreamProcessor(
             .onConflictDoUpdate({
               target: table[idField],
               set: parsed,
-              where: sql`${table.slot} <= ${(parsed as any).slot}`,
+              where: versionIsAtMost(table, parsed),
             })
             .returning();
 
@@ -243,7 +248,6 @@ export async function runAccountStreamProcessor(
         if (upserted && account.slot > lastProcessedSlot) {
           lastProcessedSlot = account.slot;
         }
-
         // Progress logging
         if (stats.accountsProcessed % 100 === 0) {
           log(

@@ -338,6 +338,41 @@ type = "u64"
 tracking = "UNTO-1818"
 "#;
 
+    fn checked_in_registry() -> FeatureGateRegistry {
+        parse_feature_gate_registry(include_str!(
+            "../../../../../specs/releases/feature-gates-registry.toml"
+        ))
+        .expect("checked-in registry parses")
+    }
+
+    #[test]
+    fn parses_checked_in_registry_file() {
+        let registry = checked_in_registry();
+
+        assert!(!registry.entries().is_empty());
+        for (expected_index, entry) in registry.entries().iter().enumerate() {
+            assert_eq!(entry.index as usize, expected_index);
+        }
+    }
+
+    #[test]
+    fn checked_in_registry_matches_on_chain_policy() {
+        let registry = checked_in_registry();
+
+        for entry in registry.entries() {
+            assert!(entry.tracking.starts_with("UNTO-"));
+
+            if entry.kind == FeatureGateRegistryKind::ChainParam {
+                // This checked-in registry feeds the on-chain global account.
+                // Node-local params will use a separate registry/config path.
+                assert_eq!(
+                    entry.category,
+                    Some(FeatureGateRegistryCategory::ConsensusCritical)
+                );
+            }
+        }
+    }
+
     #[test]
     fn parses_valid_registry() {
         let registry = parse_feature_gate_registry(VALID_REGISTRY).expect("valid registry");

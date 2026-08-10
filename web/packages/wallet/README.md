@@ -66,3 +66,20 @@ export default function Root() {
 
 Expo apps should install the config plugin from `@thru/wallet/native/plugin`.
 The SDK trusts both production wallet hosts: `app.tid.sh` and `wallet.tid.sh`.
+
+## Legacy transaction signing
+
+Embedded integrations targeting a pre-cutover network can explicitly configure
+legacy outer-transaction signing:
+
+```tsx
+import { TransactionSigningScheme } from '@thru/wallet';
+
+const config = {
+  walletUrl: 'https://app.tid.sh/embedded/native/transparent',
+  transactionSigningScheme: TransactionSigningScheme.Legacy,
+};
+```
+
+The setting is fixed for the SDK instance and propagated to the hosted wallet.
+RFC-8032 remains the default, and no automatic fallback is performed.

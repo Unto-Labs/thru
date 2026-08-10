@@ -41,6 +41,10 @@ import {
   type SigningSessionStorage,
 } from './signing-sessions';
 import { createThruClient, Thru } from '@thru/sdk/client';
+import {
+  type TransactionSigningScheme,
+  withTransactionSigningScheme,
+} from './transaction-signing-scheme';
 
 export interface BrowserSDKConfig {
   iframeUrl?: string;
@@ -50,6 +54,10 @@ export interface BrowserSDKConfig {
   depositUiConfig?: DepositUiConfig;
   signingSessionStorage?: SigningSessionStorage | false;
   signingSessionStorageKey?: string;
+  transactionSigningScheme?: TransactionSigningScheme;
+  deposits?: {
+    providers: string[];
+  };
 }
 
 export interface ConnectOptions {
@@ -70,6 +78,7 @@ export class BrowserSDK {
   private initialized = false;
   private thruClient: Thru;
   private defaultNetwork?: ThruNetwork;
+  private depositProviders: ReadonlySet<string>;
   private connectInFlight: Promise<ConnectResult> | null = null;
   private lastConnectResult: ConnectResult | null = null;
 
@@ -77,6 +86,7 @@ export class BrowserSDK {
     prepare: (targetOrPayload) => this.prepareDeposit(targetOrPayload),
     ensureAccount: (params) => this.ensureDepositAccount(params),
     open: (payload) => this.deposit(payload),
+    getProviders: async () => [...this.depositProviders],
     getAccountState: (params) => this.getDepositAccountState(params),
     waitForBalance: (params) => this.waitForDepositBalance(params),
     formatAmount: (amountRaw, destination) =>
@@ -84,8 +94,11 @@ export class BrowserSDK {
   };
 
   constructor(config: BrowserSDKConfig = {}) {
-    const iframeUrl = config.iframeUrl;
-    const walletOrigin = new URL(iframeUrl ?? DEFAULT_IFRAME_URL).origin;
+    const iframeUrl = withTransactionSigningScheme(
+      config.iframeUrl ?? DEFAULT_IFRAME_URL,
+      config.transactionSigningScheme,
+    );
+    const walletOrigin = new URL(iframeUrl).origin;
     const appOrigin =
       typeof window !== 'undefined' && window.location.origin
         ? window.location.origin
@@ -113,6 +126,7 @@ export class BrowserSDK {
       depositUiConfig: config.depositUiConfig,
     });
     this.defaultNetwork = config.network;
+    this.depositProviders = new Set(config.deposits?.providers ?? ['unifold']);
 
     this.thruClient = createThruClient({
       baseUrl: config.rpcUrl,
@@ -262,10 +276,11 @@ export class BrowserSDK {
     if (!this.initialized) {
       await this.initialize();
     }
-    return this.provider.deposit({
-      ...payload,
-      network: payload.network ?? this.defaultNetwork,
-    });
+    const providerId = payload.providerId ?? 'unifold';
+    if (!this.depositProviders.has(providerId)) {
+      throw new Error(`Deposit provider is not configured: ${providerId}`);
+    }
+    return this.provider.deposit({ ...payload, providerId });
   }
 
   /** @deprecated Use `deposits.ensureAccount()`. */

@@ -1,7 +1,7 @@
 # @thru/design
 
 The Thru design system, split by platform so a single set of design decisions
-can drive web and (later) native surfaces.
+can drive web and native surfaces.
 
 One package, `@thru/design`, with per-platform subpath exports:
 
@@ -9,11 +9,12 @@ One package, `@thru/design`, with per-platform subpath exports:
 design/                       @thru/design
   tokens/   →  @thru/design/tokens      platform-neutral source of truth (colors, type, space, radius, motion)
   web/      →  @thru/design/web         web components: Base UI behavior + plain CSS, dressed in the tokens
-  mobile/   →  @thru/design/mobile      (future) React Native implementation, consumes the same tokens
+  mobile/   →  @thru/design/mobile      React Native implementation for Expo apps
 ```
 
-Import paths: components from `@thru/design/web`, the token TS object from
-`@thru/design/tokens`, and the foundation CSS via `@thru/design/web/styles.css`
+Import paths: web components from `@thru/design/web`, mobile components from
+`@thru/design/mobile`, the token TS object from `@thru/design/tokens`, and the
+foundation CSS via `@thru/design/web/styles.css`
 (or `@thru/design/tokens/css` for tokens alone).
 
 ## Principles
