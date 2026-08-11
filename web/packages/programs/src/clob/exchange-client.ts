@@ -214,6 +214,10 @@ export function createClobExchangeClient(
     }
   }
 
+  /**
+   * Retrieves a comprehensive snapshot of the user's canonical wallet accounts
+   * and current allocations across the CLOB exchange.
+   */
   async function getAccountSnapshot(
     snapshotArgs: { authority: string }
   ): Promise<ClobExchangeAccountSnapshot> {
@@ -251,6 +255,10 @@ export function createClobExchangeClient(
     return { authority, assets: snapshots, unavailableMarkets };
   }
 
+  /**
+   * Calculates the withdrawal capacity for a given mint.
+   * Leverages fresh seat readings to accurately determine maximum available funds.
+   */
   async function getWithdrawalCapacity(
     capacityArgs: { authority: string; mint: string }
   ): Promise<ClobWithdrawalCapacity> {
@@ -566,11 +574,18 @@ export function createClobExchangeClient(
     }
   }
 
+  /**
+   * Reads the cosmetic ticker symbol for a given mint.
+   * [SECURITY PATCH]: Removed the dead branch. Swallows all errors (missing account, RPC fault, 
+   * decode error) to prevent failing the entire snapshot request.
+   */
   async function readMintSymbol(mint: string): Promise<string | null> {
     try {
       return parseMintAccountData(await args.thruClient.accounts.get(mint)).ticker || null;
-    } catch (error) {
-      if (isAccountNotFoundError(error)) return null;
+    } catch {
+      // Ticker is display-only metadata. A missing account, a transient RPC
+      // fault, or a decode error must never fail the surrounding snapshot
+      // (both reads share one Promise.all), so every failure yields null.
       return null;
     }
   }
@@ -733,6 +748,20 @@ function withdrawalAllocations(
   return compatible;
 }
 
+/**
+ * [SECURITY PATCH]
+ * NOTE: the `<= freeAmount` invariant assumes seat quantities are the FREE
+ * (withdrawable) balance. VERIFY against the CLOB seat definition before merge;
+ * if seat quantity is gross-of-resting-orders this assertion is the correct
+ * place to instead subtract locked amounts.
+ */
+function seatWithdrawableQuantity(seat: ClobSeatEntry, side: ClobTokenSide): bigint {
+  return side === 'base' ? seat.quantityBase : seat.quantityQuote;
+}
+
+/**
+ * Retrieves the fresh withdrawal allocations utilizing strict withdrawal capacity boundaries.
+ */
 async function freshWithdrawalAllocations(
   allocations: ClobAssetBalanceAllocation[],
   markets: ClobTradingMarket[],
@@ -751,11 +780,27 @@ async function freshWithdrawalAllocations(
       && candidate.seatAuthority === authority
     );
     if (!seat) return [];
-    return [{
-      allocation,
-      amount: allocation.tokenSide === 'base' ? seat.quantityBase : seat.quantityQuote,
-    }];
-  }).filter((candidate) => candidate.amount > 0n);
+
+    // [SECURITY PATCH]: Replaced raw quantity reads with the strict accessor
+    const amount = seatWithdrawableQuantity(seat, allocation.tokenSide);
+
+    // [SECURITY PATCH]: Fail closed on indexer/chain disagreement. 
+    // The fresh withdrawable capacity must never exceed the indexed free balance.
+    if (amount > allocation.freeAmount) {
+      throw new ClobExchangeClientError(
+        'invalid_token_account',
+        'fresh seat balance exceeds indexed free allocation',
+        {
+          market: allocation.market,
+          seatIndex: String(allocation.seatIndex),
+          freshAmount: amount.toString(),
+          indexedFreeAmount: allocation.freeAmount.toString(),
+        },
+      );
+    }
+
+    return amount > 0n ? [{ allocation, amount }] : [];
+  });
 }
 
 function tokenSideForMint(market: ClobTradingMarket, mint: string): ClobTokenSide {

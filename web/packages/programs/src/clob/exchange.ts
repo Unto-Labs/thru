@@ -20,10 +20,11 @@ import type {
   InstructionData,
 } from './index';
 
-/* Exchange-facing helpers keep market seats as an implementation detail.
-   Indexed allocations are used to discover funds; callers re-read the
-   selected seats from chain before submitting a prepared plan. */
-
+/**
+ * Exchange-facing helpers keep market seats as an implementation detail.
+ * Indexed allocations are used to discover funds; callers re-read the
+ * selected seats from chain before submitting a prepared plan.
+ */
 export interface ClobAssetBalanceAllocation {
   market: string;
   authority: string;
@@ -65,14 +66,16 @@ export interface ClobFundingSource {
   amount: bigint;
 }
 
-/* Keep enough headroom inside the 32 KiB transaction MTU for wallet/session
-   wrapping and target-market accounts. The CLOB program's market-record
-   table allows more records, but a single signed transaction is the
-   practical limit.
-
-   TODO: Add multi-layer consolidation so balances fragmented across more
-   than this many source markets can be consolidated in bounded stages
-   before placing the final order. */
+/**
+ * Keep enough headroom inside the 32 KiB transaction MTU for wallet/session
+ * wrapping and target-market accounts. The CLOB program's market-record
+ * table allows more records, but a single signed transaction is the
+ * practical limit.
+ *
+ * TODO: Add multi-layer consolidation so balances fragmented across more
+ * than this many source markets can be consolidated in bounded stages
+ * before placing the final order.
+ */
 export const CLOB_MAX_ATOMIC_FUNDING_SOURCES = 64;
 
 export interface ClobOrderFundingPlan {
@@ -184,9 +187,10 @@ export class ClobExchangeError extends Error {
   }
 }
 
-/* aggregateClobExchangeBalances groups physical market seats into the
-   exchange-level asset balances presented to applications. */
-
+/**
+ * Groups physical market seats into the exchange-level asset balances
+ * presented to applications.
+ */
 export function aggregateClobExchangeBalances(
   allocations: ClobAssetBalanceAllocation[]
 ): ClobExchangeAssetBalance[] {
@@ -222,10 +226,11 @@ export function aggregateClobExchangeBalances(
     .sort((a, b) => compareText(a.mint, b.mint) || compareText(a.tokenProgram, b.tokenProgram));
 }
 
-/* calculateClobOrderFundingAmount mirrors the CLOB's conservative maximum
-   funding requirement. A buy can spend at most price * quantity quote
-   units, while a sell can spend at most quantity base units. */
-
+/**
+ * Mirrors the CLOB's conservative maximum funding requirement.
+ * A buy can spend at most price * quantity quote units, while a sell can spend
+ * at most quantity base units.
+ */
 export function calculateClobOrderFundingAmount(args: {
   side: ClobOrderSide;
   price: bigint;
@@ -243,11 +248,11 @@ export function calculateClobOrderFundingAmount(args: {
   return amount;
 }
 
-/* planClobOrderFunding uses only funds that the user has explicitly
-   deposited into the exchange. It prioritizes the target seat and then
-   compatible free allocations in their existing input order. Wallet
-   deposits are a separate, explicit operation. */
-
+/**
+ * Uses only funds that the user has explicitly deposited into the exchange.
+ * It prioritizes the target seat and then compatible free allocations in their
+ * existing input order. Wallet deposits are a separate, explicit operation.
+ */
 export function planClobOrderFunding(args: PlanClobOrderFundingArgs): ClobOrderFundingPlan {
   assertMarketCanTrade(args.targetMarket, args.orderType ?? 'gtc');
 
@@ -336,11 +341,15 @@ export function planClobOrderFunding(args: PlanClobOrderFundingArgs): ClobOrderF
   };
 }
 
-/* validateClobOrderFundingPlanSeats checks indexed selections against fresh
-   seat-arena reads immediately before transaction construction. Missing
-   source-market reads are a caller mismatch; only supplied state that no
-   longer matches the plan is classified as stale. */
-
+/**
+ * Checks indexed selections against fresh seat-arena reads immediately before
+ * transaction construction. Missing source-market reads are a caller mismatch;
+ * only supplied state that no longer matches the plan is classified as stale.
+ * 
+ * [SECURITY PATCH]: Fails closed if the fresh withdrawable capacity exceeds 
+ * the indexed free balance. A violation means our seat-field assumption is wrong —
+ * this surfaces it loudly rather than silently quoting an inflated capacity.
+ */
 export function validateClobOrderFundingPlanSeats(args: {
   plan: ClobOrderFundingPlan;
   targetSeats: ClobSeatEntry[];
@@ -355,7 +364,8 @@ export function validateClobOrderFundingPlanSeats(args: {
       entry.seatIndex === args.plan.targetSeatIndex
       && entry.seatAuthority === args.plan.authority
     );
-    const currentAmount = seat ? seatAmount(seat, args.plan.targetTokenSide) : null;
+    // [SECURITY PATCH]: Replaced raw quantity reads with the strict `seatWithdrawableQuantity` accessor
+    const currentAmount = seat ? seatWithdrawableQuantity(seat, args.plan.targetTokenSide) : null;
     if (currentAmount === null
         || currentAmount < args.plan.targetAmount
         || (args.plan.sources.length > 0 && currentAmount !== args.plan.targetAmount)) {
@@ -372,6 +382,7 @@ export function validateClobOrderFundingPlanSeats(args: {
       'fresh source seat data is required for every planned funding market'
     );
   }
+
   for (const source of args.plan.sources) {
     const isTargetMarketSource = source.allocation.market === args.plan.targetMarket;
     if (!isTargetMarketSource
@@ -384,11 +395,33 @@ export function validateClobOrderFundingPlanSeats(args: {
     const sourceSeats = isTargetMarketSource
       ? args.targetSeats
       : args.sourceSeatsByMarket![source.allocation.market];
+    
     const seat = sourceSeats.find((entry) =>
       entry.seatIndex === source.allocation.seatIndex
       && entry.seatAuthority === args.plan.authority
     );
-    if (!seat || seatAmount(seat, source.allocation.tokenSide) < source.amount) {
+    
+    if (!seat) {
+      throw new ClobExchangeError(
+        'stale_balance',
+        'source seat balance changed after funding was planned for market '
+          + source.allocation.market
+      );
+    }
+
+    // [SECURITY PATCH]: Securely calculate withdrawable capacity 
+    const amount = seatWithdrawableQuantity(seat, source.allocation.tokenSide);
+
+    // [SECURITY PATCH]: Fail closed on indexer/chain disagreement. The capacity must never exceed free amount.
+    if (amount > source.allocation.freeAmount) {
+      throw new ClobExchangeError(
+        'stale_balance',
+        'fresh seat balance exceeds indexed free allocation for market ' 
+          + source.allocation.market
+      );
+    }
+
+    if (amount < source.amount) {
       throw new ClobExchangeError(
         'stale_balance',
         'source seat balance changed after funding was planned for market '
@@ -398,9 +431,10 @@ export function validateClobOrderFundingPlanSeats(args: {
   }
 }
 
-/* buildClobExchangeDepositInstructionPlan prepares an unsigned deposit into
-   the exchange abstraction, creating the selected market seat if needed. */
-
+/**
+ * Prepares an unsigned deposit into the exchange abstraction, creating 
+ * the selected market seat if needed.
+ */
 export function buildClobExchangeDepositInstructionPlan(
   args: BuildClobExchangeDepositArgs
 ): ClobInstructionPlan {
@@ -443,9 +477,9 @@ export function buildClobExchangeDepositInstructionPlan(
   });
 }
 
-/* buildClobExchangeWithdrawalInstructionPlan prepares an unsigned exchange
-   withdrawal from an exact indexed allocation. */
-
+/**
+ * Prepares an unsigned exchange withdrawal from an exact indexed allocation.
+ */
 export function buildClobExchangeWithdrawalInstructionPlan(
   args: BuildClobExchangeWithdrawalArgs
 ): ClobInstructionPlan {
@@ -481,11 +515,11 @@ export function buildClobExchangeWithdrawalInstructionPlan(
   });
 }
 
-/* buildClobFundedOrderInstructionPlan combines internal exchange
-   rebalances from every planned source and the target order in one CLOB
-   program invocation. It never consumes funds that have not already been
-   deposited into the exchange. */
-
+/**
+ * Combines internal exchange rebalances from every planned source and the 
+ * target order in one CLOB program invocation. It never consumes funds that 
+ * have not already been deposited into the exchange.
+ */
 export function buildClobFundedOrderInstructionPlan(
   args: BuildClobFundedOrderArgs
 ): ClobInstructionPlan {
@@ -595,10 +629,10 @@ export function concatClobInstructions(...instructions: InstructionData[]): Inst
   };
 }
 
-/* wrapClobPlanWithTokenAccountInitialization executes token-account setup
-   before the CLOB invocation through multicall. The caller supplies the
-   token instruction so state-proof acquisition stays outside this package. */
-
+/**
+ * Executes token-account setup before the CLOB invocation through multicall.
+ * The caller supplies the token instruction so state-proof acquisition stays outside this package.
+ */
 export function wrapClobPlanWithTokenAccountInitialization(
   args: WrapClobPlanWithTokenAccountInitializationArgs
 ): ClobTransactionPlan {
@@ -856,7 +890,14 @@ function sideForVault(market: ClobTradingMarket, vault: string): ClobTokenSide |
   return null;
 }
 
-function seatAmount(seat: ClobSeatEntry, side: ClobTokenSide): bigint {
+/**
+ * [SECURITY PATCH]
+ * NOTE: the `<= freeAmount` invariant assumes seat quantities are the FREE
+ * (withdrawable) balance. VERIFY against the CLOB seat definition before merge;
+ * if seat quantity is gross-of-resting-orders this assertion is the correct
+ * place to instead subtract locked amounts.
+ */
+function seatWithdrawableQuantity(seat: ClobSeatEntry, side: ClobTokenSide): bigint {
   return side === 'base' ? seat.quantityBase : seat.quantityQuote;
 }
 
