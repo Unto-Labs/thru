@@ -1619,6 +1619,14 @@ fn test_ts_clob_program_compiles_with_u64_event_tag() {
         "CLOB TypeScript output should include the cbook account decoder"
     );
     assert!(
+        content.contains("export class ExchangeInitializeInstruction"),
+        "CLOB TypeScript output should include the exchange initializer"
+    );
+    assert!(
+        content.contains("export class ExchangeMetaAccount"),
+        "CLOB TypeScript output should include the exchange metadata decoder"
+    );
+    assert!(
         content.contains("this.buffer.length"),
         "CLOB dynamic account tail lengths should derive from the input buffer size"
     );

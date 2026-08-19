@@ -1,6 +1,7 @@
 import { StrictMode, Component, type ReactNode } from "react";
 import { createRoot } from "react-dom/client";
 import "@thru/design/tokens/css";
+import "@thru/design/tokens/neutral.css";
 import "./gallery.css";
 import { App } from "./App";
 

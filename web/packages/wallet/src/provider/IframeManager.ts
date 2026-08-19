@@ -28,6 +28,7 @@ const FAST_REQUEST_TIMEOUT_MS = 30 * 1000;
 const PARENT_ORIGIN_SEARCH_PARAM = 'tn_parent_origin';
 export const WALLET_IFRAME_ALLOW =
   'publickey-credentials-get; publickey-credentials-create; payment *';
+const WALLET_IFRAME_BACKGROUND = 'transparent';
 
 const SLOW_REQUEST_TYPES: ReadonlySet<string> = new Set([
   POST_MESSAGE_REQUEST_TYPES.CONNECT,
@@ -311,7 +312,7 @@ export class IframeManager {
         border: none;
         z-index: 1;
         display: block;
-        background: transparent;
+        background: ${WALLET_IFRAME_BACKGROUND};
       `;
       return;
     }
@@ -325,7 +326,7 @@ export class IframeManager {
       border: none;
       z-index: 999999;
       display: block;
-      background: rgba(0, 0, 0, 0.5);
+      background: ${WALLET_IFRAME_BACKGROUND};
     `;
   }
 

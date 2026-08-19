@@ -1,0 +1,34 @@
+/* Stepper — dot progress for a short wizard. */
+
+.tds-stepper {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tds-stepper__dot {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-pill);
+  background: var(--color-border-strong);
+  transition:
+    width var(--duration-med) var(--ease-standard),
+    background-color var(--duration-med) var(--ease-standard);
+}
+
+/* Done reads as a filled dot, not a check: at 6px a glyph is noise, and
+   the contrast step alone carries the distinction. */
+.tds-stepper__dot[data-state="complete"] {
+  background: var(--color-text-disabled);
+}
+
+.tds-stepper__dot[data-state="active"] {
+  width: 16px;
+  background: var(--color-text-brand);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tds-stepper__dot {
+    transition: none;
+  }
+}

@@ -46,10 +46,16 @@ function writeU64(target: Uint8Array, offset: number, value: bigint): void {
 
 describe('amm helpers', () => {
   it('exports the standardized AMM program address', () => {
+    const managerProgramAddress =
+      'taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQE';
+    const metaAccount = deriveProgramAddress({
+      programAddress: managerProgramAddress,
+      seed: 'tn_amm_program',
+    });
     expect(AMM_PROGRAM_ADDRESS).toBe(
       deriveProgramAddress({
-        programAddress: 'taNz_xi2ZJcAkg3nIbD0Tgy6-P4ckJGUUwLQPPqobPQbsc',
-        seed: 'amm',
+        programAddress: managerProgramAddress,
+        seed: metaAccount.bytes,
       }).address
     );
   });

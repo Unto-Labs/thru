@@ -75,6 +75,30 @@ export interface CreateAccountOptions {
 export type NativeProviderEvent = EmbeddedProviderEvent;
 export type NativeProviderEventCallback = (data?: unknown) => void;
 
+const TRANSPARENT_CONTENT_PRESENTATION_PREFIX = "wallet-content:";
+
+function getUiShowReason(payload: unknown): string {
+  if (
+    payload &&
+    typeof payload === "object" &&
+    "reason" in payload &&
+    typeof payload.reason === "string" &&
+    payload.reason.length > 0
+  ) {
+    return payload.reason;
+  }
+  return "ui-show";
+}
+
+/** Internal lifecycle tag used by the transparent React host. The first show
+ * request only expands/focuses the otherwise invisible WebView; this tagged
+ * request arrives when the wallet has actually rendered visible content. */
+export function isTransparentContentPresentationReason(
+  reason?: string,
+): boolean {
+  return reason?.startsWith(TRANSPARENT_CONTENT_PRESENTATION_PREFIX) ?? false;
+}
+
 /**
  * RN-side analog of `web/packages/embedded-provider/src/EmbeddedProvider.ts`.
  * Same public surface (connect/disconnect/sign/getAccounts/etc.) over a
@@ -114,6 +138,16 @@ export class NativeProvider {
 
     this.bridge.onEvent = (eventType, payload) => {
       if (this.transparent && eventType === EMBEDDED_PROVIDER_EVENTS.UI_SHOW) {
+        /* Only a request that is holding the surface open can present content.
+           UI_SHOW also arrives outside a requestShow/requestHide bracket (the
+           wallet emits it on disconnect), and expanding the invisible surface
+           then would leave a full-screen tap-blocking layer that no matching
+           requestHide can ever collapse. */
+        if (this.transparentSurfaceRequestCount > 0) {
+          this.onShowRequested?.(
+            `${TRANSPARENT_CONTENT_PRESENTATION_PREFIX}${getUiShowReason(payload)}`,
+          );
+        }
         return;
       }
 

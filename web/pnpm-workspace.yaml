@@ -1,4 +1,5 @@
 packages:
+  - '../programs/bootstrap'
   - 'packages/*'
   - 'packages/design/gallery'
   - 'packages-private/*'

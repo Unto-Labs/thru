@@ -30,7 +30,7 @@ AR?=ar
 RANLIB?=ranlib
 
 # Optional wrapper invoked in front of compile rules.  Empty by default; set to
-# e.g. 'sccache' or 'ccache' to cache object compilation while leaving the
+# e.g. 'vcache' to cache object compilation while leaving the
 # selected cross-toolchain unchanged.
 COMPILER_LAUNCHER?=
 

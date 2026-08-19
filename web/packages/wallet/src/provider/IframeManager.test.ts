@@ -6,6 +6,21 @@ describe('IframeManager', () => {
     expect(WALLET_IFRAME_ALLOW).toContain('payment *');
   });
 
+  it('uses a transparent iframe background by default', () => {
+    const iframe = { style: { cssText: '' } };
+    const manager = new IframeManager(
+      'https://app.tid.sh/embedded'
+    ) as unknown as {
+      iframe: typeof iframe;
+      applyIframeStyles: () => void;
+    };
+
+    manager.iframe = iframe;
+    manager.applyIframeStyles();
+
+    expect(iframe.style.cssText).toContain('background: transparent;');
+  });
+
   it('allows trusted deployed wallet origins', () => {
     const thruBridge = new IframeManager('https://app.tid.sh/embedded');
     const tidBridge = new IframeManager('https://wallet.tid.sh/embedded');

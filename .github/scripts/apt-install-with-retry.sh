@@ -248,6 +248,45 @@ use_fallback_apt_mirror() {
   echo "apt mirror fallback applied to ${rewritten} file(s); remaining attempts use ${FALLBACK_MIRROR}" >&2
 }
 
+# Fast path: nothing to do.
+#
+# Every caller of this script asks for packages the runner image already
+# ships, so the common case is `apt-get update` fetching ~19 MB of indexes to
+# conclude "0 upgraded, 0 newly installed". That cost is not small: it is
+# 3m20s per job on the self-hosted runners, in zig-x86-test and grpc-test
+# alike, and when the EC2 regional mirror stalls it is the hang that has
+# ejected PRs from the merge queue outright.
+#
+# Checking dpkg's own database first turns that into a few milliseconds. Set
+# APT_ASSUME_PRESENT=0 to force the update+install path when a caller really
+# does want the newest version rather than a working one.
+ASSUME_PRESENT="${APT_ASSUME_PRESENT:-1}"
+
+all_packages_installed() {
+  local pkg status
+  for pkg in "$@"; do
+    # A package can be known to dpkg while removed or half-configured; only
+    # "install ok installed" means it is actually usable.
+    status="$(dpkg-query -W -f='${db:Status-Abbrev}' "$pkg" 2>/dev/null || true)"
+    # Status-Abbrev is three characters: desired, current, error. Only a
+    # trailing space means "no error" -- "iiR" is installed but flagged for
+    # reinstallation, which is exactly the broken state the slow path exists
+    # to repair, so a prefix match on "ii" would skip the repair and let a
+    # later command fail instead.
+    case "$status" in
+      "ii ") ;;
+      *) return 1 ;;
+    esac
+  done
+  return 0
+}
+
+if [ "$UPDATE_ONLY" -eq 0 ] && [ "$ASSUME_PRESENT" = "1" ] &&
+   command -v dpkg-query >/dev/null 2>&1 && all_packages_installed "$@"; then
+  echo "all requested packages already installed, skipping apt: $*"
+  exit 0
+fi
+
 for attempt in 1 2 3 4 5; do
   if [ "$attempt" -eq 1 ]; then
     wait_for_or_kill_lock_holders

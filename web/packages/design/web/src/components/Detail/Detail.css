@@ -23,6 +23,19 @@
   color: var(--color-text-primary);
   text-align: right;
 }
+
+/* Summary rows invert which half is machine-facing: the label is prose, the
+   figure is mono and tabular so a stack of amounts aligns on the decimal. */
+.tds-detail--summary .tds-detail__label {
+  font-family: var(--font-sans);
+  color: var(--color-text-tertiary);
+}
+
+.tds-detail--summary .tds-detail__value {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--fw-semibold);
+}
 .tds-detail--stacked .tds-detail__value {
   text-align: left;
 }

@@ -6,7 +6,6 @@ import {
   type ComponentProps,
 } from "react";
 import {
-  ActivityIndicator,
   Platform,
   Pressable,
   StyleSheet,
@@ -21,22 +20,23 @@ import {
 import {
   COINBASE_APPLE_PAY_CLICK_SCRIPT,
   buildCoinbaseApplePayButtonVisibilityScript,
+  canCancelCoinbasePayment,
+  coinbasePaymentEscape,
   isCoinbaseApplePaySandboxUrl,
   isTrustedCoinbasePaymentUrl,
   parseCoinbaseApplePayAutoClickMessage,
   parseCoinbaseEventName,
+  shouldCloseCoinbasePayment,
+  type CoinbasePaymentProgress,
 } from "./coinbase-webview";
 
 /* This adapter follows Coinbase's mobile reference widget:
    https://github.com/mlion-cb/onramp-v2-mobile-demo/blob/master/components/onramp/ApplePayWidget.tsx
 
-   It can hide the rendered apple-pay-button while trying the reference's
-   programmatic click. Coinbase's current Headless Onramp guidance still
-   requires a physical press, so the bounded fallback removes that style and
-   reveals Coinbase's button instead of stranding the user. Safari 16+ permits
-   Apple Pay and injected scripts in the same WKWebView. */
-
-const FALLBACK_DELAY_MS = 5_000;
+   It hides the rendered apple-pay-button while trying the reference's
+   programmatic click. Production keeps this WebView mounted but transparent
+   after ApplePaySession.begin() presents the system sheet. Explicit sandbox
+   URLs retain the visible Coinbase control for local testing. */
 
 type WebViewShouldStartRequest = Parameters<
   NonNullable<ComponentProps<typeof WebView>["onShouldStartLoadWithRequest"]>
@@ -63,31 +63,37 @@ export function ApplePayWidget({
   onLoadError,
 }: ApplePayWidgetProps) {
   const webViewRef = useRef<WebViewType | null>(null);
-  const fallbackTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const sandboxUi = isCoinbaseApplePaySandboxUrl(paymentUrl);
-  const [hasCommitted, setHasCommitted] = useState(false);
   const [showFallback, setShowFallback] = useState(false);
+  const [progress, setProgress] = useState<CoinbasePaymentProgress>("pending");
+  const [lastSignalAt, setLastSignalAt] = useState(() => Date.now());
 
-  const clearFallbackTimer = useCallback(() => {
-    if (!fallbackTimerRef.current) return;
-    clearTimeout(fallbackTimerRef.current);
-    fallbackTimerRef.current = null;
-  }, []);
-
-  const revealFallback = useCallback(() => {
-    clearFallbackTimer();
-    webViewRef.current?.injectJavaScript(
-      buildCoinbaseApplePayButtonVisibilityScript(false),
+  /* The transparent surface swallows every touch while this widget is mounted,
+     so a provider that goes quiet would otherwise leave the user on a blank,
+     unresponsive screen. Bound the silence, measured from the last sign of life
+     from Coinbase. */
+  useEffect(() => {
+    const escape = coinbasePaymentEscape(progress, showFallback);
+    if (!escape) return;
+    const timer = setTimeout(
+      () => {
+        if (escape.action !== "reveal") {
+          onCancel();
+          return;
+        }
+        /* The auto-click hid Coinbase's own control, so reveal it before
+           telling the user to finish the payment there. */
+        webViewRef.current?.injectJavaScript(
+          buildCoinbaseApplePayButtonVisibilityScript(false),
+        );
+        setShowFallback(true);
+      },
+      Math.max(0, escape.delayMs - (Date.now() - lastSignalAt)),
     );
-    setShowFallback(true);
-  }, [clearFallbackTimer]);
-
-  const armFallback = useCallback(() => {
-    clearFallbackTimer();
-    fallbackTimerRef.current = setTimeout(revealFallback, FALLBACK_DELAY_MS);
-  }, [clearFallbackTimer, revealFallback]);
-
-  useEffect(() => () => clearFallbackTimer(), [clearFallbackTimer]);
+    return () => {
+      clearTimeout(timer);
+    };
+  }, [lastSignalAt, onCancel, progress, showFallback]);
 
   const handleMessage = useCallback(
     (event: WebViewMessageEvent) => {
@@ -96,51 +102,56 @@ export function ApplePayWidget({
 
       const autoClickMessage = parseCoinbaseApplePayAutoClickMessage(data);
       if (autoClickMessage) {
-        if (
-          autoClickMessage.status === "button-not-found" ||
-          (autoClickMessage.status === "clicked" && sandboxUi)
-        ) {
-          revealFallback();
+        if (autoClickMessage.status === "sheet-presented") {
+          setProgress("presented");
+          setLastSignalAt(Date.now());
         } else {
-          armFallback();
+          onCancel();
         }
         return;
       }
 
       const eventName = parseCoinbaseEventName(data);
       if (!eventName) return;
+      /* Anything short of a terminal event only proves the provider is still
+         alive, so it restarts the silence bound rather than releasing it. A
+         commit is charged but not terminal: it still needs a bound, and it can
+         no longer be cancelled. */
+      if (shouldCloseCoinbasePayment(eventName)) setProgress("settled");
+      else {
+        if (eventName === "onramp_api.commit_success") setProgress("committed");
+        setLastSignalAt(Date.now());
+      }
       if (eventName === "onramp_api.load_success") {
-        webViewRef.current?.injectJavaScript(
-          `${buildCoinbaseApplePayButtonVisibilityScript(
-            hideApplePayButton,
-          )}\n${COINBASE_APPLE_PAY_CLICK_SCRIPT}`,
-        );
-        /* Ten 500ms attempts finish before this safety fallback fires. A
-           received "clicked" message re-arms from the actual click time. */
-        armFallback();
-      } else if (eventName === "onramp_api.commit_success") {
-        clearFallbackTimer();
-        setHasCommitted(true);
-        setShowFallback(false);
+        if (sandboxUi) {
+          webViewRef.current?.injectJavaScript(
+            buildCoinbaseApplePayButtonVisibilityScript(false),
+          );
+          setShowFallback(true);
+        } else {
+          webViewRef.current?.injectJavaScript(
+            `${buildCoinbaseApplePayButtonVisibilityScript(
+              hideApplePayButton,
+            )}\n${COINBASE_APPLE_PAY_CLICK_SCRIPT}`,
+          );
+        }
       } else if (
+        eventName === "onramp_api.commit_success" ||
         eventName === "onramp_api.cancel" ||
         eventName === "onramp_api.load_error" ||
         eventName === "onramp_api.commit_error" ||
         eventName === "onramp_api.polling_success" ||
         eventName === "onramp_api.polling_error"
       ) {
-        clearFallbackTimer();
         setShowFallback(false);
       }
 
       onCoinbaseMessage(event);
     },
     [
-      armFallback,
-      clearFallbackTimer,
       hideApplePayButton,
+      onCancel,
       onCoinbaseMessage,
-      revealFallback,
       sandboxUi,
     ],
   );
@@ -163,37 +174,33 @@ export function ApplePayWidget({
 
   return (
     <View
-      style={[styles.overlay, { paddingTop: topInset, paddingBottom: bottomInset }]}
+      accessible={false}
+      onStartShouldSetResponder={() => true}
+      style={[
+        styles.overlay,
+        showFallback ? styles.fallbackOverlay : null,
+        showFallback
+          ? { paddingTop: topInset, paddingBottom: bottomInset }
+          : null,
+      ]}
     >
-      <View style={styles.header}>
-        <Text style={styles.title}>
-          {hasCommitted ? "Processing" : "Apple Pay"}
-        </Text>
-        {!hasCommitted ? (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Cancel Coinbase payment"
-            hitSlop={8}
-            onPress={onCancel}
-            style={styles.cancelButton}
-          >
-            <Text style={styles.cancelText}>Cancel</Text>
-          </Pressable>
-        ) : null}
-      </View>
+      {showFallback ? (
+        <View style={styles.header}>
+          <Text style={styles.title}>Apple Pay</Text>
+          {canCancelCoinbasePayment(progress) ? (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Cancel Coinbase payment"
+              hitSlop={8}
+              onPress={onCancel}
+              style={styles.cancelButton}
+            >
+              <Text style={styles.cancelText}>Cancel</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
       <View style={styles.body}>
-        {!showFallback ? (
-          <View
-            style={styles.opening}
-            accessibilityRole="progressbar"
-            accessibilityLiveRegion="polite"
-          >
-            <ActivityIndicator size="small" color="#b52f36" />
-            <Text style={styles.openingText}>
-              {hasCommitted ? "Processing…" : "Opening Apple Pay…"}
-            </Text>
-          </View>
-        ) : null}
         <View
           style={showFallback ? styles.visiblePayment : styles.hiddenPayment}
           pointerEvents={showFallback ? "auto" : "none"}
@@ -242,7 +249,9 @@ export function ApplePayWidget({
             <Text style={styles.hint} accessibilityLiveRegion="polite">
               {sandboxUi
                 ? "Confirm the simulated payment in Coinbase's sandbox popup."
-                : "If the Apple Pay sheet didn't open, tap Coinbase's payment button above."}
+                : canCancelCoinbasePayment(progress)
+                  ? "Finish the payment in Coinbase, or cancel to go back."
+                  : "Your payment went through. Coinbase is still confirming it."}
             </Text>
           ) : null}
         </View>
@@ -253,9 +262,12 @@ export function ApplePayWidget({
 
 const styles = StyleSheet.create({
   overlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "#ffffff",
+    ...StyleSheet.absoluteFill,
+    backgroundColor: "transparent",
     zIndex: 2,
+  },
+  fallbackOverlay: {
+    backgroundColor: "#ffffff",
   },
   header: {
     alignItems: "center",
@@ -285,23 +297,13 @@ const styles = StyleSheet.create({
   body: {
     flex: 1,
   },
-  opening: {
-    alignItems: "center",
-    flex: 1,
-    gap: 12,
-    justifyContent: "center",
-  },
-  openingText: {
-    color: "#56636a",
-    fontSize: 15,
-  },
   visiblePayment: {
     flex: 1,
     gap: 12,
     padding: 16,
   },
   hiddenPayment: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     opacity: 0,
     zIndex: -1,
   },

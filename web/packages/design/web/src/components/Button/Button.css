@@ -32,7 +32,15 @@
   transform: none;
 }
 
-/* Sizes (thru-design scale: md is the default, then sm, xs) */
+/* Sizes (thru-design scale: md is the default, then sm, xs). `lg` is the
+   48px touch metric for embedded and mobile surfaces — the pinned sheet CTA. */
+.tds-btn--lg {
+  box-sizing: border-box;
+  min-height: 48px;
+  width: 100%;
+  padding: 0 var(--space-4);
+  font-size: 14px;
+}
 .tds-btn--md { padding: var(--space-2) var(--space-4); font-size: 13px; }
 .tds-btn--sm { padding: var(--space-2) var(--space-3); font-size: 12px; }
 .tds-btn--xs { padding: var(--space-1) var(--space-2);  font-size: 11px; }

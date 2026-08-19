@@ -1,0 +1,174 @@
+abi:
+  package: thru.program.uploader
+  name: "Uploader Program"
+  abi-version: 1
+  package-version: "0.1.0"
+  description: ABI for temporary bulk-data uploads used by Thru programs.
+  imports:
+    # thru_primitives
+    - type: onchain
+      address: ta1blxgaYR0dei5aldWJe1vbUtt-LkVEBOzNJtSRhHQcTG
+      target: abi
+      network: mainnet
+      revision: latest
+  options:
+    program-metadata:
+      root-types:
+        instruction-root: "UploaderInstruction"
+        account-root: "UploaderProgramMeta"
+        errors: "UploaderError"
+
+types:
+- name: CreateArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: buffer_account_idx
+        field-type:
+          primitive: u16
+      - name: meta_account_idx
+        field-type:
+          primitive: u16
+      - name: authority_account_idx
+        field-type:
+          primitive: u16
+      - name: buffer_account_sz
+        field-type:
+          primitive: u32
+      - name: expected_account_hash
+        field-type:
+          type-ref:
+            name: Hash
+            package: "thru.common.primitives"
+      - name: seed_len
+        field-type:
+          primitive: u32
+      - name: seed
+        field-type:
+          array:
+            size:
+              field-ref:
+                path: ["seed_len"]
+            element-type:
+              primitive: u8
+
+- name: WriteArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: buffer_account_idx
+        field-type:
+          primitive: u16
+      - name: meta_account_idx
+        field-type:
+          primitive: u16
+      - name: data_len
+        field-type:
+          primitive: u32
+      - name: data_offset
+        field-type:
+          primitive: u32
+      - name: data
+        field-type:
+          array:
+            size:
+              field-ref:
+                path: ["data_len"]
+            element-type:
+              primitive: u8
+
+- name: DestroyArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: buffer_account_idx
+        field-type:
+          primitive: u16
+      - name: meta_account_idx
+        field-type:
+          primitive: u16
+
+- name: FinalizeArgs
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: buffer_account_idx
+        field-type:
+          primitive: u16
+      - name: meta_account_idx
+        field-type:
+          primitive: u16
+      - name: expected_account_hash
+        field-type:
+          type-ref:
+            name: Hash
+            package: "thru.common.primitives"
+
+- name: UploaderInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: tag
+        field-type:
+          primitive: u32
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path: ["tag"]
+            variants:
+            - name: create
+              tag-value: 0
+              variant-type:
+                type-ref:
+                  name: CreateArgs
+            - name: write
+              tag-value: 1
+              variant-type:
+                type-ref:
+                  name: WriteArgs
+            - name: destroy
+              tag-value: 2
+              variant-type:
+                type-ref:
+                  name: DestroyArgs
+            - name: finalize
+              tag-value: 3
+              variant-type:
+                type-ref:
+                  name: FinalizeArgs
+
+- name: UploaderProgramMeta
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: authority
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: expected_account_hash
+        field-type:
+          type-ref:
+            name: Hash
+            package: "thru.common.primitives"
+      - name: state
+        field-type:
+          primitive: u8
+
+- name: UploaderError
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: code
+        field-type:
+          primitive: u64

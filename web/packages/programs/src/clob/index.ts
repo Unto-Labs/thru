@@ -1,4 +1,4 @@
-import { Pubkey } from '@thru/sdk';
+import { Pubkey, deriveProgramAddress } from '@thru/sdk';
 import { encodeAddress } from '@thru/sdk/helpers';
 import type { Account } from '@thru/sdk';
 import {
@@ -8,13 +8,18 @@ import {
   CbookLevel,
   ClobEvent,
   ClobInstructionBuilder,
-  ClobProgramAccount,
   CreateOrderEntryInstructionBuilder,
   CreateSeatlessOrderEntryInstructionBuilder,
+  ExchangeInitializeInstructionBuilder,
+  ExchangeRecoverAdminInstructionBuilder,
+  ExchangeSetAdminInstructionBuilder,
+  ExchangeSetStatusInstructionBuilder,
+  ExchangeMetaAccount,
   MarketAccount as MarketAccountView,
   MarketCreateInstructionBuilder,
   MarketRecordInstructionBuilder,
   MarketSetStatusInstructionBuilder,
+  MarketSetExchangeStatusInstructionBuilder,
   ModifyOrderEntryInstructionBuilder,
   OrderArenaAccount,
   OrderEntry as OrderEntryView,
@@ -45,6 +50,22 @@ export {
   CreateOrderEntryInstructionBuilder,
   CreateSeatlessOrderEntryInstruction,
   CreateSeatlessOrderEntryInstructionBuilder,
+  ExchangeInitializeInstruction,
+  ExchangeInitializeInstructionBuilder,
+  ExchangeRecoverAdminInstruction,
+  ExchangeRecoverAdminInstructionBuilder,
+  ExchangeSetAdminInstruction,
+  ExchangeSetAdminInstructionBuilder,
+  ExchangeSetStatusInstruction,
+  ExchangeSetStatusInstructionBuilder,
+  ExchangeAdminEvent,
+  ExchangeAdminEventBuilder,
+  ExchangeInitializedEvent,
+  ExchangeInitializedEventBuilder,
+  ExchangeStatusEvent,
+  ExchangeStatusEventBuilder,
+  ExchangeMetaAccount,
+  ExchangeMetaAccountBuilder,
   MarketAccount as MarketAccountView,
   MarketAccountBuilder,
   MarketCreateInstruction,
@@ -55,6 +76,10 @@ export {
   MarketRecordInstructionBuilder,
   MarketSetStatusInstruction,
   MarketSetStatusInstructionBuilder,
+  MarketSetExchangeStatusInstruction,
+  MarketSetExchangeStatusInstructionBuilder,
+  MarketExchangeStatusEvent,
+  MarketExchangeStatusEventBuilder,
   ModifyOrderEntryInstruction,
   ModifyOrderEntryInstructionBuilder,
   OrderArenaAccount,
@@ -92,6 +117,11 @@ export const CLOB_INSTRUCTION_MODIFY_ORDER_ENTRY = 5;
 export const CLOB_INSTRUCTION_MARKET_SET_STATUS = 8;
 export const CLOB_INSTRUCTION_MARKET_CREATE = 9;
 export const CLOB_INSTRUCTION_CREATE_SEATLESS_ORDER_ENTRY = 10;
+export const CLOB_INSTRUCTION_EXCHANGE_INITIALIZE = 11;
+export const CLOB_INSTRUCTION_EXCHANGE_SET_STATUS = 12;
+export const CLOB_INSTRUCTION_EXCHANGE_SET_ADMIN = 13;
+export const CLOB_INSTRUCTION_EXCHANGE_RECOVER_ADMIN = 14;
+export const CLOB_INSTRUCTION_MARKET_SET_EXCHANGE_STATUS = 15;
 
 export const CLOB_EVENT_SEAT_ASSIGNED = 1;
 export const CLOB_EVENT_ORDER_CANCELLED = 2;
@@ -103,6 +133,10 @@ export const CLOB_EVENT_ORDER_MODIFIED = 7;
 export const CLOB_EVENT_TOKEN_DEPOSIT = 8;
 export const CLOB_EVENT_TOKEN_WITHDRAW = 9;
 export const CLOB_EVENT_MARKET_STATUS = 10;
+export const CLOB_EVENT_EXCHANGE_INITIALIZED = 11;
+export const CLOB_EVENT_EXCHANGE_STATUS = 12;
+export const CLOB_EVENT_EXCHANGE_ADMIN = 13;
+export const CLOB_EVENT_MARKET_EXCHANGE_STATUS = 14;
 
 export const CLOB_EVENT_SIDE_BUY = 0;
 export const CLOB_EVENT_SIDE_SELL = 1;
@@ -117,6 +151,11 @@ export const CLOB_STATUS_FLAG_PAUSED = 1 << 0;
 export const CLOB_STATUS_FLAG_POST_ONLY = 1 << 1;
 export const CLOB_STATUS_FLAG_WITHDRAWALS_FROZEN = 1 << 2;
 export const CLOB_STATUS_FLAG_DEPOSITS_FROZEN = 1 << 3;
+export const CLOB_STATUS_FLAG_MASK =
+  CLOB_STATUS_FLAG_PAUSED |
+  CLOB_STATUS_FLAG_POST_ONLY |
+  CLOB_STATUS_FLAG_WITHDRAWALS_FROZEN |
+  CLOB_STATUS_FLAG_DEPOSITS_FROZEN;
 
 export const CLOB_PROGRAM_ADDRESS =
   'tamjQOFxFORIZhqbJjN83oAkRmSbKhLmULpvSHblK4GGIg';
@@ -133,8 +172,15 @@ export const CLOB_MODIFY_FLAG_FAIL_IF_OUT_OF_RANGE = 1 << 0;
 export const CLOB_MODIFY_FLAG_HAS_CLIENT_ID = 1 << 1;
 export const CLOB_MODIFY_FLAG_HAS_ORDER_ID = 1 << 2;
 
-export const CLOB_MARKET_ACCOUNT_SIZE = 256;
+export const CLOB_MARKET_MAGIC = 0x77;
+export const CLOB_MARKET_ACCOUNT_SIZE = 224;
+export const CLOB_SEAT_MANAGER_RESERVED_SIZE = 256;
+export const CLOB_EXCHANGE_META_ACCOUNT_SIZE = 96;
+export const CLOB_EXCHANGE_META_MAGIC = 0xF17EDA2CC10B0078n;
+export const CLOB_EXCHANGE_META_VERSION = 1;
+export const CLOB_EXCHANGE_META_SEED = fixedSeed('exchange_meta');
 export const CLOB_ARENA_HEADER_SIZE = 64;
+export const CLOB_SEAT_ARENA_ENTRIES_OFFSET = CLOB_SEAT_MANAGER_RESERVED_SIZE + CLOB_ARENA_HEADER_SIZE;
 export const CLOB_ORDER_ENTRY_SIZE = 64;
 export const CLOB_SEAT_ENTRY_SIZE = 64;
 export const CLOB_CBOOK_HEADER_SIZE = 16;
@@ -155,7 +201,12 @@ type ClobInstructionVariant =
   | 'modify_order_entry'
   | 'market_set_status'
   | 'market_create'
-  | 'create_seatless_order_entry';
+  | 'create_seatless_order_entry'
+  | 'exchange_initialize'
+  | 'exchange_set_status'
+  | 'exchange_set_admin'
+  | 'exchange_recover_admin'
+  | 'market_set_exchange_status';
 
 export type ClobOrderSide = 'buy' | 'sell';
 export type ClobOrderType = 'gtc' | 'mtl' | 'alo' | 'ioc' | 'fok';
@@ -174,6 +225,7 @@ export interface MarketRecordArgs {
   asksCbookAccountBytes: Uint8Array;
   seatAuthorityAccountBytes?: Uint8Array;
   seatIndex?: number;
+  exchangeMetaAccountBytes: Uint8Array;
   tokenProgramAccountBytes: Uint8Array;
   baseVaultAccountBytes: Uint8Array;
   quoteVaultAccountBytes: Uint8Array;
@@ -192,6 +244,35 @@ export interface MarketCreateArgs extends MarketRecordArgs {
   asksCbookStateProof: Uint8Array;
   baseVaultStateProof: Uint8Array;
   quoteVaultStateProof: Uint8Array;
+}
+
+export interface ExchangeInitializeArgs {
+  exchangeMetaAccountBytes: Uint8Array;
+  programMetaAccountBytes: Uint8Array;
+  authorityAccountBytes: Uint8Array;
+  tokenProgramAccountBytes: Uint8Array;
+  exchangeAdminAccountBytes: Uint8Array;
+  stateProof: Uint8Array;
+}
+
+export interface ExchangeSetStatusArgs {
+  exchangeMetaAccountBytes: Uint8Array;
+  exchangeAdminAccountBytes: Uint8Array;
+  statusFlags: number;
+}
+
+export interface ExchangeSetAdminArgs {
+  exchangeMetaAccountBytes: Uint8Array;
+  authorityAccountBytes: Uint8Array;
+  newAdminAccountBytes: Uint8Array;
+}
+
+export interface ExchangeRecoverAdminArgs extends ExchangeSetAdminArgs {
+  programMetaAccountBytes: Uint8Array;
+}
+
+export interface MarketSetExchangeStatusArgs extends MarketSetStatusArgs {
+  exchangeAdminAccountBytes: Uint8Array;
 }
 
 export interface SeatCreateArgs {
@@ -248,16 +329,24 @@ export interface MarketSetStatusArgs {
 export interface ClobMarket {
   magic: number;
   statusFlags: number;
+  exchangeStatusFlags: number;
   lotSize: bigint;
   tickSize: bigint;
   nextOrderId: bigint;
   orderEntry: string;
   bidsCbook: string;
   asksCbook: string;
-  tokenProgram: string;
   baseVault: string;
   quoteVault: string;
   marketAuthority: string;
+}
+
+export interface ClobExchangeMeta {
+  magic: bigint;
+  version: number;
+  statusFlags: number;
+  tokenProgram: string;
+  exchangeAdmin: string;
 }
 
 export interface ClobArenaHeader {
@@ -439,7 +528,95 @@ export type ParsedClobEvent =
       statusFlags: number;
       market: string;
       marketAuthority: string;
+    })
+  | (ParsedClobEventBase & {
+      variant: 'exchange_initialized';
+      statusFlags: number;
+      exchangeMeta: string;
+      tokenProgram: string;
+      exchangeAdmin: string;
+    })
+  | (ParsedClobEventBase & {
+      variant: 'exchange_status';
+      oldStatusFlags: number;
+      newStatusFlags: number;
+      exchangeMeta: string;
+      exchangeAdmin: string;
+    })
+  | (ParsedClobEventBase & {
+      variant: 'exchange_admin';
+      isRecovery: boolean;
+      exchangeMeta: string;
+      oldAdmin: string;
+      newAdmin: string;
+      authority: string;
+    })
+  | (ParsedClobEventBase & {
+      variant: 'market_exchange_status';
+      statusFlags: number;
+      market: string;
+      exchangeAdmin: string;
     });
+
+export function deriveClobExchangeMetaAddress(clobProgramAddress: string | Uint8Array | Pubkey) {
+  return deriveProgramAddress({
+    programAddress: clobProgramAddress,
+    seed: CLOB_EXCHANGE_META_SEED,
+    ephemeral: false,
+  });
+}
+
+export function createExchangeInitializeInstruction(args: ExchangeInitializeArgs): InstructionData {
+  return async (context) => {
+    const builder = new ExchangeInitializeInstructionBuilder()
+      .set_reserved0(0)
+      .set_exchange_meta_account_idx(accountIndex(context, args.exchangeMetaAccountBytes))
+      .set_program_meta_account_idx(accountIndex(context, args.programMetaAccountBytes))
+      .set_authority_account_idx(accountIndex(context, args.authorityAccountBytes))
+      .set_token_program_idx(accountIndex(context, args.tokenProgramAccountBytes))
+      .set_exchange_admin_account_idx(accountIndex(context, args.exchangeAdminAccountBytes));
+    builder.proof().write(args.stateProof).finish();
+    return buildClobInstruction('exchange_initialize', builder.build());
+  };
+}
+
+export function createExchangeSetStatusInstruction(args: ExchangeSetStatusArgs): InstructionData {
+  return async (context) => {
+    const payload = new ExchangeSetStatusInstructionBuilder()
+      .set_status_flags(assertStatusFlags(args.statusFlags))
+      .set_exchange_meta_account_idx(accountIndex(context, args.exchangeMetaAccountBytes))
+      .set_exchange_admin_account_idx(accountIndex(context, args.exchangeAdminAccountBytes))
+      .set_reserved0(0)
+      .build();
+    return buildClobInstruction('exchange_set_status', payload);
+  };
+}
+
+export function createExchangeSetAdminInstruction(args: ExchangeSetAdminArgs): InstructionData {
+  return async (context) => {
+    const payload = new ExchangeSetAdminInstructionBuilder()
+      .set_reserved0(0)
+      .set_exchange_meta_account_idx(accountIndex(context, args.exchangeMetaAccountBytes))
+      .set_authority_account_idx(accountIndex(context, args.authorityAccountBytes))
+      .set_new_admin_account_idx(accountIndex(context, args.newAdminAccountBytes))
+      .build();
+    return buildClobInstruction('exchange_set_admin', payload);
+  };
+}
+
+export function createExchangeRecoverAdminInstruction(args: ExchangeRecoverAdminArgs): InstructionData {
+  return async (context) => {
+    const payload = new ExchangeRecoverAdminInstructionBuilder()
+      .set_reserved0(0)
+      .set_exchange_meta_account_idx(accountIndex(context, args.exchangeMetaAccountBytes))
+      .set_program_meta_account_idx(accountIndex(context, args.programMetaAccountBytes))
+      .set_authority_account_idx(accountIndex(context, args.authorityAccountBytes))
+      .set_new_admin_account_idx(accountIndex(context, args.newAdminAccountBytes))
+      .set_reserved1([0, 0, 0, 0, 0, 0])
+      .build();
+    return buildClobInstruction('exchange_recover_admin', payload);
+  };
+}
 
 export function createMarketRecordInstruction(args: MarketRecordArgs): InstructionData {
   const seatIndex = args.seatIndex === undefined
@@ -454,10 +631,12 @@ export function createMarketRecordInstruction(args: MarketRecordArgs): Instructi
       .set_asks_cbook_account_idx(accountIndex(context, args.asksCbookAccountBytes))
       .set_seat_authority_account_idx(optionalAccountIndex(context, args.seatAuthorityAccountBytes))
       .set_seat_idx(seatIndex)
+      .set_exchange_meta_account_idx(accountIndex(context, args.exchangeMetaAccountBytes))
       .set_token_program_idx(accountIndex(context, args.tokenProgramAccountBytes))
       .set_base_vault_account_idx(accountIndex(context, args.baseVaultAccountBytes))
       .set_quote_vault_account_idx(accountIndex(context, args.quoteVaultAccountBytes))
       .set_market_authority_account_idx(optionalAccountIndex(context, args.marketAuthorityAccountBytes))
+      .set_reserved0([0, 0, 0, 0, 0, 0])
       .build();
     return buildClobInstruction('market_record', payload);
   };
@@ -473,6 +652,7 @@ export function createMarketCreateInstruction(args: MarketCreateArgs): Instructi
       .set_lot_size(args.lotSize)
       .set_tick_size(args.tickSize)
       .set_token_program_idx(accountIndex(context, args.tokenProgramAccountBytes))
+      .set_exchange_meta_account_idx(accountIndex(context, args.exchangeMetaAccountBytes))
       .set_base_mint_idx(accountIndex(context, args.baseMintAccountBytes))
       .set_quote_mint_idx(accountIndex(context, args.quoteMintAccountBytes))
       .set_seat_arena_account_idx(accountIndex(context, args.seatArenaAccountBytes))
@@ -481,7 +661,8 @@ export function createMarketCreateInstruction(args: MarketCreateArgs): Instructi
       .set_asks_cbook_account_idx(accountIndex(context, args.asksCbookAccountBytes))
       .set_base_vault_account_idx(accountIndex(context, args.baseVaultAccountBytes))
       .set_quote_vault_account_idx(accountIndex(context, args.quoteVaultAccountBytes))
-      .set_market_authority_account_idx(accountIndex(context, args.marketAuthorityAccountBytes));
+      .set_market_authority_account_idx(optionalAccountIndex(context, args.marketAuthorityAccountBytes))
+      .set_reserved1([0, 0]);
     builder.proof_seat_arena().write(args.seatArenaStateProof).finish();
     builder.proof_order_arena().write(args.orderArenaStateProof).finish();
     builder.proof_bids_cbook().write(args.bidsCbookStateProof).finish();
@@ -570,18 +751,55 @@ export function createMarketSetStatusInstruction(args: MarketSetStatusArgs): Ins
   return async () => {
     const payload = new MarketSetStatusInstructionBuilder()
       .set_market_record_idx(assertU8(args.marketRecordIndex, 'marketRecordIndex'))
-      .set_status_flags(assertU8(args.statusFlags, 'statusFlags'))
+      .set_status_flags(assertStatusFlags(args.statusFlags))
       .set_reserved0([0, 0, 0, 0, 0])
       .build();
     return buildClobInstruction('market_set_status', payload);
   };
 }
 
+export function createMarketSetExchangeStatusInstruction(args: MarketSetExchangeStatusArgs): InstructionData {
+  return async (context) => {
+    const payload = new MarketSetExchangeStatusInstructionBuilder()
+      .set_market_record_idx(assertU8(args.marketRecordIndex, 'marketRecordIndex'))
+      .set_status_flags(assertStatusFlags(args.statusFlags))
+      .set_reserved0(0)
+      .set_exchange_admin_account_idx(accountIndex(context, args.exchangeAdminAccountBytes))
+      .set_reserved1(0)
+      .build();
+    return buildClobInstruction('market_set_exchange_status', payload);
+  };
+}
+
+export function parseExchangeMetaAccount(accountOrData: Account | Uint8Array): ClobExchangeMeta {
+  const data = accountData(accountOrData, 'CLOB exchange metadata account');
+  if (data.length !== CLOB_EXCHANGE_META_ACCOUNT_SIZE) {
+    throw new Error("CLOB exchange metadata account must be " + CLOB_EXCHANGE_META_ACCOUNT_SIZE + " bytes");
+  }
+  const parsed = ExchangeMetaAccount.from_array(data);
+  if (!parsed) throw new Error('CLOB exchange metadata account data is malformed');
+  if (parsed.get_magic() !== CLOB_EXCHANGE_META_MAGIC) {
+    throw new Error('CLOB exchange metadata account has an invalid magic value');
+  }
+  if (parsed.get_version() !== CLOB_EXCHANGE_META_VERSION) {
+    throw new Error('CLOB exchange metadata account has an unsupported version');
+  }
+  assertStatusFlags(parsed.get_status_flags());
+  return {
+    magic: parsed.get_magic(),
+    version: parsed.get_version(),
+    statusFlags: parsed.get_status_flags(),
+    tokenProgram: pubkeyViewToAddress(parsed.get_token_program_pubkey()),
+    exchangeAdmin: pubkeyViewToAddress(parsed.get_exchange_admin_pubkey()),
+  };
+}
+
 export function parseClobProgramAccount(accountOrData: Account | Uint8Array): ClobMarket {
   const data = accountData(accountOrData, 'CLOB program account');
-  const parsed = ClobProgramAccount.from_array(data);
+  if (data[0] !== CLOB_MARKET_MAGIC) throw new Error('CLOB program account is not a market account');
+  const parsed = MarketAccountView.from_array(data);
   if (!parsed) throw new Error('CLOB program account data is malformed');
-  return marketFromView(parsed.get_market());
+  return marketFromView(parsed);
 }
 
 export function parseMarketAccount(accountOrData: Account | Uint8Array): ClobMarket {
@@ -833,6 +1051,54 @@ export function parseClobEvent(data: Uint8Array): ParsedClobEvent {
         marketAuthority: pubkeyViewToAddress(event.get_market_authority()),
       };
     }
+    case 'exchange_initialized': {
+      const event = payload.asExchangeInitialized();
+      if (!event) throw new Error('CLOB exchange_initialized event payload is malformed');
+      return {
+        ...base,
+        variant: 'exchange_initialized',
+        statusFlags: event.get_status_flags(),
+        exchangeMeta: pubkeyViewToAddress(event.get_exchange_meta()),
+        tokenProgram: pubkeyViewToAddress(event.get_token_program()),
+        exchangeAdmin: pubkeyViewToAddress(event.get_exchange_admin()),
+      };
+    }
+    case 'exchange_status': {
+      const event = payload.asExchangeStatus();
+      if (!event) throw new Error('CLOB exchange_status event payload is malformed');
+      return {
+        ...base,
+        variant: 'exchange_status',
+        oldStatusFlags: event.get_old_status_flags(),
+        newStatusFlags: event.get_new_status_flags(),
+        exchangeMeta: pubkeyViewToAddress(event.get_exchange_meta()),
+        exchangeAdmin: pubkeyViewToAddress(event.get_exchange_admin()),
+      };
+    }
+    case 'exchange_admin': {
+      const event = payload.asExchangeAdmin();
+      if (!event) throw new Error('CLOB exchange_admin event payload is malformed');
+      return {
+        ...base,
+        variant: 'exchange_admin',
+        isRecovery: event.get_is_recovery() !== 0,
+        exchangeMeta: pubkeyViewToAddress(event.get_exchange_meta()),
+        oldAdmin: pubkeyViewToAddress(event.get_old_admin()),
+        newAdmin: pubkeyViewToAddress(event.get_new_admin()),
+        authority: pubkeyViewToAddress(event.get_authority()),
+      };
+    }
+    case 'market_exchange_status': {
+      const event = payload.asMarketExchangeStatus();
+      if (!event) throw new Error('CLOB market_exchange_status event payload is malformed');
+      return {
+        ...base,
+        variant: 'market_exchange_status',
+        statusFlags: event.get_status_flags(),
+        market: pubkeyViewToAddress(event.get_market()),
+        exchangeAdmin: pubkeyViewToAddress(event.get_exchange_admin()),
+      };
+    }
     default:
       throw new Error('CLOB event type is unsupported');
   }
@@ -916,13 +1182,13 @@ function marketFromView(view: MarketAccountView): ClobMarket {
   return {
     magic: view.get_magic(),
     statusFlags: view.get_status_flags(),
+    exchangeStatusFlags: view.get_exchange_status_flags(),
     lotSize: view.get_lot_size(),
     tickSize: view.get_tick_size(),
     nextOrderId: view.get_next_order_id(),
     orderEntry: pubkeyViewToAddress(view.get_order_entry_pubkey()),
     bidsCbook: pubkeyViewToAddress(view.get_bids_cbook_pubkey()),
     asksCbook: pubkeyViewToAddress(view.get_asks_cbook_pubkey()),
-    tokenProgram: pubkeyViewToAddress(view.get_token_program_pubkey()),
     baseVault: pubkeyViewToAddress(view.get_base_vault_pubkey()),
     quoteVault: pubkeyViewToAddress(view.get_quote_vault_pubkey()),
     marketAuthority: pubkeyViewToAddress(view.get_market_authority_pubkey()),
@@ -1067,6 +1333,14 @@ function accountData(accountOrData: Account | Uint8Array, label: string): Uint8A
   return data;
 }
 
+function fixedSeed(value: string): Uint8Array {
+  const bytes = new TextEncoder().encode(value);
+  if (bytes.length > 32) throw new Error('seed cannot exceed 32 bytes');
+  const seed = new Uint8Array(32);
+  seed.set(bytes);
+  return seed;
+}
+
 function optionalAccountIndex(context: AccountLookupContext, pubkey?: Uint8Array): number {
   return pubkey ? accountIndex(context, pubkey) : 0xffff;
 }
@@ -1081,6 +1355,23 @@ function assertU8(value: number, label: string): number {
     throw new Error(`${label} must be an integer between 0 and 255`);
   }
   return value;
+}
+
+function assertStatusFlags(value: number): number {
+  const flags = assertU8(value, 'statusFlags');
+  if ((flags & ~CLOB_STATUS_FLAG_MASK) !== 0) {
+    throw new Error("statusFlags may only contain bits in mask 0x" + CLOB_STATUS_FLAG_MASK.toString(16));
+  }
+  return flags;
+}
+
+export function effectiveClobStatusFlags(
+  exchangeStatusFlags: number,
+  market: Pick<ClobMarket, 'statusFlags' | 'exchangeStatusFlags'>
+): number {
+  return assertStatusFlags(exchangeStatusFlags) |
+    assertStatusFlags(market.statusFlags) |
+    assertStatusFlags(market.exchangeStatusFlags);
 }
 
 function assertU16(value: number, label: string): number {
@@ -1161,3 +1452,4 @@ function bytesFromView(value: unknown): Uint8Array {
 
 export * from './exchange';
 export * from './exchange-client';
+export * from './price';

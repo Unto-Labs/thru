@@ -96,3 +96,8 @@ exported/
 test-app2/
 
 resources/
+
+# Unifold round-trip automation: live Solana key material and per-run state.
+# The wallet file holds a real mainnet secret key - never commit it.
+packages-private/unifold-automation/.unifold-wallet.json
+packages-private/unifold-automation/.unifold-runs/

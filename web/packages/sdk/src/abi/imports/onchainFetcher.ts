@@ -38,7 +38,7 @@ const ABI_META_KIND_OFFICIAL = 0;
 const ABI_META_KIND_EXTERNAL = 1;
 
 const DEFAULT_ABI_MANAGER_PROGRAM_ID =
-  "taWqAAOSe9pavaaMpkc9VbSLBUMbuW6Mk59sZlSbcNHsJA";
+  "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACrG7";
 
 async function sha256Bytes(data: Uint8Array): Promise<Uint8Array> {
   const hashBuffer = await crypto.subtle.digest("SHA-256", data as BufferSource);

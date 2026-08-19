@@ -5,6 +5,13 @@ import {
   CLOB_NULL_INDEX,
   CLOB_INSTRUCTION_CREATE_ORDER_ENTRY,
   CLOB_INSTRUCTION_CREATE_SEATLESS_ORDER_ENTRY,
+  CLOB_INSTRUCTION_EXCHANGE_INITIALIZE,
+  CLOB_INSTRUCTION_EXCHANGE_SET_STATUS,
+  CLOB_INSTRUCTION_EXCHANGE_SET_ADMIN,
+  CLOB_INSTRUCTION_EXCHANGE_RECOVER_ADMIN,
+  CLOB_INSTRUCTION_MARKET_SET_EXCHANGE_STATUS,
+  CLOB_EXCHANGE_META_MAGIC,
+  CLOB_EXCHANGE_META_VERSION,
   CLOB_CBOOK_MAX_PRICE_IN_TICKS,
   CLOB_EVENT_SIDE_BUY,
   CLOB_ORDER_FLAG_BUY,
@@ -13,18 +20,30 @@ import {
   CLOB_ORDER_TYPE_GTC,
   CLOB_ORDER_TYPE_IOC,
   CLOB_ORDER_TYPE_MTL,
+  CLOB_STATUS_FLAG_DEPOSITS_FROZEN,
+  CLOB_STATUS_FLAG_PAUSED,
+  CLOB_STATUS_FLAG_POST_ONLY,
+  CLOB_STATUS_FLAG_WITHDRAWALS_FROZEN,
   ClobEventBuilder,
+  ExchangeMetaAccountBuilder,
   MarketAccountBuilder,
   MarketCreatedEventBuilder,
   OrderEntryBuilder,
   OrderFilledEventBuilder,
   SeatEntryBuilder,
   buildOrderBookSnapshot,
+  createExchangeInitializeInstruction,
+  createExchangeSetStatusInstruction,
+  createExchangeSetAdminInstruction,
+  createExchangeRecoverAdminInstruction,
+  createMarketSetExchangeStatusInstruction,
   createMarketRecordInstruction,
   createOrderEntryInstruction,
   createSeatlessOrderEntryInstruction,
+  effectiveClobStatusFlags,
   encodeOrderFlags,
   parseClobEvent,
+  parseExchangeMetaAccount,
   parseMarketAccount,
   parseOrderArenaAccount,
   parseSeatArenaAccount,
@@ -48,16 +67,17 @@ function context(indexes: Record<string, number>) {
 
 describe('clob helpers', () => {
   it('validates market-record seat indices before ABI serialization', async () => {
-    const accounts = Array.from({ length: 7 }, (_, index) => key(index + 1));
+    const accounts = Array.from({ length: 8 }, (_, index) => key(index + 1));
     const args = {
       marketRecordIndex: 1,
       seatArenaAccountBytes: accounts[0],
       orderArenaAccountBytes: accounts[1],
       bidsCbookAccountBytes: accounts[2],
       asksCbookAccountBytes: accounts[3],
-      tokenProgramAccountBytes: accounts[4],
-      baseVaultAccountBytes: accounts[5],
-      quoteVaultAccountBytes: accounts[6],
+      exchangeMetaAccountBytes: accounts[4],
+      tokenProgramAccountBytes: accounts[5],
+      baseVaultAccountBytes: accounts[6],
+      quoteVaultAccountBytes: accounts[7],
     };
     const lookup = context(Object.fromEntries(
       accounts.map((account, index) => [bytesToHex(account), index + 2])
@@ -74,6 +94,113 @@ describe('clob helpers', () => {
         /seatIndex must be an integer/
       );
     }
+  });
+
+  it('builds and parses exchange metadata instructions and accounts', async () => {
+    const exchangeMeta = key(1);
+    const programMeta = key(2);
+    const authority = key(3);
+    const tokenProgram = key(4);
+    const exchangeAdmin = key(5);
+    const proof = new Uint8Array([6, 7, 8]);
+    const instruction = await createExchangeInitializeInstruction({
+      exchangeMetaAccountBytes: exchangeMeta,
+      programMetaAccountBytes: programMeta,
+      authorityAccountBytes: authority,
+      tokenProgramAccountBytes: tokenProgram,
+      exchangeAdminAccountBytes: exchangeAdmin,
+      stateProof: proof,
+    })(context({
+      [bytesToHex(exchangeMeta)]: 10,
+      [bytesToHex(programMeta)]: 11,
+      [bytesToHex(authority)]: 12,
+      [bytesToHex(tokenProgram)]: 13,
+      [bytesToHex(exchangeAdmin)]: 14,
+    }));
+
+    expect(instruction[0]).toBe(CLOB_INSTRUCTION_EXCHANGE_INITIALIZE);
+    const view = new DataView(instruction.buffer, instruction.byteOffset, instruction.byteLength);
+    expect(view.getUint16(2, true)).toBe(10);
+    expect(view.getUint16(4, true)).toBe(11);
+    expect(view.getUint16(6, true)).toBe(12);
+    expect(view.getUint16(8, true)).toBe(13);
+    expect(view.getUint16(10, true)).toBe(14);
+    expect(view.getUint32(12, true)).toBe(proof.length);
+    expect(instruction.slice(16)).toEqual(proof);
+
+    const data = new ExchangeMetaAccountBuilder()
+      .set_magic(CLOB_EXCHANGE_META_MAGIC)
+      .set_version(CLOB_EXCHANGE_META_VERSION)
+      .set_status_flags(3)
+      .set_reserved0([0, 0, 0, 0, 0, 0])
+      .set_token_program_pubkey(tokenProgram)
+      .set_exchange_admin_pubkey(exchangeAdmin)
+      .set_reserved1(new Uint8Array(16))
+      .build();
+    expect(parseExchangeMetaAccount(data)).toEqual({
+      magic: CLOB_EXCHANGE_META_MAGIC,
+      version: CLOB_EXCHANGE_META_VERSION,
+      statusFlags: 3,
+      tokenProgram: bytesToAddress(tokenProgram),
+      exchangeAdmin: bytesToAddress(exchangeAdmin),
+    });
+  });
+
+  it('builds exchange administration instructions', async () => {
+    const exchangeMeta = key(1);
+    const admin = key(2);
+    const nextAdmin = key(3);
+    const programMeta = key(4);
+    const lookup = context({
+      [bytesToHex(exchangeMeta)]: 10,
+      [bytesToHex(admin)]: 11,
+      [bytesToHex(nextAdmin)]: 12,
+      [bytesToHex(programMeta)]: 13,
+    });
+
+    const setStatus = await createExchangeSetStatusInstruction({
+      exchangeMetaAccountBytes: exchangeMeta,
+      exchangeAdminAccountBytes: admin,
+      statusFlags: 5,
+    })(lookup);
+    const setAdmin = await createExchangeSetAdminInstruction({
+      exchangeMetaAccountBytes: exchangeMeta,
+      authorityAccountBytes: admin,
+      newAdminAccountBytes: nextAdmin,
+    })(lookup);
+    const recoverAdmin = await createExchangeRecoverAdminInstruction({
+      exchangeMetaAccountBytes: exchangeMeta,
+      programMetaAccountBytes: programMeta,
+      authorityAccountBytes: admin,
+      newAdminAccountBytes: nextAdmin,
+    })(lookup);
+    const marketOverride = await createMarketSetExchangeStatusInstruction({
+      marketRecordIndex: 7,
+      exchangeAdminAccountBytes: admin,
+      statusFlags: 2,
+    })(lookup);
+
+    expect(setStatus[0]).toBe(CLOB_INSTRUCTION_EXCHANGE_SET_STATUS);
+    expect(setAdmin[0]).toBe(CLOB_INSTRUCTION_EXCHANGE_SET_ADMIN);
+    expect(recoverAdmin[0]).toBe(CLOB_INSTRUCTION_EXCHANGE_RECOVER_ADMIN);
+    expect(marketOverride[0]).toBe(CLOB_INSTRUCTION_MARKET_SET_EXCHANGE_STATUS);
+    await expect(createExchangeSetStatusInstruction({
+      exchangeMetaAccountBytes: exchangeMeta,
+      exchangeAdminAccountBytes: admin,
+      statusFlags: 16,
+    })(lookup)).rejects.toThrow(/statusFlags/);
+  });
+
+  it('combines global, exchange-admin, and market-authority status flags', () => {
+    expect(effectiveClobStatusFlags(
+      CLOB_STATUS_FLAG_PAUSED,
+      {
+        statusFlags: CLOB_STATUS_FLAG_POST_ONLY,
+        exchangeStatusFlags: CLOB_STATUS_FLAG_WITHDRAWALS_FROZEN | CLOB_STATUS_FLAG_DEPOSITS_FROZEN,
+      },
+    )).toBe(15);
+    expect(() => effectiveClobStatusFlags(16, { statusFlags: 0, exchangeStatusFlags: 0 }))
+      .toThrow(/statusFlags/);
   });
 
   it('encodes order flags with C program bit semantics', () => {
@@ -134,14 +261,14 @@ describe('clob helpers', () => {
     const data = new MarketAccountBuilder()
       .set_magic(0xc1)
       .set_status_flags(3)
-      .set_reserved0([0, 0, 0, 0, 0, 0])
+      .set_exchange_status_flags(4)
+      .set_reserved0([0, 0, 0, 0, 0])
       .set_lot_size(100n)
       .set_tick_size(5n)
       .set_next_order_id(42n)
       .set_order_entry_pubkey(key(10))
       .set_bids_cbook_pubkey(key(11))
       .set_asks_cbook_pubkey(key(12))
-      .set_token_program_pubkey(key(16))
       .set_base_vault_pubkey(key(13))
       .set_quote_vault_pubkey(key(14))
       .set_market_authority_pubkey(key(15))
@@ -150,11 +277,11 @@ describe('clob helpers', () => {
     const market = parseMarketAccount(data);
     expect(market.magic).toBe(0xc1);
     expect(market.statusFlags).toBe(3);
+    expect(market.exchangeStatusFlags).toBe(4);
     expect(market.lotSize).toBe(100n);
     expect(market.tickSize).toBe(5n);
     expect(market.nextOrderId).toBe(42n);
     expect(market.bidsCbook).not.toBe(market.asksCbook);
-    expect(market.tokenProgram).toBe(bytesToAddress(key(16)));
   });
 
   it('parses order arenas and groups active orderbook depth', () => {

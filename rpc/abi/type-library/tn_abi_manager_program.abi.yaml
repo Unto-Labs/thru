@@ -23,6 +23,7 @@ abi:
     program-metadata:
       root-types:
         instruction-root: "AbiManagerInstruction"
+        errors: "AbiManagerError"
 
 types:
 # ── Shared helper types ──
@@ -36,6 +37,17 @@ types:
           u64: 32
       element-type:
         primitive: u8
+
+# ABI manager errors use a composite u16. The low byte is the reason and the
+# high byte is the affected component.
+- name: AbiManagerError
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: code
+        field-type:
+          primitive: u16
 
 # ── ABI Meta Account types ──
 

@@ -14,9 +14,9 @@ tmpfs_root="/dev/shm/thru-medium-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${GITHUB
 echo "Preparing medium-runner tmpfs offload at ${tmpfs_root}"
 sudo mount -o "remount,size=${tmpfs_size}" /dev/shm
 
-mkdir -p "${tmpfs_root}"/{workspace,tmp,docker,sccache,home-cache}
+mkdir -p "${tmpfs_root}"/{workspace,tmp,docker,vcache,home-cache}
 chmod 0777 "${tmpfs_root}" "${tmpfs_root}/tmp" "${tmpfs_root}/docker" \
-  "${tmpfs_root}/sccache" "${tmpfs_root}/home-cache"
+  "${tmpfs_root}/vcache" "${tmpfs_root}/home-cache"
 
 echo "MEDIUM_TMPFS_ROOT=${tmpfs_root}" >> "${GITHUB_ENV}"
 
@@ -136,7 +136,7 @@ cleanup_partial_offload() {
     unmount_if_mounted /var/lib/docker
   fi
   unmount_if_mounted "${GITHUB_WORKSPACE}" -l
-  unmount_if_mounted /var/cache/sccache
+  unmount_if_mounted /var/cache/vcache
   unmount_if_mounted /home/runner/.cache
   sudo rm -rf "${tmpfs_root}"
   if [ "${docker_tmpfs_mounted}" != "0" ] || [ "${docker_restart_on_error}" != "0" ]; then
@@ -173,7 +173,7 @@ else
   echo "MEDIUM_TMPFS_DOCKER=0" >> "${GITHUB_ENV}"
 fi
 
-bind_dir "${tmpfs_root}/sccache" /var/cache/sccache
+bind_dir "${tmpfs_root}/vcache" /var/cache/vcache
 if [ "${tmpfs_home_cache}" != "0" ]; then
   bind_dir "${tmpfs_root}/home-cache" /home/runner/.cache
 else
@@ -181,14 +181,14 @@ else
 fi
 
 echo "Medium tmpfs offload mount state:"
-findmnt /dev/shm /var/lib/docker /var/cache/sccache || true
+findmnt /dev/shm /var/lib/docker /var/cache/vcache || true
 if [ "${tmpfs_home_cache}" != "0" ]; then
   findmnt /home/runner/.cache || true
 fi
 if [ "${tmpfs_workspace}" != "0" ]; then
   findmnt "${GITHUB_WORKSPACE}" || true
 fi
-df -h / /dev/shm /var/lib/docker /var/cache/sccache || true
+df -h / /dev/shm /var/lib/docker /var/cache/vcache || true
 if [ "${tmpfs_home_cache}" != "0" ]; then
   df -h /home/runner/.cache || true
 fi

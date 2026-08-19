@@ -17,6 +17,8 @@ import {
   Fieldset,
   Form,
   // Overlays
+  Sheet,
+  Stepper,
   Dialog,
   AlertDialog,
   Popover,
@@ -700,6 +702,66 @@ function DisplaySection() {
   );
 }
 
+/* The neutral skin is the design system's zero-config default for an embedded
+   surface: same components, role tokens instead of brand tokens. Shown against
+   the branded default so the two are comparable at a glance. */
+function NeutralSkinSection() {
+  const [step, setStep] = useState(0);
+  const steps = ["Phone", "Email", "Review"];
+
+  const sheet = (
+    <Sheet.Root size="full" style={{ height: 300, width: 260 }}>
+      <Sheet.Grabber />
+      <Sheet.Header
+        back={
+          step > 0 ? (
+            <Sheet.Control label="Back" onClick={() => setStep(step - 1)}>
+              ‹
+            </Sheet.Control>
+          ) : null
+        }
+        close={<Sheet.Control label="Close">✕</Sheet.Control>}
+      >
+        <Stepper count={steps.length} active={step} />
+      </Sheet.Header>
+      <Sheet.Body>
+        <Sheet.Title>{steps[step]}</Sheet.Title>
+        <Sheet.Lead>Step {step + 1} of {steps.length}.</Sheet.Lead>
+        <div style={{ marginTop: 10 }}>
+          <Input size="lg" text={step === 1 ? "body" : "ui"} placeholder="…" />
+        </div>
+      </Sheet.Body>
+      <Sheet.Footer>
+        <Button size="lg" onClick={() => setStep((step + 1) % steps.length)}>
+          Continue
+        </Button>
+        <Sheet.Caption>Pinned action, 48px touch metric.</Sheet.Caption>
+      </Sheet.Footer>
+    </Sheet.Root>
+  );
+
+  return (
+    <Section title="Neutral skin">
+      <Demo label="Sheet + Stepper — branded default vs [data-tds-skin] vs host accent">
+        <div>{sheet}</div>
+        <div data-tds-skin="">{sheet}</div>
+        <div data-tds-skin="dark">{sheet}</div>
+        {/* Third layer: a host names one role and the rest stays neutral. */}
+        <div data-tds-skin="" style={{ ["--tds-accent" as string]: "#4f46e5", ["--tds-focus-ring" as string]: "#4f46e5" }}>
+          {sheet}
+        </div>
+      </Demo>
+      <Demo label="Detail — summary rows (sans label, mono tabular value)">
+        <div data-tds-skin="" style={{ width: 280, display: "flex", flexDirection: "column", gap: 6, padding: 14 }}>
+          <Detail variant="summary" label="You pay">$50.00</Detail>
+          <Detail variant="summary" label="Coinbase fee (est. 2.5%)">$1.25</Detail>
+          <Detail variant="summary" label="You receive">48.75 THRUSD</Detail>
+        </div>
+      </Demo>
+    </Section>
+  );
+}
+
 const TA_ADDRESS = "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAMD";
 
 function ThemeQaSection() {
@@ -961,6 +1023,7 @@ export function App() {
           <DisplaySection />
           <ThemeQaSection />
           <WalletSection />
+          <NeutralSkinSection />
           <TypographySection />
           <ToastDemo />
         </main>

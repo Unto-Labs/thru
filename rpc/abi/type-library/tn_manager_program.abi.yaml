@@ -4,7 +4,19 @@ abi:
   abi-version: 1
   package-version: "0.1.0"
   description: ABI for the Thru manager program instruction envelopes and account state
-  imports: []
+  imports:
+    # thru_primitives
+    - type: onchain
+      address: ta1blxgaYR0dei5aldWJe1vbUtt-LkVEBOzNJtSRhHQcTG
+      target: abi
+      network: mainnet
+      revision: latest
+    # state_proof
+    - type: onchain
+      address: ta1l4yBjT6a7PQ4Wu_sJPQwb8jJiJ8Ei71gOuE5Dnotfrl
+      target: abi
+      network: mainnet
+      revision: latest
   options:
     program-metadata:
       root-types:
@@ -12,19 +24,6 @@ abi:
         account-root: "ManagerProgramMeta"
         errors: "ManagerError"
 types:
-- name: Pubkey
-  kind:
-    struct:
-      packed: true
-      fields:
-      - name: bytes
-        field-type:
-          array:
-            size:
-              literal:
-                u64: 32
-            element-type:
-              primitive: u8
 - name: CreatePermanentArgs
   kind:
     struct:
@@ -51,6 +50,24 @@ types:
       - name: seed_len
         field-type:
           primitive: u32
+      - name: seed
+        field-type:
+          array:
+            size:
+              field-ref:
+                path: ["seed_len"]
+            element-type:
+              primitive: u8
+      - name: meta_state_proof
+        field-type:
+          type-ref:
+            name: StateProof
+            package: "thru.blockchain.state_proof"
+      - name: program_state_proof
+        field-type:
+          type-ref:
+            name: StateProof
+            package: "thru.blockchain.state_proof"
 - name: CreateEphemeralArgs
   kind:
     struct:
@@ -77,6 +94,14 @@ types:
       - name: seed_len
         field-type:
           primitive: u32
+      - name: seed
+        field-type:
+          array:
+            size:
+              field-ref:
+                path: ["seed_len"]
+            element-type:
+              primitive: u8
 - name: UpgradeArgs
   kind:
     struct:
@@ -137,6 +162,7 @@ types:
         field-type:
           type-ref:
             name: Pubkey
+            package: "thru.common.primitives"
 - name: ManagerInstruction
   kind:
     struct:
@@ -203,10 +229,12 @@ types:
         field-type:
           type-ref:
             name: Pubkey
+            package: "thru.common.primitives"
       - name: authority_candidate
         field-type:
           type-ref:
             name: Pubkey
+            package: "thru.common.primitives"
       - name: version
         field-type:
           primitive: u64

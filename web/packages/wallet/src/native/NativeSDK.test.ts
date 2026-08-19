@@ -259,6 +259,67 @@ describe("NativeSDK", () => {
     expect(onHideRequested).toHaveBeenCalledTimes(1);
   });
 
+  it("reports visible transparent wallet content separately from focus preloading", async () => {
+    sdk.destroy();
+    sdk = new NativeSDK({
+      walletUrl: "http://localhost:3000/embedded/native/transparent",
+      walletExperience: "transparent",
+      origin: "thru-mobile://token-dummy",
+    });
+    webView = new MockWebView();
+    sdk.attachWebView(webView);
+    const onShowRequested = vi.fn();
+    sdk.setUiHandlers({ onShowRequested });
+
+    const frameId = frameIdFor(sdk);
+    const promise = sdk.createAccount({ accountName: "JCoin Account" });
+    sdk.onMessage(readyMessage(frameId));
+    await flush();
+    const request = parseInjectedRequest(await waitForInjectedRequest(webView));
+
+    sdk.onMessage(
+      eventMessage(frameId, EMBEDDED_PROVIDER_EVENTS.UI_SHOW, {
+        reason: "deposit",
+      }),
+    );
+
+    expect(onShowRequested).toHaveBeenCalledTimes(2);
+    expect(onShowRequested).toHaveBeenLastCalledWith("wallet-content:deposit");
+
+    const account = {
+      accountType: "thru",
+      address: "thru_created_address",
+      label: "JCoin Account",
+    };
+    sdk.onMessage(
+      responseMessage(frameId, request.id, {
+        account,
+        accounts: [account],
+        selectedAccount: account,
+      }),
+    );
+    await promise;
+  });
+
+  it("ignores transparent UI_SHOW events outside an active wallet request", () => {
+    sdk.destroy();
+    sdk = new NativeSDK({
+      walletUrl: "http://localhost:3000/embedded/native/transparent",
+      walletExperience: "transparent",
+      origin: "thru-mobile://token-dummy",
+    });
+    const onShowRequested = vi.fn();
+    sdk.setUiHandlers({ onShowRequested });
+
+    sdk.onMessage(
+      eventMessage(frameIdFor(sdk), EMBEDDED_PROVIDER_EVENTS.UI_SHOW, {
+        reason: "disconnect",
+      }),
+    );
+
+    expect(onShowRequested).not.toHaveBeenCalled();
+  });
+
   it("sends transparent createAccount requests through the wallet WebView", async () => {
     sdk.destroy();
     sdk = new NativeSDK({

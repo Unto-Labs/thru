@@ -61,7 +61,7 @@ export const AMM_LP_DECIMALS = 6;
 export const AMM_LP_SCALE = 1_000_000n;
 export const AMM_POOL_METADATA_SIZE = 203;
 export const AMM_PROGRAM_ADDRESS =
-  'taCnhMCcBZSJ8MDLGYBnTIRgmWxZx_jNjoNwOwzk1g4ST1';
+  'tajAMCTNZAhObSZDTl_biRg1nq8lIaLfl1AkALK0i5k5ZT';
 
 type AmmInstructionVariant = 'init_pool' | 'add_liquidity' | 'withdraw_liquidity' | 'swap';
 

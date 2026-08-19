@@ -48,6 +48,7 @@ export interface ClobExchangeAssetBalance {
 
 export interface ClobTradingMarket {
   address: string;
+  exchangeMeta: string;
   orderArena: string;
   bidsCbook: string;
   asksCbook: string;
@@ -775,6 +776,7 @@ function marketRecordInstruction(
     asksCbookAccountBytes: addressBytes(market.asksCbook),
     seatAuthorityAccountBytes: authority ? addressBytes(authority) : undefined,
     seatIndex: seatIndex ?? undefined,
+    exchangeMetaAccountBytes: addressBytes(market.exchangeMeta),
     tokenProgramAccountBytes: addressBytes(market.tokenProgram),
     baseVaultAccountBytes: addressBytes(market.baseVault),
     quoteVaultAccountBytes: addressBytes(market.quoteVault),
@@ -788,6 +790,7 @@ function addTargetMarketAccounts(accounts: AccountPlan, market: ClobTradingMarke
   accounts.addWrite(market.asksCbook);
   accounts.addRead(market.baseVault);
   accounts.addRead(market.quoteVault);
+  accounts.addRead(market.exchangeMeta);
 }
 
 function addSourceMarketAccounts(
@@ -806,6 +809,7 @@ function addSourceMarketAccounts(
   accounts.addWrite(market.asksCbook);
   accounts.addRead(market.baseVault);
   accounts.addRead(market.quoteVault);
+  accounts.addRead(market.exchangeMeta);
 }
 
 class AccountPlan {
