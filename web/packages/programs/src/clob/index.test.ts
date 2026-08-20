@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { encodeAddress } from '@thru/sdk/helpers';
+import { BOOTSTRAP_PROGRAM_ADDRESSES } from '../bootstrap-addresses';
 import {
+  CLOB_PROGRAM_ADDRESS,
   CLOB_INSTRUCTION_MARKET_RECORD,
   CLOB_NULL_INDEX,
   CLOB_INSTRUCTION_CREATE_ORDER_ENTRY,
@@ -66,6 +68,10 @@ function context(indexes: Record<string, number>) {
 }
 
 describe('clob helpers', () => {
+  it('uses the bootstrap-managed CLOB program address', () => {
+    expect(CLOB_PROGRAM_ADDRESS).toBe(BOOTSTRAP_PROGRAM_ADDRESSES.clob);
+  });
+
   it('validates market-record seat indices before ABI serialization', async () => {
     const accounts = Array.from({ length: 8 }, (_, index) => key(index + 1));
     const args = {

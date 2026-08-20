@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { encodeAddress } from '@thru/sdk/helpers';
 import {
+  GENESIS_MULTICALL_PROGRAM_ADDRESS,
+  GENESIS_MULTICALL_PROGRAM_PUBKEY,
   MULTICALL_PROGRAM_ADDRESS,
   MULTICALL_PROGRAM_PUBKEY,
   InstructionDataBuilder,
@@ -17,9 +20,15 @@ function instructionData(programIdx: number, data: Uint8Array): number[] {
 describe('multicall helpers', () => {
   it('encodes calls with generated InstructionData views', () => {
     expect(MULTICALL_PROGRAM_ADDRESS).toBe(
-      'taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAkJ'
+      'tatPH9XJbriBMntQG_GU6r4YWZCcco1wEGgPw2gY3iFaj8'
     );
-    expect(MULTICALL_PROGRAM_PUBKEY[31]).toBe(9);
+    expect(MULTICALL_PROGRAM_PUBKEY).toHaveLength(32);
+    expect(GENESIS_MULTICALL_PROGRAM_PUBKEY).toEqual(
+      new Uint8Array([...new Uint8Array(31), 0x09])
+    );
+    expect(GENESIS_MULTICALL_PROGRAM_ADDRESS).toBe(
+      encodeAddress(GENESIS_MULTICALL_PROGRAM_PUBKEY)
+    );
 
     const encoded = buildMulticallInstruction([
       { programIdx: 2, instructionData: new Uint8Array([0xaa]) },

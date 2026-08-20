@@ -1,3 +1,4 @@
+import { TELEMETRY_EVENTS } from "@thru/observability";
 import {
   AddressType,
   normalizeWalletAccountResult,
@@ -31,6 +32,8 @@ import { NativeThruChain } from "./chains/ThruChain";
 import type { SigningSessionDescriptorStore } from "../../signing-sessions";
 import {
   WebViewBridge,
+  type NativeTelemetryFields,
+  type NativeTelemetryRecorder,
   type WebViewMessageEventLike,
   type WebViewRefLike,
 } from "./WebViewBridge";
@@ -44,6 +47,10 @@ const TRANSPARENT_FOCUS_SETTLE_MS = 500;
 export interface NativeProviderConfig {
   /** app.tid.sh/embedded/native URL to load. */
   walletUrl?: string;
+  /** Share privacy-safe operational diagnostics with Thru. Default: true. */
+  telemetryEnabled?: boolean;
+  telemetrySessionId?: string;
+  telemetry?: NativeTelemetryRecorder;
   /** Standard bottom-sheet wallet or transparent auto-signing wallet. */
   walletExperience?: "standard" | "transparent";
   /** Caller-supplied dapp origin. Stamped on every postMessage so
@@ -119,6 +126,7 @@ export class NativeProvider {
   private isSurfaceShown = false;
   private transparentSurfaceRequestCount = 0;
   private connectionRevision = 0;
+  private readonly telemetry?: NativeTelemetryRecorder;
   private readonly eventListeners = new Map<
     string,
     Set<NativeProviderEventCallback>
@@ -134,7 +142,18 @@ export class NativeProvider {
     this.transparent = config.walletExperience === "transparent";
     this.defaultNetwork = config.network;
     this.depositUiConfig = config.depositUiConfig;
-    this.bridge = new WebViewBridge({ walletUrl });
+    this.telemetry = config.telemetry;
+    this.bridge = new WebViewBridge({
+      walletUrl,
+      telemetryEnabled: config.telemetryEnabled ?? true,
+      telemetrySessionId: config.telemetrySessionId,
+      telemetry: config.telemetry,
+    });
+    this.recordTelemetry(TELEMETRY_EVENTS.BRIDGE_PROVIDER_CONSTRUCTED, {
+      severity: "info",
+      outcome: "created",
+      ...(config.network ? { network: config.network } : {}),
+    });
 
     this.bridge.onEvent = (eventType, payload) => {
       if (this.transparent && eventType === EMBEDDED_PROVIDER_EVENTS.UI_SHOW) {
@@ -171,6 +190,11 @@ export class NativeProvider {
         const account =
           (payload as { account?: WalletAccount } | null | undefined)
             ?.account ?? null;
+        this.recordTelemetry(TELEMETRY_EVENTS.BRIDGE_ACCOUNT_CHANGED, {
+          severity: "info",
+          outcome: account ? "selected" : "cleared",
+          walletAddress: account?.address,
+        });
         this.refreshAccountCache(account);
       }
     };
@@ -189,6 +213,29 @@ export class NativeProvider {
   /** Hand the bridge a WebView ref. Required before connect/sign. */
   attachWebView(ref: WebViewRefLike): void {
     this.bridge.attachWebView(ref);
+  }
+
+  recordWebViewLoadStarted(): void {
+    this.bridge.recordWebViewLoadStarted();
+  }
+
+  recordWebViewLoadEnded(): void {
+    this.bridge.recordWebViewLoadEnded();
+  }
+
+  recordWebViewTransportError(
+    code: number | undefined,
+    description: string,
+  ): void {
+    this.bridge.recordWebViewTransportError(code, description);
+  }
+
+  recordWebViewHttpError(statusCode: number): void {
+    this.bridge.recordWebViewHttpError(statusCode);
+  }
+
+  recordWebViewContentProcessTerminated(): void {
+    this.bridge.recordWebViewContentProcessTerminated();
   }
 
   /** Mark a direct top-level WebView wallet document as ready. */
@@ -226,6 +273,11 @@ export class NativeProvider {
       this.transparentSurfaceRequestCount++;
       if (this.transparentSurfaceRequestCount === 1) {
         this.isSurfaceShown = true;
+        this.recordTelemetry(TELEMETRY_EVENTS.BRIDGE_SURFACE_SHOWN, {
+          severity: "info",
+          operation: reason,
+          outcome: "shown",
+        });
         this.onShowRequested?.(reason);
       }
       await new Promise((resolve) =>
@@ -235,6 +287,11 @@ export class NativeProvider {
     }
     if (this.isSurfaceShown) return;
     this.isSurfaceShown = true;
+    this.recordTelemetry(TELEMETRY_EVENTS.BRIDGE_SURFACE_SHOWN, {
+      severity: "info",
+      operation: reason,
+      outcome: "shown",
+    });
     this.onShowRequested?.(reason);
   }
 
@@ -249,6 +306,11 @@ export class NativeProvider {
       }
     }
     this.isSurfaceShown = false;
+    this.recordTelemetry(TELEMETRY_EVENTS.BRIDGE_SURFACE_HIDDEN, {
+      severity: "info",
+      operation: reason,
+      outcome: "hidden",
+    });
     this.onHideRequested?.(reason);
   }
 
@@ -428,12 +490,23 @@ export class NativeProvider {
     this.accounts = normalized.accounts;
     this.selectedAccount = normalized.selectedAccount;
     this.connectionRevision++;
+    this.recordTelemetry(TELEMETRY_EVENTS.BRIDGE_CONNECTION_HYDRATED, {
+      severity: "info",
+      outcome: "connected",
+      walletAddress: this.selectedAccount?.address,
+    });
   }
 
   clearConnection(): void {
+    const walletAddress = this.selectedAccount?.address;
     this.connected = false;
     this.accounts = [];
     this.selectedAccount = null;
+    this.recordTelemetry(TELEMETRY_EVENTS.BRIDGE_CONNECTION_CLEARED, {
+      severity: "info",
+      outcome: "disconnected",
+      walletAddress,
+    });
   }
 
   getAccounts(): WalletAccount[] {
@@ -576,5 +649,16 @@ export class NativeProvider {
     }
     this.accounts = [account];
     this.selectedAccount = account;
+  }
+
+  private recordTelemetry(
+    event: string,
+    fields?: NativeTelemetryFields,
+  ): void {
+    try {
+      this.telemetry?.(event, { frameId: this.bridge.frameId, ...fields });
+    } catch {
+      /* Telemetry must never affect wallet behavior. */
+    }
   }
 }

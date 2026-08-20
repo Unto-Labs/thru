@@ -2,6 +2,7 @@ import { Pubkey } from '@thru/sdk';
 import { encodeAddress } from '@thru/sdk/helpers';
 import type { Account } from '@thru/sdk';
 import type { Thru } from '@thru/sdk/client';
+import { BOOTSTRAP_PROGRAM_ADDRESSES } from '../bootstrap-addresses';
 import { compareBytes } from '../helpers/bytes';
 import {
   AmmAddLiquidityInstructionBuilder,
@@ -60,8 +61,7 @@ export const AMM_MINIMUM_LIQUIDITY = 1_000n;
 export const AMM_LP_DECIMALS = 6;
 export const AMM_LP_SCALE = 1_000_000n;
 export const AMM_POOL_METADATA_SIZE = 203;
-export const AMM_PROGRAM_ADDRESS =
-  'tajAMCTNZAhObSZDTl_biRg1nq8lIaLfl1AkALK0i5k5ZT';
+export const AMM_PROGRAM_ADDRESS = BOOTSTRAP_PROGRAM_ADDRESSES.amm;
 
 type AmmInstructionVariant = 'init_pool' | 'add_liquidity' | 'withdraw_liquidity' | 'swap';
 

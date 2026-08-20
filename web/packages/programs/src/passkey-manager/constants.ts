@@ -2,9 +2,10 @@ import {
   Authority,
   AuthorityRecord,
 } from './abi/thru/program/passkey_manager/types';
+import { BOOTSTRAP_PROGRAM_ADDRESSES } from '../bootstrap-addresses';
 
 export const PASSKEY_MANAGER_PROGRAM_ADDRESS =
-  'tabsq39mzj3DZlutXOGG6VtfMj8fUvI0HIOXfZm7TLLY6N';
+  BOOTSTRAP_PROGRAM_ADDRESSES.passkey_manager;
 
 // Instruction discriminants
 export const INSTRUCTION_CREATE = 0x00;

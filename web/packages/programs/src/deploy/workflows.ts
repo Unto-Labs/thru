@@ -39,8 +39,8 @@ import {
 } from "./chain";
 import {
   ABI_MANAGER_PROGRAM_ADDRESS,
+  DEPLOYMENT_MULTICALL_PROGRAM_ADDRESS,
   MANAGER_PROGRAM_ADDRESS,
-  MULTICALL_PROGRAM_ADDRESS,
 } from "./constants";
 import { DeployError, asDeployError } from "./errors";
 import type {
@@ -725,7 +725,7 @@ export async function deployProgram(
         ),
       ]);
       transaction = {
-        program: MULTICALL_PROGRAM_ADDRESS,
+        program: DEPLOYMENT_MULTICALL_PROGRAM_ADDRESS,
         stateUnits: 10_000,
         memoryUnits: 10_000,
         readWrite: [
@@ -838,7 +838,7 @@ export async function deployProgramABI(
         ),
       ]);
       const transaction: DeploymentTransaction = {
-        program: MULTICALL_PROGRAM_ADDRESS,
+        program: DEPLOYMENT_MULTICALL_PROGRAM_ADDRESS,
         stateUnits: 10_000,
         memoryUnits: 10_000,
         readWrite: [
@@ -946,7 +946,7 @@ export async function upgradeProgram(
     const transaction: DeploymentTransaction =
       abiBytes && abiUpload
         ? {
-            program: MULTICALL_PROGRAM_ADDRESS,
+            program: DEPLOYMENT_MULTICALL_PROGRAM_ADDRESS,
             stateUnits: 10_000,
             memoryUnits: 10_000,
             readWrite: [

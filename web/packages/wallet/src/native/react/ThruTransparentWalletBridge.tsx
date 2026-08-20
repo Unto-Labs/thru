@@ -363,6 +363,7 @@ export function ThruTransparentWalletBridge({
 
   const handleLoadEnd = useCallback(
     (event: WebViewLoadEndEvent) => {
+      wallet?.recordWebViewLoadEnded();
       attachIfReady();
       if (isDirectWalletSource) {
         wallet?.markWebViewReady();
@@ -630,12 +631,17 @@ export function ThruTransparentWalletBridge({
           isCoinbasePaymentActive ? "no-hide-descendants" : "auto"
         }
         onLoadStart={(event) => {
+          wallet?.recordWebViewLoadStarted();
           attachIfReady();
           void enableAndroidWebAuthnIfNeeded();
           webViewProps?.onLoadStart?.(event);
         }}
         onLoadEnd={handleLoadEnd}
         onError={(event) => {
+          wallet?.recordWebViewTransportError(
+            event.nativeEvent.code,
+            event.nativeEvent.description || "Wallet WebView failed to load",
+          );
           console.error("[ThruTransparentWalletBridge] wallet WebView error", {
             description: event.nativeEvent.description,
             code: event.nativeEvent.code,
@@ -643,6 +649,7 @@ export function ThruTransparentWalletBridge({
           webViewProps?.onError?.(event);
         }}
         onHttpError={(event) => {
+          wallet?.recordWebViewHttpError(event.nativeEvent.statusCode);
           console.error(
             "[ThruTransparentWalletBridge] wallet WebView HTTP error",
             {
@@ -653,6 +660,7 @@ export function ThruTransparentWalletBridge({
           webViewProps?.onHttpError?.(event);
         }}
         onContentProcessDidTerminate={(event) => {
+          wallet?.recordWebViewContentProcessTerminated();
           console.error(
             "[ThruTransparentWalletBridge] wallet WebView content process terminated",
           );

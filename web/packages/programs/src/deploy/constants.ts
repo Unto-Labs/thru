@@ -1,3 +1,5 @@
+import { GENESIS_MULTICALL_PROGRAM_ADDRESS } from "../multicall";
+
 export {
   MANAGER_META_SIZE,
   MANAGER_PROGRAM_ADDRESS,
@@ -11,7 +13,10 @@ export {
   ABI_STATE_FINALIZED,
   ABI_STATE_OPEN,
 } from "../abi-manager";
-export { MULTICALL_PROGRAM_ADDRESS } from "../multicall";
+/** Genesis Multicall remains a deployment dependency because managed
+ * Multicall cannot be used to deploy itself. */
+export const DEPLOYMENT_MULTICALL_PROGRAM_ADDRESS =
+  GENESIS_MULTICALL_PROGRAM_ADDRESS;
 export {
   UPLOADER_DEFAULT_CHUNK_SIZE as DEFAULT_CHUNK_SIZE,
   UPLOADER_MAX_CHUNK_SIZE as MAX_CHUNK_SIZE,

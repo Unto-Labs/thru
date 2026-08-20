@@ -3,6 +3,11 @@
   "version": "0.0.1",
   "type": "module",
   "exports": {
+    "./bootstrap-addresses": {
+      "types": "./dist/bootstrap-addresses/index.d.ts",
+      "import": "./dist/bootstrap-addresses/index.js",
+      "require": "./dist/bootstrap-addresses/index.cjs"
+    },
     "./token": {
       "types": "./dist/token/index.d.ts",
       "import": "./dist/token/index.js",

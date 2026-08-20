@@ -1,4 +1,6 @@
-import { encodeAddress } from '@thru/sdk/helpers';
+import { decodeAddress, encodeAddress } from '@thru/sdk/helpers';
+import { BOOTSTRAP_PROGRAM_ADDRESSES } from '../bootstrap-addresses';
+import { systemProgramPubkey } from '../utils/helpers';
 import {
   InstructionData,
   InstructionDataBuilder,
@@ -23,11 +25,16 @@ export type MulticallCall = {
   instructionData: Uint8Array;
 };
 
-export const MULTICALL_PROGRAM_PUBKEY = new Uint8Array([
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 9,
-]);
+/** Genesis Multicall remains available on networks that do not run bootstrap. */
+export const GENESIS_MULTICALL_PROGRAM_PUBKEY = systemProgramPubkey(0x09);
+export const GENESIS_MULTICALL_PROGRAM_ADDRESS = encodeAddress(
+  GENESIS_MULTICALL_PROGRAM_PUBKEY,
+);
 
-export const MULTICALL_PROGRAM_ADDRESS = encodeAddress(MULTICALL_PROGRAM_PUBKEY);
+export const MULTICALL_PROGRAM_ADDRESS = BOOTSTRAP_PROGRAM_ADDRESSES.multicall;
+export const MULTICALL_PROGRAM_PUBKEY = decodeAddress(
+  MULTICALL_PROGRAM_ADDRESS,
+);
 
 function assertProgramIdx(programIdx: number): void {
   if (!Number.isInteger(programIdx) || programIdx < 0 || programIdx > 0xffff) {

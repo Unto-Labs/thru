@@ -127,9 +127,13 @@ describe("NativeSDK", () => {
   let webView: MockWebView;
 
   beforeEach(() => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(null, { status: 202 }),
+    );
     sdk = new NativeSDK({
       walletUrl: "http://localhost:3000/embedded",
       origin: "thru-mobile://token-dummy",
+      telemetryEnabled: false,
     });
     webView = new MockWebView();
     sdk.attachWebView(webView);
@@ -137,6 +141,7 @@ describe("NativeSDK", () => {
 
   afterEach(() => {
     sdk.destroy();
+    vi.restoreAllMocks();
   });
 
   it("exposes the grouped deposit lifecycle API", () => {
@@ -167,6 +172,43 @@ describe("NativeSDK", () => {
 
   it("defaults iOS WebView mode to shell iframe", () => {
     expect(sdk.getIosWebViewMode()).toBe("shell-iframe");
+  });
+
+  it("enables telemetry by default and propagates one session to the wallet", () => {
+    const telemetrySdk = new NativeSDK({
+      walletUrl: "http://localhost:3000/embedded",
+      origin: "thru-mobile://telemetry-default",
+    });
+    const url = new URL(telemetrySdk.getIframeSrc());
+
+    expect(url.searchParams.get("tn_telemetry")).toBe("1");
+    expect(url.searchParams.get("tn_telemetry_session")).toEqual(
+      expect.any(String),
+    );
+    expect(url.searchParams.get("tn_telemetry_session")).not.toBe("");
+
+    telemetrySdk.destroy();
+  });
+
+  it("propagates telemetry opt-out and never uploads diagnostics", async () => {
+    const fetchMock = vi.mocked(globalThis.fetch);
+    fetchMock.mockClear();
+    const telemetrySdk = new NativeSDK({
+      walletUrl: "http://localhost:3000/embedded",
+      origin: "thru-mobile://telemetry-disabled",
+      telemetryEnabled: false,
+    });
+    const url = new URL(telemetrySdk.getIframeSrc());
+
+    expect(url.searchParams.get("tn_telemetry")).toBe("0");
+    expect(url.searchParams.get("tn_telemetry_session")).toEqual(
+      expect.any(String),
+    );
+    expect(url.searchParams.get("tn_telemetry_session")).not.toBe("");
+
+    telemetrySdk.destroy();
+    await Promise.resolve();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("can opt into direct iOS WebView mode", () => {

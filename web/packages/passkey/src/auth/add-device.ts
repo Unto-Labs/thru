@@ -28,7 +28,7 @@ import {
   type WalletSigner,
 } from "@thru/programs/passkey-manager";
 import {
-  MULTICALL_PROGRAM_PUBKEY,
+  MULTICALL_PROGRAM_ADDRESS,
   buildMulticallInstruction,
 } from "@thru/programs/multicall";
 
@@ -73,6 +73,10 @@ export interface AddDeviceParams {
   walletSigner: WalletSigner;
   /** Passkey program address (base58). */
   programAddress: string;
+  /** Multicall program used to batch credential registration. Defaults to the
+      canonical managed deployment. Trusted network integrations may select a
+      supported compatibility deployment. */
+  multicallProgramAddress?: string;
   /** Sign-and-send executor (lifted from passkey-transaction.ts in the
       wallet-auth-manager - wallet apps own this because it depends on
       the `Thru` client's transaction builder). */
@@ -177,10 +181,14 @@ export async function addAuthorityToAccount(
     readWriteAccounts = [lookupAddressBytes];
   }
 
+  const multicallProgramPubkey = decodeAddress(
+    params.multicallProgramAddress ?? MULTICALL_PROGRAM_ADDRESS,
+  );
+
   const ctx = buildAccountContext({
     walletAddress: params.walletAddress,
     readWriteAccounts,
-    readOnlyAccounts: params.credentialId ? [MULTICALL_PROGRAM_PUBKEY] : [],
+    readOnlyAccounts: params.credentialId ? [multicallProgramPubkey] : [],
     feePayerAddress: params.feePayerAddress,
     programAddress: params.programAddress,
   });
@@ -210,7 +218,7 @@ export async function addAuthorityToAccount(
       stateProof: lookupProof,
     });
 
-    targetProgramIdx = ctx.getAccountIndex(MULTICALL_PROGRAM_PUBKEY);
+    targetProgramIdx = ctx.getAccountIndex(multicallProgramPubkey);
     targetInstructionData = buildMulticallInstruction([
       {
         programIdx: ctx.getAccountIndex(passkeyProgramPubkey),

@@ -1,9 +1,15 @@
+import { TELEMETRY_EVENTS } from '@thru/observability';
 import type {
   InferSuccessfulPostMessageResponse,
   PostMessageEvent,
   PostMessageRequest,
   PostMessageResponse,
 } from './types/messages';
+import {
+  getSafeRequestTelemetryFields,
+  getSafeResponseTelemetryFields,
+} from '../internal/telemetry-fields';
+import type { TelemetryClient } from '../telemetry';
 import {
   IFRAME_READY_EVENT,
   POST_MESSAGE_EVENT_TYPE,
@@ -138,13 +144,14 @@ export class IframeManager {
   private displayMode: 'modal' | 'inline' = 'modal';
   private inlineContainer: HTMLElement | null = null;
   private visible = false;
+  private telemetry?: TelemetryClient;
 
   /**
    * Callback for event broadcasts from iframe (no request id)
    */
   public onEvent?: (eventType: string, payload: any) => void;
 
-  constructor(iframeUrl: string) {
+  constructor(iframeUrl: string, telemetry?: TelemetryClient) {
     // Validate origin before accepting the URL
     validateIframeOrigin(iframeUrl);
 
@@ -153,6 +160,21 @@ export class IframeManager {
     /* Used to correlate postMessage traffic with the correct iframe instance.
        Important in dev (React Strict Mode) where iframes can be created twice. */
     this.frameId = createRequestId('frame');
+    this.telemetry = telemetry;
+    this.record(TELEMETRY_EVENTS.BRIDGE_CONSTRUCTED, {
+      severity: 'debug',
+    });
+  }
+
+  private record(
+    event: string,
+    fields: Parameters<TelemetryClient['record']>[1] = {},
+  ): void {
+    this.telemetry?.record(event, {
+      source: 'bridge',
+      frameId: this.frameId,
+      ...fields,
+    });
   }
 
   private getIframeSrc(): string {
@@ -171,13 +193,30 @@ export class IframeManager {
    */
   async createIframe(): Promise<void> {
     if (this.readyPromise) {
+      this.record(TELEMETRY_EVENTS.BRIDGE_IFRAME_CREATE_REUSED, { severity: 'debug' });
       return this.readyPromise;
     }
 
+    const startedAt = Date.now();
+    this.record(TELEMETRY_EVENTS.BRIDGE_IFRAME_CREATE_STARTED, { operation: 'initialize' });
     this.readyPromise = (async () => {
       if (!this.iframe) {
         this.iframe = document.createElement('iframe');
         this.iframe.src = this.getIframeSrc();
+        this.iframe.addEventListener('load', () => {
+          this.record(TELEMETRY_EVENTS.BRIDGE_IFRAME_LOADED, {
+            operation: 'initialize',
+            durationMs: Date.now() - startedAt,
+          });
+        });
+        this.iframe.addEventListener('error', () => {
+          this.record(TELEMETRY_EVENTS.BRIDGE_IFRAME_LOAD_FAILED, {
+            operation: 'initialize',
+            outcome: 'error',
+            severity: 'error',
+            durationMs: Date.now() - startedAt,
+          });
+        });
         /* Delegate WebAuthn for passkey auth and Payment Request for the
            wallet-owned Coinbase Apple Pay iframe. */
         this.iframe.allow = WALLET_IFRAME_ALLOW;
@@ -197,7 +236,19 @@ export class IframeManager {
       }
 
       await this.waitForReady();
+      this.record(TELEMETRY_EVENTS.BRIDGE_IFRAME_READY, {
+        operation: 'initialize',
+        outcome: 'success',
+        durationMs: Date.now() - startedAt,
+      });
     })().catch((error) => {
+      this.record(TELEMETRY_EVENTS.BRIDGE_IFRAME_CREATE_FAILED, {
+        operation: 'initialize',
+        outcome: 'error',
+        severity: 'error',
+        durationMs: Date.now() - startedAt,
+        message: error,
+      });
       this.readyPromise = null;
       throw error;
     });
@@ -223,6 +274,13 @@ export class IframeManager {
 
       const timeout = setTimeout(() => {
         cleanup();
+        this.record(TELEMETRY_EVENTS.BRIDGE_IFRAME_READY_TIMEOUT, {
+          operation: 'initialize',
+          outcome: 'timeout',
+          severity: 'error',
+          errorCode: 'IFRAME_READY_TIMEOUT',
+          durationMs: 10_000,
+        });
         reject(new Error('Iframe ready timeout - wallet failed to load'));
       }, 10000);
 
@@ -256,6 +314,11 @@ export class IframeManager {
    */
   showInline(): void {
     if (!this.iframe) {
+      this.record(TELEMETRY_EVENTS.BRIDGE_VISIBILITY_IGNORED, {
+        severity: 'warn',
+        operation: 'show_inline',
+        outcome: 'iframe_missing',
+      });
       return;
     }
     this.displayMode = 'inline';
@@ -271,6 +334,11 @@ export class IframeManager {
    */
   showModal(): void {
     if (!this.iframe) {
+      this.record(TELEMETRY_EVENTS.BRIDGE_VISIBILITY_IGNORED, {
+        severity: 'warn',
+        operation: 'show_modal',
+        outcome: 'iframe_missing',
+      });
       return;
     }
     this.displayMode = 'modal';
@@ -334,10 +402,17 @@ export class IframeManager {
     if (!this.iframe) {
       return;
     }
+    const changed = this.visible !== visible;
     this.visible = visible;
     this.iframe.style.opacity = visible ? '1' : '0';
     this.iframe.style.pointerEvents = visible ? 'auto' : 'none';
     this.iframe.style.visibility = visible ? 'visible' : 'hidden';
+    if (changed) {
+      this.record(visible ? 'bridge.iframe.shown' : 'bridge.iframe.hidden', {
+        severity: 'debug',
+        operation: this.displayMode,
+      });
+    }
   }
 
   /**
@@ -346,16 +421,42 @@ export class IframeManager {
   async sendMessage<TRequest extends PostMessageRequest>(
     request: TRequest
   ): Promise<InferSuccessfulPostMessageResponse<TRequest>> {
+    const startedAt = Date.now();
+    const safeRequestFields = getSafeRequestTelemetryFields(request);
+    this.record(TELEMETRY_EVENTS.BRIDGE_REQUEST_QUEUED, {
+      requestId: request.id,
+      operation: request.type,
+      ...safeRequestFields,
+    });
     /* Ensure the iframe has navigated to the wallet origin before we try to
        postMessage to a strict targetOrigin. Otherwise the iframe can still be
        about:blank (same-origin with the dapp) and postMessage will throw. */
-    if (this.readyPromise) {
-      await this.readyPromise;
-    } else {
-      await this.createIframe();
+    try {
+      if (this.readyPromise) {
+        await this.readyPromise;
+      } else {
+        await this.createIframe();
+      }
+    } catch (error) {
+      this.record(TELEMETRY_EVENTS.BRIDGE_REQUEST_FAILED, {
+        requestId: request.id,
+        operation: request.type,
+        outcome: 'iframe_not_ready',
+        severity: 'error',
+        durationMs: Date.now() - startedAt,
+        message: error,
+      });
+      throw error;
     }
 
     if (!this.iframe?.contentWindow) {
+      this.record(TELEMETRY_EVENTS.BRIDGE_REQUEST_FAILED, {
+        requestId: request.id,
+        operation: request.type,
+        outcome: 'iframe_missing',
+        severity: 'error',
+        durationMs: Date.now() - startedAt,
+      });
       throw new Error('Iframe not initialized - call createIframe() first');
     }
 
@@ -368,6 +469,14 @@ export class IframeManager {
 
       const timeout = setTimeout(() => {
         this.messageHandlers.delete(request.id);
+        this.record(TELEMETRY_EVENTS.BRIDGE_REQUEST_TIMEOUT, {
+          requestId: request.id,
+          operation: request.type,
+          outcome: 'timeout',
+          severity: 'error',
+          errorCode: 'TIMEOUT',
+          durationMs: Date.now() - startedAt,
+        });
         reject(new Error('Request timeout - wallet did not respond'));
       }, timeoutMs);
 
@@ -377,17 +486,54 @@ export class IframeManager {
         this.messageHandlers.delete(request.id);
 
         if (response.success) {
+          this.record(TELEMETRY_EVENTS.BRIDGE_REQUEST_COMPLETED, {
+            requestId: request.id,
+            operation: request.type,
+            outcome: 'success',
+            durationMs: Date.now() - startedAt,
+            ...safeRequestFields,
+            ...getSafeResponseTelemetryFields(request.type, response.result),
+          });
           resolve(response as InferSuccessfulPostMessageResponse<TRequest>);
         } else {
           const error = new Error(response.error?.message || 'Unknown error');
           (error as any).code = response.error?.code;
           (error as any).data = response.error?.data;
+          this.record(TELEMETRY_EVENTS.BRIDGE_REQUEST_FAILED, {
+            requestId: request.id,
+            operation: request.type,
+            outcome: 'wallet_error',
+            severity: 'error',
+            errorCode: response.error?.code,
+            durationMs: Date.now() - startedAt,
+            message: error,
+            ...safeRequestFields,
+          });
           reject(error);
         }
       });
 
       // Send message to iframe
-      this.iframe!.contentWindow!.postMessage(request, this.iframeOrigin);
+      try {
+        this.iframe!.contentWindow!.postMessage(request, this.iframeOrigin);
+        this.record(TELEMETRY_EVENTS.BRIDGE_REQUEST_STARTED, {
+          requestId: request.id,
+          operation: request.type,
+          ...safeRequestFields,
+        });
+      } catch (error) {
+        clearTimeout(timeout);
+        this.messageHandlers.delete(request.id);
+        this.record(TELEMETRY_EVENTS.BRIDGE_REQUEST_FAILED, {
+          requestId: request.id,
+          operation: request.type,
+          outcome: 'post_message_error',
+          severity: 'error',
+          durationMs: Date.now() - startedAt,
+          message: error,
+        });
+        reject(error);
+      }
     });
   }
 
@@ -395,7 +541,20 @@ export class IframeManager {
    * Handle incoming messages from iframe
    */
   private handleMessage(event: MessageEvent): void {
-    if (!this.isMessageFromIframe(event)) {
+    const rejection = this.messageRejectionReason(event);
+    if (rejection) {
+      /* Do not log unrelated cross-origin page traffic. Same-origin wallet
+         traffic with invalid correlation is useful and safe to diagnose. */
+      const cameFromManagedIframe =
+        !!event.source &&
+        !!this.iframe?.contentWindow &&
+        event.source === this.iframe.contentWindow;
+      if (rejection !== 'origin_mismatch' || cameFromManagedIframe) {
+        this.record(TELEMETRY_EVENTS.BRIDGE_MESSAGE_IGNORED, {
+          severity: 'warn',
+          outcome: rejection,
+        });
+      }
       return; // Ignore messages from other origins
     }
 
@@ -410,16 +569,38 @@ export class IframeManager {
       return;
     }
 
+    if (data?.id) {
+      this.record(TELEMETRY_EVENTS.BRIDGE_RESPONSE_IGNORED, {
+        severity: 'warn',
+        outcome: 'unknown_request',
+      });
+      return;
+    }
+
+    if (data?.type === IFRAME_READY_EVENT) {
+      this.record(TELEMETRY_EVENTS.BRIDGE_IFRAME_READY_RECEIVED, { severity: 'debug' });
+      return;
+    }
+
     // Handle event broadcasts (type === 'event')
     if (data.type === POST_MESSAGE_EVENT_TYPE) {
       this.handleEvent(data as PostMessageEvent);
+      return;
     }
+
+    this.record(TELEMETRY_EVENTS.BRIDGE_MESSAGE_MALFORMED, {
+      severity: 'warn',
+      outcome: 'unknown_shape',
+    });
   }
 
   /**
    * Handle event broadcasts from iframe
    */
   private handleEvent(data: PostMessageEvent): void {
+    this.record(TELEMETRY_EVENTS.BRIDGE_EVENT_RECEIVED, {
+      operation: data.event,
+    });
     // Forward to EmbeddedProvider via callback
     if (this.onEvent) {
       this.onEvent(data.event, data.data);
@@ -427,32 +608,33 @@ export class IframeManager {
   }
 
   private isMessageFromIframe(event: MessageEvent): boolean {
-    if (event.origin !== this.iframeOrigin) {
-      return false;
-    }
+    return this.messageRejectionReason(event) === null;
+  }
+
+  private messageRejectionReason(event: MessageEvent): string | null {
+    if (event.origin !== this.iframeOrigin) return 'origin_mismatch';
 
     const data = event.data as any;
-    if (!data || data.frameId !== this.frameId) {
-      return false;
-    }
+    if (!data || typeof data !== 'object') return 'malformed';
+    if (data.frameId !== this.frameId) return 'frame_mismatch';
 
     /* Some browsers (notably Safari) can provide a null `event.source` for
        cross-origin postMessage events. Frame id + origin is sufficient. */
-    if (!event.source) {
-      return true;
-    }
-
+    if (!event.source) return null;
     if (this.iframe?.contentWindow && event.source !== this.iframe.contentWindow) {
-      return false;
+      return 'source_mismatch';
     }
-
-    return true;
+    return null;
   }
 
   /**
    * Destroy iframe and cleanup
    */
   destroy(): void {
+    this.record(TELEMETRY_EVENTS.BRIDGE_DESTROYED, {
+      severity: 'debug',
+      outcome: this.messageHandlers.size > 0 ? 'pending_requests_dropped' : 'success',
+    });
     if (this.iframe) {
       this.iframe.remove();
       this.iframe = null;
@@ -468,3 +650,5 @@ export class IframeManager {
     this.messageHandlers.clear();
   }
 }
+
+

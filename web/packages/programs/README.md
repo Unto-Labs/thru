@@ -107,17 +107,16 @@ pnpm add @thru/programs @thru/sdk
 import { createThruClient } from "@thru/sdk/client";
 import {
   deriveOracleFeedAddress,
+  ORACLE_PROGRAM_ADDRESS,
   parseOracleFeedAccount,
 } from "@thru/programs/oracle";
 
 const thru = createThruClient({
   baseUrl: "https://rpc.alphanet.thru.org",
 });
-const oracleProgramAddress = "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgI";
-
 const { address: feedAddress } = deriveOracleFeedAddress(
   thru,
-  oracleProgramAddress,
+  ORACLE_PROGRAM_ADDRESS,
   "btc-usd:ticker@coinbase",
 );
 

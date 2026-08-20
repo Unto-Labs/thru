@@ -13,7 +13,7 @@ import {
 import {
   ABI_MANAGER_PROGRAM_ADDRESS,
   MANAGER_PROGRAM_ADDRESS,
-  MULTICALL_PROGRAM_ADDRESS,
+  DEPLOYMENT_MULTICALL_PROGRAM_ADDRESS,
   UPLOADER_PROGRAM_ADDRESS,
 } from "./constants";
 import { DeployError } from "./errors";
@@ -82,7 +82,7 @@ describe("deployment address derivation", () => {
   it("uses canonical built-in addresses", () => {
     expect(UPLOADER_PROGRAM_ADDRESS).toBe(address(2));
     expect(MANAGER_PROGRAM_ADDRESS).toBe(address(4));
-    expect(MULTICALL_PROGRAM_ADDRESS).toBe(address(9));
+    expect(DEPLOYMENT_MULTICALL_PROGRAM_ADDRESS).toBe(address(9));
     expect(ABI_MANAGER_PROGRAM_ADDRESS).toBe(
       "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACrG7",
     );
@@ -196,7 +196,7 @@ describe("deployment transaction composition", () => {
     let observed: number[] = [];
     await client.transactions.buildAndSign({
       feePayer: { publicKey, privateKey },
-      program: MULTICALL_PROGRAM_ADDRESS,
+      program: DEPLOYMENT_MULTICALL_PROGRAM_ADDRESS,
       header: { fee: 0n, nonce: 0n, startSlot: 1n, chainId: 1 },
       accounts: {
         readWrite: [high, low],

@@ -45,3 +45,14 @@ export {
   TransactionSigningScheme,
   withTransactionSigningScheme,
 } from './transaction-signing-scheme';
+export {
+  TELEMETRY_BATCH_VERSION,
+  TELEMETRY_ENABLED_SEARCH_PARAM,
+  TELEMETRY_SESSION_SEARCH_PARAM,
+  WALLET_SDK_VERSION,
+} from './telemetry';
+export type {
+  TelemetryEvent,
+  TelemetrySeverity,
+  TelemetrySource,
+} from './telemetry';

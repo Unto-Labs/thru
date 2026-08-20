@@ -12,7 +12,7 @@ import { deriveManagedProgramAddresses } from "../manager";
 import {
   ABI_MANAGER_PROGRAM_ADDRESS,
   MANAGER_PROGRAM_ADDRESS,
-  MULTICALL_PROGRAM_ADDRESS,
+  DEPLOYMENT_MULTICALL_PROGRAM_ADDRESS,
 } from "./constants";
 import { DeployError } from "./errors";
 import type { DeploymentTransaction } from "./chain";
@@ -319,7 +319,7 @@ describe("deployment workflows", () => {
     });
 
     expect(mocks.submitTransaction).toHaveBeenCalledTimes(1);
-    expect(harness.state.transaction?.program).toBe(MULTICALL_PROGRAM_ADDRESS);
+    expect(harness.state.transaction?.program).toBe(DEPLOYMENT_MULTICALL_PROGRAM_ADDRESS);
     const calls = MulticallArgs.from_array(harness.state.encoded!)?.get_calls();
     expect(calls).toHaveLength(3);
     expect(calls?.map((call) => call.get_data()[0])).toEqual([0, 0, 4]);

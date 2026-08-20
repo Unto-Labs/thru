@@ -17,6 +17,8 @@ import { BrowserSDK } from '@thru/wallet';
 const sdk = new BrowserSDK({
   iframeUrl: 'https://app.tid.sh/embedded',
   rpcUrl: 'https://rpc.alphanet.thru.org',
+  // Default: true. Set false to stop all SDK and hosted-wallet telemetry.
+  telemetryEnabled: true,
 });
 
 await sdk.initialize(); // injects the iframe once
@@ -66,6 +68,59 @@ export default function Root() {
 
 Expo apps should install the config plugin from `@thru/wallet/native/plugin`.
 The SDK trusts both production wallet hosts: `app.tid.sh` and `wallet.tid.sh`.
+
+## Operational telemetry
+
+`telemetryEnabled` controls privacy-safe operational diagnostics for both the
+SDK bridge and the hosted wallet. It defaults to `true` for browser and React
+Native integrations:
+
+```ts
+const sdk = new BrowserSDK({
+  telemetryEnabled: false,
+});
+```
+
+React Native uses the same option in `ThruProvider`'s `config` object.
+
+When enabled, the SDK sends best-effort event batches directly to the hosted
+wallet's `/v1/telemetry` endpoint. Telemetry failures never block or fail a
+wallet operation. Events can include SDK and wallet versions, app origin,
+platform, network, request stage and duration, random diagnostic session ID,
+iframe/WebView frame and request IDs, error codes, public wallet and program
+addresses, and public transaction signatures. Successful and failed sessions
+are collected without sampling.
+
+Telemetry never includes private or session keys, passkey assertions or
+credential IDs, authentication headers, cookies or tokens, raw or signed
+transactions, instruction data/bytes, account data/contents, amounts, balances,
+or URL query and fragment data. Error messages are bounded and sanitized before
+they enter the in-memory queue. No persistent client queue is created.
+
+Setting `telemetryEnabled: false` prevents collection, queueing, and upload in
+the SDK and passes the opt-out into the hosted wallet. Developer console output
+is separate from telemetry and is not controlled by this option.
+
+### Cloud Logging operations
+
+Telemetry ingestion emits structured Cloud Logging records tagged with
+`telemetryType="thru_wallet"`. Useful filters add one of these fields:
+
+```text
+jsonPayload.telemetryType="thru_wallet"
+jsonPayload.sessionId="<diagnostic-session-id>"
+```
+
+Replace `sessionId` with `appOrigin`, `walletAddress`, `requestId`,
+`transactionSignature`, or `errorCode` to investigate a particular integration
+or operation. Configure the deployment's Cloud Logging bucket for 30-day
+retention; the SDK and ingestion code do not set logging-bucket retention.
+The ingestion endpoint is intentionally credential-free, so production rollout
+must also place a request-rate or quota policy in front of `/v1/telemetry` to
+limit forged traffic and log-volume abuse.
+
+Deploy and verify the ingestion route before publishing an SDK version that
+sends telemetry.
 
 ## Legacy transaction signing
 

@@ -1,6 +1,7 @@
 import { Pubkey, deriveProgramAddress } from '@thru/sdk';
 import { encodeAddress } from '@thru/sdk/helpers';
 import type { Account } from '@thru/sdk';
+import { BOOTSTRAP_PROGRAM_ADDRESSES } from '../bootstrap-addresses';
 import {
   ArenaHeader,
   CbookAccount,
@@ -157,8 +158,7 @@ export const CLOB_STATUS_FLAG_MASK =
   CLOB_STATUS_FLAG_WITHDRAWALS_FROZEN |
   CLOB_STATUS_FLAG_DEPOSITS_FROZEN;
 
-export const CLOB_PROGRAM_ADDRESS =
-  'tamjQOFxFORIZhqbJjN83oAkRmSbKhLmULpvSHblK4GGIg';
+export const CLOB_PROGRAM_ADDRESS = BOOTSTRAP_PROGRAM_ADDRESSES.clob;
 
 export const CLOB_ORDER_TYPE_GTC = 0;
 export const CLOB_ORDER_TYPE_MTL = 1;

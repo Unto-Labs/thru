@@ -7,7 +7,11 @@ import {
   ErrorCode,
   createRequestId,
 } from "../../protocol";
-import { WebViewBridge, type WebViewMessageEventLike } from './WebViewBridge';
+import {
+  WebViewBridge,
+  type NativeTelemetryFields,
+  type WebViewMessageEventLike,
+} from './WebViewBridge';
 
 const WALLET_URL = 'http://localhost:3000/embedded';
 const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
@@ -227,8 +231,25 @@ describe('WebViewBridge', () => {
   it('appends tn_frame_id to the iframe src', () => {
     const src = bridge.getIframeSrc();
     expect(src).toContain('tn_frame_id=');
+    expect(src).toContain('tn_telemetry=1');
     expect(src).toContain('/embedded/native');
     expect(src.startsWith('http://localhost:3000/embedded')).toBe(true);
+  });
+
+  it('propagates telemetry opt-out and session to the iframe src', () => {
+    const optedOutBridge = new WebViewBridge({
+      walletUrl: WALLET_URL,
+      telemetryEnabled: false,
+      telemetrySessionId: 'telemetry_native_test',
+    });
+    const src = new URL(optedOutBridge.getIframeSrc());
+
+    expect(src.searchParams.get('tn_telemetry')).toBe('0');
+    expect(src.searchParams.get('tn_telemetry_session')).toBe(
+      'telemetry_native_test'
+    );
+
+    optedOutBridge.destroy();
   });
 
   it('preserves transparent native wallet paths', () => {
@@ -361,6 +382,176 @@ describe('WebViewBridge', () => {
     ]);
   });
 
+  it('records correlated request telemetry without recording sensitive payloads', async () => {
+    const events: Array<{ event: string; fields?: NativeTelemetryFields }> = [];
+    const instrumentedBridge = new WebViewBridge({
+      walletUrl: WALLET_URL,
+      telemetrySessionId: 'telemetry_native_test',
+      telemetry: (event, fields) => events.push({ event, fields }),
+    });
+    const instrumentedWebView = new MockWebView();
+    instrumentedBridge.attachWebView(instrumentedWebView);
+    instrumentedBridge.onMessage(readyMessage(instrumentedBridge.frameId));
+
+    const id = createRequestId();
+    const promise = instrumentedBridge.sendMessage({
+      id,
+      type: POST_MESSAGE_REQUEST_TYPES.SIGN_TRANSACTION,
+      origin: 'app://telemetry-test',
+      payload: {
+        walletAddress: 'thru_wallet_public',
+        programAddress: 'thru_program_public',
+        instructionData: 'SENSITIVE_INSTRUCTION_DATA',
+        review: { appName: 'SENSITIVE_REVIEW' },
+      },
+    });
+    await flush();
+    instrumentedBridge.onMessage(
+      responseMessage(instrumentedBridge.frameId, id, {
+        signedTransaction: 'SENSITIVE_RAW_TRANSACTION',
+      })
+    );
+    await promise;
+
+    expect(events).toContainEqual({
+      event: 'bridge.request.sent',
+      fields: expect.objectContaining({
+        frameId: instrumentedBridge.frameId,
+        requestId: id,
+        operation: POST_MESSAGE_REQUEST_TYPES.SIGN_TRANSACTION,
+        walletAddress: 'thru_wallet_public',
+        programAddress: 'thru_program_public',
+      }),
+    });
+    expect(events).toContainEqual({
+      event: 'bridge.request.completed',
+      fields: expect.objectContaining({
+        frameId: instrumentedBridge.frameId,
+        requestId: id,
+        outcome: 'success',
+      }),
+    });
+    expect(JSON.stringify(events)).not.toContain('SENSITIVE_INSTRUCTION_DATA');
+    expect(JSON.stringify(events)).not.toContain('SENSITIVE_REVIEW');
+    expect(JSON.stringify(events)).not.toContain('SENSITIVE_RAW_TRANSACTION');
+
+    instrumentedBridge.destroy();
+  });
+
+  it('records safe native WebView load lifecycle details without URLs', () => {
+    const events: Array<{ event: string; fields?: NativeTelemetryFields }> = [];
+    const instrumentedBridge = new WebViewBridge({
+      walletUrl: WALLET_URL,
+      telemetry: (event, fields) => events.push({ event, fields }),
+    });
+
+    instrumentedBridge.recordWebViewLoadStarted();
+    instrumentedBridge.recordWebViewLoadEnded();
+    instrumentedBridge.recordWebViewTransportError(
+      -1009,
+      'Offline at https://wallet.example/path?token=secret',
+    );
+    instrumentedBridge.recordWebViewHttpError(503);
+    instrumentedBridge.recordWebViewContentProcessTerminated();
+
+    expect(events).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          event: 'bridge.webview.load.started',
+          fields: expect.objectContaining({ outcome: 'started' }),
+        }),
+        expect.objectContaining({
+          event: 'bridge.webview.load.ended',
+          fields: expect.objectContaining({ outcome: 'ended' }),
+        }),
+        expect.objectContaining({
+          event: 'bridge.webview.load.failed',
+          fields: expect.objectContaining({
+            outcome: 'transport_error',
+            errorCode: 'WEBVIEW_-1009',
+            message: 'Offline at https://wallet.example/path',
+          }),
+        }),
+        expect.objectContaining({
+          event: 'bridge.webview.load.failed',
+          fields: expect.objectContaining({
+            outcome: 'http_error',
+            errorCode: 'HTTP_503',
+          }),
+        }),
+        expect.objectContaining({
+          event: 'bridge.webview.content_process.terminated',
+          fields: expect.objectContaining({
+            errorCode: 'WEBVIEW_CONTENT_PROCESS_TERMINATED',
+          }),
+        }),
+      ]),
+    );
+    expect(JSON.stringify(events)).not.toContain('token=secret');
+
+    instrumentedBridge.destroy();
+  });
+
+  it('records malformed and frame-mismatched WebView messages', () => {
+    const events: Array<{ event: string; fields?: NativeTelemetryFields }> = [];
+    const instrumentedBridge = new WebViewBridge({
+      walletUrl: WALLET_URL,
+      telemetry: (event, fields) => events.push({ event, fields }),
+    });
+
+    instrumentedBridge.onMessage({ nativeEvent: { data: '{invalid' } });
+    instrumentedBridge.onMessage(
+      responseMessage('frame_other', 'req_other', { accounts: [] })
+    );
+
+    expect(events).toContainEqual({
+      event: 'bridge.message.malformed',
+      fields: expect.objectContaining({ outcome: 'invalid_json' }),
+    });
+    expect(events).toContainEqual({
+      event: 'bridge.message.ignored',
+      fields: expect.objectContaining({
+        outcome: 'frame_mismatch',
+      }),
+    });
+
+    instrumentedBridge.destroy();
+  });
+
+  it('does not stringify arbitrary values thrown by WebView injection', async () => {
+    const events: Array<{ event: string; fields?: NativeTelemetryFields }> = [];
+    const sensitiveThrownValue = {
+      toString: () => 'SENSITIVE_RAW_PAYLOAD',
+    };
+    const instrumentedBridge = new WebViewBridge({
+      walletUrl: WALLET_URL,
+      telemetry: (event, fields) => events.push({ event, fields }),
+    });
+    instrumentedBridge.attachWebView({
+      injectJavaScript: () => {
+        throw sensitiveThrownValue;
+      },
+    });
+    instrumentedBridge.onMessage(readyMessage(instrumentedBridge.frameId));
+
+    const promise = instrumentedBridge.sendMessage({
+      id: createRequestId(),
+      type: POST_MESSAGE_REQUEST_TYPES.GET_ACCOUNTS,
+      origin: 'app://test',
+    });
+
+    await expect(promise).rejects.toBe(sensitiveThrownValue);
+    const failed = events.find(
+      ({ event, fields }) =>
+        event === 'bridge.request.failed' &&
+        fields?.outcome === 'injection_error'
+    );
+    expect(failed?.fields?.message).toBe('Unknown wallet bridge error');
+    expect(JSON.stringify(events)).not.toContain('SENSITIVE_RAW_PAYLOAD');
+
+    instrumentedBridge.destroy();
+  });
+
   it('rejects in-flight sendMessage if the WebView ref is dropped before injection', async () => {
     bridge.awaitReady();
     bridge.onMessage(readyMessage(bridge.frameId));
@@ -379,6 +570,20 @@ describe('WebViewBridge', () => {
     const ready = bridge.awaitReady();
     bridge.destroy();
     await expect(ready).rejects.toThrow(/Bridge destroyed/);
+  });
+
+  it('rejects an already-sent request when the bridge is destroyed', async () => {
+    bridge.onMessage(readyMessage(bridge.frameId));
+    const promise = bridge.sendMessage({
+      id: createRequestId(),
+      type: POST_MESSAGE_REQUEST_TYPES.GET_ACCOUNTS,
+      origin: 'app://test',
+    });
+    await flush();
+
+    bridge.destroy();
+
+    await expect(promise).rejects.toThrow(/Bridge destroyed/);
   });
 
   /* Note: the 30s / 5min timeout values are exercised by integration

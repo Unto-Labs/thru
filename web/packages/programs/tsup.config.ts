@@ -2,6 +2,7 @@ import { defineConfig } from "tsup";
 
 export default defineConfig({
   entry: {
+    "bootstrap-addresses/index": "src/bootstrap-addresses/index.ts",
     "token/index": "src/token/index.ts",
     "passkey-manager/index": "src/passkey-manager/index.ts",
     "multicall/index": "src/multicall/index.ts",
