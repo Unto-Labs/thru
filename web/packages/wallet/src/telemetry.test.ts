@@ -3,6 +3,7 @@
 import { encodeAddress, encodeSignature } from '@thru/sdk/helpers';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
+  TELEMETRY_APP_CONTEXT_SEARCH_PARAM,
   TELEMETRY_ENABLED_SEARCH_PARAM,
   TELEMETRY_SESSION_SEARCH_PARAM,
   TelemetryClient,
@@ -274,6 +275,49 @@ describe('TelemetryClient', () => {
     expect(batch.events[0].appOrigin).toBe('thru-mobile://sweeps');
     client.destroy();
   });
+
+  it('stamps, updates, and clears the host-app context ID', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new TelemetryClient({
+      walletUrl: 'https://app.tid.sh/embedded',
+      sessionId: 'session-app-context',
+      appContextId: 'qa-run-1',
+    });
+
+    client.record('sdk.context.initial');
+    client.setAppContextId('user_42');
+    client.record('sdk.context.updated');
+    client.setAppContextId(null);
+    client.record('sdk.context.cleared');
+    await client.flush();
+
+    const events = JSON.parse(fetchMock.mock.calls[0][1].body as string)
+      .events as TelemetryEvent[];
+    expect(events.map((event) => event.appContextId)).toEqual([
+      'qa-run-1',
+      'user_42',
+      undefined,
+    ]);
+    client.destroy();
+  });
+
+  it('omits invalid or oversized app context IDs instead of mangling them', () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+    const client = new TelemetryClient({
+      walletUrl: 'https://app.tid.sh/embedded',
+      sessionId: 'session-app-context-invalid',
+      appContextId: 'has spaces and $ymbols',
+    });
+    expect(client.getAppContextId()).toBeUndefined();
+
+    client.setAppContextId('x'.repeat(129));
+    expect(client.getAppContextId()).toBeUndefined();
+
+    client.setAppContextId('valid-id');
+    expect(client.getAppContextId()).toBe('valid-id');
+    client.destroy();
+  });
 });
 
 describe('telemetry URL and redaction helpers', () => {
@@ -291,6 +335,33 @@ describe('telemetry URL and redaction helpers', () => {
 
     const disabled = new URL(withTelemetryParameters(enabled.toString(), false, 'off'));
     expect(disabled.searchParams.get(TELEMETRY_ENABLED_SEARCH_PARAM)).toBe('0');
+  });
+
+  it('propagates only a valid app context ID to the hosted wallet URL', () => {
+    const withContext = new URL(
+      withTelemetryParameters('https://app.tid.sh/embedded', true, 'session-123', 'user_42'),
+    );
+    expect(withContext.searchParams.get(TELEMETRY_APP_CONTEXT_SEARCH_PARAM)).toBe('user_42');
+
+    const withoutContext = new URL(
+      withTelemetryParameters('https://app.tid.sh/embedded', true, 'session-123'),
+    );
+    expect(withoutContext.searchParams.has(TELEMETRY_APP_CONTEXT_SEARCH_PARAM)).toBe(false);
+
+    const invalidContext = new URL(
+      withTelemetryParameters('https://app.tid.sh/embedded', true, 'session-123', 'bad value!'),
+    );
+    expect(invalidContext.searchParams.has(TELEMETRY_APP_CONTEXT_SEARCH_PARAM)).toBe(false);
+  });
+
+  it('drops a stale app context ID already present in the wallet URL', () => {
+    const stale = 'https://app.tid.sh/embedded?tn_telemetry_app_context=old_user';
+
+    const cleared = new URL(withTelemetryParameters(stale, true, 'session-123'));
+    expect(cleared.searchParams.has(TELEMETRY_APP_CONTEXT_SEARCH_PARAM)).toBe(false);
+
+    const invalid = new URL(withTelemetryParameters(stale, true, 'session-123', 'bad value!'));
+    expect(invalid.searchParams.has(TELEMETRY_APP_CONTEXT_SEARCH_PARAM)).toBe(false);
   });
 
   it('derives the endpoint from only the wallet origin', () => {

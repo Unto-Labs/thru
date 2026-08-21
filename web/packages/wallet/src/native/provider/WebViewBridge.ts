@@ -137,6 +137,8 @@ export interface WebViewBridgeOptions {
   walletUrl: string;
   telemetryEnabled?: boolean;
   telemetrySessionId?: string;
+  /** Opaque host-app-provided correlation label forwarded to the wallet. */
+  telemetryAppContextId?: string;
   telemetry?: NativeTelemetryRecorder;
 }
 
@@ -176,6 +178,7 @@ export class WebViewBridge {
 
   private readonly telemetryEnabled: boolean;
   private readonly telemetrySessionId?: string;
+  private telemetryAppContextId?: string;
   private readonly telemetry?: NativeTelemetryRecorder;
 
   private webView: WebViewRefLike | null = null;
@@ -202,6 +205,7 @@ export class WebViewBridge {
     this.frameId = createRequestId('frame');
     this.telemetryEnabled = options.telemetryEnabled ?? true;
     this.telemetrySessionId = options.telemetrySessionId;
+    this.telemetryAppContextId = options.telemetryAppContextId;
     this.telemetry = options.telemetry;
     this.recordTelemetry(TELEMETRY_EVENTS.BRIDGE_CONSTRUCTED, {
       severity: 'info',
@@ -223,7 +227,17 @@ export class WebViewBridge {
     if (this.telemetrySessionId) {
       url.searchParams.set('tn_telemetry_session', this.telemetrySessionId);
     }
+    if (this.telemetryAppContextId) {
+      url.searchParams.set('tn_telemetry_app_context', this.telemetryAppContextId);
+    } else {
+      url.searchParams.delete('tn_telemetry_app_context');
+    }
     return url.toString();
+  }
+
+  /** Set or clear the correlation label carried by later WebView loads. */
+  setTelemetryAppContextId(value: string | null): void {
+    this.telemetryAppContextId = value ?? undefined;
   }
 
   /**

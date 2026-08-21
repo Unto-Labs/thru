@@ -50,6 +50,8 @@ export interface NativeProviderConfig {
   /** Share privacy-safe operational diagnostics with Thru. Default: true. */
   telemetryEnabled?: boolean;
   telemetrySessionId?: string;
+  /** Opaque host-app-provided correlation label forwarded to the wallet. */
+  telemetryAppContextId?: string;
   telemetry?: NativeTelemetryRecorder;
   /** Standard bottom-sheet wallet or transparent auto-signing wallet. */
   walletExperience?: "standard" | "transparent";
@@ -147,6 +149,7 @@ export class NativeProvider {
       walletUrl,
       telemetryEnabled: config.telemetryEnabled ?? true,
       telemetrySessionId: config.telemetrySessionId,
+      telemetryAppContextId: config.telemetryAppContextId,
       telemetry: config.telemetry,
     });
     this.recordTelemetry(TELEMETRY_EVENTS.BRIDGE_PROVIDER_CONSTRUCTED, {
@@ -208,6 +211,11 @@ export class NativeProvider {
         config.signingSessions,
       );
     }
+  }
+
+  /** Set or clear the correlation label carried by later WebView loads. */
+  setTelemetryAppContextId(value: string | null): void {
+    this.bridge.setTelemetryAppContextId(value);
   }
 
   /** Hand the bridge a WebView ref. Required before connect/sign. */

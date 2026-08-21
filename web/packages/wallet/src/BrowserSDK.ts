@@ -58,6 +58,10 @@ export interface BrowserSDKConfig {
   iframeUrl?: string;
   /** Share sanitized operational diagnostics with Thru. Defaults to true. */
   telemetryEnabled?: boolean;
+  /** Opaque host-app-provided label stamped on telemetry for cross-session
+      correlation (e.g. the app's own user or install ID). Never minted or
+      interpreted by the SDK. */
+  appContextId?: string;
   addressTypes?: AddressTypeValue[];
   rpcUrl?: string;
   network?: ThruNetwork;
@@ -115,6 +119,7 @@ export class BrowserSDK {
       configuredIframeUrl,
       telemetryEnabled,
       telemetrySessionId,
+      config.appContextId,
     );
     const walletOrigin = new URL(iframeUrl).origin;
     const appOrigin =
@@ -125,6 +130,7 @@ export class BrowserSDK {
       enabled: telemetryEnabled,
       walletUrl: configuredIframeUrl,
       sessionId: telemetrySessionId,
+      appContextId: config.appContextId,
       source: 'sdk',
       context: {
         appOrigin,
@@ -172,6 +178,15 @@ export class BrowserSDK {
 
     // Forward provider events to SDK events
     this.setupEventForwarding();
+  }
+
+  /**
+   * Set or clear the opaque host-app correlation label on later telemetry
+   * events from this SDK instance (the embedded wallet keeps the label it
+   * received at construction).
+   */
+  setAppContextId(appContextId: string | null): void {
+    this.telemetry.setAppContextId(appContextId);
   }
 
   /**

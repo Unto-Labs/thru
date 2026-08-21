@@ -108,6 +108,10 @@ export interface NativeSDKConfig {
   walletUrl?: string;
   /** Share privacy-safe operational diagnostics with Thru. Default: true. */
   telemetryEnabled?: boolean;
+  /** Opaque host-app-provided label stamped on telemetry for cross-session
+      correlation (e.g. the app's own user or install ID). Never minted or
+      interpreted by the SDK. */
+  appContextId?: string;
   /** Wallet presentation loaded in the native WebView. Transparent mode
       signs in without opening the native wallet sheet. */
   walletExperience?: NativeWalletExperience;
@@ -305,6 +309,7 @@ export class NativeSDK {
       enabled: config.telemetryEnabled ?? true,
       walletUrl,
       sessionId: telemetrySessionId,
+      appContextId: config.appContextId,
       source: "sdk",
       context: {
         appOrigin: this.origin,
@@ -332,6 +337,7 @@ export class NativeSDK {
         walletUrl,
         telemetryEnabled: config.telemetryEnabled ?? true,
         telemetrySessionId,
+        telemetryAppContextId: this.telemetry.getAppContextId(),
         telemetry: (event, fields) =>
           this.telemetry.record(event, { ...fields, source: "bridge" }),
         origin: this.origin,
@@ -354,6 +360,18 @@ export class NativeSDK {
       outcome: "created",
       operation: this.walletExperience,
     });
+  }
+
+  /**
+   * Set or clear the opaque host-app correlation label. Applies to later
+   * events from this SDK instance and to wallet WebView loads that start
+   * after the call.
+   */
+  setAppContextId(appContextId: string | null): void {
+    this.telemetry.setAppContextId(appContextId);
+    this.provider.setTelemetryAppContextId(
+      this.telemetry.getAppContextId() ?? null,
+    );
   }
 
   /** Hand the WebView ref to the underlying provider/bridge. */

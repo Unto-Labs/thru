@@ -13,6 +13,7 @@ export const TELEMETRY_FIELD_LIMITS = {
   eventId: 128,
   frameId: 128,
   requestId: 128,
+  appContextId: 128,
   appOrigin: 256,
   sdkVersion: 64,
   walletVersion: 64,

@@ -46,6 +46,7 @@ export {
   withTransactionSigningScheme,
 } from './transaction-signing-scheme';
 export {
+  TELEMETRY_APP_CONTEXT_SEARCH_PARAM,
   TELEMETRY_BATCH_VERSION,
   TELEMETRY_ENABLED_SEARCH_PARAM,
   TELEMETRY_SESSION_SEARCH_PARAM,

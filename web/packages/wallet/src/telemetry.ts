@@ -24,6 +24,7 @@ export const WALLET_SDK_VERSION = packageMetadata.version;
 export const TELEMETRY_BATCH_VERSION = 1 as const;
 export const TELEMETRY_ENABLED_SEARCH_PARAM = 'tn_telemetry';
 export const TELEMETRY_SESSION_SEARCH_PARAM = 'tn_telemetry_session';
+export const TELEMETRY_APP_CONTEXT_SEARCH_PARAM = 'tn_telemetry_app_context';
 
 const TELEMETRY_PATH = '/v1/telemetry';
 
@@ -41,6 +42,8 @@ export interface TelemetryEvent {
   producerId?: string;
   /** Minted once per event and preserved across retries for de-duplication. */
   eventId?: string;
+  /** Opaque host-app-provided correlation label. Never minted by the SDK. */
+  appContextId?: string;
   frameId?: string;
   requestId?: string;
   appOrigin?: string;
@@ -76,7 +79,14 @@ export type TelemetryContext = Partial<
 
 export type TelemetryEventFields = Omit<
   Partial<TelemetryEvent>,
-  'timestamp' | 'sequence' | 'event' | 'sessionId' | 'producerId' | 'eventId' | 'message'
+  | 'timestamp'
+  | 'sequence'
+  | 'event'
+  | 'sessionId'
+  | 'producerId'
+  | 'eventId'
+  | 'appContextId'
+  | 'message'
 > & {
   message?: unknown;
 };
@@ -88,6 +98,8 @@ export interface TelemetryClientOptions {
   walletUrl: string;
   /** A caller-provided ID allows the SDK and hosted wallet to share a trace. */
   sessionId?: string;
+  /** Opaque host-app-provided cross-session correlation label. */
+  appContextId?: string;
   /** Default source for events. Individual records may override it. */
   source?: TelemetrySource;
   /** Safe fields included on every event unless overridden. */
@@ -131,11 +143,32 @@ export function withTelemetryParameters(
   walletUrl: string,
   enabled: boolean,
   sessionId: string,
+  appContextId?: string,
 ): string {
   const url = new URL(walletUrl);
   url.searchParams.set(TELEMETRY_ENABLED_SEARCH_PARAM, enabled ? '1' : '0');
   url.searchParams.set(TELEMETRY_SESSION_SEARCH_PARAM, sessionId);
+  const sanitizedAppContextId = sanitizeAppContextId(appContextId);
+  if (sanitizedAppContextId) {
+    url.searchParams.set(TELEMETRY_APP_CONTEXT_SEARCH_PARAM, sanitizedAppContextId);
+  } else {
+    url.searchParams.delete(TELEMETRY_APP_CONTEXT_SEARCH_PARAM);
+  }
   return url.toString();
+}
+
+/** Correlation keys are never mutated into misleading values; invalid input
+    is omitted instead. */
+export function sanitizeAppContextId(value: unknown): string | undefined {
+  if (
+    typeof value !== 'string' ||
+    value.length === 0 ||
+    value.length > FIELD_LIMITS.appContextId ||
+    !TELEMETRY_IDENTIFIER_PATTERN.test(value)
+  ) {
+    return undefined;
+  }
+  return value;
 }
 
 /**
@@ -149,6 +182,7 @@ export class TelemetryClient {
 
   private readonly defaultSource: TelemetrySource;
   private readonly context: TelemetryContext;
+  private appContextId?: string;
   private readonly queue: BufferedEventQueue<TelemetryEvent>;
   private sequence = 0;
   private destroyed = false;
@@ -171,6 +205,7 @@ export class TelemetryClient {
     this.defaultSource = isTelemetrySource(options.source)
       ? options.source
       : 'sdk';
+    this.appContextId = sanitizeAppContextId(options.appContextId);
     this.context = sanitizeContext(options.context);
     this.queue = new BufferedEventQueue<TelemetryEvent>({
       transport: createHttpJsonTransport({
@@ -202,6 +237,15 @@ export class TelemetryClient {
     return this.queue.size;
   }
 
+  /** Set or clear the opaque host-app correlation label for later events. */
+  setAppContextId(value: string | null): void {
+    this.appContextId = value === null ? undefined : sanitizeAppContextId(value);
+  }
+
+  getAppContextId(): string | undefined {
+    return this.appContextId;
+  }
+
   record(event: string, fields: TelemetryEventFields = {}): void {
     if (!this.enabled || this.destroyed) {
       return;
@@ -217,6 +261,9 @@ export class TelemetryClient {
         this.defaultSource,
         merged,
       );
+      if (this.appContextId) {
+        telemetryEvent.appContextId = this.appContextId;
+      }
       this.queue.enqueue(telemetryEvent);
     } catch {
       /* Telemetry must never change application behavior. */
