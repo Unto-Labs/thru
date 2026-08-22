@@ -6,6 +6,8 @@ use rand::rngs::SysRng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
 use thru_base::tn_tools::Pubkey;
 use url::Url;
 
@@ -404,6 +406,7 @@ impl Config {
         let config_path = Self::get_config_path()?;
         let config_content = Self::generate_config_template(self);
         tokio::fs::write(&config_path, config_content).await?;
+        restrict_permissions(&config_path, 0o600).await?;
         Ok(())
     }
 
@@ -534,12 +537,14 @@ impl Config {
                 .await
                 .map_err(ConfigError::DirectoryCreation)?;
         }
+        restrict_permissions(&config_dir, 0o700).await?;
 
         // Create default config
         let default_config = Config::default();
         let config_content = Self::generate_config_template(&default_config);
 
         tokio::fs::write(&config_path, config_content).await?;
+        restrict_permissions(&config_path, 0o600).await?;
 
         println!(
             "Created default configuration at: {}",
@@ -662,6 +667,20 @@ impl Config {
         names.sort();
         names
     }
+}
+
+/// Restrict filesystem permissions on a config file/dir that may contain
+/// private key material. No-op on non-Unix platforms.
+#[cfg(unix)]
+async fn restrict_permissions(path: &std::path::Path, mode: u32) -> Result<(), CliError> {
+    let perms = std::fs::Permissions::from_mode(mode);
+    tokio::fs::set_permissions(path, perms).await?;
+    Ok(())
+}
+
+#[cfg(not(unix))]
+async fn restrict_permissions(_path: &std::path::Path, _mode: u32) -> Result<(), CliError> {
+    Ok(())
 }
 
 #[cfg(test)]
