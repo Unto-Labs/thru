@@ -380,6 +380,7 @@ describe("NativeSDK", () => {
     const frameId = frameIdFor(sdk);
     const promise = sdk.createAccount({
       accountName: "JCoin Account",
+      passkeyName: "Jerry iPhone",
       metadata: {
         appId: "token_dummy_app",
         appName: "Token Dummy App",
@@ -395,6 +396,7 @@ describe("NativeSDK", () => {
     expect(request.type).toBe(POST_MESSAGE_REQUEST_TYPES.CREATE_ACCOUNT);
     expect(request.payload).toEqual({
       accountName: "JCoin Account",
+      passkeyName: "Jerry iPhone",
       metadata: {
         appId: "token_dummy_app",
         appName: "Token Dummy App",

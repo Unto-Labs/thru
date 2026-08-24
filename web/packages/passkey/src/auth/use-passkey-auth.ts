@@ -19,6 +19,7 @@ import {
   touchPasskeyLastUsedAt,
 } from '../mobile/storage';
 import type {
+  CreateWalletOptions,
   PasskeyAuthApiResponse,
   PasskeyAuthBoundStore,
   PasskeyAuthConfig,
@@ -147,12 +148,13 @@ export function createPasskeyAuthStore<TExtra = Record<string, never>>(
       }
     },
 
-    createWallet: async () => {
+    createWallet: async (options?: CreateWalletOptions) => {
       set({ isLoading: true, error: null, needsNewPasskey: false });
 
       try {
         const tempId = `user-${Date.now()}`;
-        const passkeyLabel = resolvedAlias.trim() || 'Thru Wallet';
+        const customName = options?.passkeyName?.trim().slice(0, 64).trim();
+        const passkeyLabel = customName || resolvedAlias.trim() || 'Thru Wallet';
         const { credentialId, publicKeyX, publicKeyY, rpId } =
           await registerPasskey(passkeyLabel, tempId, {
             rpId: config.rpId,

@@ -70,10 +70,12 @@ export interface ConnectOptions {
   metadata?: ConnectMetadataInput;
   preferredAccountAddress?: string;
   intent?: ConnectRequestPayload["intent"];
+  passkeyName?: string;
 }
 
 export interface CreateAccountOptions {
   accountName?: string;
+  passkeyName?: string;
   metadata?: ConnectMetadataInput;
   createSigningSession?: Omit<
     ThruSigningSessionCreateOptions,
@@ -337,6 +339,7 @@ export class NativeProvider {
         payload.preferredAccountAddress = options.preferredAccountAddress;
       }
       if (options?.intent) payload.intent = options.intent;
+      if (options?.passkeyName) payload.passkeyName = options.passkeyName;
 
       const response = await this.bridge.sendMessage({
         id: createRequestId(),
@@ -368,6 +371,7 @@ export class NativeProvider {
       await this.requestShow("create-account-open");
       const payload: CreateAccountPayload = {};
       if (options?.accountName) payload.accountName = options.accountName;
+      if (options?.passkeyName) payload.passkeyName = options.passkeyName;
       if (options?.metadata) payload.metadata = options.metadata;
       if (options?.createSigningSession) {
         payload.createSigningSession = {

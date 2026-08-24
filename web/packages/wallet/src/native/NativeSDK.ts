@@ -16,6 +16,7 @@ import {
   EMBEDDED_PROVIDER_EVENTS,
   DepositTarget,
   ErrorCode,
+  sanitizePasskeyName,
   type ConnectMetadataInput,
   type ConnectRequestPayload,
   type CreateAccountResult,
@@ -154,10 +155,14 @@ export interface ConnectOptions {
   metadata?: ConnectMetadataInput;
   preferredAccountAddress?: string;
   intent?: ConnectRequestPayload["intent"];
+  /** Custom name for a passkey created during this connect flow. */
+  passkeyName?: string;
 }
 
 export interface CreateAccountOptions {
   accountName?: string;
+  /** Custom name for the passkey created for this account. */
+  passkeyName?: string;
   metadata?: ConnectMetadataInput;
   createSigningSession?: Omit<
     ThruSigningSessionCreateOptions,
@@ -521,12 +526,14 @@ export class NativeSDK {
           ? null
           : (options?.preferredAccountAddress ??
             (await this.readSelectedAccountAddress()));
+        const passkeyName = sanitizePasskeyName(options?.passkeyName);
         const providerOptions =
-          metadata || preferredAccountAddress || options?.intent
+          metadata || preferredAccountAddress || options?.intent || passkeyName
             ? {
                 ...(metadata ? { metadata } : {}),
                 ...(preferredAccountAddress ? { preferredAccountAddress } : {}),
                 ...(options?.intent ? { intent: options.intent } : {}),
+                ...(passkeyName ? { passkeyName } : {}),
               }
             : undefined;
         const result = await this.provider.connect(providerOptions);
@@ -602,8 +609,10 @@ export class NativeSDK {
       if (!this.initialized) await this.initialize();
 
       const metadata = this.resolveMetadata(options.metadata);
+      const passkeyName = sanitizePasskeyName(options.passkeyName);
       const result = await this.provider.createAccount({
         ...(options.accountName ? { accountName: options.accountName } : {}),
+        ...(passkeyName ? { passkeyName } : {}),
         ...(metadata ? { metadata } : {}),
         ...(options.createSigningSession
           ? { createSigningSession: options.createSigningSession }

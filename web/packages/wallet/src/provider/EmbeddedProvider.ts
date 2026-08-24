@@ -43,6 +43,7 @@ export interface EmbeddedProviderConfig {
 
 export interface ConnectOptions {
   metadata?: ConnectMetadataInput;
+  passkeyName?: string;
 }
 
 /**
@@ -160,6 +161,10 @@ export class EmbeddedProvider {
 
       if (options?.metadata) {
         payload.metadata = options.metadata;
+      }
+
+      if (options?.passkeyName) {
+        payload.passkeyName = options.passkeyName;
       }
 
       const response = await this.iframeManager.sendMessage({

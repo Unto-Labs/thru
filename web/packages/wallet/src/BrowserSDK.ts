@@ -16,6 +16,7 @@ import {
   EMBEDDED_PROVIDER_EVENTS,
   DepositTarget,
   type ConnectMetadataInput,
+  sanitizePasskeyName,
   type DepositDestination,
   type DepositRequestPayload,
   type DepositResult,
@@ -76,6 +77,8 @@ export interface BrowserSDKConfig {
 
 export interface ConnectOptions {
   metadata?: ConnectMetadataInput;
+  /** Custom name for a passkey created during this connect flow. */
+  passkeyName?: string;
 }
 
 export type SDKEvent = 'connect' | 'disconnect' | 'lock' | 'error' | 'accountChanged';
@@ -264,7 +267,14 @@ export class BrowserSDK {
       this.telemetry.record(TELEMETRY_EVENTS.SDK_CONNECT_STARTED, { operation: 'connect' });
       try {
         const metadata = this.resolveMetadata(options?.metadata);
-        const providerOptions = metadata ? { metadata } : undefined;
+        const passkeyName = sanitizePasskeyName(options?.passkeyName);
+        const providerOptions =
+          metadata || passkeyName
+            ? {
+                ...(metadata ? { metadata } : {}),
+                ...(passkeyName ? { passkeyName } : {}),
+              }
+            : undefined;
         const result = await this.provider.connect(providerOptions);
         this.lastConnectResult = result;
         this.telemetry.record(TELEMETRY_EVENTS.SDK_CONNECT_COMPLETED, {

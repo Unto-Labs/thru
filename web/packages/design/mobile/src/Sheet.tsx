@@ -3,7 +3,17 @@
  * 360ms slide, title row with close.
  */
 import { type ReactNode, useEffect, useRef, useState } from "react";
-import { Animated, Easing, Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import {
+  Animated,
+  Easing,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  StyleSheet,
+  Text,
+  View,
+} from "react-native";
 import { font, radius, text, touch } from "./tokens";
 import { makeStyles } from "./theme";
 import { IconClose } from "./Icons";
@@ -13,11 +23,13 @@ export function Sheet({
   title,
   onClose,
   children,
+  keyboardAvoiding = false,
 }: {
   visible: boolean;
   title: string;
   onClose: () => void;
   children: ReactNode;
+  keyboardAvoiding?: boolean;
 }) {
   const styles = useStyles();
   const [mounted, setMounted] = useState(visible);
@@ -43,6 +55,30 @@ export function Sheet({
   }, [mounted, progress, visible]);
 
   const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [400, 0] });
+  const panel = (
+    <Animated.View
+      style={[
+        styles.panel,
+        keyboardAvoiding ? styles.keyboardPanel : styles.absolutePanel,
+        { transform: [{ translateY }] },
+      ]}
+    >
+      <View style={styles.header}>
+        <Text style={styles.title}>{title}</Text>
+        <Pressable
+          accessibilityLabel={`Close ${title}`}
+          accessibilityRole="button"
+          style={styles.close}
+          onPress={onClose}
+          hitSlop={8}
+        >
+          <IconClose />
+        </Pressable>
+      </View>
+      {children}
+      <View style={styles.bottomInset} />
+    </Animated.View>
+  );
 
   return (
     <Modal visible={mounted} transparent animationType="none" onRequestClose={onClose}>
@@ -54,22 +90,17 @@ export function Sheet({
           onPress={onClose}
         />
       </Animated.View>
-      <Animated.View style={[styles.panel, { transform: [{ translateY }] }]}>
-        <View style={styles.header}>
-          <Text style={styles.title}>{title}</Text>
-          <Pressable
-            accessibilityLabel={`Close ${title}`}
-            accessibilityRole="button"
-            style={styles.close}
-            onPress={onClose}
-            hitSlop={8}
-          >
-            <IconClose />
-          </Pressable>
-        </View>
-        {children}
-        <View style={styles.bottomInset} />
-      </Animated.View>
+      {keyboardAvoiding ? (
+        <KeyboardAvoidingView
+          behavior={Platform.OS === "ios" ? "padding" : "height"}
+          pointerEvents="box-none"
+          style={styles.keyboardLayer}
+        >
+          {panel}
+        </KeyboardAvoidingView>
+      ) : (
+        panel
+      )}
     </Modal>
   );
 }
@@ -78,15 +109,22 @@ const useStyles = makeStyles((c) => ({
   scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: c.scrim },
   scrimPressable: { flex: 1 },
   panel: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    bottom: 0,
     backgroundColor: c.bg,
     borderTopLeftRadius: radius.sheet,
     borderTopRightRadius: radius.sheet,
     paddingTop: 4,
   },
+  absolutePanel: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  keyboardLayer: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: "flex-end",
+  },
+  keyboardPanel: { width: "100%" },
   header: {
     height: touch.navH,
     flexDirection: "row",

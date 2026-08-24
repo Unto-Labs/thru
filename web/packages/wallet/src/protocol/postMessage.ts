@@ -170,6 +170,8 @@ export interface DisconnectResult {
 
 export interface CreateAccountPayload {
   accountName?: string;
+  /** App-provided name for the passkey created for this account. */
+  passkeyName?: string;
   metadata?: ConnectMetadataInput;
   createSigningSession?: {
     expiresAt: string;
@@ -301,6 +303,17 @@ export interface ConnectRequestPayload {
   metadata?: ConnectMetadataInput;
   preferredAccountAddress?: string;
   intent?: ConnectIntent;
+  /** App-provided name for a passkey created during this connect flow. */
+  passkeyName?: string;
+}
+
+/** WebAuthn user.name is capped by authenticators; keep names comfortably short. */
+export const MAX_PASSKEY_NAME_LENGTH = 64;
+
+export function sanitizePasskeyName(name?: string): string | undefined {
+  if (typeof name !== "string") return undefined;
+  const trimmed = name.trim().slice(0, MAX_PASSKEY_NAME_LENGTH).trim();
+  return trimmed || undefined;
 }
 
 export type { AppMetadata, ConnectResult };
