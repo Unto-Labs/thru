@@ -53,6 +53,7 @@ import {
   WALLET_SDK_VERSION,
   createTelemetrySessionId,
   withTelemetryParameters,
+  type TelemetryAppContext,
 } from './telemetry';
 
 export interface BrowserSDKConfig {
@@ -63,6 +64,9 @@ export interface BrowserSDKConfig {
       correlation (e.g. the app's own user or install ID). Never minted or
       interpreted by the SDK. */
   appContextId?: string;
+  /** Bounded host-app-provided dimensions stamped on telemetry events
+      (at most 5 short keys/values). Never interpreted by the SDK. */
+  appContext?: TelemetryAppContext;
   addressTypes?: AddressTypeValue[];
   rpcUrl?: string;
   network?: ThruNetwork;
@@ -123,6 +127,7 @@ export class BrowserSDK {
       telemetryEnabled,
       telemetrySessionId,
       config.appContextId,
+      config.appContext,
     );
     const walletOrigin = new URL(iframeUrl).origin;
     const appOrigin =
@@ -134,6 +139,7 @@ export class BrowserSDK {
       walletUrl: configuredIframeUrl,
       sessionId: telemetrySessionId,
       appContextId: config.appContextId,
+      appContext: config.appContext,
       source: 'sdk',
       context: {
         appOrigin,
@@ -190,6 +196,15 @@ export class BrowserSDK {
    */
   setAppContextId(appContextId: string | null): void {
     this.telemetry.setAppContextId(appContextId);
+  }
+
+  /**
+   * Replace or clear the host-app dimensions on later telemetry events from
+   * this SDK instance (the embedded wallet keeps the context it received at
+   * construction).
+   */
+  setContext(context: TelemetryAppContext | null): void {
+    this.telemetry.setContext(context);
   }
 
   /**

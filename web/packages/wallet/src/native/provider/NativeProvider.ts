@@ -1,4 +1,7 @@
-import { TELEMETRY_EVENTS } from "@thru/observability";
+import {
+  TELEMETRY_EVENTS,
+  type TelemetryAppContext,
+} from "@thru/observability";
 import {
   AddressType,
   normalizeWalletAccountResult,
@@ -52,6 +55,8 @@ export interface NativeProviderConfig {
   telemetrySessionId?: string;
   /** Opaque host-app-provided correlation label forwarded to the wallet. */
   telemetryAppContextId?: string;
+  /** Bounded host-app-provided dimensions forwarded to the wallet. */
+  telemetryContext?: TelemetryAppContext;
   telemetry?: NativeTelemetryRecorder;
   /** Standard bottom-sheet wallet or transparent auto-signing wallet. */
   walletExperience?: "standard" | "transparent";
@@ -152,6 +157,7 @@ export class NativeProvider {
       telemetryEnabled: config.telemetryEnabled ?? true,
       telemetrySessionId: config.telemetrySessionId,
       telemetryAppContextId: config.telemetryAppContextId,
+      telemetryContext: config.telemetryContext,
       telemetry: config.telemetry,
     });
     this.recordTelemetry(TELEMETRY_EVENTS.BRIDGE_PROVIDER_CONSTRUCTED, {
@@ -218,6 +224,11 @@ export class NativeProvider {
   /** Set or clear the correlation label carried by later WebView loads. */
   setTelemetryAppContextId(value: string | null): void {
     this.bridge.setTelemetryAppContextId(value);
+  }
+
+  /** Set or clear the host-app dimensions carried by later WebView loads. */
+  setTelemetryContext(value: TelemetryAppContext | null): void {
+    this.bridge.setTelemetryContext(value);
   }
 
   /** Hand the bridge a WebView ref. Required before connect/sign. */

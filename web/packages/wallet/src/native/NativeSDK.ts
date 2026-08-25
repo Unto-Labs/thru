@@ -62,6 +62,7 @@ import {
   TelemetryClient,
   WALLET_SDK_VERSION,
   createTelemetrySessionId,
+  type TelemetryAppContext,
 } from "../telemetry";
 
 export type IosWebViewMode = "direct" | "shell-iframe";
@@ -113,6 +114,9 @@ export interface NativeSDKConfig {
       correlation (e.g. the app's own user or install ID). Never minted or
       interpreted by the SDK. */
   appContextId?: string;
+  /** Bounded host-app-provided dimensions stamped on telemetry events
+      (at most 5 short keys/values). Never interpreted by the SDK. */
+  appContext?: TelemetryAppContext;
   /** Wallet presentation loaded in the native WebView. Transparent mode
       signs in without opening the native wallet sheet. */
   walletExperience?: NativeWalletExperience;
@@ -315,6 +319,7 @@ export class NativeSDK {
       walletUrl,
       sessionId: telemetrySessionId,
       appContextId: config.appContextId,
+      appContext: config.appContext,
       source: "sdk",
       context: {
         appOrigin: this.origin,
@@ -343,6 +348,7 @@ export class NativeSDK {
         telemetryEnabled: config.telemetryEnabled ?? true,
         telemetrySessionId,
         telemetryAppContextId: this.telemetry.getAppContextId(),
+        telemetryContext: this.telemetry.getContext(),
         telemetry: (event, fields) =>
           this.telemetry.record(event, { ...fields, source: "bridge" }),
         origin: this.origin,
@@ -377,6 +383,15 @@ export class NativeSDK {
     this.provider.setTelemetryAppContextId(
       this.telemetry.getAppContextId() ?? null,
     );
+  }
+
+  /**
+   * Replace or clear the host-app dimensions. Applies to later events from
+   * this SDK instance and to wallet WebView loads that start after the call.
+   */
+  setContext(context: TelemetryAppContext | null): void {
+    this.telemetry.setContext(context);
+    this.provider.setTelemetryContext(this.telemetry.getContext() ?? null);
   }
 
   /** Hand the WebView ref to the underlying provider/bridge. */

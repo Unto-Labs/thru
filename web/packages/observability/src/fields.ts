@@ -4,6 +4,7 @@
 export const TELEMETRY_IDENTIFIER_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._:-]*$/;
 export const TELEMETRY_VERSION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._+:-]*$/;
 export const TELEMETRY_EVENT_NAME_PATTERN = /^[a-z][a-z0-9_.-]*$/;
+export const TELEMETRY_TOKEN_ACCOUNT_PATTERN = /^ta[A-Za-z0-9_-]{44}$/;
 
 export const TELEMETRY_MAX_EVENT_NAME_LENGTH = 64;
 
@@ -22,6 +23,7 @@ export const TELEMETRY_FIELD_LIMITS = {
   provider: 64,
   providerOrderId: 256,
   providerDepositId: 256,
+  tokenAccountAddress: 46,
   operation: 96,
   outcome: 64,
   errorCode: 96,

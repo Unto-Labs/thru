@@ -48,11 +48,13 @@ export {
 export {
   TELEMETRY_APP_CONTEXT_SEARCH_PARAM,
   TELEMETRY_BATCH_VERSION,
+  TELEMETRY_CONTEXT_SEARCH_PARAM,
   TELEMETRY_ENABLED_SEARCH_PARAM,
   TELEMETRY_SESSION_SEARCH_PARAM,
   WALLET_SDK_VERSION,
 } from './telemetry';
 export type {
+  TelemetryAppContext,
   TelemetryEvent,
   TelemetrySeverity,
   TelemetrySource,

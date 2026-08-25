@@ -1,4 +1,8 @@
-import { TELEMETRY_EVENTS } from "@thru/observability";
+import {
+  TELEMETRY_EVENTS,
+  encodeTelemetryAppContext,
+  type TelemetryAppContext,
+} from "@thru/observability";
 import {
   ErrorCode,
   IFRAME_READY_EVENT,
@@ -139,6 +143,8 @@ export interface WebViewBridgeOptions {
   telemetrySessionId?: string;
   /** Opaque host-app-provided correlation label forwarded to the wallet. */
   telemetryAppContextId?: string;
+  /** Bounded host-app-provided dimensions forwarded to the wallet. */
+  telemetryContext?: TelemetryAppContext;
   telemetry?: NativeTelemetryRecorder;
 }
 
@@ -179,6 +185,7 @@ export class WebViewBridge {
   private readonly telemetryEnabled: boolean;
   private readonly telemetrySessionId?: string;
   private telemetryAppContextId?: string;
+  private telemetryContext?: TelemetryAppContext;
   private readonly telemetry?: NativeTelemetryRecorder;
 
   private webView: WebViewRefLike | null = null;
@@ -206,6 +213,7 @@ export class WebViewBridge {
     this.telemetryEnabled = options.telemetryEnabled ?? true;
     this.telemetrySessionId = options.telemetrySessionId;
     this.telemetryAppContextId = options.telemetryAppContextId;
+    this.telemetryContext = options.telemetryContext;
     this.telemetry = options.telemetry;
     this.recordTelemetry(TELEMETRY_EVENTS.BRIDGE_CONSTRUCTED, {
       severity: 'info',
@@ -232,12 +240,23 @@ export class WebViewBridge {
     } else {
       url.searchParams.delete('tn_telemetry_app_context');
     }
+    const encodedContext = encodeTelemetryAppContext(this.telemetryContext);
+    if (encodedContext) {
+      url.searchParams.set('tn_telemetry_context', encodedContext);
+    } else {
+      url.searchParams.delete('tn_telemetry_context');
+    }
     return url.toString();
   }
 
   /** Set or clear the correlation label carried by later WebView loads. */
   setTelemetryAppContextId(value: string | null): void {
     this.telemetryAppContextId = value ?? undefined;
+  }
+
+  /** Set or clear the host-app dimensions carried by later WebView loads. */
+  setTelemetryContext(value: TelemetryAppContext | null): void {
+    this.telemetryContext = value ?? undefined;
   }
 
   /**

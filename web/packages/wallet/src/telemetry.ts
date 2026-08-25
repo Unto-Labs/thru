@@ -2,12 +2,15 @@ import {
   BufferedEventQueue,
   createHttpJsonTransport,
   createTelemetryId,
+  encodeTelemetryAppContext,
   isCanonicalEncoding,
+  sanitizeTelemetryAppContext,
   sanitizeTelemetryMessage,
   TELEMETRY_FIELD_LIMITS as FIELD_LIMITS,
   TELEMETRY_IDENTIFIER_PATTERN,
   TELEMETRY_MAX_EVENT_NAME_LENGTH as TELEMETRY_MAX_EVENT_LENGTH,
   TELEMETRY_VERSION_PATTERN,
+  type TelemetryAppContext,
 } from '@thru/observability';
 import {
   decodeAddress,
@@ -18,6 +21,7 @@ import {
 import packageMetadata from '../package.json';
 
 export { sanitizeTelemetryMessage } from '@thru/observability';
+export type { TelemetryAppContext } from '@thru/observability';
 
 /** Package version embedded at build time (including release-workflow rewrites). */
 export const WALLET_SDK_VERSION = packageMetadata.version;
@@ -25,6 +29,7 @@ export const TELEMETRY_BATCH_VERSION = 1 as const;
 export const TELEMETRY_ENABLED_SEARCH_PARAM = 'tn_telemetry';
 export const TELEMETRY_SESSION_SEARCH_PARAM = 'tn_telemetry_session';
 export const TELEMETRY_APP_CONTEXT_SEARCH_PARAM = 'tn_telemetry_app_context';
+export const TELEMETRY_CONTEXT_SEARCH_PARAM = 'tn_telemetry_context';
 
 const TELEMETRY_PATH = '/v1/telemetry';
 
@@ -44,6 +49,8 @@ export interface TelemetryEvent {
   eventId?: string;
   /** Opaque host-app-provided correlation label. Never minted by the SDK. */
   appContextId?: string;
+  /** Bounded host-app-provided dimensions. Never minted or interpreted. */
+  appContext?: TelemetryAppContext;
   frameId?: string;
   requestId?: string;
   appOrigin?: string;
@@ -86,6 +93,7 @@ export type TelemetryEventFields = Omit<
   | 'producerId'
   | 'eventId'
   | 'appContextId'
+  | 'appContext'
   | 'message'
 > & {
   message?: unknown;
@@ -100,6 +108,8 @@ export interface TelemetryClientOptions {
   sessionId?: string;
   /** Opaque host-app-provided cross-session correlation label. */
   appContextId?: string;
+  /** Bounded host-app-provided dimensions stamped on every event. */
+  appContext?: TelemetryAppContext;
   /** Default source for events. Individual records may override it. */
   source?: TelemetrySource;
   /** Safe fields included on every event unless overridden. */
@@ -144,6 +154,7 @@ export function withTelemetryParameters(
   enabled: boolean,
   sessionId: string,
   appContextId?: string,
+  appContext?: TelemetryAppContext,
 ): string {
   const url = new URL(walletUrl);
   url.searchParams.set(TELEMETRY_ENABLED_SEARCH_PARAM, enabled ? '1' : '0');
@@ -153,6 +164,12 @@ export function withTelemetryParameters(
     url.searchParams.set(TELEMETRY_APP_CONTEXT_SEARCH_PARAM, sanitizedAppContextId);
   } else {
     url.searchParams.delete(TELEMETRY_APP_CONTEXT_SEARCH_PARAM);
+  }
+  const encodedContext = encodeTelemetryAppContext(appContext);
+  if (encodedContext) {
+    url.searchParams.set(TELEMETRY_CONTEXT_SEARCH_PARAM, encodedContext);
+  } else {
+    url.searchParams.delete(TELEMETRY_CONTEXT_SEARCH_PARAM);
   }
   return url.toString();
 }
@@ -183,6 +200,7 @@ export class TelemetryClient {
   private readonly defaultSource: TelemetrySource;
   private readonly context: TelemetryContext;
   private appContextId?: string;
+  private appContext?: TelemetryAppContext;
   private readonly queue: BufferedEventQueue<TelemetryEvent>;
   private sequence = 0;
   private destroyed = false;
@@ -206,6 +224,7 @@ export class TelemetryClient {
       ? options.source
       : 'sdk';
     this.appContextId = sanitizeAppContextId(options.appContextId);
+    this.appContext = sanitizeTelemetryAppContext(options.appContext);
     this.context = sanitizeContext(options.context);
     this.queue = new BufferedEventQueue<TelemetryEvent>({
       transport: createHttpJsonTransport({
@@ -246,6 +265,17 @@ export class TelemetryClient {
     return this.appContextId;
   }
 
+  /** Replace or clear the host-app dimensions stamped on later events.
+      Entries the ingestion contract cannot accept are dropped. */
+  setContext(context: TelemetryAppContext | null): void {
+    this.appContext =
+      context === null ? undefined : sanitizeTelemetryAppContext(context);
+  }
+
+  getContext(): TelemetryAppContext | undefined {
+    return this.appContext ? { ...this.appContext } : undefined;
+  }
+
   record(event: string, fields: TelemetryEventFields = {}): void {
     if (!this.enabled || this.destroyed) {
       return;
@@ -263,6 +293,9 @@ export class TelemetryClient {
       );
       if (this.appContextId) {
         telemetryEvent.appContextId = this.appContextId;
+      }
+      if (this.appContext) {
+        telemetryEvent.appContext = { ...this.appContext };
       }
       this.queue.enqueue(telemetryEvent);
     } catch {

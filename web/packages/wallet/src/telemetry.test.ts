@@ -4,6 +4,7 @@ import { encodeAddress, encodeSignature } from '@thru/sdk/helpers';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   TELEMETRY_APP_CONTEXT_SEARCH_PARAM,
+  TELEMETRY_CONTEXT_SEARCH_PARAM,
   TELEMETRY_ENABLED_SEARCH_PARAM,
   TELEMETRY_SESSION_SEARCH_PARAM,
   TelemetryClient,
@@ -318,6 +319,46 @@ describe('TelemetryClient', () => {
     expect(client.getAppContextId()).toBe('valid-id');
     client.destroy();
   });
+
+  it('stamps, replaces, and clears the host-app context map', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true });
+    vi.stubGlobal('fetch', fetchMock);
+    const client = new TelemetryClient({
+      walletUrl: 'https://app.tid.sh/embedded',
+      sessionId: 'session-app-context-map',
+      appContext: { anon_id: 'install-1', tier: 'gold' },
+    });
+
+    client.record('sdk.ctx.initial');
+    client.setContext({ anon_id: 'install-1' });
+    client.record('sdk.ctx.replaced');
+    client.setContext(null);
+    client.record('sdk.ctx.cleared');
+    await client.flush();
+
+    const events = JSON.parse(fetchMock.mock.calls[0][1].body as string)
+      .events as TelemetryEvent[];
+    expect(events.map((event) => event.appContext)).toEqual([
+      { anon_id: 'install-1', tier: 'gold' },
+      { anon_id: 'install-1' },
+      undefined,
+    ]);
+    client.destroy();
+  });
+
+  it('omits context entries the ingestion contract cannot accept', () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
+    const client = new TelemetryClient({
+      walletUrl: 'https://app.tid.sh/embedded',
+      sessionId: 'session-app-context-map-invalid',
+      appContext: { 'Bad Key': 'x', tier: 'gold', email: 'user@example.com' },
+    });
+    expect(client.getContext()).toEqual({ tier: 'gold' });
+
+    client.setContext({ email: 'user@example.com' });
+    expect(client.getContext()).toBeUndefined();
+    client.destroy();
+  });
 });
 
 describe('telemetry URL and redaction helpers', () => {
@@ -362,6 +403,19 @@ describe('telemetry URL and redaction helpers', () => {
 
     const invalid = new URL(withTelemetryParameters(stale, true, 'session-123', 'bad value!'));
     expect(invalid.searchParams.has(TELEMETRY_APP_CONTEXT_SEARCH_PARAM)).toBe(false);
+  });
+
+  it('propagates only a sanitized context map to the hosted wallet URL', () => {
+    const withContext = new URL(
+      withTelemetryParameters('https://app.tid.sh/embedded', true, 'session-123', undefined, {
+        tier: 'gold',
+        'bad key': 'x',
+      }),
+    );
+    expect(withContext.searchParams.get(TELEMETRY_CONTEXT_SEARCH_PARAM)).toBe('tier=gold');
+
+    const stale = withTelemetryParameters(withContext.toString(), true, 'session-123');
+    expect(new URL(stale).searchParams.has(TELEMETRY_CONTEXT_SEARCH_PARAM)).toBe(false);
   });
 
   it('derives the endpoint from only the wallet origin', () => {
