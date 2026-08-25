@@ -90,6 +90,12 @@ function eventMessage(
   };
 }
 
+function parseInjectedTelemetryContext(script: string): unknown {
+  const match = script.match(/var msg = (.*?);\s*if \(window\.__pushIn\)/s);
+  if (!match) throw new Error('Injected message not found');
+  return JSON.parse(match[1]!);
+}
+
 /* Flush enough microtask ticks for sendMessage's `await awaitReady()` to
    land, the injectJavaScript call to fire, and the handler to register. */
 async function flush(): Promise<void> {
@@ -252,6 +258,68 @@ describe('WebViewBridge', () => {
     optedOutBridge.destroy();
   });
 
+  it('pushes runtime telemetry context to an already-loaded wallet', () => {
+    bridge.onMessage(readyMessage(bridge.frameId));
+    expect(webView.injected).toHaveLength(0);
+
+    bridge.setTelemetryAppContextId('user-42');
+    bridge.setTelemetryContext({ anon_id: 'install-7' });
+
+    const messages = webView.injected.map(parseInjectedTelemetryContext);
+    expect(messages).toEqual([
+      {
+        type: 'telemetry:context',
+        origin: bridge.walletOrigin,
+        frameId: bridge.frameId,
+        appContextId: 'user-42',
+      },
+      {
+        type: 'telemetry:context',
+        origin: bridge.walletOrigin,
+        frameId: bridge.frameId,
+        appContextId: 'user-42',
+        appContext: { anon_id: 'install-7' },
+      },
+    ]);
+  });
+
+  it('restates telemetry context to a reloaded wallet document', () => {
+    bridge.onMessage(readyMessage(bridge.frameId));
+    bridge.setTelemetryAppContextId('user-42');
+    webView.injected.length = 0;
+
+    bridge.onMessage(readyMessage(bridge.frameId));
+
+    expect(webView.injected.map(parseInjectedTelemetryContext)).toEqual([
+      {
+        type: 'telemetry:context',
+        origin: bridge.walletOrigin,
+        frameId: bridge.frameId,
+        appContextId: 'user-42',
+      },
+    ]);
+  });
+
+  it('propagates cleared telemetry context to the loaded wallet', () => {
+    const contextBridge = new WebViewBridge({
+      walletUrl: WALLET_URL,
+      telemetryAppContextId: 'user-42',
+    });
+    const contextWebView = new MockWebView();
+    contextBridge.attachWebView(contextWebView);
+    contextBridge.onMessage(readyMessage(contextBridge.frameId));
+
+    contextBridge.setTelemetryAppContextId(null);
+
+    expect(parseInjectedTelemetryContext(contextWebView.injected[0]!)).toEqual({
+      type: 'telemetry:context',
+      origin: contextBridge.walletOrigin,
+      frameId: contextBridge.frameId,
+    });
+
+    contextBridge.destroy();
+  });
+
   it('preserves transparent native wallet paths', () => {
     const transparentBridge = new WebViewBridge({
       walletUrl: 'http://localhost:3000/embedded/native/transparent',
@@ -302,7 +370,7 @@ describe('WebViewBridge', () => {
     await flush();
     expect(webView.injected.length).toBe(1);
     expect(webView.injected[0]).toContain('window.__pushIn');
-    expect(webView.injected[0]).toContain('window.postMessage');
+    expect(webView.injected[0]).toContain("new MessageEvent('message'");
     expect(webView.injected[0]).toContain(bridge.frameId);
     expect(webView.injected[0]).toContain(id);
 

@@ -1,7 +1,6 @@
 packages:
   - '../programs/bootstrap'
   - 'packages/*'
-  - 'packages/design/gallery'
   - 'packages-private/*'
   - 'clob'
   - 'clob/packages/*'
@@ -9,6 +8,7 @@ packages:
   - 'test-dapp'
   - 'explorer'
   - 'faucet'
+  - 'gallery'
   - 'jcoin-app'
   - 'etl-bridge'
   - 'eve-token-app'

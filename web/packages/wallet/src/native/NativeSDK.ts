@@ -35,6 +35,7 @@ import {
   ensureDepositAccountForWallet,
   formatDepositAmount,
   getDepositAccountStateForWallet,
+  signDepositTransactionWithActiveSession,
   waitForDepositBalanceForWallet,
   type DepositAccountState,
   type DepositsApi,
@@ -375,8 +376,8 @@ export class NativeSDK {
 
   /**
    * Set or clear the opaque host-app correlation label. Applies to later
-   * events from this SDK instance and to wallet WebView loads that start
-   * after the call.
+   * events from this SDK instance and from the wallet WebView, including one
+   * already loaded.
    */
   setAppContextId(appContextId: string | null): void {
     this.telemetry.setAppContextId(appContextId);
@@ -387,7 +388,8 @@ export class NativeSDK {
 
   /**
    * Replace or clear the host-app dimensions. Applies to later events from
-   * this SDK instance and to wallet WebView loads that start after the call.
+   * this SDK instance and from the wallet WebView, including one already
+   * loaded.
    */
   setContext(context: TelemetryAppContext | null): void {
     this.telemetry.setContext(context);
@@ -922,14 +924,7 @@ export class NativeSDK {
   private signDepositTransaction(
     payload: SignDepositTransactionPayload,
   ): Promise<string> {
-    return this.thru.signTransaction({
-      walletAddress: payload.walletAddress,
-      programAddress: payload.programAddress,
-      instructionData: payload.trailingInstructionData,
-      readWriteAddresses: payload.readWriteAddresses,
-      readOnlyAddresses: payload.readOnlyAddresses,
-      review: payload.review,
-    });
+    return signDepositTransactionWithActiveSession(this.thru, payload);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any

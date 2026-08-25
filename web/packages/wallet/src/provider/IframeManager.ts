@@ -1,9 +1,10 @@
-import { TELEMETRY_EVENTS } from '@thru/observability';
+import { TELEMETRY_EVENTS, type TelemetryAppContext } from '@thru/observability';
 import type {
   InferSuccessfulPostMessageResponse,
   PostMessageEvent,
   PostMessageRequest,
   PostMessageResponse,
+  TelemetryContextMessage,
 } from './types/messages';
 import {
   getSafeRequestTelemetryFields,
@@ -14,6 +15,7 @@ import {
   IFRAME_READY_EVENT,
   POST_MESSAGE_EVENT_TYPE,
   POST_MESSAGE_REQUEST_TYPES,
+  TELEMETRY_CONTEXT_MESSAGE_TYPE,
   createRequestId,
 } from './types/messages';
 
@@ -145,6 +147,9 @@ export class IframeManager {
   private inlineContainer: HTMLElement | null = null;
   private visible = false;
   private telemetry?: TelemetryClient;
+  private telemetryAppContextId?: string;
+  private telemetryContext?: TelemetryAppContext;
+  private telemetryContextUpdated = false;
 
   /**
    * Callback for event broadcasts from iframe (no request id)
@@ -297,6 +302,58 @@ export class IframeManager {
 
       window.addEventListener('message', readyHandler);
     });
+  }
+
+  /**
+   * Record the load-time correlation values, which the iframe URL already
+   * carries, so a later update never clears them by omission.
+   */
+  primeTelemetryContext(
+    appContextId: string | null,
+    context: TelemetryAppContext | null,
+  ): void {
+    this.telemetryAppContextId = appContextId ?? undefined;
+    this.telemetryContext = context ?? undefined;
+  }
+
+  /** Set or clear the correlation label carried by wallet telemetry. */
+  setTelemetryAppContextId(value: string | null): void {
+    this.telemetryAppContextId = value ?? undefined;
+    this.telemetryContextUpdated = true;
+    this.sendTelemetryContext();
+  }
+
+  /** Set or clear the host-app dimensions carried by wallet telemetry. */
+  setTelemetryContext(value: TelemetryAppContext | null): void {
+    this.telemetryContext = value ?? undefined;
+    this.telemetryContextUpdated = true;
+    this.sendTelemetryContext();
+  }
+
+  /**
+   * Push the current correlation values to an already-loaded wallet so its own
+   * telemetry carries them too. Best effort, and only once the host app has
+   * changed them: the iframe URL already carries the load-time values.
+   */
+  sendTelemetryContext(): void {
+    if (!this.telemetryContextUpdated) return;
+    const target = this.iframe?.contentWindow;
+    const parentOrigin = getCurrentWindowOrigin();
+    if (!target || !parentOrigin) return;
+    const message: TelemetryContextMessage = {
+      type: TELEMETRY_CONTEXT_MESSAGE_TYPE,
+      origin: parentOrigin,
+      frameId: this.frameId,
+      ...(this.telemetryAppContextId
+        ? { appContextId: this.telemetryAppContextId }
+        : {}),
+      ...(this.telemetryContext ? { appContext: this.telemetryContext } : {}),
+    };
+    try {
+      target.postMessage(message, this.iframeOrigin);
+    } catch {
+      /* Telemetry correlation is best effort and never blocks wallet use. */
+    }
   }
 
   /**
@@ -579,6 +636,7 @@ export class IframeManager {
 
     if (data?.type === IFRAME_READY_EVENT) {
       this.record(TELEMETRY_EVENTS.BRIDGE_IFRAME_READY_RECEIVED, { severity: 'debug' });
+      this.sendTelemetryContext();
       return;
     }
 

@@ -20,7 +20,10 @@ import {
   parseTokenAccountData,
 } from "@thru/programs/token";
 import { base64ToBytes } from "../encoding";
-import type { ThruTransactionReviewPayload } from "../interfaces";
+import type {
+  IThruChain,
+  ThruTransactionReviewPayload,
+} from "../interfaces";
 import {
   DepositTarget,
   ThruNetwork,
@@ -174,6 +177,32 @@ export type SignDepositTransactionPayload = {
 export type SignDepositTransaction = (
   payload: SignDepositTransactionPayload,
 ) => Promise<string>;
+
+/* signDepositTransactionWithActiveSession keeps deposit setup on the wallet's
+   existing signing-session path. getSigningSessions already returns only
+   active sessions for this app scope, and the session store replaces older
+   sessions for the same wallet. */
+export async function signDepositTransactionWithActiveSession(
+  thru: IThruChain,
+  payload: SignDepositTransactionPayload,
+): Promise<string> {
+  const session = (await thru.getSigningSessions()).find(
+    (candidate) =>
+      candidate.walletAddress === payload.walletAddress &&
+      Number.isInteger(candidate.authIdx) &&
+      candidate.authIdx >= 0 &&
+      candidate.authIdx <= 255,
+  );
+  return thru.signTransaction({
+    walletAddress: payload.walletAddress,
+    programAddress: payload.programAddress,
+    instructionData: payload.trailingInstructionData,
+    readWriteAddresses: payload.readWriteAddresses,
+    readOnlyAddresses: payload.readOnlyAddresses,
+    review: payload.review,
+    ...(session ? { signingSessionId: session.id } : {}),
+  });
+}
 
 export class DepositTransactionError extends Error {
   signature: string;

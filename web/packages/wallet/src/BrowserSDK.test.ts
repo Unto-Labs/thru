@@ -12,6 +12,12 @@ vi.mock("./provider/EmbeddedProvider", () => ({
 
     on(): void {}
 
+    primeTelemetryContext(): void {}
+
+    setTelemetryAppContextId(): void {}
+
+    setTelemetryContext(): void {}
+
     destroy(): void {}
   },
 }));

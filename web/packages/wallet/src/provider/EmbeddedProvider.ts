@@ -1,4 +1,4 @@
-import { TELEMETRY_EVENTS } from '@thru/observability';
+import { TELEMETRY_EVENTS, type TelemetryAppContext } from '@thru/observability';
 import { getErrorCode } from '../internal/telemetry-fields';
 import {
   AddressType,
@@ -124,6 +124,24 @@ export class EmbeddedProvider {
         config.signingSessions,
       );
     }
+  }
+
+  /** Record the load-time correlation values already carried by the iframe URL. */
+  primeTelemetryContext(
+    appContextId: string | null,
+    context: TelemetryAppContext | null,
+  ): void {
+    this.iframeManager.primeTelemetryContext(appContextId, context);
+  }
+
+  /** Set or clear the correlation label carried by wallet telemetry. */
+  setTelemetryAppContextId(value: string | null): void {
+    this.iframeManager.setTelemetryAppContextId(value);
+  }
+
+  /** Set or clear the host-app dimensions carried by wallet telemetry. */
+  setTelemetryContext(value: TelemetryAppContext | null): void {
+    this.iframeManager.setTelemetryContext(value);
   }
 
   /**

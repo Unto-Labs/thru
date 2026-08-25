@@ -29,6 +29,7 @@ import {
   ensureDepositAccountForWallet,
   formatDepositAmount,
   getDepositAccountStateForWallet,
+  signDepositTransactionWithActiveSession,
   waitForDepositBalanceForWallet,
   type DepositAccountState,
   type DepositsApi,
@@ -177,6 +178,10 @@ export class BrowserSDK {
       this.telemetry.discard();
       throw error;
     }
+    this.provider.primeTelemetryContext(
+      this.telemetry.getAppContextId() ?? null,
+      this.telemetry.getContext() ?? null,
+    );
     this.telemetry.record(TELEMETRY_EVENTS.SDK_CONSTRUCTED);
     this.defaultNetwork = config.network;
     this.depositProviders = new Set(config.deposits?.providers ?? ['unifold']);
@@ -191,20 +196,20 @@ export class BrowserSDK {
 
   /**
    * Set or clear the opaque host-app correlation label on later telemetry
-   * events from this SDK instance (the embedded wallet keeps the label it
-   * received at construction).
+   * events from this SDK instance and from the embedded wallet.
    */
   setAppContextId(appContextId: string | null): void {
     this.telemetry.setAppContextId(appContextId);
+    this.provider.setTelemetryAppContextId(this.telemetry.getAppContextId() ?? null);
   }
 
   /**
    * Replace or clear the host-app dimensions on later telemetry events from
-   * this SDK instance (the embedded wallet keeps the context it received at
-   * construction).
+   * this SDK instance and from the embedded wallet.
    */
   setContext(context: TelemetryAppContext | null): void {
     this.telemetry.setContext(context);
+    this.provider.setTelemetryContext(this.telemetry.getContext() ?? null);
   }
 
   /**
@@ -693,14 +698,7 @@ export class BrowserSDK {
   private signDepositTransaction(
     payload: SignDepositTransactionPayload
   ): Promise<string> {
-    return this.thru.signTransaction({
-      walletAddress: payload.walletAddress,
-      programAddress: payload.programAddress,
-      instructionData: payload.trailingInstructionData,
-      readWriteAddresses: payload.readWriteAddresses,
-      readOnlyAddresses: payload.readOnlyAddresses,
-      review: payload.review,
-    });
+    return signDepositTransactionWithActiveSession(this.thru, payload);
   }
 
   private refreshCachedAccounts(accounts: WalletAccount[], selectedAccount?: WalletAccount | null): void {

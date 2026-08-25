@@ -66,6 +66,12 @@ export type {
   NavbarBurgerProps,
   NavbarDrawerProps,
 } from "./components/Navbar/Navbar";
+export { ThemeToggle, useColorScheme } from "./components/ThemeToggle/ThemeToggle";
+export type {
+  ThemeToggleProps,
+  UseColorSchemeOptions,
+  ColorSchemeControls,
+} from "./components/ThemeToggle/ThemeToggle";
 export { ScrollArea } from "./components/ScrollArea/ScrollArea";
 export { Sheet } from "./components/Sheet/Sheet";
 export type { SheetRootProps, SheetHeaderProps, SheetControlProps } from "./components/Sheet/Sheet";

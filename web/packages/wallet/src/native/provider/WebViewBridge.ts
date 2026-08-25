@@ -8,7 +8,9 @@ import {
   IFRAME_READY_EVENT,
   POST_MESSAGE_EVENT_TYPE,
   POST_MESSAGE_REQUEST_TYPES,
+  TELEMETRY_CONTEXT_MESSAGE_TYPE,
   createRequestId,
+  type TelemetryContextMessage,
   type InferSuccessfulPostMessageResponse,
   type PostMessageEvent,
   type PostMessageRequest,
@@ -186,6 +188,7 @@ export class WebViewBridge {
   private readonly telemetrySessionId?: string;
   private telemetryAppContextId?: string;
   private telemetryContext?: TelemetryAppContext;
+  private telemetryContextUpdated = false;
   private readonly telemetry?: NativeTelemetryRecorder;
 
   private webView: WebViewRefLike | null = null;
@@ -249,14 +252,50 @@ export class WebViewBridge {
     return url.toString();
   }
 
-  /** Set or clear the correlation label carried by later WebView loads. */
+  /** Set or clear the correlation label carried by wallet telemetry. */
   setTelemetryAppContextId(value: string | null): void {
     this.telemetryAppContextId = value ?? undefined;
+    this.telemetryContextUpdated = true;
+    this.sendTelemetryContext();
   }
 
-  /** Set or clear the host-app dimensions carried by later WebView loads. */
+  /** Set or clear the host-app dimensions carried by wallet telemetry. */
   setTelemetryContext(value: TelemetryAppContext | null): void {
     this.telemetryContext = value ?? undefined;
+    this.telemetryContextUpdated = true;
+    this.sendTelemetryContext();
+  }
+
+  /**
+   * Push the current correlation values to an already-loaded wallet so its own
+   * telemetry carries them too. Best effort, and only once the host app has
+   * changed them: the WebView URL already carries the load-time values.
+   */
+  sendTelemetryContext(): void {
+    if (!this.telemetryContextUpdated) return;
+    if (this.destroyed || !this.ready || !this.webView) return;
+    const message: TelemetryContextMessage = {
+      type: TELEMETRY_CONTEXT_MESSAGE_TYPE,
+      origin: this.walletOrigin,
+      frameId: this.frameId,
+      ...(this.telemetryAppContextId
+        ? { appContextId: this.telemetryAppContextId }
+        : {}),
+      ...(this.telemetryContext ? { appContext: this.telemetryContext } : {}),
+    };
+    const script = `try {
+      var msg = ${JSON.stringify(message)};
+      if (window.__pushIn) {
+        window.__pushIn(msg);
+      } else {
+        window.postMessage(msg, window.location.origin);
+      }
+    } catch (e) {} ; true;`;
+    try {
+      this.webView.injectJavaScript(script);
+    } catch {
+      /* Telemetry correlation is best effort and never blocks wallet use. */
+    }
   }
 
   /**
@@ -348,6 +387,9 @@ export class WebViewBridge {
         severity: 'debug',
         outcome: 'ignored',
       });
+      /* A replacement document only carries the load-time values from its
+         URL, so restate the current ones. */
+      this.sendTelemetryContext();
       return;
     }
     this.ready = true;
@@ -361,6 +403,7 @@ export class WebViewBridge {
       severity: 'info',
       outcome: 'ready',
     });
+    this.sendTelemetryContext();
   }
 
   /**
@@ -525,7 +568,11 @@ export class WebViewBridge {
         if (window.__pushIn) {
           window.__pushIn(msg);
         } else {
-          window.postMessage(msg, window.location.origin);
+          window.dispatchEvent(new MessageEvent('message', {
+            data: msg,
+            origin: window.location.origin,
+            source: window
+          }));
         }
       } catch (e) {} ; true;`;
       try {

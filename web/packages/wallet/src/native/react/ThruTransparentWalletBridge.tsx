@@ -366,7 +366,9 @@ export function ThruTransparentWalletBridge({
       wallet?.recordWebViewLoadEnded();
       attachIfReady();
       if (isDirectWalletSource) {
-        wallet?.markWebViewReady();
+        /* The page posts iframe:ready after its request router is installed.
+           Treating onLoadEnd as ready races that effect on WKWebView and can
+           drop the first getConnectionState request. */
         void enableAndroidWebAuthnIfNeeded().finally(
           refreshWalletAvailabilityIfReady,
         );
