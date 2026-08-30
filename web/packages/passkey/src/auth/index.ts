@@ -1,4 +1,5 @@
 export type {
+  CreateWalletOptions,
   PasskeyApiUser,
   PasskeyAuthApiResponse,
   PasskeyUser,

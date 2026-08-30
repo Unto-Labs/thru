@@ -53,6 +53,9 @@ types:
       - name: seat_idx
         field-type:
           primitive: u32
+      - name: exchange_meta_account_idx
+        field-type:
+          primitive: u16
       - name: token_program_idx
         field-type:
           primitive: u16
@@ -65,6 +68,14 @@ types:
       - name: market_authority_account_idx
         field-type:
           primitive: u16
+      - name: reserved0
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 6
+            element-type:
+              primitive: u8
 - name: TokenTransferInstruction
   kind:
     struct:
@@ -324,6 +335,9 @@ types:
       - name: token_program_idx
         field-type:
           primitive: u16
+      - name: exchange_meta_account_idx
+        field-type:
+          primitive: u16
       - name: base_mint_idx
         field-type:
           primitive: u16
@@ -351,6 +365,14 @@ types:
       - name: market_authority_account_idx
         field-type:
           primitive: u16
+      - name: reserved1
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 2
+            element-type:
+              primitive: u8
       - name: proof_sz_seat_arena
         field-type:
           primitive: u32
@@ -369,14 +391,6 @@ types:
       - name: proof_sz_quote_vault
         field-type:
           primitive: u32
-      - name: reserved1
-        field-type:
-          array:
-            size:
-              literal:
-                u64: 4
-            element-type:
-              primitive: u8
       - name: proof_seat_arena
         field-type:
           array:
@@ -425,6 +439,40 @@ types:
                 path: ["proof_sz_quote_vault"]
             element-type:
               primitive: u8
+- name: ExchangeInitializeInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: reserved0
+        field-type:
+          primitive: u8
+      - name: exchange_meta_account_idx
+        field-type:
+          primitive: u16
+      - name: program_meta_account_idx
+        field-type:
+          primitive: u16
+      - name: authority_account_idx
+        field-type:
+          primitive: u16
+      - name: token_program_idx
+        field-type:
+          primitive: u16
+      - name: exchange_admin_account_idx
+        field-type:
+          primitive: u16
+      - name: proof_sz
+        field-type:
+          primitive: u32
+      - name: proof
+        field-type:
+          array:
+            size:
+              field-ref:
+                path: ["proof_sz"]
+            element-type:
+              primitive: u8
 - name: MarketSetStatusInstruction
   kind:
     struct:
@@ -444,6 +492,88 @@ types:
                 u64: 5
             element-type:
               primitive: u8
+- name: ExchangeSetStatusInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: status_flags
+        field-type:
+          primitive: u8
+      - name: exchange_meta_account_idx
+        field-type:
+          primitive: u16
+      - name: exchange_admin_account_idx
+        field-type:
+          primitive: u16
+      - name: reserved0
+        field-type:
+          primitive: u16
+- name: ExchangeSetAdminInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: reserved0
+        field-type:
+          primitive: u8
+      - name: exchange_meta_account_idx
+        field-type:
+          primitive: u16
+      - name: authority_account_idx
+        field-type:
+          primitive: u16
+      - name: new_admin_account_idx
+        field-type:
+          primitive: u16
+- name: ExchangeRecoverAdminInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: reserved0
+        field-type:
+          primitive: u8
+      - name: exchange_meta_account_idx
+        field-type:
+          primitive: u16
+      - name: program_meta_account_idx
+        field-type:
+          primitive: u16
+      - name: authority_account_idx
+        field-type:
+          primitive: u16
+      - name: new_admin_account_idx
+        field-type:
+          primitive: u16
+      - name: reserved1
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 6
+            element-type:
+              primitive: u8
+- name: MarketSetExchangeStatusInstruction
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: market_record_idx
+        field-type:
+          primitive: u8
+      - name: status_flags
+        field-type:
+          primitive: u8
+      - name: reserved0
+        field-type:
+          primitive: u8
+      - name: exchange_admin_account_idx
+        field-type:
+          primitive: u16
+      - name: reserved1
+        field-type:
+          primitive: u16
 - name: ClobInstruction
   kind:
     struct:
@@ -506,6 +636,31 @@ types:
               variant-type:
                 type-ref:
                   name: CreateSeatlessOrderEntryInstruction
+            - name: exchange_initialize
+              tag-value: 11
+              variant-type:
+                type-ref:
+                  name: ExchangeInitializeInstruction
+            - name: exchange_set_status
+              tag-value: 12
+              variant-type:
+                type-ref:
+                  name: ExchangeSetStatusInstruction
+            - name: exchange_set_admin
+              tag-value: 13
+              variant-type:
+                type-ref:
+                  name: ExchangeSetAdminInstruction
+            - name: exchange_recover_admin
+              tag-value: 14
+              variant-type:
+                type-ref:
+                  name: ExchangeRecoverAdminInstruction
+            - name: market_set_exchange_status
+              tag-value: 15
+              variant-type:
+                type-ref:
+                  name: MarketSetExchangeStatusInstruction
 - name: MarketAccount
   kind:
     struct:
@@ -517,12 +672,15 @@ types:
       - name: status_flags
         field-type:
           primitive: u8
+      - name: exchange_status_flags
+        field-type:
+          primitive: u8
       - name: reserved0
         field-type:
           array:
             size:
               literal:
-                u64: 6
+                u64: 5
             element-type:
               primitive: u8
       - name: lot_size
@@ -549,7 +707,60 @@ types:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
-      - name: token_program_pubkey
+      - name: base_vault_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: quote_vault_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: market_authority_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+- name: MarketAccountPayload
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: status_flags
+        field-type:
+          primitive: u8
+      - name: exchange_status_flags
+        field-type:
+          primitive: u8
+      - name: reserved0
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 5
+            element-type:
+              primitive: u8
+      - name: lot_size
+        field-type:
+          primitive: u64
+      - name: tick_size
+        field-type:
+          primitive: u64
+      - name: next_order_id
+        field-type:
+          primitive: u64
+      - name: order_entry_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: bids_cbook_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: asks_cbook_pubkey
         field-type:
           type-ref:
             name: Pubkey
@@ -569,6 +780,91 @@ types:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
+- name: ExchangeMetaAccount
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: magic
+        field-type:
+          primitive: u64
+      - name: version
+        field-type:
+          primitive: u8
+      - name: status_flags
+        field-type:
+          primitive: u8
+      - name: reserved0
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 6
+            element-type:
+              primitive: u8
+      - name: token_program_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: exchange_admin_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: reserved1
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 16
+            element-type:
+              primitive: u8
+- name: ExchangeMetaAccountPayload
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: magic_suffix
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 7
+            element-type:
+              primitive: u8
+      - name: version
+        field-type:
+          primitive: u8
+      - name: status_flags
+        field-type:
+          primitive: u8
+      - name: reserved0
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 6
+            element-type:
+              primitive: u8
+      - name: token_program_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: exchange_admin_pubkey
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: reserved1
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 16
+            element-type:
+              primitive: u8
 - name: ArenaHeader
   kind:
     struct:
@@ -684,6 +980,14 @@ types:
         field-type:
           type-ref:
             name: MarketAccount
+      - name: reserved_market_padding
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 32
+            element-type:
+              primitive: u8
       - name: header
         field-type:
           type-ref:
@@ -776,10 +1080,28 @@ types:
     struct:
       packed: true
       fields:
-      - name: market
+      - name: account_tag
         field-type:
-          type-ref:
-            name: MarketAccount
+          primitive: u8
+      - name: payload
+        field-type:
+          enum:
+            packed: true
+            tag-ref:
+              field-ref:
+                path:
+                - account_tag
+            variants:
+            - name: market
+              tag-value: 119
+              variant-type:
+                type-ref:
+                  name: MarketAccountPayload
+            - name: exchange_meta
+              tag-value: 120
+              variant-type:
+                type-ref:
+                  name: ExchangeMetaAccountPayload
 - name: ClobError
   kind:
     struct:
@@ -1163,6 +1485,128 @@ types:
           type-ref:
             name: Pubkey
             package: "thru.common.primitives"
+- name: ExchangeInitializedEvent
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: status_flags
+        field-type:
+          primitive: u8
+      - name: reserved0
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 7
+            element-type:
+              primitive: u8
+      - name: exchange_meta
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: token_program
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: exchange_admin
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+- name: ExchangeStatusEvent
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: old_status_flags
+        field-type:
+          primitive: u8
+      - name: new_status_flags
+        field-type:
+          primitive: u8
+      - name: reserved0
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 6
+            element-type:
+              primitive: u8
+      - name: exchange_meta
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: exchange_admin
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+- name: ExchangeAdminEvent
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: is_recovery
+        field-type:
+          primitive: u8
+      - name: reserved0
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 7
+            element-type:
+              primitive: u8
+      - name: exchange_meta
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: old_admin
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: new_admin
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: authority
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+- name: MarketExchangeStatusEvent
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: status_flags
+        field-type:
+          primitive: u8
+      - name: reserved0
+        field-type:
+          array:
+            size:
+              literal:
+                u64: 7
+            element-type:
+              primitive: u8
+      - name: market
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
+      - name: exchange_admin
+        field-type:
+          type-ref:
+            name: Pubkey
+            package: "thru.common.primitives"
 - name: ClobEvent
   kind:
     struct:
@@ -1230,3 +1674,23 @@ types:
               variant-type:
                 type-ref:
                   name: MarketStatusEvent
+            - name: exchange_initialized
+              tag-value: 11
+              variant-type:
+                type-ref:
+                  name: ExchangeInitializedEvent
+            - name: exchange_status
+              tag-value: 12
+              variant-type:
+                type-ref:
+                  name: ExchangeStatusEvent
+            - name: exchange_admin
+              tag-value: 13
+              variant-type:
+                type-ref:
+                  name: ExchangeAdminEvent
+            - name: market_exchange_status
+              tag-value: 14
+              variant-type:
+                type-ref:
+                  name: MarketExchangeStatusEvent

@@ -30,6 +30,7 @@ const TOKEN_PROGRAM = address(2);
 const BASE_MINT = address(3);
 const QUOTE_MINT = address(4);
 const WALLET_QUOTE = address(5);
+const EXCHANGE_META = address(250);
 
 describe('CLOB exchange balance SDK', () => {
   it('aggregates compatible physical allocations without losing transferability', () => {
@@ -569,10 +570,10 @@ describe('CLOB exchange balance SDK', () => {
 
     expect([
       bytes[0],
-      bytes[24],
-      bytes[48],
-      bytes[72],
-      bytes[96],
+      bytes[32],
+      bytes[56],
+      bytes[88],
+      bytes[112],
     ]).toEqual([
       CLOB_INSTRUCTION_MARKET_RECORD,
       CLOB_INSTRUCTION_TOKEN_WITHDRAW,
@@ -581,12 +582,12 @@ describe('CLOB exchange balance SDK', () => {
       CLOB_INSTRUCTION_CREATE_ORDER_ENTRY,
     ]);
     expect(bytes[1]).toBe(1);
-    expect(bytes[25]).toBe(1);
-    expect(bytes[49]).toBe(2);
-    expect(bytes[73]).toBe(2);
-    expect(bytes[98]).toBe(2);
-    expect(readU16(bytes, 22)).toBe(0xffff);
-    expect(readU16(bytes, 70)).toBe(0xffff);
+    expect(bytes[33]).toBe(1);
+    expect(bytes[57]).toBe(2);
+    expect(bytes[89]).toBe(2);
+    expect(bytes[114]).toBe(2);
+    expect(readU16(bytes, 24)).toBe(0xffff);
+    expect(readU16(bytes, 80)).toBe(0xffff);
     expect(instructionPlan.readWriteAccounts).toContain(source.address);
     expect(instructionPlan.readWriteAccounts).toContain(source.orderArena);
     expect(instructionPlan.readWriteAccounts).toContain(source.bidsCbook);
@@ -638,7 +639,7 @@ describe('CLOB exchange balance SDK', () => {
     });
     const bytes = await instructionPlan.instructionData(contextForPlan(instructionPlan));
 
-    expect([bytes[0], bytes[24], bytes[48], bytes[72], bytes[96]]).toEqual([
+    expect([bytes[0], bytes[32], bytes[56], bytes[88], bytes[112]]).toEqual([
       CLOB_INSTRUCTION_MARKET_RECORD,
       CLOB_INSTRUCTION_TOKEN_WITHDRAW,
       CLOB_INSTRUCTION_MARKET_RECORD,
@@ -646,7 +647,7 @@ describe('CLOB exchange balance SDK', () => {
       CLOB_INSTRUCTION_CREATE_ORDER_ENTRY,
     ]);
     expect(readU32(bytes, 12)).toBe(3);
-    expect(readU32(bytes, 60)).toBe(2);
+    expect(readU32(bytes, 68)).toBe(2);
     expect(instructionPlan.readWriteAccounts.filter((account) => account === target.address))
       .toHaveLength(1);
   });
@@ -691,7 +692,7 @@ describe('CLOB exchange balance SDK', () => {
     });
     const bytes = await instructionPlan.instructionData(contextForPlan(instructionPlan));
 
-    expect([bytes[0], bytes[24], bytes[48], bytes[72], bytes[96], bytes[120], bytes[128], bytes[152]]).toEqual([
+    expect([bytes[0], bytes[32], bytes[56], bytes[88], bytes[112], bytes[144], bytes[152], bytes[176]]).toEqual([
       CLOB_INSTRUCTION_MARKET_RECORD,
       CLOB_INSTRUCTION_TOKEN_WITHDRAW,
       CLOB_INSTRUCTION_MARKET_RECORD,
@@ -701,7 +702,7 @@ describe('CLOB exchange balance SDK', () => {
       CLOB_INSTRUCTION_TOKEN_DEPOSIT,
       CLOB_INSTRUCTION_CREATE_ORDER_ENTRY,
     ]);
-    expect([bytes[1], bytes[25], bytes[49], bytes[73], bytes[97], bytes[129], bytes[154]])
+    expect([bytes[1], bytes[33], bytes[57], bytes[89], bytes[113], bytes[153], bytes[178]])
       .toEqual([1, 1, 2, 2, 3, 3, 3]);
     expect(instructionPlan.review.value.sourceMarketCount).toBe('2');
     expect(instructionPlan.review.value.exchangeAmount).toBe('300');
@@ -744,7 +745,7 @@ describe('CLOB exchange balance SDK', () => {
       seatIndex: null,
     });
     const depositBytes = await deposit.instructionData(contextForPlan(deposit));
-    expect([depositBytes[0], depositBytes[24], depositBytes[32]]).toEqual([
+    expect([depositBytes[0], depositBytes[32], depositBytes[40]]).toEqual([
       CLOB_INSTRUCTION_MARKET_RECORD,
       CLOB_INSTRUCTION_SEAT_CREATE,
       CLOB_INSTRUCTION_TOKEN_DEPOSIT,
@@ -760,7 +761,7 @@ describe('CLOB exchange balance SDK', () => {
       seatIndex: 2,
     });
     const withdrawalBytes = await withdrawal.instructionData(contextForPlan(withdrawal));
-    expect([withdrawalBytes[0], withdrawalBytes[24]]).toEqual([
+    expect([withdrawalBytes[0], withdrawalBytes[32]]).toEqual([
       CLOB_INSTRUCTION_MARKET_RECORD,
       CLOB_INSTRUCTION_TOKEN_WITHDRAW,
     ]);
@@ -825,6 +826,7 @@ function market(
 ): ClobTradingMarket {
   return {
     address: address(id),
+    exchangeMeta: EXCHANGE_META,
     orderArena: address(id + 1),
     bidsCbook: address(id + 2),
     asksCbook: address(id + 3),

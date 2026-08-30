@@ -28,6 +28,7 @@ export type { SigningSessionStorage } from "../../signing-sessions";
 
 export type {
   IosWebViewMode,
+  NativeSDKConfig,
   NativeSDKStorage,
   NativeWalletExperience,
   WalletAvailability,

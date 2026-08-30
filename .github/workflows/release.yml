@@ -123,15 +123,20 @@ jobs:
         restore-keys: |
           thru-toolchain-c-${{ runner.os }}-${{ runner.arch }}-${{ steps.sdk-compiler-cache-key.outputs.hash }}-
 
-    - name: Update apt (Ubuntu only)
-      if: ${{ matrix.os == 'ubuntu-large' }}
-      run: |
-        .github/scripts/apt-install-with-retry.sh --update-only
-
     - name: Ensure toolchain dependencies
       run: |
         if [[ ! -x "${GITHUB_WORKSPACE}/.thru/sdk/toolchain/bin/riscv64-unknown-elf-gcc" ]] ||
            [[ ! -x "${GITHUB_WORKSPACE}/.thru/sdk/toolchain/bin/riscv64-unknown-elf-g++" ]]; then
+          # apt only on the path that actually installs. deps.sh runs
+          # `apt-get install` under TN_AUTO_INSTALL_PACKAGES=1, and that needs
+          # a fresh index or it 404s on a moved package version -- but it only
+          # runs when the toolchain cache missed. Hoisting the update out of
+          # this branch made every cache-hit job fetch ~11 MB of indexes to
+          # install nothing, and put a stalled mirror (5 x 180s + backoff)
+          # directly on the merge-queue gate. UNTO-1667.
+          if [[ "${RUNNER_OS}" == "Linux" ]]; then
+            .github/scripts/apt-install-with-retry.sh --update-only
+          fi
           for attempt in 1 2 3; do
             if TN_AUTO_INSTALL_PACKAGES=1 ./sdks/deps.sh --thru-dir "${GITHUB_WORKSPACE}" fetch check install-c; then
               break

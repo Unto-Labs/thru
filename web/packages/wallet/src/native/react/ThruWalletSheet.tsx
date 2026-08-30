@@ -624,6 +624,7 @@ export const ThruWalletSheet = forwardRef<
   }, [wallet]);
 
   const handleLoadEnd = useCallback(() => {
+    wallet?.recordWebViewLoadEnded();
     attachIfReady();
     if (isDirectWalletSource) {
       wallet?.markWebViewReady();
@@ -934,6 +935,7 @@ export const ThruWalletSheet = forwardRef<
               limitsNavigationsToAppBoundDomains
             }
             onLoadStart={() => {
+              wallet?.recordWebViewLoadStarted();
               attachIfReady();
               void enableAndroidWebAuthnIfNeeded();
             }}
@@ -943,6 +945,10 @@ export const ThruWalletSheet = forwardRef<
               const description =
                 event.nativeEvent.description ||
                 "Wallet WebView failed to load";
+              wallet?.recordWebViewTransportError(
+                event.nativeEvent.code,
+                description,
+              );
               if (hasBridgeMessage) {
                 console.warn(
                   "[ThruWalletSheet] Ignoring post-ready WebView error:",
@@ -956,6 +962,7 @@ export const ThruWalletSheet = forwardRef<
             onHttpError={(event) => {
               const status = event.nativeEvent.statusCode;
               const description = `Wallet returned HTTP ${status}`;
+              wallet?.recordWebViewHttpError(status);
               if (hasBridgeMessage) {
                 console.warn(
                   "[ThruWalletSheet] Ignoring post-ready WebView HTTP error:",
@@ -968,6 +975,9 @@ export const ThruWalletSheet = forwardRef<
                 "[ThruWalletSheet] WebView HTTP error:",
                 description,
               );
+            }}
+            onContentProcessDidTerminate={() => {
+              wallet?.recordWebViewContentProcessTerminated();
             }}
             onMessage={handleMessage}
             style={[styles.webview, { backgroundColor }]}

@@ -1,3 +1,5 @@
+import { TELEMETRY_EVENTS, type TelemetryAppContext } from '@thru/observability';
+import { getErrorCode } from '../internal/telemetry-fields';
 import {
   AddressType,
   normalizeWalletAccountResult,
@@ -27,6 +29,7 @@ import {
 import { IframeManager } from './IframeManager';
 import { EmbeddedThruChain } from './chains/ThruChain';
 import type { SigningSessionDescriptorStore } from '../signing-sessions';
+import type { TelemetryClient } from '../telemetry';
 
 export interface EmbeddedProviderConfig {
   iframeUrl?: string;
@@ -34,10 +37,13 @@ export interface EmbeddedProviderConfig {
   signingSessions?: SigningSessionDescriptorStore;
   network?: ThruNetwork;
   depositUiConfig?: DepositUiConfig;
+  /** Shared SDK telemetry client. @internal */
+  telemetry?: TelemetryClient;
 }
 
 export interface ConnectOptions {
   metadata?: ConnectMetadataInput;
+  passkeyName?: string;
 }
 
 /**
@@ -54,14 +60,24 @@ export class EmbeddedProvider {
   private inlineMode = false;
   private defaultNetwork?: ThruNetwork;
   private depositUiConfig?: DepositUiConfig;
+  private telemetry?: TelemetryClient;
   constructor(config: EmbeddedProviderConfig) {
     const iframeUrl = config.iframeUrl || DEFAULT_IFRAME_URL;
-    this.iframeManager = new IframeManager(iframeUrl);
+    this.telemetry = config.telemetry;
+    this.iframeManager = new IframeManager(iframeUrl, this.telemetry);
     this.defaultNetwork = config.network;
     this.depositUiConfig = config.depositUiConfig;
+    this.telemetry?.record(TELEMETRY_EVENTS.PROVIDER_CONSTRUCTED, {
+      source: 'sdk',
+      severity: 'debug',
+    });
 
     // Set up event forwarding from iframe
     this.iframeManager.onEvent = (eventType: string, payload: any) => {
+      this.telemetry?.record(TELEMETRY_EVENTS.PROVIDER_EVENT_RECEIVED, {
+        source: 'bridge',
+        operation: eventType,
+      });
       this.emit(eventType, payload);
 
       if (eventType === EMBEDDED_PROVIDER_EVENTS.UI_SHOW) {
@@ -77,6 +93,11 @@ export class EmbeddedProvider {
         eventType === EMBEDDED_PROVIDER_EVENTS.DISCONNECT ||
         eventType === EMBEDDED_PROVIDER_EVENTS.LOCK
       ) {
+        this.telemetry?.record(TELEMETRY_EVENTS.PROVIDER_CONNECTION_CLEARED, {
+          source: 'sdk',
+          operation: eventType,
+          outcome: eventType === EMBEDDED_PROVIDER_EVENTS.LOCK ? 'locked' : 'disconnected',
+        });
         this.clearConnection();
         return;
       }
@@ -85,6 +106,12 @@ export class EmbeddedProvider {
         const account =
           (payload && (payload.account as WalletAccount | undefined)) || null;
         this.refreshAccountCache(account ?? null);
+        this.telemetry?.record(TELEMETRY_EVENTS.PROVIDER_ACCOUNT_CHANGED, {
+          source: 'sdk',
+          operation: 'account_changed',
+          outcome: account ? 'selected' : 'cleared',
+          walletAddress: account?.address,
+        });
       }
     };
 
@@ -97,6 +124,24 @@ export class EmbeddedProvider {
         config.signingSessions,
       );
     }
+  }
+
+  /** Record the load-time correlation values already carried by the iframe URL. */
+  primeTelemetryContext(
+    appContextId: string | null,
+    context: TelemetryAppContext | null,
+  ): void {
+    this.iframeManager.primeTelemetryContext(appContextId, context);
+  }
+
+  /** Set or clear the correlation label carried by wallet telemetry. */
+  setTelemetryAppContextId(value: string | null): void {
+    this.iframeManager.setTelemetryAppContextId(value);
+  }
+
+  /** Set or clear the host-app dimensions carried by wallet telemetry. */
+  setTelemetryContext(value: TelemetryAppContext | null): void {
+    this.iframeManager.setTelemetryContext(value);
   }
 
   /**
@@ -136,6 +181,10 @@ export class EmbeddedProvider {
         payload.metadata = options.metadata;
       }
 
+      if (options?.passkeyName) {
+        payload.passkeyName = options.passkeyName;
+      }
+
       const response = await this.iframeManager.sendMessage({
         id: createRequestId(),
         type: POST_MESSAGE_REQUEST_TYPES.CONNECT,
@@ -147,6 +196,12 @@ export class EmbeddedProvider {
       this.connected = true;
       this.accounts = result.accounts;
       this.selectedAccount = result.selectedAccount;
+      this.telemetry?.record(TELEMETRY_EVENTS.PROVIDER_CONNECTED, {
+        source: 'sdk',
+        operation: 'connect',
+        outcome: 'success',
+        walletAddress: result.selectedAccount?.address,
+      });
 
       // Emit success event
       this.emit(EMBEDDED_PROVIDER_EVENTS.CONNECT, result);
@@ -162,6 +217,14 @@ export class EmbeddedProvider {
         this.iframeManager.hide();
       }
       this.emit(EMBEDDED_PROVIDER_EVENTS.CONNECT_ERROR, { error });
+      this.telemetry?.record(TELEMETRY_EVENTS.PROVIDER_CONNECT_FAILED, {
+        source: 'sdk',
+        operation: 'connect',
+        outcome: 'error',
+        severity: 'error',
+        errorCode: getErrorCode(error),
+        message: error,
+      });
       throw error;
     }
   }
@@ -178,9 +241,22 @@ export class EmbeddedProvider {
       });
 
       this.clearConnection();
+      this.telemetry?.record(TELEMETRY_EVENTS.PROVIDER_DISCONNECTED, {
+        source: 'sdk',
+        operation: 'disconnect',
+        outcome: 'success',
+      });
       this.emit(EMBEDDED_PROVIDER_EVENTS.DISCONNECT, {});
     } catch (error) {
       this.clearConnection();
+      this.telemetry?.record(TELEMETRY_EVENTS.PROVIDER_DISCONNECT_FAILED, {
+        source: 'sdk',
+        operation: 'disconnect',
+        outcome: 'error',
+        severity: 'error',
+        errorCode: getErrorCode(error),
+        message: error,
+      });
       this.emit(EMBEDDED_PROVIDER_EVENTS.ERROR, { error });
       throw error;
     } finally {
@@ -232,6 +308,12 @@ export class EmbeddedProvider {
     const account = response.result.account;
 
     this.refreshAccountCache(account);
+    this.telemetry?.record(TELEMETRY_EVENTS.PROVIDER_ACCOUNT_SELECTED, {
+      source: 'sdk',
+      operation: 'select_account',
+      outcome: 'success',
+      walletAddress: account.address,
+    });
     return account;
   }
 
@@ -379,6 +461,10 @@ export class EmbeddedProvider {
    * Destroy provider and cleanup
    */
   destroy(): void {
+    this.telemetry?.record(TELEMETRY_EVENTS.PROVIDER_DESTROYED, {
+      source: 'sdk',
+      severity: 'debug',
+    });
     this.iframeManager.destroy();
     this.eventListeners.clear();
     this.clearConnection();
@@ -401,3 +487,5 @@ export class EmbeddedProvider {
     this.selectedAccount = null;
   }
 }
+
+

@@ -1,0 +1,215 @@
+/* ============================================================
+   @thru/design — neutral skin layer.
+
+   A brand-neutral default for embedded surfaces: system type, neutral
+   grays, ink accent, soft radii. Opt in by putting `data-tds-skin` on a
+   container; everything inside renders neutral, and nothing outside it
+   changes.
+
+       <div data-tds-skin>          light
+       <div data-tds-skin="dark">   dark
+
+   Two layers live here:
+
+   1. The `--tds-*` ROLE tokens — the contract. Names describe role
+      (surface, foreground, accent, danger), never material or brand, so
+      an embedder can recolor the surface without knowing what it wraps.
+      A host overrides by setting the same custom properties inline; an
+      absent property falls through to the neutral default rather than
+      blanking it.
+
+   2. A REMAP of the tokens `web/src` components already read, expressed
+      in terms of those roles. This is why no component CSS had to change:
+      `.tds-btn` still reads `--color-surface-lower-inverse`, which inside
+      the skin resolves to `--tds-accent`. Components that reach past the
+      semantic layer into the raw palette (Input's brick focus ring, Tag's
+      accents) are covered too, so no brand color leaks in.
+
+   Keep this file the ONLY place the two vocabularies meet.
+   ============================================================ */
+
+[data-tds-skin] {
+  /* ─── Role tokens — light ─────────────────────────────────── */
+
+  /* Surfaces, back to front. */
+  --tds-background: #fafafa;
+  --tds-surface: #ffffff;
+  --tds-surface-muted: #f4f4f5;
+  --tds-surface-sunken: #ececef;
+  --tds-surface-inverse: #161619;
+
+  /* Foreground ramp: title → body → label → caption. */
+  --tds-foreground: #161619;
+  --tds-foreground-body: #2b2b31;
+  --tds-foreground-muted: #5d5d66;
+  --tds-foreground-faint: #9b9ba4;
+  --tds-foreground-inverse: #fafafa;
+
+  /* Lines. `border` is the hairline; `border-strong` is the form-control
+     outline. `focus-ring` is separate so a host can recolor focus without
+     restyling every border. */
+  --tds-border: #e5e5e8;
+  --tds-border-strong: #c9c9d1;
+  --tds-focus-ring: #161619;
+
+  /* Accent. Neutral ships ink, not a hue — a host supplies its own. */
+  --tds-accent: #161619;
+  --tds-accent-foreground: #ffffff;
+  --tds-accent-soft: #ececef;
+
+  /* Status. */
+  --tds-success: #147347;
+  --tds-success-soft: #e3f5eb;
+  --tds-warning: #8a5a00;
+  --tds-warning-soft: #fdf3e0;
+  --tds-danger: #d7232a;
+  --tds-danger-soft: #fdeceb;
+
+  /* Shape. Neutral is softly rounded; the square-first look is a Thru
+     choice and stays in the brand theme. */
+  --tds-radius-control: 6px;
+  --tds-radius-field: 6px;
+  --tds-radius-surface: 10px;
+
+  /* Scrim behind a sheet or dialog. */
+  --tds-overlay: rgba(23, 23, 26, 0.48);
+
+  /* Type. System stacks — no webfont dependency in an embedded surface. */
+  --tds-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  --tds-font-mono: ui-monospace, "SF Mono", Menlo, monospace;
+
+  /* ─── Remap: semantic tokens the components read ──────────── */
+
+  --color-text-primary: var(--tds-foreground);
+  --color-text-secondary: var(--tds-foreground-body);
+  --color-text-tertiary: var(--tds-foreground-muted);
+  --color-text-disabled: var(--tds-foreground-faint);
+  --color-text-brand: var(--tds-accent);
+  --color-text-primary-inverse: var(--tds-foreground-inverse);
+  --color-text-secondary-inverse: var(--tds-foreground-inverse);
+  --color-text-tertiary-inverse: var(--tds-foreground-faint);
+  --color-text-disabled-inverse: var(--tds-foreground-faint);
+
+  --color-border-primary: var(--tds-foreground);
+  --color-border-secondary: var(--tds-border-strong);
+  --color-border-tertiary: var(--tds-border);
+  --color-border-strong: var(--tds-border-strong);
+  --color-border-brand: var(--tds-focus-ring);
+  --color-border-disabled: var(--tds-border);
+
+  --color-text-danger: var(--tds-danger);
+  --color-border-danger: var(--tds-danger);
+  --color-surface-danger: var(--tds-danger);
+
+  --color-surface-higher: var(--tds-surface);
+  --color-surface-card: var(--tds-surface);
+  --color-surface-primary: var(--tds-surface-muted);
+  --color-surface-lower: var(--tds-surface-sunken);
+  --color-surface-disabled: var(--tds-surface-muted);
+  /* The primary button fills with the accent, not with brand ink. */
+  --color-surface-lower-inverse: var(--tds-accent);
+  --color-surface-higher-inverse: var(--tds-foreground-body);
+  --color-surface-primary-inverse: var(--tds-foreground-body);
+  --color-surface-brick: var(--tds-accent);
+  --color-surface-sky: var(--tds-foreground-muted);
+  --color-surface-grass: var(--tds-success);
+  --color-surface-yellow: var(--tds-warning);
+  --color-surface-tan: var(--tds-surface-muted);
+  --color-surface-sand: var(--tds-surface-muted);
+  --color-golden: var(--tds-warning-soft);
+
+  /* ─── Remap: raw palette reached past the semantic layer ──── */
+
+  --brick-100: var(--tds-accent-soft);
+  --brick-200: var(--tds-accent-soft);
+  --brick-300: var(--tds-focus-ring);
+  --brick-400: var(--tds-focus-ring);
+
+  --steel-200: var(--tds-border-strong);
+  --steel-300: var(--tds-border-strong);
+  --steel-400: var(--tds-foreground-faint);
+  --steel-600: var(--tds-foreground-muted);
+  --steel-700: var(--tds-foreground-body);
+  --steel-800: var(--tds-foreground);
+
+  --teal-0: var(--tds-surface);
+  --teal-200: var(--tds-border);
+  --teal-300: var(--tds-border-strong);
+  --teal-400: var(--tds-border-strong);
+  --teal-500: var(--tds-foreground-faint);
+  --teal-600: var(--tds-foreground-muted);
+  --teal-700: var(--tds-foreground-body);
+  --teal-800: var(--tds-foreground);
+
+  --grass-100: var(--tds-success-soft);
+  --grass-300: var(--tds-success);
+  --grass-400: var(--tds-success);
+
+  --sky-100: var(--tds-surface-muted);
+  --sky-200: var(--tds-surface-muted);
+  --sky-300: var(--tds-foreground-muted);
+  --sky-400: var(--tds-foreground-muted);
+
+  --yellow-100: var(--tds-warning-soft);
+  --yellow-300: var(--tds-warning);
+  --yellow-400: var(--tds-warning);
+
+  --red-bright: var(--tds-danger);
+  --red-hot: var(--tds-danger);
+
+  /* ─── Remap: type and shape ───────────────────────────────── */
+
+  --font-sans: var(--tds-font-sans);
+  --font-mono: var(--tds-font-mono);
+
+  /* Components express "square" as --radius-none, so the neutral radius
+     has to land on that token to round them. The name is inherited, not
+     descriptive, inside this scope. */
+  --radius-none: var(--tds-radius-control);
+  --radius-xs: var(--tds-radius-control);
+  --radius-sm: var(--tds-radius-field);
+  --radius-md: var(--tds-radius-surface);
+
+  color-scheme: light;
+  background-color: var(--tds-background);
+  color: var(--tds-foreground);
+  font-family: var(--tds-font-sans);
+}
+
+/* ─── Role tokens — dark ─────────────────────────────────────
+   Re-derived rather than inverted: the light ramp's contrast steps do not
+   survive a straight flip. Only the values change; every remap above is
+   written against the roles, so it follows automatically. */
+
+[data-tds-skin="dark"] {
+  --tds-background: #131316;
+  --tds-surface: #1c1c20;
+  --tds-surface-muted: #26262b;
+  --tds-surface-sunken: #0e0e10;
+  --tds-surface-inverse: #f4f4f5;
+
+  --tds-foreground: #f5f5f7;
+  --tds-foreground-body: #d4d4da;
+  --tds-foreground-muted: #9d9da6;
+  --tds-foreground-faint: #64646e;
+  --tds-foreground-inverse: #161619;
+
+  --tds-border: #2b2b31;
+  --tds-border-strong: #45454e;
+  --tds-focus-ring: #f5f5f7;
+
+  --tds-accent: #f5f5f7;
+  --tds-accent-foreground: #161619;
+  --tds-accent-soft: #26262b;
+
+  --tds-success: #56c88b;
+  --tds-success-soft: #142b1e;
+  --tds-warning: #e0a44a;
+  --tds-warning-soft: #2e2410;
+  --tds-danger: #f6716b;
+  --tds-danger-soft: #2f1614;
+
+  --tds-overlay: rgba(0, 0, 0, 0.6);
+
+  color-scheme: dark;
+}

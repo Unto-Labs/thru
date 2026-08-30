@@ -1,3 +1,5 @@
+import { TELEMETRY_EVENTS } from "@thru/observability";
+import { getErrorCode, getErrorMessage } from "../internal/telemetry-fields";
 import {
   AddressType,
   type AppMetadata,
@@ -14,6 +16,7 @@ import {
   EMBEDDED_PROVIDER_EVENTS,
   DepositTarget,
   ErrorCode,
+  sanitizePasskeyName,
   type ConnectMetadataInput,
   type ConnectRequestPayload,
   type CreateAccountResult,
@@ -32,6 +35,7 @@ import {
   ensureDepositAccountForWallet,
   formatDepositAmount,
   getDepositAccountStateForWallet,
+  signDepositTransactionWithActiveSession,
   waitForDepositBalanceForWallet,
   type DepositAccountState,
   type DepositsApi,
@@ -55,6 +59,12 @@ import {
   type TransactionSigningScheme,
   withTransactionSigningScheme,
 } from "../transaction-signing-scheme";
+import {
+  TelemetryClient,
+  WALLET_SDK_VERSION,
+  createTelemetrySessionId,
+  type TelemetryAppContext,
+} from "../telemetry";
 
 export type IosWebViewMode = "direct" | "shell-iframe";
 export type NativeWalletExperience = "standard" | "transparent";
@@ -99,6 +109,15 @@ export type WalletAvailability =
 
 export interface NativeSDKConfig {
   walletUrl?: string;
+  /** Share privacy-safe operational diagnostics with Thru. Default: true. */
+  telemetryEnabled?: boolean;
+  /** Opaque host-app-provided label stamped on telemetry for cross-session
+      correlation (e.g. the app's own user or install ID). Never minted or
+      interpreted by the SDK. */
+  appContextId?: string;
+  /** Bounded host-app-provided dimensions stamped on telemetry events
+      (at most 5 short keys/values). Never interpreted by the SDK. */
+  appContext?: TelemetryAppContext;
   /** Wallet presentation loaded in the native WebView. Transparent mode
       signs in without opening the native wallet sheet. */
   walletExperience?: NativeWalletExperience;
@@ -141,10 +160,14 @@ export interface ConnectOptions {
   metadata?: ConnectMetadataInput;
   preferredAccountAddress?: string;
   intent?: ConnectRequestPayload["intent"];
+  /** Custom name for a passkey created during this connect flow. */
+  passkeyName?: string;
 }
 
 export interface CreateAccountOptions {
   accountName?: string;
+  /** Custom name for the passkey created for this account. */
+  passkeyName?: string;
   metadata?: ConnectMetadataInput;
   createSigningSession?: Omit<
     ThruSigningSessionCreateOptions,
@@ -258,6 +281,7 @@ export class NativeSDK {
   private readonly defaultNetwork?: ThruNetwork;
   private readonly depositProviders: ReadonlySet<string>;
   private readonly signingSessions?: SigningSessionDescriptorStore;
+  private readonly telemetry: TelemetryClient;
 
   readonly deposits: DepositsApi = {
     prepare: (targetOrPayload) => this.prepareDeposit(targetOrPayload),
@@ -290,6 +314,21 @@ export class NativeSDK {
           : DEFAULT_NATIVE_WALLET_URL),
       config.transactionSigningScheme,
     );
+    const telemetrySessionId = createTelemetrySessionId();
+    this.telemetry = new TelemetryClient({
+      enabled: config.telemetryEnabled ?? true,
+      walletUrl,
+      sessionId: telemetrySessionId,
+      appContextId: config.appContextId,
+      appContext: config.appContext,
+      source: "sdk",
+      context: {
+        appOrigin: this.origin,
+        sdkVersion: WALLET_SDK_VERSION,
+        platform: "react-native",
+        ...(config.network ? { network: config.network } : {}),
+      },
+    });
     const walletOrigin = new URL(walletUrl).origin;
     const signingSessions = this.storage
       ? new SigningSessionDescriptorStore(
@@ -304,24 +343,90 @@ export class NativeSDK {
         )
       : undefined;
     this.signingSessions = signingSessions;
-    this.provider = new NativeProvider({
-      walletUrl,
-      origin: this.origin,
-      metadata: this.defaultMetadata
-        ? this.resolveMetadata(this.defaultMetadata)
-        : undefined,
-      addressTypes: config.addressTypes ?? [AddressType.THRU],
-      signingSessions,
-      walletExperience: this.walletExperience,
-      network: config.network,
-      depositUiConfig: config.depositUiConfig,
-    });
+    try {
+      this.provider = new NativeProvider({
+        walletUrl,
+        telemetryEnabled: config.telemetryEnabled ?? true,
+        telemetrySessionId,
+        telemetryAppContextId: this.telemetry.getAppContextId(),
+        telemetryContext: this.telemetry.getContext(),
+        telemetry: (event, fields) =>
+          this.telemetry.record(event, { ...fields, source: "bridge" }),
+        origin: this.origin,
+        metadata: this.defaultMetadata
+          ? this.resolveMetadata(this.defaultMetadata)
+          : undefined,
+        addressTypes: config.addressTypes ?? [AddressType.THRU],
+        signingSessions,
+        walletExperience: this.walletExperience,
+        network: config.network,
+        depositUiConfig: config.depositUiConfig,
+      });
+    } catch (error) {
+      this.telemetry.discard();
+      throw error;
+    }
     this.setupEventForwarding();
+    this.telemetry.record(TELEMETRY_EVENTS.SDK_CONSTRUCTED, {
+      severity: "info",
+      outcome: "created",
+      operation: this.walletExperience,
+    });
+  }
+
+  /**
+   * Set or clear the opaque host-app correlation label. Applies to later
+   * events from this SDK instance and from the wallet WebView, including one
+   * already loaded.
+   */
+  setAppContextId(appContextId: string | null): void {
+    this.telemetry.setAppContextId(appContextId);
+    this.provider.setTelemetryAppContextId(
+      this.telemetry.getAppContextId() ?? null,
+    );
+  }
+
+  /**
+   * Replace or clear the host-app dimensions. Applies to later events from
+   * this SDK instance and from the wallet WebView, including one already
+   * loaded.
+   */
+  setContext(context: TelemetryAppContext | null): void {
+    this.telemetry.setContext(context);
+    this.provider.setTelemetryContext(this.telemetry.getContext() ?? null);
   }
 
   /** Hand the WebView ref to the underlying provider/bridge. */
   attachWebView(ref: WebViewRefLike): void {
     this.provider.attachWebView(ref);
+  }
+
+  /** Record a wallet WebView load without collecting its URL. */
+  recordWebViewLoadStarted(): void {
+    this.provider.recordWebViewLoadStarted();
+  }
+
+  /** Record the WebView's load-end callback. */
+  recordWebViewLoadEnded(): void {
+    this.provider.recordWebViewLoadEnded();
+  }
+
+  /** Record a native WebView transport error through telemetry sanitization. */
+  recordWebViewTransportError(
+    code: number | undefined,
+    description: string,
+  ): void {
+    this.provider.recordWebViewTransportError(code, description);
+  }
+
+  /** Record a WebView HTTP error without collecting its URL. */
+  recordWebViewHttpError(statusCode: number): void {
+    this.provider.recordWebViewHttpError(statusCode);
+  }
+
+  /** Record an iOS WebKit content-process termination. */
+  recordWebViewContentProcessTerminated(): void {
+    this.provider.recordWebViewContentProcessTerminated();
   }
 
   /** Mark a direct top-level WebView wallet document as ready. */
@@ -366,23 +471,67 @@ export class NativeSDK {
   }
 
   async initialize(): Promise<void> {
-    if (this.initialized) return;
-    await this.provider.initialize();
-    this.initialized = true;
+    if (this.initialized) {
+      this.telemetry.record(TELEMETRY_EVENTS.SDK_INITIALIZE_CACHED, {
+        severity: "debug",
+        outcome: "already_initialized",
+      });
+      return;
+    }
+    const startedAt = Date.now();
+    this.telemetry.record(TELEMETRY_EVENTS.SDK_INITIALIZE_STARTED, {
+      severity: "info",
+      outcome: "started",
+    });
+    try {
+      await this.provider.initialize();
+      this.initialized = true;
+      this.telemetry.record(TELEMETRY_EVENTS.SDK_INITIALIZE_COMPLETED, {
+        severity: "info",
+        durationMs: Date.now() - startedAt,
+        outcome: "success",
+      });
+    } catch (error) {
+      this.telemetry.record(TELEMETRY_EVENTS.SDK_INITIALIZE_FAILED, {
+        severity: "error",
+        durationMs: Date.now() - startedAt,
+        outcome: "error",
+        ...getTelemetryErrorFields(error),
+      });
+      throw error;
+    }
   }
 
   async connect(options?: ConnectOptions): Promise<ConnectResult> {
     const isAccountSwitch = options?.intent === "switch-account";
-    if (this.connectInFlight) return this.connectInFlight;
+    if (this.connectInFlight) {
+      this.telemetry.record(TELEMETRY_EVENTS.SDK_CONNECT_REUSED, {
+        severity: "debug",
+        outcome: "in_flight",
+        operation: options?.intent ?? "default",
+      });
+      return this.connectInFlight;
+    }
     if (
       !isAccountSwitch &&
       this.lastConnectResult &&
       this.provider.isConnected() &&
       this.walletAvailability.isUnlocked
     ) {
+      this.telemetry.record(TELEMETRY_EVENTS.SDK_CONNECT_CACHED, {
+        severity: "debug",
+        outcome: "cached",
+        walletAddress: this.lastConnectResult.selectedAccount?.address,
+      });
       return this.lastConnectResult;
     }
 
+    const startedAt = Date.now();
+    this.telemetry.record(TELEMETRY_EVENTS.SDK_CONNECT_STARTED, {
+      severity: "info",
+      outcome: "started",
+      operation: options?.intent ?? "default",
+    });
     this.emit("connect", { status: "connecting" });
 
     const inFlight = (async () => {
@@ -394,12 +543,14 @@ export class NativeSDK {
           ? null
           : (options?.preferredAccountAddress ??
             (await this.readSelectedAccountAddress()));
+        const passkeyName = sanitizePasskeyName(options?.passkeyName);
         const providerOptions =
-          metadata || preferredAccountAddress || options?.intent
+          metadata || preferredAccountAddress || options?.intent || passkeyName
             ? {
                 ...(metadata ? { metadata } : {}),
                 ...(preferredAccountAddress ? { preferredAccountAddress } : {}),
                 ...(options?.intent ? { intent: options.intent } : {}),
+                ...(passkeyName ? { passkeyName } : {}),
               }
             : undefined;
         const result = await this.provider.connect(providerOptions);
@@ -424,6 +575,13 @@ export class NativeSDK {
         this.setWalletAvailability(
           walletAvailabilityFromConnectResult(activeResult),
         );
+        this.telemetry.record(TELEMETRY_EVENTS.SDK_CONNECT_COMPLETED, {
+          severity: "info",
+          durationMs: Date.now() - startedAt,
+          outcome: "success",
+          operation: options?.intent ?? "default",
+          walletAddress: activeResult.selectedAccount?.address,
+        });
         this.emit("connect", activeResult);
         return activeResult;
       } catch (error) {
@@ -434,6 +592,13 @@ export class NativeSDK {
           this.clearAuthorizedAvailability();
           this.emit("disconnect", { reason: "user_rejected" });
         }
+        this.telemetry.record(TELEMETRY_EVENTS.SDK_CONNECT_FAILED, {
+          severity: isUserRejectedError(error) ? "warn" : "error",
+          durationMs: Date.now() - startedAt,
+          outcome: isUserRejectedError(error) ? "user_rejected" : "error",
+          operation: options?.intent ?? "default",
+          ...getTelemetryErrorFields(error),
+        });
         this.emit("error", error);
         throw error;
       } finally {
@@ -461,8 +626,10 @@ export class NativeSDK {
       if (!this.initialized) await this.initialize();
 
       const metadata = this.resolveMetadata(options.metadata);
+      const passkeyName = sanitizePasskeyName(options.passkeyName);
       const result = await this.provider.createAccount({
         ...(options.accountName ? { accountName: options.accountName } : {}),
+        ...(passkeyName ? { passkeyName } : {}),
         ...(metadata ? { metadata } : {}),
         ...(options.createSigningSession
           ? { createSigningSession: options.createSigningSession }
@@ -712,12 +879,17 @@ export class NativeSDK {
   }
 
   destroy(): void {
+    this.telemetry.record(TELEMETRY_EVENTS.SDK_DESTROYED, {
+      severity: "info",
+      outcome: "destroyed",
+    });
     this.provider.destroy();
     this.eventListeners.clear();
     this.initialized = false;
     this.connectInFlight = null;
     this.lastConnectResult = null;
     this.walletAvailability = CHECKING_WALLET_AVAILABILITY;
+    this.telemetry.destroy();
   }
 
   /** Lazily-instantiated Thru chain client. */
@@ -752,14 +924,7 @@ export class NativeSDK {
   private signDepositTransaction(
     payload: SignDepositTransactionPayload,
   ): Promise<string> {
-    return this.thru.signTransaction({
-      walletAddress: payload.walletAddress,
-      programAddress: payload.programAddress,
-      instructionData: payload.trailingInstructionData,
-      readWriteAddresses: payload.readWriteAddresses,
-      readOnlyAddresses: payload.readOnlyAddresses,
-      review: payload.review,
-    });
+    return signDepositTransactionWithActiveSession(this.thru, payload);
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -778,6 +943,10 @@ export class NativeSDK {
     /* CONNECT is emitted from connect() directly (with the resolved
        ConnectResult), so don't double-emit here. */
     this.provider.on(EMBEDDED_PROVIDER_EVENTS.DISCONNECT, (data) => {
+      this.telemetry.record(TELEMETRY_EVENTS.SDK_CONNECTION_DISCONNECTED, {
+        severity: "info",
+        outcome: "disconnected",
+      });
       this.lastConnectResult = null;
       this.clearAuthorizedAvailability();
       this.emit("disconnect", data);
@@ -786,6 +955,10 @@ export class NativeSDK {
       this.emit("error", data);
     });
     this.provider.on(EMBEDDED_PROVIDER_EVENTS.LOCK, (data) => {
+      this.telemetry.record(TELEMETRY_EVENTS.SDK_CONNECTION_LOCKED, {
+        severity: "info",
+        outcome: "locked",
+      });
       this.lastConnectResult = null;
       this.clearAuthorizedAvailability();
       this.emit("lock", data);
@@ -794,6 +967,11 @@ export class NativeSDK {
     this.provider.on(EMBEDDED_PROVIDER_EVENTS.ACCOUNT_CHANGED, (data) => {
       const payload = data as { account?: WalletAccount } | undefined;
       const account = payload?.account ?? null;
+      this.telemetry.record(TELEMETRY_EVENTS.SDK_ACCOUNT_CHANGED, {
+        severity: "info",
+        outcome: account ? "selected" : "cleared",
+        walletAddress: account?.address,
+      });
       this.refreshCachedAccounts(this.provider.getAccounts(), account);
       if (account) void this.persistSelectedAccountAddress(account.address);
       this.emit("accountChanged", account);
@@ -1018,6 +1196,16 @@ export class NativeSDK {
       return null;
     }
   }
+}
+
+function getTelemetryErrorFields(error: unknown): {
+  errorCode: string;
+  message: string;
+} {
+  return {
+    errorCode: getErrorCode(error) ?? ErrorCode.UNKNOWN_ERROR,
+    message: getErrorMessage(error, "Unknown native wallet error"),
+  };
 }
 
 function assertDepositDestinationMatches(

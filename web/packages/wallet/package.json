@@ -59,6 +59,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
+    "@thru/observability": "workspace:*",
     "@thru/programs": "workspace:*",
     "@thru/sdk": "workspace:*"
   },

@@ -3,6 +3,11 @@
   "version": "0.0.1",
   "type": "module",
   "exports": {
+    "./bootstrap-addresses": {
+      "types": "./dist/bootstrap-addresses/index.d.ts",
+      "import": "./dist/bootstrap-addresses/index.js",
+      "require": "./dist/bootstrap-addresses/index.cjs"
+    },
     "./token": {
       "types": "./dist/token/index.d.ts",
       "import": "./dist/token/index.js",
@@ -32,6 +37,26 @@
       "types": "./dist/oracle/index.d.ts",
       "import": "./dist/oracle/index.js",
       "require": "./dist/oracle/index.cjs"
+    },
+    "./manager": {
+      "types": "./dist/manager/index.d.ts",
+      "import": "./dist/manager/index.js",
+      "require": "./dist/manager/index.cjs"
+    },
+    "./abi-manager": {
+      "types": "./dist/abi-manager/index.d.ts",
+      "import": "./dist/abi-manager/index.js",
+      "require": "./dist/abi-manager/index.cjs"
+    },
+    "./uploader": {
+      "types": "./dist/uploader/index.d.ts",
+      "import": "./dist/uploader/index.js",
+      "require": "./dist/uploader/index.cjs"
+    },
+    "./deploy": {
+      "types": "./dist/deploy/index.d.ts",
+      "import": "./dist/deploy/index.js",
+      "require": "./dist/deploy/index.cjs"
     }
   },
   "scripts": {

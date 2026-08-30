@@ -1,0 +1,228 @@
+/* Sheet — bottom-sheet chrome for an embedded surface.
+
+   Presentational on purpose: the panel does not own how it is mounted. On
+   web the consumer puts it under `Sheet.Scrim`; on a native host the OS
+   sheet supplies the scrim and the panel fills it. That split is what lets
+   the same anatomy serve both without a mode flag.
+
+   Anatomy: grabber → header (back / stepper / close) → body → footer. */
+
+.tds-sheet-scrim {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  background: var(--tds-overlay, rgba(23, 23, 26, 0.48));
+}
+
+/* Presentation motion.
+
+   The panel is the only thing that moves when the sheet opens, so it carries
+   its own entrance: a host that animates the surface it is drawn on instead
+   (a native webview layer, say) transforms a whole compositing layer to shift
+   one panel. Only the viewport-owning presentation animates — a `--full` panel
+   fills a host sheet that the OS has already animated in.
+
+   The scrim is deliberately static. Fading its background makes the host app
+   change color for the first few frames of the sheet entrance. */
+@keyframes tds-sheet-enter {
+  from {
+    transform: translateY(16px);
+  }
+}
+
+.tds-sheet--half {
+  animation: tds-sheet-enter var(--duration-med) var(--ease-standard) both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tds-sheet--half {
+    animation: none;
+  }
+}
+
+.tds-sheet {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  min-height: 0;
+  /* The sheet is the width of its surface and never wider. Without this a
+     single unshrinkable child (a text input carries an intrinsic width) makes
+     the whole page horizontally scrollable, which on iOS then pans the page
+     sideways when the keyboard focuses that input. */
+  max-width: 100%;
+  overflow-x: hidden;
+  background: var(--color-surface-card);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  border-radius: var(--radius-md) var(--radius-md) 0 0;
+  box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.18);
+  padding: 0 var(--space-5) var(--space-5);
+}
+
+/* Half the viewport, and never more — the provider surface is a guest in
+   the host app, so the host stays visible behind it.
+
+   A bottom-anchored sheet sits against the device edge, so its own padding is
+   what clears the home indicator; nothing below it will. */
+.tds-sheet--half {
+  /* Half the screen is the TARGET, not a ceiling. A fixed 50% is right until
+     the content genuinely needs more — on a short device the review step's
+     summary, disclosure and pinned action do not fit, and because the footer
+     cannot shrink the body gets crushed to nothing and the rows overlap.
+     Growing past half beats clipping the figures someone is about to pay.
+     On a tall phone the content fits inside 50% and this changes nothing. */
+  height: auto;
+  min-height: 50%;
+  max-height: 90%;
+  padding-bottom: max(var(--space-5), env(safe-area-inset-bottom));
+}
+
+.tds-sheet--full {
+  flex: 1;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.tds-sheet__grabber {
+  flex: none;
+  align-self: center;
+  width: 36px;
+  height: 4px;
+  /* Hugs the top edge like the native grabber, with more air below than
+     above so it groups with the sheet lip rather than the header. */
+  margin: var(--space-2) 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  background: var(--color-border-strong);
+}
+
+.tds-sheet__header {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* Both slots are reserved whether or not a control is in them, so the
+   stepper stays optically centred on the first step too. */
+.tds-sheet__slot {
+  flex: none;
+  width: 28px;
+  height: 28px;
+}
+
+.tds-sheet__control {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-primary);
+  color: var(--color-text-tertiary);
+  font-family: inherit;
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+.tds-sheet__control:hover {
+  background: var(--color-surface-lower);
+}
+.tds-sheet__control:focus-visible {
+  outline: 2px solid var(--color-border-brand);
+  outline-offset: 2px;
+}
+
+/* The 28px circle is the visual; the tap target is expanded to the 44px
+   minimum without pushing the header taller. */
+.tds-sheet__control::after {
+  content: "";
+  position: absolute;
+  width: 44px;
+  height: 44px;
+}
+
+.tds-sheet__center {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+}
+
+.tds-sheet__body {
+  /* Grows to pin the footer at the bottom of a fixed-height sheet, shrinks and
+     scrolls when the content is taller. A content-height sheet has nothing to
+     distribute, so the same rule serves both. */
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  min-height: 0;
+  margin-top: var(--space-4);
+  overflow-y: auto;
+}
+
+.tds-sheet__title {
+  font-size: 18px;
+  font-weight: var(--fw-semibold);
+  letter-spacing: -0.25px;
+  color: var(--color-text-primary);
+}
+
+.tds-sheet__lead {
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--color-text-tertiary);
+}
+
+/* The action needs its own separation from the body, not just whatever space
+   the body happens to leave. On a tall sheet the body grows and pushes the
+   footer down, which reads as generous spacing — but the moment the sheet is
+   content-height (a short step, or a viewport shortened by the keyboard) that
+   space collapses to nothing and the action sits flush against the last field,
+   close enough to look like part of it. */
+.tds-sheet__footer {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+}
+
+.tds-sheet__caption {
+  text-align: center;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--color-text-disabled);
+}
+.tds-sheet__caption a {
+  color: var(--color-text-primary);
+  font-weight: var(--fw-semibold);
+}
+
+/* Short viewport — in practice an on-screen keyboard, where a native host has
+   shortened the webview to the area the keyboard leaves free.
+
+   Only the body tightens. Taking the full height here would be wrong: the
+   viewport is already just the uncovered strip, so `height: 100%` of it is a
+   full-bleed panel with the host app nowhere in sight — the takeover this
+   component exists to avoid. The `--half` rules degrade correctly on their own
+   (content height, capped at 90%, body scrolls past that).
+
+   Captions are deliberately NOT hidden: on the review step the caption carries
+   Coinbase's mandated disclosure. */
+@media (max-height: 520px) {
+  .tds-sheet__body {
+    margin-top: var(--space-2);
+  }
+
+  .tds-sheet__footer {
+    margin-top: var(--space-4);
+  }
+}

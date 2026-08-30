@@ -93,7 +93,7 @@ fi
 if [ "${docker_tmpfs}" != "0" ]; then
   unmount_if_mounted /var/lib/docker
 fi
-unmount_if_mounted /var/cache/sccache
+unmount_if_mounted /var/cache/vcache
 unmount_if_mounted /home/runner/.cache
 unmount_if_mounted "${GITHUB_WORKSPACE}" -l
 sudo rm -rf "${tmpfs_root}"

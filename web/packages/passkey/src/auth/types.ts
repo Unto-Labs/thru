@@ -38,9 +38,14 @@ export interface PasskeyAuthState<TExtra = Record<string, never>> {
   activeCredentialId: string | null;
 }
 
+export interface CreateWalletOptions {
+  /** Custom name for the created passkey (e.g. app name plus the user's email). */
+  passkeyName?: string;
+}
+
 export interface PasskeyAuthActions<TExtra = Record<string, never>> {
   initialize: () => Promise<void>;
-  createWallet: () => Promise<boolean>;
+  createWallet: (options?: CreateWalletOptions) => Promise<boolean>;
   unlockWithPasskey: () => Promise<boolean>;
   recoverWithDiscoverablePasskey: () => Promise<boolean>;
   logout: () => Promise<void>;

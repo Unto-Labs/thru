@@ -127,9 +127,13 @@ describe("NativeSDK", () => {
   let webView: MockWebView;
 
   beforeEach(() => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(
+      new Response(null, { status: 202 }),
+    );
     sdk = new NativeSDK({
       walletUrl: "http://localhost:3000/embedded",
       origin: "thru-mobile://token-dummy",
+      telemetryEnabled: false,
     });
     webView = new MockWebView();
     sdk.attachWebView(webView);
@@ -137,6 +141,7 @@ describe("NativeSDK", () => {
 
   afterEach(() => {
     sdk.destroy();
+    vi.restoreAllMocks();
   });
 
   it("exposes the grouped deposit lifecycle API", () => {
@@ -167,6 +172,43 @@ describe("NativeSDK", () => {
 
   it("defaults iOS WebView mode to shell iframe", () => {
     expect(sdk.getIosWebViewMode()).toBe("shell-iframe");
+  });
+
+  it("enables telemetry by default and propagates one session to the wallet", () => {
+    const telemetrySdk = new NativeSDK({
+      walletUrl: "http://localhost:3000/embedded",
+      origin: "thru-mobile://telemetry-default",
+    });
+    const url = new URL(telemetrySdk.getIframeSrc());
+
+    expect(url.searchParams.get("tn_telemetry")).toBe("1");
+    expect(url.searchParams.get("tn_telemetry_session")).toEqual(
+      expect.any(String),
+    );
+    expect(url.searchParams.get("tn_telemetry_session")).not.toBe("");
+
+    telemetrySdk.destroy();
+  });
+
+  it("propagates telemetry opt-out and never uploads diagnostics", async () => {
+    const fetchMock = vi.mocked(globalThis.fetch);
+    fetchMock.mockClear();
+    const telemetrySdk = new NativeSDK({
+      walletUrl: "http://localhost:3000/embedded",
+      origin: "thru-mobile://telemetry-disabled",
+      telemetryEnabled: false,
+    });
+    const url = new URL(telemetrySdk.getIframeSrc());
+
+    expect(url.searchParams.get("tn_telemetry")).toBe("0");
+    expect(url.searchParams.get("tn_telemetry_session")).toEqual(
+      expect.any(String),
+    );
+    expect(url.searchParams.get("tn_telemetry_session")).not.toBe("");
+
+    telemetrySdk.destroy();
+    await Promise.resolve();
+    expect(fetchMock).not.toHaveBeenCalled();
   });
 
   it("can opt into direct iOS WebView mode", () => {
@@ -259,6 +301,67 @@ describe("NativeSDK", () => {
     expect(onHideRequested).toHaveBeenCalledTimes(1);
   });
 
+  it("reports visible transparent wallet content separately from focus preloading", async () => {
+    sdk.destroy();
+    sdk = new NativeSDK({
+      walletUrl: "http://localhost:3000/embedded/native/transparent",
+      walletExperience: "transparent",
+      origin: "thru-mobile://token-dummy",
+    });
+    webView = new MockWebView();
+    sdk.attachWebView(webView);
+    const onShowRequested = vi.fn();
+    sdk.setUiHandlers({ onShowRequested });
+
+    const frameId = frameIdFor(sdk);
+    const promise = sdk.createAccount({ accountName: "JCoin Account" });
+    sdk.onMessage(readyMessage(frameId));
+    await flush();
+    const request = parseInjectedRequest(await waitForInjectedRequest(webView));
+
+    sdk.onMessage(
+      eventMessage(frameId, EMBEDDED_PROVIDER_EVENTS.UI_SHOW, {
+        reason: "deposit",
+      }),
+    );
+
+    expect(onShowRequested).toHaveBeenCalledTimes(2);
+    expect(onShowRequested).toHaveBeenLastCalledWith("wallet-content:deposit");
+
+    const account = {
+      accountType: "thru",
+      address: "thru_created_address",
+      label: "JCoin Account",
+    };
+    sdk.onMessage(
+      responseMessage(frameId, request.id, {
+        account,
+        accounts: [account],
+        selectedAccount: account,
+      }),
+    );
+    await promise;
+  });
+
+  it("ignores transparent UI_SHOW events outside an active wallet request", () => {
+    sdk.destroy();
+    sdk = new NativeSDK({
+      walletUrl: "http://localhost:3000/embedded/native/transparent",
+      walletExperience: "transparent",
+      origin: "thru-mobile://token-dummy",
+    });
+    const onShowRequested = vi.fn();
+    sdk.setUiHandlers({ onShowRequested });
+
+    sdk.onMessage(
+      eventMessage(frameIdFor(sdk), EMBEDDED_PROVIDER_EVENTS.UI_SHOW, {
+        reason: "disconnect",
+      }),
+    );
+
+    expect(onShowRequested).not.toHaveBeenCalled();
+  });
+
   it("sends transparent createAccount requests through the wallet WebView", async () => {
     sdk.destroy();
     sdk = new NativeSDK({
@@ -277,6 +380,7 @@ describe("NativeSDK", () => {
     const frameId = frameIdFor(sdk);
     const promise = sdk.createAccount({
       accountName: "JCoin Account",
+      passkeyName: "Jerry iPhone",
       metadata: {
         appId: "token_dummy_app",
         appName: "Token Dummy App",
@@ -292,6 +396,7 @@ describe("NativeSDK", () => {
     expect(request.type).toBe(POST_MESSAGE_REQUEST_TYPES.CREATE_ACCOUNT);
     expect(request.payload).toEqual({
       accountName: "JCoin Account",
+      passkeyName: "Jerry iPhone",
       metadata: {
         appId: "token_dummy_app",
         appName: "Token Dummy App",

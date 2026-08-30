@@ -87,8 +87,7 @@ export interface RpcEndpoints {
 
 /* Default RPC endpoints */
 export const DEFAULT_RPC_ENDPOINTS: RpcEndpoints = {
-  mainnet: "https://rpc.thru.network",
-  testnet: "https://rpc-testnet.thru.network",
+  alphanet: "https://rpc.alphanet.thru.org",
 };
 
 /* ABI metadata parsed from YAML */

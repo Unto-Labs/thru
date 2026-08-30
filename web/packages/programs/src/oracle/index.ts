@@ -1,3 +1,7 @@
+import { BOOTSTRAP_PROGRAM_ADDRESSES } from "../bootstrap-addresses";
+
+export const ORACLE_PROGRAM_ADDRESS = BOOTSTRAP_PROGRAM_ADDRESSES.oracle;
+
 export { parseOracleFeedAccount } from "./accounts";
 export { deriveOracleFeedAddress, normalizeOracleFeedSeed } from "./derivation";
 export { oracleProgramErrorFromCode, OracleProgramError } from "./errors";

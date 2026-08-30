@@ -33,6 +33,30 @@ fn load_reflector_with_imports(relative_path: &str) -> Reflector {
     Reflector::new(resolver).expect("build reflector")
 }
 
+fn load_reflector_with_imports_and_roots(relative_path: &str) -> Reflector {
+    let path = crate_root().join(relative_path);
+    let type_library_dir = crate_root().join("../type-library");
+
+    let mut import_resolver = ImportResolver::new(vec![PathBuf::from(&type_library_dir)]);
+    import_resolver
+        .load_file_with_imports(&path, false)
+        .expect("load ABI file with imports");
+    let root_types = import_resolver
+        .get_all_files()
+        .last()
+        .expect("root ABI file")
+        .root_types()
+        .clone();
+
+    let mut resolver = TypeResolver::new();
+    for typedef in import_resolver.get_all_types() {
+        resolver.add_typedef(typedef.clone());
+    }
+    resolver.resolve_all().expect("resolve types");
+    Reflector::with_root_types(resolver, Default::default(), root_types)
+        .expect("build reflector with roots")
+}
+
 fn reflector_from_yaml(yaml: &str) -> Reflector {
     let abi_file: AbiFile = serde_yml::from_str(yaml).expect("parse ABI YAML");
 
@@ -665,6 +689,43 @@ fn simple_union_fixture_should_distinguish_variants() {
         bytes_obj.get("value").and_then(JsonValue::as_str),
         Some("0xdeadbeef")
     );
+}
+
+#[test]
+fn clob_account_root_reflects_market_and_exchange_metadata() {
+    let reflector =
+        load_reflector_with_imports_and_roots("../type-library/tn_clob_program.abi.yaml");
+
+    let mut market = vec![0u8; 320 + 64];
+    market[0] = 0x77;
+    let reflected_market = reflector
+        .reflect_account(&market)
+        .expect("market account reflection succeeds");
+    let market_payload = reflected_market
+        .get_struct_field("payload")
+        .expect("market account payload");
+    match market_payload.get_value() {
+        abi_reflect::value::Value::Enum { variant_name, .. } => {
+            assert_eq!(variant_name, "market");
+        }
+        other => panic!("expected market enum payload, got {other:?}"),
+    }
+
+    let mut exchange_meta = vec![0u8; 96];
+    exchange_meta[..8].copy_from_slice(&0xF17EDA2CC10B0078u64.to_le_bytes());
+    exchange_meta[8] = 1;
+    let reflected_exchange = reflector
+        .reflect_account(&exchange_meta)
+        .expect("exchange metadata reflection succeeds");
+    let exchange_payload = reflected_exchange
+        .get_struct_field("payload")
+        .expect("exchange metadata payload");
+    match exchange_payload.get_value() {
+        abi_reflect::value::Value::Enum { variant_name, .. } => {
+            assert_eq!(variant_name, "exchange_meta");
+        }
+        other => panic!("expected exchange metadata enum payload, got {other:?}"),
+    }
 }
 
 #[test]

@@ -24,6 +24,7 @@ import {
 import {
   CLOB_PROGRAM_ADDRESS,
   CLOB_STATUS_FLAG_DEPOSITS_FROZEN,
+  CLOB_STATUS_FLAG_PAUSED,
   CLOB_STATUS_FLAG_WITHDRAWALS_FROZEN,
   parseSeatArenaAccount,
   type ClobOrderSide,
@@ -63,6 +64,7 @@ export interface ClobExchangeAssetSnapshot {
   mint: string;
   tokenProgram: string;
   symbol: string | null;
+  decimals: number | null;
   discoveryComplete: boolean;
   exchange: {
     freeAmount: bigint;
@@ -121,6 +123,7 @@ export type ClobExchangeClientErrorCode =
   | 'insufficient_wallet_balance'
   | 'insufficient_exchange_balance'
   | 'fragmented_balance'
+  | 'market_paused'
   | 'invalid_token_account';
 
 export class ClobExchangeClientError extends Error {
@@ -227,14 +230,15 @@ export function createClobExchangeClient(
     const assets = uniqueSnapshotAssets(markets, allocations, authority);
     const snapshots = await Promise.all(assets.map(async ({ mint, tokenProgram }) => {
       const balance = balances.get(assetKey(mint, tokenProgram));
-      const [wallet, symbol] = await Promise.all([
+      const [wallet, mintMetadata] = await Promise.all([
         readCanonicalWalletAccount(authority, mint, tokenProgram),
-        readMintSymbol(mint),
+        readMintMetadata(mint),
       ]);
       return {
         mint,
         tokenProgram,
-        symbol,
+        symbol: mintMetadata?.symbol ?? null,
+        decimals: mintMetadata?.decimals ?? null,
         discoveryComplete: isAssetDiscoveryComplete(
           unavailableMarkets,
           balance?.allocations ?? [],
@@ -298,28 +302,41 @@ export function createClobExchangeClient(
     );
     const eligible = marketsForAsset(markets, depositArgs.mint, args.tokenProgramAddress);
     if (eligible.length === 0) throw assetNotFound(depositArgs.mint);
-    const acceptingDeposits = eligible.filter(
+    const unpaused = eligible.filter(
+      (market) => !(market.statusFlags & CLOB_STATUS_FLAG_PAUSED)
+    );
+    if (unpaused.length === 0) {
+      throw new ClobExchangeClientError(
+        'market_paused',
+        'no active CLOB market accepts deposits for this asset',
+        { mint: depositArgs.mint }
+      );
+    }
+    const acceptingDeposits = unpaused.filter(
       (market) => !(market.statusFlags & CLOB_STATUS_FLAG_DEPOSITS_FROZEN)
     );
     /* Preserve the builder's deposits_frozen error when every compatible
        market is frozen, but never prefer a frozen existing allocation over
        another market that can actually accept the deposit. */
     const market = chooseDepositMarket(
-      acceptingDeposits.length > 0 ? acceptingDeposits : eligible,
+      acceptingDeposits.length > 0 ? acceptingDeposits : unpaused,
       allocations,
       depositArgs.authority,
       depositArgs.mint
     );
     const tokenSide = tokenSideForMint(market, depositArgs.mint);
-    const seats = await readMarketSeats(market);
+    const [seats, wallet] = await Promise.all([
+      readMarketSeats(market),
+      readCanonicalWalletAccount(
+        depositArgs.authority,
+        depositArgs.mint,
+        args.tokenProgramAddress
+      ),
+      validateMarketVault(market, tokenSide, depositArgs.mint),
+    ]);
     const existingSeat = seats
       .filter((seat) => seat.seatAuthority === depositArgs.authority)
       .sort((a, b) => a.seatIndex - b.seatIndex)[0] ?? null;
-    const wallet = await readCanonicalWalletAccount(
-      depositArgs.authority,
-      depositArgs.mint,
-      args.tokenProgramAddress
-    );
     if (wallet.amount < depositArgs.amount) {
       throw new ClobExchangeClientError(
         'insufficient_wallet_balance',
@@ -566,9 +583,15 @@ export function createClobExchangeClient(
     }
   }
 
-  async function readMintSymbol(mint: string): Promise<string | null> {
+  async function readMintMetadata(
+    mint: string
+  ): Promise<{ symbol: string | null; decimals: number } | null> {
     try {
-      return parseMintAccountData(await args.thruClient.accounts.get(mint)).ticker || null;
+      const parsed = parseMintAccountData(await args.thruClient.accounts.get(mint));
+      return {
+        symbol: parsed.ticker || null,
+        decimals: parsed.decimals,
+      };
     } catch (error) {
       if (isAccountNotFoundError(error)) return null;
       return null;
@@ -577,6 +600,22 @@ export function createClobExchangeClient(
 
   async function readMarketSeats(market: ClobTradingMarket): Promise<ClobSeatEntry[]> {
     return parseSeatArenaAccount(await args.thruClient.accounts.get(market.address)).seats;
+  }
+
+  async function validateMarketVault(
+    market: ClobTradingMarket,
+    tokenSide: ClobTokenSide,
+    mint: string
+  ): Promise<void> {
+    const vault = tokenSide === 'base' ? market.baseVault : market.quoteVault;
+    const parsed = parseTokenAccountData(await args.thruClient.accounts.get(vault));
+    if (parsed.mint !== mint || parsed.owner !== clobProgramAddress) {
+      throw new ClobExchangeClientError(
+        'invalid_token_account',
+        'selected market vault does not match the requested mint and CLOB program',
+        { market: market.address, vault, expectedMint: mint, actualMint: parsed.mint }
+      );
+    }
   }
 
   async function wrapWithWalletTokenAccountInitialization(initArgs: {

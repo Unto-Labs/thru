@@ -221,9 +221,9 @@ describe('passkey manager validate helpers', () => {
 
   it('encodes multicall instructions with the known program address', () => {
     expect(MULTICALL_PROGRAM_ADDRESS).toBe(
-      'taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAkJ'
+      'tatPH9XJbriBMntQG_GU6r4YWZCcco1wEGgPw2gY3iFaj8'
     );
-    expect(MULTICALL_PROGRAM_PUBKEY[31]).toBe(9);
+    expect(MULTICALL_PROGRAM_PUBKEY).toHaveLength(32);
 
     const encoded = buildMulticallInstruction([
       { programIdx: 2, instructionData: new Uint8Array([0xaa]) },

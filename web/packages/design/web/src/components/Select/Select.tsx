@@ -62,7 +62,10 @@ export function Select({
         </BaseSelect.Icon>
       </BaseSelect.Trigger>
       <BaseSelect.Portal>
-        <BaseSelect.Positioner sideOffset={4} align="start">
+        {/* alignItemWithTrigger defaults to true, which overlays the popup on
+            the trigger (macOS-native style) and ignores sideOffset/align —
+            every other @thru/design popup drops below its anchor. */}
+        <BaseSelect.Positioner sideOffset={4} align="start" alignItemWithTrigger={false}>
           <BaseSelect.Popup className="tds-select-popup">
             {items.map((it) => (
               <BaseSelect.Item key={it.value} value={it.value} className="tds-select-item">

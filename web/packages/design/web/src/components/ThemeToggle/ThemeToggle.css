@@ -1,0 +1,141 @@
+/* ThemeToggle — square Sun/Moon switcher, plus the theme-switch animation the
+   `useColorScheme` hook drives through `data-theme-transition` on <html>. */
+
+.tds-theme-toggle {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 36.75px;
+  height: 36.75px;
+  padding: 0;
+  margin: 0;
+  color: var(--color-text-secondary);
+  background: var(--color-surface-higher);
+  border: 1px solid var(--color-border-secondary);
+  border-radius: var(--radius-none);
+  cursor: pointer;
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard),
+    color var(--duration-fast) var(--ease-standard);
+}
+
+.tds-theme-toggle:hover {
+  color: var(--color-text-primary);
+  background: var(--color-surface-card);
+  border-color: var(--color-border-strong);
+}
+
+.tds-theme-toggle:focus-visible {
+  outline: 2px solid var(--color-border-brand);
+  outline-offset: 2px;
+}
+
+.tds-theme-toggle svg {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  stroke-width: 2;
+}
+
+.tds-theme-toggle__icon {
+  opacity: 0;
+  transform: scale(0.72) rotate(-24deg);
+  transition:
+    opacity 500ms var(--ease-standard),
+    transform 700ms var(--ease-standard);
+}
+
+.tds-theme-toggle__icon--active {
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
+}
+
+/* `gif-mask`: the new theme is revealed through the animated wing GIF mask via
+   the View Transition API. `retokenize`: the no-VT fallback — surfaces
+   re-tokenize with staggered color transitions. Reduced motion switches
+   instantly (the hook sets no data attribute). Surfaces extend the retokenize
+   selector list below with their own app-local classes. */
+html[data-theme-transition="gif-mask"]::view-transition-old(root),
+html[data-theme-transition="gif-mask"]::view-transition-new(root) {
+  animation-duration: 1180ms;
+  animation-fill-mode: both;
+  animation-timing-function: var(--ease-standard);
+  mix-blend-mode: normal;
+  pointer-events: none;
+}
+
+html[data-theme-transition="gif-mask"]::view-transition,
+html[data-theme-transition="gif-mask"]::view-transition-group(root),
+html[data-theme-transition="gif-mask"]::view-transition-image-pair(root) {
+  pointer-events: none;
+}
+
+html[data-theme-transition="gif-mask"]::view-transition-old(root) {
+  animation-name: tn-theme-mask-hold;
+  z-index: 0;
+}
+
+html[data-theme-transition="gif-mask"]::view-transition-new(root) {
+  animation-name: tn-theme-mask-hold;
+  mask-image: var(--theme-transition-mask-image);
+  mask-mode: alpha;
+  mask-repeat: no-repeat;
+  mask-position: center center;
+  mask-size: max(120vw, 120vh);
+  -webkit-mask-image: var(--theme-transition-mask-image);
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-position: center center;
+  -webkit-mask-size: max(120vw, 120vh);
+  z-index: 1;
+}
+
+@keyframes tn-theme-mask-hold {
+  from,
+  to {
+    opacity: 1;
+  }
+}
+
+html[data-theme-transition="retokenize"] body,
+html[data-theme-transition="retokenize"] .tds-navbar,
+html[data-theme-transition="retokenize"] .tds-navbar__tag,
+html[data-theme-transition="retokenize"] .tds-navbar__status,
+html[data-theme-transition="retokenize"] .tds-navbar__drawer,
+html[data-theme-transition="retokenize"] .tds-tag,
+html[data-theme-transition="retokenize"] .tds-banner,
+html[data-theme-transition="retokenize"] .tds-theme-toggle,
+html[data-theme-transition="retokenize"] .tds-card,
+html[data-theme-transition="retokenize"] .tds-input-wrap,
+html[data-theme-transition="retokenize"] .tds-select-trigger {
+  transition-property: background-color, border-color, color, box-shadow, text-decoration-color;
+  transition-duration: 280ms;
+  transition-timing-function: var(--ease-standard);
+}
+
+html[data-theme-transition="retokenize"] .tds-card,
+html[data-theme-transition="retokenize"] .tds-input-wrap,
+html[data-theme-transition="retokenize"] .tds-select-trigger {
+  transition-delay: 70ms;
+  transition-duration: 360ms;
+}
+
+html[data-theme-transition="retokenize"] .tds-navbar__wordmark,
+html[data-theme-transition="retokenize"] .tds-input,
+html[data-theme-transition="retokenize"] .tds-field__label,
+html[data-theme-transition="retokenize"] .tds-detail__label,
+html[data-theme-transition="retokenize"] .tds-detail__value {
+  transition-property: color, background-color, border-color, text-decoration-color;
+  transition-delay: 150ms;
+  transition-duration: 420ms;
+  transition-timing-function: var(--ease-standard);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html[data-theme-transition="retokenize"] *,
+  html[data-theme-transition="retokenize"] *::before,
+  html[data-theme-transition="retokenize"] *::after {
+    transition: none !important;
+  }
+}

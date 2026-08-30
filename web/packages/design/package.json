@@ -13,6 +13,7 @@
       "import": "./tokens/src/index.ts"
     },
     "./tokens/css": "./tokens/src/all.css",
+    "./tokens/neutral.css": "./tokens/src/neutral.css",
     "./tokens/tokens.css": "./tokens/src/tokens.css",
     "./tokens/typography.css": "./tokens/src/typography.css",
     "./tokens/theme.css": "./tokens/src/theme.css",

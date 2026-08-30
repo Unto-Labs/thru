@@ -9,6 +9,7 @@ COMMAND_TIMEOUT_SECONDS="${APT_COMMAND_TIMEOUT_SECONDS:-180}"
 COMMAND_KILL_GRACE_SECONDS="${APT_COMMAND_KILL_GRACE_SECONDS:-10}"
 MIRROR_FALLBACK="${APT_MIRROR_FALLBACK:-1}"
 FALLBACK_MIRROR="${APT_FALLBACK_MIRROR:-http://archive.ubuntu.com/ubuntu}"
+PORTS_FALLBACK_MIRROR="${APT_FALLBACK_PORTS_MIRROR:-http://ports.ubuntu.com/ubuntu-ports}"
 SOURCES_LIST="${APT_SOURCES_LIST:-/etc/apt/sources.list}"
 SOURCES_PARTS_DIR="${APT_SOURCES_PARTS_DIR:-/etc/apt/sources.list.d}"
 UPDATE_ONLY=0
@@ -174,11 +175,28 @@ wait_for_or_kill_lock_holders() {
   apt_command sudo env DEBIAN_FRONTEND=noninteractive apt-get -o "DPkg::Lock::Timeout=${LOCK_TIMEOUT_SECONDS}" -f install -y || true
 }
 
-# Matches the EC2 region-local Ubuntu archive mirrors, e.g.
-# http://us-east-1.ec2.archive.ubuntu.com/ubuntu.  The region is not
-# hardcoded.  security.ubuntu.com and every other host deliberately do not
-# match, so they are never rewritten.
-ec2_mirror_pattern='https?://[a-z0-9-]+\.ec2\.archive\.ubuntu\.com(/ubuntu)?'
+# Ubuntu splits its archive by architecture family, and the fallback has to
+# follow: amd64 and i386 live on archive.ubuntu.com, while every port --
+# arm64 included -- lives on ports.ubuntu.com/ubuntu-ports.  Rewriting an
+# arm64 source to archive.ubuntu.com does not degrade to a slower mirror, it
+# 404s, so each family carries its own pattern and its own fallback.
+#
+# Each pattern requires at least one label before `archive`/`ports`, which is
+# what makes it match a vendor or region mirror without matching the fallback
+# host itself:
+#
+#   us-east-1.ec2.archive.ubuntu.com   GARM x86, matches archive family
+#   azure.archive.ubuntu.com           GitHub-hosted, matches archive family
+#   us-east-1.ec2.ports.ubuntu.com     GARM arm64, matches ports family
+#   archive.ubuntu.com                 the fallback, deliberately no match
+#   security.ubuntu.com                deliberately no match
+#
+# Before this the pattern was `[a-z0-9-]+\.ec2\.archive\.ubuntu\.com`, which
+# matched only GARM x86.  On the other two classes the fallback reported "no
+# EC2 regional apt mirror configured" and spent every remaining attempt on the
+# same sick mirror.
+archive_mirror_pattern='https?://[a-z0-9.-]+\.archive\.ubuntu\.com(/ubuntu)?'
+ports_mirror_pattern='https?://[a-z0-9.-]+\.ports\.ubuntu\.com(/ubuntu-ports)?'
 mirror_fallback_applied=0
 
 # Emits every apt source file that actually exists, covering both the legacy
@@ -192,6 +210,36 @@ apt_source_files() {
       printf '%s\n' "$candidate"
     fi
   done
+}
+
+# GitHub-hosted runners do not name a mirror in their sources at all.  They
+# point apt at a local mirrorlist:
+#
+#   Types: deb
+#   URIs: mirror+file:/etc/apt/apt-mirrors.txt
+#
+# and that file holds the real hosts (azure.archive.ubuntu.com and friends).
+# Rewriting only sources.list.d there changes nothing, which is why the
+# fallback never worked on hosted runners.  Emit each referenced mirrorlist so
+# the rewrite reaches the hosts apt will actually contact.  Only absolute
+# paths under /etc/apt are followed, so a source cannot redirect the rewrite
+# at an arbitrary file.
+apt_mirrorlist_files() {
+  local source_file path name root
+  root="$(dirname "$SOURCES_LIST")"
+  while IFS= read -r source_file; do
+    while IFS= read -r path; do
+      # Only the basename is used, resolved beneath the apt config directory
+      # we were told to manage. A source file therefore cannot point the
+      # rewrite at an arbitrary path, and the lookup still works when the
+      # caller relocates the apt tree (which is how this is tested).
+      name="${path##*/}"
+      case "$name" in
+        ''|.|..|*/*) continue ;;
+      esac
+      [ -f "${root}/${name}" ] && printf '%s\n' "${root}/${name}"
+    done < <(grep -Eoh 'file:/[^ 	"]+' "$source_file" 2>/dev/null | sed 's|^file:||')
+  done < <(apt_source_files)
 }
 
 # Repoints the configured apt sources from the EC2 regional mirror at
@@ -222,31 +270,95 @@ use_fallback_apt_mirror() {
       ;;
   esac
 
-  local source_file rewritten=0
-  while IFS= read -r source_file; do
-    if ! grep -Eq "$ec2_mirror_pattern" "$source_file"; then
-      continue
-    fi
+  case "$PORTS_FALLBACK_MIRROR" in
+    http://*|https://*) ;;
+    *)
+      echo "refusing to use APT_FALLBACK_PORTS_MIRROR='${PORTS_FALLBACK_MIRROR}': not an http(s) URL" >&2
+      return 0
+      ;;
+  esac
 
-    echo "rewriting EC2 regional apt mirror in ${source_file} (backup: ${source_file}.bak)" >&2
-    grep -En "$ec2_mirror_pattern" "$source_file" | sed 's/^/  before: /' >&2 || true
+  case "$PORTS_FALLBACK_MIRROR" in
+    *[\|\&\\]*)
+      echo "refusing to use APT_FALLBACK_PORTS_MIRROR='${PORTS_FALLBACK_MIRROR}': unsafe in a sed replacement" >&2
+      return 0
+      ;;
+  esac
 
-    if ! sudo sed -E -i.bak "s|${ec2_mirror_pattern}|${FALLBACK_MIRROR}|g" "$source_file"; then
-      echo "failed to rewrite ${source_file}; leaving it unchanged" >&2
-      continue
-    fi
+  # Rewrite each family with its own fallback, over the source files and over
+  # any mirrorlist they reference.
+  local target rewritten=0 family pattern replacement
+  while IFS= read -r target; do
+    for family in archive ports; do
+      if [ "$family" = archive ]; then
+        pattern="$archive_mirror_pattern"
+        replacement="$FALLBACK_MIRROR"
+      else
+        pattern="$ports_mirror_pattern"
+        replacement="$PORTS_FALLBACK_MIRROR"
+      fi
 
-    grep -Fn -- "$FALLBACK_MIRROR" "$source_file" | sed 's/^/  after:  /' >&2 || true
-    rewritten=$((rewritten + 1))
-  done < <(apt_source_files)
+      grep -Eq "$pattern" "$target" || continue
+
+      echo "rewriting ${family} apt mirror in ${target} (backup: ${target}.bak)" >&2
+      grep -En "$pattern" "$target" | sed 's/^/  before: /' >&2 || true
+
+      if ! sudo sed -E -i.bak "s|${pattern}|${replacement}|g" "$target"; then
+        echo "failed to rewrite ${target}; leaving it unchanged" >&2
+        continue
+      fi
+
+      grep -Fn -- "$replacement" "$target" | sed 's/^/  after:  /' >&2 || true
+      rewritten=$((rewritten + 1))
+    done
+  done < <({ apt_source_files; apt_mirrorlist_files; } | sort -u)
 
   if [ "$rewritten" -eq 0 ]; then
-    echo "no EC2 regional apt mirror configured under ${SOURCES_LIST} or ${SOURCES_PARTS_DIR}; apt sources left unchanged" >&2
+    echo "no rewritable Ubuntu mirror configured under ${SOURCES_LIST}, ${SOURCES_PARTS_DIR}, or a referenced mirrorlist; apt sources left unchanged" >&2
     return 0
   fi
 
-  echo "apt mirror fallback applied to ${rewritten} file(s); remaining attempts use ${FALLBACK_MIRROR}" >&2
+  echo "apt mirror fallback applied to ${rewritten} file/family pair(s); archive -> ${FALLBACK_MIRROR}, ports -> ${PORTS_FALLBACK_MIRROR}" >&2
 }
+
+# Fast path: nothing to do.
+#
+# Every caller of this script asks for packages the runner image already
+# ships, so the common case is `apt-get update` fetching ~19 MB of indexes to
+# conclude "0 upgraded, 0 newly installed". That cost is not small: it is
+# 3m20s per job on the self-hosted runners, in zig-x86-test and grpc-test
+# alike, and when the EC2 regional mirror stalls it is the hang that has
+# ejected PRs from the merge queue outright.
+#
+# Checking dpkg's own database first turns that into a few milliseconds. Set
+# APT_ASSUME_PRESENT=0 to force the update+install path when a caller really
+# does want the newest version rather than a working one.
+ASSUME_PRESENT="${APT_ASSUME_PRESENT:-1}"
+
+all_packages_installed() {
+  local pkg status
+  for pkg in "$@"; do
+    # A package can be known to dpkg while removed or half-configured; only
+    # "install ok installed" means it is actually usable.
+    status="$(dpkg-query -W -f='${db:Status-Abbrev}' "$pkg" 2>/dev/null || true)"
+    # Status-Abbrev is three characters: desired, current, error. Only a
+    # trailing space means "no error" -- "iiR" is installed but flagged for
+    # reinstallation, which is exactly the broken state the slow path exists
+    # to repair, so a prefix match on "ii" would skip the repair and let a
+    # later command fail instead.
+    case "$status" in
+      "ii ") ;;
+      *) return 1 ;;
+    esac
+  done
+  return 0
+}
+
+if [ "$UPDATE_ONLY" -eq 0 ] && [ "$ASSUME_PRESENT" = "1" ] &&
+   command -v dpkg-query >/dev/null 2>&1 && all_packages_installed "$@"; then
+  echo "all requested packages already installed, skipping apt: $*"
+  exit 0
+fi
 
 for attempt in 1 2 3 4 5; do
   if [ "$attempt" -eq 1 ]; then

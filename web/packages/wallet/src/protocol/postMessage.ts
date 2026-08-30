@@ -1,3 +1,4 @@
+import type { TelemetryAppContext } from "@thru/observability";
 import type {
   AppMetadata,
   ConnectResult,
@@ -45,6 +46,23 @@ export type EmbeddedProviderEvent =
 export const POST_MESSAGE_EVENT_TYPE = "event" as const;
 
 export const IFRAME_READY_EVENT = "iframe:ready" as const;
+
+/**
+ * Host -> wallet control message carrying the current host-app telemetry
+ * correlation values. Fire-and-forget: the wallet never responds, and the
+ * values only affect telemetry, never wallet behaviour.
+ */
+export const TELEMETRY_CONTEXT_MESSAGE_TYPE = "telemetry:context" as const;
+
+export interface TelemetryContextMessage {
+  type: typeof TELEMETRY_CONTEXT_MESSAGE_TYPE;
+  origin: string;
+  frameId: string;
+  /** Absent clears the label the wallet received at load. */
+  appContextId?: string;
+  /** Absent clears the dimensions the wallet received at load. */
+  appContext?: TelemetryAppContext;
+}
 
 export const DEFAULT_IFRAME_URL = "http://localhost:3010/embedded";
 
@@ -170,6 +188,8 @@ export interface DisconnectResult {
 
 export interface CreateAccountPayload {
   accountName?: string;
+  /** App-provided name for the passkey created for this account. */
+  passkeyName?: string;
   metadata?: ConnectMetadataInput;
   createSigningSession?: {
     expiresAt: string;
@@ -301,6 +321,17 @@ export interface ConnectRequestPayload {
   metadata?: ConnectMetadataInput;
   preferredAccountAddress?: string;
   intent?: ConnectIntent;
+  /** App-provided name for a passkey created during this connect flow. */
+  passkeyName?: string;
+}
+
+/** WebAuthn user.name is capped by authenticators; keep names comfortably short. */
+export const MAX_PASSKEY_NAME_LENGTH = 64;
+
+export function sanitizePasskeyName(name?: string): string | undefined {
+  if (typeof name !== "string") return undefined;
+  const trimmed = name.trim().slice(0, MAX_PASSKEY_NAME_LENGTH).trim();
+  return trimmed || undefined;
 }
 
 export type { AppMetadata, ConnectResult };

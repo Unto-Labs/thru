@@ -1,3 +1,4 @@
+import { TELEMETRY_EVENTS } from '@thru/observability';
 import {
   AddressType,
   normalizeActiveWalletAccounts,
@@ -8,12 +9,14 @@ import type {
   IThruChain,
   WalletAccount,
 } from './interfaces';
+import { getErrorCode as getTelemetryErrorCode } from './internal/telemetry-fields';
 import { EmbeddedProvider } from './provider/EmbeddedProvider';
 import {
   DEFAULT_IFRAME_URL,
   EMBEDDED_PROVIDER_EVENTS,
   DepositTarget,
   type ConnectMetadataInput,
+  sanitizePasskeyName,
   type DepositDestination,
   type DepositRequestPayload,
   type DepositResult,
@@ -26,6 +29,7 @@ import {
   ensureDepositAccountForWallet,
   formatDepositAmount,
   getDepositAccountStateForWallet,
+  signDepositTransactionWithActiveSession,
   waitForDepositBalanceForWallet,
   type DepositAccountState,
   type DepositsApi,
@@ -45,9 +49,25 @@ import {
   type TransactionSigningScheme,
   withTransactionSigningScheme,
 } from './transaction-signing-scheme';
+import {
+  TelemetryClient,
+  WALLET_SDK_VERSION,
+  createTelemetrySessionId,
+  withTelemetryParameters,
+  type TelemetryAppContext,
+} from './telemetry';
 
 export interface BrowserSDKConfig {
   iframeUrl?: string;
+  /** Share sanitized operational diagnostics with Thru. Defaults to true. */
+  telemetryEnabled?: boolean;
+  /** Opaque host-app-provided label stamped on telemetry for cross-session
+      correlation (e.g. the app's own user or install ID). Never minted or
+      interpreted by the SDK. */
+  appContextId?: string;
+  /** Bounded host-app-provided dimensions stamped on telemetry events
+      (at most 5 short keys/values). Never interpreted by the SDK. */
+  appContext?: TelemetryAppContext;
   addressTypes?: AddressTypeValue[];
   rpcUrl?: string;
   network?: ThruNetwork;
@@ -62,6 +82,8 @@ export interface BrowserSDKConfig {
 
 export interface ConnectOptions {
   metadata?: ConnectMetadataInput;
+  /** Custom name for a passkey created during this connect flow. */
+  passkeyName?: string;
 }
 
 export type SDKEvent = 'connect' | 'disconnect' | 'lock' | 'error' | 'accountChanged';
@@ -74,6 +96,7 @@ export type EventCallback = (...args: any[]) => void;
  */
 export class BrowserSDK {
   private provider: EmbeddedProvider;
+  private telemetry: TelemetryClient;
   private eventListeners = new Map<SDKEvent, Set<EventCallback>>();
   private initialized = false;
   private thruClient: Thru;
@@ -94,15 +117,38 @@ export class BrowserSDK {
   };
 
   constructor(config: BrowserSDKConfig = {}) {
-    const iframeUrl = withTransactionSigningScheme(
+    const configuredIframeUrl = withTransactionSigningScheme(
       config.iframeUrl ?? DEFAULT_IFRAME_URL,
       config.transactionSigningScheme,
+    );
+    const telemetryEnabled = config.telemetryEnabled ?? true;
+    const telemetrySessionId = createTelemetrySessionId();
+    const iframeUrl = withTelemetryParameters(
+      configuredIframeUrl,
+      telemetryEnabled,
+      telemetrySessionId,
+      config.appContextId,
+      config.appContext,
     );
     const walletOrigin = new URL(iframeUrl).origin;
     const appOrigin =
       typeof window !== 'undefined' && window.location.origin
         ? window.location.origin
         : 'unknown';
+    this.telemetry = new TelemetryClient({
+      enabled: telemetryEnabled,
+      walletUrl: configuredIframeUrl,
+      sessionId: telemetrySessionId,
+      appContextId: config.appContextId,
+      appContext: config.appContext,
+      source: 'sdk',
+      context: {
+        appOrigin,
+        sdkVersion: WALLET_SDK_VERSION,
+        platform: 'browser',
+        network: config.network,
+      },
+    });
     const storage =
       config.signingSessionStorage === false
         ? null
@@ -118,13 +164,25 @@ export class BrowserSDK {
         )
       : undefined;
 
-    this.provider = new EmbeddedProvider({
-      iframeUrl,
-      addressTypes: config.addressTypes || [AddressType.THRU],
-      signingSessions,
-      network: config.network,
-      depositUiConfig: config.depositUiConfig,
-    });
+    try {
+      this.provider = new EmbeddedProvider({
+        iframeUrl,
+        addressTypes: config.addressTypes || [AddressType.THRU],
+        signingSessions,
+        network: config.network,
+        depositUiConfig: config.depositUiConfig,
+        telemetry: this.telemetry,
+      });
+    } catch (error) {
+      /* Never upload to a wallet origin that failed provider validation. */
+      this.telemetry.discard();
+      throw error;
+    }
+    this.provider.primeTelemetryContext(
+      this.telemetry.getAppContextId() ?? null,
+      this.telemetry.getContext() ?? null,
+    );
+    this.telemetry.record(TELEMETRY_EVENTS.SDK_CONSTRUCTED);
     this.defaultNetwork = config.network;
     this.depositProviders = new Set(config.deposits?.providers ?? ['unifold']);
 
@@ -137,16 +195,60 @@ export class BrowserSDK {
   }
 
   /**
+   * Set or clear the opaque host-app correlation label on later telemetry
+   * events from this SDK instance and from the embedded wallet.
+   */
+  setAppContextId(appContextId: string | null): void {
+    this.telemetry.setAppContextId(appContextId);
+    this.provider.setTelemetryAppContextId(this.telemetry.getAppContextId() ?? null);
+  }
+
+  /**
+   * Replace or clear the host-app dimensions on later telemetry events from
+   * this SDK instance and from the embedded wallet.
+   */
+  setContext(context: TelemetryAppContext | null): void {
+    this.telemetry.setContext(context);
+    this.provider.setTelemetryContext(this.telemetry.getContext() ?? null);
+  }
+
+  /**
    * Initialize the SDK (creates iframe)
    * Must be called before using the SDK
    */
   async initialize(): Promise<void> {
     if (this.initialized) {
+      this.telemetry.record(TELEMETRY_EVENTS.SDK_INITIALIZE_SKIPPED, {
+        severity: 'debug',
+        operation: 'initialize',
+        outcome: 'already_initialized',
+      });
       return;
     }
 
-    await this.provider.initialize();
-    this.initialized = true;
+    const startedAt = Date.now();
+    this.telemetry.record(TELEMETRY_EVENTS.SDK_INITIALIZE_STARTED, {
+      operation: 'initialize',
+    });
+    try {
+      await this.provider.initialize();
+      this.initialized = true;
+      this.telemetry.record(TELEMETRY_EVENTS.SDK_INITIALIZE_COMPLETED, {
+        operation: 'initialize',
+        outcome: 'success',
+        durationMs: Date.now() - startedAt,
+      });
+    } catch (error) {
+      this.telemetry.record(TELEMETRY_EVENTS.SDK_INITIALIZE_FAILED, {
+        operation: 'initialize',
+        outcome: 'error',
+        severity: 'error',
+        durationMs: Date.now() - startedAt,
+        errorCode: getTelemetryErrorCode(error),
+        message: error,
+      });
+      throw error;
+    }
   }
 
   /**
@@ -160,24 +262,58 @@ export class BrowserSDK {
     }
 
     if (this.connectInFlight) {
+      this.telemetry.record(TELEMETRY_EVENTS.SDK_CONNECT_REUSED, {
+        severity: 'debug',
+        operation: 'connect',
+        outcome: 'in_flight',
+      });
       return this.connectInFlight;
     }
 
     if (this.lastConnectResult && this.provider.isConnected()) {
+      this.telemetry.record(TELEMETRY_EVENTS.SDK_CONNECT_REUSED, {
+        severity: 'debug',
+        operation: 'connect',
+        outcome: 'already_connected',
+        walletAddress: this.lastConnectResult.selectedAccount?.address,
+      });
       return this.lastConnectResult;
     }
 
     this.emit('connect', { status: 'connecting' });
 
     const inFlight = (async () => {
+      const startedAt = Date.now();
+      this.telemetry.record(TELEMETRY_EVENTS.SDK_CONNECT_STARTED, { operation: 'connect' });
       try {
         const metadata = this.resolveMetadata(options?.metadata);
-        const providerOptions = metadata ? { metadata } : undefined;
+        const passkeyName = sanitizePasskeyName(options?.passkeyName);
+        const providerOptions =
+          metadata || passkeyName
+            ? {
+                ...(metadata ? { metadata } : {}),
+                ...(passkeyName ? { passkeyName } : {}),
+              }
+            : undefined;
         const result = await this.provider.connect(providerOptions);
         this.lastConnectResult = result;
+        this.telemetry.record(TELEMETRY_EVENTS.SDK_CONNECT_COMPLETED, {
+          operation: 'connect',
+          outcome: 'success',
+          durationMs: Date.now() - startedAt,
+          walletAddress: result.selectedAccount?.address,
+        });
         this.emit('connect', result);
         return result;
       } catch (error) {
+        this.telemetry.record(TELEMETRY_EVENTS.SDK_CONNECT_FAILED, {
+          operation: 'connect',
+          outcome: 'error',
+          severity: 'error',
+          durationMs: Date.now() - startedAt,
+          errorCode: getTelemetryErrorCode(error),
+          message: error,
+        });
         this.emit('error', error);
         throw error;
       } finally {
@@ -200,11 +336,28 @@ export class BrowserSDK {
    * Disconnect from wallet
    */
   async disconnect(): Promise<void> {
+    const startedAt = Date.now();
+    this.telemetry.record(TELEMETRY_EVENTS.SDK_DISCONNECT_STARTED, {
+      operation: 'disconnect',
+    });
     try {
       await this.provider.disconnect();
+      this.telemetry.record(TELEMETRY_EVENTS.SDK_DISCONNECT_COMPLETED, {
+        operation: 'disconnect',
+        outcome: 'success',
+        durationMs: Date.now() - startedAt,
+      });
       this.emit('disconnect', {});
       this.lastConnectResult = null;
     } catch (error) {
+      this.telemetry.record(TELEMETRY_EVENTS.SDK_DISCONNECT_FAILED, {
+        operation: 'disconnect',
+        outcome: 'error',
+        severity: 'error',
+        durationMs: Date.now() - startedAt,
+        errorCode: getTelemetryErrorCode(error),
+        message: error,
+      });
       this.emit('error', error);
       throw error;
     }
@@ -231,15 +384,36 @@ export class BrowserSDK {
   }
 
   async selectAccount(publicKey: string): Promise<WalletAccount> {
+    const startedAt = Date.now();
+    this.telemetry.record(TELEMETRY_EVENTS.SDK_ACCOUNT_SELECTION_STARTED, {
+      operation: 'select_account',
+      walletAddress: publicKey,
+    });
     const account = await this.provider.selectAccount(publicKey);
     this.refreshCachedAccounts(this.provider.getAccounts(), account);
+    this.telemetry.record(TELEMETRY_EVENTS.SDK_ACCOUNT_SELECTION_COMPLETED, {
+      operation: 'select_account',
+      outcome: 'success',
+      durationMs: Date.now() - startedAt,
+      walletAddress: account.address,
+    });
     return account;
   }
 
   async manageAccounts(): Promise<ManageAccountsResult> {
+    const startedAt = Date.now();
+    this.telemetry.record(TELEMETRY_EVENTS.SDK_ACCOUNT_MANAGEMENT_STARTED, {
+      operation: 'manage_accounts',
+    });
     const result = await this.provider.manageAccounts();
     this.refreshCachedAccounts(result.accounts, result.selectedAccount);
     this.emit('accountChanged', result.selectedAccount);
+    this.telemetry.record(TELEMETRY_EVENTS.SDK_ACCOUNT_MANAGEMENT_COMPLETED, {
+      operation: 'manage_accounts',
+      outcome: 'success',
+      durationMs: Date.now() - startedAt,
+      walletAddress: result.selectedAccount?.address,
+    });
     return result;
   }
 
@@ -395,20 +569,40 @@ export class BrowserSDK {
     });
 
     this.provider.on(EMBEDDED_PROVIDER_EVENTS.DISCONNECT, (data: any) => {
+      this.telemetry.record(TELEMETRY_EVENTS.SDK_WALLET_DISCONNECTED, {
+        operation: 'disconnect',
+        outcome: 'wallet_event',
+      });
       this.emit('disconnect', data);
     });
 
     this.provider.on(EMBEDDED_PROVIDER_EVENTS.ERROR, (data: any) => {
+      const error = data?.error ?? data;
+      this.telemetry.record(TELEMETRY_EVENTS.SDK_WALLET_ERROR, {
+        severity: 'error',
+        outcome: 'error',
+        errorCode: getTelemetryErrorCode(error),
+        message: error,
+      });
       this.emit('error', data);
     });
 
     this.provider.on(EMBEDDED_PROVIDER_EVENTS.LOCK, (data: any) => {
+      this.telemetry.record(TELEMETRY_EVENTS.SDK_WALLET_LOCKED, {
+        operation: 'lock',
+        outcome: 'locked',
+      });
       this.emit('lock', data);
       this.emit('disconnect', { reason: 'locked' });
     });
 
     this.provider.on(EMBEDDED_PROVIDER_EVENTS.ACCOUNT_CHANGED, (data: any) => {
       const account = data?.account ?? data;
+      this.telemetry.record(TELEMETRY_EVENTS.SDK_ACCOUNT_CHANGED, {
+        operation: 'account_changed',
+        outcome: account ? 'selected' : 'cleared',
+        walletAddress: account?.address,
+      });
       this.refreshCachedAccounts(this.provider.getAccounts(), account ?? null);
       this.emit('accountChanged', account);
     });
@@ -418,11 +612,16 @@ export class BrowserSDK {
    * Destroy SDK and cleanup
    */
   destroy(): void {
+    this.telemetry.record(TELEMETRY_EVENTS.SDK_DESTROYED, {
+      operation: 'destroy',
+      outcome: 'success',
+    });
     this.provider.destroy();
     this.eventListeners.clear();
     this.initialized = false;
     this.connectInFlight = null;
     this.lastConnectResult = null;
+    this.telemetry.destroy();
   }
 
   private resolveMetadata(input?: ConnectMetadataInput): ConnectMetadataInput | undefined {
@@ -499,14 +698,7 @@ export class BrowserSDK {
   private signDepositTransaction(
     payload: SignDepositTransactionPayload
   ): Promise<string> {
-    return this.thru.signTransaction({
-      walletAddress: payload.walletAddress,
-      programAddress: payload.programAddress,
-      instructionData: payload.trailingInstructionData,
-      readWriteAddresses: payload.readWriteAddresses,
-      readOnlyAddresses: payload.readOnlyAddresses,
-      review: payload.review,
-    });
+    return signDepositTransactionWithActiveSession(this.thru, payload);
   }
 
   private refreshCachedAccounts(accounts: WalletAccount[], selectedAccount?: WalletAccount | null): void {

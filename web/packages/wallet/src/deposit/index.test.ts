@@ -10,6 +10,7 @@ import {
   type DepositRuntimeConfig,
   ensureDepositAccountForWallet,
   getDepositAccountStateForWallet,
+  signDepositTransactionWithActiveSession,
   waitForDepositBalanceForWallet,
 } from "./index";
 
@@ -230,6 +231,64 @@ describe("wallet deposit account helpers", () => {
     );
     expect(thru.transactions.send).toHaveBeenCalledOnce();
     expect(state.lastSetupSignature).toBe("ts_setup");
+  });
+
+  it("uses the active signing session for deposit setup", async () => {
+    const signTransaction = vi.fn(async () => "AQID");
+    const thru = {
+      getSigningSessions: vi.fn(async () => [
+        { id: "session-other", walletAddress: "ta_other", authIdx: 1 },
+        { id: "session-wallet", walletAddress: "ta_wallet", authIdx: 1 },
+      ]),
+      signTransaction,
+    };
+    const payload = {
+      trailingInstructionData: "AQID",
+      walletAddress: "ta_wallet",
+      readWriteAddresses: ["ta_token_account"],
+      readOnlyAddresses: ["ta_token_program", "ta_mint"],
+      programAddress: "ta_token_program",
+      review: {
+        appName: "Thru Wallet",
+        instruction: "initialize_token_account(symbol: CREDITS)",
+      },
+    };
+
+    await expect(
+      signDepositTransactionWithActiveSession(thru as never, payload),
+    ).resolves.toBe("AQID");
+    expect(signTransaction).toHaveBeenCalledWith({
+      walletAddress: payload.walletAddress,
+      programAddress: payload.programAddress,
+      instructionData: payload.trailingInstructionData,
+      readWriteAddresses: payload.readWriteAddresses,
+      readOnlyAddresses: payload.readOnlyAddresses,
+      review: payload.review,
+      signingSessionId: "session-wallet",
+    });
+  });
+
+  it("preserves passkey signing when no wallet session is active", async () => {
+    const signTransaction = vi.fn(async () => "AQID");
+    const thru = {
+      getSigningSessions: vi.fn(async () => [
+        { id: "session-provisional", walletAddress: "ta_wallet", authIdx: -1 },
+        { id: "session-other", walletAddress: "ta_other", authIdx: 1 },
+      ]),
+      signTransaction,
+    };
+
+    await signDepositTransactionWithActiveSession(thru as never, {
+      trailingInstructionData: "AQID",
+      walletAddress: "ta_wallet",
+      readWriteAddresses: ["ta_token_account"],
+      readOnlyAddresses: ["ta_token_program", "ta_mint"],
+      programAddress: "ta_token_program",
+    });
+
+    expect(signTransaction).toHaveBeenCalledWith(
+      expect.not.objectContaining({ signingSessionId: expect.anything() }),
+    );
   });
 
   it("resolves once the balance reaches the minimum", async () => {

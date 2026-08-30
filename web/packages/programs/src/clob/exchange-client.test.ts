@@ -3,8 +3,17 @@ import { Pubkey } from '@thru/sdk';
 import { encodeAddress } from '@thru/sdk/helpers';
 import type { Thru } from '@thru/sdk/client';
 import { deriveTokenAccountAddress } from '../token';
-import { TokenAccountBuilder } from '../token/abi/thru/program/token/types';
-import { CLOB_STATUS_FLAG_DEPOSITS_FROZEN, SeatEntryBuilder } from './index';
+import {
+  TickerFieldBuilder,
+  TokenAccountBuilder,
+  TokenMintAccountBuilder,
+} from '../token/abi/thru/program/token/types';
+import {
+  CLOB_PROGRAM_ADDRESS,
+  CLOB_STATUS_FLAG_DEPOSITS_FROZEN,
+  CLOB_STATUS_FLAG_PAUSED,
+  SeatEntryBuilder,
+} from './index';
 import {
   ClobExchangeClientError,
   createClobExchangeClient,
@@ -14,6 +23,7 @@ import type { ClobAssetBalanceAllocation, ClobTradingMarket } from './exchange';
 
 const AUTHORITY = address(10);
 const TOKEN_PROGRAM = address(11);
+const EXCHANGE_META = address(12);
 const BTC = address(20);
 const ETH = address(21);
 const USD = address(22);
@@ -29,11 +39,16 @@ describe('ClobExchangeClient', () => {
         balance(markets[1]!, USD, 'base', 60n),
       ],
     });
+    harness.setMint(USD, 6, 'USD');
 
     const snapshot = await harness.client.getAccountSnapshot({ authority: AUTHORITY });
 
     expect(snapshot.assets.map((asset) => asset.mint)).toEqual([BTC, ETH, USD].sort());
     expect(snapshot.assets.find((asset) => asset.mint === USD)?.exchange.freeAmount).toBe(100n);
+    expect(snapshot.assets.find((asset) => asset.mint === USD)).toMatchObject({
+      symbol: 'USD',
+      decimals: 6,
+    });
     expect(snapshot.unavailableMarkets).toEqual([]);
     for (const asset of snapshot.assets) {
       expect(asset.discoveryComplete).toBe(true);
@@ -162,6 +177,73 @@ describe('ClobExchangeClient', () => {
     });
 
     expect(prepared.market.address).toBe(available.address);
+  });
+
+  it('skips a paused existing market when an active market accepts deposits', async () => {
+    const paused = { ...market(44, BTC, USD), statusFlags: CLOB_STATUS_FLAG_PAUSED };
+    const active = market(45, BTC, USD);
+    const harness = createHarness({
+      markets: [paused, active],
+      allocations: [balance(paused, BTC, 'base', 25n)],
+    });
+    harness.setWalletBalance(BTC, 100n);
+    harness.setSeats(active, []);
+
+    const prepared = await harness.client.prepareDeposit({
+      authority: AUTHORITY,
+      mint: BTC,
+      amount: 10n,
+    });
+
+    expect(prepared.market.address).toBe(active.address);
+  });
+
+  it('rejects deposits when every compatible market is paused', async () => {
+    const paused = { ...market(46, BTC, USD), statusFlags: CLOB_STATUS_FLAG_PAUSED };
+    const harness = createHarness({ markets: [paused] });
+
+    await expect(harness.client.prepareDeposit({
+      authority: AUTHORITY,
+      mint: BTC,
+      amount: 10n,
+    })).rejects.toMatchObject({ code: 'market_paused' });
+  });
+
+  it('keeps paused markets available for withdrawals', async () => {
+    const paused = { ...market(48, BTC, USD), statusFlags: CLOB_STATUS_FLAG_PAUSED };
+    const harness = createHarness({
+      markets: [paused],
+      allocations: [balance(paused, BTC, 'base', 25n)],
+    });
+    harness.setSeats(paused, [{ authority: AUTHORITY, base: 25n, quote: 0n }]);
+
+    await expect(harness.client.prepareWithdrawal({
+      authority: AUTHORITY,
+      mint: BTC,
+      amount: 10n,
+    })).resolves.toMatchObject({ market: { address: paused.address } });
+  });
+
+  it('rejects a selected vault whose on-chain mint does not match', async () => {
+    const target = market(47, BTC, USD);
+    const harness = createHarness({ markets: [target] });
+    harness.setWalletBalance(BTC, 100n);
+    harness.setSeats(target, []);
+    harness.setVaultMint(target.baseVault, OTHER);
+
+    await expect(harness.client.prepareDeposit({
+      authority: AUTHORITY,
+      mint: BTC,
+      amount: 10n,
+    })).rejects.toMatchObject({
+      code: 'invalid_token_account',
+      details: {
+        market: target.address,
+        vault: target.baseVault,
+        expectedMint: BTC,
+        actualMint: OTHER,
+      },
+    });
   });
 
   it('uses fresh seat balances for withdrawals and reports fragmented funds', async () => {
@@ -383,9 +465,27 @@ function createHarness({
     tokenProgramAddress: TOKEN_PROGRAM,
   });
 
+  for (const target of markets) {
+    accounts.set(target.baseVault, tokenAccount(target.baseMint, CLOB_PROGRAM_ADDRESS));
+    accounts.set(target.quoteVault, tokenAccount(target.quoteMint, CLOB_PROGRAM_ADDRESS));
+  }
+
   return {
     client,
     reads,
+    setMint(mint: string, decimals: number, symbol: string) {
+      const symbolBytes = new TextEncoder().encode(symbol);
+      const paddedSymbol = new Uint8Array(8);
+      paddedSymbol.set(symbolBytes);
+      const ticker = new TickerFieldBuilder()
+        .set_length(symbolBytes.length)
+        .set_bytes(Array.from(paddedSymbol))
+        .build();
+      accounts.set(mint, new TokenMintAccountBuilder()
+        .set_decimals(decimals)
+        .set_ticker(ticker)
+        .build());
+    },
     setWalletBalance(mint: string, amount: bigint, owner = AUTHORITY) {
       const tokenAccount = deriveTokenAccountAddress(
         thruClient,
@@ -399,6 +499,9 @@ function createHarness({
         .set_amount(amount)
         .set_is_frozen(0)
         .build());
+    },
+    setVaultMint(vault: string, mint: string) {
+      accounts.set(vault, tokenAccount(mint, CLOB_PROGRAM_ADDRESS));
     },
     setSeats(target: ClobTradingMarket, seats: Array<{
       authority: string;
@@ -421,12 +524,22 @@ function createHarness({
   };
 }
 
+function tokenAccount(mint: string, owner: string): Uint8Array {
+  return new TokenAccountBuilder()
+    .set_mint(bytesFor(mint))
+    .set_owner(bytesFor(owner))
+    .set_amount(0n)
+    .set_is_frozen(0)
+    .build();
+}
+
 function market(id: number, baseMint: string, quoteMint: string): ClobTradingMarket {
   return {
     address: address(id),
     orderArena: address(id + 40),
     bidsCbook: address(id + 80),
     asksCbook: address(id + 120),
+    exchangeMeta: EXCHANGE_META,
     tokenProgram: TOKEN_PROGRAM,
     baseMint,
     quoteMint,

@@ -66,7 +66,17 @@ export type {
   NavbarBurgerProps,
   NavbarDrawerProps,
 } from "./components/Navbar/Navbar";
+export { ThemeToggle, useColorScheme } from "./components/ThemeToggle/ThemeToggle";
+export type {
+  ThemeToggleProps,
+  UseColorSchemeOptions,
+  ColorSchemeControls,
+} from "./components/ThemeToggle/ThemeToggle";
 export { ScrollArea } from "./components/ScrollArea/ScrollArea";
+export { Sheet } from "./components/Sheet/Sheet";
+export type { SheetRootProps, SheetHeaderProps, SheetControlProps } from "./components/Sheet/Sheet";
+export { Stepper } from "./components/Stepper/Stepper";
+export type { StepperProps } from "./components/Stepper/Stepper";
 
 // Display
 export { Tag } from "./components/Tag/Tag";
@@ -87,7 +97,7 @@ export type { BannerProps } from "./components/Banner/Banner";
 export { Skeleton } from "./components/Skeleton/Skeleton";
 export type { SkeletonProps } from "./components/Skeleton/Skeleton";
 export { Detail } from "./components/Detail/Detail";
-export type { DetailProps } from "./components/Detail/Detail";
+export type { DetailProps, DetailVariant } from "./components/Detail/Detail";
 
 // Wallet
 export { CHAINS, TOKENS, chainMeta, tokenMeta } from "./components/wallet/registry";

@@ -12,6 +12,9 @@ design/                       @thru/design
   mobile/   →  @thru/design/mobile      React Native implementation for Expo apps
 ```
 
+The visual QA gallery for these components is a deployed Next.js app and lives
+with the other web apps, at `web/gallery` (`design.thru.org`).
+
 Import paths: web components from `@thru/design/web`, mobile components from
 `@thru/design/mobile`, the token TS object from `@thru/design/tokens`, and the
 foundation CSS via `@thru/design/web/styles.css`
