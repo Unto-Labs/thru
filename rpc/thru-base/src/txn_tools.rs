@@ -499,7 +499,7 @@ fn build_delete_account_instruction(eoa_account_idx: u16, signature: &[u8; 64]) 
     Ok(instruction)
 }
 
-/// Build regular account creation instruction (TN_SYS_PROG_DISCRIMINANT_ACCOUNT_CREATE = 0x00)
+/// Build regular account creation instruction (TN_SYS_TEST_PROG_DISCRIMINANT_ACCOUNT_CREATE = 0x00)
 fn build_create_account_instruction(
     target_account_idx: u16,
     seed: &str,
@@ -507,20 +507,20 @@ fn build_create_account_instruction(
 ) -> Result<Vec<u8>> {
     let mut instruction = Vec::new();
 
-    // TN_SYS_PROG_DISCRIMINANT_ACCOUNT_CREATE = 0x00
+    // TN_SYS_TEST_PROG_DISCRIMINANT_ACCOUNT_CREATE = 0x00
     instruction.push(0x00);
 
-    // Target account index (little-endian u16) - matching tn_system_program_account_create_args_t
+    // Target account index (little-endian u16) - matching tn_system_test_program_account_create_args_t
     instruction.extend_from_slice(&target_account_idx.to_le_bytes());
 
     // Seed should be hex-decoded (to match addrtool behavior)
     let seed_bytes =
         hex::decode(seed).map_err(|e| anyhow::anyhow!("Failed to decode hex seed: {}", e))?;
 
-    // Seed length (little-endian u64) - matching tn_system_program_account_create_args_t.seed_len
+    // Seed length (little-endian u64) - matching tn_system_test_program_account_create_args_t.seed_len
     instruction.extend_from_slice(&(seed_bytes.len() as u64).to_le_bytes());
 
-    // has_proof flag (1 byte) - matching tn_system_program_account_create_args_t.has_proof
+    // has_proof flag (1 byte) - matching tn_system_test_program_account_create_args_t.has_proof
     let has_proof = state_proof.is_some();
     instruction.push(if has_proof { 1u8 } else { 0u8 });
 
@@ -542,7 +542,7 @@ fn build_ephemeral_account_instruction(
 ) -> Result<Vec<u8>> {
     let mut instruction = Vec::new();
 
-    // TN_SYS_PROG_DISCRIMINANT_ACCOUNT_CREATE_EPHEMERAL = 01
+    // TN_SYS_TEST_PROG_DISCRIMINANT_ACCOUNT_CREATE_EPHEMERAL = 01
     instruction.push(0x01);
 
     // Target account index (little-endian u16)
@@ -561,7 +561,7 @@ fn build_ephemeral_account_instruction(
 fn build_resize_instruction(target_account_idx: u16, new_size: u64) -> Result<Vec<u8>> {
     let mut instruction = Vec::new();
 
-    // TN_SYS_PROG_DISCRIMINANT_ACCOUNT_RESIZE = 04
+    // TN_SYS_TEST_PROG_DISCRIMINANT_ACCOUNT_RESIZE = 04
     instruction.push(0x04);
 
     // Target account index (little-endian u16)
@@ -577,7 +577,7 @@ fn build_resize_instruction(target_account_idx: u16, new_size: u64) -> Result<Ve
 fn build_write_instruction(target_account_idx: u16, offset: u16, data: &[u8]) -> Result<Vec<u8>> {
     let mut instruction = Vec::new();
 
-    // TN_SYS_PROG_DISCRIMINANT_WRITE = C8
+    // TN_SYS_TEST_PROG_DISCRIMINANT_WRITE = C8
     instruction.push(0xC8);
 
     // Target account index (little-endian u16)
@@ -599,7 +599,7 @@ fn build_write_instruction(target_account_idx: u16, offset: u16, data: &[u8]) ->
 fn build_compress_instruction(target_account_idx: u16, state_proof: &[u8]) -> Result<Vec<u8>> {
     let mut instruction = Vec::new();
 
-    // TN_SYS_PROG_DISCRIMINANT_ACCOUNT_COMPRESS - based on C test, this appears to be different from other discriminants
+    // TN_SYS_TEST_PROG_DISCRIMINANT_ACCOUNT_COMPRESS - based on C test, this appears to be different from other discriminants
     // Looking at the C test pattern and other system discriminants, compression is likely 0x05
     instruction.push(0x05);
 
@@ -619,10 +619,10 @@ fn build_decompress_instruction(
 ) -> Result<Vec<u8>> {
     let mut instruction = Vec::new();
 
-    // TN_SYS_PROG_DISCRIMINANT_ACCOUNT_DECOMPRESS = 0x06
+    // TN_SYS_TEST_PROG_DISCRIMINANT_ACCOUNT_DECOMPRESS = 0x06
     instruction.push(0x06);
 
-    // tn_system_program_account_decompress_args_t: account_idx (u16) + data_len (u64)
+    // tn_system_test_program_account_decompress_args_t: account_idx (u16) + data_len (u64)
     instruction.extend_from_slice(&target_account_idx.to_le_bytes());
     instruction.extend_from_slice(&(account_data.len() as u64).to_le_bytes());
 
@@ -3751,7 +3751,7 @@ pub fn build_decompress2_instruction(
 ) -> Result<Vec<u8>> {
     let mut instruction = Vec::new();
 
-    // Discriminant (1 byte) - TN_SYS_PROG_DISCRIMINANT_ACCOUNT_DECOMPRESS2 = 0x08
+    // Discriminant (1 byte) - TN_SYS_TEST_PROG_DISCRIMINANT_ACCOUNT_DECOMPRESS2 = 0x08
     instruction.push(0x08);
 
     // DECOMPRESS2 args

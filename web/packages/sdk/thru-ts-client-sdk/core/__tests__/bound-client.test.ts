@@ -203,7 +203,11 @@ describe("createBoundThruClient", () => {
 
     expect(typeof client.consensus.currentVersionContext).toBe("function");
     expect(typeof client.consensus.slotVersionContext).toBe("function");
+    expect(typeof client.consensus.slotSeqVersionContext).toBe("function");
     expect(client.consensus.statusToString(ConsensusStatus.INCLUDED)).toBe("INCLUDED");
+
+    const ctx2 = client.consensus.slotSeqVersionContext(3, 7n);
+    expect(ctx2.version?.case).toBe("slotSeq");
   });
 
   it("should inject context into bound functions", async () => {

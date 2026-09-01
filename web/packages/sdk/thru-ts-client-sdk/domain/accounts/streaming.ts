@@ -16,6 +16,10 @@ export interface AccountSnapshot {
 
 export interface AccountUpdateDelta {
     slot: bigint;
+    /** Per-account sequence number of this update. Always present, unlike
+        meta.seq which is stripped under DATA_ONLY/PUBKEY_ONLY views
+        (META_ONLY strips data, not meta). */
+    seq: bigint;
     meta?: AccountMeta;
     page?: AccountPageChunk;
     deleted?: boolean;
@@ -50,6 +54,7 @@ export function toStreamAccountUpdate(response: StreamAccountUpdatesResponse): S
 function fromProtoUpdate(update: ProtoAccountUpdate): AccountUpdateDelta {
     return {
         slot: update.slot,
+        seq: update.seq,
         meta: AccountMeta.fromProto(update.meta),
         page: update.page ? fromProtoPage(update.page) : undefined,
         deleted: update.delete ?? false,

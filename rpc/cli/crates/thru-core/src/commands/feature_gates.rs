@@ -1633,6 +1633,7 @@ tracking = "UNTO-1818"
             pages_used: 0,
             user_error_code: 0xCAFE,
             vm_error: -1,
+            fee_payer_expected_nonce: None,
             rw_accounts: Vec::new(),
             ro_accounts: Vec::new(),
             events: Vec::new(),

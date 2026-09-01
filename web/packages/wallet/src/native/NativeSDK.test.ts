@@ -157,6 +157,101 @@ describe("NativeSDK", () => {
     expect(sdk.deposit).toBeTypeOf("function");
   });
 
+  it("reuses an unchanged prepared destination but rejects later mutation", async () => {
+    const destination = {
+      network: "alphanet",
+      depositTarget: "credits",
+      tokenAccountAddress: "ta_token_account",
+      mintAddress: "ta_mint",
+      tokenProgramAddress: "ta_token_program",
+      symbol: "CREDITS",
+      decimals: 6,
+    };
+    const internals = sdk as unknown as {
+      initialized: boolean;
+      provider: {
+        prepareDeposit: (payload: unknown) => Promise<typeof destination>;
+        getSelectedAccount: () => { address: string } | null;
+      };
+      resolveDepositDestination: (
+        value: typeof destination,
+      ) => Promise<{ destination: typeof destination; walletAddress: string }>;
+    };
+    internals.initialized = true;
+    const prepare = vi
+      .spyOn(internals.provider, "prepareDeposit")
+      .mockResolvedValue(destination);
+    vi.spyOn(internals.provider, "getSelectedAccount").mockReturnValue({
+      address: "ta_wallet",
+    });
+
+    const prepared = await sdk.prepareDeposit({
+      network: "alphanet" as never,
+      depositTarget: "credits" as never,
+    });
+    const resolved = await internals.resolveDepositDestination(prepared);
+
+    expect(resolved).toEqual({ destination, walletAddress: "ta_wallet" });
+    expect(resolved.destination).not.toBe(prepared);
+    expect(prepare).toHaveBeenCalledOnce();
+
+    prepared.symbol = "ALTERED";
+    await expect(
+      internals.resolveDepositDestination(prepared),
+    ).rejects.toThrow("Prepared deposit destination no longer matches wallet config: symbol");
+    expect(prepare).toHaveBeenCalledOnce();
+  });
+
+  it("revalidates a prepared destination after the selected account changes", async () => {
+    const firstDestination = {
+      network: "alphanet",
+      depositTarget: "credits",
+      tokenAccountAddress: "ta_first_token_account",
+      mintAddress: "ta_mint",
+      tokenProgramAddress: "ta_token_program",
+      symbol: "CREDITS",
+      decimals: 6,
+    };
+    const secondDestination = {
+      ...firstDestination,
+      tokenAccountAddress: "ta_second_token_account",
+    };
+    const internals = sdk as unknown as {
+      initialized: boolean;
+      provider: {
+        prepareDeposit: (payload: unknown) => Promise<typeof firstDestination>;
+        getSelectedAccount: () => { address: string } | null;
+      };
+      resolveDepositDestination: (
+        destination: typeof firstDestination,
+      ) => Promise<{
+        destination: typeof firstDestination;
+        walletAddress: string;
+      }>;
+    };
+    internals.initialized = true;
+    let selectedAddress = "ta_first_wallet";
+    vi.spyOn(internals.provider, "getSelectedAccount").mockImplementation(
+      () => ({
+        address: selectedAddress,
+      }),
+    );
+    const prepare = vi
+      .spyOn(internals.provider, "prepareDeposit")
+      .mockResolvedValueOnce(firstDestination)
+      .mockResolvedValueOnce(secondDestination);
+
+    const prepared = await sdk.prepareDeposit();
+    await internals.resolveDepositDestination(prepared);
+    expect(prepare).toHaveBeenCalledOnce();
+
+    selectedAddress = "ta_second_wallet";
+    await expect(internals.resolveDepositDestination(prepared)).rejects.toThrow(
+      "Prepared deposit destination no longer matches wallet config: tokenAccountAddress",
+    );
+    expect(prepare).toHaveBeenCalledTimes(2);
+  });
+
   it("returns only the dapp-configured deposit provider IDs", async () => {
     const configured = new NativeSDK({
       walletUrl: "http://localhost:3000/embedded",
@@ -360,6 +455,31 @@ describe("NativeSDK", () => {
     );
 
     expect(onShowRequested).not.toHaveBeenCalled();
+  });
+
+  it("records native disconnect completion", async () => {
+    const telemetry = (
+      sdk as unknown as {
+        telemetry: { record: (event: string, fields?: Record<string, unknown>) => void };
+      }
+    ).telemetry;
+    const record = vi.spyOn(telemetry, "record");
+
+    sdk.onMessage(readyMessage(frameIdFor(sdk)));
+    const promise = sdk.disconnect();
+    const request = parseInjectedRequest(await waitForInjectedRequest(webView));
+    expect(request.type).toBe(POST_MESSAGE_REQUEST_TYPES.DISCONNECT);
+    sdk.onMessage(responseMessage(frameIdFor(sdk), request.id, {}));
+    await promise;
+
+    expect(record).toHaveBeenCalledWith(
+      "sdk.disconnect.started",
+      expect.objectContaining({ operation: "disconnect", outcome: "started" }),
+    );
+    expect(record).toHaveBeenCalledWith(
+      "sdk.disconnect.completed",
+      expect.objectContaining({ operation: "disconnect", outcome: "success" }),
+    );
   });
 
   it("sends transparent createAccount requests through the wallet WebView", async () => {

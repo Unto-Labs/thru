@@ -39,6 +39,7 @@ function makeDelta(options: {
   const owner = new Uint8Array([9]);
   return create(AccountUpdateSchema, {
     slot: options.slot,
+    seq: options.seq,
     address: create(PubkeySchema, { value: options.address }),
     meta: options.omitMeta ? undefined : makeMeta(owner, options.seq, options.dataSize),
     page:
@@ -67,6 +68,23 @@ function seedAccount(
     data,
     slot,
     seq,
+  });
+}
+
+function seedDelete(
+  cache: AccountPageCache,
+  address: Uint8Array,
+  slot: bigint,
+  seq: bigint
+): void {
+  cache.seed({
+    address,
+    addressHex: bytesToHex(address),
+    meta: makeMeta(new Uint8Array([9]), seq, 0),
+    data: new Uint8Array(0),
+    slot,
+    seq,
+    isDelete: true,
   });
 }
 
@@ -144,6 +162,288 @@ describe("AccountPageCache", () => {
     if (result.kind !== "emit") return;
     expect(result.account.isDelete).toBe(true);
     expect(cache.size).toBe(0);
+  });
+
+  test("redelivered duplicate delete after a cross-slot recreate does not drop the recreated cache entry", () => {
+    /* Under UNTO-2630, seq only restarts at 0 when an account is
+       recreated in a LATER slot; the cache's plain (slot, seq) comparison
+       against the current entry (no separate tombstone) already protects
+       this case, since the delete's (30,7) is older than the recreated
+       entry's (31,0). */
+    const cache = new AccountPageCache();
+
+    const deleted = cache.applyUpdate(
+      ADDR,
+      ADDR_HEX,
+      makeDelta({ address: ADDR, slot: 30n, seq: 7n, dataSize: 0, isDelete: true })
+    );
+    expect(deleted.kind).toBe("emit");
+    expect(cache.size).toBe(0);
+
+    const recreated = cache.applyUpdate(
+      ADDR,
+      ADDR_HEX,
+      makeDelta({ address: ADDR, slot: 31n, seq: 0n, dataSize: 3, pageIdx: 0, pageData: new Uint8Array([1, 2, 3]) })
+    );
+    expect(recreated.kind).toBe("emit");
+    expect(cache.size).toBe(1);
+
+    /* A redelivered duplicate of the ORIGINAL delete arrives after the
+       account has already been recreated in a later slot. It is older
+       than the current cache entry's (31,0) mark, so it is rejected
+       before any mutation. */
+    const duplicate = cache.applyUpdate(
+      ADDR,
+      ADDR_HEX,
+      makeDelta({ address: ADDR, slot: 30n, seq: 7n, dataSize: 0, isDelete: true })
+    );
+    expect(duplicate.kind).toBe("stale");
+    expect(cache.size).toBe(1);
+    expect(cache.counters.staleDropped).toBe(1);
+
+    /* The recreated account's cached data survived: a subsequent delta for
+       it overlays cleanly without requiring a resync. */
+    const overlaid = cache.applyUpdate(
+      ADDR,
+      ADDR_HEX,
+      makeDelta({ address: ADDR, slot: 31n, seq: 1n, dataSize: 3, pageIdx: 0, pageData: new Uint8Array([4, 5, 6]) })
+    );
+    expect(overlaid.kind).toBe("emit");
+    if (overlaid.kind !== "emit") return;
+    expect(Array.from(overlaid.account.data)).toEqual([4, 5, 6]);
+
+    /* A genuinely newer delete (later slot) still drops the entry. */
+    const newerDelete = cache.applyUpdate(
+      ADDR,
+      ADDR_HEX,
+      makeDelta({ address: ADDR, slot: 32n, seq: 2n, dataSize: 0, isDelete: true })
+    );
+    expect(newerDelete.kind).toBe("emit");
+    expect(cache.size).toBe(0);
+  });
+
+  test("delete(30,7) -> update(31,1) -> redelivered delete(30,9) is rejected against the current entry; a duplicate of the original delete and a genuinely newer delete are handled the same way", () => {
+    const cache = new AccountPageCache();
+
+    const deleted = cache.applyUpdate(
+      ADDR,
+      ADDR_HEX,
+      makeDelta({ address: ADDR, slot: 30n, seq: 7n, dataSize: 0, isDelete: true })
+    );
+    expect(deleted.kind).toBe("emit");
+
+    const updated = cache.applyUpdate(
+      ADDR,
+      ADDR_HEX,
+      makeDelta({ address: ADDR, slot: 31n, seq: 1n, dataSize: 3, pageIdx: 0, pageData: new Uint8Array([1, 2, 3]) })
+    );
+    expect(updated.kind).toBe("emit");
+    expect(cache.size).toBe(1);
+    const emitsBeforeStaleDeletes = cache.counters.immediateEmits;
+
+    /* Redelivered delete(30,9) is newer than the original delete(30,7)
+       but older than the cached (31,1) entry left by the intervening
+       update -- rejected against the current cache entry, the only
+       freshness bound a delete needs under UNTO-2630 (see the comparison
+       helper in account-replay.ts). */
+    const staleDelete = cache.applyUpdate(
+      ADDR,
+      ADDR_HEX,
+      makeDelta({ address: ADDR, slot: 30n, seq: 9n, dataSize: 0, isDelete: true })
+    );
+    expect(staleDelete.kind).toBe("stale");
+    expect(cache.size).toBe(1);
+    expect(cache.counters.staleDropped).toBe(1);
+
+    /* An exact duplicate of the original delete(30,7) is rejected the
+       same way -- it is even older than (31,1). */
+    const duplicate = cache.applyUpdate(
+      ADDR,
+      ADDR_HEX,
+      makeDelta({ address: ADDR, slot: 30n, seq: 7n, dataSize: 0, isDelete: true })
+    );
+    expect(duplicate.kind).toBe("stale");
+    expect(cache.size).toBe(1);
+    expect(cache.counters.staleDropped).toBe(2);
+    expect(cache.counters.immediateEmits).toBe(emitsBeforeStaleDeletes);
+
+    /* A genuinely newer delete, newer than the (31,1) entry, still
+       succeeds. */
+    const legitimateDelete = cache.applyUpdate(
+      ADDR,
+      ADDR_HEX,
+      makeDelta({ address: ADDR, slot: 31n, seq: 2n, dataSize: 0, isDelete: true })
+    );
+    expect(legitimateDelete.kind).toBe("emit");
+    expect(cache.size).toBe(0);
+  });
+
+  test("delete(30,7) followed by a same-slot lower-seq recreate is rejected by the version floor (UNTO-2632 P1)", () => {
+    /* Pre-P1-fix this was the transitional pre-UNTO-2630 case: the cache
+       had no persistent version memory for a deleted address (the entry
+       was dropped, not retained), so a same-slot recreate at a LOWER seq
+       than the delete was accepted vacuously -- indistinguishable from a
+       genuinely new incarnation. The version floor now closes that gap
+       unconditionally, regardless of runtime era: (30,0) is not newer
+       than the floor's (30,7), so it is rejected like any other stale
+       update. This also matches the current runtime: under UNTO-2630 an
+       in-block delete+recreate reuses (never restarts) seq, so this exact
+       sequence cannot occur live -- but the cache no longer depends on
+       that invariant to stay correct. */
+    const cache = new AccountPageCache();
+
+    const deleted = cache.applyUpdate(
+      ADDR,
+      ADDR_HEX,
+      makeDelta({ address: ADDR, slot: 30n, seq: 7n, dataSize: 0, isDelete: true })
+    );
+    expect(deleted.kind).toBe("emit");
+
+    const recreateAttempt = cache.applyUpdate(
+      ADDR,
+      ADDR_HEX,
+      makeDelta({ address: ADDR, slot: 30n, seq: 0n, dataSize: 3, pageIdx: 0, pageData: new Uint8Array([1, 2, 3]) })
+    );
+    expect(recreateAttempt.kind).toBe("stale");
+    expect(cache.size).toBe(0);
+
+    /* A genuinely newer update within the same slot is still accepted. */
+    const modified = cache.applyUpdate(
+      ADDR,
+      ADDR_HEX,
+      makeDelta({ address: ADDR, slot: 30n, seq: 8n, dataSize: 3, pageIdx: 0, pageData: new Uint8Array([4, 5, 6]) })
+    );
+    expect(modified.kind).toBe("emit");
+    expect(cache.size).toBe(1);
+
+    /* delete(30,9) is newer than the current (30,8) entry. */
+    const finalDelete = cache.applyUpdate(
+      ADDR,
+      ADDR_HEX,
+      makeDelta({ address: ADDR, slot: 30n, seq: 9n, dataSize: 0, isDelete: true })
+    );
+    expect(finalDelete.kind).toBe("emit");
+    if (finalDelete.kind !== "emit") return;
+    expect(finalDelete.account.isDelete).toBe(true);
+    expect(cache.size).toBe(0);
+  });
+
+  test("UNTO-2632 P1: a stale resync/snapshot seed after an accepted delete is rejected by the version floor, and a later-slot partial delta requests a resync instead of overlaying onto stale bytes", () => {
+    const cache = new AccountPageCache();
+
+    /* Accepted delete drops the entry, but the version floor must survive
+       the drop. */
+    const deleted = cache.applyUpdate(
+      ADDR,
+      ADDR_HEX,
+      makeDelta({ address: ADDR, slot: 31n, seq: 2n, dataSize: 0, isDelete: true })
+    );
+    expect(deleted.kind).toBe("emit");
+    expect(cache.size).toBe(0);
+
+    /* A stale in-flight resync/snapshot fetch, seeded well before the
+       delete was observed, arrives after it. Pre-P1-fix, seed() only
+       compared against `entries` -- with the entry gone, this passed the
+       freshness check vacuously and reseeded pre-delete bytes. The
+       version floor must reject it even though there is no entry left to
+       compare against, and the cache must stay empty. */
+    seedAccount(cache, ADDR, 30n, 5n, new Uint8Array(THREE_PAGES).fill(0xff));
+    expect(cache.size).toBe(0);
+
+    /* A later-slot partial delta (one page of a multi-page account)
+       arrives next. With no entry to overlay onto, the cache's contract
+       is to request a resync rather than fabricate a partial buffer --
+       critically, it must NOT silently overlay onto the stale bytes the
+       rejected seed above would have reintroduced. */
+    const laterPartial = cache.applyUpdate(
+      ADDR,
+      ADDR_HEX,
+      makeDelta({
+        address: ADDR,
+        slot: 32n,
+        seq: 0n,
+        dataSize: THREE_PAGES,
+        pageIdx: 1,
+        pageData: new Uint8Array(PAGE_SIZE).fill(0xaa),
+      })
+    );
+    expect(laterPartial.kind).toBe("resync");
+    expect(cache.size).toBe(0);
+    expect(cache.counters.resyncsRequested).toBe(1);
+  });
+
+  test("redelivered duplicate delete after a delete-snapshot seed + cross-slot recreate does not drop the recreated entry", () => {
+    const cache = new AccountPageCache();
+
+    /* Account observed already-deleted via an authoritative snapshot (e.g.
+       backfill/catch-up), not a streamed delete update. seed() records no
+       persistent tombstone for this -- it only drops any current cache
+       entry, so once the recreate below lands, that recreated entry is
+       the sole freshness bound available. */
+    seedDelete(cache, ADDR, 30n, 7n);
+    expect(cache.size).toBe(0);
+
+    const recreated = cache.applyUpdate(
+      ADDR,
+      ADDR_HEX,
+      makeDelta({ address: ADDR, slot: 31n, seq: 0n, dataSize: 3, pageIdx: 0, pageData: new Uint8Array([1, 2, 3]) })
+    );
+    expect(recreated.kind).toBe("emit");
+    expect(cache.size).toBe(1);
+
+    /* A redelivered duplicate of the delete snapshot's own (slot, seq)
+       arrives as a streamed update. It is older than the recreated
+       entry's (31,0) mark, so it is rejected against the current cache
+       entry. */
+    const duplicate = cache.applyUpdate(
+      ADDR,
+      ADDR_HEX,
+      makeDelta({ address: ADDR, slot: 30n, seq: 7n, dataSize: 0, isDelete: true })
+    );
+    expect(duplicate.kind).toBe("stale");
+    expect(cache.size).toBe(1);
+    expect(cache.counters.staleDropped).toBe(1);
+
+    /* The recreated account's cached state is intact. */
+    const overlaid = cache.applyUpdate(
+      ADDR,
+      ADDR_HEX,
+      makeDelta({ address: ADDR, slot: 31n, seq: 1n, dataSize: 3, pageIdx: 0, pageData: new Uint8Array([4, 5, 6]) })
+    );
+    expect(overlaid.kind).toBe("emit");
+    if (overlaid.kind !== "emit") return;
+    expect(Array.from(overlaid.account.data)).toEqual([4, 5, 6]);
+  });
+
+  test("non-delete seeding behavior is unaffected by delete seeding", () => {
+    const cache = new AccountPageCache();
+    seedAccount(cache, ADDR, 5n, 1n, new Uint8Array([1, 2, 3]));
+    expect(cache.size).toBe(1);
+
+    /* Older-than-cached non-delete seed is still ignored outright. Probe
+       via a newer metadata-only update (rather than re-reading the seeded
+       version itself) so the read doesn't get rejected as stale too. */
+    seedAccount(cache, ADDR, 4n, 9n, new Uint8Array([9, 9, 9]));
+    const staleSeed = cache.applyUpdate(
+      ADDR,
+      ADDR_HEX,
+      makeDelta({ address: ADDR, slot: 6n, seq: 5n, dataSize: 3 })
+    );
+    expect(staleSeed.kind).toBe("emit");
+    if (staleSeed.kind !== "emit") return;
+    expect(Array.from(staleSeed.account.data)).toEqual([1, 2, 3]);
+
+    /* A newer non-delete seed still unconditionally overwrites once past
+       the freshness gate. */
+    seedAccount(cache, ADDR, 7n, 1n, new Uint8Array([7, 8, 9]));
+    const refreshed = cache.applyUpdate(
+      ADDR,
+      ADDR_HEX,
+      makeDelta({ address: ADDR, slot: 8n, seq: 1n, dataSize: 3 })
+    );
+    expect(refreshed.kind).toBe("emit");
+    if (refreshed.kind !== "emit") return;
+    expect(Array.from(refreshed.account.data)).toEqual([7, 8, 9]);
   });
 
   test("partial page deltas overlay onto seeded data and flush at boundary", () => {
@@ -543,5 +843,68 @@ describe("AccountPageCache", () => {
     expect(cache.counters.overlaysApplied).toBe(2);
     expect(cache.counters.staleDropped).toBe(1);
     expect(cache.counters.flushedAccounts).toBe(1);
+  });
+
+  /* Reconnect-repair regression (Greptile finding on the UNTO-2632 PR): a
+     disconnect mid-version leaves a dirty half-applied overlay whose page
+     deltas already raised the floor to exactly (S, N). The reconnect
+     catch-up then refetches the account and seeds the authoritative full
+     image at that same (S, N) -- a strict seed gate rejected that repair,
+     so the corrupt bytes stayed as the base every later delta overlaid
+     onto. seed() must accept an equal-to-floor seed. */
+  test("equal-version catch-up seed repairs a half-applied overlay after a mid-version disconnect", () => {
+    const cache = new AccountPageCache();
+    const TWO_PAGES = 2 * PAGE_SIZE;
+    const pageA0 = new Uint8Array(PAGE_SIZE).fill(0xa0);
+    const pageB0 = new Uint8Array(PAGE_SIZE).fill(0xb0);
+    const pageA1 = new Uint8Array(PAGE_SIZE).fill(0xa1);
+    const pageB1 = new Uint8Array(PAGE_SIZE).fill(0xb1);
+    const pageA2 = new Uint8Array(PAGE_SIZE).fill(0xa2);
+
+    /* Baseline version (10, 1). */
+    const base = new Uint8Array(TWO_PAGES);
+    base.set(pageA0, 0);
+    base.set(pageB0, PAGE_SIZE);
+    seedAccount(cache, ADDR, 10n, 1n, base);
+
+    /* Version (20, 5) changed both pages, but only page 0's delta arrived
+       before the disconnect. The entry is now dirty and half-applied, and
+       the floor sits at exactly (20, 5). */
+    const partial = cache.applyUpdate(
+      ADDR,
+      ADDR_HEX,
+      makeDelta({ address: ADDR, slot: 20n, seq: 5n, dataSize: TWO_PAGES, pageIdx: 0, pageData: pageA1 })
+    );
+    expect(partial.kind).toBe("buffered");
+
+    /* Reconnect catch-up: authoritative full image at the same (20, 5).
+       Must be accepted and replace the half-applied bytes. */
+    const repaired = new Uint8Array(TWO_PAGES);
+    repaired.set(pageA1, 0);
+    repaired.set(pageB1, PAGE_SIZE);
+    seedAccount(cache, ADDR, 20n, 5n, repaired);
+
+    const flushed = cache.flushDirty();
+    expect(flushed).toHaveLength(1);
+    expect(flushed[0]!.data).toEqual(repaired);
+
+    /* Strictly-older seeds are still rejected: a stale in-flight resync at
+       (20, 4) must not roll the repaired state back. */
+    const garbage = new Uint8Array(TWO_PAGES).fill(0xee);
+    seedAccount(cache, ADDR, 20n, 4n, garbage);
+
+    /* A later partial write overlays onto the REPAIRED base. */
+    const later = cache.applyUpdate(
+      ADDR,
+      ADDR_HEX,
+      makeDelta({ address: ADDR, slot: 21n, seq: 1n, dataSize: TWO_PAGES, pageIdx: 0, pageData: pageA2 })
+    );
+    expect(later.kind).toBe("buffered");
+    const expected = new Uint8Array(TWO_PAGES);
+    expected.set(pageA2, 0);
+    expected.set(pageB1, PAGE_SIZE);
+    const finalFlush = cache.flushDirty();
+    expect(finalFlush).toHaveLength(1);
+    expect(finalFlush[0]!.data).toEqual(expected);
   });
 });

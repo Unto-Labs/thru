@@ -29,7 +29,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file thru/services/v1/streaming_service.proto.
  */
 export const file_thru_services_v1_streaming_service: GenFile = /*@__PURE__*/
-  fileDesc("Cih0aHJ1L3NlcnZpY2VzL3YxL3N0cmVhbWluZ19zZXJ2aWNlLnByb3RvEhB0aHJ1LnNlcnZpY2VzLnYxIo0CChNTdHJlYW1CbG9ja3NSZXF1ZXN0EhwKCnN0YXJ0X3Nsb3QYASABKARCA+BBAUgAiAEBEjAKBmZpbHRlchgCIAEoCzIWLnRocnUuY29tbW9uLnYxLkZpbHRlckID4EEBSAGIAQESLwoEdmlldxgDIAEoDjIXLnRocnUuY29yZS52MS5CbG9ja1ZpZXdCA+BBAUgCiAEBEkAKDW1pbl9jb25zZW5zdXMYBCABKA4yHy50aHJ1LmNvbW1vbi52MS5Db25zZW5zdXNTdGF0dXNCA+BBAUgDiAEBQg0KC19zdGFydF9zbG90QgkKB19maWx0ZXJCBwoFX3ZpZXdCEAoOX21pbl9jb25zZW5zdXMiPwoUU3RyZWFtQmxvY2tzUmVzcG9uc2USJwoFYmxvY2sYASABKAsyEy50aHJ1LmNvcmUudjEuQmxvY2tCA+BBAiKcAQobU3RyZWFtQWNjb3VudFVwZGF0ZXNSZXF1ZXN0EjEKBHZpZXcYAiABKA4yGS50aHJ1LmNvcmUudjEuQWNjb3VudFZpZXdCA+BBAUgAiAEBEjAKBmZpbHRlchgEIAEoCzIWLnRocnUuY29tbW9uLnYxLkZpbHRlckID4EEBSAGIAQFCBwoFX3ZpZXdCCQoHX2ZpbHRlckoECAEQAiLtAQoNQWNjb3VudFVwZGF0ZRIRCgRzbG90GAEgASgEQgPgQQISMQoEcGFnZRgCIAEoCzIZLnRocnUuY29yZS52MS5BY2NvdW50UGFnZUID4EEBSACIAQESMQoEbWV0YRgDIAEoCzIZLnRocnUuY29yZS52MS5BY2NvdW50TWV0YUID4EEBSAGIAQESGAoGZGVsZXRlGAQgASgIQgPgQQFIAogBARIsCgdhZGRyZXNzGAUgASgLMhYudGhydS5jb21tb24udjEuUHVia2V5QgPgQQJCBwoFX3BhZ2VCBwoFX21ldGFCCQoHX2RlbGV0ZSKbAQoNQmxvY2tGaW5pc2hlZBIRCgRzbG90GAEgASgEQgPgQQISKwoeZ2xvYmFsX2FjdGl2YXRlZF9zdGF0ZV9jb3VudGVyGAIgASgEQgPgQQISLQogZ2xvYmFsX2RlYWN0aXZhdGVkX3N0YXRlX2NvdW50ZXIYAyABKARCA+BBAhIbCg5jb2xsZWN0ZWRfZmVlcxgEIAEoBEID4EECIrwBChxTdHJlYW1BY2NvdW50VXBkYXRlc1Jlc3BvbnNlEikKCHNuYXBzaG90GAEgASgLMhUudGhydS5jb3JlLnYxLkFjY291bnRIABIxCgZ1cGRhdGUYAiABKAsyHy50aHJ1LnNlcnZpY2VzLnYxLkFjY291bnRVcGRhdGVIABIzCghmaW5pc2hlZBgDIAEoCzIfLnRocnUuc2VydmljZXMudjEuQmxvY2tGaW5pc2hlZEgAQgkKB21lc3NhZ2UirAEKGVN0cmVhbVRyYW5zYWN0aW9uc1JlcXVlc3QSMAoGZmlsdGVyGAEgASgLMhYudGhydS5jb21tb24udjEuRmlsdGVyQgPgQQFIAIgBARJACg1taW5fY29uc2Vuc3VzGAIgASgOMh8udGhydS5jb21tb24udjEuQ29uc2Vuc3VzU3RhdHVzQgPgQQFIAYgBAUIJCgdfZmlsdGVyQhAKDl9taW5fY29uc2Vuc3VzIlEKGlN0cmVhbVRyYW5zYWN0aW9uc1Jlc3BvbnNlEjMKC3RyYW5zYWN0aW9uGAEgASgLMhkudGhydS5jb3JlLnYxLlRyYW5zYWN0aW9uQgPgQQIiUgoTU3RyZWFtRXZlbnRzUmVxdWVzdBIwCgZmaWx0ZXIYASABKAsyFi50aHJ1LmNvbW1vbi52MS5GaWx0ZXJCA+BBAUgAiAEBQgkKB19maWx0ZXIipgIKFFN0cmVhbUV2ZW50c1Jlc3BvbnNlEhUKCGV2ZW50X2lkGAEgASgJQgPgQQISGQoHcGF5bG9hZBgCIAEoDEID4EEBSACIAQESNwoJdGltZXN0YW1wGAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEID4EEBSAGIAQESLAoHcHJvZ3JhbRgEIAEoCzIWLnRocnUuY29tbW9uLnYxLlB1YmtleUID4EECEhUKCGNhbGxfaWR4GAUgASgNQgPgQQISMQoJc2lnbmF0dXJlGAYgASgLMhkudGhydS5jb21tb24udjEuU2lnbmF0dXJlQgPgQQISEQoEc2xvdBgHIAEoBEID4EECQgoKCF9wYXlsb2FkQgwKCl90aW1lc3RhbXAijgEKF1RyYWNrVHJhbnNhY3Rpb25SZXF1ZXN0EjEKCXNpZ25hdHVyZRgBIAEoCzIZLnRocnUuY29tbW9uLnYxLlNpZ25hdHVyZUID4EECEjQKB3RpbWVvdXQYAiABKAsyGS5nb29nbGUucHJvdG9idWYuRHVyYXRpb25CA+BBAUgAiAEBQgoKCF90aW1lb3V0IukBChhUcmFja1RyYW5zYWN0aW9uUmVzcG9uc2USMQoJc2lnbmF0dXJlGAEgASgLMhkudGhydS5jb21tb24udjEuU2lnbmF0dXJlQgPgQQISPgoQY29uc2Vuc3VzX3N0YXR1cxgCIAEoDjIfLnRocnUuY29tbW9uLnYxLkNvbnNlbnN1c1N0YXR1c0ID4EEBEkcKEGV4ZWN1dGlvbl9yZXN1bHQYAyABKAsyKC50aHJ1LmNvcmUudjEuVHJhbnNhY3Rpb25FeGVjdXRpb25SZXN1bHRCA+BBARIRCgRzbG90GAQgASgEQgPgQQEiRwoYU3RyZWFtU2xvdE1ldHJpY3NSZXF1ZXN0EhwKCnN0YXJ0X3Nsb3QYASABKARCA+BBAUgAiAEBQg0KC19zdGFydF9zbG90IqkCChlTdHJlYW1TbG90TWV0cmljc1Jlc3BvbnNlEhEKBHNsb3QYASABKARCA+BBAhIrCh5nbG9iYWxfYWN0aXZhdGVkX3N0YXRlX2NvdW50ZXIYAiABKARCA+BBAhItCiBnbG9iYWxfZGVhY3RpdmF0ZWRfc3RhdGVfY291bnRlchgDIAEoBEID4EECEhsKDmNvbGxlY3RlZF9mZWVzGAQgASgEQgPgQQISOAoPYmxvY2tfdGltZXN0YW1wGAUgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEID4EECEiMKFmNvbnN1bWVkX2NvbXB1dGVfdW5pdHMYBiABKARCA+BBAhIhChRjb25zdW1lZF9zdGF0ZV91bml0cxgHIAEoDUID4EECIhUKE1N0cmVhbUhlaWdodFJlcXVlc3QibAoUU3RyZWFtSGVpZ2h0UmVzcG9uc2USFgoJZmluYWxpemVkGAEgASgEQgPgQQISHQoQbG9jYWxseV9leGVjdXRlZBgCIAEoBEID4EECEh0KEGNsdXN0ZXJfZXhlY3V0ZWQYAyABKARCA+BBAiIaChhTdHJlYW1Ob2RlUmVjb3Jkc1JlcXVlc3QiZgoZU3RyZWFtTm9kZVJlY29yZHNSZXNwb25zZRIqCgZyZWNvcmQYASABKAsyGC50aHJ1LmNvcmUudjEuTm9kZVJlY29yZEgAEhIKCGZpbmlzaGVkGAIgASgISABCCQoHbWVzc2FnZTLuBgoQU3RyZWFtaW5nU2VydmljZRJfCgxTdHJlYW1CbG9ja3MSJS50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbUJsb2Nrc1JlcXVlc3QaJi50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbUJsb2Nrc1Jlc3BvbnNlMAESdwoUU3RyZWFtQWNjb3VudFVwZGF0ZXMSLS50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbUFjY291bnRVcGRhdGVzUmVxdWVzdBouLnRocnUuc2VydmljZXMudjEuU3RyZWFtQWNjb3VudFVwZGF0ZXNSZXNwb25zZTABEnEKElN0cmVhbVRyYW5zYWN0aW9ucxIrLnRocnUuc2VydmljZXMudjEuU3RyZWFtVHJhbnNhY3Rpb25zUmVxdWVzdBosLnRocnUuc2VydmljZXMudjEuU3RyZWFtVHJhbnNhY3Rpb25zUmVzcG9uc2UwARJfCgxTdHJlYW1FdmVudHMSJS50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbUV2ZW50c1JlcXVlc3QaJi50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbUV2ZW50c1Jlc3BvbnNlMAESawoQVHJhY2tUcmFuc2FjdGlvbhIpLnRocnUuc2VydmljZXMudjEuVHJhY2tUcmFuc2FjdGlvblJlcXVlc3QaKi50aHJ1LnNlcnZpY2VzLnYxLlRyYWNrVHJhbnNhY3Rpb25SZXNwb25zZTABEl8KDFN0cmVhbUhlaWdodBIlLnRocnUuc2VydmljZXMudjEuU3RyZWFtSGVpZ2h0UmVxdWVzdBomLnRocnUuc2VydmljZXMudjEuU3RyZWFtSGVpZ2h0UmVzcG9uc2UwARJuChFTdHJlYW1TbG90TWV0cmljcxIqLnRocnUuc2VydmljZXMudjEuU3RyZWFtU2xvdE1ldHJpY3NSZXF1ZXN0GisudGhydS5zZXJ2aWNlcy52MS5TdHJlYW1TbG90TWV0cmljc1Jlc3BvbnNlMAESbgoRU3RyZWFtTm9kZVJlY29yZHMSKi50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbU5vZGVSZWNvcmRzUmVxdWVzdBorLnRocnUuc2VydmljZXMudjEuU3RyZWFtTm9kZVJlY29yZHNSZXNwb25zZTABQuABChRjb20udGhydS5zZXJ2aWNlcy52MUIVU3RyZWFtaW5nU2VydmljZVByb3RvUAFaSGdpdGh1Yi5jb20vVW50by1MYWJzL3RocnUtbmV0L2dycGMvcGtnL3Byb3RvL3RocnUvc2VydmljZXMvdjE7c2VydmljZXN2MaICA1RTWKoCEFRocnUuU2VydmljZXMuVjG6AgRUSFVTygIQVGhydVxTZXJ2aWNlc1xWMeICHFRocnVcU2VydmljZXNcVjFcR1BCTWV0YWRhdGHqAhJUaHJ1OjpTZXJ2aWNlczo6VjFiBnByb3RvMw", [file_buf_validate_validate, file_google_api_field_behavior, file_thru_common_v1_primitives, file_google_protobuf_duration, file_google_protobuf_timestamp, file_thru_common_v1_consensus, file_thru_common_v1_filters, file_thru_core_v1_account, file_thru_core_v1_block, file_thru_core_v1_transaction, file_thru_core_v1_types, file_thru_core_v1_node]);
+  fileDesc("Cih0aHJ1L3NlcnZpY2VzL3YxL3N0cmVhbWluZ19zZXJ2aWNlLnByb3RvEhB0aHJ1LnNlcnZpY2VzLnYxIo0CChNTdHJlYW1CbG9ja3NSZXF1ZXN0EhwKCnN0YXJ0X3Nsb3QYASABKARCA+BBAUgAiAEBEjAKBmZpbHRlchgCIAEoCzIWLnRocnUuY29tbW9uLnYxLkZpbHRlckID4EEBSAGIAQESLwoEdmlldxgDIAEoDjIXLnRocnUuY29yZS52MS5CbG9ja1ZpZXdCA+BBAUgCiAEBEkAKDW1pbl9jb25zZW5zdXMYBCABKA4yHy50aHJ1LmNvbW1vbi52MS5Db25zZW5zdXNTdGF0dXNCA+BBAUgDiAEBQg0KC19zdGFydF9zbG90QgkKB19maWx0ZXJCBwoFX3ZpZXdCEAoOX21pbl9jb25zZW5zdXMiPwoUU3RyZWFtQmxvY2tzUmVzcG9uc2USJwoFYmxvY2sYASABKAsyEy50aHJ1LmNvcmUudjEuQmxvY2tCA+BBAiKcAQobU3RyZWFtQWNjb3VudFVwZGF0ZXNSZXF1ZXN0EjEKBHZpZXcYAiABKA4yGS50aHJ1LmNvcmUudjEuQWNjb3VudFZpZXdCA+BBAUgAiAEBEjAKBmZpbHRlchgEIAEoCzIWLnRocnUuY29tbW9uLnYxLkZpbHRlckID4EEBSAGIAQFCBwoFX3ZpZXdCCQoHX2ZpbHRlckoECAEQAiL/AQoNQWNjb3VudFVwZGF0ZRIRCgRzbG90GAEgASgEQgPgQQISMQoEcGFnZRgCIAEoCzIZLnRocnUuY29yZS52MS5BY2NvdW50UGFnZUID4EEBSACIAQESMQoEbWV0YRgDIAEoCzIZLnRocnUuY29yZS52MS5BY2NvdW50TWV0YUID4EEBSAGIAQESGAoGZGVsZXRlGAQgASgIQgPgQQFIAogBARIsCgdhZGRyZXNzGAUgASgLMhYudGhydS5jb21tb24udjEuUHVia2V5QgPgQQISEAoDc2VxGAYgASgEQgPgQQJCBwoFX3BhZ2VCBwoFX21ldGFCCQoHX2RlbGV0ZSKbAQoNQmxvY2tGaW5pc2hlZBIRCgRzbG90GAEgASgEQgPgQQISKwoeZ2xvYmFsX2FjdGl2YXRlZF9zdGF0ZV9jb3VudGVyGAIgASgEQgPgQQISLQogZ2xvYmFsX2RlYWN0aXZhdGVkX3N0YXRlX2NvdW50ZXIYAyABKARCA+BBAhIbCg5jb2xsZWN0ZWRfZmVlcxgEIAEoBEID4EECIrwBChxTdHJlYW1BY2NvdW50VXBkYXRlc1Jlc3BvbnNlEikKCHNuYXBzaG90GAEgASgLMhUudGhydS5jb3JlLnYxLkFjY291bnRIABIxCgZ1cGRhdGUYAiABKAsyHy50aHJ1LnNlcnZpY2VzLnYxLkFjY291bnRVcGRhdGVIABIzCghmaW5pc2hlZBgDIAEoCzIfLnRocnUuc2VydmljZXMudjEuQmxvY2tGaW5pc2hlZEgAQgkKB21lc3NhZ2UirAEKGVN0cmVhbVRyYW5zYWN0aW9uc1JlcXVlc3QSMAoGZmlsdGVyGAEgASgLMhYudGhydS5jb21tb24udjEuRmlsdGVyQgPgQQFIAIgBARJACg1taW5fY29uc2Vuc3VzGAIgASgOMh8udGhydS5jb21tb24udjEuQ29uc2Vuc3VzU3RhdHVzQgPgQQFIAYgBAUIJCgdfZmlsdGVyQhAKDl9taW5fY29uc2Vuc3VzIlEKGlN0cmVhbVRyYW5zYWN0aW9uc1Jlc3BvbnNlEjMKC3RyYW5zYWN0aW9uGAEgASgLMhkudGhydS5jb3JlLnYxLlRyYW5zYWN0aW9uQgPgQQIiUgoTU3RyZWFtRXZlbnRzUmVxdWVzdBIwCgZmaWx0ZXIYASABKAsyFi50aHJ1LmNvbW1vbi52MS5GaWx0ZXJCA+BBAUgAiAEBQgkKB19maWx0ZXIipgIKFFN0cmVhbUV2ZW50c1Jlc3BvbnNlEhUKCGV2ZW50X2lkGAEgASgJQgPgQQISGQoHcGF5bG9hZBgCIAEoDEID4EEBSACIAQESNwoJdGltZXN0YW1wGAMgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEID4EEBSAGIAQESLAoHcHJvZ3JhbRgEIAEoCzIWLnRocnUuY29tbW9uLnYxLlB1YmtleUID4EECEhUKCGNhbGxfaWR4GAUgASgNQgPgQQISMQoJc2lnbmF0dXJlGAYgASgLMhkudGhydS5jb21tb24udjEuU2lnbmF0dXJlQgPgQQISEQoEc2xvdBgHIAEoBEID4EECQgoKCF9wYXlsb2FkQgwKCl90aW1lc3RhbXAijgEKF1RyYWNrVHJhbnNhY3Rpb25SZXF1ZXN0EjEKCXNpZ25hdHVyZRgBIAEoCzIZLnRocnUuY29tbW9uLnYxLlNpZ25hdHVyZUID4EECEjQKB3RpbWVvdXQYAiABKAsyGS5nb29nbGUucHJvdG9idWYuRHVyYXRpb25CA+BBAUgAiAEBQgoKCF90aW1lb3V0IukBChhUcmFja1RyYW5zYWN0aW9uUmVzcG9uc2USMQoJc2lnbmF0dXJlGAEgASgLMhkudGhydS5jb21tb24udjEuU2lnbmF0dXJlQgPgQQISPgoQY29uc2Vuc3VzX3N0YXR1cxgCIAEoDjIfLnRocnUuY29tbW9uLnYxLkNvbnNlbnN1c1N0YXR1c0ID4EEBEkcKEGV4ZWN1dGlvbl9yZXN1bHQYAyABKAsyKC50aHJ1LmNvcmUudjEuVHJhbnNhY3Rpb25FeGVjdXRpb25SZXN1bHRCA+BBARIRCgRzbG90GAQgASgEQgPgQQEimwEKGFN0cmVhbVNsb3RNZXRyaWNzUmVxdWVzdBIcCgpzdGFydF9zbG90GAEgASgEQgPgQQFIAIgBARIqCh1pbmNsdWRlX2NvbXByZXNzZWRfc3RhdGVfcm9vdBgCIAEoCEID4EEBEiYKGWluY2x1ZGVfYWN0aXZlX3N0YXRlX2hhc2gYAyABKAhCA+BBAUINCgtfc3RhcnRfc2xvdCKnAwoZU3RyZWFtU2xvdE1ldHJpY3NSZXNwb25zZRIRCgRzbG90GAEgASgEQgPgQQISKwoeZ2xvYmFsX2FjdGl2YXRlZF9zdGF0ZV9jb3VudGVyGAIgASgEQgPgQQISLQogZ2xvYmFsX2RlYWN0aXZhdGVkX3N0YXRlX2NvdW50ZXIYAyABKARCA+BBAhIbCg5jb2xsZWN0ZWRfZmVlcxgEIAEoBEID4EECEjgKD2Jsb2NrX3RpbWVzdGFtcBgFIAEoCzIaLmdvb2dsZS5wcm90b2J1Zi5UaW1lc3RhbXBCA+BBAhIjChZjb25zdW1lZF9jb21wdXRlX3VuaXRzGAYgASgEQgPgQQISIQoUY29uc3VtZWRfc3RhdGVfdW5pdHMYByABKA1CA+BBAhInChVjb21wcmVzc2VkX3N0YXRlX3Jvb3QYCCABKAxCA+BBAUgAiAEBEiMKEWFjdGl2ZV9zdGF0ZV9oYXNoGAkgASgMQgPgQQFIAYgBAUIYChZfY29tcHJlc3NlZF9zdGF0ZV9yb290QhQKEl9hY3RpdmVfc3RhdGVfaGFzaCIVChNTdHJlYW1IZWlnaHRSZXF1ZXN0ImwKFFN0cmVhbUhlaWdodFJlc3BvbnNlEhYKCWZpbmFsaXplZBgBIAEoBEID4EECEh0KEGxvY2FsbHlfZXhlY3V0ZWQYAiABKARCA+BBAhIdChBjbHVzdGVyX2V4ZWN1dGVkGAMgASgEQgPgQQIiGgoYU3RyZWFtTm9kZVJlY29yZHNSZXF1ZXN0ImYKGVN0cmVhbU5vZGVSZWNvcmRzUmVzcG9uc2USKgoGcmVjb3JkGAEgASgLMhgudGhydS5jb3JlLnYxLk5vZGVSZWNvcmRIABISCghmaW5pc2hlZBgCIAEoCEgAQgkKB21lc3NhZ2Uy7gYKEFN0cmVhbWluZ1NlcnZpY2USXwoMU3RyZWFtQmxvY2tzEiUudGhydS5zZXJ2aWNlcy52MS5TdHJlYW1CbG9ja3NSZXF1ZXN0GiYudGhydS5zZXJ2aWNlcy52MS5TdHJlYW1CbG9ja3NSZXNwb25zZTABEncKFFN0cmVhbUFjY291bnRVcGRhdGVzEi0udGhydS5zZXJ2aWNlcy52MS5TdHJlYW1BY2NvdW50VXBkYXRlc1JlcXVlc3QaLi50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbUFjY291bnRVcGRhdGVzUmVzcG9uc2UwARJxChJTdHJlYW1UcmFuc2FjdGlvbnMSKy50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbVRyYW5zYWN0aW9uc1JlcXVlc3QaLC50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbVRyYW5zYWN0aW9uc1Jlc3BvbnNlMAESXwoMU3RyZWFtRXZlbnRzEiUudGhydS5zZXJ2aWNlcy52MS5TdHJlYW1FdmVudHNSZXF1ZXN0GiYudGhydS5zZXJ2aWNlcy52MS5TdHJlYW1FdmVudHNSZXNwb25zZTABEmsKEFRyYWNrVHJhbnNhY3Rpb24SKS50aHJ1LnNlcnZpY2VzLnYxLlRyYWNrVHJhbnNhY3Rpb25SZXF1ZXN0GioudGhydS5zZXJ2aWNlcy52MS5UcmFja1RyYW5zYWN0aW9uUmVzcG9uc2UwARJfCgxTdHJlYW1IZWlnaHQSJS50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbUhlaWdodFJlcXVlc3QaJi50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbUhlaWdodFJlc3BvbnNlMAESbgoRU3RyZWFtU2xvdE1ldHJpY3MSKi50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbVNsb3RNZXRyaWNzUmVxdWVzdBorLnRocnUuc2VydmljZXMudjEuU3RyZWFtU2xvdE1ldHJpY3NSZXNwb25zZTABEm4KEVN0cmVhbU5vZGVSZWNvcmRzEioudGhydS5zZXJ2aWNlcy52MS5TdHJlYW1Ob2RlUmVjb3Jkc1JlcXVlc3QaKy50aHJ1LnNlcnZpY2VzLnYxLlN0cmVhbU5vZGVSZWNvcmRzUmVzcG9uc2UwAULgAQoUY29tLnRocnUuc2VydmljZXMudjFCFVN0cmVhbWluZ1NlcnZpY2VQcm90b1ABWkhnaXRodWIuY29tL1VudG8tTGFicy90aHJ1LW5ldC9ncnBjL3BrZy9wcm90by90aHJ1L3NlcnZpY2VzL3YxO3NlcnZpY2VzdjGiAgNUU1iqAhBUaHJ1LlNlcnZpY2VzLlYxugIEVEhVU8oCEFRocnVcU2VydmljZXNcVjHiAhxUaHJ1XFNlcnZpY2VzXFYxXEdQQk1ldGFkYXRh6gISVGhydTo6U2VydmljZXM6OlYxYgZwcm90bzM", [file_buf_validate_validate, file_google_api_field_behavior, file_thru_common_v1_primitives, file_google_protobuf_duration, file_google_protobuf_timestamp, file_thru_common_v1_consensus, file_thru_common_v1_filters, file_thru_core_v1_account, file_thru_core_v1_block, file_thru_core_v1_transaction, file_thru_core_v1_types, file_thru_core_v1_node]);
 
 /**
  * StreamBlocksRequest subscribes to real-time block updates.
@@ -205,6 +205,9 @@ export const StreamBlocksResponseSchema: GenMessage<StreamBlocksResponse> = /*@_
  *
  * - params.min_seq (uint64): Minimum sequence number for filtering
  *   Example: snapshot.meta.seq >= params.min_seq
+ *   Note: for account_update messages, prefer the top-level
+ *   account_update.seq -- it is present under every view, including
+ *   DATA_ONLY and PUBKEY_ONLY where account_update.meta is stripped.
  *
  * - params.min_data_size (uint32): Minimum data size for filtering
  *   Example: snapshot.meta.data_size >= params.min_data_size
@@ -222,6 +225,7 @@ export const StreamBlocksResponseSchema: GenMessage<StreamBlocksResponse> = /*@_
  *
  * Available account_update fields (AccountUpdate):
  *   account_update.slot (uint64), account_update.delete (bool),
+ *   account_update.seq (uint64) - present under every view, unlike meta.seq,
  *   account_update.meta.balance (uint64), account_update.meta.seq (uint64),
  *   account_update.meta.nonce (uint64), account_update.meta.data_size (uint32),
  *   account_update.meta.version (uint32), account_update.meta.flags (AccountFlags),
@@ -256,6 +260,8 @@ export const StreamBlocksResponseSchema: GenMessage<StreamBlocksResponse> = /*@_
  *
  * 6. Filter by sequence number:
  *    Expression: "(has(snapshot.meta) && snapshot.meta.seq >= uint(100)) || (has(account_update.meta) && account_update.meta.seq >= uint(100))"
+ *    Note: for account_update alone, the top-level field also works and
+ *    survives every view: "account_update.seq >= uint(100)"
  *
  * 7. Filter by data size:
  *    Expression: "(has(snapshot.meta) && snapshot.meta.data_size >= uint(1024)) || (has(account_update.meta) && account_update.meta.data_size >= uint(1024))"
@@ -307,10 +313,11 @@ export type StreamAccountUpdatesRequest = Message<"thru.services.v1.StreamAccoun
    * Projects delivered snapshots and updates to the requested fields. The
    * server strips fields the view excludes before sending: META_ONLY omits
    * Account.data and AccountUpdate.page; DATA_ONLY omits the meta; PUBKEY_ONLY
-   * delivers only the address. On AccountUpdate deltas the slot and the
-   * AccountUpdate.delete flag are always preserved regardless of view, so every
-   * view can detect account deletion; without delete a deletion would be
-   * indistinguishable from a page-less update.
+   * delivers only the address. On AccountUpdate deltas the slot, the
+   * top-level seq, and the AccountUpdate.delete flag are always preserved
+   * regardless of view, so every view can detect account deletion and read
+   * the per-account sequence number even when meta is stripped; without
+   * delete a deletion would be indistinguishable from a page-less update.
    * ACCOUNT_VIEW_UNSPECIFIED defaults to ACCOUNT_VIEW_FULL, matching the unary
    * GetAccount RPC.
    *
@@ -363,6 +370,15 @@ export type AccountUpdate = Message<"thru.services.v1.AccountUpdate"> & {
    * @generated from field: thru.common.v1.Pubkey address = 5;
    */
   address?: Pubkey | undefined;
+
+  /**
+   * Per-account sequence number of this update. Unlike meta.seq, this
+   * top-level field is present under every view, including DATA_ONLY and
+   * PUBKEY_ONLY where meta is stripped.
+   *
+   * @generated from field: uint64 seq = 6;
+   */
+  seq: bigint;
 };
 
 /**
@@ -857,18 +873,47 @@ export const TrackTransactionResponseSchema: GenMessage<TrackTransactionResponse
 
 /**
  * StreamSlotMetricsRequest subscribes to per-slot metrics updates.
- * Metrics are emitted after each block's execution completes.
+ *
+ * One message is published per slot terminator. That is normally an executed
+ * block, but a persistence consumer connecting without a durable marker also
+ * receives an account-bootstrap terminator, which reports no execution state:
+ * its counters are zero and it carries no state commitments.
  *
  * @generated from message thru.services.v1.StreamSlotMetricsRequest
  */
 export type StreamSlotMetricsRequest = Message<"thru.services.v1.StreamSlotMetricsRequest"> & {
   /**
-   * Optional starting slot. If specified, starts streaming from this slot.
-   * If not specified, starts from the next executed slot.
+   * Optional lower bound on the slots delivered. This is a FILTER on live
+   * publications, not a replay: the server holds no history and will not
+   * backfill slots that are already in the past. Slots below this value are
+   * skipped; if not specified, delivery starts from the next terminator.
+   * To read past slots use QueryService.GetSlotMetrics / ListSlotMetrics --
+   * but note those carry the counters and timestamp only, NOT the state
+   * commitments below. For the commitments the corresponding queries are
+   * QueryService.GetStateRoots and QueryService.GetActiveStateHashes, and they
+   * answer only for slots whose rows were actually persisted -- a slot the
+   * indexer never committed, or one whose terminator carried no commitment, has
+   * nothing to return, so a gap is not guaranteed to be fillable.
    *
    * @generated from field: optional uint64 start_slot = 1;
    */
   startSlot?: bigint | undefined;
+
+  /**
+   * Opt in to compressed_state_root on the response. Off by default: the
+   * commitment costs ~34 bytes per slot and most consumers do not read it.
+   *
+   * @generated from field: bool include_compressed_state_root = 2;
+   */
+  includeCompressedStateRoot: boolean;
+
+  /**
+   * Opt in to active_state_hash on the response. Off by default, same
+   * reasoning as include_compressed_state_root.
+   *
+   * @generated from field: bool include_active_state_hash = 3;
+   */
+  includeActiveStateHash: boolean;
 };
 
 /**
@@ -879,7 +924,17 @@ export const StreamSlotMetricsRequestSchema: GenMessage<StreamSlotMetricsRequest
   messageDesc(file_thru_services_v1_streaming_service, 12);
 
 /**
- * StreamSlotMetricsResponse delivers slot metrics after execution completes.
+ * StreamSlotMetricsResponse delivers slot metrics at slot-terminator time.
+ *
+ * This is a best-effort, live-only feed. One message is published per slot
+ * TERMINATOR, which is normally an executed block but is also an
+ * account-bootstrap marker carrying zeroed counters and no state commitments.
+ * Publication happens AHEAD of the indexer having persisted the slot: a state
+ * proof for that slot may not be servable yet, and
+ * neither StreamHeight nor GetStateRoots is a durability signal. A subscriber
+ * that cannot keep up is disconnected with RESOURCE_EXHAUSTED rather than
+ * silently skipped, and there is no replay -- a client that reconnects has a
+ * gap and must backfill through QueryService.
  *
  * @generated from message thru.services.v1.StreamSlotMetricsResponse
  */
@@ -932,6 +987,53 @@ export type StreamSlotMetricsResponse = Message<"thru.services.v1.StreamSlotMetr
    * @generated from field: uint32 consumed_state_units = 7;
    */
   consumedStateUnits: number;
+
+  /**
+   * The compressed-state trie root as of this slot: exactly 32 bytes, the
+   * commitment that account state proofs are verified against.
+   *
+   * Sent only when the request set include_compressed_state_root.
+   *
+   * An all-zero VALUE is legitimate and is not the same as an absent field.
+   * The trie is empty until compression warms up, and a slot in which nothing
+   * was compressed carries the previous root unchanged, so a repeated or zero
+   * root means "nothing merged", never "unknown".
+   *
+   * Absence has five causes, and they are not all distinguishable from the
+   * client:
+   *   1. the field was not requested;
+   *   2. it was requested, and the node reported no execution state for this
+   *      slot (an account-bootstrap terminator);
+   *   3. this server predates the field and ignores the request flag;
+   *   4. this server supports the field, but the NODE behind it is older than
+   *      the wire flag that marks a terminator as post-execution, so the server
+   *      withholds the commitments rather than guess;
+   *   5. the node's terminator was truncated or malformed, so the server could
+   *      not read a commitment out of it at all.
+   * QueryService.GetVersion separates case 3 from the rest by reporting the
+   * server build. Cases 2, 4 and 5 are indistinguishable on the wire -- all of
+   * them mean "the server declined to state a commitment for this slot", and
+   * none of them is safe to read as a value.
+   *
+   * @generated from field: optional bytes compressed_state_root = 8;
+   */
+  compressedStateRoot?: Uint8Array | undefined;
+
+  /**
+   * The active-state hash as of this slot: exactly 32 bytes, computed over the
+   * live (uncompressed) account set together with this slot's block context.
+   *
+   * Sent only when the request set include_active_state_hash. The same five
+   * causes of absence as compressed_state_root apply.
+   *
+   * Note that this hash covers the block context, which itself contains the
+   * compressed-state root -- so it transitively commits to the value in
+   * compressed_state_root. Agreement between the two fields is therefore NOT
+   * an independent cross-check of either one.
+   *
+   * @generated from field: optional bytes active_state_hash = 9;
+   */
+  activeStateHash?: Uint8Array | undefined;
 };
 
 /**
@@ -1090,8 +1192,9 @@ export const StreamingService: GenService<{
     output: typeof StreamHeightResponseSchema;
   },
   /**
-   * Stream per-slot metrics including state counters and collected fees.
-   * Metrics are emitted after each block's execution completes.
+   * Stream per-slot metrics including state counters, collected fees and --
+   * on request -- the slot's state commitments. One message per slot
+   * terminator; see StreamSlotMetricsResponse for the delivery contract.
    *
    * @generated from rpc thru.services.v1.StreamingService.StreamSlotMetrics
    */

@@ -26,15 +26,19 @@ import {
   type ThruNetwork,
 } from './protocol';
 import {
+  createPreparedDepositSnapshot,
   ensureDepositAccountForWallet,
   formatDepositAmount,
   getDepositAccountStateForWallet,
+  getReusablePreparedDepositDestination,
+  getValidatedDepositDestination,
   signDepositTransactionWithActiveSession,
   waitForDepositBalanceForWallet,
   type DepositAccountState,
   type DepositsApi,
   type EnsureDepositAccountParams,
   type GetDepositAccountStateParams,
+  type PreparedDepositSnapshot,
   type SignDepositTransactionPayload,
   type WaitForDepositBalanceParams,
 } from './deposit';
@@ -79,7 +83,6 @@ export interface BrowserSDKConfig {
     providers: string[];
   };
 }
-
 export interface ConnectOptions {
   metadata?: ConnectMetadataInput;
   /** Custom name for a passkey created during this connect flow. */
@@ -104,6 +107,10 @@ export class BrowserSDK {
   private depositProviders: ReadonlySet<string>;
   private connectInFlight: Promise<ConnectResult> | null = null;
   private lastConnectResult: ConnectResult | null = null;
+  private readonly preparedDepositSnapshots = new WeakMap<
+    DepositDestination,
+    PreparedDepositSnapshot
+  >();
 
   readonly deposits: DepositsApi = {
     prepare: (targetOrPayload) => this.prepareDeposit(targetOrPayload),
@@ -434,10 +441,22 @@ export class BrowserSDK {
       typeof depositTargetOrPayload === 'string'
         ? { depositTarget: depositTargetOrPayload }
         : depositTargetOrPayload ?? {};
-    return this.provider.prepareDeposit({
+    const selectedAccountBefore = this.provider.getSelectedAccount();
+    const destination = await this.provider.prepareDeposit({
       ...payload,
       network: payload.network ?? this.defaultNetwork,
     });
+    const selectedAccountAfter = this.provider.getSelectedAccount();
+    if (
+      selectedAccountBefore &&
+      selectedAccountAfter?.address === selectedAccountBefore.address
+    ) {
+      this.preparedDepositSnapshots.set(
+        destination,
+        createPreparedDepositSnapshot(destination, selectedAccountAfter.address)
+      );
+    }
+    return destination;
   }
 
   /**
@@ -681,6 +700,22 @@ export class BrowserSDK {
     if (!selectedAccount) {
       throw new Error('Wallet not connected');
     }
+    if (destination) {
+      const snapshot = this.preparedDepositSnapshots.get(destination);
+      if (snapshot) {
+        const canonicalDestination = getReusablePreparedDepositDestination(
+          destination,
+          snapshot,
+          selectedAccount.address
+        );
+        if (canonicalDestination) {
+          return {
+            destination: canonicalDestination,
+            walletAddress: selectedAccount.address,
+          };
+        }
+      }
+    }
     const expected = await this.prepareDeposit(
       destination
         ? {
@@ -689,10 +724,12 @@ export class BrowserSDK {
           }
         : DepositTarget.Credits
     );
-    if (destination) {
-      assertDepositDestinationMatches(destination, expected);
-    }
-    return { destination: expected, walletAddress: selectedAccount.address };
+    return {
+      destination: destination
+        ? getValidatedDepositDestination(destination, expected)
+        : expected,
+      walletAddress: selectedAccount.address,
+    };
   }
 
   private signDepositTransaction(
@@ -711,18 +748,5 @@ export class BrowserSDK {
         selectedAccount: active.selectedAccount,
       };
     }
-  }
-}
-
-function assertDepositDestinationMatches(
-  actual: DepositDestination,
-  expected: DepositDestination
-): void {
-  const mismatches = (Object.keys(expected) as Array<keyof DepositDestination>)
-    .filter((key) => actual[key] !== expected[key]);
-  if (mismatches.length > 0) {
-    throw new Error(
-      `Prepared deposit destination no longer matches wallet config: ${mismatches.join(', ')}`
-    );
   }
 }

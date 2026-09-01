@@ -299,7 +299,6 @@ impl Client {
             view: Some(view_value.to_proto() as i32),
             version_context: Some(version_ctx.to_proto()),
             data_slice: None,
-            ..Default::default()
         };
 
         let mut grpc_request = Request::new(request);
@@ -341,7 +340,6 @@ impl Client {
             view: Some(corev1::AccountView::Full as i32),
             version_context: Some(slot_version_context(slot)),
             data_slice: None,
-            ..Default::default()
         };
 
         let mut grpc_request = Request::new(request);
@@ -553,6 +551,7 @@ impl Client {
         let execution_result = execution.execution_result;
         let vm_error = execution.vm_error as i32;
         let user_error_code = execution.user_error_code;
+        let fee_payer_expected_nonce = execution.fee_payer_expected_nonce;
 
         let rw_accounts = execution
             .readwrite_accounts
@@ -614,6 +613,7 @@ impl Client {
             pages_used: execution.pages_used,
             user_error_code,
             vm_error,
+            fee_payer_expected_nonce,
             rw_accounts,
             ro_accounts,
             events,
@@ -758,8 +758,21 @@ impl Client {
             .await?
         {
             Some(transaction_proto) => {
-                self.transaction_proto_to_details(transaction_proto, &signature_bytes)
-                    .await
+                let mut details = self
+                    .transaction_proto_to_details(transaction_proto, &signature_bytes)
+                    .await?;
+                /* fee_payer_expected_nonce reaches us only on the streamed
+                   result: a nonce reject persists nothing, so there is no
+                   ClickHouse column behind it and the query reconstruction
+                   above always leaves it None. Carry it over from the stream,
+                   which is authoritative for this field (UNTO-2619). */
+                if details.fee_payer_expected_nonce.is_none() {
+                    details.fee_payer_expected_nonce = track_resp
+                        .execution_result
+                        .as_ref()
+                        .and_then(|exec| exec.fee_payer_expected_nonce);
+                }
+                Ok(details)
             }
             None => Err(ClientError::TransactionVerification(
                 "Transaction confirmed via stream but not found in query".to_string(),
@@ -1156,6 +1169,44 @@ impl Client {
         Ok(ConfirmationStream { inner: stream })
     }
 
+    /// Open a live stream of per-slot metrics, optionally carrying the slot's
+    /// state commitments.
+    ///
+    /// The commitments are opt-in on the wire, so a caller that does not need
+    /// them pays nothing for them; ask only for what you will read.
+    ///
+    /// This is a best-effort, live-only feed. One message is published per slot
+    /// terminator -- normally an executed block, but also the account-bootstrap
+    /// marker the node emits when a PERSISTENCE consumer attaches without a
+    /// durable marker, which carries zeroed counters and no commitments.
+    /// Subscribing here does not trigger one; it is the indexer's own
+    /// connection to the node that does. Publication is ahead of the indexer persisting the slot,
+    /// and there is no replay: a reconnect leaves a gap that must be filled
+    /// through the query service.
+    pub async fn stream_slot_metrics(
+        &self,
+        include_compressed_state_root: bool,
+        include_active_state_hash: bool,
+    ) -> Result<SlotMetricsStream> {
+        let mut client = StreamingServiceClient::new(self.channel.clone())
+            .max_decoding_message_size(128 * 1024 * 1024) /* 128 MB */
+            .max_encoding_message_size(128 * 1024 * 1024); /* 128 MB */
+
+        let request =
+            slot_metrics_request(include_compressed_state_root, include_active_state_hash);
+
+        let mut grpc_request = Request::new(request);
+        self.apply_metadata(&mut grpc_request);
+        /* No per-request timeout: this is a long-lived subscription. */
+
+        let stream = client
+            .stream_slot_metrics(grpc_request)
+            .await
+            .map_err(map_stream_status)?
+            .into_inner();
+        Ok(SlotMetricsStream { inner: stream })
+    }
+
     async fn fetch_transaction_details(
         &self,
         signature: &[u8; 64],
@@ -1262,6 +1313,7 @@ impl Client {
         let execution_result = execution.execution_result;
         let vm_error = execution.vm_error as i32;
         let user_error_code = execution.user_error_code;
+        let fee_payer_expected_nonce = execution.fee_payer_expected_nonce;
 
         let rw_accounts = execution
             .readwrite_accounts
@@ -1324,6 +1376,7 @@ impl Client {
             pages_used: execution.pages_used,
             user_error_code,
             vm_error,
+            fee_payer_expected_nonce,
             rw_accounts,
             ro_accounts,
             events,
@@ -1382,8 +1435,6 @@ impl Client {
             }),
             view: Some(corev1::AccountView::Full as i32),
             version_context: Some(current_or_historical_version_context()),
-            min_consensus: Some(commonv1::ConsensusStatus::Included as i32),
-            ..Default::default()
         };
 
         let mut grpc_request = Request::new(request);
@@ -1419,6 +1470,11 @@ pub enum VersionContext {
     /// Current or historical version (default)
     #[default]
     CurrentOrHistorical,
+    /// Identifies the exact account version written in `slot` carrying
+    /// per-account sequence `seq`. A bare seq is not a version key -- it
+    /// restarts across account incarnations -- so it is only meaningful
+    /// scoped to a slot.
+    SlotSeq { slot: u64, seq: u64 },
 }
 
 impl VersionContext {
@@ -1432,6 +1488,11 @@ impl VersionContext {
             VersionContext::CurrentOrHistorical => commonv1::VersionContext {
                 version: Some(commonv1::version_context::Version::CurrentOrHistorical(
                     commonv1::CurrentOrHistoricalVersion {},
+                )),
+            },
+            VersionContext::SlotSeq { slot, seq } => commonv1::VersionContext {
+                version: Some(commonv1::version_context::Version::SlotSeq(
+                    commonv1::SlotSeq { slot, seq },
                 )),
             },
         }
@@ -1457,6 +1518,18 @@ fn current_or_historical_version_context() -> commonv1::VersionContext {
 fn slot_version_context(slot: u64) -> commonv1::VersionContext {
     commonv1::VersionContext {
         version: Some(commonv1::version_context::Version::Slot(slot)),
+    }
+}
+
+/// Builds a version context that identifies the exact account version
+/// written in `slot` carrying per-account sequence `seq`. A bare seq is not
+/// a version key -- it restarts across account incarnations -- so it is
+/// only meaningful scoped to a slot.
+pub fn slot_seq_version_context(slot: u64, seq: u64) -> commonv1::VersionContext {
+    commonv1::VersionContext {
+        version: Some(commonv1::version_context::Version::SlotSeq(
+            commonv1::SlotSeq { slot, seq },
+        )),
     }
 }
 
@@ -1503,6 +1576,145 @@ pub struct Confirmation {
     pub execution_result: u64,
     /// Slot the transaction was included in.
     pub slot: u64,
+    /// The nonce the runtime requires for the next transaction from this fee
+    /// payer. `Some` only when `vm_error` is a nonce reject; `None` otherwise.
+    /// Retry against this value -- treat it as a correction, not a reservation
+    /// (UNTO-2619).
+    pub fee_payer_expected_nonce: Option<u64>,
+}
+
+/// One slot's metrics, with the state commitments the server actually sent.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SlotMetricsUpdate {
+    /// Slot these metrics describe.
+    pub slot: u64,
+    /// Total fees collected in the slot.
+    pub collected_fees: u64,
+    /// Running total of activated state across all accounts.
+    pub global_activated_state_counter: u64,
+    /// Running total of deactivated state across all accounts.
+    pub global_deactivated_state_counter: u64,
+    /// Block timestamp, when the server reported one.
+    pub block_timestamp: Option<std::time::SystemTime>,
+    /// Total compute units consumed in the slot.
+    pub consumed_compute_units: u64,
+    /// Total state units consumed in the slot.
+    pub consumed_state_units: u32,
+    /// The compressed-state trie root as of this slot.
+    ///
+    /// `None` when it was not requested; when the node reported no execution
+    /// state for the slot; when the server predates the field; when the NODE
+    /// behind a supporting server is older than the wire flag that marks a
+    /// terminator as post-execution; or when that terminator was truncated.
+    /// Those cases are not distinguishable from each other on the wire.
+    ///
+    /// An all-zero value is NOT the same as `None`: the compressed trie is
+    /// empty until compression warms up, so zero is a real root.
+    pub compressed_state_root: Option<[u8; 32]>,
+    /// The active-state hash as of this slot, with the same presence rules.
+    ///
+    /// This hash covers the block context, which itself contains the
+    /// compressed-state root, so it transitively commits to
+    /// `compressed_state_root`; the two agreeing is not an independent check.
+    pub active_state_hash: Option<[u8; 32]>,
+}
+
+/// A live stream of per-slot metrics.
+pub struct SlotMetricsStream {
+    inner: tonic::codec::Streaming<servicesv1::StreamSlotMetricsResponse>,
+}
+
+impl SlotMetricsStream {
+    /// Await the next slot's metrics.
+    ///
+    /// - `Ok(Some(m))` — metrics arrived.
+    /// - `Ok(None)`    — the server closed the stream.
+    /// - `Err(_)`      — the stream failed. A `RESOURCE_EXHAUSTED` status is
+    ///   reported as [`ClientError::StreamLagged`]: the server drops a
+    ///   subscriber that cannot keep up rather than skipping messages, so the
+    ///   subscription is over and re-subscribing leaves a gap.
+    pub async fn next(&mut self) -> Result<Option<SlotMetricsUpdate>> {
+        match self.inner.message().await {
+            Ok(Some(resp)) => Ok(Some(slot_metrics_from_response(resp)?)),
+            Ok(None) => Ok(None),
+            Err(status) => Err(map_stream_status(status)),
+        }
+    }
+}
+
+/// Map a subscription's gRPC status to a client error.
+///
+/// `RESOURCE_EXHAUSTED` is not a transient hiccup: it is terminal for the
+/// subscription, so the caller has a gap and must fill it through the query
+/// service rather than simply resubscribing. A caller that retried it as a
+/// generic RPC error would silently lose slots.
+///
+/// The overwhelmingly common cause is the server dropping a subscriber that
+/// cannot keep up -- it disconnects rather than skipping messages -- which is
+/// why the variant is named for lag. The code is not exclusively that, though:
+/// a proxy quota or a message-size limit surfaces the same way, and this maps on
+/// the code alone rather than matching server text, which would be brittle.
+///
+/// Both paths funnel through here -- rejected while opening the stream, and
+/// raised once it is running -- because the meaning is the same either way. The
+/// crate's blanket `From<tonic::Status>` flattens everything to
+/// [`ClientError::Rpc`], which is why the open path maps explicitly rather than
+/// leaning on `?`.
+fn map_stream_status(status: tonic::Status) -> ClientError {
+    if status.code() == tonic::Code::ResourceExhausted {
+        return ClientError::StreamLagged(status.message().to_string());
+    }
+    ClientError::Rpc(status.to_string())
+}
+
+/// Build the subscription request. Split out so the opt-in flags can be tested
+/// without standing up a server: silently dropping one would leave the caller
+/// waiting for a commitment that is never sent.
+fn slot_metrics_request(
+    include_compressed_state_root: bool,
+    include_active_state_hash: bool,
+) -> servicesv1::StreamSlotMetricsRequest {
+    servicesv1::StreamSlotMetricsRequest {
+        start_slot: None,
+        include_compressed_state_root,
+        include_active_state_hash,
+    }
+}
+
+/// Convert a wire response, rejecting a commitment that is present but not 32
+/// bytes. Truncating or zero-padding it would hand the caller a hash that is
+/// not the one the node published.
+fn slot_metrics_from_response(
+    resp: servicesv1::StreamSlotMetricsResponse,
+) -> Result<SlotMetricsUpdate> {
+    let commitment = |value: Option<Vec<u8>>, label: &str| -> Result<Option<[u8; 32]>> {
+        match value {
+            None => Ok(None),
+            Some(bytes) => array_from_vec::<32>(bytes, label)
+                .map(Some)
+                .map_err(ClientError::Validation),
+        }
+    };
+
+    Ok(SlotMetricsUpdate {
+        slot: resp.slot,
+        collected_fees: resp.collected_fees,
+        global_activated_state_counter: resp.global_activated_state_counter,
+        global_deactivated_state_counter: resp.global_deactivated_state_counter,
+        block_timestamp: match resp.block_timestamp {
+            /* A timestamp the server sent but that will not convert is bad
+               data, not an absent field. Folding it into None would report it
+               as "the server said nothing", which is a different claim. */
+            Some(ts) => Some(ts.try_into().map_err(|err| {
+                ClientError::Validation(format!("invalid block timestamp: {err}"))
+            })?),
+            None => None,
+        },
+        consumed_compute_units: resp.consumed_compute_units,
+        consumed_state_units: resp.consumed_state_units,
+        compressed_state_root: commitment(resp.compressed_state_root, "compressed state root")?,
+        active_state_hash: commitment(resp.active_state_hash, "active state hash")?,
+    })
 }
 
 /// A live stream of transaction confirmations for a fee payer.
@@ -1573,6 +1785,7 @@ fn confirmation_from_transaction(tx: &corev1::Transaction) -> Option<Confirmatio
         vm_error,
         execution_result,
         slot,
+        fee_payer_expected_nonce: result.fee_payer_expected_nonce,
     })
 }
 
@@ -1637,6 +1850,12 @@ pub struct Account {
     pub is_privileged: bool,
     pub slot: Option<u64>,
     pub block_timestamp: Option<std::time::SystemTime>,
+    /// Per-account sequence number of the version resolved by the query's
+    /// `VersionContext` (distinct from `seq` above, which is the account's
+    /// current per-account sequence from `AccountMeta`).
+    pub version_seq: Option<u64>,
+    /// Block offset of the transaction that wrote the resolved version.
+    pub block_offset: Option<u32>,
 }
 
 impl Account {
@@ -1674,14 +1893,14 @@ impl Account {
             })
         });
 
-        let (slot, block_timestamp) = account
+        let (slot, block_timestamp, version_seq, block_offset) = account
             .version_context
             .map(|vc| {
                 let slot = vc.slot.filter(|&s| s != 0);
                 let timestamp = vc.block_timestamp.and_then(|ts| ts.try_into().ok());
-                (slot, timestamp)
+                (slot, timestamp, vc.seq, vc.block_offset)
             })
-            .unwrap_or((None, None));
+            .unwrap_or((None, None, None, None));
 
         Ok(Account {
             balance: meta.balance,
@@ -1697,6 +1916,8 @@ impl Account {
             is_privileged,
             slot,
             block_timestamp,
+            version_seq,
+            block_offset,
         })
     }
 }
@@ -1874,6 +2095,13 @@ pub struct TransactionDetails {
     pub pages_used: u32,
     pub user_error_code: u64,
     pub vm_error: i32,
+    /// The nonce the runtime requires for the next transaction from this fee
+    /// payer. `Some` only when `vm_error` is a nonce reject (NONCE_TOO_LOW /
+    /// NONCE_TOO_HIGH); `None` otherwise. A nonce reject does not advance the
+    /// nonce, so retrying with this value is correct. It is canonical at
+    /// execution time, not necessarily on arrival -- treat it as a correction
+    /// to retry against, not a reservation (UNTO-2619).
+    pub fee_payer_expected_nonce: Option<u64>,
     pub rw_accounts: Vec<Pubkey>,
     pub ro_accounts: Vec<Pubkey>,
     pub events: Vec<Event>,
@@ -1917,6 +2145,7 @@ impl Default for TransactionDetails {
             pages_used: 0,
             user_error_code: 0,
             vm_error: 0,
+            fee_payer_expected_nonce: None,
             rw_accounts: Vec::new(),
             ro_accounts: Vec::new(),
             events: Vec::new(),
@@ -2023,5 +2252,249 @@ mod tests {
         let c = confirmation_from_transaction(&tx).expect("executed txn should convert");
         assert_eq!(c.vm_error, 2);
         assert_eq!(c.execution_result, 7);
+    }
+
+    fn response_with(
+        root: Option<Vec<u8>>,
+        hash: Option<Vec<u8>>,
+    ) -> servicesv1::StreamSlotMetricsResponse {
+        servicesv1::StreamSlotMetricsResponse {
+            slot: 42,
+            collected_fees: 7,
+            consumed_compute_units: 9,
+            consumed_state_units: 3,
+            compressed_state_root: root,
+            active_state_hash: hash,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn slot_metrics_surface_present_commitments() {
+        let root = vec![0xA5u8; 32];
+        let hash = vec![0x5Au8; 32];
+
+        let m = slot_metrics_from_response(response_with(Some(root.clone()), Some(hash.clone())))
+            .expect("well-formed commitments convert");
+
+        assert_eq!(m.slot, 42);
+        assert_eq!(m.compressed_state_root.expect("root present"), root[..]);
+        assert_eq!(m.active_state_hash.expect("hash present"), hash[..]);
+    }
+
+    #[test]
+    fn slot_metrics_absent_commitments_are_none() {
+        let m = slot_metrics_from_response(response_with(None, None)).expect("absence is not an error");
+        assert!(m.compressed_state_root.is_none());
+        assert!(m.active_state_hash.is_none());
+    }
+
+    /* Zero is a legitimate root -- the compressed trie is empty until
+       compression warms up -- so it must arrive as Some, not None. */
+    #[test]
+    fn slot_metrics_zero_root_is_some() {
+        let m = slot_metrics_from_response(response_with(Some(vec![0u8; 32]), None))
+            .expect("a zero root is a value");
+        assert_eq!(m.compressed_state_root, Some([0u8; 32]));
+    }
+
+    /* A short or long commitment is a protocol violation. Padding or truncating
+       it would hand the caller a hash the node never published. */
+    #[test]
+    fn slot_metrics_reject_wrong_length_commitment() {
+        let err = slot_metrics_from_response(response_with(Some(vec![1u8; 31]), None))
+            .expect_err("a 31-byte root must not convert");
+        assert!(matches!(err, ClientError::Validation(_)), "got {err:?}");
+
+        let err = slot_metrics_from_response(response_with(None, Some(vec![1u8; 33])))
+            .expect_err("a 33-byte hash must not convert");
+        assert!(matches!(err, ClientError::Validation(_)), "got {err:?}");
+    }
+
+    /* The flags are the whole opt-in contract: dropping one leaves the caller
+       waiting for a commitment the server was never asked to send. */
+    #[test]
+    fn slot_metrics_request_forwards_each_flag_independently() {
+        let neither = slot_metrics_request(false, false);
+        assert!(!neither.include_compressed_state_root);
+        assert!(!neither.include_active_state_hash);
+
+        let root_only = slot_metrics_request(true, false);
+        assert!(root_only.include_compressed_state_root);
+        assert!(!root_only.include_active_state_hash);
+
+        let hash_only = slot_metrics_request(false, true);
+        assert!(!hash_only.include_compressed_state_root);
+        assert!(hash_only.include_active_state_hash);
+
+        let both = slot_metrics_request(true, true);
+        assert!(both.include_compressed_state_root);
+        assert!(both.include_active_state_hash);
+    }
+
+    /* The rest of the response must survive conversion too -- a "slot metrics"
+       stream that quietly drops the counters is not one. */
+    #[test]
+    fn slot_metrics_carry_the_whole_response() {
+        let resp = servicesv1::StreamSlotMetricsResponse {
+            slot: 9,
+            collected_fees: 11,
+            global_activated_state_counter: 22,
+            global_deactivated_state_counter: 33,
+            consumed_compute_units: 44,
+            consumed_state_units: 55,
+            ..Default::default()
+        };
+        let m = slot_metrics_from_response(resp).expect("converts");
+        assert_eq!(m.global_activated_state_counter, 22);
+        assert!(m.block_timestamp.is_none(), "an unset timestamp stays None");
+        assert_eq!(m.global_deactivated_state_counter, 33);
+        assert_eq!(m.consumed_compute_units, 44);
+        assert_eq!(m.consumed_state_units, 55);
+    }
+
+    /* A valid timestamp must survive conversion: without this, an implementation
+       that rejected every present timestamp would still pass the malformed-input
+       test below. */
+    #[test]
+    fn slot_metrics_keep_a_valid_timestamp() {
+        let resp = servicesv1::StreamSlotMetricsResponse {
+            slot: 9,
+            block_timestamp: Some(prost_types::Timestamp {
+                seconds: 1_700_000_000,
+                nanos: 500,
+            }),
+            ..Default::default()
+        };
+        let m = slot_metrics_from_response(resp).expect("a valid timestamp converts");
+        assert!(m.block_timestamp.is_some(), "a valid timestamp must survive");
+    }
+
+    /* A timestamp the server sent but that cannot be represented is bad data,
+       not an absent field: folding it into None would report it as "the server
+       said nothing". */
+    #[test]
+    fn slot_metrics_reject_unrepresentable_timestamp() {
+        let resp = servicesv1::StreamSlotMetricsResponse {
+            slot: 4,
+            block_timestamp: Some(prost_types::Timestamp {
+                seconds: i64::MIN,
+                nanos: -1,
+            }),
+            ..Default::default()
+        };
+        match slot_metrics_from_response(resp) {
+            Err(ClientError::Validation(msg)) => {
+                assert!(msg.contains("timestamp"), "unhelpful message: {msg}");
+            }
+            other => panic!("expected a validation error, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn resource_exhausted_maps_to_stream_lagged() {
+        let err = map_stream_status(tonic::Status::resource_exhausted(
+            "streaming backpressure: subscriber too slow",
+        ));
+        match err {
+            ClientError::StreamLagged(msg) => {
+                assert!(msg.contains("subscriber too slow"), "message lost: {msg}");
+            }
+            other => panic!("expected StreamLagged, got {other:?}"),
+        }
+    }
+
+    /* Everything else stays a plain RPC error -- widening this would hide real
+       failures behind a "you fell behind" message. */
+    #[test]
+    fn other_statuses_stay_rpc_errors() {
+        for status in [
+            tonic::Status::unavailable("server down"),
+            tonic::Status::internal("boom"),
+            tonic::Status::cancelled("client went away"),
+        ] {
+            let code = status.code();
+            match map_stream_status(status) {
+                ClientError::Rpc(_) => {}
+                other => panic!("{code:?} must stay an Rpc error, got {other:?}"),
+            }
+        }
+    }
+
+    /* A bare seq is not a version key -- it restarts across account
+       incarnations -- so the wire representation must always carry the
+       slot alongside it. */
+    #[test]
+    fn slot_seq_version_context_variant_converts_to_proto() {
+        let proto = VersionContext::SlotSeq { slot: 20, seq: 4 }.to_proto();
+        assert_eq!(
+            proto.version,
+            Some(commonv1::version_context::Version::SlotSeq(
+                commonv1::SlotSeq { slot: 20, seq: 4 }
+            ))
+        );
+    }
+
+    #[test]
+    fn slot_seq_version_context_helper_matches_variant() {
+        assert_eq!(
+            slot_seq_version_context(20, 4),
+            VersionContext::SlotSeq { slot: 20, seq: 4 }.to_proto()
+        );
+    }
+
+    fn account_proto_with_version_context(
+        version_context: Option<corev1::VersionContextMetadata>,
+    ) -> corev1::Account {
+        corev1::Account {
+            address: Some(commonv1::Pubkey {
+                value: vec![0u8; 32],
+            }),
+            meta: Some(corev1::AccountMeta {
+                owner: Some(commonv1::Pubkey {
+                    value: vec![0u8; 32],
+                }),
+                seq: 9,
+                ..Default::default()
+            }),
+            data: None,
+            version_context,
+            consensus_status: None,
+        }
+    }
+
+    /* The version context's seq/block_offset identify which resolved
+       version was returned; they must survive conversion the same way
+       slot/block_timestamp already do. */
+    #[test]
+    fn account_from_proto_surfaces_version_context_seq_and_block_offset() {
+        let account = Account::from_proto(account_proto_with_version_context(Some(
+            corev1::VersionContextMetadata {
+                slot: Some(20),
+                block_timestamp: None,
+                seq: Some(4),
+                block_offset: Some(2),
+            },
+        )))
+        .expect("well-formed account converts");
+
+        assert_eq!(account.slot, Some(20));
+        assert_eq!(account.version_seq, Some(4));
+        assert_eq!(account.block_offset, Some(2));
+        assert_eq!(
+            account.seq, 9,
+            "meta.seq must stay independent of version_seq"
+        );
+    }
+
+    /* Absent version context must not fabricate a resolved version. */
+    #[test]
+    fn account_from_proto_absent_version_context_is_none() {
+        let account = Account::from_proto(account_proto_with_version_context(None))
+            .expect("well-formed account converts");
+
+        assert!(account.slot.is_none());
+        assert!(account.version_seq.is_none());
+        assert!(account.block_offset.is_none());
     }
 }

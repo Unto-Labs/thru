@@ -15,7 +15,7 @@ import {
   type ListAccountsResponse,
   type StreamAccountUpdatesResponse,
 } from "@thru/sdk/proto";
-import { createAccountsByOwnerReplay } from "./account-replay";
+import { createAccountsByOwnerReplay, AccountSeqTracker } from "./account-replay";
 import { PAGE_SIZE } from "./page-assembler";
 import type { AccountSource } from "./chain-client";
 import type { RetryConfig } from "./retry";
@@ -984,6 +984,249 @@ describe("page-delta overlay (live tail)", () => {
 
     await iterator.return?.();
   });
+
+  test("cross-slot recreate at seq 0 after a delete is accepted", async () => {
+    /* Under UNTO-2630, seq only restarts at 0 when an account is
+       recreated in a LATER slot; plain lexicographic (slot, seq)
+       ordering already orders that correctly since the slot itself is
+       greater. */
+    const owner = bytes(26);
+    const address = bytes(27);
+    const stream = createPushableStream();
+    const client = createMockClient(stream.iterable);
+    client.listAccounts.mockResolvedValue(create(ListAccountsResponseSchema, { accounts: [] }));
+
+    const replay = createAccountsByOwnerReplay({ client, owner, retryConfig: OVERLAY_RETRY_CONFIG });
+    const iterator = replay[Symbol.asyncIterator]();
+
+    stream.push(makeDeleteResponse(address, owner, 30n, 7n));
+    await expect(pull(iterator)).resolves.toMatchObject({
+      done: false,
+      value: { type: "account", account: { slot: 30n, seq: 7n, isDelete: true } },
+    });
+
+    stream.push(makeDeltaResponse(address, owner, 31n, 0n, 1, 0, 9));
+    await expect(pull(iterator)).resolves.toMatchObject({
+      done: false,
+      value: { type: "account", account: { slot: 31n, seq: 0n, isDelete: false } },
+    });
+
+    await iterator.return?.();
+  });
+
+  test("same-slot recreate at a lower seq after a delete is rejected (transitional pre-UNTO-2630 behavior)", async () => {
+    /* Today's runtime can still restart seq in-block on a delete+recreate.
+       Until UNTO-2630 lands, a same-slot recreate redelivered at that seam
+       is suppressed by plain comparison -- this is the pre-UNTO-2632
+       status quo, not a UNTO-2630 semantic: under UNTO-2630, seq is
+       strictly monotonic within a slot, so this exact sequence (a lower
+       seq following a delete in the same slot) is unrepresentable. */
+    const owner = bytes(38);
+    const address = bytes(39);
+    const stream = createPushableStream();
+    const client = createMockClient(stream.iterable);
+    client.listAccounts.mockResolvedValue(create(ListAccountsResponseSchema, { accounts: [] }));
+
+    const replay = createAccountsByOwnerReplay({ client, owner, retryConfig: OVERLAY_RETRY_CONFIG });
+    const iterator = replay[Symbol.asyncIterator]();
+
+    stream.push(makeDeleteResponse(address, owner, 30n, 7n));
+    await expect(pull(iterator)).resolves.toMatchObject({
+      done: false,
+      value: { type: "account", account: { slot: 30n, seq: 7n, isDelete: true } },
+    });
+
+    stream.push(makeDeltaResponse(address, owner, 30n, 0n, 1, 0, 9));
+    stream.push(makeBlockFinished(31n));
+
+    await expect(pull(iterator)).resolves.toMatchObject({
+      done: false,
+      value: { type: "blockFinished", block: { slot: 31n } },
+    });
+
+    await iterator.return?.();
+  });
+
+  test("cross-slot stale update after a delete is still rejected", async () => {
+    const owner = bytes(28);
+    const address = bytes(29);
+    const stream = createPushableStream();
+    const client = createMockClient(stream.iterable);
+    client.listAccounts.mockResolvedValue(create(ListAccountsResponseSchema, { accounts: [] }));
+
+    const replay = createAccountsByOwnerReplay({ client, owner, retryConfig: OVERLAY_RETRY_CONFIG });
+    const iterator = replay[Symbol.asyncIterator]();
+
+    stream.push(makeDeleteResponse(address, owner, 30n, 7n));
+    await expect(pull(iterator)).resolves.toMatchObject({
+      done: false,
+      value: { type: "account", account: { slot: 30n, seq: 7n, isDelete: true } },
+    });
+
+    /* An update from an older slot must never resurrect the deleted
+       account, even though the delete is an incarnation boundary. */
+    stream.push(makeDeltaResponse(address, owner, 29n, 99n, 1, 0, 5));
+    stream.push(makeBlockFinished(31n));
+
+    await expect(pull(iterator)).resolves.toMatchObject({
+      done: false,
+      value: { type: "blockFinished", block: { slot: 31n } },
+    });
+
+    await iterator.return?.();
+  });
+
+  test("duplicate of the delete's exact (slot, seq) is deduped", async () => {
+    const owner = bytes(30);
+    const address = bytes(31);
+    const stream = createPushableStream();
+    const client = createMockClient(stream.iterable);
+    client.listAccounts.mockResolvedValue(create(ListAccountsResponseSchema, { accounts: [] }));
+
+    const replay = createAccountsByOwnerReplay({ client, owner, retryConfig: OVERLAY_RETRY_CONFIG });
+    const iterator = replay[Symbol.asyncIterator]();
+
+    stream.push(makeDeleteResponse(address, owner, 30n, 7n));
+    await expect(pull(iterator)).resolves.toMatchObject({
+      done: false,
+      value: { type: "account", account: { slot: 30n, seq: 7n, isDelete: true } },
+    });
+
+    /* A redelivered duplicate of the delete itself (e.g. during a
+       reconnect) must not re-emit. */
+    stream.push(makeDeleteResponse(address, owner, 30n, 7n));
+    stream.push(makeBlockFinished(31n));
+
+    await expect(pull(iterator)).resolves.toMatchObject({
+      done: false,
+      value: { type: "blockFinished", block: { slot: 31n } },
+    });
+
+    await iterator.return?.();
+  });
+
+  test("delete then cross-slot recreate then a redelivered duplicate of the old delete: recreated account survives", async () => {
+    const owner = bytes(32);
+    const address = bytes(33);
+    const stream = createPushableStream();
+    const client = createMockClient(stream.iterable);
+    client.listAccounts.mockResolvedValue(create(ListAccountsResponseSchema, { accounts: [] }));
+
+    const replay = createAccountsByOwnerReplay({ client, owner, retryConfig: OVERLAY_RETRY_CONFIG });
+    const iterator = replay[Symbol.asyncIterator]();
+
+    stream.push(makeDeleteResponse(address, owner, 30n, 7n));
+    await expect(pull(iterator)).resolves.toMatchObject({
+      done: false,
+      value: { type: "account", account: { slot: 30n, seq: 7n, isDelete: true } },
+    });
+
+    stream.push(makeDeltaResponse(address, owner, 31n, 0n, 1, 0, 9));
+    await expect(pull(iterator)).resolves.toMatchObject({
+      done: false,
+      value: { type: "account", account: { slot: 31n, seq: 0n, isDelete: false } },
+    });
+
+    /* A live-seam / replay redelivery of the ORIGINAL delete arrives after
+       the account has already been recreated in a later slot. (30,7) is
+       older than the current mark (31,0) under plain lexicographic
+       comparison, so it is rejected and dropped silently -- no event, no
+       tracker update -- with no need for any incarnation-boundary or
+       tombstone special case. */
+    stream.push(makeDeleteResponse(address, owner, 30n, 7n));
+    stream.push(makeBlockFinished(31n));
+
+    /* The next event is the block boundary, not a resurrected delete. */
+    await expect(pull(iterator)).resolves.toMatchObject({
+      done: false,
+      value: { type: "blockFinished", block: { slot: 31n } },
+    });
+
+    await iterator.return?.();
+  });
+});
+
+describe("AccountSeqTracker ordering (UNTO-2630 plain lexicographic (slot, seq))", () => {
+  test("accepts a cross-slot recreate (seq 0) after a delete", () => {
+    /* Under UNTO-2630, seq only restarts at 0 when an account is recreated
+       in a LATER slot; plain (slot, seq) ordering accepts this because the
+       slot itself is greater. */
+    const tracker = new AccountSeqTracker();
+    tracker.update("addr", 30n, 7n);
+
+    expect(tracker.shouldApply("addr", 31n, 0n)).toBe(true);
+    expect(tracker.update("addr", 31n, 0n)).toBe(true);
+    expect(tracker.getVersion("addr")).toEqual({ slot: 31n, seq: 0n });
+  });
+
+  test("same-slot recreate at a lower seq after a delete is rejected (transitional pre-UNTO-2630 behavior)", () => {
+    /* Today's runtime can still restart seq in-block on a delete+recreate.
+       Until UNTO-2630 lands, a same-slot recreate redelivered at that seam
+       is suppressed by plain comparison -- this is the pre-UNTO-2632
+       status quo, not a UNTO-2630 semantic: under UNTO-2630, seq is
+       strictly monotonic within a slot, so this exact sequence (a lower
+       seq following a delete in the same slot) is unrepresentable. */
+    const tracker = new AccountSeqTracker();
+    tracker.update("addr", 30n, 7n);
+
+    expect(tracker.shouldApply("addr", 30n, 0n)).toBe(false);
+    expect(tracker.update("addr", 30n, 0n)).toBe(false);
+    expect(tracker.getVersion("addr")).toEqual({ slot: 30n, seq: 7n });
+  });
+
+  test("rejects a stale cross-slot update after a delete", () => {
+    const tracker = new AccountSeqTracker();
+    tracker.update("addr", 30n, 7n);
+
+    expect(tracker.shouldApply("addr", 29n, 99n)).toBe(false);
+    expect(tracker.update("addr", 29n, 99n)).toBe(false);
+    expect(tracker.getVersion("addr")).toEqual({ slot: 30n, seq: 7n });
+  });
+
+  test("dedupes an exact duplicate of the delete's own (slot, seq)", () => {
+    const tracker = new AccountSeqTracker();
+    tracker.update("addr", 30n, 7n);
+
+    expect(tracker.shouldApply("addr", 30n, 7n)).toBe(false);
+    expect(tracker.update("addr", 30n, 7n)).toBe(false);
+  });
+
+  test("a non-delete version still requires a strictly greater seq at the same slot", () => {
+    const tracker = new AccountSeqTracker();
+    tracker.update("addr", 30n, 4n);
+
+    expect(tracker.shouldApply("addr", 30n, 4n)).toBe(false);
+    expect(tracker.shouldApply("addr", 30n, 3n)).toBe(false);
+    expect(tracker.shouldApply("addr", 30n, 5n)).toBe(true);
+  });
+
+  test("delete(30,7) -> update(31,1) -> redelivered delete(30,9) is rejected against the current mark; a duplicate of the original delete and a genuinely newer delete are handled the same way", () => {
+    const tracker = new AccountSeqTracker();
+
+    tracker.update("addr", 30n, 7n);
+    expect(tracker.getVersion("addr")).toEqual({ slot: 30n, seq: 7n });
+
+    expect(tracker.shouldApply("addr", 31n, 1n)).toBe(true);
+    expect(tracker.update("addr", 31n, 1n)).toBe(true);
+    expect(tracker.getVersion("addr")).toEqual({ slot: 31n, seq: 1n });
+
+    /* A redelivered delete(30,9) is newer than the original delete's mark
+       (30,7) but older than the current (31,1) mark -- rejected. */
+    expect(tracker.shouldApply("addr", 30n, 9n)).toBe(false);
+    expect(tracker.update("addr", 30n, 9n)).toBe(false);
+    expect(tracker.getVersion("addr")).toEqual({ slot: 31n, seq: 1n });
+
+    /* An exact duplicate of the original delete(30,7) is rejected the same
+       way -- it is even older than (31,1). */
+    expect(tracker.shouldApply("addr", 30n, 7n)).toBe(false);
+    expect(tracker.update("addr", 30n, 7n)).toBe(false);
+    expect(tracker.getVersion("addr")).toEqual({ slot: 31n, seq: 1n });
+
+    /* A genuinely newer delete, newer than the (31,1) mark, still applies. */
+    expect(tracker.shouldApply("addr", 31n, 2n)).toBe(true);
+    expect(tracker.update("addr", 31n, 2n)).toBe(true);
+    expect(tracker.getVersion("addr")).toEqual({ slot: 31n, seq: 2n });
+  });
 });
 
 function createPushableStream(): {
@@ -1071,6 +1314,7 @@ function makeDeltaResponse(
       case: "update",
       value: create(AccountUpdateSchema, {
         slot,
+        seq,
         address: create(PubkeySchema, { value: address }),
         meta: create(AccountMetaSchema, {
           owner: create(PubkeySchema, { value: owner }),
@@ -1081,6 +1325,30 @@ function makeDeltaResponse(
           pageIdx,
           pageSize: PAGE_SIZE,
           pageData: new Uint8Array(PAGE_SIZE).fill(fill),
+        }),
+      }),
+    },
+  });
+}
+
+/** A delete update: the (slot, seq) of the row that recorded the delete. */
+function makeDeleteResponse(
+  address: Uint8Array,
+  owner: Uint8Array,
+  slot: bigint,
+  seq: bigint
+): StreamAccountUpdatesResponse {
+  return create(StreamAccountUpdatesResponseSchema, {
+    message: {
+      case: "update",
+      value: create(AccountUpdateSchema, {
+        slot,
+        seq,
+        address: create(PubkeySchema, { value: address }),
+        delete: true,
+        meta: create(AccountMetaSchema, {
+          owner: create(PubkeySchema, { value: owner }),
+          seq,
         }),
       }),
     },

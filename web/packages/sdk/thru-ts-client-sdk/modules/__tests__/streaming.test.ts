@@ -7,7 +7,8 @@ import { ChainEvent } from "../../domain/events";
 import { Transaction } from "../../domain/transactions/Transaction";
 import { ConsensusStatus } from "@thru/sdk/proto";
 import { TransactionExecutionResultSchema, TransactionSchema } from "@thru/sdk/proto";
-import { AccountUpdateSchema, StreamAccountUpdatesResponseSchema, StreamEventsResponseSchema, TrackTransactionResponseSchema } from "@thru/sdk/proto";
+import { AccountUpdateSchema, StreamAccountUpdatesResponseSchema, StreamEventsResponseSchema, StreamSlotMetricsResponseSchema, TrackTransactionResponseSchema } from "@thru/sdk/proto";
+import { TimestampSchema } from "@bufbuild/protobuf/wkt";
 import {
   collectStream,
   firstStreamValue,
@@ -15,6 +16,7 @@ import {
   streamAccountUpdates,
   streamBlocks,
   streamEvents,
+  streamSlotMetrics,
   streamTransactions,
   trackTransaction
 } from "../streaming";
@@ -434,6 +436,148 @@ describe("streaming", () => {
 
       expect(updates[0].slot).toBeUndefined();
       expect(updates[1].slot).toBe(123n);
+    });
+  });
+
+  describe("streamSlotMetrics", () => {
+    /* Every field distinct and non-default, so a mapper that copies the wrong
+       source property, or drops one, cannot pass by coincidence. */
+    const SLOT_METRICS_FIXTURE = {
+      slot: 42n,
+      globalActivatedStateCounter: 111n,
+      globalDeactivatedStateCounter: 222n,
+      collectedFees: 333n,
+      blockTimestamp: create(TimestampSchema, { seconds: 1_700_000_000n, nanos: 500 }),
+      consumedComputeUnits: 444n,
+      consumedStateUnits: 555,
+    };
+
+    function mockOneResponse(ctx: ReturnType<typeof createMockContext>) {
+      const response = create(StreamSlotMetricsResponseSchema, SLOT_METRICS_FIXTURE);
+      vi.spyOn(ctx.streaming, "streamSlotMetrics").mockReturnValue(
+        (async function* () {
+          yield response;
+        })() as AsyncIterable<any>
+      );
+      return response;
+    }
+
+    it("maps every response field to the result, with wire-faithful types", async () => {
+      const ctx = createMockContext();
+      mockOneResponse(ctx);
+
+      const [metric] = await collectStream(streamSlotMetrics(ctx));
+
+      expect(metric.slot).toBe(42n);
+      expect(metric.globalActivatedStateCounter).toBe(111n);
+      expect(metric.globalDeactivatedStateCounter).toBe(222n);
+      expect(metric.collectedFees).toBe(333n);
+      expect(metric.blockTimestamp?.seconds).toBe(1_700_000_000n);
+      expect(metric.blockTimestamp?.nanos).toBe(500);
+      /* UNTO-2581: these two were on the wire but dropped by the mapper. */
+      expect(metric.consumedComputeUnits).toBe(444n);
+      expect(metric.consumedStateUnits).toBe(555);
+
+      /* uint64 stays bigint, uint32 stays number — swapping them silently
+         breaks arithmetic for consumers. */
+      expect(typeof metric.consumedComputeUnits).toBe("bigint");
+      expect(typeof metric.consumedStateUnits).toBe("number");
+    });
+
+    it("surfaces every field the response schema declares", async () => {
+      const ctx = createMockContext();
+      mockOneResponse(ctx);
+
+      const [metric] = await collectStream(streamSlotMetrics(ctx));
+      const mappedKeys = Object.keys(metric);
+
+      /* This is the guard against the next UNTO-2581: a field added to
+         StreamSlotMetricsResponse that nobody remembers to map. The mapper must
+         assign every key unconditionally, even when the value is undefined. */
+      const missing = StreamSlotMetricsResponseSchema.fields
+        .map((field) => field.localName)
+        .filter((name) => !mappedKeys.includes(name));
+
+      expect(missing).toEqual([]);
+    });
+
+    it("passes startSlot and AbortSignal through to the streaming client", async () => {
+      const ctx = createMockContext();
+      mockOneResponse(ctx);
+      const controller = new AbortController();
+
+      streamSlotMetrics(ctx, { startSlot: 7n, signal: controller.signal });
+
+      const [request, callOptions] = (ctx.streaming.streamSlotMetrics as any).mock.calls[0];
+      expect(request.startSlot).toBe(7n);
+      expect(callOptions.signal).toBe(controller.signal);
+    });
+
+    it("does not ask for the state commitments unless the caller opts in", async () => {
+      const ctx = createMockContext();
+      mockOneResponse(ctx);
+
+      streamSlotMetrics(ctx);
+
+      const [request] = (ctx.streaming.streamSlotMetrics as any).mock.calls[0];
+      /* Opt-in is the whole point: an existing consumer must not start paying
+         for commitments it never asked for. */
+      expect(request.includeCompressedStateRoot).toBe(false);
+      expect(request.includeActiveStateHash).toBe(false);
+    });
+
+    it("forwards each commitment opt-in independently", async () => {
+      /* Both directions: testing only one flag would pass an implementation
+         that hard-codes the other. */
+      const hashOnlyCtx = createMockContext();
+      mockOneResponse(hashOnlyCtx);
+      streamSlotMetrics(hashOnlyCtx, { includeActiveStateHash: true });
+      const [hashOnlyReq] = (hashOnlyCtx.streaming.streamSlotMetrics as any).mock.calls[0];
+      expect(hashOnlyReq.includeActiveStateHash).toBe(true);
+      expect(hashOnlyReq.includeCompressedStateRoot).toBe(false);
+
+      const rootOnlyCtx = createMockContext();
+      mockOneResponse(rootOnlyCtx);
+      streamSlotMetrics(rootOnlyCtx, { includeCompressedStateRoot: true });
+      const [rootOnlyReq] = (rootOnlyCtx.streaming.streamSlotMetrics as any).mock.calls[0];
+      expect(rootOnlyReq.includeCompressedStateRoot).toBe(true);
+      expect(rootOnlyReq.includeActiveStateHash).toBe(false);
+    });
+
+    it("surfaces the state commitments when the server sends them", async () => {
+      const ctx = createMockContext();
+      const root = new Uint8Array(32).fill(0xa5);
+      const hash = new Uint8Array(32).fill(0x5a);
+      const response = create(StreamSlotMetricsResponseSchema, {
+        ...SLOT_METRICS_FIXTURE,
+        compressedStateRoot: root,
+        activeStateHash: hash,
+      });
+      vi.spyOn(ctx.streaming, "streamSlotMetrics").mockReturnValue(
+        (async function* () {
+          yield response;
+        })() as AsyncIterable<any>
+      );
+
+      const [metric] = await collectStream(
+        streamSlotMetrics(ctx, { includeCompressedStateRoot: true, includeActiveStateHash: true })
+      );
+
+      expect(metric.compressedStateRoot).toEqual(root);
+      expect(metric.activeStateHash).toEqual(hash);
+    });
+
+    it("leaves the commitments undefined when the server omits them", async () => {
+      const ctx = createMockContext();
+      mockOneResponse(ctx);
+
+      const [metric] = await collectStream(streamSlotMetrics(ctx, { includeCompressedStateRoot: true }));
+
+      /* Absent, not an empty array: a zero-length value would be
+         indistinguishable from a legitimately all-zero root once a consumer
+         starts comparing bytes. */
+      expect(metric.compressedStateRoot).toBeUndefined();
+      expect(metric.activeStateHash).toBeUndefined();
     });
   });
 

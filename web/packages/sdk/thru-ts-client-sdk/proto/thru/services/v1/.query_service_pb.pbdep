@@ -1,15 +1,15 @@
 libprotoc 3.21.12
-proto/thru/common/v1/consensus.proto hFLa6r0tI+jdvy41FwXYxX3aCI7/exxvkD0J9GT+ja4=
+proto/thru/common/v1/consensus.proto 6MrBaLZowZ6UM0JsSxnf++vsrNSe4qf1TbgzOsR/gF8=
 proto/thru/common/v1/filters.proto dBMFAvxqVI7+xMlCdV8Mr94HyKcDts+WNhPOK/xgEXg=
 proto/thru/common/v1/pagination.proto s1zvH0IqtSxHbTRfa2PgLqzmOXiqpB9W28UVTHJtkDw=
 proto/thru/common/v1/primitives.proto 7yHiC/ZU+OD48BI/hxM65nNYhy3otIBola4hhun5K9c=
-proto/thru/core/v1/account.proto OqUYftYRqDYwpvbEDTfeptcZs3/AHAOEu7cgGpctCAk=
+proto/thru/core/v1/account.proto qbhcPuEQ0u06xheF5SF+rJ/nVrfrLorsHdEUpIETe1s=
 proto/thru/core/v1/block.proto 424yEELV33rDQaEEsuhGU2G+7amUtlPajG/0MECm72g=
 proto/thru/core/v1/node.proto pBCRF3muhzHcwMgaqm90QxE0qiASOySD29U7RvVZl7U=
 proto/thru/core/v1/state.proto nLx8vqLsktCWRqDNLqzmj0nAMMy0V6VjQsi9A9PfVgs=
-proto/thru/core/v1/transaction.proto N/eDUStINJ1Lr2ksQu2hnF+D/ASNE1+bO37tHMmTPUA=
+proto/thru/core/v1/transaction.proto LGuE4c18B2mslHCZRyxE/21ypXn50fzD4dUiN5hlKAI=
 proto/thru/core/v1/types.proto JgjfD6WYMteMJ7Mch78NWx+wz3rchH1eGHUXsoiUGh4=
-proto/thru/services/v1/query_service.proto yHUCoTjy6Nj5DwF7WdKvafTDMNu6qSTMOSGlO4shTWI=
+proto/thru/services/v1/query_service.proto D0PLDq3UtSfQlj/Vzstk4o1VPsLMjHJkPIFObHq6mxE=
 web/packages/proto-toolchain/package.json YzDLTH4AVsA+JhVcxDSHyK1euWy6ZEVNRu2yywY1P2Q=
 web/packages/sdk/buf.yaml SNRjMoMqNnzqEDMgSvyHDHxiAmkhAqb1hs2HzSbDNs8=
 web/packages/sdk/buf.gen.yaml PTN1wmrbpm9sJLB5JKB0tgryonAhTrgnKAp3SIa64SE=
@@ -17,4 +17,4 @@ web/packages/sdk/buf.lock TECtzQqbl8d7xq04z5zhEa4fappBQHsl9rwk9uKw/B0=
 scripts/gen-web-proto.sh uStLeLdYCslwPOW3vCqGB6XfOtCe50Pee0TxCORtzNg=
 scripts/sync-thru-sdk-protos.py MvTwq2hqRPPc4vB678N5nBdWxYs2JS+i/WLrU5ZtQa4=
 scripts/gen-pbdeps.py OE53a33Lyt5hZwdrIC7GWux9KPEwvZJVWcO5MQPQjoc=
-web/packages/sdk/thru-ts-client-sdk/proto/thru/services/v1/query_service_pb.ts Hwrl2JgzWfcAcelIc1Fknh2tBdGeF/eMFlVM/FsqfH0=
+web/packages/sdk/thru-ts-client-sdk/proto/thru/services/v1/query_service_pb.ts BTWK8sIGyp1TifEJW54OJArCKRb82z5+gj+0q8dVyF8=

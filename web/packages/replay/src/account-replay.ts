@@ -211,6 +211,35 @@ async function waitForCleanup(
 }
 
 /**
+ * Tracked (slot, seq) version for an account.
+ *
+ * Grounded in the UNTO-2630 runtime redesign: per-account seq is strictly
+ * monotonic WITHIN a slot -- an in-block delete followed by a recreate does
+ * NOT restart seq (the corpse survives to block seal and is reused), so
+ * (address, slot, seq) is unique. seq restarts at 0 only when a
+ * fully-removed account is recreated in a LATER slot, and plain
+ * lexicographic (slot, seq) ordering already orders that correctly (a
+ * greater slot is newer regardless of seq). Deletes are ordered exactly
+ * like any other update against this same per-address mark -- there is no
+ * incarnation-boundary exception and no separate tombstone memory.
+ */
+interface AccountVersionMark {
+  slot: bigint;
+  seq: bigint;
+}
+
+/**
+ * True when (slot, seq) is strictly newer than `previous`, under plain
+ * lexicographic order. See AccountVersionMark for the UNTO-2630 grounding.
+ */
+function isNewerAccountVersion(previous: AccountVersionMark, slot: bigint, seq: bigint): boolean {
+  if (slot !== previous.slot) {
+    return slot > previous.slot;
+  }
+  return seq > previous.seq;
+}
+
+/**
  * Represents a complete account state ready for processing
  */
 export interface AccountState {
@@ -361,7 +390,7 @@ function snapshotToState(account: Account): AccountState | null {
     address: account.address.value,
     addressHex: bytesToHex(account.address.value),
     slot: account.versionContext?.slot ?? 0n,
-    seq: BigInt(account.meta.seq.toString()),
+    seq: account.meta.seq,
     meta: account.meta,
     data: account.data?.data ?? new Uint8Array(0),
     isDelete: account.meta.flags?.isDeleted ?? false,
@@ -397,7 +426,7 @@ function getAccountToState(account: Account): AccountState | null {
     address: account.address.value,
     addressHex: bytesToHex(account.address.value),
     slot: account.meta.lastUpdatedSlot ?? account.versionContext?.slot ?? 0n,
-    seq: BigInt(account.meta.seq.toString()),
+    seq: account.meta.seq,
     meta: account.meta,
     data: account.data?.data ?? new Uint8Array(0),
     isDelete: account.meta.flags?.isDeleted ?? false,
@@ -506,7 +535,7 @@ export async function* createAccountsByOwnerReplay(
 
   // Highest slot seen (for checkpoint callback)
   let highestSlotSeen = minUpdatedSlot ?? 0n;
-  const lastEmittedAccounts = new Map<string, { slot: bigint; seq: bigint }>();
+  const lastEmittedAccounts = new Map<string, AccountVersionMark>();
 
   /* Delta overlay cache for streamed page updates. The server streams only
      the pages a transaction modified, so full account data is reconstructed
@@ -583,12 +612,14 @@ export async function* createAccountsByOwnerReplay(
   }
 
   const shouldEmitAccountState = (account: AccountState): boolean => {
+    /* Plain lexicographic (slot, seq) comparison against a single
+       per-address mark, applied identically whether or not this is a
+       delete -- see isNewerAccountVersion / AccountVersionMark for the
+       UNTO-2630 grounding. The mark is never cleared on delete, so a
+       redelivered duplicate/stale delete is still rejected until
+       something genuinely newer replaces it. */
     const previous = lastEmittedAccounts.get(account.addressHex);
-    if (
-      previous &&
-      (account.slot < previous.slot ||
-        (account.slot === previous.slot && account.seq <= previous.seq))
-    ) {
+    if (previous && !isNewerAccountVersion(previous, account.slot, account.seq)) {
       return false;
     }
 
@@ -1515,61 +1546,82 @@ function processResponseMulti(
 }
 
 /**
- * State tracker for account sequence numbers.
+ * State tracker for account (slot, seq) versions.
  *
- * Used to track the highest sequence number seen per account address
- * to ensure updates are applied in order.
+ * Used to track the highest version seen per account address to ensure
+ * updates are applied in order. A bare seq is not a version key on its
+ * own -- under UNTO-2630 it only restarts when an account is recreated in
+ * a later slot, not within one -- so ordering is lexicographic on
+ * (slot, seq), matching shouldEmitAccountState above. Deletes are ordered
+ * identically to any other update against the same per-address mark: the
+ * mark is never cleared on delete (only remove() clears it), so a delete's
+ * own mark still rejects a stale/duplicate redelivery until something
+ * genuinely newer replaces it. See isNewerAccountVersion / AccountVersionMark
+ * for the full UNTO-2630 grounding.
  */
 export class AccountSeqTracker {
-  private seqs: Map<string, bigint> = new Map();
+  private versions: Map<string, AccountVersionMark> = new Map();
 
   /**
-   * Get the current sequence number for an address
+   * Get the current (slot, seq) version for an address
+   */
+  getVersion(addressHex: string): { slot: bigint; seq: bigint } | undefined {
+    const version = this.versions.get(addressHex);
+    return version ? { slot: version.slot, seq: version.seq } : undefined;
+  }
+
+  /**
+   * Get the current sequence number for an address (seq component only;
+   * kept for callers that only need the bare seq).
    */
   getSeq(addressHex: string): bigint | undefined {
-    return this.seqs.get(addressHex);
+    return this.versions.get(addressHex)?.seq;
   }
 
   /**
-   * Check if an update should be applied (seq > current)
+   * Check if an update should be applied: strictly newer (slot, seq),
+   * lexicographically, applied identically whether or not the update is a
+   * delete (see isNewerAccountVersion).
    */
-  shouldApply(addressHex: string, seq: bigint): boolean {
-    const current = this.seqs.get(addressHex);
-    return current === undefined || seq > current;
-  }
-
-  /**
-   * Update the sequence number for an address
-   * Only updates if new seq is greater than current
-   */
-  update(addressHex: string, seq: bigint): boolean {
-    const current = this.seqs.get(addressHex);
-    if (current === undefined || seq > current) {
-      this.seqs.set(addressHex, seq);
+  shouldApply(addressHex: string, slot: bigint, seq: bigint): boolean {
+    const current = this.versions.get(addressHex);
+    if (!current) {
       return true;
     }
-    return false;
+    return isNewerAccountVersion(current, slot, seq);
+  }
+
+  /**
+   * Update the tracked version for an address.
+   * Only updates if the new (slot, seq) is strictly newer than current.
+   */
+  update(addressHex: string, slot: bigint, seq: bigint): boolean {
+    if (!this.shouldApply(addressHex, slot, seq)) {
+      return false;
+    }
+    this.versions.set(addressHex, { slot, seq });
+    return true;
   }
 
   /**
    * Remove tracking for an address
    */
   remove(addressHex: string): void {
-    this.seqs.delete(addressHex);
+    this.versions.delete(addressHex);
   }
 
   /**
    * Clear all tracking
    */
   clear(): void {
-    this.seqs.clear();
+    this.versions.clear();
   }
 
   /**
    * Get count of tracked addresses
    */
   size(): number {
-    return this.seqs.size;
+    return this.versions.size;
   }
 }
 
@@ -1613,10 +1665,16 @@ export class MultiAccountReplay {
         address,
         view: this.view,
       })) {
-        // Filter by sequence number
+        // Filter by (slot, seq) version, lexicographically
         if (event.type === "account") {
-          if (this.seqTracker.shouldApply(event.account.addressHex, event.account.seq)) {
-            this.seqTracker.update(event.account.addressHex, event.account.seq);
+          if (
+            this.seqTracker.shouldApply(
+              event.account.addressHex,
+              event.account.slot,
+              event.account.seq
+            )
+          ) {
+            this.seqTracker.update(event.account.addressHex, event.account.slot, event.account.seq);
             yield event;
           }
         } else {

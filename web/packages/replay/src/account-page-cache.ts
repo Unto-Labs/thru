@@ -85,6 +85,17 @@ export interface AccountPageCacheStats {
 export class AccountPageCache {
   /** Insertion order doubles as LRU order (entries re-inserted on touch). */
   private readonly entries = new Map<string, CachedAccount>();
+  /**
+   * Per-address (slot, seq) of the last ACCEPTED update or seed -- deletes
+   * included. This is the cache's only version memory that SURVIVES entry
+   * removal: `entries` alone cannot detect staleness once an address's
+   * entry is gone (dropped by an accepted delete, or LRU-evicted), so a
+   * seed()/applyUpdate() arriving afterward would otherwise pass the
+   * freshness check vacuously against a missing entry. See isNewerThanFloor
+   * / isOlderThanFloor / raiseFloor for how this is consulted and advanced,
+   * and drop() for why eviction deliberately does not touch it.
+   */
+  private readonly versionFloor = new Map<string, { slot: bigint; seq: bigint }>();
   private readonly maxBytes: number;
   private readonly logger: ReplayLogger;
   private totalBytes = 0;
@@ -124,8 +135,29 @@ export class AccountPageCache {
 
   /**
    * Seed (or refresh) an account with complete data from an authoritative
-   * source. Older-than-cached seeds are ignored so an in-flight resync
-   * fetch cannot roll back newer streamed state.
+   * source. Only STRICTLY-older-than-floor seeds (delete or not) are
+   * ignored -- checked against the per-address version floor, NOT just the
+   * current cache entry, so a stale in-flight resync/snapshot fetch can
+   * neither roll back newer streamed state nor, critically, revive
+   * pre-delete bytes after the entry it would have been compared against
+   * was already dropped (UNTO-2632 P1: `entries` alone forgets an address's
+   * version the moment its entry is removed, so a stale seed arriving after
+   * an accepted delete used to pass this check vacuously).
+   *
+   * An EQUAL-to-floor seed is deliberately accepted: seeds carry
+   * authoritative full images, and equal-version overwrite is the repair
+   * path for a half-applied overlay. A disconnect mid-version leaves a
+   * dirty entry holding only some of version (S, N)'s pages -- with the
+   * floor already raised to (S, N) by those overlays -- and the reconnect
+   * catch-up refetch returns exactly (S, N) when the account has not
+   * changed since. A strict gate would reject that repair, leaving the
+   * corrupt bytes as the base every later delta overlays onto.
+   *
+   * A delete snapshot (backfill/catch-up/resync can all observe an account
+   * as already deleted) drops the cache entry instead of replacing it;
+   * non-delete seeds keep their unconditional-overwrite semantics (once
+   * past the freshness gate) -- seed() is the authoritative refresh path
+   * and callers rely on it being able to replace cached data outright.
    */
   seed(state: {
     address: Uint8Array;
@@ -136,12 +168,13 @@ export class AccountPageCache {
     seq: bigint;
     isDelete?: boolean;
   }): void {
-    if (state.isDelete) {
-      this.drop(state.addressHex);
+    if (this.isOlderThanFloor(state.addressHex, state.slot, state.seq)) {
       return;
     }
     const existing = this.entries.get(state.addressHex);
-    if (existing && !this.isNewer(existing, state.slot, state.seq)) {
+    if (state.isDelete) {
+      this.drop(state.addressHex);
+      this.raiseFloor(state.addressHex, state.slot, state.seq);
       return;
     }
     const data = new Uint8Array(state.data.length);
@@ -154,21 +187,43 @@ export class AccountPageCache {
       seq: state.seq,
       dirty: existing?.dirty ?? false,
     });
+    this.raiseFloor(state.addressHex, state.slot, state.seq);
   }
 
   /** Apply one streamed update (page delta, delete, or meta-only). */
   applyUpdate(address: Uint8Array, addressHex: string, update: AccountUpdate): ApplyUpdateResult {
     const slot = BigInt(update.slot.toString());
 
+    /* Top-level seq (AccountUpdate.seq) is always present, unlike
+       update.meta?.seq which is stripped under DATA_ONLY/PUBKEY_ONLY
+       views (META_ONLY strips data, not meta). Source it from there
+       instead of falling back to 0n. */
+    const topSeq = BigInt(update.seq.toString());
+
     if (update.delete) {
+      /* Reject a stale/duplicate delete against the version floor, BEFORE
+         any state mutation. See the comparison helper in account-replay.ts
+         for the UNTO-2630 grounding: plain lexicographic (slot, seq),
+         applied identically to deletes and non-delete updates -- there is
+         no separate persistent tombstone. Checked against the floor rather
+         than the current entry so a delete redelivered after this same
+         address was already dropped by an earlier accepted delete is still
+         rejected (UNTO-2632 P1) -- a missing floor (never seen before)
+         means any delete is accepted. */
+      if (!this.isNewerThanFloor(addressHex, slot, topSeq)) {
+        this.counters.staleDropped++;
+        return { kind: "stale" };
+      }
+
       this.drop(addressHex);
+      this.raiseFloor(addressHex, slot, topSeq);
       this.counters.immediateEmits++;
       return {
         kind: "emit",
         account: {
           address,
           slot,
-          seq: update.meta?.seq !== undefined ? BigInt(update.meta.seq.toString()) : 0n,
+          seq: topSeq,
           meta: update.meta!,
           data: new Uint8Array(0),
           isDelete: true,
@@ -176,26 +231,30 @@ export class AccountPageCache {
       };
     }
 
-    /* Every server-produced delta carries meta (ingest_handlers.go:101).
-       Without it we know neither size nor seq, so a refetch is the only
-       safe recovery. */
+    /* Every server-produced delta carries meta (ingest_handlers.go:101) so
+       we know the page's dataSize; the seq itself is now sourced from the
+       top-level field above regardless of meta's presence. */
     if (!update.meta) {
       this.counters.resyncsRequested++;
       return { kind: "resync" };
     }
 
-    const seq = BigInt(update.meta.seq.toString());
+    const seq = topSeq;
     const dataSize = Number(update.meta.dataSize);
 
     /* Single-page accounts with page data carry the complete account. A
        metadata-only update, however, must retain the previously cached
        bytes; synthesizing a zero-filled buffer would corrupt the account. */
     if (dataSize <= PAGE_SIZE) {
-      const entry = this.entries.get(addressHex);
-      if (entry && !this.isNewer(entry, slot, seq)) {
+      /* Checked against the version floor rather than the entry directly
+         (see seed() / UNTO-2632 P1): the entry may already be gone (an
+         accepted delete or LRU eviction), and the floor is the only thing
+         that still remembers this address was already at a newer version. */
+      if (!this.isNewerThanFloor(addressHex, slot, seq)) {
         this.counters.staleDropped++;
         return { kind: "stale" };
       }
+      const entry = this.entries.get(addressHex);
 
       let data: Uint8Array;
       if (!update.page?.pageData) {
@@ -228,6 +287,7 @@ export class AccountPageCache {
         seq,
         dirty: false,
       });
+      this.raiseFloor(addressHex, slot, seq);
       this.counters.immediateEmits++;
       return {
         kind: "emit",
@@ -237,6 +297,15 @@ export class AccountPageCache {
 
     const entry = this.entries.get(addressHex);
     if (!entry) {
+      /* No cached bytes to overlay onto (never seeded, or dropped by a
+         delete/eviction). Still consult the floor before asking for a
+         resync: a delta that is actually stale relative to a version we
+         already know about (via the floor, even without an entry) should
+         be dropped outright rather than triggering a wasted refetch. */
+      if (!this.isNewerThanFloor(addressHex, slot, seq)) {
+        this.counters.staleDropped++;
+        return { kind: "stale" };
+      }
       this.counters.resyncsRequested++;
       this.logger.debug(
         `[page-cache] delta for uncached multi-page account ${addressHex} (slot ${slot}); requesting resync`
@@ -245,8 +314,18 @@ export class AccountPageCache {
     }
     /* A transaction can emit one update per changed page, with every page
        carrying the same (slot, seq). Reject only an older version here so
-       all pages from the current version are overlaid before the flush. */
-    if (this.isOlder(entry, slot, seq) || (!entry.dirty && !this.isNewer(entry, slot, seq))) {
+       all pages from the current version are overlaid before the flush.
+       Compared against the floor, not the entry directly: the floor is
+       proven >= the entry's version (raised alongside every entry write
+       below), so this is equivalent whenever an entry exists, and it stays
+       correct in the `!entry` branch above where there is no entry to
+       compare against at all. entry.dirty itself is orthogonal (a
+       capacity/in-flight-transaction concern, not a version one) and is
+       still read directly off the entry. */
+    if (
+      this.isOlderThanFloor(addressHex, slot, seq) ||
+      (!entry.dirty && !this.isNewerThanFloor(addressHex, slot, seq))
+    ) {
       this.counters.staleDropped++;
       return { kind: "stale" };
     }
@@ -284,6 +363,7 @@ export class AccountPageCache {
     entry.meta = update.meta;
     entry.slot = slot;
     entry.seq = seq;
+    this.raiseFloor(addressHex, slot, seq);
     if (!entry.dirty) {
       entry.dirty = true;
       this.dirtyAccounts++;
@@ -320,19 +400,75 @@ export class AccountPageCache {
 
   clear(): void {
     this.entries.clear();
+    this.versionFloor.clear();
     this.totalBytes = 0;
     this.dirtyAccounts = 0;
     this.updatePressureThresholds();
   }
 
-  private isNewer(entry: CachedAccount, slot: bigint, seq: bigint): boolean {
-    return slot > entry.slot || (slot === entry.slot && seq > entry.seq);
+  /**
+   * True when (slot, seq) is strictly newer than the address's version
+   * floor, or the address has no floor yet (never seen before -- anything
+   * is accepted). Mirrors isNewerAccountVersion's plain lexicographic
+   * comparison in account-replay.ts.
+   */
+  private isNewerThanFloor(addressHex: string, slot: bigint, seq: bigint): boolean {
+    const floor = this.versionFloor.get(addressHex);
+    if (!floor) return true;
+    return slot > floor.slot || (slot === floor.slot && seq > floor.seq);
   }
 
-  private isOlder(entry: CachedAccount, slot: bigint, seq: bigint): boolean {
-    return slot < entry.slot || (slot === entry.slot && seq < entry.seq);
+  /** True when (slot, seq) is strictly older than the address's version
+      floor. False (not older) when there is no floor yet. */
+  private isOlderThanFloor(addressHex: string, slot: bigint, seq: bigint): boolean {
+    const floor = this.versionFloor.get(addressHex);
+    if (!floor) return false;
+    return slot < floor.slot || (slot === floor.slot && seq < floor.seq);
   }
 
+  /**
+   * Advance the version floor for an address to (slot, seq) if it is newer
+   * than what's already recorded. Called on every ACCEPTED update or seed
+   * -- i.e. every path that writes a new entry or drops one via an accepted
+   * delete -- so the floor is always >= the corresponding entry's version
+   * whenever an entry exists.
+   *
+   * Deliberately NOT called from the resync-triggering drop sites (account
+   * growth, an out-of-bounds page, an incomplete single-page update): those
+   * deltas passed the freshness check against the *previous* version, but
+   * this layer never actually accepted/cached their own (slot, seq) -- it
+   * bounced back a `resync` request instead. The eventual seed() that
+   * satisfies that resync will typically carry that exact (slot, seq); if
+   * the floor were raised at the drop site, that legitimate seed would
+   * itself be rejected as "not newer than the floor" (see isNewerThanFloor,
+   * a strict comparison). Leaving the floor at the last successfully
+   * cached version keeps that follow-up seed valid.
+   */
+  private raiseFloor(addressHex: string, slot: bigint, seq: bigint): void {
+    const floor = this.versionFloor.get(addressHex);
+    if (!floor || slot > floor.slot || (slot === floor.slot && seq > floor.seq)) {
+      this.versionFloor.set(addressHex, { slot, seq });
+    }
+  }
+
+  /**
+   * Drop an address's cache entry (accounting only -- callers are
+   * responsible for the version floor, since not every drop represents an
+   * accepted version: see raiseFloor). Deliberately never touches
+   * `versionFloor` itself, for two distinct reasons depending on the
+   * caller:
+   *   - Accepted-delete / superseded-entry drops: the caller raises the
+   *     floor itself immediately after calling drop(), to the delete's own
+   *     (slot, seq).
+   *   - Capacity-driven LRU eviction (evictOverBudget) and
+   *     cannot-reconstruct drops (growth/out-of-bounds/incomplete-page):
+   *     these are not version statements -- eviction is purely a memory
+   *     budget concern, and the cannot-reconstruct cases intentionally
+   *     leave the floor exactly where raiseFloor's doc explains. Keeping
+   *     the floor untouched here means an evicted-then-restale-delivered
+   *     update is still correctly rejected by the floor even though its
+   *     entry is gone.
+   */
   private drop(addressHex: string): void {
     const entry = this.entries.get(addressHex);
     if (entry) {

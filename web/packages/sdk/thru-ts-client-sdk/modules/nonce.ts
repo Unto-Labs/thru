@@ -1,11 +1,40 @@
 import type { ThruClientContext } from "../core/client";
-import { AccountView, type VersionContext } from "@thru/sdk/proto";
+import { AccountView, TransactionVmError, type VersionContext } from "@thru/sdk/proto";
 import { Pubkey, type PubkeyInput } from "../domain/primitives";
 import { getAccount } from "./accounts";
 import { currentVersionContext } from "./consensus";
 import { streamAccountUpdates } from "./streaming";
 
 const DEFAULT_NONCE_WAIT_TIMEOUT_MS = 10_000;
+
+/**
+ * The two rejects that carry `feePayerExpectedNonce`. Mirrors
+ * `tn_runtime_err_is_nonce_reject` (src/thru/runtime/tn_runtime_errors.h).
+ */
+const NONCE_REJECT_VM_ERRORS: readonly number[] = [
+    TransactionVmError.TRANSACTION_VM_ERROR_NONCE_TOO_LOW,
+    TransactionVmError.TRANSACTION_VM_ERROR_NONCE_TOO_HIGH,
+];
+
+/** Shape of the execution result fields this module needs. */
+export interface NonceRejectExecutionResult {
+    vmError: number;
+    feePayerExpectedNonce?: bigint;
+}
+
+/**
+ * Returns the nonce a rejected transaction should have used, or undefined when
+ * the result is not a nonce reject or the node did not report one (an older
+ * node, or a reject for some other reason).
+ */
+export function expectedNonceFromExecutionResult(
+    executionResult: NonceRejectExecutionResult | undefined,
+): bigint | undefined {
+    if (!executionResult || !NONCE_REJECT_VM_ERRORS.includes(executionResult.vmError)) {
+        return undefined;
+    }
+    return executionResult.feePayerExpectedNonce;
+}
 
 export interface AccountNonceObserverOptions {
     versionContext?: VersionContext;
@@ -209,6 +238,28 @@ export class FeePayerNonceManager {
 
     reset(nextNonce?: bigint): void {
         this.nextNonce = nextNonce;
+    }
+
+    /**
+     * Applies a nonce correction reported by the node on a rejected
+     * transaction, and returns true when one was applied.
+     *
+     * This MUST assign rather than take a maximum. NONCE_TOO_HIGH means the
+     * allocation cursor ran ahead of the chain -- which is what happens
+     * whenever an optimistically-allocated transaction fails to land -- so the
+     * correction is always SMALLER than `nextNonce`. A monotone update would
+     * discard it and the cursor would stay wrong forever (UNTO-2619).
+     *
+     * The observer is deliberately not updated: `latestNonce` tracks values
+     * actually observed on chain and is monotone by design.
+     */
+    applyNonceReject(executionResult: NonceRejectExecutionResult | undefined): boolean {
+        const expected = expectedNonceFromExecutionResult(executionResult);
+        if (expected === undefined) {
+            return false;
+        }
+        this.nextNonce = expected;
+        return true;
     }
 
     async sync(): Promise<bigint> {

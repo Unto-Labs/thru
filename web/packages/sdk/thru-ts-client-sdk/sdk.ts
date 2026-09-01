@@ -135,12 +135,14 @@ export type { ListSlotMetricsOptions } from "./modules/slots";
 // ============================================================================
 export {
   AccountNonceObserver,
-  FeePayerNonceManager
+  FeePayerNonceManager,
+  expectedNonceFromExecutionResult
 } from "./modules/nonce";
 export type {
   AccountNonceObserverOptions,
   FeePayerNonceAllocation,
   FeePayerNonceManagerOptions,
+  NonceRejectExecutionResult,
   WaitForNonceOptions
 } from "./modules/nonce";
 

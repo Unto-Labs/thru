@@ -18,6 +18,14 @@ vi.mock("./provider/EmbeddedProvider", () => ({
 
     setTelemetryContext(): void {}
 
+    getSelectedAccount(): { address: string } | null {
+      return null;
+    }
+
+    async prepareDeposit(): Promise<never> {
+      throw new Error("prepareDeposit mock not configured");
+    }
+
     destroy(): void {}
   },
 }));
@@ -29,10 +37,70 @@ beforeEach(() => {
   providerConfigs.length = 0;
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true }));
 });
-
 afterEach(() => vi.unstubAllGlobals());
 
 describe("BrowserSDK transaction signing scheme", () => {
+  it("revalidates a prepared destination after the selected account changes", async () => {
+    const firstDestination = {
+      network: "alphanet",
+      depositTarget: "credits",
+      tokenAccountAddress: "ta_first_token_account",
+      mintAddress: "ta_mint",
+      tokenProgramAddress: "ta_token_program",
+      symbol: "CREDITS",
+      decimals: 6,
+    };
+    const secondDestination = {
+      ...firstDestination,
+      tokenAccountAddress: "ta_second_token_account",
+    };
+    const sdk = new BrowserSDK({
+      iframeUrl: "https://app.tid.sh/embedded",
+      signingSessionStorage: false,
+    });
+    const internals = sdk as unknown as {
+      initialized: boolean;
+      provider: {
+        prepareDeposit: (payload: unknown) => Promise<typeof firstDestination>;
+        getSelectedAccount: () => { address: string } | null;
+      };
+      resolveDepositDestination: (
+        destination: typeof firstDestination,
+      ) => Promise<{
+        destination: typeof firstDestination;
+        walletAddress: string;
+      }>;
+    };
+    internals.initialized = true;
+    let selectedAddress = "ta_first_wallet";
+    vi.spyOn(internals.provider, "getSelectedAccount").mockImplementation(() => ({
+      address: selectedAddress,
+    }));
+    const prepare = vi
+      .spyOn(internals.provider, "prepareDeposit")
+      .mockResolvedValueOnce(firstDestination)
+      .mockResolvedValueOnce(secondDestination);
+
+    const prepared = await sdk.prepareDeposit();
+    const reused = await internals.resolveDepositDestination(prepared);
+
+    expect(reused).toEqual({
+      destination: firstDestination,
+      walletAddress: "ta_first_wallet",
+    });
+    expect(reused.destination).not.toBe(prepared);
+    expect(prepare).toHaveBeenCalledOnce();
+
+    selectedAddress = "ta_second_wallet";
+    await expect(
+      internals.resolveDepositDestination(prepared),
+    ).rejects.toThrow(
+      "Prepared deposit destination no longer matches wallet config: tokenAccountAddress",
+    );
+    expect(prepare).toHaveBeenCalledTimes(2);
+    sdk.destroy();
+  });
+
   it("returns only the dapp-configured deposit provider IDs", async () => {
     const sdk = new BrowserSDK({
       iframeUrl: "https://app.tid.sh/embedded",

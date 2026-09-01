@@ -14,7 +14,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file thru/common/v1/consensus.proto.
  */
 export const file_thru_common_v1_consensus: GenFile = /*@__PURE__*/
-  fileDesc("Ch50aHJ1L2NvbW1vbi92MS9jb25zZW5zdXMucHJvdG8SDnRocnUuY29tbW9uLnYxIpYDCg5WZXJzaW9uQ29udGV4dBI2CgdjdXJyZW50GAEgASgLMh4udGhydS5jb21tb24udjEuQ3VycmVudFZlcnNpb25CA+BBAUgAEk4KE2N1cnJlbnRPckhpc3RvcmljYWwYAiABKAsyKi50aHJ1LmNvbW1vbi52MS5DdXJyZW50T3JIaXN0b3JpY2FsVmVyc2lvbkID4EEBSAASEwoEc2xvdBgDIAEoBEID4EEBSAASNAoJdGltZXN0YW1wGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEID4EEBSAASEgoDc2VxGAUgASgEQgPgQQFIADqRAbpIjQEaigEKHHZlcnNpb25fY29udGV4dF9oYXNfc2VsZWN0b3ISLm9uZSBvZiBjdXJyZW50LCBzbG90LCBvciB0aW1lc3RhbXAgbXVzdCBiZSBzZXQaOmhhcyh0aGlzLmN1cnJlbnQpIHx8IGhhcyh0aGlzLnNsb3QpIHx8IGhhcyh0aGlzLnRpbWVzdGFtcClCCQoHdmVyc2lvbiIQCg5DdXJyZW50VmVyc2lvbiIcChpDdXJyZW50T3JIaXN0b3JpY2FsVmVyc2lvbirfAQoPQ29uc2Vuc3VzU3RhdHVzEiAKHENPTlNFTlNVU19TVEFUVVNfVU5TUEVDSUZJRUQQABIdChlDT05TRU5TVVNfU1RBVFVTX09CU0VSVkVEEAESHQoZQ09OU0VOU1VTX1NUQVRVU19JTkNMVURFRBACEh4KGkNPTlNFTlNVU19TVEFUVVNfRklOQUxJWkVEEAMSJQohQ09OU0VOU1VTX1NUQVRVU19MT0NBTExZX0VYRUNVVEVEEAQSJQohQ09OU0VOU1VTX1NUQVRVU19DTFVTVEVSX0VYRUNVVEVEEAVCygEKEmNvbS50aHJ1LmNvbW1vbi52MUIOQ29uc2Vuc3VzUHJvdG9QAVpEZ2l0aHViLmNvbS9VbnRvLUxhYnMvdGhydS1uZXQvZ3JwYy9wa2cvcHJvdG8vdGhydS9jb21tb24vdjE7Y29tbW9udjGiAgNUQ1iqAg5UaHJ1LkNvbW1vbi5WMboCA1RIVcoCDlRocnVcQ29tbW9uXFYx4gIaVGhydVxDb21tb25cVjFcR1BCTWV0YWRhdGHqAhBUaHJ1OjpDb21tb246OlYxYgZwcm90bzM", [file_buf_validate_validate, file_google_api_field_behavior, file_google_protobuf_timestamp]);
+  fileDesc("Ch50aHJ1L2NvbW1vbi92MS9jb25zZW5zdXMucHJvdG8SDnRocnUuY29tbW9uLnYxIooECg5WZXJzaW9uQ29udGV4dBI2CgdjdXJyZW50GAEgASgLMh4udGhydS5jb21tb24udjEuQ3VycmVudFZlcnNpb25CA+BBAUgAEk4KE2N1cnJlbnRPckhpc3RvcmljYWwYAiABKAsyKi50aHJ1LmNvbW1vbi52MS5DdXJyZW50T3JIaXN0b3JpY2FsVmVyc2lvbkID4EEBSAASEwoEc2xvdBgDIAEoBEID4EEBSAASNAoJdGltZXN0YW1wGAQgASgLMhouZ29vZ2xlLnByb3RvYnVmLlRpbWVzdGFtcEID4EEBSAASMAoIc2xvdF9zZXEYBSABKAsyFy50aHJ1LmNvbW1vbi52MS5TbG90U2VxQgPgQQFIADrnAbpI4wEa4AEKHHZlcnNpb25fY29udGV4dF9oYXNfc2VsZWN0b3ISTW9uZSBvZiBjdXJyZW50LCBjdXJyZW50T3JIaXN0b3JpY2FsLCBzbG90LCB0aW1lc3RhbXAsIG9yIHNsb3Rfc2VxIG11c3QgYmUgc2V0GnFoYXModGhpcy5jdXJyZW50KSB8fCBoYXModGhpcy5jdXJyZW50T3JIaXN0b3JpY2FsKSB8fCBoYXModGhpcy5zbG90KSB8fCBoYXModGhpcy50aW1lc3RhbXApIHx8IGhhcyh0aGlzLnNsb3Rfc2VxKUIJCgd2ZXJzaW9uIhAKDkN1cnJlbnRWZXJzaW9uIhwKGkN1cnJlbnRPckhpc3RvcmljYWxWZXJzaW9uIi4KB1Nsb3RTZXESEQoEc2xvdBgBIAEoBEID4EECEhAKA3NlcRgCIAEoBEID4EECKt8BCg9Db25zZW5zdXNTdGF0dXMSIAocQ09OU0VOU1VTX1NUQVRVU19VTlNQRUNJRklFRBAAEh0KGUNPTlNFTlNVU19TVEFUVVNfT0JTRVJWRUQQARIdChlDT05TRU5TVVNfU1RBVFVTX0lOQ0xVREVEEAISHgoaQ09OU0VOU1VTX1NUQVRVU19GSU5BTElaRUQQAxIlCiFDT05TRU5TVVNfU1RBVFVTX0xPQ0FMTFlfRVhFQ1VURUQQBBIlCiFDT05TRU5TVVNfU1RBVFVTX0NMVVNURVJfRVhFQ1VURUQQBULKAQoSY29tLnRocnUuY29tbW9uLnYxQg5Db25zZW5zdXNQcm90b1ABWkRnaXRodWIuY29tL1VudG8tTGFicy90aHJ1LW5ldC9ncnBjL3BrZy9wcm90by90aHJ1L2NvbW1vbi92MTtjb21tb252MaICA1RDWKoCDlRocnUuQ29tbW9uLlYxugIDVEhVygIOVGhydVxDb21tb25cVjHiAhpUaHJ1XENvbW1vblxWMVxHUEJNZXRhZGF0YeoCEFRocnU6OkNvbW1vbjo6VjFiBnByb3RvMw", [file_buf_validate_validate, file_google_api_field_behavior, file_google_protobuf_timestamp]);
 
 /**
  * VersionContext selects which logical version of a resource should be
@@ -62,13 +62,13 @@ export type VersionContext = Message<"thru.common.v1.VersionContext"> & {
     case: "timestamp";
   } | {
     /**
-     * Request the version for a specific seq number.
+     * Request the account version written at an exact (slot, seq) point.
      * Relevant only for GetAccount and GetRawAccount requests.
      *
-     * @generated from field: uint64 seq = 5;
+     * @generated from field: thru.common.v1.SlotSeq slot_seq = 5;
      */
-    value: bigint;
-    case: "seq";
+    value: SlotSeq;
+    case: "slotSeq";
   } | { case: undefined; value?: undefined };
 };
 
@@ -108,6 +108,33 @@ export type CurrentOrHistoricalVersion = Message<"thru.common.v1.CurrentOrHistor
  */
 export const CurrentOrHistoricalVersionSchema: GenMessage<CurrentOrHistoricalVersion> = /*@__PURE__*/
   messageDesc(file_thru_common_v1_consensus, 2);
+
+/**
+ * SlotSeq identifies an exact account version: the row written in `slot`
+ * carrying per-account sequence number `seq`.  A bare seq is not a version
+ * key -- it restarts across account incarnations -- so it is only
+ * meaningful scoped to a slot.
+ *
+ * @generated from message thru.common.v1.SlotSeq
+ */
+export type SlotSeq = Message<"thru.common.v1.SlotSeq"> & {
+  /**
+   * @generated from field: uint64 slot = 1;
+   */
+  slot: bigint;
+
+  /**
+   * @generated from field: uint64 seq = 2;
+   */
+  seq: bigint;
+};
+
+/**
+ * Describes the message thru.common.v1.SlotSeq.
+ * Use `create(SlotSeqSchema)` to create a new message.
+ */
+export const SlotSeqSchema: GenMessage<SlotSeq> = /*@__PURE__*/
+  messageDesc(file_thru_common_v1_consensus, 3);
 
 /**
  * ConsensusStatus represents the minimum consensus level a resource has

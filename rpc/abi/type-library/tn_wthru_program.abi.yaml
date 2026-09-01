@@ -60,6 +60,12 @@ types:
   kind:
     struct:
       packed: true
+      comment: >-
+        Mints the vault's native balance delta (current balance minus the
+        recorded last_balance) to dest_token_account_idx.  The delta does not
+        identify a depositor, so the funding transfer and this instruction must
+        be submitted atomically in a single transaction, e.g. via the multicall
+        program; otherwise the next caller can claim the delta.
       fields:
       - name: token_program_idx
         field-type:

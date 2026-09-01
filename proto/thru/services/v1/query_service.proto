@@ -32,8 +32,6 @@ message GetAccountRequest {
   optional thru.core.v1.AccountView view = 2 [(google.api.field_behavior) = OPTIONAL];
   thru.common.v1.VersionContext version_context = 3
       [(google.api.field_behavior) = REQUIRED];
-  optional thru.common.v1.ConsensusStatus min_consensus = 4
-      [(google.api.field_behavior) = OPTIONAL];
   optional thru.core.v1.DataSlice data_slice = 5
       [(google.api.field_behavior) = OPTIONAL];
 }
@@ -41,11 +39,16 @@ message GetAccountRequest {
 // GetRawAccountRequest retrieves raw account bytes by public key.
 message GetRawAccountRequest {
   thru.common.v1.Pubkey address = 1 [(google.api.field_behavior) = REQUIRED];
+  // Controls which sections of the raw response are returned.
+  // ACCOUNT_VIEW_UNSPECIFIED and ACCOUNT_VIEW_FULL (default) return both
+  // raw_meta and raw_data. ACCOUNT_VIEW_META_ONLY skips the data fetch
+  // entirely and omits raw_data from the response. ACCOUNT_VIEW_DATA_ONLY
+  // and ACCOUNT_VIEW_PUBKEY_ONLY are rejected with InvalidArgument: raw_meta
+  // is a REQUIRED field on RawAccount, so a raw response without it has no
+  // honest encoding, and a raw response of only an address is meaningless.
   optional thru.core.v1.AccountView view = 2 [(google.api.field_behavior) = OPTIONAL];
   thru.common.v1.VersionContext version_context = 3
       [(google.api.field_behavior) = REQUIRED];
-  optional thru.common.v1.ConsensusStatus min_consensus = 4
-      [(google.api.field_behavior) = OPTIONAL];
 }
 
 // GetTransactionRequest retrieves a decoded transaction by signature.
@@ -1105,6 +1108,140 @@ message NodeRepairStatus {
   bool active = 1;
 }
 
+/* Batch RPC messages.
+
+   APPENDED AFTER every existing message, deliberately.  A protobuf
+   message's position in the file is its descriptor index, and several
+   generators bind their exported schemas by that index -- so inserting a
+   message mid-file renumbers every message below it and rewrites their
+   generated bindings.  That is not a wire-compatibility problem (names and
+   field numbers are what the wire uses) but it turns an additive change
+   into a churning one and trips the generated-diff check.  New messages go
+   at the end. */
+
+// BatchGetRawAccountsRequest fetches raw bytes for many accounts in one call.
+//
+// Batching exists because the per-account path costs up to three ClickHouse
+// round-trips (current meta, historical meta, historical pages), so N accounts
+// fetched one at a time is 3N sequential queries. The batch answers the whole
+// set in a fixed number of queries regardless of N.
+message BatchGetRawAccountsRequest {
+  // The accounts to fetch. At most 1000 (BATCH_GET_MAX_ITEMS); a larger batch
+  // is rejected with INVALID_ARGUMENT rather than silently truncated, because
+  // the address list is rendered into the SQL and would otherwise run into
+  // ClickHouse's max_query_size.
+  repeated BatchGetRawAccountsItem items = 1
+      [(google.api.field_behavior) = REQUIRED];
+  // Version applied to every item that does not carry its own. Set this alone
+  // to read the whole batch at one version -- the common case -- instead of
+  // repeating the same context on each item.
+  optional thru.common.v1.VersionContext version_context = 2
+      [(google.api.field_behavior) = OPTIONAL];
+  optional thru.common.v1.ConsensusStatus min_consensus = 3
+      [(google.api.field_behavior) = OPTIONAL];
+  optional thru.core.v1.AccountView view = 4
+      [(google.api.field_behavior) = OPTIONAL];
+}
+
+// BatchGetRawAccountsItem is one account in a batch, optionally pinned to its
+// own version.
+message BatchGetRawAccountsItem {
+  thru.common.v1.Pubkey address = 1 [(google.api.field_behavior) = REQUIRED];
+  // Overrides the request-level version_context for this account only. Leave
+  // unset to inherit it. Set it when the batch reads accounts at DIFFERENT
+  // versions -- e.g. verifying each account at the slot its own transaction
+  // executed in.
+  optional thru.common.v1.VersionContext version_context = 2
+      [(google.api.field_behavior) = OPTIONAL];
+}
+
+// BatchGetRawAccountsResponse returns the accounts that were found.
+//
+// PARTIAL BY DESIGN: an address that does not exist is simply ABSENT from the
+// map rather than failing the call, so one missing account cannot destroy a
+// batch of 1000. Callers must look up their addresses rather than assume the
+// map is complete.
+message BatchGetRawAccountsResponse {
+  // Keyed by the encoded account address, as returned elsewhere in this API.
+  map<string, thru.core.v1.RawAccount> accounts = 1
+      [(google.api.field_behavior) = OPTIONAL];
+}
+
+// BatchGetTransactionsRequest fetches many decoded transactions in one call.
+message BatchGetTransactionsRequest {
+  // At most 1000 (BATCH_GET_MAX_ITEMS); see BatchGetRawAccountsRequest.items.
+  repeated thru.common.v1.Signature signatures = 1
+      [(google.api.field_behavior) = REQUIRED];
+  optional thru.common.v1.VersionContext version_context = 2
+      [(google.api.field_behavior) = OPTIONAL];
+  optional thru.common.v1.ConsensusStatus min_consensus = 3
+      [(google.api.field_behavior) = OPTIONAL];
+  optional thru.core.v1.TransactionView view = 4
+      [(google.api.field_behavior) = OPTIONAL];
+}
+
+// BatchGetTransactionsResponse returns the transactions that were found.
+//
+// PARTIAL BY DESIGN, exactly as BatchGetRawAccountsResponse: an unknown
+// signature is absent from the map, not an error.
+message BatchGetTransactionsResponse {
+  // Keyed by the encoded transaction signature.
+  map<string, thru.core.v1.Transaction> transactions = 1
+      [(google.api.field_behavior) = OPTIONAL];
+}
+
+// BatchGenerateStateProofsRequest generates many state proofs in one call.
+//
+// A single proof descends the state trie root-to-leaf, one node fetch per
+// level, and that descent cannot be parallelised -- each node is what reveals
+// the next hash.  What CAN be shared is the descent across proofs: every
+// request in the batch needs its depth-d node at the same moment, so N proofs
+// over a depth-D trie cost D round-trips rather than N*D.
+message BatchGenerateStateProofsRequest {
+  // At most 1000; a larger batch is rejected rather than truncated.
+  //
+  // Every request's own target_slot must be UNSET: the slot is chosen once for
+  // the batch, below. A request that sets it is rejected rather than ignored.
+  repeated thru.core.v1.StateProofRequest requests = 1
+      [(google.api.field_behavior) = REQUIRED];
+
+  // The slot whose state root every proof in this batch is built against.
+  // Unset (or 0) selects the latest usable root, as the per-request RPC does.
+  //
+  // BATCH-LEVEL, NOT PER-REQUEST, deliberately. A proof is only usable by a
+  // block whose execution slot falls inside the runtime's ACCEPTS window, so
+  // every proof a caller assembles for one block already shares one slot;
+  // mixing slots in a batch has no use and is expensive to serve. Each distinct
+  // slot costs its own root resolution and its own full trie descent, so a
+  // 1000-request batch of distinct slots performs ~1000 descents instead of one
+  // shared walk -- the same work as 1000 separate calls, bought with a single
+  // round-trip. Hoisting the slot here makes that shape unrepresentable rather
+  // than merely rejected.
+  optional uint64 target_slot = 2 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// BatchGenerateStateProofsResponse returns one result per request, IN THE ORDER
+// REQUESTED.
+//
+// Results are positional rather than keyed because the same account may
+// legitimately appear more than once in a batch (at different proof types), so
+// an address alone does not identify a request.
+message BatchGenerateStateProofsResponse {
+  repeated StateProofResult results = 1 [(google.api.field_behavior) = OPTIONAL];
+}
+
+// StateProofResult is one request's outcome.
+//
+// PARTIAL BY DESIGN: a key that cannot be proved -- absent when membership was
+// asked, present when non-membership was -- is an ordinary answer ABOUT THAT
+// KEY and must not fail the other 999.  Exactly one of proof/error is set.
+message StateProofResult {
+  optional thru.core.v1.StateProof proof = 1 [(google.api.field_behavior) = OPTIONAL];
+  // google.rpc.Code for this request, 0 when proof is set.
+  optional int32 error_code = 2 [(google.api.field_behavior) = OPTIONAL];
+  optional string error_message = 3 [(google.api.field_behavior) = OPTIONAL];
+}
+
 // QueryService defines unary RPCs for accessing blockchain data.
 service QueryService {
   option (google.api.default_host) = "api.thru.network";
@@ -1137,6 +1274,26 @@ service QueryService {
       get: "/v1/accounts/{address.value}:raw"
     };
     option (google.api.method_signature) = "address";
+  }
+
+  // Get raw bytes for many accounts in one call. Partial: addresses that do
+  // not exist are absent from the response map.
+  rpc BatchGetRawAccounts(BatchGetRawAccountsRequest)
+      returns (BatchGetRawAccountsResponse) {
+    option (google.api.http) = {
+      post: "/v1/accounts:batchGetRaw"
+      body: "*"
+    };
+  }
+
+  // Get many transactions in one call. Partial: unknown signatures are absent
+  // from the response map.
+  rpc BatchGetTransactions(BatchGetTransactionsRequest)
+      returns (BatchGetTransactionsResponse) {
+    option (google.api.http) = {
+      post: "/v1/transactions:batchGet"
+      body: "*"
+    };
   }
 
   // Get transaction by signature.
@@ -1231,6 +1388,16 @@ service QueryService {
   }
 
   // Generate an account state proof snapshot.
+  // Generate many state proofs in one call, sharing the trie descent across
+  // them. Partial: a request that cannot be proved carries its own error.
+  rpc BatchGenerateStateProofs(BatchGenerateStateProofsRequest)
+      returns (BatchGenerateStateProofsResponse) {
+    option (google.api.http) = {
+      post: "/v1/state-proofs:batchGenerate"
+      body: "*"
+    };
+  }
+
   rpc GenerateStateProof(GenerateStateProofRequest)
       returns (GenerateStateProofResponse) {
     option (google.api.http) = {

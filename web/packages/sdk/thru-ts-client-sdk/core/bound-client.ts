@@ -121,7 +121,7 @@ interface BoundConsensus {
     currentOrHistoricalVersionContext: typeof consensusModule.currentOrHistoricalVersionContext;
     slotVersionContext: typeof consensusModule.slotVersionContext;
     timestampVersionContext: typeof consensusModule.timestampVersionContext;
-    seqVersionContext: typeof consensusModule.seqVersionContext;
+    slotSeqVersionContext: typeof consensusModule.slotSeqVersionContext;
 }
 
 interface Helpers {
@@ -229,7 +229,7 @@ export function createBoundThruClient(ctx: ThruClientContext): Thru {
             currentOrHistoricalVersionContext: consensusModule.currentOrHistoricalVersionContext,
             slotVersionContext: consensusModule.slotVersionContext,
             timestampVersionContext: consensusModule.timestampVersionContext,
-            seqVersionContext: consensusModule.seqVersionContext,
+            slotSeqVersionContext: consensusModule.slotSeqVersionContext,
         },
     };
 }

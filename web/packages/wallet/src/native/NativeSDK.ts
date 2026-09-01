@@ -32,15 +32,19 @@ import {
   normalizeConnectionStateResult,
 } from "../protocol";
 import {
+  createPreparedDepositSnapshot,
   ensureDepositAccountForWallet,
   formatDepositAmount,
+  getReusablePreparedDepositDestination,
   getDepositAccountStateForWallet,
+  getValidatedDepositDestination,
   signDepositTransactionWithActiveSession,
   waitForDepositBalanceForWallet,
   type DepositAccountState,
   type DepositsApi,
   type EnsureDepositAccountParams,
   type GetDepositAccountStateParams,
+  type PreparedDepositSnapshot,
   type SignDepositTransactionPayload,
   type WaitForDepositBalanceParams,
 } from "../deposit";
@@ -282,6 +286,10 @@ export class NativeSDK {
   private readonly depositProviders: ReadonlySet<string>;
   private readonly signingSessions?: SigningSessionDescriptorStore;
   private readonly telemetry: TelemetryClient;
+  private readonly preparedDepositSnapshots = new WeakMap<
+    DepositDestination,
+    PreparedDepositSnapshot
+  >();
 
   readonly deposits: DepositsApi = {
     prepare: (targetOrPayload) => this.prepareDeposit(targetOrPayload),
@@ -674,6 +682,11 @@ export class NativeSDK {
   }
 
   async disconnect(): Promise<void> {
+    const startedAt = Date.now();
+    this.telemetry.record(TELEMETRY_EVENTS.SDK_DISCONNECT_STARTED, {
+      operation: "disconnect",
+      outcome: "started",
+    });
     try {
       await this.provider.disconnect();
       this.emit("disconnect", {});
@@ -681,7 +694,19 @@ export class NativeSDK {
       await this.persistSelectedAccountAddress(null);
       await this.clearPersistedConnection();
       this.clearAuthorizedAvailability();
+      this.telemetry.record(TELEMETRY_EVENTS.SDK_DISCONNECT_COMPLETED, {
+        operation: "disconnect",
+        outcome: "success",
+        durationMs: Date.now() - startedAt,
+      });
     } catch (error) {
+      this.telemetry.record(TELEMETRY_EVENTS.SDK_DISCONNECT_FAILED, {
+        operation: "disconnect",
+        outcome: "error",
+        severity: "error",
+        durationMs: Date.now() - startedAt,
+        ...getTelemetryErrorFields(error),
+      });
       this.emit("error", error);
       throw error;
     }
@@ -781,10 +806,25 @@ export class NativeSDK {
       typeof depositTargetOrPayload === "string"
         ? { depositTarget: depositTargetOrPayload }
         : (depositTargetOrPayload ?? {});
-    return this.provider.prepareDeposit({
+    const selectedAccountBefore = this.provider.getSelectedAccount();
+    const destination = await this.provider.prepareDeposit({
       ...payload,
       network: payload.network ?? this.defaultNetwork,
     });
+    const selectedAccountAfter = this.provider.getSelectedAccount();
+    if (
+      selectedAccountBefore &&
+      selectedAccountAfter?.address === selectedAccountBefore.address
+    ) {
+      this.preparedDepositSnapshots.set(
+        destination,
+        createPreparedDepositSnapshot(
+          destination,
+          selectedAccountAfter.address,
+        ),
+      );
+    }
+    return destination;
   }
 
   /**
@@ -907,6 +947,22 @@ export class NativeSDK {
     if (!selectedAccount) {
       throw new Error("Wallet not connected");
     }
+    if (destination) {
+      const snapshot = this.preparedDepositSnapshots.get(destination);
+      if (snapshot) {
+        const canonicalDestination = getReusablePreparedDepositDestination(
+          destination,
+          snapshot,
+          selectedAccount.address,
+        );
+        if (canonicalDestination) {
+          return {
+            destination: canonicalDestination,
+            walletAddress: selectedAccount.address,
+          };
+        }
+      }
+    }
     const expected = await this.prepareDeposit(
       destination
         ? {
@@ -915,10 +971,12 @@ export class NativeSDK {
           }
         : DepositTarget.Credits,
     );
-    if (destination) {
-      assertDepositDestinationMatches(destination, expected);
-    }
-    return { destination: expected, walletAddress: selectedAccount.address };
+    return {
+      destination: destination
+        ? getValidatedDepositDestination(destination, expected)
+        : expected,
+      walletAddress: selectedAccount.address,
+    };
   }
 
   private signDepositTransaction(
@@ -1206,20 +1264,6 @@ function getTelemetryErrorFields(error: unknown): {
     errorCode: getErrorCode(error) ?? ErrorCode.UNKNOWN_ERROR,
     message: getErrorMessage(error, "Unknown native wallet error"),
   };
-}
-
-function assertDepositDestinationMatches(
-  actual: DepositDestination,
-  expected: DepositDestination,
-): void {
-  const mismatches = (
-    Object.keys(expected) as Array<keyof DepositDestination>
-  ).filter((key) => actual[key] !== expected[key]);
-  if (mismatches.length > 0) {
-    throw new Error(
-      `Prepared deposit destination no longer matches wallet config: ${mismatches.join(", ")}`,
-    );
-  }
 }
 
 function walletAvailabilityFromConnectResult(

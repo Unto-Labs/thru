@@ -22,6 +22,7 @@ import {
     StreamHeightRequestSchema,
     StreamNodeRecordsRequestSchema,
     StreamSlotMetricsRequestSchema,
+    type StreamSlotMetricsResponse,
     StreamTransactionsRequestSchema,
     TrackTransactionRequestSchema,
 } from "@thru/sdk/proto";
@@ -251,6 +252,18 @@ export function streamHeight(
 export interface StreamSlotMetricsOptions {
     startSlot?: bigint;
     signal?: AbortSignal;
+    /**
+     * Ask the server for the slot's compressed-state trie root.
+     *
+     * Off by default: the commitment costs bandwidth on every slot and most
+     * consumers never read it.
+     */
+    includeCompressedStateRoot?: boolean;
+    /**
+     * Ask the server for the slot's active-state hash. Off by default, same
+     * reasoning as {@link StreamSlotMetricsOptions.includeCompressedStateRoot}.
+     */
+    includeActiveStateHash?: boolean;
 }
 
 export interface StreamSlotMetricsResult {
@@ -259,7 +272,63 @@ export interface StreamSlotMetricsResult {
     globalActivatedStateCounter: bigint;
     globalDeactivatedStateCounter: bigint;
     blockTimestamp?: Timestamp;
+    /**
+     * Total compute units consumed by this block.
+     *
+     * Zero for an empty block, and also zero when the node could not attribute
+     * this slot's execution results to it. The wire cannot distinguish the two
+     * cases, so do not read zero as "the block did no work".
+     */
+    consumedComputeUnits: bigint;
+    /**
+     * Total state units consumed by this block.
+     *
+     * Same zero caveat as {@link StreamSlotMetricsResult.consumedComputeUnits}.
+     */
+    consumedStateUnits: number;
+    /**
+     * The compressed-state trie root as of this slot: the commitment account
+     * state proofs are verified against.
+     *
+     * The server sends exactly 32 bytes. This is a pass-through of whatever
+     * arrived -- unlike the Rust client, the SDK does not reject a
+     * wrong-length value -- so a consumer doing byte comparisons should check
+     * the length rather than assume it.
+     *
+     * Undefined unless requested, and undefined even then when: the node
+     * reported no execution state for the slot; the server predates the field;
+     * the node behind a supporting server predates the wire flag that marks a
+     * terminator as post-execution; or that terminator was truncated. Those
+     * cases are not distinguishable from one another on the wire.
+     *
+     * An all-zero VALUE is legitimate and means something different from
+     * undefined: the trie is empty until compression warms up, and a slot that
+     * compressed nothing repeats the previous root.
+     */
+    compressedStateRoot?: Uint8Array;
+    /**
+     * The active-state hash as of this slot: 32 bytes over the live account set
+     * and this slot's block context. Same presence rules as
+     * {@link StreamSlotMetricsResult.compressedStateRoot}.
+     *
+     * Because that block context contains the compressed-state root, this hash
+     * transitively commits to it -- the two fields agreeing is not an
+     * independent check of either.
+     */
+    activeStateHash?: Uint8Array;
 }
+
+/* Compile-time guard: every property the generated StreamSlotMetricsResponse
+   carries must be surfaced by StreamSlotMetricsResult. Adding a proto field
+   without widening the result type stops this file compiling, and the error
+   names the missing key. This asserts over generated object keys, not protobuf
+   wire fields — the two coincide only because this message has no oneof. */
+type _UnmappedSlotMetricsKeys = Exclude<
+    Exclude<keyof StreamSlotMetricsResponse, "$typeName" | "$unknown">,
+    keyof StreamSlotMetricsResult
+>;
+type _AssertNever<T extends never> = T;
+type _StreamSlotMetricsCoverage = _AssertNever<_UnmappedSlotMetricsKeys>;
 
 export function streamSlotMetrics(
     ctx: ThruClientContext,
@@ -267,18 +336,27 @@ export function streamSlotMetrics(
 ): AsyncIterable<StreamSlotMetricsResult> {
     const request = create(StreamSlotMetricsRequestSchema, {
         startSlot: options.startSlot,
+        includeCompressedStateRoot: options.includeCompressedStateRoot ?? false,
+        includeActiveStateHash: options.includeActiveStateHash ?? false,
     });
 
     const iterable = ctx.streaming.streamSlotMetrics(request, withCallOptions(ctx, { signal: options.signal }));
 
     async function* mapper() {
         for await (const response of iterable) {
+            /* One assignment per proto field, including the ones that may be
+               undefined: the key must always be present so the schema-coverage
+               test can see it. */
             yield {
                 slot: response.slot,
                 collectedFees: response.collectedFees,
                 globalActivatedStateCounter: response.globalActivatedStateCounter,
                 globalDeactivatedStateCounter: response.globalDeactivatedStateCounter,
                 blockTimestamp: response.blockTimestamp,
+                consumedComputeUnits: response.consumedComputeUnits,
+                consumedStateUnits: response.consumedStateUnits,
+                compressedStateRoot: response.compressedStateRoot,
+                activeStateHash: response.activeStateHash,
             };
         }
     }

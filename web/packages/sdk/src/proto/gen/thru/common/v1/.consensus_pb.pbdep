@@ -1,9 +1,9 @@
 libprotoc 3.21.12
-proto/thru/common/v1/consensus.proto hFLa6r0tI+jdvy41FwXYxX3aCI7/exxvkD0J9GT+ja4=
+proto/thru/common/v1/consensus.proto 6MrBaLZowZ6UM0JsSxnf++vsrNSe4qf1TbgzOsR/gF8=
 web/packages/proto-toolchain/package.json YzDLTH4AVsA+JhVcxDSHyK1euWy6ZEVNRu2yywY1P2Q=
 web/packages/sdk/buf.yaml SNRjMoMqNnzqEDMgSvyHDHxiAmkhAqb1hs2HzSbDNs8=
 web/packages/sdk/buf.gen.yaml PTN1wmrbpm9sJLB5JKB0tgryonAhTrgnKAp3SIa64SE=
 web/packages/sdk/buf.lock TECtzQqbl8d7xq04z5zhEa4fappBQHsl9rwk9uKw/B0=
 scripts/gen-web-proto.sh uStLeLdYCslwPOW3vCqGB6XfOtCe50Pee0TxCORtzNg=
 scripts/gen-pbdeps.py OE53a33Lyt5hZwdrIC7GWux9KPEwvZJVWcO5MQPQjoc=
-web/packages/sdk/src/proto/gen/thru/common/v1/consensus_pb.ts F4xqCoFNuRocj3Rm79l8psd3rT/UalgcaEUZbBl120o=
+web/packages/sdk/src/proto/gen/thru/common/v1/consensus_pb.ts 0Ie2hdMk+eYoXpImmAW1p1C+251YNUGJMkIvpDT2Z7Y=

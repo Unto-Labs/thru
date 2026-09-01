@@ -358,6 +358,11 @@ export interface SendAndTrackTxnUpdate {
         vmError: number;
         consumedComputeUnits: number;
         userErrorCode: bigint;
+        /**
+         * Set only on a nonce reject: the nonce the runtime requires for the
+         * next transaction from this fee payer. Retry against this value.
+         */
+        feePayerExpectedNonce?: bigint;
     };
 }
 
@@ -394,6 +399,7 @@ export function sendAndTrackTxn(
                         vmError: response.executionResult.vmError,
                         consumedComputeUnits: response.executionResult.consumedComputeUnits,
                         userErrorCode: response.executionResult.userErrorCode,
+                        feePayerExpectedNonce: response.executionResult.feePayerExpectedNonce,
                     }
                     : undefined,
             };

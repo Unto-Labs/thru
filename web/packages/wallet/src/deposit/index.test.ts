@@ -5,10 +5,12 @@ import {
   type DepositDestination,
 } from "../protocol";
 import {
+  createPreparedDepositSnapshot,
   DepositTransactionError,
   createDepositConfig,
   type DepositRuntimeConfig,
   ensureDepositAccountForWallet,
+  getReusablePreparedDepositDestination,
   getDepositAccountStateForWallet,
   signDepositTransactionWithActiveSession,
   waitForDepositBalanceForWallet,
@@ -17,6 +19,33 @@ import {
 vi.mock("@thru/sdk/helpers", () => ({
   decodeAddress: vi.fn((address: string) => new Uint8Array([address.length])),
 }));
+
+describe("prepared deposit snapshots", () => {
+  it("uses the canonical snapshot after validating a stateful caller object", () => {
+    const actual = { ...DESTINATION };
+    const snapshot = createPreparedDepositSnapshot(actual, "ta_wallet");
+    let reads = 0;
+    Object.defineProperty(actual, "tokenProgramAddress", {
+      enumerable: true,
+      get: () => {
+        reads += 1;
+        return reads === 1
+          ? DESTINATION.tokenProgramAddress
+          : "ta_attacker_program";
+      },
+    });
+
+    const resolved = getReusablePreparedDepositDestination(
+      actual,
+      snapshot,
+      "ta_wallet",
+    );
+
+    expect(resolved?.tokenProgramAddress).toBe(DESTINATION.tokenProgramAddress);
+    expect(actual.tokenProgramAddress).toBe("ta_attacker_program");
+    expect(resolved).not.toBe(actual);
+  });
+});
 
 vi.mock("@thru/programs/passkey-manager", () => ({
   buildWalletAccountContext: vi.fn(() => ({
@@ -146,6 +175,7 @@ describe("wallet deposit account helpers", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.unstubAllEnvs();
     vi.restoreAllMocks();
   });
@@ -293,15 +323,82 @@ describe("wallet deposit account helpers", () => {
 
   it("resolves once the balance reaches the minimum", async () => {
     const thru = createThru({ tokenExists: true, balanceRaw: 10n });
+    const onAttempt = vi.fn();
 
     const state = await waitForDepositBalanceForWallet({
       thru: thru as never,
       walletAddress: "ta_wallet",
       destination: DESTINATION,
       minimumBalanceRaw: 10n,
+      onAttempt,
     });
 
     expect(state.balanceRaw).toBe(10n);
+    expect(onAttempt).toHaveBeenCalledOnce();
+    expect(onAttempt).toHaveBeenCalledWith(1);
+  });
+
+  it("does not let an observation callback break balance polling", async () => {
+    const thru = createThru({ tokenExists: true, balanceRaw: 10n });
+
+    await expect(
+      waitForDepositBalanceForWallet({
+        thru: thru as never,
+        walletAddress: "ta_wallet",
+        destination: DESTINATION,
+        minimumBalanceRaw: 10n,
+        onAttempt: () => {
+          throw new Error("telemetry failed");
+        },
+      }),
+    ).resolves.toMatchObject({ balanceRaw: 10n });
+  });
+
+  it("stops the balance poll window when it is cancelled", async () => {
+    vi.useFakeTimers();
+    const thru = createThru({ tokenExists: true, balanceRaw: 0n });
+    const controller = new AbortController();
+    const onAttempt = vi.fn();
+
+    const wait = waitForDepositBalanceForWallet({
+      thru: thru as never,
+      walletAddress: "ta_wallet",
+      destination: DESTINATION,
+      minimumBalanceRaw: 1n,
+      signal: controller.signal,
+      onAttempt,
+    });
+    const rejection = expect(wait).rejects.toMatchObject({
+      name: "AbortError",
+    });
+
+    await vi.advanceTimersByTimeAsync(0);
+    expect(onAttempt).toHaveBeenCalledOnce();
+    expect(thru.accounts.get).toHaveBeenCalledOnce();
+
+    controller.abort();
+    await rejection;
+    await vi.advanceTimersByTimeAsync(10_000);
+
+    expect(onAttempt).toHaveBeenCalledOnce();
+    expect(thru.accounts.get).toHaveBeenCalledOnce();
+  });
+
+  it("does not start a balance read when already cancelled", async () => {
+    const thru = createThru({ tokenExists: true, balanceRaw: 10n });
+    const controller = new AbortController();
+    controller.abort();
+
+    await expect(
+      waitForDepositBalanceForWallet({
+        thru: thru as never,
+        walletAddress: "ta_wallet",
+        destination: DESTINATION,
+        minimumBalanceRaw: 1n,
+        signal: controller.signal,
+      }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(thru.accounts.get).not.toHaveBeenCalled();
   });
 
   it("throws the transaction failure while polling by signature", async () => {

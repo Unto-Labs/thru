@@ -989,6 +989,7 @@ mod tests {
                     readonly_accounts: vec![test_pubkey(0x32)],
                     events: vec![],
                     error_program_acc_idx: 2,
+                    fee_payer_expected_nonce: None,
                 }),
                 slot: Some(42),
                 block_offset: Some(7),

@@ -36,14 +36,12 @@ export interface CreateAccountOptions {
 export interface AccountQueryOptions {
     view?: AccountView;
     versionContext?: VersionContext;
-    minConsensus?: ConsensusStatus;
     dataSlice?: DataSlice;
 }
 
 export interface RawAccountQueryOptions {
     view?: AccountView;
     versionContext?: VersionContext;
-    minConsensus?: ConsensusStatus;
 }
 
 export interface ListAccountsOptions {
@@ -68,7 +66,6 @@ export function getAccount(
         address: Pubkey.from(address).toProtoPubkey(),
         view: options.view ?? DEFAULT_ACCOUNT_VIEW,
         versionContext: options.versionContext ?? DEFAULT_VERSION_CONTEXT,
-        minConsensus: options.minConsensus ?? DEFAULT_MIN_CONSENSUS,
         dataSlice: options.dataSlice,
     });
     return ctx.query.getAccount(request, withCallOptions(ctx)).then(Account.fromProto);
@@ -83,7 +80,6 @@ export function getRawAccount(
         address: Pubkey.from(address).toProtoPubkey(),
         view: options.view ?? DEFAULT_ACCOUNT_VIEW,
         versionContext: options.versionContext ?? DEFAULT_VERSION_CONTEXT,
-        minConsensus: options.minConsensus ?? DEFAULT_MIN_CONSENSUS,
     });
     return ctx.query.getRawAccount(request, withCallOptions(ctx));
 }

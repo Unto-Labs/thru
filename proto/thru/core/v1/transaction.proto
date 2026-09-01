@@ -108,6 +108,18 @@ message TransactionExecutionResult {
   // Account index of the program that caused the error (revert, fault, etc.).
   // Only meaningful when vm_error indicates a failure.
   uint32 error_program_acc_idx = 13 [(google.api.field_behavior) = OPTIONAL];
+  // The nonce the runtime requires for the next transaction from this fee
+  // payer, as of this transaction's execution. Populated ONLY when vm_error is
+  // TRANSACTION_VM_ERROR_NONCE_TOO_LOW or TRANSACTION_VM_ERROR_NONCE_TOO_HIGH;
+  // absent otherwise. A nonce reject does not advance the nonce, so retrying
+  // with this value is correct.
+  //
+  // This is not necessarily the account's live nonce by the time you read it:
+  // another transaction from the same fee payer may have landed since. Treat it
+  // as a correction to retry against, not a reservation. For a fee payer
+  // restored by a creation state proof it is 0, and no account exists yet.
+  optional uint64 fee_payer_expected_nonce = 14
+      [(google.api.field_behavior) = OPTIONAL];
 }
 // TransactionEvent describes an event emitted during transaction execution.
 message TransactionEvent {

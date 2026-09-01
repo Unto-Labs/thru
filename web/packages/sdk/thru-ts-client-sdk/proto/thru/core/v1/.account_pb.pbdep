@@ -1,7 +1,7 @@
 libprotoc 3.21.12
-proto/thru/common/v1/consensus.proto hFLa6r0tI+jdvy41FwXYxX3aCI7/exxvkD0J9GT+ja4=
+proto/thru/common/v1/consensus.proto 6MrBaLZowZ6UM0JsSxnf++vsrNSe4qf1TbgzOsR/gF8=
 proto/thru/common/v1/primitives.proto 7yHiC/ZU+OD48BI/hxM65nNYhy3otIBola4hhun5K9c=
-proto/thru/core/v1/account.proto OqUYftYRqDYwpvbEDTfeptcZs3/AHAOEu7cgGpctCAk=
+proto/thru/core/v1/account.proto qbhcPuEQ0u06xheF5SF+rJ/nVrfrLorsHdEUpIETe1s=
 proto/thru/core/v1/types.proto JgjfD6WYMteMJ7Mch78NWx+wz3rchH1eGHUXsoiUGh4=
 web/packages/proto-toolchain/package.json YzDLTH4AVsA+JhVcxDSHyK1euWy6ZEVNRu2yywY1P2Q=
 web/packages/sdk/buf.yaml SNRjMoMqNnzqEDMgSvyHDHxiAmkhAqb1hs2HzSbDNs8=
@@ -10,4 +10,4 @@ web/packages/sdk/buf.lock TECtzQqbl8d7xq04z5zhEa4fappBQHsl9rwk9uKw/B0=
 scripts/gen-web-proto.sh uStLeLdYCslwPOW3vCqGB6XfOtCe50Pee0TxCORtzNg=
 scripts/sync-thru-sdk-protos.py MvTwq2hqRPPc4vB678N5nBdWxYs2JS+i/WLrU5ZtQa4=
 scripts/gen-pbdeps.py OE53a33Lyt5hZwdrIC7GWux9KPEwvZJVWcO5MQPQjoc=
-web/packages/sdk/thru-ts-client-sdk/proto/thru/core/v1/account_pb.ts CdsCOMczoFYkwf/mWTtTaq1awm2X0BKOMAllSpRzXN4=
+web/packages/sdk/thru-ts-client-sdk/proto/thru/core/v1/account_pb.ts y720Ovv/p8vTUy12lMArtFS9Q6pSD12gNFUXEbuU5w4=

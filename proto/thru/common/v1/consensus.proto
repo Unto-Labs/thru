@@ -45,8 +45,8 @@ enum ConsensusStatus {
 message VersionContext {
   option (buf.validate.message).cel = {
     id: "version_context_has_selector"
-    message: "one of current, slot, or timestamp must be set"
-    expression: "has(this.current) || has(this.slot) || has(this.timestamp)"
+    message: "one of current, currentOrHistorical, slot, timestamp, or slot_seq must be set"
+    expression: "has(this.current) || has(this.currentOrHistorical) || has(this.slot) || has(this.timestamp) || has(this.slot_seq)"
   };
 
   // Specifies the desired version semantics.
@@ -64,9 +64,9 @@ message VersionContext {
     google.protobuf.Timestamp timestamp = 4
         [(google.api.field_behavior) = OPTIONAL];
 
-    // Request the version for a specific seq number.
+    // Request the account version written at an exact (slot, seq) point.
     // Relevant only for GetAccount and GetRawAccount requests.
-    uint64 seq = 5 [(google.api.field_behavior) = OPTIONAL];
+    SlotSeq slot_seq = 5 [(google.api.field_behavior) = OPTIONAL];
   }
 }
 
@@ -75,3 +75,12 @@ message CurrentVersion {}
 
 // CurrentOrHistoricalVersion is an empty marker message for VersionContext.current.
 message CurrentOrHistoricalVersion {}
+
+// SlotSeq identifies an exact account version: the row written in `slot`
+// carrying per-account sequence number `seq`.  A bare seq is not a version
+// key -- it restarts across account incarnations -- so it is only
+// meaningful scoped to a slot.
+message SlotSeq {
+  uint64 slot = 1 [(google.api.field_behavior) = REQUIRED];
+  uint64 seq = 2 [(google.api.field_behavior) = REQUIRED];
+}

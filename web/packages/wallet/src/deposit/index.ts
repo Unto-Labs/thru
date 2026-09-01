@@ -20,10 +20,7 @@ import {
   parseTokenAccountData,
 } from "@thru/programs/token";
 import { base64ToBytes } from "../encoding";
-import type {
-  IThruChain,
-  ThruTransactionReviewPayload,
-} from "../interfaces";
+import type { IThruChain, ThruTransactionReviewPayload } from "../interfaces";
 import {
   DepositTarget,
   ThruNetwork,
@@ -129,6 +126,50 @@ export interface DepositAccountState {
   balanceRaw: bigint;
   balanceLabel: string;
   lastSetupSignature?: string;
+}
+
+export interface PreparedDepositSnapshot {
+  walletAddress: string;
+  destination: Readonly<DepositDestination>;
+}
+
+export function createPreparedDepositSnapshot(
+  destination: DepositDestination,
+  walletAddress: string,
+): PreparedDepositSnapshot {
+  return {
+    walletAddress,
+    destination: Object.freeze({ ...destination }),
+  };
+}
+
+export function getReusablePreparedDepositDestination(
+  actual: DepositDestination,
+  snapshot: PreparedDepositSnapshot,
+  walletAddress: string,
+): DepositDestination | null {
+  if (snapshot.walletAddress !== walletAddress) return null;
+
+  return getValidatedDepositDestination(actual, snapshot.destination);
+}
+
+export function getValidatedDepositDestination(
+  actual: DepositDestination,
+  expected: Readonly<DepositDestination>,
+): DepositDestination {
+  const mismatches = (
+    Object.keys(expected) as Array<keyof DepositDestination>
+  ).filter((key) => actual[key] !== expected[key]);
+  if (mismatches.length > 0) {
+    throw new Error(
+      `Prepared deposit destination no longer matches wallet config: ${mismatches.join(", ")}`,
+    );
+  }
+
+  /* Never pass the caller-controlled object beyond validation. A property
+     getter could otherwise return a different value when downstream code
+     reads it after this check. */
+  return { ...expected };
 }
 
 export type EnsureDepositAccountParams = {
@@ -388,7 +429,8 @@ function parseDepositNetworkConfigs(
           publicConfig[key] = publicValue;
         }
         providers.set(providerName, {
-          kind: providerName === "coinbase" ? "coinbase_headless" : providerName,
+          kind:
+            providerName === "coinbase" ? "coinbase_headless" : providerName,
           enabled: provider.orders_enabled === true,
           public: Object.freeze(publicConfig),
         });
@@ -422,7 +464,9 @@ function parseDepositNetworkConfigs(
           publishableKey,
           treasuryAddress: rawUnifold.settlement_treasury,
           destinationChainType:
-            separator > 0 ? settlementNetwork.slice(0, separator) : settlementNetwork,
+            separator > 0
+              ? settlementNetwork.slice(0, separator)
+              : settlementNetwork,
           destinationChainId:
             separator > 0 ? settlementNetwork.slice(separator + 1) : "mainnet",
           destinationTokenAddress: rawUnifold.settlement_asset_address,
@@ -714,7 +758,13 @@ export async function waitForDepositBalanceForWallet(params: {
   destination: DepositDestination;
   minimumBalanceRaw: bigint;
   signature?: string;
+  /** Stops this polling window. An in-flight account read is allowed to
+      settle, but no result or later poll is accepted after cancellation. */
+  signal?: AbortSignal;
+  /** Best-effort observer invoked once before each balance read. */
+  onAttempt?: (attemptCount: number) => void;
 }): Promise<DepositAccountState> {
+  throwIfAborted(params.signal);
   const accounts = deriveDepositAccounts(
     params.thru,
     params.walletAddress,
@@ -722,27 +772,40 @@ export async function waitForDepositBalanceForWallet(params: {
   );
   const startedAt = Date.now();
   let latestState: DepositAccountState | null = null;
+  let attemptCount = 0;
 
   while (Date.now() - startedAt < ACCOUNT_STATE_WAIT_TIMEOUT_MS) {
+    throwIfAborted(params.signal);
+    attemptCount += 1;
+    try {
+      params.onAttempt?.(attemptCount);
+    } catch {
+      /* Observability callbacks must never affect deposit polling. */
+    }
+    throwIfAborted(params.signal);
     try {
       latestState = await readExistingDepositAccountState(
         params.thru,
         accounts,
       );
+      throwIfAborted(params.signal);
       if (latestState.balanceRaw >= params.minimumBalanceRaw) {
         return latestState;
       }
     } catch (err) {
+      throwIfAborted(params.signal);
       if (!isNotFoundError(err)) throw err;
     }
 
     if (params.signature) {
       await throwIfTransactionFailed(params.thru, params.signature, "MintTo");
+      throwIfAborted(params.signal);
     }
 
-    await sleep(ACCOUNT_STATE_POLL_MS);
+    await sleep(ACCOUNT_STATE_POLL_MS, params.signal);
   }
 
+  throwIfAborted(params.signal);
   const latestBalance = latestState
     ? `${latestState.balanceLabel} ${params.destination.symbol}`
     : "unknown";
@@ -997,6 +1060,37 @@ function normalizeDepositTarget(depositTarget: string): DepositTarget {
   throw new Error(`Unsupported deposit target ${depositTarget}`);
 }
 
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (!signal?.aborted) return;
+  throw depositBalanceWaitAbortReason(signal);
+}
+
+function depositBalanceWaitAbortReason(signal: AbortSignal): Error {
+  if (signal.reason instanceof Error) return signal.reason;
+  const error = new Error("Deposit balance wait was aborted");
+  error.name = "AbortError";
+  return error;
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+  if (!signal) return new Promise((resolve) => setTimeout(resolve, ms));
+  throwIfAborted(signal);
+
+  return new Promise((resolve, reject) => {
+    let timer: ReturnType<typeof setTimeout>;
+    const cleanup = () => {
+      signal.removeEventListener("abort", onAbort);
+    };
+    const finish = () => {
+      cleanup();
+      resolve();
+    };
+    const onAbort = () => {
+      clearTimeout(timer);
+      cleanup();
+      reject(depositBalanceWaitAbortReason(signal));
+    };
+    timer = setTimeout(finish, ms);
+    signal.addEventListener("abort", onAbort, { once: true });
+  });
 }

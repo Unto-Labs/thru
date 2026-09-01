@@ -5,7 +5,7 @@ import {
     consensusStatusToString,
     currentOrHistoricalVersionContext,
     currentVersionContext,
-    seqVersionContext,
+    slotSeqVersionContext,
     slotVersionContext,
     timestampVersionContext,
     versionContext,
@@ -29,10 +29,11 @@ describe("consensus module", () => {
         expect(ctx.version?.value).toBe(42n);
     });
 
-    it("creates seq-based context", () => {
-        const ctx = seqVersionContext(7n);
-        expect(ctx.version?.case).toBe("seq");
-        expect(ctx.version?.value).toBe(7n);
+    it("creates slot-seq-based context", () => {
+        const ctx = slotSeqVersionContext(3, 7n);
+        expect(ctx.version?.case).toBe("slotSeq");
+        expect(ctx.version?.value?.slot).toBe(3n);
+        expect(ctx.version?.value?.seq).toBe(7n);
     });
 
     it("creates timestamp-based context", () => {

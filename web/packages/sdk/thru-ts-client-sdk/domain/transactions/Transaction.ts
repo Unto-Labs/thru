@@ -57,6 +57,17 @@ export interface TransactionExecutionResultData {
     readonlyAccounts: Pubkey[];
     events?: TransactionExecutionEvent[];
     errorProgramAccIdx: number;
+    /**
+     * The nonce the runtime requires for the next transaction from this fee
+     * payer. Set only when `vmError` is a nonce reject (NONCE_TOO_LOW /
+     * NONCE_TOO_HIGH); undefined otherwise. A nonce reject does not advance the
+     * nonce, so retrying with this value is correct.
+     *
+     * Canonical at execution time, not necessarily on arrival: another
+     * transaction from the same fee payer may have landed since. Treat it as a
+     * correction to retry against, not a reservation.
+     */
+    feePayerExpectedNonce?: bigint;
 }
 
 export class Transaction {
@@ -758,6 +769,9 @@ export class Transaction {
                   }))
                 : undefined,
             errorProgramAccIdx: proto.errorProgramAccIdx ?? 0,
+            /* Optional on the wire: 0 is a valid expected nonce (a fee payer
+               that has never transacted), so absence must not collapse to 0. */
+            feePayerExpectedNonce: proto.feePayerExpectedNonce,
         };
     }
 }

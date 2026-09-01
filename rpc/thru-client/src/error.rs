@@ -25,6 +25,15 @@ pub enum ClientError {
     #[error("Transaction verification error: {0}")]
     TransactionVerification(String),
 
+    /// A server-side stream dropped this subscriber for falling behind.
+    ///
+    /// The server disconnects a slow subscriber rather than silently skipping
+    /// messages, so this is terminal for the subscription and re-subscribing
+    /// resumes from the present, leaving a gap that must be filled through the
+    /// query service.
+    #[error("Stream lagged: {0}")]
+    StreamLagged(String),
+
     /// Account not found errors
     #[error("Account not found: {0}")]
     AccountNotFound(String),

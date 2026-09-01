@@ -4,6 +4,7 @@ import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import {
     CurrentOrHistoricalVersionSchema,
     CurrentVersionSchema,
+    SlotSeqSchema,
     VersionContext,
     VersionContextSchema,
 } from "@thru/sdk/proto";
@@ -15,7 +16,7 @@ export type VersionContextInput =
     | { currentOrHistorical: true }
     | { slot: number | bigint }
     | { timestamp: Date | number | Timestamp }
-    | { seq: number | bigint };
+    | { slotSeq: { slot: number | bigint; seq: number | bigint } };
 
 export { consensusStatusToString };
 
@@ -43,9 +44,12 @@ export function timestampVersionContext(value: Date | number | Timestamp): Versi
     });
 }
 
-export function seqVersionContext(seq: number | bigint): VersionContext {
+export function slotSeqVersionContext(slot: number | bigint, seq: number | bigint): VersionContext {
     return create(VersionContextSchema, {
-        version: { case: "seq", value: toUint64(seq, "seq") },
+        version: {
+            case: "slotSeq",
+            value: create(SlotSeqSchema, { slot: toUint64(slot, "slot"), seq: toUint64(seq, "seq") }),
+        },
     });
 }
 
@@ -68,10 +72,10 @@ export function versionContext(input?: VersionContextInput): VersionContext {
     if ("timestamp" in input) {
         return timestampVersionContext(input.timestamp);
     }
-    if ("seq" in input) {
-        return seqVersionContext(input.seq);
+    if ("slotSeq" in input) {
+        return slotSeqVersionContext(input.slotSeq.slot, input.slotSeq.seq);
     }
-    throw new Error("Version context input must specify current, slot, timestamp, or seq");
+    throw new Error("Version context input must specify current, currentOrHistorical, slot, timestamp, or slotSeq");
 }
 
 function toUint64(value: number | bigint, field: string): bigint {

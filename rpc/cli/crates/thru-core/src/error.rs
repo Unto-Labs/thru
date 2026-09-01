@@ -155,6 +155,12 @@ impl From<thru_client::ClientError> for CliError {
             thru_client::ClientError::TransactionVerification(msg) => {
                 CliError::TransactionVerification(msg)
             }
+            /* A dropped subscription is an RPC failure to the CLI, but say why:
+               the server disconnects a subscriber that falls behind rather than
+               skipping messages, so whatever was being followed now has a gap. */
+            thru_client::ClientError::StreamLagged(msg) => {
+                CliError::Rpc(format!("stream dropped for falling behind: {}", msg))
+            }
             thru_client::ClientError::AccountNotFound(msg) => CliError::AccountNotFound(msg),
             thru_client::ClientError::Generic { message } => CliError::Generic { message },
         }

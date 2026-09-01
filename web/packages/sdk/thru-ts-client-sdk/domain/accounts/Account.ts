@@ -123,6 +123,10 @@ export class AccountData {
 export interface AccountVersionContext {
     slot?: bigint;
     blockTimestampNs?: bigint;
+    /** Per-account sequence number of the returned version, when known. */
+    seq?: bigint;
+    /** Block offset of the transaction that wrote the returned version, when known. */
+    blockOffset?: number;
 }
 
 export class Account {
@@ -169,5 +173,7 @@ function convertVersionContext(meta?: ProtoVersionContextMetadata): AccountVersi
     return {
         slot: meta.slot,
         blockTimestampNs: timestampToNanoseconds(meta.blockTimestamp),
+        seq: meta.seq,
+        blockOffset: meta.blockOffset,
     };
 }

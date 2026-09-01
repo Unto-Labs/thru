@@ -40,6 +40,7 @@ export const TELEMETRY_EVENTS = {
   BRIDGE_WEBVIEW_LOAD_ENDED: 'bridge.webview.load.ended',
   BRIDGE_WEBVIEW_LOAD_FAILED: 'bridge.webview.load.failed',
   BRIDGE_WEBVIEW_LOAD_STARTED: 'bridge.webview.load.started',
+  DEPOSIT_BALANCE_WAIT_FINISHED: 'deposit.balance_wait.finished',
   DEPOSIT_EXECUTION_DETECTED: 'deposit.execution.detected',
   DEPOSIT_EXECUTION_SUCCEEDED: 'deposit.execution.succeeded',
   DEPOSIT_EXECUTION_UPDATED: 'deposit.execution.updated',

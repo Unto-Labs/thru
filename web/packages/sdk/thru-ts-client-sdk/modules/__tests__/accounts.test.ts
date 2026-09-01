@@ -72,16 +72,6 @@ describe("accounts", () => {
       expect(callArgs.view).toBe(AccountView.META_ONLY);
     });
 
-    it("should use default minConsensus when not provided", async () => {
-      const ctx = createMockContext();
-      const mockAccount = createMockAccount();
-      vi.spyOn(ctx.query, "getAccount").mockResolvedValue(mockAccount);
-      
-      await getAccount(ctx, generateTestPubkey(0x01));
-      
-      const callArgs = (ctx.query.getAccount as any).mock.calls[0][0];
-      expect(callArgs.minConsensus).toBe(ConsensusStatus.UNSPECIFIED);
-    });
     it("should use default version context when not provided", async () => {
       const ctx = createMockContext();
       const mockAccount = createMockAccount();
@@ -92,17 +82,6 @@ describe("accounts", () => {
       const callArgs = (ctx.query.getAccount as any).mock.calls[0][0];
       expect(callArgs.versionContext).toBeDefined();
       expect(callArgs.versionContext.version?.case).toBe("current");
-    });
-
-    it("should use custom minConsensus when provided", async () => {
-      const ctx = createMockContext();
-      const mockAccount = createMockAccount();
-      vi.spyOn(ctx.query, "getAccount").mockResolvedValue(mockAccount);
-      
-      await getAccount(ctx, generateTestPubkey(0x01), { minConsensus: ConsensusStatus.FINALIZED });
-      
-      const callArgs = (ctx.query.getAccount as any).mock.calls[0][0];
-      expect(callArgs.minConsensus).toBe(ConsensusStatus.FINALIZED);
     });
 
     it("should include dataSlice when provided", async () => {
@@ -156,16 +135,15 @@ describe("accounts", () => {
       expect(ctx.query.getRawAccount).toHaveBeenCalledTimes(1);
     });
 
-    it("should use default view and minConsensus", async () => {
+    it("should use default view", async () => {
       const ctx = createMockContext();
       const mockRawAccount = { address: { value: generateTestPubkey(0x01) } };
       vi.spyOn(ctx.query, "getRawAccount").mockResolvedValue(mockRawAccount as any);
-      
+
       await getRawAccount(ctx, generateTestPubkey(0x01));
-      
+
       const callArgs = (ctx.query.getRawAccount as any).mock.calls[0][0];
       expect(callArgs.view).toBe(AccountView.FULL);
-      expect(callArgs.minConsensus).toBe(ConsensusStatus.UNSPECIFIED);
     });
     it("should use default version context when not provided", async () => {
       const ctx = createMockContext();

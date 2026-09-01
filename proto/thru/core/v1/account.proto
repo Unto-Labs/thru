@@ -111,6 +111,10 @@ message VersionContextMetadata {
   optional uint64 slot = 1 [(google.api.field_behavior) = OPTIONAL];
   optional google.protobuf.Timestamp block_timestamp = 2
       [(google.api.field_behavior) = OPTIONAL];
+  // Per-account sequence number of the returned version.
+  optional uint64 seq = 3 [(google.api.field_behavior) = OPTIONAL];
+  // Block offset of the transaction that wrote the returned version.
+  optional uint32 block_offset = 4 [(google.api.field_behavior) = OPTIONAL];
 }
 
 // Account models a fully decoded account resource.

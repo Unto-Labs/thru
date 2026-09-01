@@ -1940,6 +1940,13 @@ pub enum WthruCommands {
     },
 
     /// Deposit native THRU and receive WTHRU tokens
+    ///
+    /// The native transfer into the vault and the deposit instruction are sent
+    /// as two separate transactions. WTHRU is minted from the vault's balance
+    /// delta, which does not identify a depositor, so a concurrent caller can
+    /// claim the transferred amount in between. Use this only against a vault
+    /// that is not shared with untrusted depositors; otherwise batch the
+    /// transfer and the deposit into one transaction via the multicall program.
     Deposit {
         /// Destination WTHRU token account address
         dest_token_account: String,
