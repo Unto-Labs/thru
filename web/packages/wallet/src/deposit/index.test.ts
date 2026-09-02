@@ -94,6 +94,7 @@ const RUNTIME_CONFIG: DepositRuntimeConfig = {
           public: {
             project_id: "project_devnet",
             publishable_key: "pk_devnet",
+            stripe_link_enabled: "true",
           },
           settlement_network: "solana-mainnet",
           settlement_asset: "USDC",
@@ -186,6 +187,9 @@ describe("wallet deposit account helpers", () => {
     const config = depositConfig.getNetwork("devnet");
 
     expect(config.unifoldProject?.projectId).toBe("project_devnet");
+    expect(config.providers.get("unifold")?.public.stripe_link_enabled).toBe(
+      "true",
+    );
     expect(config.providers.get("coinbase")).toEqual({
       kind: "coinbase_headless",
       enabled: true,

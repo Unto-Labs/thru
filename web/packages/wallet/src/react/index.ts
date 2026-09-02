@@ -19,6 +19,7 @@ export {
   type BrowserSDKConfig,
   type ConnectOptions,
   type DepositDestination,
+  type DepositFundingMethod,
   type DepositUiConfig,
   type DepositRequestPayload,
   type DepositResult,
@@ -33,10 +34,7 @@ export type {
   GetDepositAccountStateParams,
   WaitForDepositBalanceParams,
 } from "../deposit";
-export {
-  DepositTransactionError,
-  formatDepositAmount,
-} from "../deposit";
+export { DepositTransactionError, formatDepositAmount } from "../deposit";
 
 export type {
   ConnectResult,

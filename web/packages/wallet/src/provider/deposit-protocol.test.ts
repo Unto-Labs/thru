@@ -55,7 +55,7 @@ describe('deposit protocol round-trip', () => {
           success: true,
           result: DESTINATION,
         } as never;
-      },
+      }
     );
 
     const provider = new EmbeddedProvider({
@@ -87,6 +87,7 @@ describe('deposit protocol round-trip', () => {
             status: 'completed',
             mintedAmountRaw: '1500000',
             signature: 'ts_minttx',
+            providerDepositId: 'exec_link_1',
           },
         } as never;
       });
@@ -104,7 +105,10 @@ describe('deposit protocol round-trip', () => {
     });
     const result = await provider.deposit({
       providerId: 'unifold',
+      fundingMethod: 'stripe_link',
       destination: DESTINATION,
+      paymentAmount: '25.00',
+      contact: { email: 'person@example.com' },
     });
 
     expect(captured).not.toBeNull();
@@ -112,13 +116,17 @@ describe('deposit protocol round-trip', () => {
     expect(captured!.origin).toBe(APP_ORIGIN);
     expect(captured!.payload).toEqual({
       providerId: 'unifold',
+      fundingMethod: 'stripe_link',
       destination: DESTINATION,
+      paymentAmount: '25.00',
+      contact: { email: 'person@example.com' },
       resolvedDepositUiConfig: DEPOSIT_UI_CONFIG,
     });
     expect(result).toEqual({
       status: 'completed',
       mintedAmountRaw: '1500000',
       signature: 'ts_minttx',
+      providerDepositId: 'exec_link_1',
     });
 
     expect(showModal).toHaveBeenCalledOnce();
@@ -136,7 +144,7 @@ describe('deposit protocol round-trip', () => {
           success: true,
           result: { status: 'cancelled' },
         } as never;
-      },
+      }
     );
     vi.spyOn(IframeManager.prototype, 'showModal').mockImplementation(() => {});
     vi.spyOn(IframeManager.prototype, 'hide').mockImplementation(() => {});
@@ -178,7 +186,7 @@ describe('deposit protocol round-trip', () => {
           id: request.id,
           success: true,
           result: { status: 'cancelled' },
-        }) as never,
+        }) as never
     );
     vi.spyOn(IframeManager.prototype, 'showModal').mockImplementation(() => {});
     const hide = vi
@@ -197,7 +205,7 @@ describe('deposit protocol round-trip', () => {
 
   it('hides the modal and rejects when the wallet errors', async () => {
     vi.spyOn(IframeManager.prototype, 'sendMessage').mockRejectedValue(
-      new Error('wallet exploded'),
+      new Error('wallet exploded')
     );
     vi.spyOn(IframeManager.prototype, 'showModal').mockImplementation(() => {});
     const hide = vi
@@ -209,7 +217,7 @@ describe('deposit protocol round-trip', () => {
       provider.deposit({
         providerId: 'unifold',
         destination: DESTINATION,
-      }),
+      })
     ).rejects.toThrow('wallet exploded');
     expect(hide).toHaveBeenCalledOnce();
   });

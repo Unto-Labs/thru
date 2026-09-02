@@ -83,6 +83,7 @@ describe("native deposit protocol round-trip", () => {
             status: "completed",
             mintedAmountRaw: "1500000",
             signature: "ts_minttx",
+            providerDepositId: "exec_link_1",
           },
         } as never;
       });
@@ -109,7 +110,10 @@ describe("native deposit protocol round-trip", () => {
 
     const result = await provider.deposit({
       providerId: "unifold",
+      fundingMethod: "stripe_link",
       destination: DESTINATION,
+      paymentAmount: "25.00",
+      contact: { email: "person@example.com" },
     });
 
     expect(captured).not.toBeNull();
@@ -117,13 +121,17 @@ describe("native deposit protocol round-trip", () => {
     expect(captured!.origin).toBe(APP_ORIGIN);
     expect(captured!.payload).toEqual({
       providerId: "unifold",
+      fundingMethod: "stripe_link",
       destination: DESTINATION,
+      paymentAmount: "25.00",
+      contact: { email: "person@example.com" },
       resolvedDepositUiConfig: DEPOSIT_UI_CONFIG,
     });
     expect(result).toEqual({
       status: "completed",
       mintedAmountRaw: "1500000",
       signature: "ts_minttx",
+      providerDepositId: "exec_link_1",
     });
     expect(sendMessage).toHaveBeenCalledOnce();
     expect(surface).toEqual(["show:deposit-open", "hide:deposit-settled"]);
@@ -291,10 +299,7 @@ describe("native deposit protocol round-trip", () => {
       result: { status: "cancelled" },
     });
     await expect(depositPromise).resolves.toEqual({ status: "cancelled" });
-    expect(surface).toEqual([
-      "show:deposit-open",
-      "hide:deposit-settled",
-    ]);
+    expect(surface).toEqual(["show:deposit-open", "hide:deposit-settled"]);
   });
 
   it("does not let a stale disconnect clear or hide a newer connection", async () => {
@@ -368,10 +373,7 @@ describe("native deposit protocol round-trip", () => {
       result: { status: "cancelled" },
     });
     await expect(depositPromise).resolves.toEqual({ status: "cancelled" });
-    expect(surface).toEqual([
-      "show:deposit-open",
-      "hide:deposit-settled",
-    ]);
+    expect(surface).toEqual(["show:deposit-open", "hide:deposit-settled"]);
   });
 
   it("preserves the local connection when disconnect fails", async () => {

@@ -608,10 +608,18 @@ export interface DepositContactPrefill {
   phoneNumber?: string;
 }
 
+/** Funding surface to open for an Unifold deposit. */
+export type DepositFundingMethod = "crypto" | "stripe_link";
+
 /** Provider-neutral request for a prepared token destination. */
 export interface DepositRequestPayload {
   /** Defaults to Unifold so existing `deposits.open({ destination })` callers keep working. */
   providerId?: string;
+  /**
+   * Unifold funding surface. Omitted values preserve the historical crypto
+   * transfer flow so existing callers never receive a new method chooser.
+   */
+  fundingMethod?: DepositFundingMethod;
   destination: DepositDestination;
   paymentAmount?: string;
   /** Prefills the onramp screen; the user can still edit every value. */
@@ -650,6 +658,8 @@ export interface DepositResult {
   mintedAmountRaw?: string;
   /** Thru mint transaction id, when surfaced to the client. */
   signature?: string;
+  /** Provider execution id, when the provider has assigned one. */
+  providerDepositId?: string;
 }
 
 export interface TransactionReviewSimulation {

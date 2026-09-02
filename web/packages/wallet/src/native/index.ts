@@ -19,10 +19,7 @@ export type {
   WalletAvailability,
 } from './NativeSDK';
 
-export {
-  AddressType,
-  ThruTransactionEncoding,
-} from '../interfaces';
+export { AddressType, ThruTransactionEncoding } from '../interfaces';
 export type {
   AppMetadata,
   ConnectResult,
@@ -52,6 +49,7 @@ export type {
   ConnectMetadataInput,
   CreateAccountResult,
   DepositDestination,
+  DepositFundingMethod,
   DepositRequestPayload,
   DepositResult,
   DepositUiConfig,
@@ -59,10 +57,7 @@ export type {
   ManageAccountsResult,
   PrepareDepositPayload,
 } from '../protocol';
-export {
-  DepositTarget,
-  ThruNetwork,
-} from '../protocol';
+export { DepositTarget, ThruNetwork } from '../protocol';
 export type {
   DepositAccountState,
   DepositsApi,
@@ -70,7 +65,4 @@ export type {
   GetDepositAccountStateParams,
   WaitForDepositBalanceParams,
 } from '../deposit';
-export {
-  DepositTransactionError,
-  formatDepositAmount,
-} from '../deposit';
+export { DepositTransactionError, formatDepositAmount } from '../deposit';

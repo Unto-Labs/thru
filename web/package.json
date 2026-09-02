@@ -49,7 +49,8 @@
       "ws@>=8.0.0 <8.21.0": "^8.21.0"
     },
     "patchedDependencies": {
-      "liveline": "patches/liveline.patch"
+      "liveline": "patches/liveline.patch",
+      "@unifold/connect-react@0.1.80": "patches/@unifold__connect-react@0.1.80.patch"
     }
   }
 }

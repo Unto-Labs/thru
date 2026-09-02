@@ -33,6 +33,7 @@ export {
   type RevokeSigningSessionRequestMessage,
   type RevokeSigningSessionResult,
   type DepositRequestMessage,
+  type DepositFundingMethod,
   type DepositRequestPayload,
   type DepositResult,
   type DisconnectResult,

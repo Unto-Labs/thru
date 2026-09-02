@@ -7,4 +7,8 @@ export {
   waitForDepositBalanceForWallet,
 } from "../deposit";
 
-export type { DepositConfig, DepositRuntimeConfig } from "../deposit";
+export type {
+  DepositConfig,
+  DepositProviderConfig,
+  DepositRuntimeConfig,
+} from "../deposit";
