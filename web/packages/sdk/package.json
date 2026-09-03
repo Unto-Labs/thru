@@ -61,7 +61,7 @@
     "test:coverage": "vitest --coverage",
     "test:run": "vitest run",
     "test:ui": "vitest --ui",
-    "test:transactions": "node --loader ts-node/esm --test \"thru-ts-client-sdk/transactions/__tests__/*.test.ts\"",
+    "test:transactions": "node --loader ts-node/esm --test \"thru-ts-client-sdk/domain/transactions/__tests__/*.test.ts\"",
     "clean": "rm -rf dist"
   },
   "dependencies": {
