@@ -11,7 +11,7 @@ import {
   TELEMETRY_MAX_EVENT_NAME_LENGTH as TELEMETRY_MAX_EVENT_LENGTH,
   TELEMETRY_VERSION_PATTERN,
   type TelemetryAppContext,
-} from '@thru/observability';
+} from './observability';
 import {
   decodeAddress,
   decodeSignature,
@@ -20,8 +20,8 @@ import {
 } from '@thru/sdk/helpers';
 import packageMetadata from '../package.json';
 
-export { sanitizeTelemetryMessage } from '@thru/observability';
-export type { TelemetryAppContext } from '@thru/observability';
+export { sanitizeTelemetryMessage } from './observability';
+export type { TelemetryAppContext } from './observability';
 
 /** Package version embedded at build time (including release-workflow rewrites). */
 export const WALLET_SDK_VERSION = packageMetadata.version;

@@ -1,4 +1,4 @@
-import { TELEMETRY_EVENTS } from "@thru/observability";
+import { TELEMETRY_EVENTS } from "../observability";
 import { getErrorCode, getErrorMessage } from "../internal/telemetry-fields";
 import {
   AddressType,

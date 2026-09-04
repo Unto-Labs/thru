@@ -23,6 +23,7 @@ export type { TextProps, TextVariant, TextComponentProps } from "./components/Te
 
 // Overlays (styled parts)
 export { Dialog } from "./components/Dialog/Dialog";
+export { Drawer } from "@base-ui/react/drawer";
 export { AlertDialog } from "./components/AlertDialog/AlertDialog";
 export { Popover } from "./components/Popover/Popover";
 export { Tooltip } from "./components/Tooltip/Tooltip";

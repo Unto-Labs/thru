@@ -41,6 +41,7 @@ export default defineConfig([
       react: 'src/react/index.ts',
       'react-ui': 'src/react-ui/index.ts',
       'internal/deposit': 'src/internal/deposit.ts',
+      'internal/observability': 'src/internal/observability.ts',
     },
     format: ['esm'],
     dts: true,

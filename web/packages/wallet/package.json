@@ -21,6 +21,10 @@
       "import": "./dist/internal/deposit.js",
       "types": "./dist/internal/deposit.d.ts"
     },
+    "./internal/observability": {
+      "import": "./dist/internal/observability.js",
+      "types": "./dist/internal/observability.d.ts"
+    },
     "./native": {
       "types": "./dist/native.d.ts",
       "react-native": "./src/native/index.ts",
@@ -59,7 +63,6 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@thru/observability": "workspace:*",
     "@thru/programs": "workspace:*",
     "@thru/sdk": "workspace:*"
   },

@@ -1,4 +1,4 @@
-import type { TelemetryAppContext } from "@thru/observability";
+import type { TelemetryAppContext } from "../observability";
 import type {
   AppMetadata,
   ConnectResult,

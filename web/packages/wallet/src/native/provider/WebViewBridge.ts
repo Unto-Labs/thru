@@ -2,7 +2,7 @@ import {
   TELEMETRY_EVENTS,
   encodeTelemetryAppContext,
   type TelemetryAppContext,
-} from "@thru/observability";
+} from "../../observability";
 import {
   ErrorCode,
   IFRAME_READY_EVENT,

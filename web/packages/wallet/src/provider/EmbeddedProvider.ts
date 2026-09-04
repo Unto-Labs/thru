@@ -1,4 +1,4 @@
-import { TELEMETRY_EVENTS, type TelemetryAppContext } from '@thru/observability';
+import { TELEMETRY_EVENTS, type TelemetryAppContext } from '../observability';
 import { getErrorCode } from '../internal/telemetry-fields';
 import {
   AddressType,

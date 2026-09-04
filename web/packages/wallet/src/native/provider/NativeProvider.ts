@@ -1,7 +1,7 @@
 import {
   TELEMETRY_EVENTS,
   type TelemetryAppContext,
-} from "@thru/observability";
+} from "../../observability";
 import {
   AddressType,
   normalizeWalletAccountResult,
