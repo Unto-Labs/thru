@@ -1,6 +1,31 @@
 {
   "name": "@thru/wallet",
   "version": "0.0.1",
+  "description": "Passkey-native embedded wallet SDK for Thru.",
+  "license": "Apache-2.0",
+  "homepage": "https://thru.org/docs/sdks/web-packages/wallet/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Unto-Labs/thru.git",
+    "directory": "web/packages/wallet"
+  },
+  "bugs": {
+    "url": "https://github.com/Unto-Labs/thru/issues"
+  },
+  "keywords": [
+    "thru",
+    "blockchain",
+    "risc-v",
+    "wallet",
+    "passkey",
+    "webauthn",
+    "embedded-wallet",
+    "react",
+    "expo"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",

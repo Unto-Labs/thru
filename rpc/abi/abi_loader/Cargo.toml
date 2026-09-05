@@ -5,6 +5,9 @@ edition = "2021"
 description = "ABI loading utilities for the Thru blockchain"
 license = "Apache-2.0"
 repository = "https://github.com/Unto-Labs/thru"
+homepage = "https://thru.org/docs/abi/overview/"
+keywords = ["thru", "abi", "blockchain", "codegen", "serialization"]
+categories = ["encoding", "development-tools"]
 
 [dependencies]
 abi_types = { package = "thru-abi-types", version = "0.1.0", path = "../abi_types" }

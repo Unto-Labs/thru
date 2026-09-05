@@ -1,6 +1,8 @@
 # @thru/sdk
 
-Typed TypeScript/JavaScript client for talking to the Thru blockchain. The SDK exposes rich domain models (blocks, accounts, transactions, events, proofs) that hide the underlying protobuf transport.
+Open-source TypeScript SDK for the Thru RISC-V Layer-1 blockchain: typed RPC client, transaction builder, keys and crypto, protobufs, and ABI reflection.
+
+The SDK exposes rich domain models (blocks, accounts, transactions, events, proofs) that hide the underlying protobuf transport.
 
 ## Installation
 

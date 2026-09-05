@@ -1,6 +1,6 @@
 # @thru/passkey
 
-Cross-platform passkey helpers for Thru applications.
+WebAuthn passkey registration and signing for Thru apps across browser, popup, React Native, and server.
 
 ## Installation
 

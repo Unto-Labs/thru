@@ -1,6 +1,6 @@
 # @thru/programs
 
-TypeScript bindings and helpers for Thru on-chain programs.
+Typed TypeScript clients for Thru's core on-chain programs: token, AMM, CLOB, oracle, multicall, passkey manager, and others.
 
 ## Managed program primitives
 

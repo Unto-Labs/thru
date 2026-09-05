@@ -2,9 +2,12 @@
 name = "thru-grpc-client"
 version = "0.1.0"
 edition = "2024"
-description = "Thru GRPC Client"
+description = "Generated tonic and prost bindings for the Thru blockchain's public gRPC API."
 license = "Apache-2.0"
 repository = "https://github.com/Unto-Labs/thru"
+homepage = "https://thru.org/docs/sdks/rust-packages/thru-grpc-client/"
+keywords = ["thru", "grpc", "tonic", "protobuf", "blockchain"]
+categories = ["api-bindings", "network-programming"]
 
 [dependencies]
 bytes = "1"

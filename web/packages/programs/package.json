@@ -1,6 +1,30 @@
 {
   "name": "@thru/programs",
   "version": "0.0.1",
+  "description": "Typed TypeScript clients for Thru's core on-chain programs: token, AMM, CLOB, oracle, multicall, passkey manager, and others.",
+  "license": "Apache-2.0",
+  "homepage": "https://thru.org/docs/sdks/web-packages/programs/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Unto-Labs/thru.git",
+    "directory": "web/packages/programs"
+  },
+  "bugs": {
+    "url": "https://github.com/Unto-Labs/thru/issues"
+  },
+  "keywords": [
+    "thru",
+    "blockchain",
+    "risc-v",
+    "token",
+    "amm",
+    "clob",
+    "oracle",
+    "abi"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "type": "module",
   "exports": {
     "./bootstrap-addresses": {

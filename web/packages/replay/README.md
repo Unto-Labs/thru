@@ -1,6 +1,8 @@
-# @thru/etl-replay
+# @thru/replay
 
-High-throughput historical replay for the thru-net blockchain stack. This package backfills blocks, transactions, and events via the `QueryService` (`List*` RPCs) and then hands off to the realtime `StreamingService` (`Stream*` RPCs) without gaps or duplicates. It powers ETL and analytics sinks that need a single ordered feed even when the node is millions of slots behind tip.
+Gap-free historical plus live replay of Thru blocks, transactions, accounts, and events for ETL and analytics pipelines.
+
+This package backfills blocks, transactions, and events via the `QueryService` (`List*` RPCs) and then hands off to the realtime `StreamingService` (`Stream*` RPCs) without gaps or duplicates. It powers ETL and analytics sinks that need a single ordered feed even when the node is millions of slots behind tip.
 
 ```
             ┌─────────────┐     paginated history     ┌─────────────┐

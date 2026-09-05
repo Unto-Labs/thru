@@ -1,13 +1,24 @@
 {
   "name": "thru",
   "version": "0.0.1",
-  "description": "Thru command-line interface",
+  "description": "Command-line interface for the Thru blockchain: keys, accounts, transactions, program deployment, and ABI tooling.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Unto-Labs/thru.git",
     "directory": "web/packages/cli"
   },
+  "homepage": "https://thru.org/docs/cli-reference/overview/",
+  "bugs": {
+    "url": "https://github.com/Unto-Labs/thru/issues"
+  },
+  "keywords": [
+    "thru",
+    "blockchain",
+    "risc-v",
+    "cli",
+    "command-line"
+  ],
   "type": "module",
   "bin": {
     "thru": "./bin/thru.js"

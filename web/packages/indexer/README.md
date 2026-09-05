@@ -1,6 +1,6 @@
 # @thru/indexer
 
-A reusable blockchain indexing framework for building backends that index Thru chain data.
+Open-source TypeScript framework for indexing Thru chain data into Postgres: event and account streams, checkpointed resume, and an auto-generated REST API.
 
 ## Features
 

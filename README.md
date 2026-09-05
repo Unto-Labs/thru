@@ -39,6 +39,24 @@ C is the documented path for writing programs today; a Rust program SDK ships in
   [crates.io](https://crates.io/crates/thru-client).
 - **TypeScript**: `@thru/sdk` and friends on [npm](https://www.npmjs.com/package/@thru/sdk).
 
+## Packages
+
+One sentence per package, identical on npm or crates.io, in the package README, and in the docs.
+
+| Package | What it is | Docs |
+|---|---|---|
+| [`@thru/sdk`](https://www.npmjs.com/package/@thru/sdk) | Open-source TypeScript SDK for the Thru RISC-V Layer-1 blockchain: typed RPC client, transaction builder, keys and crypto, protobufs, and ABI reflection. | [sdk](https://thru.org/docs/sdks/web-packages/sdk/) |
+| [`@thru/wallet`](https://www.npmjs.com/package/@thru/wallet) | Passkey-native embedded wallet SDK for Thru. | [wallet](https://thru.org/docs/sdks/web-packages/wallet/) |
+| [`@thru/passkey`](https://www.npmjs.com/package/@thru/passkey) | WebAuthn passkey registration and signing for Thru apps across browser, popup, React Native, and server. | [passkey](https://thru.org/docs/sdks/web-packages/passkey/) |
+| [`@thru/programs`](https://www.npmjs.com/package/@thru/programs) | Typed TypeScript clients for Thru's core on-chain programs: token, AMM, CLOB, oracle, multicall, passkey manager, and others. | [programs](https://thru.org/docs/sdks/web-packages/programs/) |
+| [`@thru/indexer`](https://www.npmjs.com/package/@thru/indexer) | Open-source TypeScript framework for indexing Thru chain data into Postgres: event and account streams, checkpointed resume, and an auto-generated REST API. | [indexer](https://thru.org/docs/sdks/web-packages/indexer/) |
+| [`@thru/replay`](https://www.npmjs.com/package/@thru/replay) | Gap-free historical plus live replay of Thru blocks, transactions, accounts, and events for ETL and analytics pipelines. | [replay](https://thru.org/docs/sdks/web-packages/replay/) |
+| [`@thru/bridge`](https://www.npmjs.com/package/@thru/bridge) | TypeScript SDK for Polygon-to-Thru bridge deposits and withdrawals. | [web SDKs](https://thru.org/docs/sdks/web/) |
+| [`thru`](https://www.npmjs.com/package/thru) (npm) / [`thru`](https://crates.io/crates/thru) (crates.io) | Command-line interface for the Thru blockchain: keys, accounts, transactions, program deployment, and ABI tooling. | [CLI reference](https://thru.org/docs/cli-reference/overview/) |
+| [`thru-client`](https://crates.io/crates/thru-client) | High-level gRPC client library for the Thru blockchain | [Rust SDKs](https://thru.org/docs/sdks/rust/) |
+| [`thru-grpc-client`](https://crates.io/crates/thru-grpc-client) | Generated tonic and prost bindings for the Thru blockchain's public gRPC API. | [thru-grpc-client](https://thru.org/docs/sdks/rust-packages/thru-grpc-client/) |
+| [`thru-base`](https://crates.io/crates/thru-base) | Core Rust primitives for the Thru blockchain: key and address types, transaction builders, state proof helpers, and RPC config. | [thru-base](https://thru.org/docs/sdks/rust-packages/thru-base/) |
+
 ## Getting started
 
 - [Setting up the Thru DevKit](https://thru.org/docs/program-development/setting-up-thru-devkit/)

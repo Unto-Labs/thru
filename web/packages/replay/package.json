@@ -1,6 +1,29 @@
 {
   "name": "@thru/replay",
   "version": "0.1.0",
+  "description": "Gap-free historical plus live replay of Thru blocks, transactions, accounts, and events for ETL and analytics pipelines.",
+  "license": "Apache-2.0",
+  "homepage": "https://thru.org/docs/sdks/web-packages/replay/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Unto-Labs/thru.git",
+    "directory": "web/packages/replay"
+  },
+  "bugs": {
+    "url": "https://github.com/Unto-Labs/thru/issues"
+  },
+  "keywords": [
+    "thru",
+    "blockchain",
+    "risc-v",
+    "replay",
+    "etl",
+    "streaming",
+    "grpc"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
   "private": false,
   "type": "module",
   "main": "./dist/index.cjs",

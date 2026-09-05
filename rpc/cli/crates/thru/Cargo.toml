@@ -1,9 +1,10 @@
 [package]
 name = "thru"
 version = "0.1.0"
-description = "Command-line interface for the Thru blockchain"
+description = "Command-line interface for the Thru blockchain: keys, accounts, transactions, program deployment, and ABI tooling."
 license = "Apache-2.0"
 repository = "https://github.com/Unto-Labs/thru"
+homepage = "https://thru.org/docs/cli-reference/overview/"
 edition = "2024"
 keywords = ["thru", "cli", "blockchain", "rpc"]
 categories = ["command-line-utilities", "cryptography::cryptocurrencies"]

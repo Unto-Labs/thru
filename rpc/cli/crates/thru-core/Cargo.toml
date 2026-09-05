@@ -4,6 +4,7 @@ version = "0.1.0"
 description = "Shared implementation for the Thru CLI"
 license = "Apache-2.0"
 repository = "https://github.com/Unto-Labs/thru"
+homepage = "https://thru.org/docs/cli-reference/overview/"
 edition = "2024"
 keywords = ["thru", "cli", "blockchain", "rpc"]
 categories = ["command-line-utilities", "cryptography::cryptocurrencies"]

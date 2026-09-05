@@ -609,7 +609,12 @@ async fn initialize_mint(
     )
     .map_err(|e| CliError::TransactionSubmission(format!("Failed to build transaction: {}", e)))?;
 
-    // Sign transaction
+    // Set chain ID and sign transaction
+    let chain_info = client
+        .get_chain_info()
+        .await
+        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
+    transaction = transaction.with_chain_id(chain_info.chain_id);
     transaction
         .sign(&fee_payer_keypair.private_key)
         .map_err(|e| CliError::Crypto(format!("Failed to sign transaction: {}", e)))?;
@@ -781,7 +786,12 @@ async fn initialize_account(
     )
     .map_err(|e| CliError::TransactionSubmission(format!("Failed to build transaction: {}", e)))?;
 
-    // Sign transaction
+    // Set chain ID and sign transaction
+    let chain_info = client
+        .get_chain_info()
+        .await
+        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
+    transaction = transaction.with_chain_id(chain_info.chain_id);
     transaction
         .sign(&fee_payer_keypair.private_key)
         .map_err(|e| CliError::Crypto(format!("Failed to sign transaction: {}", e)))?;
@@ -1084,7 +1094,12 @@ async fn burn(
     )
     .map_err(|e| CliError::TransactionSubmission(format!("Failed to build transaction: {}", e)))?;
 
-    // Sign transaction
+    // Set chain ID and sign transaction
+    let chain_info = client
+        .get_chain_info()
+        .await
+        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
+    transaction = transaction.with_chain_id(chain_info.chain_id);
     transaction
         .sign(&fee_payer_keypair.private_key)
         .map_err(|e| CliError::Crypto(format!("Failed to sign transaction: {}", e)))?;
@@ -1191,7 +1206,12 @@ async fn close_account(
     )
     .map_err(|e| CliError::TransactionSubmission(format!("Failed to build transaction: {}", e)))?;
 
-    // Sign transaction
+    // Set chain ID and sign transaction
+    let chain_info = client
+        .get_chain_info()
+        .await
+        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
+    transaction = transaction.with_chain_id(chain_info.chain_id);
     transaction
         .sign(&fee_payer_keypair.private_key)
         .map_err(|e| CliError::Crypto(format!("Failed to sign transaction: {}", e)))?;
@@ -1296,7 +1316,12 @@ async fn freeze_account(
     )
     .map_err(|e| CliError::TransactionSubmission(format!("Failed to build transaction: {}", e)))?;
 
-    // Sign transaction
+    // Set chain ID and sign transaction
+    let chain_info = client
+        .get_chain_info()
+        .await
+        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
+    transaction = transaction.with_chain_id(chain_info.chain_id);
     transaction
         .sign(&fee_payer_keypair.private_key)
         .map_err(|e| CliError::Crypto(format!("Failed to sign transaction: {}", e)))?;
@@ -1401,7 +1426,12 @@ async fn thaw_account(
     )
     .map_err(|e| CliError::TransactionSubmission(format!("Failed to build transaction: {}", e)))?;
 
-    // Sign transaction
+    // Set chain ID and sign transaction
+    let chain_info = client
+        .get_chain_info()
+        .await
+        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
+    transaction = transaction.with_chain_id(chain_info.chain_id);
     transaction
         .sign(&fee_payer_keypair.private_key)
         .map_err(|e| CliError::Crypto(format!("Failed to sign transaction: {}", e)))?;

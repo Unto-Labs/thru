@@ -492,6 +492,12 @@ async fn build_and_sign_transaction(
         .await
         .map_err(|e| CliError::NonceManagement(format!("Failed to get block height: {}", e)))?;
 
+    // Get chain info so the transaction is bound to the network we are talking to
+    let chain_info = client
+        .get_chain_info()
+        .await
+        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
+
     // Parse account lists
     let rw_accounts: Result<Vec<TnPubkey>, CliError> = readwrite_accounts
         .iter()
@@ -513,7 +519,8 @@ async fn build_and_sign_transaction(
             .with_state_units(state_units)
             .with_memory_units(memory_units)
             .with_expiry_after(expiry_after)
-            .with_start_slot(block_height.finalized_height);
+            .with_start_slot(block_height.finalized_height)
+            .with_chain_id(chain_info.chain_id);
 
     // Add account lists if provided
     if !rw_accounts.is_empty() {

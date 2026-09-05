@@ -1,6 +1,8 @@
 # @thru/wallet
 
-Low-level browser SDK for embedding the Thru wallet experience. It manages the iframe-based embedded provider, forwards lifecycle events, and exposes a ready-to-use `Thru` RPC client alongside wallet account management utilities.
+Passkey-native embedded wallet SDK for Thru.
+
+The package manages the iframe-based embedded provider, forwards lifecycle events, and exposes a ready-to-use `Thru` RPC client alongside wallet account management utilities.
 
 ## Installation
 

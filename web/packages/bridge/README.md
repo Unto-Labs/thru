@@ -1,6 +1,6 @@
 # @thru/bridge
 
-TypeScript SDK for Polygon <-> Thru bridge deposits.
+TypeScript SDK for Polygon-to-Thru bridge deposits and withdrawals.
 
 ## Setup
 

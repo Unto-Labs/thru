@@ -2,9 +2,12 @@
 name = "thru-base"
 version = "0.1.0"
 edition = "2024"
-description = "Thru base"
+description = "Core Rust primitives for the Thru blockchain: key and address types, transaction builders, state proof helpers, and RPC config."
 license = "Apache-2.0"
 repository = "https://github.com/Unto-Labs/thru"
+homepage = "https://thru.org/docs/sdks/rust-packages/thru-base/"
+keywords = ["thru", "blockchain", "risc-v", "sdk", "transactions"]
+categories = ["cryptography::cryptocurrencies", "api-bindings"]
 
 [dependencies]
 rand = "0.10.1"

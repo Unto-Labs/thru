@@ -1,5 +1,7 @@
 # Thru CLI
 
+Command-line interface for the Thru blockchain: keys, accounts, transactions, program deployment, and ABI tooling.
+
 Install the Thru command-line interface with npm:
 
 ```bash

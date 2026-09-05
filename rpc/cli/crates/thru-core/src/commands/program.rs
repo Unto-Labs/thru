@@ -1177,6 +1177,8 @@ async fn set_pause_program(
     )
     .map_err(|e| CliError::ProgramUpload(e.to_string()))?;
 
+    // Set chain ID and sign transaction
+    transaction = transaction.with_chain_id(program_manager.chain_id);
     transaction
         .sign(&program_manager.fee_payer_keypair.private_key)
         .map_err(|e| CliError::Crypto(e.to_string()))?;
@@ -1272,6 +1274,8 @@ async fn destroy_program(
     )
     .map_err(|e| CliError::ProgramUpload(e.to_string()))?;
 
+    // Set chain ID and sign transaction
+    transaction = transaction.with_chain_id(program_manager.chain_id);
     transaction
         .sign(&program_manager.fee_payer_keypair.private_key)
         .map_err(|e| CliError::Crypto(e.to_string()))?;
@@ -1490,6 +1494,8 @@ async fn finalize_program(
     )
     .map_err(|e| CliError::ProgramUpload(e.to_string()))?;
 
+    // Set chain ID and sign transaction
+    transaction = transaction.with_chain_id(program_manager.chain_id);
     transaction
         .sign(&program_manager.fee_payer_keypair.private_key)
         .map_err(|e| CliError::Crypto(e.to_string()))?;
@@ -1596,6 +1602,8 @@ async fn set_authority_program(
     )
     .map_err(|e| CliError::ProgramUpload(e.to_string()))?;
 
+    // Set chain ID and sign transaction
+    transaction = transaction.with_chain_id(program_manager.chain_id);
     transaction
         .sign(&program_manager.fee_payer_keypair.private_key)
         .map_err(|e| CliError::Crypto(e.to_string()))?;
@@ -1688,6 +1696,8 @@ async fn claim_authority_program(
     )
     .map_err(|e| CliError::ProgramUpload(e.to_string()))?;
 
+    // Set chain ID and sign transaction
+    transaction = transaction.with_chain_id(program_manager.chain_id);
     transaction
         .sign(&program_manager.fee_payer_keypair.private_key)
         .map_err(|e| CliError::Crypto(e.to_string()))?;
