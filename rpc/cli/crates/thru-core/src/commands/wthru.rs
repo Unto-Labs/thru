@@ -1,4 +1,18 @@
 //! WTHRU program command implementation
+//!
+//! Deposits are accounted for as a balance delta: the program mints the vault's
+//! current native balance minus the `last_balance` it recorded, to the
+//! destination token account named by the instruction. The program cannot pull
+//! the funds itself (the runtime only lets a program transfer from accounts it
+//! owns), so the native transfer into the vault is the client's job and must be
+//! in the same transaction as the deposit instruction (e.g. batched via the
+//! multicall program). Funding the vault in a separate transaction leaves the
+//! delta unattributed on-chain, creditable by whichever caller runs `deposit`
+//! next.
+//!
+//! `deposit_wthru` below does not meet that requirement yet: it submits the
+//! transfer and the deposit as two transactions. Batching them is tracked
+//! separately.
 use base64::{Engine, engine::general_purpose};
 use serde_json::json;
 use sha2::{Digest, Sha256};
@@ -188,6 +202,13 @@ async fn initialize_wthru(
     Ok(())
 }
 
+/// Wrap native THRU into WTHRU.
+///
+/// Sends the native transfer into the vault (unless `skip_transfer`) and then
+/// the deposit instruction. The deposit instruction mints whatever native
+/// balance the vault has not yet accounted for, so the transfer and the deposit
+/// are only safely attributed to `dest_token_account` when they share a
+/// transaction; see the module comment.
 async fn deposit_wthru(
     config: &Config,
     dest_token_account: &str,

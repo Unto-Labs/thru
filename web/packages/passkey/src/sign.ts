@@ -1,3 +1,8 @@
+import {
+  reportPasskeyCeremony,
+  serializePasskeyCredential,
+  type PasskeyReportingOptions,
+} from './reporter';
 import type {
   PasskeySigningResult,
   PasskeyStoredSigningResult,
@@ -24,11 +29,7 @@ import {
   shouldFallbackToPopup,
   type PasskeyPromptAction,
 } from './capabilities';
-import {
-  requestPasskeyPopup,
-  openPasskeyPopupWindow,
-  closePopup,
-} from './popup';
+import { requestPasskeyPopup, openPasskeyPopupWindow, closePopup } from './popup';
 
 const WEB_AUTHN_FOCUS_RETRY_DELAYS_MS = [150, 300, 600, 1000, 1500];
 
@@ -38,7 +39,8 @@ const WEB_AUTHN_FOCUS_RETRY_DELAYS_MS = [150, 300, 600, 1000, 1500];
 export async function signWithPasskey(
   credentialId: string,
   challenge: Uint8Array,
-  rpId: string
+  rpId: string,
+  options: PasskeyReportingOptions = {}
 ): Promise<PasskeySigningResult> {
   if (!isWebAuthnSupported()) {
     throw new Error('WebAuthn is not supported in this browser');
@@ -46,9 +48,9 @@ export async function signWithPasskey(
 
   return runWithPromptMode(
     'get',
-    () => signWithPasskeyInline(credentialId, challenge, rpId),
+    () => signWithPasskeyInline(credentialId, challenge, rpId, options),
     (preopenedPopup) =>
-      signWithPasskeyViaPopup(credentialId, challenge, rpId, preopenedPopup)
+      signWithPasskeyViaPopup(credentialId, challenge, rpId, preopenedPopup, options)
   );
 }
 
@@ -72,9 +74,7 @@ export async function signWithStoredPasskey(
   const preopenedPopup = allowPopupFallback
     ? maybePreopenPopup('get', openPasskeyPopupWindow)
     : null;
-  const promptMode = allowPopupFallback
-    ? await getPasskeyPromptMode('get')
-    : 'inline';
+  const promptMode = allowPopupFallback ? await getPasskeyPromptMode('get') : 'inline';
   const storedPasskey = preferredPasskey;
   const canUsePopup = allowPopupFallback && isInIframe();
 
@@ -88,12 +88,13 @@ export async function signWithStoredPasskey(
     return signWithDiscoverableStoredPasskey(
       challenge,
       storedPasskey?.rpId ?? rpId,
-      allPasskeys
+      allPasskeys,
+      options
     );
   }
 
   if (promptMode === 'popup' || (canUsePopup && !storedPasskey)) {
-    return requestStoredPasskeyPopup(challenge, preopenedPopup, context);
+    return requestStoredPasskeyPopup(challenge, preopenedPopup, context, options);
   }
 
   closePopup(preopenedPopup);
@@ -104,31 +105,30 @@ export async function signWithStoredPasskey(
         const result = await signWithPasskeyInline(
           storedPasskey.credentialId,
           challenge,
-          storedPasskey.rpId
+          storedPasskey.rpId,
+          options
         );
         return {
           ...result,
           passkey: storedPasskey,
         };
       } catch (error) {
-        if (
-          !allowDiscoverableFallback ||
-          !shouldFallbackToDiscoverable(error)
-        ) {
+        if (!allowDiscoverableFallback || !shouldFallbackToDiscoverable(error)) {
           throw error;
         }
         return signWithDiscoverableStoredPasskey(
           challenge,
           storedPasskey.rpId,
-          allPasskeys
+          allPasskeys,
+          options
         );
       }
     }
 
-    return signWithDiscoverableStoredPasskey(challenge, rpId, allPasskeys);
+    return signWithDiscoverableStoredPasskey(challenge, rpId, allPasskeys, options);
   } catch (error) {
     if (canUsePopup && shouldFallbackToPopup(error)) {
-      return requestStoredPasskeyPopup(challenge, undefined, context);
+      return requestStoredPasskeyPopup(challenge, undefined, context, options);
     }
 
     throw error;
@@ -138,12 +138,12 @@ export async function signWithStoredPasskey(
 async function signWithDiscoverableStoredPasskey(
   challenge: Uint8Array,
   rpId: string,
-  allPasskeys: PasskeyMetadata[]
+  allPasskeys: PasskeyMetadata[],
+  options: PasskeyReportingOptions
 ): Promise<PasskeyStoredSigningResult> {
-  const discoverable = await signWithDiscoverablePasskey(challenge, rpId);
+  const discoverable = await signWithDiscoverablePasskey(challenge, rpId, options);
   const matchingPasskey =
-    allPasskeys.find((p) => p.credentialId === discoverable.credentialId) ??
-    null;
+    allPasskeys.find((p) => p.credentialId === discoverable.credentialId) ?? null;
   const now = new Date().toISOString();
   const passkey = matchingPasskey ?? {
     credentialId: discoverable.credentialId,
@@ -155,6 +155,7 @@ async function signWithDiscoverableStoredPasskey(
   };
 
   return {
+    credentialJson: discoverable.credentialJson,
     signature: discoverable.signature,
     authenticatorData: discoverable.authenticatorData,
     clientDataJSON: discoverable.clientDataJSON,
@@ -200,16 +201,18 @@ function shouldFallbackToDiscoverable(error: unknown): boolean {
  */
 export async function signWithDiscoverablePasskey(
   challenge: Uint8Array,
-  rpId: string
+  rpId: string,
+  options: PasskeyReportingOptions = {}
 ): Promise<PasskeyDiscoverableSigningResult> {
   if (!isWebAuthnSupported()) {
     throw new Error('WebAuthn is not supported in this browser');
   }
 
   const resolvedRpId = rpId;
-  const result = await signWithPasskeyAssertion(challenge, resolvedRpId);
+  const result = await signWithPasskeyAssertion(challenge, resolvedRpId, undefined, options);
 
   return {
+    credentialJson: result.credentialJson,
     signature: result.signature,
     authenticatorData: result.authenticatorData,
     clientDataJSON: result.clientDataJSON,
@@ -249,10 +252,12 @@ async function runWithPromptMode<T>(
 async function signWithPasskeyInline(
   credentialId: string,
   challenge: Uint8Array,
-  rpId: string
+  rpId: string,
+  options: PasskeyReportingOptions = {}
 ): Promise<PasskeySigningResult> {
-  const result = await signWithPasskeyAssertion(challenge, rpId, credentialId);
+  const result = await signWithPasskeyAssertion(challenge, rpId, credentialId, options);
   return {
+    credentialJson: result.credentialJson,
     signature: result.signature,
     authenticatorData: result.authenticatorData,
     clientDataJSON: result.clientDataJSON,
@@ -265,7 +270,8 @@ async function signWithPasskeyInline(
 async function signWithPasskeyAssertion(
   challenge: Uint8Array,
   rpId: string,
-  credentialId?: string
+  credentialId: string | undefined,
+  options: PasskeyReportingOptions
 ): Promise<PasskeySigningResult & { credentialId: string }> {
   const challengeBytes = new Uint8Array(challenge);
   const getOptions: PublicKeyCredentialRequestOptions = {
@@ -286,38 +292,45 @@ async function signWithPasskeyAssertion(
     ];
   }
 
-  const assertion = await getPasskeyAssertionWithFocusRetry(getOptions);
+  return reportPasskeyCeremony(
+    options.ceremonyReporter,
+    { kind: 'get', mode: 'inline', allowCredentials: Boolean(credentialId) },
+    async () => {
+      const assertion = await getPasskeyAssertionWithFocusRetry(getOptions);
 
-  if (!assertion) {
-    throw new Error('Passkey authentication was cancelled');
-  }
+      if (!assertion) {
+        throw new Error('Passkey authentication was cancelled');
+      }
 
-  const response = assertion.response as AuthenticatorAssertionResponse;
+      const response = assertion.response as AuthenticatorAssertionResponse;
 
-  const signature = new Uint8Array(response.signature);
-  let { r, s } = parseDerSignature(signature);
-  s = normalizeLowS(s);
+      const signature = new Uint8Array(response.signature);
+      let { r, s } = parseDerSignature(signature);
+      s = normalizeLowS(s);
 
-  /* `authenticatorAttachment` distinguishes a same-device passkey
+      /* `authenticatorAttachment` distinguishes a same-device passkey
      ('platform') from a cross-device one signed via QR / hybrid
      transport ('cross-platform'). Drives the wallet's add-device
      prompt. Browsers may report null. */
-  const rawAttachment =
-    (
-      assertion as PublicKeyCredential & {
-        authenticatorAttachment?: AuthenticatorAttachment | null;
-      }
-    ).authenticatorAttachment ?? null;
+      const rawAttachment =
+        (
+          assertion as PublicKeyCredential & {
+            authenticatorAttachment?: AuthenticatorAttachment | null;
+          }
+        ).authenticatorAttachment ?? null;
 
-  return {
-    signature: new Uint8Array([...r, ...s]),
-    authenticatorData: new Uint8Array(response.authenticatorData),
-    clientDataJSON: new Uint8Array(response.clientDataJSON),
-    signatureR: r,
-    signatureS: s,
-    credentialId: arrayBufferToBase64Url(assertion.rawId),
-    authenticatorAttachment: rawAttachment,
-  };
+      return {
+        signature: new Uint8Array([...r, ...s]),
+        authenticatorData: new Uint8Array(response.authenticatorData),
+        clientDataJSON: new Uint8Array(response.clientDataJSON),
+        signatureR: r,
+        signatureS: s,
+        credentialId: arrayBufferToBase64Url(assertion.rawId),
+        authenticatorAttachment: rawAttachment,
+        credentialJson: serializePasskeyCredential(assertion, 'get'),
+      };
+    }
+  );
 }
 
 async function getPasskeyAssertionWithFocusRetry(
@@ -366,7 +379,8 @@ async function signWithPasskeyViaPopup(
   credentialId: string,
   challenge: Uint8Array,
   rpId: string,
-  preopenedPopup?: Window | null
+  preopenedPopup: Window | null | undefined,
+  options: PasskeyReportingOptions
 ): Promise<PasskeySigningResult> {
   const result = await requestPasskeyPopup<PasskeyPopupSigningResult>(
     'get',
@@ -375,7 +389,8 @@ async function signWithPasskeyViaPopup(
       challengeBase64Url: bytesToBase64Url(challenge),
       rpId,
     },
-    preopenedPopup
+    preopenedPopup,
+    options
   );
 
   return decodePopupSigningResult(result);
@@ -383,8 +398,9 @@ async function signWithPasskeyViaPopup(
 
 async function requestStoredPasskeyPopup(
   challenge: Uint8Array,
-  preopenedPopup?: Window | null,
-  context?: PasskeyPopupContext
+  preopenedPopup: Window | null | undefined,
+  context: PasskeyPopupContext | undefined,
+  options: PasskeyReportingOptions
 ): Promise<PasskeyStoredSigningResult> {
   const result = await requestPasskeyPopup<PasskeyPopupStoredSigningResult>(
     'getStored',
@@ -392,15 +408,15 @@ async function requestStoredPasskeyPopup(
       challengeBase64Url: bytesToBase64Url(challenge),
       context,
     },
-    preopenedPopup
+    preopenedPopup,
+    options
   );
   return decodePopupStoredSigningResult(result);
 }
 
-function decodePopupSigningResult(
-  result: PasskeyPopupSigningResult
-): PasskeySigningResult {
+function decodePopupSigningResult(result: PasskeyPopupSigningResult): PasskeySigningResult {
   return {
+    credentialJson: result.credentialJson,
     signature: base64UrlToBytes(result.signatureBase64Url),
     authenticatorData: base64UrlToBytes(result.authenticatorDataBase64Url),
     clientDataJSON: base64UrlToBytes(result.clientDataJSONBase64Url),

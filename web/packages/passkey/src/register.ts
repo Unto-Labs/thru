@@ -11,6 +11,7 @@ import {
   shouldFallbackToPopup,
   type PasskeyPromptAction,
 } from './capabilities';
+import { reportPasskeyCeremony, serializePasskeyCredential } from './reporter';
 import { requestPasskeyPopup, openPasskeyPopupWindow, closePopup } from './popup';
 
 /**
@@ -28,8 +29,8 @@ export async function registerPasskey(
 
   return runWithPromptMode(
     'create',
-    () => registerPasskeyInline(alias, userId, rpId),
-    (preopenedPopup) => registerPasskeyViaPopup(alias, userId, rpId, preopenedPopup),
+    () => registerPasskeyInline(alias, userId, rpId, options),
+    (preopenedPopup) => registerPasskeyViaPopup(alias, userId, rpId, preopenedPopup, options),
     options
   );
 }
@@ -41,7 +42,9 @@ async function runWithPromptMode<T>(
   options: PasskeyRegistrationOptions = {}
 ): Promise<T> {
   const allowPopupFallback = options.allowPopupFallback ?? true;
-  const preopenedPopup = allowPopupFallback ? maybePreopenPopup(action, openPasskeyPopupWindow) : null;
+  const preopenedPopup = allowPopupFallback
+    ? maybePreopenPopup(action, openPasskeyPopupWindow)
+    : null;
   const promptMode = allowPopupFallback ? await getPasskeyPromptMode(action) : 'inline';
   if (promptMode === 'popup') {
     return popupFn(preopenedPopup);
@@ -62,7 +65,8 @@ async function runWithPromptMode<T>(
 async function registerPasskeyInline(
   alias: string,
   userId: string,
-  rpId: string
+  rpId: string,
+  options: PasskeyRegistrationOptions
 ): Promise<PasskeyRegistrationResult> {
   const rpName = 'Thru Wallet';
 
@@ -82,9 +86,7 @@ async function registerPasskeyInline(
       name: alias,
       displayName: alias,
     },
-    pubKeyCredParams: [
-      { type: 'public-key', alg: -7 },
-    ],
+    pubKeyCredParams: [{ type: 'public-key', alg: -7 }],
     authenticatorSelection: {
       authenticatorAttachment: 'platform',
       userVerification: 'required',
@@ -95,51 +97,61 @@ async function registerPasskeyInline(
     timeout: 60000,
   };
 
-  const credential = (await navigator.credentials.create({
-    publicKey: createOptions,
-  })) as PublicKeyCredential | null;
+  return reportPasskeyCeremony(
+    options.ceremonyReporter,
+    { kind: 'create', mode: 'inline' },
+    async () => {
+      const credential = (await navigator.credentials.create({
+        publicKey: createOptions,
+      })) as PublicKeyCredential | null;
 
-  if (!credential) {
-    throw new Error('Passkey registration was cancelled');
-  }
-
-  const response = credential.response as AuthenticatorAttestationResponse;
-  const { x, y } = extractP256PublicKey(response);
-  const authenticatorAttachment =
-    (
-      credential as PublicKeyCredential & {
-        authenticatorAttachment?: AuthenticatorAttachment | null;
+      if (!credential) {
+        throw new Error('Passkey registration was cancelled');
       }
-    ).authenticatorAttachment ?? null;
 
-  return {
-    credentialId: arrayBufferToBase64Url(credential.rawId),
-    publicKeyX: bytesToHex(x),
-    publicKeyY: bytesToHex(y),
-    rpId,
-    authenticatorAttachment,
-  };
+      const response = credential.response as AuthenticatorAttestationResponse;
+      const { x, y } = extractP256PublicKey(response);
+      const authenticatorAttachment =
+        (
+          credential as PublicKeyCredential & {
+            authenticatorAttachment?: AuthenticatorAttachment | null;
+          }
+        ).authenticatorAttachment ?? null;
+
+      return {
+        credentialJson: serializePasskeyCredential(credential, 'create'),
+        credentialId: arrayBufferToBase64Url(credential.rawId),
+        publicKeyX: bytesToHex(x),
+        publicKeyY: bytesToHex(y),
+        rpId,
+        authenticatorAttachment,
+      };
+    }
+  );
 }
 
 async function registerPasskeyViaPopup(
   alias: string,
   userId: string,
   rpId: string,
-  preopenedPopup?: Window | null
+  preopenedPopup: Window | null | undefined,
+  options: PasskeyRegistrationOptions
 ): Promise<PasskeyRegistrationResult> {
   const result = await requestPasskeyPopup<PasskeyPopupRegistrationResult>(
     'create',
     { alias, userId, rpId },
-    preopenedPopup
+    preopenedPopup,
+    options
   );
   return result;
 }
 
 // Key extraction helpers
 
-function extractP256PublicKey(
-  response: AuthenticatorAttestationResponse
-): { x: Uint8Array; y: Uint8Array } {
+function extractP256PublicKey(response: AuthenticatorAttestationResponse): {
+  x: Uint8Array;
+  y: Uint8Array;
+} {
   if (typeof response.getPublicKey === 'function') {
     const spkiKey = response.getPublicKey();
     if (spkiKey) {
@@ -152,7 +164,9 @@ function extractP256PublicKey(
     return extractFromAuthenticatorData(authData);
   }
 
-  throw new Error('Unable to extract public key: browser does not support required WebAuthn methods');
+  throw new Error(
+    'Unable to extract public key: browser does not support required WebAuthn methods'
+  );
 }
 
 function extractFromSpki(spki: Uint8Array): { x: Uint8Array; y: Uint8Array } {
@@ -172,7 +186,10 @@ function extractFromSpki(spki: Uint8Array): { x: Uint8Array; y: Uint8Array } {
   return { x, y };
 }
 
-function extractFromAuthenticatorData(authData: Uint8Array): { x: Uint8Array; y: Uint8Array } {
+function extractFromAuthenticatorData(authData: Uint8Array): {
+  x: Uint8Array;
+  y: Uint8Array;
+} {
   const rpIdHashLength = 32;
   const flagsLength = 1;
   const counterLength = 4;
@@ -186,7 +203,10 @@ function extractFromAuthenticatorData(authData: Uint8Array): { x: Uint8Array; y:
   return extractFromCoseKey(coseKey);
 }
 
-function extractFromCoseKey(coseKey: Uint8Array): { x: Uint8Array; y: Uint8Array } {
+function extractFromCoseKey(coseKey: Uint8Array): {
+  x: Uint8Array;
+  y: Uint8Array;
+} {
   const mapStart = coseKey[0];
   if (mapStart !== 0xa5 && mapStart !== 0xa4) {
     throw new Error('Invalid COSE key format');

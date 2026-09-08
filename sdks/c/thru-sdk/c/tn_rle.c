@@ -30,7 +30,7 @@ tn_rle_encode( tn_rle_t *    rle,
                ulong const * bitset,
                ulong         bit_count ) {
   if( TN_RLE_UNLIKELY( !rle || !bitset ) ) {
-    return TN_RLE_ERR_INVALID_PARAM;
+    return TN_RLE_ERR_ENCODE_NULL_ARG;
   }
 
   if( TN_RLE_UNLIKELY( bit_count == 0 ) ) {
@@ -99,7 +99,7 @@ tn_rle_decode( tn_rle_t const * rle,
                ulong            max_bits,
                ulong *          out_bit_count ) {
   if( TN_RLE_UNLIKELY( !rle || !bitset || !out_bit_count ) ) {
-    return TN_RLE_ERR_INVALID_PARAM;
+    return TN_RLE_ERR_DECODE_NULL_ARG;
   }
 
   int err = check_bitset_size( rle, max_bits );
@@ -133,7 +133,7 @@ tn_rle_decode_bytes( tn_rle_t const * rle,
                      ulong            max_bits,
                      ulong *          out_bit_count ) {
   if( TN_RLE_UNLIKELY( !rle || !bitset || !out_bit_count ) ) {
-    return TN_RLE_ERR_INVALID_PARAM;
+    return TN_RLE_ERR_DECODE_BYTES_NULL_ARG;
   }
 
   int err = check_bitset_size( rle, max_bits );

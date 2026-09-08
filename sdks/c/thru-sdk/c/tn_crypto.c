@@ -7,9 +7,8 @@ static uchar const TN_CONSENSUS_DST[] = "TN_CONSENSUS_V1";
 int
 tn_crypto_generate_keypair( tn_bls_pubkey_t * pubkey,
                             tn_bls_private_key_t * private_key, ulong seed ) {
-  if( UNLIKELY( !pubkey || !private_key ) ) {
-    return TN_CRYPTO_ERR_INVALID_PARAM;
-  }
+  if( UNLIKELY( !pubkey ) ) return TN_CRYPTO_ERR_KEYPAIR_PUBKEY_IS_NULL;
+  if( UNLIKELY( !private_key ) ) return TN_CRYPTO_ERR_KEYPAIR_PRIVATE_KEY_IS_NULL;
 
   /* Create deterministic key material from seed */
   uchar ikm[32];
@@ -37,9 +36,10 @@ tn_crypto_sign_message_with_dst( tn_bls_signature_t *         signature,
                                  tn_bls_private_key_t const * private_key,
                                  uchar const *                dst,
                                  ulong                        dst_len ) {
-  if( UNLIKELY( !signature || !message || !private_key || !dst ) ) {
-    return TN_CRYPTO_ERR_INVALID_PARAM;
-  }
+  if( UNLIKELY( !signature ) ) return TN_CRYPTO_ERR_SIGN_SIGNATURE_IS_NULL;
+  if( UNLIKELY( !message ) ) return TN_CRYPTO_ERR_SIGN_MESSAGE_IS_NULL;
+  if( UNLIKELY( !private_key ) ) return TN_CRYPTO_ERR_SIGN_PRIVATE_KEY_IS_NULL;
+  if( UNLIKELY( !dst ) ) return TN_CRYPTO_ERR_SIGN_DST_IS_NULL;
 
   /* Hash message to G2 point */
   blst_p2 hash_point;
@@ -56,7 +56,7 @@ tn_crypto_sign_message_with_dst( tn_bls_signature_t *         signature,
   /* Group check signature (as recommended by blst README) */
   if( UNLIKELY( !blst_p2_affine_in_g2( signature ) ) ) {
     FD_LOG_WARNING(( "signature group check failed after signing" ));
-    return TN_CRYPTO_ERR_SIGN_FAILED;
+    return TN_CRYPTO_ERR_SIGN_SIGNATURE_NOT_IN_G2;
   }
 
   return TN_CRYPTO_SUCCESS;
@@ -74,21 +74,21 @@ int
 tn_crypto_verify_signature( tn_bls_signature_t const * signature,
                             tn_bls_pubkey_t const * pubkey,
                             void const * message, ulong message_len ) {
-  if( UNLIKELY( !signature || !pubkey || !message ) ) {
-    return TN_CRYPTO_ERR_INVALID_PARAM;
-  }
+  if( UNLIKELY( !signature ) ) return TN_CRYPTO_ERR_VERIFY_SIGNATURE_IS_NULL;
+  if( UNLIKELY( !pubkey ) ) return TN_CRYPTO_ERR_VERIFY_PUBKEY_IS_NULL;
+  if( UNLIKELY( !message ) ) return TN_CRYPTO_ERR_VERIFY_MESSAGE_IS_NULL;
 
   /* Group check public key (as recommended by blst README) */
   if( UNLIKELY( !blst_p1_affine_in_g1( pubkey ) ) ) {
     FD_LOG_WARNING(( "public key group check failed" ));
-    return TN_CRYPTO_ERR_VERIFY_FAILED;
+    return TN_CRYPTO_ERR_VERIFY_PUBKEY_NOT_IN_G1;
   }
 
   /* The pairing API lets us precompute the signature side once and then
      verify the public-key/message side against it. */
   if( UNLIKELY( !blst_p2_affine_in_g2( signature ) ) ) {
     FD_LOG_WARNING(( "signature group check failed" ));
-    return TN_CRYPTO_ERR_VERIFY_FAILED;
+    return TN_CRYPTO_ERR_VERIFY_SIGNATURE_NOT_IN_G2;
   }
 
   blst_fp12 gtsig;
@@ -104,14 +104,14 @@ tn_crypto_verify_signature( tn_bls_signature_t const * signature,
       pairing, pubkey, NULL, (uchar const *)message, message_len, NULL, 0 );
   if( UNLIKELY( err != BLST_SUCCESS ) ) {
     FD_LOG_WARNING(( "blst_pairing_aggregate_pk_in_g1 failed: %d", (int)err ));
-    return TN_CRYPTO_ERR_VERIFY_FAILED;
+    return TN_CRYPTO_ERR_VERIFY_PAIRING_AGGREGATE_REJECTED;
   }
 
   blst_pairing_commit( pairing );
 
   if( UNLIKELY( !blst_pairing_finalverify( pairing, &gtsig ) ) ) {
     FD_LOG_WARNING(( "blst_pairing_finalverify failed" ));
-    return TN_CRYPTO_ERR_VERIFY_FAILED;
+    return TN_CRYPTO_ERR_VERIFY_PAIRING_MISMATCH;
   }
 
   return TN_CRYPTO_SUCCESS;
@@ -121,9 +121,9 @@ int
 tn_crypto_aggregate_signatures( tn_bls_signature_t *       aggregate,
                                 tn_bls_signature_t const * sig1,
                                 tn_bls_signature_t const * sig2 ) {
-  if( UNLIKELY( !aggregate || !sig1 || !sig2 ) ) {
-    return TN_CRYPTO_ERR_INVALID_PARAM;
-  }
+  if( UNLIKELY( !aggregate ) ) return TN_CRYPTO_ERR_AGG_SIGNATURE_OUTPUT_IS_NULL;
+  if( UNLIKELY( !sig1 ) ) return TN_CRYPTO_ERR_AGG_SIGNATURE_LEFT_IS_NULL;
+  if( UNLIKELY( !sig2 ) ) return TN_CRYPTO_ERR_AGG_SIGNATURE_RIGHT_IS_NULL;
 
   blst_p2 result;
   blst_p2_from_affine( &result, sig1 );
@@ -139,9 +139,9 @@ int
 tn_crypto_aggregate_pubkeys( tn_bls_pubkey_t *       aggregate,
                              tn_bls_pubkey_t const * pk1,
                              tn_bls_pubkey_t const * pk2 ) {
-  if( UNLIKELY( !aggregate || !pk1 || !pk2 ) ) {
-    return TN_CRYPTO_ERR_INVALID_PARAM;
-  }
+  if( UNLIKELY( !aggregate ) ) return TN_CRYPTO_ERR_AGG_PUBKEY_OUTPUT_IS_NULL;
+  if( UNLIKELY( !pk1 ) ) return TN_CRYPTO_ERR_AGG_PUBKEY_LEFT_IS_NULL;
+  if( UNLIKELY( !pk2 ) ) return TN_CRYPTO_ERR_AGG_PUBKEY_RIGHT_IS_NULL;
 
   blst_p1 result;
   blst_p1_from_affine( &result, pk1 );
@@ -156,9 +156,8 @@ tn_crypto_aggregate_pubkeys( tn_bls_pubkey_t *       aggregate,
 int
 tn_crypto_subtract_signature( tn_bls_signature_t *       aggregate,
                               tn_bls_signature_t const * to_subtract ) {
-  if( UNLIKELY( !aggregate || !to_subtract ) ) {
-    return TN_CRYPTO_ERR_INVALID_PARAM;
-  }
+  if( UNLIKELY( !aggregate ) ) return TN_CRYPTO_ERR_SUB_SIGNATURE_AGGREGATE_IS_NULL;
+  if( UNLIKELY( !to_subtract ) ) return TN_CRYPTO_ERR_SUB_SIGNATURE_SUBTRAHEND_IS_NULL;
 
   /* Convert to projective coordinates */
   blst_p2 agg, sub, result;
@@ -180,9 +179,8 @@ tn_crypto_subtract_signature( tn_bls_signature_t *       aggregate,
 int
 tn_crypto_subtract_pubkey( tn_bls_pubkey_t *       aggregate,
                            tn_bls_pubkey_t const * to_subtract ) {
-  if( UNLIKELY( !aggregate || !to_subtract ) ) {
-    return TN_CRYPTO_ERR_INVALID_PARAM;
-  }
+  if( UNLIKELY( !aggregate ) ) return TN_CRYPTO_ERR_SUB_PUBKEY_AGGREGATE_IS_NULL;
+  if( UNLIKELY( !to_subtract ) ) return TN_CRYPTO_ERR_SUB_PUBKEY_SUBTRAHEND_IS_NULL;
 
   /* Convert to projective coordinates */
   blst_p1 agg, sub, result;
@@ -208,19 +206,20 @@ tn_crypto_verify_aggregate_with_dst( tn_bls_signature_t const * aggregate_sig,
                                      ulong                      message_len,
                                      uchar const *              dst,
                                      ulong                      dst_len ) {
-  if( UNLIKELY( !aggregate_sig || !aggregate_pk || !message || !dst ) ) {
-    return TN_CRYPTO_ERR_INVALID_PARAM;
-  }
+  if( UNLIKELY( !aggregate_sig ) ) return TN_CRYPTO_ERR_AGG_VERIFY_SIGNATURE_IS_NULL;
+  if( UNLIKELY( !aggregate_pk ) ) return TN_CRYPTO_ERR_AGG_VERIFY_PUBKEY_IS_NULL;
+  if( UNLIKELY( !message ) ) return TN_CRYPTO_ERR_AGG_VERIFY_MESSAGE_IS_NULL;
+  if( UNLIKELY( !dst ) ) return TN_CRYPTO_ERR_AGG_VERIFY_DST_IS_NULL;
 
   /* Group check public key (as recommended by blst README) */
   if( UNLIKELY( !blst_p1_affine_in_g1( aggregate_pk ) ) ) {
     FD_LOG_WARNING(( "aggregate public key group check failed" ));
-    return TN_CRYPTO_ERR_VERIFY_FAILED;
+    return TN_CRYPTO_ERR_AGG_VERIFY_PUBKEY_NOT_IN_G1;
   }
 
   if( UNLIKELY( !blst_p2_affine_in_g2( aggregate_sig ) ) ) {
     FD_LOG_WARNING(( "aggregate signature group check failed" ));
-    return TN_CRYPTO_ERR_VERIFY_FAILED;
+    return TN_CRYPTO_ERR_AGG_VERIFY_SIGNATURE_NOT_IN_G2;
   }
 
   blst_fp12 gtsig;
@@ -236,14 +235,14 @@ tn_crypto_verify_aggregate_with_dst( tn_bls_signature_t const * aggregate_sig,
       pairing, aggregate_pk, NULL, (uchar const *)message, message_len, NULL, 0 );
   if( UNLIKELY( err != BLST_SUCCESS ) ) {
     FD_LOG_WARNING(( "blst_pairing_aggregate_pk_in_g1 (aggregate) failed: %d", (int)err ));
-    return TN_CRYPTO_ERR_VERIFY_FAILED;
+    return TN_CRYPTO_ERR_AGG_VERIFY_PAIRING_AGGREGATE_REJECTED;
   }
 
   blst_pairing_commit( pairing );
 
   if( UNLIKELY( !blst_pairing_finalverify( pairing, &gtsig ) ) ) {
     FD_LOG_WARNING(( "blst_pairing_finalverify (aggregate) failed" ));
-    return TN_CRYPTO_ERR_VERIFY_FAILED;
+    return TN_CRYPTO_ERR_AGG_VERIFY_PAIRING_MISMATCH;
   }
 
   return TN_CRYPTO_SUCCESS;
@@ -261,13 +260,12 @@ tn_crypto_verify_aggregate( tn_bls_signature_t const * aggregate_sig,
 
 int
 tn_crypto_pubkey_on_curve( tn_bls_pubkey_t const * pubkey ) {
-  if( UNLIKELY( !pubkey ) ) {
-    return TN_CRYPTO_ERR_INVALID_PARAM;
+  if( UNLIKELY( !pubkey ) ) return TN_CRYPTO_ERR_PUBKEY_CURVE_PUBKEY_IS_NULL;
+  if( UNLIKELY( !blst_p1_affine_on_curve( pubkey ) ) ) {
+    return TN_CRYPTO_ERR_PUBKEY_NOT_ON_CURVE;
   }
-
-  if( UNLIKELY( !blst_p1_affine_on_curve( pubkey )) ||
-      UNLIKELY( blst_p1_affine_is_inf( pubkey )) ) {
-    return TN_CRYPTO_ERR_INVALID_PUBKEY;
+  if( UNLIKELY( blst_p1_affine_is_inf( pubkey ) ) ) {
+    return TN_CRYPTO_ERR_PUBKEY_IS_INFINITY;
   }
 
   return TN_CRYPTO_SUCCESS;
@@ -276,9 +274,8 @@ tn_crypto_pubkey_on_curve( tn_bls_pubkey_t const * pubkey ) {
 int
 tn_crypto_derive_pubkey( tn_bls_pubkey_t *            pubkey,
                          tn_bls_private_key_t const * private_key ) {
-  if( UNLIKELY( !pubkey || !private_key ) ) {
-    return TN_CRYPTO_ERR_INVALID_PARAM;
-  }
+  if( UNLIKELY( !pubkey ) ) return TN_CRYPTO_ERR_DERIVE_PUBKEY_OUTPUT_IS_NULL;
+  if( UNLIKELY( !private_key ) ) return TN_CRYPTO_ERR_DERIVE_PUBKEY_PRIVATE_KEY_IS_NULL;
 
   /* Generate corresponding public key from private key */
   blst_p1 pubkey_proj;
@@ -290,7 +287,7 @@ tn_crypto_derive_pubkey( tn_bls_pubkey_t *            pubkey,
   /* Group check public key */
   if( UNLIKELY( !blst_p1_affine_in_g1( pubkey ) ) ) {
     FD_LOG_WARNING(( "derived public key group check failed" ));
-    return TN_CRYPTO_ERR_KEYGEN_FAILED;
+    return TN_CRYPTO_ERR_DERIVE_PUBKEY_NOT_IN_G1;
   }
 
   return TN_CRYPTO_SUCCESS;
@@ -299,9 +296,8 @@ tn_crypto_derive_pubkey( tn_bls_pubkey_t *            pubkey,
 int
 tn_crypto_serialize_pubkey( tn_bls_serialized_pubkey_t      serialized,
                             tn_bls_pubkey_t const *         pubkey ) {
-  if( UNLIKELY( !serialized || !pubkey ) ) {
-    return TN_CRYPTO_ERR_INVALID_PARAM;
-  }
+  if( UNLIKELY( !serialized ) ) return TN_CRYPTO_ERR_SERIALIZE_PUBKEY_OUTPUT_IS_NULL;
+  if( UNLIKELY( !pubkey ) ) return TN_CRYPTO_ERR_SERIALIZE_PUBKEY_IS_NULL;
 
   /* Serialize affine point to uncompressed format (x + y coordinates) */
   blst_p1_affine_serialize( serialized, pubkey );
@@ -312,21 +308,20 @@ tn_crypto_serialize_pubkey( tn_bls_serialized_pubkey_t      serialized,
 int
 tn_crypto_deserialize_pubkey( tn_bls_pubkey_t *                pubkey,
                               tn_bls_serialized_pubkey_t const serialized ) {
-  if( UNLIKELY( !pubkey || !serialized ) ) {
-    return TN_CRYPTO_ERR_INVALID_PARAM;
-  }
+  if( UNLIKELY( !pubkey ) ) return TN_CRYPTO_ERR_DESERIALIZE_PUBKEY_OUTPUT_IS_NULL;
+  if( UNLIKELY( !serialized ) ) return TN_CRYPTO_ERR_DESERIALIZE_PUBKEY_BYTES_IS_NULL;
 
   /* Deserialize from uncompressed format directly to affine */
   BLST_ERROR err = blst_p1_deserialize( pubkey, serialized );
   if( UNLIKELY( err != BLST_SUCCESS ) ) {
     FD_LOG_WARNING(( "blst_p1_deserialize failed: %d (invalid uncompressed format)", (int)err ));
-    return TN_CRYPTO_ERR_DESERIALIZE_FAILED;
+    return TN_CRYPTO_ERR_DESERIALIZE_PUBKEY_ENCODING_REJECTED;
   }
 
   /* Group check the deserialized public key */
   if( UNLIKELY( !blst_p1_affine_in_g1( pubkey ) ) ) {
     FD_LOG_WARNING(( "deserialized public key group check failed" ));
-    return TN_CRYPTO_ERR_DESERIALIZE_FAILED;
+    return TN_CRYPTO_ERR_DESERIALIZE_PUBKEY_NOT_IN_G1;
   }
 
   return TN_CRYPTO_SUCCESS;
@@ -335,14 +330,13 @@ tn_crypto_deserialize_pubkey( tn_bls_pubkey_t *                pubkey,
 int
 tn_crypto_serialize_signature( tn_bls_serialized_signature_t      serialized,
                                tn_bls_signature_t const *         signature ) {
-  if( UNLIKELY( !serialized || !signature ) ) {
-    return TN_CRYPTO_ERR_INVALID_PARAM;
-  }
+  if( UNLIKELY( !serialized ) ) return TN_CRYPTO_ERR_SERIALIZE_SIGNATURE_OUTPUT_IS_NULL;
+  if( UNLIKELY( !signature ) ) return TN_CRYPTO_ERR_SERIALIZE_SIGNATURE_IS_NULL;
 
   /* Verify point is on curve before serializing */
   if( UNLIKELY( !blst_p2_affine_on_curve( signature ) ) ) {
     FD_LOG_WARNING(( "signature point not on curve before serialization" ));
-    return TN_CRYPTO_ERR_INVALID_PARAM;
+    return TN_CRYPTO_ERR_SERIALIZE_SIGNATURE_NOT_ON_CURVE;
   }
 
   /* Serialize affine point to uncompressed format (x + y coordinates) */
@@ -354,9 +348,8 @@ tn_crypto_serialize_signature( tn_bls_serialized_signature_t      serialized,
 int
 tn_crypto_deserialize_signature( tn_bls_signature_t *                signature,
                                  tn_bls_serialized_signature_t const serialized ) {
-  if( UNLIKELY( !signature || !serialized ) ) {
-    return TN_CRYPTO_ERR_INVALID_PARAM;
-  }
+  if( UNLIKELY( !signature ) ) return TN_CRYPTO_ERR_DESERIALIZE_SIGNATURE_OUTPUT_IS_NULL;
+  if( UNLIKELY( !serialized ) ) return TN_CRYPTO_ERR_DESERIALIZE_SIGNATURE_BYTES_IS_NULL;
 
   /* Deserialize from uncompressed format directly to affine */
   BLST_ERROR err = blst_p2_deserialize( signature, serialized );
@@ -368,14 +361,14 @@ tn_crypto_deserialize_signature( tn_bls_signature_t *                signature,
     } else {
       FD_LOG_WARNING(( "blst_p2_deserialize failed: %d", (int)err ));
     }
-    return TN_CRYPTO_ERR_DESERIALIZE_FAILED;
+    return TN_CRYPTO_ERR_DESERIALIZE_SIGNATURE_ENCODING_REJECTED;
   }
 
   /* Signatures are group-checked internally by blst during verification,
      but we can also check here for early validation */
   if( UNLIKELY( !blst_p2_affine_in_g2( signature ) ) ) {
     FD_LOG_WARNING(( "deserialized signature group check failed" ));
-    return TN_CRYPTO_ERR_DESERIALIZE_FAILED;
+    return TN_CRYPTO_ERR_DESERIALIZE_SIGNATURE_NOT_IN_G2;
   }
 
   return TN_CRYPTO_SUCCESS;

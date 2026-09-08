@@ -20,15 +20,58 @@
 #endif
 
 /* Error codes for crypto operations */
-#define TN_CRYPTO_SUCCESS 0
-#define TN_CRYPTO_ERR_INVALID_PARAM -1
-#define TN_CRYPTO_ERR_KEYGEN_FAILED -2
-#define TN_CRYPTO_ERR_SIGN_FAILED -3
-#define TN_CRYPTO_ERR_VERIFY_FAILED -4
-#define TN_CRYPTO_ERR_AGGREGATE_FAILED -5
-#define TN_CRYPTO_ERR_INVALID_PUBKEY -6
-#define TN_CRYPTO_ERR_SERIALIZE_FAILED -7
-#define TN_CRYPTO_ERR_DESERIALIZE_FAILED -8
+#define TN_CRYPTO_SUCCESS                                        (0)
+#define TN_CRYPTO_ERR_KEYPAIR_PUBKEY_IS_NULL                     (-1)
+#define TN_CRYPTO_ERR_KEYPAIR_PRIVATE_KEY_IS_NULL                (-2)
+#define TN_CRYPTO_ERR_SIGN_SIGNATURE_IS_NULL                     (-3)
+#define TN_CRYPTO_ERR_SIGN_MESSAGE_IS_NULL                       (-4)
+#define TN_CRYPTO_ERR_SIGN_PRIVATE_KEY_IS_NULL                   (-5)
+#define TN_CRYPTO_ERR_SIGN_DST_IS_NULL                           (-6)
+#define TN_CRYPTO_ERR_SIGN_SIGNATURE_NOT_IN_G2                   (-7)
+#define TN_CRYPTO_ERR_VERIFY_SIGNATURE_IS_NULL                   (-8)
+#define TN_CRYPTO_ERR_VERIFY_PUBKEY_IS_NULL                      (-9)
+#define TN_CRYPTO_ERR_VERIFY_MESSAGE_IS_NULL                    (-10)
+#define TN_CRYPTO_ERR_VERIFY_PUBKEY_NOT_IN_G1                   (-11)
+#define TN_CRYPTO_ERR_VERIFY_SIGNATURE_NOT_IN_G2                (-12)
+#define TN_CRYPTO_ERR_VERIFY_PAIRING_AGGREGATE_REJECTED         (-13)
+#define TN_CRYPTO_ERR_VERIFY_PAIRING_MISMATCH                   (-14)
+#define TN_CRYPTO_ERR_AGG_SIGNATURE_OUTPUT_IS_NULL              (-15)
+#define TN_CRYPTO_ERR_AGG_SIGNATURE_LEFT_IS_NULL                (-16)
+#define TN_CRYPTO_ERR_AGG_SIGNATURE_RIGHT_IS_NULL               (-17)
+#define TN_CRYPTO_ERR_AGG_PUBKEY_OUTPUT_IS_NULL                 (-18)
+#define TN_CRYPTO_ERR_AGG_PUBKEY_LEFT_IS_NULL                   (-19)
+#define TN_CRYPTO_ERR_AGG_PUBKEY_RIGHT_IS_NULL                  (-20)
+#define TN_CRYPTO_ERR_SUB_SIGNATURE_AGGREGATE_IS_NULL           (-21)
+#define TN_CRYPTO_ERR_SUB_SIGNATURE_SUBTRAHEND_IS_NULL          (-22)
+#define TN_CRYPTO_ERR_SUB_PUBKEY_AGGREGATE_IS_NULL              (-23)
+#define TN_CRYPTO_ERR_SUB_PUBKEY_SUBTRAHEND_IS_NULL             (-24)
+#define TN_CRYPTO_ERR_AGG_VERIFY_SIGNATURE_IS_NULL              (-25)
+#define TN_CRYPTO_ERR_AGG_VERIFY_PUBKEY_IS_NULL                 (-26)
+#define TN_CRYPTO_ERR_AGG_VERIFY_MESSAGE_IS_NULL                (-27)
+#define TN_CRYPTO_ERR_AGG_VERIFY_DST_IS_NULL                    (-28)
+#define TN_CRYPTO_ERR_AGG_VERIFY_PUBKEY_NOT_IN_G1               (-29)
+#define TN_CRYPTO_ERR_AGG_VERIFY_SIGNATURE_NOT_IN_G2            (-30)
+#define TN_CRYPTO_ERR_AGG_VERIFY_PAIRING_AGGREGATE_REJECTED     (-31)
+#define TN_CRYPTO_ERR_AGG_VERIFY_PAIRING_MISMATCH               (-32)
+#define TN_CRYPTO_ERR_PUBKEY_CURVE_PUBKEY_IS_NULL               (-33)
+#define TN_CRYPTO_ERR_PUBKEY_NOT_ON_CURVE                       (-34)
+#define TN_CRYPTO_ERR_PUBKEY_IS_INFINITY                        (-35)
+#define TN_CRYPTO_ERR_DERIVE_PUBKEY_OUTPUT_IS_NULL              (-36)
+#define TN_CRYPTO_ERR_DERIVE_PUBKEY_PRIVATE_KEY_IS_NULL         (-37)
+#define TN_CRYPTO_ERR_DERIVE_PUBKEY_NOT_IN_G1                   (-38)
+#define TN_CRYPTO_ERR_SERIALIZE_PUBKEY_OUTPUT_IS_NULL           (-39)
+#define TN_CRYPTO_ERR_SERIALIZE_PUBKEY_IS_NULL                  (-40)
+#define TN_CRYPTO_ERR_DESERIALIZE_PUBKEY_OUTPUT_IS_NULL         (-41)
+#define TN_CRYPTO_ERR_DESERIALIZE_PUBKEY_BYTES_IS_NULL          (-42)
+#define TN_CRYPTO_ERR_DESERIALIZE_PUBKEY_ENCODING_REJECTED      (-43)
+#define TN_CRYPTO_ERR_DESERIALIZE_PUBKEY_NOT_IN_G1              (-44)
+#define TN_CRYPTO_ERR_SERIALIZE_SIGNATURE_OUTPUT_IS_NULL        (-45)
+#define TN_CRYPTO_ERR_SERIALIZE_SIGNATURE_IS_NULL               (-46)
+#define TN_CRYPTO_ERR_SERIALIZE_SIGNATURE_NOT_ON_CURVE          (-47)
+#define TN_CRYPTO_ERR_DESERIALIZE_SIGNATURE_OUTPUT_IS_NULL      (-48)
+#define TN_CRYPTO_ERR_DESERIALIZE_SIGNATURE_BYTES_IS_NULL       (-49)
+#define TN_CRYPTO_ERR_DESERIALIZE_SIGNATURE_ENCODING_REJECTED   (-50)
+#define TN_CRYPTO_ERR_DESERIALIZE_SIGNATURE_NOT_IN_G2           (-51)
 
 /* BLS types for certificates - use actual blst types */
 typedef blst_scalar    tn_bls_private_key_t;

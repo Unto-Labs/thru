@@ -86,3 +86,10 @@ export {
   decodeChallenge,
   getResponseError,
 } from './popup-entry';
+
+export type {
+  PasskeyCeremonyReporter,
+  PasskeyCeremonyInfo,
+  PasskeyCeremonyCredentialJson,
+  PasskeyReportingOptions,
+} from './reporter';

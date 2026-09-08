@@ -1,3 +1,4 @@
+import { reportPasskeyCeremony, type PasskeyReportingOptions } from './reporter';
 import type {
   PasskeyPopupAction,
   PasskeyPopupRequestPayload,
@@ -21,11 +22,7 @@ export function closePopup(popup: Window | null | undefined): void {
 
 export function openPasskeyPopupWindow(): Window {
   const popupUrl = new URL(PASSKEY_POPUP_PATH, window.location.origin).toString();
-  const popup = window.open(
-    popupUrl,
-    'thru_passkey_popup',
-    'popup=yes,width=440,height=640'
-  );
+  const popup = window.open(popupUrl, 'thru_passkey_popup', 'popup=yes,width=440,height=640');
 
   if (!popup) {
     throw new Error('Passkey popup was blocked');
@@ -40,6 +37,23 @@ function createPopupRequestId(): string {
 }
 
 export async function requestPasskeyPopup<T>(
+  action: PasskeyPopupAction,
+  payload: PasskeyPopupRequestPayload,
+  preopenedPopup?: Window | null,
+  options: PasskeyReportingOptions = {}
+): Promise<T> {
+  return reportPasskeyCeremony(
+    options.ceremonyReporter,
+    {
+      kind: action === 'create' ? 'create' : 'get',
+      mode: 'popup',
+      allowCredentials: action === 'get' ? true : undefined,
+    },
+    () => requestPasskeyPopupImpl<T>(action, payload, preopenedPopup)
+  );
+}
+
+async function requestPasskeyPopupImpl<T>(
   action: PasskeyPopupAction,
   payload: PasskeyPopupRequestPayload,
   preopenedPopup?: Window | null
@@ -179,7 +193,7 @@ export async function requestPasskeyPopup<T>(
       } catch {
         /* ignore */
       }
-      reject(new Error('Passkey popup timed out'));
+      reject(new Error(requestSent ? 'Passkey popup timed out' : 'Passkey popup did not load'));
     }, PASSKEY_POPUP_TIMEOUT_MS);
 
     closePoll = setInterval(() => {

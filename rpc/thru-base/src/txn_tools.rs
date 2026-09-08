@@ -4339,6 +4339,13 @@ impl TransactionBuilder {
     }
 
     /// Build WTHRU deposit transaction
+    ///
+    /// The deposit instruction mints the vault's unaccounted native balance
+    /// delta to `dest_token_account` and does not transfer any native THRU
+    /// itself. The transfer into the vault must therefore be in the same
+    /// transaction as this instruction (e.g. batched via the multicall
+    /// program); if the two are submitted separately, the delta sits
+    /// unattributed on-chain and any caller can be credited it instead.
     pub fn build_wthru_deposit(
         fee_payer: TnPubkey,
         wthru_program: TnPubkey,

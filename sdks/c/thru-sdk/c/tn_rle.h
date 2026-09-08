@@ -19,7 +19,9 @@
 #define TN_RLE_SUCCESS                   (0)
 #define TN_RLE_ERR_RUNS_TOO_SMALL        (-1)
 #define TN_RLE_ERR_BITSET_TOO_SMALL      (-2)
-#define TN_RLE_ERR_INVALID_PARAM         (-3)
+#define TN_RLE_ERR_ENCODE_NULL_ARG       (-3)
+#define TN_RLE_ERR_DECODE_NULL_ARG       (-4)
+#define TN_RLE_ERR_DECODE_BYTES_NULL_ARG (-5)
 
 /* RLE structure for run-length encoded bitsets
    Layout: first_bit (2 bytes) + run_count (2 bytes) + runs[] (variable) */

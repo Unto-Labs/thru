@@ -15,11 +15,7 @@ export { registerPasskey } from './register';
 export { createDistinctPasskeyLabel } from './label';
 export type { DistinctPasskeyLabelOptions } from './label';
 
-export {
-  signWithPasskey,
-  signWithStoredPasskey,
-  signWithDiscoverablePasskey,
-} from './sign';
+export { signWithPasskey, signWithStoredPasskey, signWithDiscoverablePasskey } from './sign';
 
 export {
   parseDerSignature,
@@ -53,3 +49,10 @@ export {
   compareBytes,
   uniqueAccounts,
 } from '@thru/programs/passkey-manager';
+
+export type {
+  PasskeyCeremonyReporter,
+  PasskeyCeremonyInfo,
+  PasskeyCeremonyCredentialJson,
+  PasskeyReportingOptions,
+} from './reporter';

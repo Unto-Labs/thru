@@ -1,12 +1,18 @@
-import type { PasskeySigningResult, PasskeyMetadata } from '@thru/programs/passkey-manager';
-
-// Re-export platform-agnostic types for backward compatibility
-export type {
-  PasskeyRegistrationResult,
-  PasskeySigningResult,
-  PasskeyDiscoverableSigningResult,
+import type {
+  PasskeyRegistrationResult as ProgramRegistrationResult,
+  PasskeySigningResult as ProgramSigningResult,
+  PasskeyDiscoverableSigningResult as ProgramDiscoverableSigningResult,
   PasskeyMetadata,
 } from '@thru/programs/passkey-manager';
+import type { PasskeyCeremonyResult, PasskeyReportingOptions } from './reporter';
+
+export type PasskeyRegistrationResult = ProgramRegistrationResult & PasskeyCeremonyResult;
+export type PasskeySigningResult = ProgramSigningResult & PasskeyCeremonyResult;
+export type PasskeyDiscoverableSigningResult = ProgramDiscoverableSigningResult &
+  PasskeyCeremonyResult;
+
+// Re-export platform-agnostic types for backward compatibility
+export type { PasskeyMetadata } from '@thru/programs/passkey-manager';
 
 /**
  * Signing result with stored passkey metadata attached.
@@ -48,7 +54,7 @@ export interface PasskeyPopupContext {
 /**
  * Options for stored passkey signing in embedded contexts.
  */
-export interface PasskeyStoredSigningOptions {
+export interface PasskeyStoredSigningOptions extends PasskeyReportingOptions {
   allowPopupFallback?: boolean;
   allowDiscoverableFallback?: boolean;
   /** Prefer an RP-scoped discoverable credential prompt over a stored
@@ -61,7 +67,7 @@ export interface PasskeyStoredSigningOptions {
 /**
  * Options for passkey registration in embedded contexts.
  */
-export interface PasskeyRegistrationOptions {
+export interface PasskeyRegistrationOptions extends PasskeyReportingOptions {
   allowPopupFallback?: boolean;
 }
 
@@ -110,7 +116,7 @@ export interface PasskeyPopupRequest {
   payload: PasskeyPopupRequestPayload;
 }
 
-export interface PasskeyPopupSigningResult {
+export interface PasskeyPopupSigningResult extends PasskeyCeremonyResult {
   signatureBase64Url: string;
   authenticatorDataBase64Url: string;
   clientDataJSONBase64Url: string;
@@ -138,7 +144,7 @@ export interface PasskeyPopupStoredSigningResult extends PasskeyPopupSigningResu
   accounts?: PasskeyPopupAccount[];
 }
 
-export interface PasskeyPopupRegistrationResult {
+export interface PasskeyPopupRegistrationResult extends PasskeyCeremonyResult {
   credentialId: string;
   publicKeyX: string;
   publicKeyY: string;
