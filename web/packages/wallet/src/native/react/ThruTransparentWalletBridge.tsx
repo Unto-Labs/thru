@@ -207,7 +207,7 @@ export function ThruTransparentWalletBridge({
   const refreshWalletAvailabilityIfReady = useCallback(() => {
     if (!wallet || didRefreshWalletAvailabilityRef.current) return;
     didRefreshWalletAvailabilityRef.current = true;
-    void wallet.refreshWalletAvailability();
+    void wallet.restoreConnection();
   }, [wallet]);
 
   useEffect(() => {

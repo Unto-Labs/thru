@@ -3,6 +3,15 @@ export { cn } from "./utils";
 export { Button } from "./components/Button/Button";
 export type { ButtonProps, ButtonVariant, ButtonSize } from "./components/Button/Button";
 
+export { ConnectButton, shortenWalletAddress } from "./components/ConnectButton/ConnectButton";
+export type {
+  ConnectButtonProps,
+  ConnectButtonState,
+  ConnectButtonSize,
+  ConnectButtonVariant,
+  ConnectAccount,
+} from "./components/ConnectButton/ConnectButton";
+
 export { Input } from "./components/Input/Input";
 export type { InputProps } from "./components/Input/Input";
 
@@ -128,8 +137,63 @@ export type { DetailsProps, DetailsItemProps } from "./components/wallet/Details
 export { Deposit } from "./components/wallet/Deposit/Deposit";
 export type { DepositProps } from "./components/wallet/Deposit/Deposit";
 export { Frame } from "./components/wallet/Frame/Frame";
-export type { FrameProps, FrameSite } from "./components/wallet/Frame/Frame";
+export type { FrameProps, FrameSite, FrameAnimate } from "./components/wallet/Frame/Frame";
 export { Screen, ScreenHeader } from "./components/wallet/Screen/Screen";
-export type { ScreenProps, ScreenHeaderProps, ScreenBottomAction } from "./components/wallet/Screen/Screen";
+export type {
+  ScreenProps,
+  ScreenHeaderProps,
+  ScreenHeaderTone,
+  ScreenBottomAction,
+} from "./components/wallet/Screen/Screen";
 export { PresetsInput } from "./components/wallet/PresetsInput/PresetsInput";
 export type { PresetsInputProps, PresetOption } from "./components/wallet/PresetsInput/PresetsInput";
+export { Steps } from "./components/wallet/Steps/Steps";
+export type { StepsProps, StepItem, StepStatus } from "./components/wallet/Steps/Steps";
+export { Checklist } from "./components/wallet/Checklist/Checklist";
+export type { ChecklistProps } from "./components/wallet/Checklist/Checklist";
+export { ThruDisc, ThruWordmark, PoweredBy } from "./components/wallet/Brand/Brand";
+export type { ThruDiscProps, ThruWordmarkProps, PoweredByProps } from "./components/wallet/Brand/Brand";
+export { Dove } from "./components/wallet/Dove/Dove";
+export type { DoveProps } from "./components/wallet/Dove/Dove";
+export {
+  AccountMenuPopup,
+  AccountAvatar,
+  DEFAULT_MANAGE_HREF,
+  DEFAULT_MANAGE_ACCOUNTS_HREF,
+} from "./components/wallet/AccountMenu/AccountMenu";
+export type { AccountMenuPopupProps } from "./components/wallet/AccountMenu/AccountMenu";
+export { TxTree, TreeSection } from "./components/wallet/TxTree/TxTree";
+export type {
+  TxTreeProps,
+  TxTreeSectionProps,
+  TxTreeRowProps,
+  TxTreeHexProps,
+  TxTreeAccountProps,
+  TxTreePreProps,
+  TxTreeBytesProps,
+} from "./components/wallet/TxTree/TxTree";
+export {
+  WalletSheet,
+  WALLET_SHEET_SLOW_MS,
+  WALLET_SHEET_ESCALATE_MS,
+} from "./components/wallet/WalletSheet/WalletSheet";
+export type {
+  WalletSheetScreen,
+  WalletSheetFlow,
+  WalletSheetDetail,
+  WalletSheetRootProps,
+  WalletSheetSignInProps,
+  WalletSheetLoadingProps,
+  WalletSheetPermissionsProps,
+  WalletSheetConnectedProps,
+  WalletSheetErrorProps,
+  WalletSheetTxApproveProps,
+  WalletSheetTxField,
+  WalletSheetTxAccount,
+  WalletSheetTxCall,
+  WalletSheetTxInstruction,
+  WalletSheetTxPendingProps,
+  WalletSheetTxDoneProps,
+} from "./components/wallet/WalletSheet/WalletSheet";
+export { WalletOverlay } from "./components/wallet/WalletOverlay/WalletOverlay";
+export type { WalletOverlayProps } from "./components/wallet/WalletOverlay/WalletOverlay";

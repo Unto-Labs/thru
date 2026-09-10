@@ -1,0 +1,51 @@
+/* Island motion — the wallet sheet opens by growing out of a pill "island"
+   (the top bar first, then the body) and closes by collapsing back into it.
+   Shared by Frame (standalone `animate`) and WalletOverlay (Base UI
+   open / ending-style hooks). Durations follow the design: 640ms in, 480ms out. */
+
+@keyframes tds-island-in {
+  0% {
+    opacity: 0;
+    clip-path: inset(0 42% calc(100% - 39px) 42% round 20px);
+  }
+  18% {
+    opacity: 1;
+    clip-path: inset(0 42% calc(100% - 39px) 42% round 20px);
+  }
+  50% {
+    clip-path: inset(0 0 calc(100% - 39px) 0 round 0);
+  }
+  100% {
+    opacity: 1;
+    clip-path: inset(0 0 0 0 round 0);
+  }
+}
+
+@keyframes tds-island-out {
+  0% {
+    opacity: 1;
+    clip-path: inset(0 0 0 0 round 0);
+  }
+  45% {
+    opacity: 1;
+    clip-path: inset(0 0 calc(100% - 39px) 0 round 0);
+  }
+  80% {
+    opacity: 1;
+    clip-path: inset(0 42% calc(100% - 39px) 42% round 20px);
+  }
+  100% {
+    opacity: 0;
+    clip-path: inset(0 42% calc(100% - 39px) 42% round 20px);
+  }
+}
+
+@keyframes tds-island-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes tds-island-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}

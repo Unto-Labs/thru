@@ -268,7 +268,12 @@ export interface StreamSlotMetricsOptions {
 
 export interface StreamSlotMetricsResult {
     slot: bigint;
-    collectedFees: bigint;
+    /** Fees credited to the absent-block-producer fee receiver this block
+     *  because the producer account was not live (UNTO-1293). Disjoint from
+     *  `claimedFees`. */
+    absentBlockProducerFees: bigint;
+    /** Fees credited to a live block-producer account this block (UNTO-1293). */
+    claimedFees: bigint;
     globalActivatedStateCounter: bigint;
     globalDeactivatedStateCounter: bigint;
     blockTimestamp?: Timestamp;
@@ -349,7 +354,8 @@ export function streamSlotMetrics(
                test can see it. */
             yield {
                 slot: response.slot,
-                collectedFees: response.collectedFees,
+                absentBlockProducerFees: response.absentBlockProducerFees,
+                claimedFees: response.claimedFees,
                 globalActivatedStateCounter: response.globalActivatedStateCounter,
                 globalDeactivatedStateCounter: response.globalDeactivatedStateCounter,
                 blockTimestamp: response.blockTimestamp,

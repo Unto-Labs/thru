@@ -3,6 +3,7 @@ import { getErrorCode } from '../internal/telemetry-fields';
 import {
   AddressType,
   normalizeWalletAccountResult,
+  resolveWalletAccountByAddress,
 } from '../interfaces';
 import type {
   AddressType as AddressTypeValue,
@@ -21,11 +22,17 @@ import {
   type DepositRequestPayload,
   type DepositResult,
   type DepositUiConfig,
+  type GetConnectionStateResult,
   type ManageAccountsResult,
+  type AccountMenuPayload,
+  type AccountMenuResult,
+  type WalletTheme,
   type PrepareDepositPayload,
   type SelectAccountPayload,
   type ThruNetwork,
+  normalizeConnectionStateResult,
 } from '../protocol';
+import { connectionResultFromState } from '../connection-state';
 import { IframeManager } from './IframeManager';
 import { EmbeddedThruChain } from './chains/ThruChain';
 import type { SigningSessionDescriptorStore } from '../signing-sessions';
@@ -33,8 +40,11 @@ import type { TelemetryClient } from '../telemetry';
 
 export interface EmbeddedProviderConfig {
   iframeUrl?: string;
+  /** The host page's color scheme; the wallet frames draw to match. */
+  theme?: WalletTheme;
   addressTypes?: AddressTypeValue[];
   signingSessions?: SigningSessionDescriptorStore;
+  broadcastTransaction?: (signedTransaction: string) => Promise<unknown>;
   network?: ThruNetwork;
   depositUiConfig?: DepositUiConfig;
   /** Shared SDK telemetry client. @internal */
@@ -44,6 +54,8 @@ export interface EmbeddedProviderConfig {
 export interface ConnectOptions {
   metadata?: ConnectMetadataInput;
   passkeyName?: string;
+  preferredAccountAddress?: string;
+  intent?: ConnectRequestPayload['intent'];
 }
 
 /**
@@ -64,7 +76,7 @@ export class EmbeddedProvider {
   constructor(config: EmbeddedProviderConfig) {
     const iframeUrl = config.iframeUrl || DEFAULT_IFRAME_URL;
     this.telemetry = config.telemetry;
-    this.iframeManager = new IframeManager(iframeUrl, this.telemetry);
+    this.iframeManager = new IframeManager(iframeUrl, this.telemetry, { theme: config.theme });
     this.defaultNetwork = config.network;
     this.depositUiConfig = config.depositUiConfig;
     this.telemetry?.record(TELEMETRY_EVENTS.PROVIDER_CONSTRUCTED, {
@@ -89,14 +101,11 @@ export class EmbeddedProvider {
         return;
       }
 
-      if (
-        eventType === EMBEDDED_PROVIDER_EVENTS.DISCONNECT ||
-        eventType === EMBEDDED_PROVIDER_EVENTS.LOCK
-      ) {
+      if (eventType === EMBEDDED_PROVIDER_EVENTS.DISCONNECT) {
         this.telemetry?.record(TELEMETRY_EVENTS.PROVIDER_CONNECTION_CLEARED, {
           source: 'sdk',
           operation: eventType,
-          outcome: eventType === EMBEDDED_PROVIDER_EVENTS.LOCK ? 'locked' : 'disconnected',
+          outcome: 'disconnected',
         });
         this.clearConnection();
         return;
@@ -122,6 +131,7 @@ export class EmbeddedProvider {
         this.iframeManager,
         this,
         config.signingSessions,
+        config.broadcastTransaction,
       );
     }
   }
@@ -152,6 +162,10 @@ export class EmbeddedProvider {
     await this.iframeManager.createIframe();
   }
 
+  getWalletOrigin(): string {
+    return this.iframeManager.getWalletOrigin();
+  }
+
   /**
    * Mount the wallet iframe inline in a container (for inline connect button).
    */
@@ -179,6 +193,12 @@ export class EmbeddedProvider {
 
       if (options?.metadata) {
         payload.metadata = options.metadata;
+      }
+      if (options?.preferredAccountAddress) {
+        payload.preferredAccountAddress = options.preferredAccountAddress;
+      }
+      if (options?.intent) {
+        payload.intent = options.intent;
       }
 
       if (options?.passkeyName) {
@@ -213,8 +233,10 @@ export class EmbeddedProvider {
 
       return result;
     } catch (error) {
+      /* A cancelled sign-in settles only once the wallet sheet has animated
+         away, so the host's "Signing in…" state lasts through the exit. */
       if (!this.inlineMode) {
-        this.iframeManager.hide();
+        await this.iframeManager.hide();
       }
       this.emit(EMBEDDED_PROVIDER_EVENTS.CONNECT_ERROR, { error });
       this.telemetry?.record(TELEMETRY_EVENTS.PROVIDER_CONNECT_FAILED, {
@@ -227,6 +249,31 @@ export class EmbeddedProvider {
       });
       throw error;
     }
+  }
+
+  async getConnectionState(
+    options?: ConnectOptions,
+  ): Promise<GetConnectionStateResult> {
+    const payload: ConnectRequestPayload = {};
+    if (options?.metadata) payload.metadata = options.metadata;
+    if (options?.preferredAccountAddress) {
+      payload.preferredAccountAddress = options.preferredAccountAddress;
+    }
+
+    const response = await this.iframeManager.sendMessage({
+      id: createRequestId(),
+      type: POST_MESSAGE_REQUEST_TYPES.GET_CONNECTION_STATE,
+      payload,
+      origin: window.location.origin,
+    });
+    const state = normalizeConnectionStateResult(response.result);
+    const result = connectionResultFromState(state);
+    if (result) {
+      this.hydrateConnection(result, state.selectedAccount?.address ?? null);
+    } else {
+      this.clearConnection();
+    }
+    return state;
   }
 
   /**
@@ -284,6 +331,20 @@ export class EmbeddedProvider {
     return this.selectedAccount;
   }
 
+  hydrateConnection(
+    result: ConnectResult,
+    selectedAccountAddress?: string | null,
+  ): void {
+    const selectedAccount =
+      resolveWalletAccountByAddress(result.accounts, selectedAccountAddress) ??
+      result.selectedAccount ??
+      null;
+    const normalized = normalizeWalletAccountResult(result, selectedAccount);
+    this.connected = true;
+    this.accounts = normalized.accounts;
+    this.selectedAccount = normalized.selectedAccount;
+  }
+
   async selectAccount(publicKey: string): Promise<WalletAccount> {
     if (!this.connected) {
       throw new Error("Wallet not connected");
@@ -335,12 +396,9 @@ export class EmbeddedProvider {
         origin: window.location.origin,
       });
 
-      const result = normalizeWalletAccountResult({
-        accounts: response.result.accounts,
-        selectedAccount: response.result.selectedAccount,
-      });
-      this.accounts = result.accounts;
+      const result = response.result;
       this.selectedAccount = result.selectedAccount;
+      this.accounts = this.selectedAccount ? [this.selectedAccount] : [];
       if (this.selectedAccount) {
         this.emit(EMBEDDED_PROVIDER_EVENTS.ACCOUNT_CHANGED, {
           account: this.selectedAccount,
@@ -350,6 +408,55 @@ export class EmbeddedProvider {
     } finally {
       if (!this.inlineMode) {
         this.iframeManager.hide();
+      }
+    }
+  }
+
+  getTheme(): WalletTheme {
+    return this.iframeManager.getTheme();
+  }
+
+  /**
+   * Open the wallet's account menu inside its frame, anchored under the host's
+   * account chip. Resolves when the menu closes; a switch or an account
+   * manager run comes back with the resulting accounts.
+   */
+  async openAccountMenu(payload: AccountMenuPayload): Promise<AccountMenuResult> {
+    if (!this.connected) {
+      throw new Error("Wallet not connected");
+    }
+
+    if (this.inlineMode) {
+      this.iframeManager.showInline();
+    } else {
+      this.iframeManager.showModal();
+    }
+
+    try {
+      const response = await this.iframeManager.sendMessage({
+        id: createRequestId(),
+        type: POST_MESSAGE_REQUEST_TYPES.ACCOUNT_MENU,
+        payload,
+        origin: window.location.origin,
+      });
+      const result = response.result;
+      if (result.accounts) {
+        const normalized = normalizeWalletAccountResult({
+          accounts: result.accounts,
+          selectedAccount: result.selectedAccount ?? null,
+        });
+        this.accounts = normalized.accounts;
+        this.selectedAccount = normalized.selectedAccount;
+        if (this.selectedAccount) {
+          this.emit(EMBEDDED_PROVIDER_EVENTS.ACCOUNT_CHANGED, {
+            account: this.selectedAccount,
+          });
+        }
+      }
+      return result;
+    } finally {
+      if (!this.inlineMode) {
+        await this.iframeManager.hide();
       }
     }
   }
@@ -481,11 +588,10 @@ export class EmbeddedProvider {
     this.selectedAccount = account;
   }
 
-  private clearConnection(): void {
+  clearConnection(): void {
     this.connected = false;
     this.accounts = [];
     this.selectedAccount = null;
   }
 }
-
 

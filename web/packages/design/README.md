@@ -77,3 +77,21 @@ Verified against [base-ui.com](https://base-ui.com) — these are the patterns w
 - **One folder per component** (`<Name>/<Name>.tsx` + `<Name>.css`), co-located CSS imported by the `.tsx`, exported from `web/src/index.ts`. `tsc --noEmit` after each.
 
 CSS is ported from thru-design's `app.css` class families, retargeted to the canonical tokens.
+
+## Wallet surfaces (`web/src/components/wallet/`, `ConnectButton/`)
+
+The web wallet iframe design, as composable parts (see the gallery's
+"Wallet surfaces" section):
+
+- `WalletOverlay` — light scrim + top-center island popup (Base UI `Dialog`,
+  non-modal; 640 ms in / 480 ms out).
+- `WalletSheet` — `Root` (the `Frame` chrome: site mark, label, verified
+  badge, close) plus one part per screen: `SignIn`, `Loading`, `Permissions`,
+  `Connected`, `Error`, `TxApprove`, `TxPending`, `TxDone`, `PoweredBy`.
+- `Frame`, `Screen` (+ `Header`, `Box`, `Actions`), `Steps`, `Checklist`,
+  `Details`, `TxTree` (nested collapsible review tree: `Section`, `Rows`,
+  `Row`, `Hex`, `Account`, `Pre`, `Bytes`).
+- `ConnectButton` — the dapp-side drop-in: idle / loading / connected chip
+  with the account menu (manage, switch, add, explorer, sign out).
+- `Dove` — the animated mark that replaces a spinner after a 2 s wait;
+  `ThruDisc`, `ThruWordmark`, `PoweredBy` brand marks.

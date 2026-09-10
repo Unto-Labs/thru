@@ -1,0 +1,96 @@
+/* WalletOverlay — light scrim + top-center island popup. Enter / exit ride on
+   Base UI's [data-open] / [data-ending-style] hooks with keyframes (which
+   always fire animationend, so the unmount never stalls). The z-index sits
+   well under the hosted wallet iframe (999999) on purpose. */
+
+.tds-woverlay__scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  background: rgba(21, 30, 30, 0.18);
+  animation: tds-island-fade-in var(--duration-med) var(--ease-standard) both;
+}
+.tds-woverlay__scrim[data-ending-style] {
+  animation: tds-island-fade-out 440ms var(--ease-standard) both;
+  pointer-events: none;
+}
+.tds-woverlay__scrim--contained {
+  position: absolute;
+}
+
+/* Centered by layout (auto margins on a fit-content box) rather than a
+   translate, so the sheet sits on whole pixels and stays crisp while the
+   clip-path animates. */
+.tds-woverlay {
+  position: fixed;
+  top: 12px;
+  left: 0;
+  right: 0;
+  width: fit-content;
+  margin: 0 auto;
+  z-index: 61;
+  outline: none;
+  max-width: calc(100% - 24px);
+  animation: tds-island-in 640ms var(--ease-standard) both;
+}
+.tds-woverlay[data-ending-style] {
+  animation: tds-island-out 480ms var(--ease-standard) both;
+  pointer-events: none;
+}
+.tds-woverlay--contained {
+  position: absolute;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tds-woverlay,
+  .tds-woverlay[data-ending-style],
+  .tds-woverlay__scrim,
+  .tds-woverlay__scrim[data-ending-style] {
+    animation-duration: 0.01ms;
+  }
+}
+
+/* ── Mobile: bottom sheet ───────────────────────────────────────────────────
+   Below 640px the island stops being a popup and becomes a sheet anchored to
+   the bottom edge, full width. Values are from the "Wallet Bottom Sheet"
+   design; the scrim darkens to rgba(24,27,27,0.64) because the sheet covers
+   the host rather than floating over it. */
+
+@keyframes tds-wsheet-slide-in {
+  from {
+    transform: translateY(100%);
+  }
+  to {
+    transform: translateY(0);
+  }
+}
+
+@keyframes tds-wsheet-slide-out {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(100%);
+  }
+}
+
+@media (max-width: 640px) {
+  .tds-woverlay__scrim {
+    background: rgba(24, 27, 27, 0.64);
+  }
+
+  .tds-woverlay {
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    max-width: 100%;
+    margin: 0;
+    animation: tds-wsheet-slide-in 360ms var(--ease-standard) both;
+  }
+
+  .tds-woverlay[data-ending-style] {
+    animation: tds-wsheet-slide-out 360ms var(--ease-standard) both;
+  }
+}

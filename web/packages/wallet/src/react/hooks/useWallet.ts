@@ -29,6 +29,7 @@ export function useWallet() {
     selectedAccount,
     selectAccount,
     manageAccounts,
+    openAccountMenu,
     prepareDeposit,
     deposit,
     ensureDepositAccount,
@@ -37,6 +38,7 @@ export function useWallet() {
     formatDepositAmount,
     deposits,
     isConnecting,
+    walletAvailability,
   } = useThru();
   const walletRef = useRef(wallet);
 
@@ -73,13 +75,23 @@ export function useWallet() {
     return manageAccounts();
   };
 
+  const refreshWalletAvailability = async (options?: ConnectOptions) => {
+    const readySdk =
+      walletRef.current ?? (await waitForWallet(() => walletRef.current));
+    return readySdk.refreshWalletAvailability(options);
+  };
+
   return {
     wallet: wallet?.thru as IThruChain | undefined,
+    connection: wallet?.connection,
+    accountApi: wallet?.accounts,
+    sessions: wallet?.sessions,
     accounts,
     connect,
     disconnect,
     mountInline,
     manageAccounts: openAccountSettings,
+    openAccountMenu,
     prepareDeposit,
     deposit,
     ensureDepositAccount,
@@ -88,8 +100,14 @@ export function useWallet() {
     formatDepositAmount,
     deposits,
     isConnected: isConnected && !!wallet,
-    isConnecting,
+    isConnecting: isConnecting || walletAvailability.status === 'checking',
     selectedAccount,
     selectAccount,
+    walletAvailability,
+    hasPasskey: walletAvailability.hasPasskey,
+    hasWalletAccount: walletAvailability.hasWalletAccount,
+    isAuthorized: walletAvailability.isConnected,
+    isWalletAvailabilityLoading: walletAvailability.status === 'checking',
+    refreshWalletAvailability,
   };
 }

@@ -3,12 +3,17 @@ import type {
   ThruSigningSessionDescriptor,
   ThruSigningSessionTimestamp,
 } from "./interfaces";
+import {
+  getDefaultBrowserWalletSDKStorage,
+  resolveWalletSDKStorageKey,
+  withWalletSDKStorageErrors,
+  WalletSDKStorageError,
+  type WalletSDKStorage,
+} from "./storage";
+import type { TelemetryClient } from "./telemetry";
 
-export interface SigningSessionStorage {
-  getItem: (key: string) => string | null | Promise<string | null>;
-  setItem: (key: string, value: string) => void | Promise<void>;
-  removeItem: (key: string) => void | Promise<void>;
-}
+/** @deprecated Use WalletSDKStorage. */
+export type SigningSessionStorage = WalletSDKStorage;
 
 interface SigningSessionStorePayload {
   version: 1;
@@ -16,13 +21,6 @@ interface SigningSessionStorePayload {
 }
 
 const STORAGE_VERSION = 1;
-const KEY_PREFIX = "thru.wallet.signing-sessions.v1";
-
-function encodeKeyPart(input: string): string {
-  return encodeURIComponent(input).replace(/[!'()*]/g, (char) =>
-    `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
-  );
-}
 
 function nowSeconds(): number {
   return Math.floor(Date.now() / 1000);
@@ -33,17 +31,19 @@ export function resolveSigningSessionStorageKey(params: {
   appOrigin: string;
   storageKey?: string;
 }): string {
-  if (params.storageKey) return params.storageKey;
-  return `${KEY_PREFIX}:${encodeKeyPart(params.walletOrigin)}:${encodeKeyPart(params.appOrigin)}`;
+  return resolveWalletSDKStorageKey({ ...params, kind: "signing-sessions" });
+}
+
+/** Only this explicit wallet response permits one passkey retry. */
+export function isSigningSessionUnavailable(error: unknown): boolean {
+  return (
+    !!error && typeof error === "object" &&
+    (error as { code?: unknown }).code === "SIGNING_SESSION_UNAVAILABLE"
+  );
 }
 
 export function getDefaultBrowserSigningSessionStorage(): SigningSessionStorage | null {
-  if (typeof window === "undefined") return null;
-  try {
-    return window.localStorage ?? null;
-  } catch {
-    return null;
-  }
+  return getDefaultBrowserWalletSDKStorage();
 }
 
 export function normalizeExpiresAt(
@@ -128,8 +128,12 @@ export class SigningSessionDescriptorStore {
   private readonly storage: SigningSessionStorage;
   private readonly key: string;
 
-  constructor(storage: SigningSessionStorage, key: string) {
-    this.storage = storage;
+  constructor(
+    storage: SigningSessionStorage,
+    key: string,
+    telemetry?: Pick<TelemetryClient, "record">,
+  ) {
+    this.storage = withWalletSDKStorageErrors(storage, "signing-sessions", telemetry);
     this.key = key;
   }
 
@@ -145,6 +149,19 @@ export class SigningSessionDescriptorStore {
   async get(id: string): Promise<ThruSigningSessionDescriptor | null> {
     const sessions = await this.list();
     return sessions.find((session) => session.id === id) ?? null;
+  }
+
+  async getActive(
+    walletAddress?: string,
+  ): Promise<ThruSigningSessionDescriptor | null> {
+    const sessions = await this.list();
+    return (
+      sessions
+        .filter(
+          (session) => !walletAddress || session.walletAddress === walletAddress,
+        )
+        .sort((a, b) => b.expiresAt - a.expiresAt)[0] ?? null
+    );
   }
 
   async save(descriptor: ThruSigningSessionDescriptor): Promise<void> {
@@ -177,6 +194,10 @@ export class SigningSessionDescriptorStore {
     await this.write(sessions);
   }
 
+  async clear(): Promise<void> {
+    await this.storage.removeItem(this.key);
+  }
+
   private async read(): Promise<ThruSigningSessionDescriptor[]> {
     const raw = await this.storage.getItem(this.key);
     if (!raw) return [];
@@ -188,7 +209,8 @@ export class SigningSessionDescriptorStore {
         return [];
       }
       return parsed.sessions.map(normalizeDescriptor);
-    } catch {
+    } catch (error) {
+      if (error instanceof WalletSDKStorageError) throw error;
       await this.storage.removeItem(this.key);
       return [];
     }

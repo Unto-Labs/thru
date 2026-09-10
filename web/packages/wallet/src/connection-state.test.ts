@@ -1,0 +1,172 @@
+import { describe, expect, it } from "vitest";
+import {
+  ConnectionHintStore,
+  connectionResultFromState,
+  disconnectedWalletAvailability,
+  walletAvailabilityFromConnectionState,
+  resolveConnectionHintStorageKey,
+} from "./connection-state";
+
+const ACCOUNT_A = {
+  accountType: "thru" as const,
+  address: "account-a",
+  label: "Account A",
+};
+
+const ACCOUNT_B = {
+  accountType: "thru" as const,
+  address: "account-b",
+  label: "Account B",
+};
+
+class MockStorage {
+  readonly values = new Map<string, string>();
+
+  getItem(key: string): string | null {
+    return this.values.get(key) ?? null;
+  }
+
+  setItem(key: string, value: string): void {
+    this.values.set(key, value);
+  }
+
+  removeItem(key: string): void {
+    this.values.delete(key);
+  }
+}
+
+describe("shared wallet connection state", () => {
+  it("restores a selected account without exposing legacy lock state", () => {
+    const state = {
+      isAuthorized: true,
+      isConnected: true,
+      isUnlocked: false,
+      hasPasskey: false,
+      hasWalletAccount: true,
+      accounts: [ACCOUNT_A, ACCOUNT_B],
+      selectedAccount: ACCOUNT_B,
+      metadata: {
+        appId: "clob-demo",
+        appName: "CLOB Demo",
+        appUrl: "https://clob.example",
+      },
+    };
+
+    expect(walletAvailabilityFromConnectionState(state)).toMatchObject({
+      status: "connected",
+      selectedAccount: ACCOUNT_B,
+    });
+    expect(connectionResultFromState(state)).toMatchObject({
+      accounts: [ACCOUNT_B],
+      selectedAccount: ACCOUNT_B,
+    });
+  });
+
+  it("trusts a selected account without checking authorization flags", () => {
+    const availability = walletAvailabilityFromConnectionState({
+      isAuthorized: false,
+      isConnected: false,
+      isUnlocked: false,
+      hasPasskey: true,
+      hasWalletAccount: true,
+      accounts: [ACCOUNT_A],
+      selectedAccount: ACCOUNT_A,
+      metadata: null,
+    });
+
+    expect(availability).toMatchObject({
+      status: "connected",
+      isConnected: true,
+      accounts: [ACCOUNT_A],
+      selectedAccount: ACCOUNT_A,
+    });
+  });
+
+  it("clears the selected account on disconnect", () => {
+    const connected = walletAvailabilityFromConnectionState({
+      isAuthorized: true,
+      isConnected: true,
+      isUnlocked: true,
+      hasPasskey: true,
+      hasWalletAccount: true,
+      accounts: [ACCOUNT_B],
+      selectedAccount: ACCOUNT_B,
+      metadata: {
+        appId: "clob-demo",
+        appName: "CLOB Demo",
+        appUrl: "https://clob.example",
+      },
+    });
+
+    expect(disconnectedWalletAvailability(connected)).toMatchObject({
+      status: "disconnected",
+      selectedAccount: null,
+    });
+  });
+});
+
+describe("ConnectionHintStore", () => {
+  it("namespaces default keys by wallet and app origin", () => {
+    const first = resolveConnectionHintStorageKey({
+      walletOrigin: "https://wallet.example",
+      appOrigin: "https://clob-a.example",
+    });
+    const second = resolveConnectionHintStorageKey({
+      walletOrigin: "https://wallet.example",
+      appOrigin: "https://clob-b.example",
+    });
+    expect(first).not.toBe(second);
+  });
+
+  it("reads the previous mobile hint format", async () => {
+    const storage = new MockStorage();
+    storage.setItem(
+      "hint",
+      JSON.stringify({
+        version: 1,
+        origin: "thru-mobile://clob",
+        walletOrigin: "https://app.tid.sh",
+        selectedAccountAddress: ACCOUNT_B.address,
+        savedAt: "2026-08-27T00:00:00.000Z",
+      }),
+    );
+    const store = new ConnectionHintStore(storage, "hint");
+
+    await expect(store.read()).resolves.toMatchObject({
+      version: 1,
+      selectedAccountAddress: ACCOUNT_B.address,
+    });
+  });
+
+  it("trusts a valid hint without checking per-app metadata", async () => {
+    const storage = new MockStorage();
+    storage.setItem(
+      "hint",
+      JSON.stringify({
+        version: 1,
+        appId: "clob-demo",
+        appOrigin: "https://other.example",
+        walletOrigin: "https://app.tid.sh",
+        selectedAccountAddress: ACCOUNT_B.address,
+        autoRestore: true,
+        savedAt: "2026-08-27T00:00:00.000Z",
+      }),
+    );
+    const store = new ConnectionHintStore(storage, "hint");
+
+    await expect(store.read()).resolves.toMatchObject({
+      selectedAccountAddress: ACCOUNT_B.address,
+    });
+    expect(storage.values.has("hint")).toBe(true);
+  });
+
+  it("deletes the selected-account hint", async () => {
+    const storage = new MockStorage();
+    const store = new ConnectionHintStore(storage, "hint");
+    await store.write({ selectedAccountAddress: ACCOUNT_B.address });
+
+    await store.clear();
+
+    expect(storage.values.size).toBe(0);
+  });
+});

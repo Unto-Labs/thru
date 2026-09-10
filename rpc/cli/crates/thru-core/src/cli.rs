@@ -91,7 +91,7 @@ pub enum Commands {
         account: Option<String>,
     },
 
-    /// Get slot metrics (state counters, collected fees)
+    /// Get slot metrics (state counters, distributed fees)
     #[command(name = "getslotmetrics")]
     GetSlotMetrics {
         /// Start slot number (required)

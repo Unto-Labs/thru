@@ -20,7 +20,7 @@ const WALLET_URL = "https://app.tid.sh/embedded/native";
 const APP_ORIGIN = "thru-mobile://app";
 const DESTINATION: DepositDestination = {
   network: ThruNetwork.Alphanet,
-  depositTarget: DepositTarget.Credits,
+  depositTarget: DepositTarget.THRUSD,
   tokenAccountAddress: "ta_token_account",
   mintAddress: "ta_mint",
   tokenProgramAddress: "ta_token_program",
@@ -59,12 +59,12 @@ describe("native deposit protocol round-trip", () => {
       network: ThruNetwork.Alphanet,
       depositUiConfig: DEPOSIT_UI_CONFIG,
     });
-    const result = await provider.prepareDeposit(DepositTarget.Credits);
+    const result = await provider.prepareDeposit(DepositTarget.THRUSD);
 
     expect(captured).not.toBeNull();
     expect(captured!.type).toBe(POST_MESSAGE_REQUEST_TYPES.PREPARE_DEPOSIT);
     expect(captured!.payload).toEqual({
-      depositTarget: DepositTarget.Credits,
+      depositTarget: DepositTarget.THRUSD,
       network: ThruNetwork.Alphanet,
     });
     expect(result).toEqual(DESTINATION);

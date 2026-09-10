@@ -16,7 +16,7 @@ const WALLET_URL = 'https://app.tid.sh/embedded';
 const APP_ORIGIN = 'https://jcoin.example';
 const DESTINATION: DepositDestination = {
   network: ThruNetwork.Alphanet,
-  depositTarget: DepositTarget.Credits,
+  depositTarget: DepositTarget.THRUSD,
   tokenAccountAddress: 'ta_token_account',
   mintAddress: 'ta_mint',
   tokenProgramAddress: 'ta_token_program',
@@ -63,12 +63,12 @@ describe('deposit protocol round-trip', () => {
       network: ThruNetwork.Alphanet,
       depositUiConfig: DEPOSIT_UI_CONFIG,
     });
-    const result = await provider.prepareDeposit(DepositTarget.Credits);
+    const result = await provider.prepareDeposit(DepositTarget.THRUSD);
 
     expect(captured).not.toBeNull();
     expect(captured!.type).toBe(POST_MESSAGE_REQUEST_TYPES.PREPARE_DEPOSIT);
     expect(captured!.payload).toEqual({
-      depositTarget: DepositTarget.Credits,
+      depositTarget: DepositTarget.THRUSD,
       network: ThruNetwork.Alphanet,
     });
     expect(result).toEqual(DESTINATION);
@@ -96,7 +96,7 @@ describe('deposit protocol round-trip', () => {
       .mockImplementation(() => {});
     const hide = vi
       .spyOn(IframeManager.prototype, 'hide')
-      .mockImplementation(() => {});
+      .mockImplementation(async () => {});
 
     const provider = new EmbeddedProvider({
       iframeUrl: WALLET_URL,
@@ -147,7 +147,7 @@ describe('deposit protocol round-trip', () => {
       }
     );
     vi.spyOn(IframeManager.prototype, 'showModal').mockImplementation(() => {});
-    vi.spyOn(IframeManager.prototype, 'hide').mockImplementation(() => {});
+    vi.spyOn(IframeManager.prototype, 'hide').mockImplementation(async () => {});
 
     const provider = new EmbeddedProvider({
       iframeUrl: WALLET_URL,
@@ -191,7 +191,7 @@ describe('deposit protocol round-trip', () => {
     vi.spyOn(IframeManager.prototype, 'showModal').mockImplementation(() => {});
     const hide = vi
       .spyOn(IframeManager.prototype, 'hide')
-      .mockImplementation(() => {});
+      .mockImplementation(async () => {});
 
     const provider = new EmbeddedProvider({ iframeUrl: WALLET_URL });
     const result = await provider.deposit({
@@ -210,7 +210,7 @@ describe('deposit protocol round-trip', () => {
     vi.spyOn(IframeManager.prototype, 'showModal').mockImplementation(() => {});
     const hide = vi
       .spyOn(IframeManager.prototype, 'hide')
-      .mockImplementation(() => {});
+      .mockImplementation(async () => {});
 
     const provider = new EmbeddedProvider({ iframeUrl: WALLET_URL });
     await expect(

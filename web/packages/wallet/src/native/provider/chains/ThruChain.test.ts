@@ -78,4 +78,54 @@ describe("NativeThruChain signing-session fallback", () => {
       }),
     );
   });
+
+  it("uses the selected account session without UI and opens UI only for stale-key fallback", async () => {
+    const signingSessions = new SigningSessionDescriptorStore(
+      new MemoryStorage(),
+      "sessions",
+    );
+    await signingSessions.save({
+      id: "session-active",
+      walletAddress: "wallet-a",
+      publicKey: "session-public-key",
+      authIdx: 2,
+      expiresAt: Math.floor(Date.now() / 1000) + 600,
+      createdAt: Math.floor(Date.now() / 1000),
+    });
+    const requestShow = vi.fn(async () => {});
+    const requestHide = vi.fn();
+    const sendMessage = vi
+      .fn()
+      .mockRejectedValueOnce(Object.assign(new Error("Signing session key missing"), {
+        code: "SIGNING_SESSION_UNAVAILABLE",
+      }))
+      .mockResolvedValueOnce({ result: { signedTransaction: "passkey-signed" } });
+    const chain = new NativeThruChain(
+      { sendMessage } as never,
+      {
+        isConnected: () => true,
+        isTransparent: () => false,
+        getSelectedAccount: () => ({ address: "wallet-a" }),
+        requestShow,
+        requestHide,
+      } as never,
+      "thru-mobile://app",
+      signingSessions,
+    );
+
+    await expect(chain.signTransaction({
+      programAddress: "program",
+      instructionData: "AQID",
+    })).resolves.toBe("passkey-signed");
+
+    expect(sendMessage).toHaveBeenNthCalledWith(1, expect.objectContaining({
+      payload: expect.objectContaining({ signingSessionId: "session-active" }),
+    }));
+    expect(sendMessage).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      payload: expect.not.objectContaining({ signingSessionId: expect.anything() }),
+    }));
+    expect(requestShow).toHaveBeenCalledWith("sign-transaction-session-fallback");
+    expect(requestHide).toHaveBeenCalledWith("sign-transaction-settled");
+    await expect(chain.getSigningSession("session-active")).resolves.toBeNull();
+  });
 });

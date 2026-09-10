@@ -16,8 +16,11 @@ export interface DetailsProps {
   children: React.ReactNode;
   /** Trigger label. */
   label?: React.ReactNode;
+  /** Trigger label while the panel is open; defaults to `label`. */
+  openLabel?: React.ReactNode;
   /** When set, render a loading message instead of children. */
   loading?: boolean | React.ReactNode;
+  defaultOpen?: boolean;
   className?: string;
 }
 
@@ -40,11 +43,19 @@ function DetailsItem({ label, value }: DetailsItemProps) {
  * Collapsible for the open/close behavior. Use `Details.Item` for rows.
  * Presentational; data comes in via children/props.
  */
-function DetailsRoot({ children, label = "Show more details", loading, className }: DetailsProps) {
+function DetailsRoot({
+  children,
+  label = "Show more details",
+  openLabel,
+  loading,
+  defaultOpen = false,
+  className,
+}: DetailsProps) {
+  const [open, setOpen] = React.useState(defaultOpen);
   return (
-    <Collapsible.Root className={cn("tds-details", className)}>
+    <Collapsible.Root className={cn("tds-details", className)} open={open} onOpenChange={setOpen}>
       <Collapsible.Trigger className="tds-details__trigger">
-        <Info width={14} height={14} /> {label}
+        <Info width={14} height={14} /> {open ? (openLabel ?? label) : label}
       </Collapsible.Trigger>
       <Collapsible.Panel className="tds-details__panel">
         <div className="tds-details__body">

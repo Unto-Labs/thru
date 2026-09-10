@@ -537,6 +537,13 @@ pub enum SyscallCode {
     ComputeUnitsExceeded = -40,
     InvalidFlags = -41,
     EphemeralAccountCannotCreatePersistent = -42,
+    AccountCompressionNotAllowed = -43,
+    InvalidSignature = -44,
+    AccountUncompressable = -45,
+    EventIsZeroSize = -46,
+    StateBytesAddedOverflow = -47,
+    StateBytesRemovedOverflow = -48,
+    ProgramInCallStack = -49,
 
     // Fallback
     UnknownCode = i64::MIN,
@@ -583,6 +590,13 @@ impl SyscallCode {
             -40 => Self::ComputeUnitsExceeded,
             -41 => Self::InvalidFlags,
             -42 => Self::EphemeralAccountCannotCreatePersistent,
+            -43 => Self::AccountCompressionNotAllowed,
+            -44 => Self::InvalidSignature,
+            -45 => Self::AccountUncompressable,
+            -46 => Self::EventIsZeroSize,
+            -47 => Self::StateBytesAddedOverflow,
+            -48 => Self::StateBytesRemovedOverflow,
+            -49 => Self::ProgramInCallStack,
             _ => Self::UnknownCode,
         }
     }

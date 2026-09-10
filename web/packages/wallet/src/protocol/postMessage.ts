@@ -18,6 +18,7 @@ export const POST_MESSAGE_REQUEST_TYPES = {
   GET_SIGNING_CONTEXT: "getSigningContext",
   SELECT_ACCOUNT: "selectAccount",
   MANAGE_ACCOUNTS: "manageAccounts",
+  ACCOUNT_MENU: "accountMenu",
   CREATE_SIGNING_SESSION: "createSigningSession",
   CREATE_SIGNING_SESSION_INSTRUCTION: "createSigningSessionInstruction",
   CONFIRM_SIGNING_SESSION: "confirmSigningSession",
@@ -35,10 +36,19 @@ export const EMBEDDED_PROVIDER_EVENTS = {
   DISCONNECT: "disconnect",
   CONNECT_ERROR: "connect_error",
   ERROR: "error",
-  LOCK: "lock",
   UI_SHOW: "ui_show",
+  /**
+   * The wallet's UI is going away. `exitMs` is how long its exit animation
+   * runs; the host stops routing pointer events at once and hides the frame
+   * once the animation has played.
+   */
+  UI_HIDE: "ui_hide",
   ACCOUNT_CHANGED: "account_changed",
 } as const;
+
+export interface UiHideEventPayload {
+  exitMs?: number;
+}
 
 export type EmbeddedProviderEvent =
   (typeof EMBEDDED_PROVIDER_EVENTS)[keyof typeof EMBEDDED_PROVIDER_EVENTS];
@@ -46,6 +56,23 @@ export type EmbeddedProviderEvent =
 export const POST_MESSAGE_EVENT_TYPE = "event" as const;
 
 export const IFRAME_READY_EVENT = "iframe:ready" as const;
+
+/**
+ * What the wallet can do beyond the base protocol, declared in the ready
+ * handshake so an older wallet keeps the older host behaviour.
+ */
+export interface IframeReadyCapabilities {
+  /**
+   * The wallet announces `ui_hide` when its UI closes, so the host may leave
+   * the frame visible after a response until the exit animation has played.
+   */
+  managedHide?: boolean;
+}
+
+export interface IframeReadyData {
+  ready: true;
+  capabilities?: IframeReadyCapabilities;
+}
 
 /**
  * Host -> wallet control message carrying the current host-app telemetry
@@ -133,6 +160,41 @@ export interface ManageAccountsRequestMessage extends BaseRequest {
   payload?: undefined;
 }
 
+/** Viewport rect of the host control the account menu anchors to. */
+/** The host page's color scheme; the wallet frames draw to match. */
+export type WalletTheme = "light" | "dark";
+
+export interface AccountMenuAnchor {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/**
+ * Ask the wallet to draw its account menu inside its (full-viewport) frame,
+ * anchored under the host's account chip. The wallet owns switching, adding
+ * accounts, and signing out; the host only supplies display hints.
+ */
+export interface AccountMenuPayload {
+  anchor: AccountMenuAnchor;
+  /** Which edge of the anchor the menu aligns to (default right). */
+  align?: "left" | "right";
+  /** Network label shown in the menu header, e.g. "alphanet". */
+  network?: string;
+  /** Explorer page of the current account. */
+  explorerUrl?: string;
+  /** Formatted balances by address, as the host displays them. */
+  balances?: Record<string, string>;
+  /** Draw the menu for a light or dark host page (default: the frame's theme). */
+  theme?: WalletTheme;
+}
+
+export interface AccountMenuRequestMessage extends BaseRequest {
+  type: typeof POST_MESSAGE_REQUEST_TYPES.ACCOUNT_MENU;
+  payload: AccountMenuPayload;
+}
+
 export interface CreateSigningSessionRequestMessage extends BaseRequest {
   type: typeof POST_MESSAGE_REQUEST_TYPES.CREATE_SIGNING_SESSION;
   payload: CreateSigningSessionPayload;
@@ -175,6 +237,7 @@ export type PostMessageRequest =
   | GetSigningContextRequestMessage
   | SelectAccountRequestMessage
   | ManageAccountsRequestMessage
+  | AccountMenuRequestMessage
   | CreateSigningSessionRequestMessage
   | CreateSigningSessionInstructionRequestMessage
   | ConfirmSigningSessionRequestMessage
@@ -214,7 +277,8 @@ export interface GetAccountsResult {
 export interface GetConnectionStateResult {
   isAuthorized: boolean;
   isConnected: boolean;
-  isUnlocked: boolean;
+  /** @deprecated Authentication is action-based; compatibility responses return true. */
+  isUnlocked?: boolean;
   hasPasskey: boolean;
   hasWalletAccount: boolean;
   accounts: WalletAccount[];
@@ -231,8 +295,16 @@ export interface SelectAccountResult {
 }
 
 export interface ManageAccountsResult {
-  accounts: WalletAccount[];
   selectedAccount: WalletAccount | null;
+}
+
+export type AccountMenuAction = "closed" | "switched" | "accounts-updated" | "signed-out";
+
+export interface AccountMenuResult {
+  action: AccountMenuAction;
+  /** Present after a switch or after the account manager ran. */
+  accounts?: WalletAccount[];
+  selectedAccount?: WalletAccount | null;
 }
 
 type RequestResultMap = {
@@ -247,6 +319,7 @@ type RequestResultMap = {
   [POST_MESSAGE_REQUEST_TYPES.GET_SIGNING_CONTEXT]: GetSigningContextResult;
   [POST_MESSAGE_REQUEST_TYPES.SELECT_ACCOUNT]: SelectAccountResult;
   [POST_MESSAGE_REQUEST_TYPES.MANAGE_ACCOUNTS]: ManageAccountsResult;
+  [POST_MESSAGE_REQUEST_TYPES.ACCOUNT_MENU]: AccountMenuResult;
   [POST_MESSAGE_REQUEST_TYPES.CREATE_SIGNING_SESSION]: CreateSigningSessionResult;
   [POST_MESSAGE_REQUEST_TYPES.CREATE_SIGNING_SESSION_INSTRUCTION]: CreateSigningSessionInstructionResult;
   [POST_MESSAGE_REQUEST_TYPES.CONFIRM_SIGNING_SESSION]: ConfirmSigningSessionResult;
@@ -298,7 +371,7 @@ export interface PostMessageEvent<
 
 export const ErrorCode = {
   USER_REJECTED: "USER_REJECTED",
-  WALLET_LOCKED: "WALLET_LOCKED",
+  SIGNING_SESSION_UNAVAILABLE: "SIGNING_SESSION_UNAVAILABLE",
   INVALID_PASSWORD: "INVALID_PASSWORD",
   ALREADY_CONNECTED: "ALREADY_CONNECTED",
   ACCOUNT_NOT_FOUND: "ACCOUNT_NOT_FOUND",
@@ -441,7 +514,8 @@ export enum ThruNetwork {
 }
 
 export enum DepositTarget {
-  Credits = "credits",
+  /** THRUSD retains the legacy wire value for backend compatibility. */
+  THRUSD = "credits",
 }
 
 export interface DepositDestination {

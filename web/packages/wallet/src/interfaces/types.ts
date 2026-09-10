@@ -75,11 +75,11 @@ export interface ThruSigningSessionCreateOptions {
   review?: ThruTransactionReviewPayload;
 }
 
-export interface ThruSigningSessionInstructionCreateOptions extends Omit<
+export interface ThruSigningSessionRenewOptions extends Omit<
   ThruSigningSessionCreateOptions,
-  "review"
+  "walletAddress" | "review"
 > {
-  walletAccountIdx: number;
+  walletAddress: string;
 }
 
 export interface ThruSigningSessionDescriptor {
@@ -95,12 +95,6 @@ export interface ThruSigningSession extends ThruSigningSessionDescriptor {
   signTransaction(transaction: ThruTransactionIntent): Promise<string>;
   revoke(): Promise<void>;
   toJSON(): ThruSigningSessionDescriptor;
-}
-
-export interface ThruSigningSessionInstruction {
-  session: ThruSigningSession;
-  programAddress: string;
-  instructionData: Uint8Array;
 }
 
 export interface ThruTransactionIntent {

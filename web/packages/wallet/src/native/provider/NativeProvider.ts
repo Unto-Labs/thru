@@ -67,6 +67,7 @@ export interface NativeProviderConfig {
   metadata?: ConnectMetadataInput;
   addressTypes?: AddressTypeValue[];
   signingSessions?: SigningSessionDescriptorStore;
+  broadcastTransaction?: (signedTransaction: string) => Promise<unknown>;
   network?: ThruNetwork;
   depositUiConfig?: DepositUiConfig;
 }
@@ -188,10 +189,7 @@ export class NativeProvider {
         return;
       }
 
-      if (
-        eventType === EMBEDDED_PROVIDER_EVENTS.DISCONNECT ||
-        eventType === EMBEDDED_PROVIDER_EVENTS.LOCK
-      ) {
+      if (eventType === EMBEDDED_PROVIDER_EVENTS.DISCONNECT) {
         this.clearConnection();
         this.requestHide(eventType);
         return;
@@ -217,6 +215,7 @@ export class NativeProvider {
         this,
         this.origin,
         config.signingSessions,
+        config.broadcastTransaction,
       );
     }
   }
@@ -454,7 +453,7 @@ export class NativeProvider {
 
     if (
       result.isAuthorized &&
-      result.hasPasskey &&
+      result.isConnected &&
       result.accounts.length > 0
     ) {
       this.hydrateConnection(
@@ -564,9 +563,9 @@ export class NativeProvider {
         origin: this.origin,
       });
 
-      const result = normalizeWalletAccountResult(response.result);
-      this.accounts = result.accounts;
+      const result = response.result;
       this.selectedAccount = result.selectedAccount;
+      this.accounts = this.selectedAccount ? [this.selectedAccount] : [];
       this.requestHide("manage-accounts-settled");
       return result;
     } catch (error) {

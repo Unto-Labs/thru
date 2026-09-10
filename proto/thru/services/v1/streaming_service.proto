@@ -299,8 +299,14 @@ message BlockFinished {
   // Global counter tracking total deactivated state across all accounts.
   // Increments when accounts are deleted or compressed.
   uint64 global_deactivated_state_counter = 3 [(google.api.field_behavior) = REQUIRED];
-  // Total fees collected from all transactions in this block.
-  uint64 collected_fees = 4 [(google.api.field_behavior) = REQUIRED];
+  // Fees credited to the absent-block-producer fee receiver this block
+  // because the block producer account was not live (UNTO-1293). Field
+  // number unchanged (4).
+  uint64 absent_block_producer_fees = 4 [(google.api.field_behavior) = REQUIRED];
+  // Fees credited to a live block-producer account this block. Disjoint from
+  // absent_block_producer_fees by destination; total block fees =
+  // absent_block_producer_fees + claimed_fees.
+  uint64 claimed_fees = 5 [(google.api.field_behavior) = REQUIRED];
 }
 
 // StreamAccountUpdatesResponse contains either an initial snapshot or a delta.
@@ -640,14 +646,20 @@ message StreamSlotMetricsResponse {
   uint64 global_activated_state_counter = 2 [(google.api.field_behavior) = REQUIRED];
   // Global counter tracking total deactivated state across all accounts.
   uint64 global_deactivated_state_counter = 3 [(google.api.field_behavior) = REQUIRED];
-  // Total fees collected from all transactions in this block.
-  uint64 collected_fees = 4 [(google.api.field_behavior) = REQUIRED];
+  // Fees credited to the absent-block-producer fee receiver this block
+  // because the block producer account was not live (UNTO-1293). Field
+  // number unchanged (4).
+  uint64 absent_block_producer_fees = 4 [(google.api.field_behavior) = REQUIRED];
   // Block timestamp.
   google.protobuf.Timestamp block_timestamp = 5 [(google.api.field_behavior) = REQUIRED];
   // Total compute units consumed across all transactions in this block.
   uint64 consumed_compute_units = 6 [(google.api.field_behavior) = REQUIRED];
   // Total state units consumed across all transactions in this block.
   uint32 consumed_state_units = 7 [(google.api.field_behavior) = REQUIRED];
+  // Fees credited to a live block-producer account this block. Disjoint from
+  // absent_block_producer_fees by destination; total block fees =
+  // absent_block_producer_fees + claimed_fees.
+  uint64 claimed_fees = 8 [(google.api.field_behavior) = REQUIRED];
 
   // The compressed-state trie root as of this slot: exactly 32 bytes, the
   // commitment that account state proofs are verified against.
@@ -674,7 +686,7 @@ message StreamSlotMetricsResponse {
   // server build. Cases 2, 4 and 5 are indistinguishable on the wire -- all of
   // them mean "the server declined to state a commitment for this slot", and
   // none of them is safe to read as a value.
-  optional bytes compressed_state_root = 8 [(google.api.field_behavior) = OPTIONAL];
+  optional bytes compressed_state_root = 9 [(google.api.field_behavior) = OPTIONAL];
 
   // The active-state hash as of this slot: exactly 32 bytes, computed over the
   // live (uncompressed) account set together with this slot's block context.
@@ -686,7 +698,7 @@ message StreamSlotMetricsResponse {
   // compressed-state root -- so it transitively commits to the value in
   // compressed_state_root. Agreement between the two fields is therefore NOT
   // an independent cross-check of either one.
-  optional bytes active_state_hash = 9 [(google.api.field_behavior) = OPTIONAL];
+  optional bytes active_state_hash = 10 [(google.api.field_behavior) = OPTIONAL];
 }
 
 // StreamHeightRequest subscribes to real-time height updates.
@@ -732,9 +744,10 @@ service StreamingService {
   rpc StreamHeight(StreamHeightRequest)
       returns (stream StreamHeightResponse);
 
-  // Stream per-slot metrics including state counters, collected fees and --
-  // on request -- the slot's state commitments. One message per slot
-  // terminator; see StreamSlotMetricsResponse for the delivery contract.
+  // Stream per-slot metrics including state counters, distributed fees
+  // (absent-block-producer + claimed) and -- on request -- the slot's state
+  // commitments. One message per slot terminator; see
+  // StreamSlotMetricsResponse for the delivery contract.
   rpc StreamSlotMetrics(StreamSlotMetricsRequest)
       returns (stream StreamSlotMetricsResponse);
 

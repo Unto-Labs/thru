@@ -16,8 +16,11 @@ export type {
   RestoreConnectionOptions,
   SDKEvent,
   SignInOptions,
-  WalletAvailability,
 } from './NativeSDK';
+export type {
+  WalletAvailability,
+  WalletAvailabilityStatus,
+} from '../connection-state';
 
 export { AddressType, ThruTransactionEncoding } from '../interfaces';
 export type {
@@ -32,13 +35,21 @@ export type {
   ThruSigningSession,
   ThruSigningSessionCreateOptions,
   ThruSigningSessionDescriptor,
-  ThruSigningSessionInstruction,
-  ThruSigningSessionInstructionCreateOptions,
+  ThruSigningSessionRenewOptions,
   ThruSigningSessionTimestamp,
   ThruTransactionIntent,
   WalletAccount,
 } from '../interfaces';
 export type { SigningSessionStorage } from '../signing-sessions';
+export type { WalletSDKStorage } from '../storage';
+export { WalletSDKStorageError } from '../storage';
+export type {
+  AccountsApi,
+  ConnectionApi,
+  SigningSessionsApi,
+  WalletConnectOptions,
+  WalletSDK,
+} from '../sdk-contract';
 
 export {
   EMBEDDED_PROVIDER_EVENTS,
@@ -63,6 +74,6 @@ export type {
   DepositsApi,
   EnsureDepositAccountParams,
   GetDepositAccountStateParams,
-  WaitForDepositBalanceParams,
+  WaitForDepositParams,
 } from '../deposit';
 export { DepositTransactionError, formatDepositAmount } from '../deposit';

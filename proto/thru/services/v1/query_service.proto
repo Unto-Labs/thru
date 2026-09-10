@@ -1019,10 +1019,16 @@ message GetSlotMetricsResponse {
   uint64 global_activated_state_counter = 2 [(google.api.field_behavior) = REQUIRED];
   // Global counter tracking total deactivated state across all accounts.
   uint64 global_deactivated_state_counter = 3 [(google.api.field_behavior) = REQUIRED];
-  // Total fees collected from all transactions in this block.
-  uint64 collected_fees = 4 [(google.api.field_behavior) = REQUIRED];
+  // Fees credited to the absent-block-producer fee receiver this block
+  // because the block producer account was not live (UNTO-1293). Field
+  // number unchanged (4).
+  uint64 absent_block_producer_fees = 4 [(google.api.field_behavior) = REQUIRED];
   // Block timestamp when available.
   optional google.protobuf.Timestamp block_timestamp = 5 [(google.api.field_behavior) = OPTIONAL];
+  // Fees credited to a live block-producer account this block. Disjoint from
+  // absent_block_producer_fees by destination; total block fees =
+  // absent_block_producer_fees + claimed_fees.
+  uint64 claimed_fees = 6 [(google.api.field_behavior) = REQUIRED];
 }
 
 // ListSlotMetricsRequest lists slot metrics for a range of slots.
@@ -1428,7 +1434,8 @@ service QueryService {
     };
   }
 
-  // Get slot-level metrics including state counters and collected fees.
+  // Get slot-level metrics including state counters and distributed fees
+  // (absent-block-producer + claimed).
   rpc GetSlotMetrics(GetSlotMetricsRequest) returns (GetSlotMetricsResponse) {
     option (google.api.http) = {
       get: "/v1/slots/{slot}/metrics"

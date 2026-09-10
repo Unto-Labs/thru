@@ -22,7 +22,7 @@ export function useWalletAvailability() {
     refreshWalletAvailability,
     hasPasskey: walletAvailability.hasPasskey,
     hasWalletAccount: walletAvailability.hasWalletAccount,
-    isAuthorized: walletAvailability.isAuthorized,
+    isAuthorized: walletAvailability.isConnected,
     isWalletAvailabilityLoading: walletAvailability.status === 'checking',
     accounts: walletAvailability.accounts,
     selectedAccount: walletAvailability.selectedAccount,

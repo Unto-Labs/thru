@@ -26,3 +26,9 @@
     transform: rotate(360deg);
   }
 }
+
+/* Inherit — rides on currentColor so it sits inside any button or label. */
+.tds-spinner--inherit {
+  border-color: color-mix(in srgb, currentColor 28%, transparent);
+  border-top-color: currentColor;
+}

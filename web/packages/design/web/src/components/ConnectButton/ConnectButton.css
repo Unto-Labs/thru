@@ -1,0 +1,65 @@
+/* ConnectButton — idle button rides on Button.css; the brick variant and the
+   loading cursor are the only additions. The connected chip follows the
+   Navbar status-chip recipe: mono, hairline, square. The account menu is
+   modelled on the Google account switcher, on Menu.css's item look. */
+
+.tds-connect {
+  white-space: nowrap;
+}
+.tds-connect--loading {
+  cursor: progress;
+}
+.tds-connect--brick:hover:not(:disabled),
+.tds-connect--brick:focus-visible {
+  background: var(--brick-300);
+  opacity: 1;
+}
+
+/* ── Connected chip ─────────────────────────────────────────────── */
+.tds-connect-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0;
+  background: var(--color-surface-higher);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-none);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  white-space: nowrap;
+  color: var(--color-text-primary);
+  transition:
+    background-color var(--duration-fast) var(--ease-standard),
+    border-color var(--duration-fast) var(--ease-standard);
+}
+.tds-connect-chip:hover,
+.tds-connect-chip[data-popup-open] {
+  border-color: var(--color-border-secondary);
+}
+.tds-connect-chip:active {
+  transform: translateY(1px);
+}
+.tds-connect-chip:focus-visible {
+  outline: 2px solid var(--color-border-brand);
+  outline-offset: 2px;
+}
+.tds-connect-chip--md { padding: 7px 14px; font-size: 13px; }
+.tds-connect-chip--sm { padding: 6px 10px; font-size: 12px; }
+.tds-connect-chip--xs { padding: 4px 8px; font-size: 11px; }
+
+.tds-connect-chip__avatar {
+  display: inline-flex;
+  flex: none;
+}
+.tds-connect-chip__sep {
+  width: 1px;
+  height: 14px;
+  background: var(--color-border-tertiary);
+}
+.tds-connect-chip__bal {
+  color: var(--color-text-secondary);
+}
+.tds-connect-chip__chev {
+  color: var(--color-text-tertiary);
+  flex: none;
+}

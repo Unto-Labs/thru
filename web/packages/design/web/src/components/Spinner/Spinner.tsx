@@ -1,7 +1,7 @@
 import * as React from "react";
 import "./Spinner.css";
 
-export type SpinnerTone = "neutral" | "brick";
+export type SpinnerTone = "neutral" | "brick" | "inherit";
 
 export interface SpinnerProps extends React.HTMLAttributes<HTMLSpanElement> {
   tone?: SpinnerTone;

@@ -32,7 +32,7 @@ describe("signing session descriptor storage", () => {
     vi.useRealTimers();
   });
 
-  it("scopes default storage keys by wallet origin and app origin", () => {
+  it("namespaces default storage keys by wallet and app origin", () => {
     const appA = resolveSigningSessionStorageKey({
       walletOrigin: "https://wallet.example",
       appOrigin: "https://app-a.example",
@@ -43,8 +43,8 @@ describe("signing session descriptor storage", () => {
     });
 
     expect(appA).not.toBe(appB);
-    expect(appA).toContain(encodeURIComponent("https://wallet.example"));
-    expect(appA).toContain(encodeURIComponent("https://app-a.example"));
+    expect(appA).toContain(Buffer.from("https://wallet.example").toString("hex"));
+    expect(appA).toContain(Buffer.from("https://app-a.example").toString("hex"));
   });
 
   it("stores only active sessions and prunes expired descriptors locally", async () => {
@@ -150,6 +150,42 @@ describe("signing session descriptor storage", () => {
       }),
     ]);
     expect(await store.get("old-wallet-a")).toBeNull();
+  });
+
+  it("selects the matching active session with the latest expiration", async () => {
+    const store = new SigningSessionDescriptorStore(new MemoryStorage(), "sessions");
+    const now = Math.floor(Date.now() / 1000);
+    await store.save({
+      id: "wallet-a-sooner",
+      walletAddress: "wallet-a",
+      publicKey: "pubkey-a-1",
+      authIdx: 2,
+      expiresAt: now + 60,
+      createdAt: now,
+    });
+    await store.save({
+      id: "wallet-b-later",
+      walletAddress: "wallet-b",
+      publicKey: "pubkey-b",
+      authIdx: 3,
+      expiresAt: now + 300,
+      createdAt: now,
+    });
+    await store.save({
+      id: "wallet-a-latest",
+      walletAddress: "wallet-a",
+      publicKey: "pubkey-a-2",
+      authIdx: 4,
+      expiresAt: now + 120,
+      createdAt: now,
+    });
+
+    await expect(store.getActive("wallet-a")).resolves.toMatchObject({
+      id: "wallet-a-latest",
+    });
+    await expect(store.getActive("wallet-b")).resolves.toMatchObject({
+      id: "wallet-b-later",
+    });
   });
 
   it("accepts exactly one of durationSeconds or expiresAt", () => {

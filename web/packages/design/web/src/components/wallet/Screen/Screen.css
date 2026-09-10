@@ -9,6 +9,10 @@
   flex-direction: column;
   gap: var(--space-3);
 }
+.tds-screen__body--scroll {
+  max-height: 460px;
+  overflow: auto;
+}
 
 .tds-screen__header {
   display: flex;
@@ -27,6 +31,23 @@
   place-items: center;
   color: var(--color-text-tertiary);
 }
+.tds-screen__badge--success {
+  background: var(--color-surface-grass);
+  color: var(--color-text-primary-inverse);
+}
+.tds-screen__badge--danger {
+  background: var(--brick-100);
+  color: var(--brick-400);
+}
+.tds-screen__badge--plain {
+  width: auto;
+  height: auto;
+  min-width: 38px;
+  min-height: 38px;
+  background: none;
+  border-radius: 0;
+  color: inherit;
+}
 .tds-screen__title {
   font-size: 16px;
   font-weight: var(--fw-semibold);
@@ -36,6 +57,26 @@
 .tds-screen__sub {
   font-size: 12px;
   color: var(--color-text-tertiary);
+  text-wrap: pretty;
+}
+
+.tds-screen__box {
+  background: var(--color-surface-primary);
+  padding: var(--space-2) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  border-radius: var(--radius-none);
+}
+
+.tds-screen__actions {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--color-border-tertiary);
+}
+.tds-screen__actions > * {
+  flex: 1;
 }
 
 .tds-screen__bottom {
@@ -56,4 +97,36 @@
 }
 .tds-screen__bottom:hover {
   background: var(--color-surface-primary);
+}
+
+/* ── Mobile: inside a bottom sheet ──────────────────────────────────────────
+   The frame is height-capped (Frame.css), so the body is the only scroller:
+   the sheet's bar keeps its close button and the action row keeps its primary
+   CTA on screen no matter how long the content is. */
+
+@media (max-width: 640px) {
+  .tds-screen {
+    flex: 1;
+    min-height: 0;
+  }
+
+  .tds-screen__body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    /* A single non-visible axis makes the other compute to `auto`, which would
+       turn the body into a horizontal scroller the moment any child overruns
+       it. Content wraps here; the one thing that must scroll sideways (the
+       instruction decode) carries its own overflow. */
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+  }
+
+  .tds-screen__body--scroll {
+    max-height: none;
+  }
+
+  .tds-screen__actions {
+    flex: none;
+  }
 }

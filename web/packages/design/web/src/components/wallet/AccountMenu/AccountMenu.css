@@ -1,0 +1,183 @@
+/* AccountMenu — the wallet account menu popup, modelled on the Google
+   account switcher, on Menu.css's item look. Class names keep the
+   tds-connect-menu prefix (the ConnectButton is its first home). */
+
+.tds-connect-menu {
+  box-sizing: border-box;
+  width: 300px;
+  padding: 0;
+  font-family: var(--font-sans);
+  color: var(--color-text-primary);
+}
+.tds-connect-menu .tds-menu-item {
+  font-size: 0.8125rem;
+}
+/* Base UI marks hovered anchors as highlighted; a host stylesheet's `a`
+   rules must not add an underline or recolor the row. */
+.tds-connect-menu a.tds-menu-item {
+  text-decoration: none;
+  color: inherit;
+}
+.tds-connect-menu a.tds-menu-item[data-highlighted] {
+  color: var(--color-text-primary-inverse);
+}
+.tds-connect-menu__label {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3) 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+}
+.tds-connect-menu__head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-3) var(--space-2);
+}
+.tds-connect-menu__avatar {
+  display: inline-flex;
+  flex: none;
+}
+.tds-connect-menu__who {
+  flex: 1;
+  min-width: 0;
+}
+.tds-connect-menu__addr {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+.tds-connect-menu__copy {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  min-height: 16px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: var(--color-text-tertiary);
+  transition: color var(--duration-fast) var(--ease-standard);
+}
+.tds-connect-menu__copy:hover {
+  color: var(--color-text-primary);
+}
+.tds-connect-menu__copy:focus-visible {
+  outline: 2px solid var(--color-border-brand);
+  outline-offset: 2px;
+}
+.tds-connect-menu__sub {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tds-connect-menu__bal {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-text-primary);
+  flex: none;
+}
+
+.tds-connect-menu__manage {
+  padding: 0 var(--space-3) var(--space-3);
+}
+.tds-connect-menu__manage-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  font-family: var(--font-sans);
+  font-weight: var(--fw-semibold);
+  font-size: 12px;
+  line-height: 1;
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-none);
+  padding: var(--space-2) var(--space-3);
+  color: var(--color-text-primary);
+  background: transparent;
+  text-decoration: none;
+  transition:
+    border-color var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard);
+}
+.tds-connect-menu__manage-link:hover,
+.tds-connect-menu__manage-link:focus-visible {
+  border-color: var(--color-text-primary);
+  background: var(--color-surface-primary);
+  text-decoration: none;
+  color: var(--color-text-primary);
+}
+
+.tds-connect-menu__sep {
+  margin: 0;
+}
+.tds-connect-menu__group {
+  padding: var(--space-2) var(--space-3) var(--space-1);
+}
+.tds-connect-menu__account {
+  font-family: var(--font-sans);
+}
+.tds-connect-menu__account-avatar {
+  display: inline-flex;
+  flex: none;
+}
+.tds-connect-menu__account-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.tds-connect-menu__account-name {
+  font-size: 13px;
+  font-weight: var(--fw-medium);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tds-connect-menu__account-addr {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: inherit;
+  opacity: 0.7;
+  white-space: nowrap;
+}
+.tds-connect-menu__account-bal {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  flex: none;
+}
+
+.tds-connect-menu__icon {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.tds-connect-menu__grow {
+  flex: 1;
+}
+.tds-connect-menu__ext {
+  opacity: 0.7;
+  flex: none;
+}
+.tds-connect-menu__danger {
+  color: var(--color-text-danger);
+}
+.tds-connect-menu__pad {
+  height: var(--space-1);
+}

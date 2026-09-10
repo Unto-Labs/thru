@@ -5,6 +5,7 @@ import {
   type DepositDestination,
 } from "../protocol";
 import {
+  createDepositsApi,
   createPreparedDepositSnapshot,
   DepositTransactionError,
   createDepositConfig,
@@ -13,12 +14,33 @@ import {
   getReusablePreparedDepositDestination,
   getDepositAccountStateForWallet,
   signDepositTransactionWithActiveSession,
-  waitForDepositBalanceForWallet,
+  waitForDepositForWallet,
 } from "./index";
 
 vi.mock("@thru/sdk/helpers", () => ({
   decodeAddress: vi.fn((address: string) => new Uint8Array([address.length])),
 }));
+
+describe("deposit API", () => {
+  it("preserves the receiver for stateful delegates", async () => {
+    const delegate = {
+      providers: ["unifold"],
+      prepare: vi.fn(),
+      ensureAccount: vi.fn(),
+      open: vi.fn(),
+      async getProviders() {
+        return this.providers;
+      },
+      getAccountState: vi.fn(),
+      waitForDeposit: vi.fn(),
+      formatAmount: vi.fn(),
+    };
+
+    const api = createDepositsApi(delegate);
+
+    await expect(api.getProviders()).resolves.toEqual(["unifold"]);
+  });
+});
 
 describe("prepared deposit snapshots", () => {
   it("uses the canonical snapshot after validating a stateful caller object", () => {
@@ -72,7 +94,7 @@ vi.mock("@thru/programs/token", () => ({
 
 const DESTINATION: DepositDestination = {
   network: ThruNetwork.Alphanet,
-  depositTarget: DepositTarget.Credits,
+  depositTarget: DepositTarget.THRUSD,
   tokenAccountAddress: "ta_token_account",
   mintAddress: "ta_mint",
   tokenProgramAddress: "ta_token_program",
@@ -329,7 +351,7 @@ describe("wallet deposit account helpers", () => {
     const thru = createThru({ tokenExists: true, balanceRaw: 10n });
     const onAttempt = vi.fn();
 
-    const state = await waitForDepositBalanceForWallet({
+    const state = await waitForDepositForWallet({
       thru: thru as never,
       walletAddress: "ta_wallet",
       destination: DESTINATION,
@@ -346,7 +368,7 @@ describe("wallet deposit account helpers", () => {
     const thru = createThru({ tokenExists: true, balanceRaw: 10n });
 
     await expect(
-      waitForDepositBalanceForWallet({
+      waitForDepositForWallet({
         thru: thru as never,
         walletAddress: "ta_wallet",
         destination: DESTINATION,
@@ -364,7 +386,7 @@ describe("wallet deposit account helpers", () => {
     const controller = new AbortController();
     const onAttempt = vi.fn();
 
-    const wait = waitForDepositBalanceForWallet({
+    const wait = waitForDepositForWallet({
       thru: thru as never,
       walletAddress: "ta_wallet",
       destination: DESTINATION,
@@ -394,7 +416,7 @@ describe("wallet deposit account helpers", () => {
     controller.abort();
 
     await expect(
-      waitForDepositBalanceForWallet({
+      waitForDepositForWallet({
         thru: thru as never,
         walletAddress: "ta_wallet",
         destination: DESTINATION,
@@ -409,7 +431,7 @@ describe("wallet deposit account helpers", () => {
     const thru = createThru({ tokenExists: false, failedSignature: true });
 
     await expect(
-      waitForDepositBalanceForWallet({
+      waitForDepositForWallet({
         thru: thru as never,
         walletAddress: "ta_wallet",
         destination: DESTINATION,

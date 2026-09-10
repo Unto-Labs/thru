@@ -2,8 +2,7 @@ import type {
   ThruSigningContext,
   ThruSigningSession,
   ThruSigningSessionCreateOptions,
-  ThruSigningSessionInstruction,
-  ThruSigningSessionInstructionCreateOptions,
+  ThruSigningSessionRenewOptions,
   ThruPasskeyChallengeIntent,
   ThruPasskeyChallengeSignature,
   ThruTransactionIntent,
@@ -60,26 +59,19 @@ export interface IThruChain {
     options: ThruSigningSessionCreateOptions,
   ): Promise<ThruSigningSession>;
 
-  /**
-   * Prepare a temporary signing-session authority instruction without asking
-   * for passkey approval. The returned instruction must be included in a
-   * later passkey-approved transaction before the session can sign.
-   */
-  createSigningSessionInstruction(
-    options: ThruSigningSessionInstructionCreateOptions,
-  ): Promise<ThruSigningSessionInstruction>;
-
-  /**
-   * Confirm that a prepared signing-session instruction landed on-chain and
-   * publish the resulting session descriptor into SDK storage.
-   */
-  confirmSigningSession(id: string): Promise<ThruSigningSession>;
+  /** Renew a signing session non-interactively, including its on-chain update. */
+  renewSession(
+    options: ThruSigningSessionRenewOptions,
+  ): Promise<ThruSigningSession>;
 
   /** Return a locally known signing session by id. */
   getSigningSession(id: string): Promise<ThruSigningSession | null>;
 
   /** Return locally known signing sessions for this SDK app scope only. */
   getSigningSessions(): Promise<ThruSigningSession[]>;
+
+  /** Return the longest-lived active session for a wallet account. */
+  getActiveSigningSession(walletAddress?: string): Promise<ThruSigningSession | null>;
 
   /** Delete a locally known session and ask the wallet to delete its key. */
   revokeSigningSession(id: string): Promise<void>;

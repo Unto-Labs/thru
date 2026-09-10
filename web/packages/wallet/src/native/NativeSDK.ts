@@ -29,24 +29,24 @@ import {
   type PrepareDepositPayload,
   type SigningSessionDescriptorPayload,
   type ThruNetwork,
-  normalizeConnectionStateResult,
 } from "../protocol";
 import {
   createPreparedDepositSnapshot,
   ensureDepositAccountForWallet,
+  createDepositsApi,
   formatDepositAmount,
   getReusablePreparedDepositDestination,
   getDepositAccountStateForWallet,
   getValidatedDepositDestination,
   signDepositTransactionWithActiveSession,
-  waitForDepositBalanceForWallet,
+  waitForDepositForWallet,
   type DepositAccountState,
   type DepositsApi,
   type EnsureDepositAccountParams,
   type GetDepositAccountStateParams,
   type PreparedDepositSnapshot,
   type SignDepositTransactionPayload,
-  type WaitForDepositBalanceParams,
+  type WaitForDepositParams,
 } from "../deposit";
 import { NativeProvider } from "./provider/NativeProvider";
 import type {
@@ -59,6 +59,7 @@ import {
   resolveSigningSessionStorageKey,
 } from "../signing-sessions";
 import { createNativeThruClient } from "./rpc";
+import { base64ToBytes } from "../encoding";
 import {
   type TransactionSigningScheme,
   withTransactionSigningScheme,
@@ -69,47 +70,32 @@ import {
   createTelemetrySessionId,
   type TelemetryAppContext,
 } from "../telemetry";
+import {
+  CHECKING_WALLET_AVAILABILITY,
+  ConnectionHintStore,
+  connectionResultFromState,
+  disconnectedWalletAvailability,
+  walletAvailabilityFromConnectResult,
+  walletAvailabilityFromConnectionState,
+  walletAvailabilityFromError,
+  resolveConnectionHintStorageKey,
+  type WalletAvailability,
+} from "../connection-state";
+import {
+  WalletSDKStorageError,
+  withWalletSDKStorageErrors,
+  type WalletSDKStorage,
+} from "../storage";
+import type {
+  AccountsApi,
+  ConnectionApi,
+  SigningSessionsApi,
+  WalletConnectOptions,
+  WalletSDK,
+} from "../sdk-contract";
 
 export type IosWebViewMode = "direct" | "shell-iframe";
 export type NativeWalletExperience = "standard" | "transparent";
-
-export type WalletAvailability =
-  | {
-      status: "checking";
-      isAuthorized: false;
-      isConnected: false;
-      isUnlocked: false;
-      hasPasskey: false;
-      hasWalletAccount: false;
-      accounts: WalletAccount[];
-      selectedAccount: null;
-      metadata: null;
-      error: null;
-    }
-  | {
-      status: "ready";
-      isAuthorized: boolean;
-      isConnected: boolean;
-      isUnlocked: boolean;
-      hasPasskey: boolean;
-      hasWalletAccount: boolean;
-      accounts: WalletAccount[];
-      selectedAccount: WalletAccount | null;
-      metadata: AppMetadata | null;
-      error: null;
-    }
-  | {
-      status: "error";
-      isAuthorized: false;
-      isConnected: false;
-      isUnlocked: false;
-      hasPasskey: false;
-      hasWalletAccount: false;
-      accounts: WalletAccount[];
-      selectedAccount: null;
-      metadata: null;
-      error: Error;
-    };
 
 export interface NativeSDKConfig {
   walletUrl?: string;
@@ -130,6 +116,7 @@ export interface NativeSDKConfig {
   origin?: string;
   /** Default app metadata used for connection and transparent hydration. */
   metadata?: ConnectMetadataInput;
+  autoRestore?: boolean;
   rpcUrl?: string;
   network?: ThruNetwork;
   depositUiConfig?: DepositUiConfig;
@@ -139,7 +126,7 @@ export interface NativeSDKConfig {
   iosWebViewMode?: IosWebViewMode;
   /** Optional host-provided persistent storage (SecureStore,
       AsyncStorage, localStorage-compatible adapter, etc.). */
-  storage?: NativeSDKStorage;
+  storage?: WalletSDKStorage;
   /** Override the legacy connection snapshot key cleared from `storage`. */
   storageKey?: string;
   /** Override the key used to remember the app-local selected account. */
@@ -160,13 +147,7 @@ export interface SignInOptions {
   intent?: ConnectOptions["intent"];
 }
 
-export interface ConnectOptions {
-  metadata?: ConnectMetadataInput;
-  preferredAccountAddress?: string;
-  intent?: ConnectRequestPayload["intent"];
-  /** Custom name for a passkey created during this connect flow. */
-  passkeyName?: string;
-}
+export interface ConnectOptions extends WalletConnectOptions {}
 
 export interface CreateAccountOptions {
   accountName?: string;
@@ -179,14 +160,11 @@ export interface CreateAccountOptions {
   >;
 }
 
-export interface RestoreConnectionOptions {
-  hydrate?: boolean;
-}
+export type RestoreConnectionOptions = Record<string, never>;
 
 export type SDKEvent =
   | "connect"
   | "disconnect"
-  | "lock"
   | "error"
   | "accountChanged"
   | "availabilityChanged";
@@ -194,11 +172,8 @@ export type SDKEvent =
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type EventCallback = (...args: any[]) => void;
 
-export interface NativeSDKStorage {
-  getItem: (key: string) => string | null | Promise<string | null>;
-  setItem: (key: string, value: string) => void | Promise<void>;
-  removeItem: (key: string) => void | Promise<void>;
-}
+/** @deprecated Use WalletSDKStorage. */
+export type NativeSDKStorage = WalletSDKStorage;
 
 export interface NativeSDKUiHandlers {
   onShowRequested?: (reason?: string) => void;
@@ -206,24 +181,9 @@ export interface NativeSDKUiHandlers {
 }
 
 const DEFAULT_STORAGE_KEY = "thru.native-sdk.connection.v1";
-const SELECTED_ACCOUNT_STORAGE_KEY_SUFFIX = ".selected-account.v1";
-const SIGNING_SESSION_STORAGE_KEY_SUFFIX = ".signing-sessions.v1";
 const DEFAULT_NATIVE_WALLET_URL = "https://app.tid.sh/embedded/native";
 const DEFAULT_TRANSPARENT_WALLET_URL =
   "https://app.tid.sh/embedded/native/transparent";
-
-const CHECKING_WALLET_AVAILABILITY: WalletAvailability = {
-  status: "checking",
-  isAuthorized: false,
-  isConnected: false,
-  isUnlocked: false,
-  hasPasskey: false,
-  hasWalletAccount: false,
-  accounts: [],
-  selectedAccount: null,
-  metadata: null,
-  error: null,
-};
 
 function completeAppMetadata(
   metadata: ConnectMetadataInput | AppMetadata | null | undefined,
@@ -252,21 +212,13 @@ function signingSessionDescriptorFromWire(
   };
 }
 
-interface PersistedSelectedAccountSnapshot {
-  version: 1;
-  origin: string;
-  walletOrigin: string;
-  savedAt: string;
-  selectedAccountAddress: string;
-}
-
 /**
  * NativeSDK - mobile mirror of `@thru/wallet`'s `BrowserSDK`.
  * Public surface matches verbatim except `mountInline(HTMLElement)` is
  * replaced by `attachWebView(WebViewRefLike)` since the host bottom
  * sheet owns the WebView lifecycle.
  */
-export class NativeSDK {
+export class NativeSDK implements WalletSDK {
   private provider: NativeProvider;
   private eventListeners = new Map<SDKEvent, Set<EventCallback>>();
   private initialized = false;
@@ -279,6 +231,7 @@ export class NativeSDK {
   private readonly storage?: NativeSDKStorage;
   private readonly storageKey: string;
   private readonly selectedAccountStorageKey: string;
+  private readonly connectionHints?: ConnectionHintStore;
   private readonly iosWebViewMode: IosWebViewMode;
   private readonly walletExperience: NativeWalletExperience;
   private readonly defaultMetadata?: ConnectMetadataInput;
@@ -290,29 +243,57 @@ export class NativeSDK {
     DepositDestination,
     PreparedDepositSnapshot
   >();
+  private readonly autoRestore: boolean;
 
-  readonly deposits: DepositsApi = {
+  readonly connection: ConnectionApi = {
+    connect: (options) => this.connect(options),
+    disconnect: () => this.disconnect(),
+    getState: () => this.getWalletAvailability(),
+    refresh: (options) => this.refreshWalletAvailability(options),
+  };
+
+  readonly accounts: AccountsApi = {
+    getSelected: () => this.getSelectedAccount(),
+    select: (address) => this.selectAccount(address),
+    manage: () => this.manageAccounts(),
+  };
+
+  readonly sessions: SigningSessionsApi = {
+    create: (options) => this.thru.createSigningSession(options),
+    renewSession: (options) => this.thru.renewSession(options),
+    get: (id) => this.thru.getSigningSession(id),
+    list: () => this.thru.getSigningSessions(),
+    getActive: (walletAddress) =>
+      this.thru.getActiveSigningSession(walletAddress),
+    revoke: (id) => this.thru.revokeSigningSession(id),
+  };
+
+  readonly nativeOnboarding = {
+    signIn: (options: SignInOptions) => this.signIn(options),
+    createAccount: (options?: CreateAccountOptions) =>
+      this.createAccount(options),
+  };
+
+  readonly deposits: DepositsApi = createDepositsApi({
     prepare: (targetOrPayload) => this.prepareDeposit(targetOrPayload),
     ensureAccount: (params) => this.ensureDepositAccount(params),
     open: (payload) => this.deposit(payload),
     getProviders: async () => [...this.depositProviders],
     getAccountState: (params) => this.getDepositAccountState(params),
-    waitForBalance: (params) => this.waitForDepositBalance(params),
+    waitForDeposit: (params) => this.waitForDepositBalance(params),
     formatAmount: (amountRaw, destination) =>
       this.formatDepositAmount(amountRaw, destination),
-  };
+  });
 
   constructor(config: NativeSDKConfig = {}) {
     this.origin = config.origin ?? "thru-mobile://app";
     this.rpcUrl = config.rpcUrl;
     this.storage = config.storage;
     this.storageKey = config.storageKey ?? DEFAULT_STORAGE_KEY;
-    this.selectedAccountStorageKey =
-      config.selectedAccountStorageKey ??
-      `${this.storageKey}${SELECTED_ACCOUNT_STORAGE_KEY_SUFFIX}`;
     this.iosWebViewMode = config.iosWebViewMode ?? "shell-iframe";
     this.walletExperience = config.walletExperience ?? "standard";
     this.defaultMetadata = config.metadata;
+    this.autoRestore = config.autoRestore ?? true;
     this.defaultNetwork = config.network;
     this.depositProviders = new Set(config.deposits?.providers ?? ['unifold']);
     const walletUrl = withTransactionSigningScheme(
@@ -338,6 +319,19 @@ export class NativeSDK {
       },
     });
     const walletOrigin = new URL(walletUrl).origin;
+    this.selectedAccountStorageKey =
+      config.selectedAccountStorageKey ??
+      resolveConnectionHintStorageKey({
+        walletOrigin,
+        appOrigin: this.origin,
+      });
+    this.connectionHints = this.storage
+      ? new ConnectionHintStore(
+          this.storage,
+          this.selectedAccountStorageKey,
+          this.telemetry,
+        )
+      : undefined;
     const signingSessions = this.storage
       ? new SigningSessionDescriptorStore(
           this.storage,
@@ -345,9 +339,9 @@ export class NativeSDK {
             walletOrigin,
             appOrigin: this.origin,
             storageKey:
-              config.signingSessionStorageKey ??
-              `${this.storageKey}${SIGNING_SESSION_STORAGE_KEY_SUFFIX}`,
+              config.signingSessionStorageKey,
           }),
+          this.telemetry,
         )
       : undefined;
     this.signingSessions = signingSessions;
@@ -366,6 +360,8 @@ export class NativeSDK {
           : undefined,
         addressTypes: config.addressTypes ?? [AddressType.THRU],
         signingSessions,
+        broadcastTransaction: (signedTransaction) =>
+          this.getThru().transactions.send(base64ToBytes(signedTransaction)),
         walletExperience: this.walletExperience,
         network: config.network,
         depositUiConfig: config.depositUiConfig,
@@ -510,6 +506,7 @@ export class NativeSDK {
     }
   }
 
+  /** @deprecated Use `connection.connect()`. */
   async connect(options?: ConnectOptions): Promise<ConnectResult> {
     const isAccountSwitch = options?.intent === "switch-account";
     if (this.connectInFlight) {
@@ -523,8 +520,7 @@ export class NativeSDK {
     if (
       !isAccountSwitch &&
       this.lastConnectResult &&
-      this.provider.isConnected() &&
-      this.walletAvailability.isUnlocked
+      this.provider.isConnected()
     ) {
       this.telemetry.record(TELEMETRY_EVENTS.SDK_CONNECT_CACHED, {
         severity: "debug",
@@ -618,6 +614,7 @@ export class NativeSDK {
     return inFlight;
   }
 
+  /** @deprecated Use `nativeOnboarding.signIn()`. */
   async signIn(options: SignInOptions): Promise<ConnectResult> {
     return this.connect({
       metadata: this.resolveSignInMetadata(options),
@@ -625,6 +622,7 @@ export class NativeSDK {
     });
   }
 
+  /** @deprecated Use `nativeOnboarding.createAccount()`. */
   async createAccount(
     options: CreateAccountOptions = {},
   ): Promise<CreateAccountResult> {
@@ -664,9 +662,16 @@ export class NativeSDK {
         if (!this.signingSessions) {
           throw new Error("NativeSDKStorage is required for signing sessions");
         }
-        await this.signingSessions.saveReplacingWalletSessions(
-          signingSessionDescriptorFromWire(activeResult.signingSession),
-        );
+        try {
+          await this.signingSessions.saveReplacingWalletSessions(
+            signingSessionDescriptorFromWire(activeResult.signingSession),
+          );
+        } catch (error) {
+          if (error instanceof WalletSDKStorageError) {
+            error.walletOperationCompleted = true;
+          }
+          throw error;
+        }
       }
       await this.clearPersistedConnection();
       this.setWalletAvailability(
@@ -681,6 +686,7 @@ export class NativeSDK {
     }
   }
 
+  /** @deprecated Use `connection.disconnect()`. */
   async disconnect(): Promise<void> {
     const startedAt = Date.now();
     this.telemetry.record(TELEMETRY_EVENTS.SDK_DISCONNECT_STARTED, {
@@ -691,7 +697,8 @@ export class NativeSDK {
       await this.provider.disconnect();
       this.emit("disconnect", {});
       this.lastConnectResult = null;
-      await this.persistSelectedAccountAddress(null);
+      await this.connectionHints?.clear();
+      await this.signingSessions?.clear();
       await this.clearPersistedConnection();
       this.clearAuthorizedAvailability();
       this.telemetry.record(TELEMETRY_EVENTS.SDK_DISCONNECT_COMPLETED, {
@@ -720,12 +727,15 @@ export class NativeSDK {
     return this.walletAvailability;
   }
 
-  async restoreConnection(
-    options: RestoreConnectionOptions = {},
-  ): Promise<ConnectResult | null> {
-    void options;
+  async restoreConnection(): Promise<ConnectResult | null> {
     await this.clearPersistedConnection();
-    return null;
+    if (!this.autoRestore) {
+      this.clearAuthorizedAvailability();
+      return null;
+    }
+    await this.signingSessions?.list();
+    const availability = await this.refreshWalletAvailability();
+    return availability.status === "connected" ? this.lastConnectResult : null;
   }
 
   async syncConnectionState(
@@ -760,32 +770,33 @@ export class NativeSDK {
     }
   }
 
-  getAccounts(): WalletAccount[] {
-    const accounts = this.provider.getAccounts();
-    const activeAccounts = this.refreshCachedAccounts(
-      accounts,
-      this.provider.getSelectedAccount(),
-    );
-    return activeAccounts;
-  }
-
+  /** @deprecated Use `accounts.getSelected()`. */
   getSelectedAccount(): WalletAccount | null {
     return this.provider.getSelectedAccount();
   }
 
+  /** @deprecated Use `accounts.select()`. */
   async selectAccount(publicKey: string): Promise<WalletAccount> {
     const account = await this.provider.selectAccount(publicKey);
     this.refreshCachedAccounts(this.provider.getAccounts(), account);
     await this.persistSelectedAccountAddress(account.address);
+    if (this.lastConnectResult) {
+      this.setWalletAvailability(
+        walletAvailabilityFromConnectResult(this.lastConnectResult, account),
+      );
+    }
     return account;
   }
 
+  /** @deprecated Use `accounts.manage()`. */
   async manageAccounts(): Promise<ManageAccountsResult> {
     if (!this.initialized) await this.initialize();
     const result = await this.provider.manageAccounts();
-    const activeResult = normalizeWalletAccountResult(result);
-    const selectedAccount = activeResult.selectedAccount ?? null;
-    this.refreshCachedAccounts(activeResult.accounts, selectedAccount);
+    const selectedAccount = result.selectedAccount ?? null;
+    this.refreshCachedAccounts(
+      selectedAccount ? [selectedAccount] : [],
+      selectedAccount,
+    );
     await this.persistSelectedAccountAddress(selectedAccount?.address ?? null);
     if (this.lastConnectResult) {
       this.setWalletAvailability(
@@ -793,7 +804,7 @@ export class NativeSDK {
       );
     }
     this.emit("accountChanged", selectedAccount);
-    return activeResult;
+    return result;
   }
 
   /** @deprecated Use `deposits.prepare()`. */
@@ -874,15 +885,15 @@ export class NativeSDK {
     });
   }
 
-  /** @deprecated Use `deposits.waitForBalance()`. */
+  /** @deprecated Use `deposits.waitForDeposit()`. */
   async waitForDepositBalance(
-    params: WaitForDepositBalanceParams,
+    params: WaitForDepositParams,
   ): Promise<DepositAccountState> {
     if (!this.initialized) await this.initialize();
     const { destination, walletAddress } = await this.resolveDepositDestination(
       params.destination,
     );
-    return waitForDepositBalanceForWallet({
+    return waitForDepositForWallet({
       thru: this.getThru(),
       walletAddress,
       destination,
@@ -969,7 +980,7 @@ export class NativeSDK {
             network: destination.network,
             depositTarget: destination.depositTarget,
           }
-        : DepositTarget.Credits,
+        : DepositTarget.THRUSD,
     );
     return {
       destination: destination
@@ -1006,21 +1017,12 @@ export class NativeSDK {
         outcome: "disconnected",
       });
       this.lastConnectResult = null;
+      void this.connectionHints?.clear();
       this.clearAuthorizedAvailability();
       this.emit("disconnect", data);
     });
     this.provider.on(EMBEDDED_PROVIDER_EVENTS.ERROR, (data) => {
       this.emit("error", data);
-    });
-    this.provider.on(EMBEDDED_PROVIDER_EVENTS.LOCK, (data) => {
-      this.telemetry.record(TELEMETRY_EVENTS.SDK_CONNECTION_LOCKED, {
-        severity: "info",
-        outcome: "locked",
-      });
-      this.lastConnectResult = null;
-      this.clearAuthorizedAvailability();
-      this.emit("lock", data);
-      this.emit("disconnect", { reason: "locked" });
     });
     this.provider.on(EMBEDDED_PROVIDER_EVENTS.ACCOUNT_CHANGED, (data) => {
       const payload = data as { account?: WalletAccount } | undefined;
@@ -1059,20 +1061,14 @@ export class NativeSDK {
             ...(preferredAccountAddress ? { preferredAccountAddress } : {}),
           }
         : undefined;
-    const state = await this.provider.getConnectionState(nextProviderOptions);
-    return normalizeConnectionStateResult(state);
+    return this.provider.getConnectionState(nextProviderOptions);
   }
 
   private async applyConnectionState(
     state: GetConnectionStateResult,
   ): Promise<void> {
-    if (state.isAuthorized && state.hasPasskey && state.accounts.length > 0) {
-      const result: ConnectResult = {
-        accounts: state.accounts,
-        selectedAccount: state.selectedAccount,
-        status: "completed",
-        metadata: state.metadata ?? undefined,
-      };
+    const result = connectionResultFromState(state);
+    if (result) {
       const activeResult = normalizeWalletAccountResult(result);
       this.lastConnectResult = activeResult;
       await this.persistSelectedAccountAddress(
@@ -1101,22 +1097,9 @@ export class NativeSDK {
   }
 
   private clearAuthorizedAvailability(): void {
-    const previous =
-      this.walletAvailability.status === "ready"
-        ? this.walletAvailability
-        : null;
-    this.setWalletAvailability({
-      status: "ready",
-      isAuthorized: false,
-      isConnected: false,
-      isUnlocked: false,
-      hasPasskey: previous?.hasPasskey ?? false,
-      hasWalletAccount: previous?.hasWalletAccount ?? false,
-      accounts: [],
-      selectedAccount: null,
-      metadata: null,
-      error: null,
-    });
+    this.setWalletAvailability(
+      disconnectedWalletAvailability(this.walletAvailability),
+    );
   }
 
   private resolveMetadata(
@@ -1190,67 +1173,38 @@ export class NativeSDK {
   private async persistSelectedAccountAddress(
     selectedAccountAddress: string | null,
   ): Promise<void> {
-    if (!this.storage) return;
+    if (!this.connectionHints) return;
     try {
       if (!selectedAccountAddress) {
-        await this.storage.removeItem(this.selectedAccountStorageKey);
+        await this.connectionHints.clear();
         return;
       }
 
-      const snapshot: PersistedSelectedAccountSnapshot = {
-        version: 1,
-        origin: this.origin,
-        walletOrigin: this.provider.getWalletOrigin(),
-        savedAt: new Date().toISOString(),
+      await this.connectionHints.write({
         selectedAccountAddress,
-      };
-      await this.storage.setItem(
-        this.selectedAccountStorageKey,
-        JSON.stringify(snapshot),
-      );
-    } catch (error) {
-      console.warn("[NativeSDK] Failed to persist selected account:", error);
+      });
+    } catch {
+      // Already reported by the shared storage adapter without stored values.
     }
   }
 
   private async clearPersistedConnection(): Promise<void> {
     if (!this.storage) return;
     try {
-      await this.storage.removeItem(this.storageKey);
-    } catch (error) {
-      console.warn("[NativeSDK] Failed to clear connection state:", error);
+      await withWalletSDKStorageErrors(this.storage, "connection", this.telemetry)
+        .removeItem(this.storageKey);
+    } catch {
+      // Legacy snapshot cleanup is best effort.
     }
   }
 
   private async readSelectedAccountAddress(): Promise<string | null> {
-    if (!this.storage) return null;
+    if (!this.connectionHints) return null;
 
     try {
-      const raw = await this.storage.getItem(this.selectedAccountStorageKey);
-      if (!raw) return null;
-
-      const parsed = JSON.parse(
-        raw,
-      ) as Partial<PersistedSelectedAccountSnapshot>;
-      if (
-        parsed.version !== 1 ||
-        parsed.origin !== this.origin ||
-        parsed.walletOrigin !== this.provider.getWalletOrigin() ||
-        typeof parsed.selectedAccountAddress !== "string" ||
-        parsed.selectedAccountAddress.length === 0
-      ) {
-        await this.storage.removeItem(this.selectedAccountStorageKey);
-        return null;
-      }
-
-      return parsed.selectedAccountAddress;
-    } catch (error) {
-      console.warn("[NativeSDK] Failed to restore selected account:", error);
-      try {
-        await this.storage.removeItem(this.selectedAccountStorageKey);
-      } catch {
-        /* best effort */
-      }
+      return (await this.connectionHints.read())?.selectedAccountAddress ?? null;
+    } catch {
+      // A transient read failure is not evidence that the hint is corrupt.
       return null;
     }
   }
@@ -1263,65 +1217,6 @@ function getTelemetryErrorFields(error: unknown): {
   return {
     errorCode: getErrorCode(error) ?? ErrorCode.UNKNOWN_ERROR,
     message: getErrorMessage(error, "Unknown native wallet error"),
-  };
-}
-
-function walletAvailabilityFromConnectResult(
-  result: ConnectResult,
-  selectedAccount?: WalletAccount | null,
-): WalletAvailability {
-  const active = normalizeWalletAccountResult(result, selectedAccount ?? null);
-  const hasActiveAccount = active.accounts.length > 0;
-  return {
-    status: "ready",
-    isAuthorized: hasActiveAccount,
-    isConnected: hasActiveAccount,
-    isUnlocked: true,
-    hasPasskey: hasActiveAccount,
-    hasWalletAccount: hasActiveAccount,
-    accounts: active.accounts,
-    selectedAccount: active.selectedAccount,
-    metadata: result.metadata ?? null,
-    error: null,
-  };
-}
-
-function walletAvailabilityFromConnectionState(
-  state: GetConnectionStateResult,
-): WalletAvailability {
-  const active = normalizeConnectionStateResult(state);
-  const hasWalletAccount =
-    (state as Partial<GetConnectionStateResult>).hasWalletAccount ??
-    state.accounts.length > 0;
-  return {
-    status: "ready",
-    isAuthorized: state.isAuthorized,
-    isConnected: state.isAuthorized && state.isConnected,
-    isUnlocked: state.isUnlocked,
-    hasPasskey: state.hasPasskey,
-    hasWalletAccount,
-    accounts: active.accounts,
-    selectedAccount: active.selectedAccount,
-    metadata: state.isAuthorized ? state.metadata : null,
-    error: null,
-  };
-}
-
-function walletAvailabilityFromError(error: unknown): WalletAvailability {
-  return {
-    status: "error",
-    isAuthorized: false,
-    isConnected: false,
-    isUnlocked: false,
-    hasPasskey: false,
-    hasWalletAccount: false,
-    accounts: [],
-    selectedAccount: null,
-    metadata: null,
-    error:
-      error instanceof Error
-        ? error
-        : new Error("Wallet availability check failed"),
   };
 }
 

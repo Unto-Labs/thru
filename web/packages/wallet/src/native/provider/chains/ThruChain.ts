@@ -5,19 +5,18 @@ import {
   type ThruSigningSession,
   type ThruSigningSessionCreateOptions,
   type ThruSigningSessionDescriptor,
-  type ThruSigningSessionInstruction,
-  type ThruSigningSessionInstructionCreateOptions,
+  type ThruSigningSessionRenewOptions,
   type ThruPasskeyChallengeIntent,
   type ThruPasskeyChallengeSignature,
   type ThruTransactionIntent,
 } from "../../../interfaces";
 import { POST_MESSAGE_REQUEST_TYPES, createRequestId } from "../../../protocol";
-import { base64ToBytes } from "../../../encoding";
+import { buildWalletAccountContext } from "@thru/programs/passkey-manager";
 import type { NativeProvider } from "../NativeProvider";
 import type { WebViewBridge } from "../WebViewBridge";
 import {
   SigningSessionDescriptorStore,
-  assertSigningSessionWalletAccountIdx,
+  isSigningSessionUnavailable,
   resolveSessionExpirySeconds,
 } from "../../../signing-sessions";
 
@@ -49,17 +48,22 @@ export class NativeThruChain implements IThruChain {
   private readonly provider: NativeProvider;
   private readonly origin: string;
   private readonly signingSessions?: SigningSessionDescriptorStore;
+  private readonly broadcastTransaction?: (
+    signedTransaction: string,
+  ) => Promise<unknown>;
 
   constructor(
     bridge: WebViewBridge,
     provider: NativeProvider,
     origin: string,
     signingSessions?: SigningSessionDescriptorStore,
+    broadcastTransaction?: (signedTransaction: string) => Promise<unknown>,
   ) {
     this.bridge = bridge;
     this.provider = provider;
     this.origin = origin;
     this.signingSessions = signingSessions;
+    this.broadcastTransaction = broadcastTransaction;
   }
 
   get connected(): boolean {
@@ -96,7 +100,17 @@ export class NativeThruChain implements IThruChain {
   }
 
   async signTransaction(transaction: ThruTransactionIntent): Promise<string> {
-    const signingSessionId = transaction.signingSessionId;
+    const walletAddress =
+      transaction.walletAddress ?? this.provider.getSelectedAccount()?.address;
+    let signingSessionId = transaction.signingSessionId;
+    let session =
+      signingSessionId && this.signingSessions
+        ? await this.signingSessions.get(signingSessionId)
+        : null;
+    if (!signingSessionId && this.signingSessions && walletAddress) {
+      session = await this.signingSessions.getActive(walletAddress);
+      signingSessionId = session?.id;
+    }
     if (
       !signingSessionId &&
       !this.provider.isConnected() &&
@@ -105,35 +119,29 @@ export class NativeThruChain implements IThruChain {
       throw new Error("Wallet not connected");
     }
 
-    const session =
-      signingSessionId && this.signingSessions
-        ? await this.signingSessions.get(signingSessionId)
-        : null;
-    // A missing local descriptor can mean the session expired or was revoked
-    // after the caller retained its session object. Let the wallet make the
-    // authoritative decision and expose its passkey fallback UI.
     const shouldShowWallet = !signingSessionId || !session;
+    let walletShown = shouldShowWallet;
     if (shouldShowWallet) {
       await this.provider.requestShow("sign-transaction-open");
     }
     try {
-      const response = await this.bridge.sendMessage({
-        id: createRequestId(),
-        type: POST_MESSAGE_REQUEST_TYPES.SIGN_TRANSACTION,
-        payload: {
-          walletAddress: transaction.walletAddress ?? session?.walletAddress,
-          programAddress: transaction.programAddress,
-          instructionData: transaction.instructionData,
-          readWriteAddresses: transaction.readWriteAddresses,
-          readOnlyAddresses: transaction.readOnlyAddresses,
-          review: transaction.review,
+      try {
+        return await this.requestSignedTransaction(
+          transaction,
+          walletAddress ?? session?.walletAddress,
           signingSessionId,
-        },
-        origin: this.origin,
-      });
-      return response.result.signedTransaction;
+        );
+      } catch (error) {
+        if (!signingSessionId || !isSigningSessionUnavailable(error)) throw error;
+        await this.signingSessions?.remove(signingSessionId);
+        if (!shouldShowWallet) {
+          await this.provider.requestShow("sign-transaction-session-fallback");
+          walletShown = true;
+        }
+        return await this.requestSignedTransaction(transaction, walletAddress, undefined);
+      }
     } finally {
-      if (shouldShowWallet) {
+      if (walletShown) {
         this.provider.requestHide("sign-transaction-settled");
       }
     }
@@ -193,47 +201,54 @@ export class NativeThruChain implements IThruChain {
     }
   }
 
-  async createSigningSessionInstruction(
-    options: ThruSigningSessionInstructionCreateOptions,
-  ): Promise<ThruSigningSessionInstruction> {
-    // Refresh preparation is non-interactive and must keep working after the
-    // wallet auto-locks. The existing session still authorizes the resulting
-    // add-authority transaction before this candidate session is confirmed.
+  async renewSession(
+    options: ThruSigningSessionRenewOptions,
+  ): Promise<ThruSigningSession> {
+    /* Renewal is non-interactive and must keep working after auto-lock. The
+       existing session authorizes and broadcasts the replacement authority
+       before the wallet confirms it. */
     if (!this.signingSessions) {
       throw new Error("NativeSDKStorage is required for signing sessions");
     }
+    if (!this.broadcastTransaction) {
+      throw new Error("Signing session transaction broadcast is not available");
+    }
+
+    const current = await this.signingSessions.getActive(options.walletAddress);
+    if (!current) {
+      throw new Error("An active signing session is required for renewal");
+    }
 
     const expiresAt = resolveSessionExpirySeconds(options);
-    assertSigningSessionWalletAccountIdx(options.walletAccountIdx);
-    const response = await this.bridge.sendMessage({
+    const context = buildWalletAccountContext({
+      walletAddress: options.walletAddress,
+      readWriteAccounts: [],
+      readOnlyAccounts: [],
+    });
+    const prepared = await this.bridge.sendMessage({
       id: createRequestId(),
       type: POST_MESSAGE_REQUEST_TYPES.CREATE_SIGNING_SESSION_INSTRUCTION,
       payload: {
         walletAddress: options.walletAddress,
         expiresAt: String(expiresAt),
-        walletAccountIdx: options.walletAccountIdx,
+        walletAccountIdx: context.walletAccountIdx,
       },
       origin: this.origin,
     });
-    const descriptor = descriptorFromWire(response.result.session);
-    return {
-      session: this.toSigningSession(descriptor),
-      programAddress: response.result.programAddress,
-      instructionData: base64ToBytes(response.result.instructionData),
-    };
-  }
-
-  async confirmSigningSession(id: string): Promise<ThruSigningSession> {
-    // Confirmation only persists a session whose add-authority transaction has
-    // already succeeded, so it does not require an active wallet connection.
-    if (!this.signingSessions) {
-      throw new Error("NativeSDKStorage is required for signing sessions");
-    }
+    const signedTransaction = await this.signTransaction({
+      walletAddress: options.walletAddress,
+      programAddress: prepared.result.programAddress,
+      instructionData: prepared.result.instructionData,
+      readWriteAddresses: context.readWriteAddresses,
+      readOnlyAddresses: context.readOnlyAddresses,
+      signingSessionId: current.id,
+    });
+    await this.broadcastTransaction(signedTransaction);
 
     const response = await this.bridge.sendMessage({
       id: createRequestId(),
       type: POST_MESSAGE_REQUEST_TYPES.CONFIRM_SIGNING_SESSION,
-      payload: { sessionId: id },
+      payload: { sessionId: prepared.result.session.id },
       origin: this.origin,
     });
     const descriptor = descriptorFromWire(response.result.session);
@@ -252,6 +267,16 @@ export class NativeThruChain implements IThruChain {
     return (await this.signingSessions.list()).map((descriptor) =>
       this.toSigningSession(descriptor),
     );
+  }
+
+  async getActiveSigningSession(
+    walletAddress?: string,
+  ): Promise<ThruSigningSession | null> {
+    if (!this.signingSessions) return null;
+    const descriptor = await this.signingSessions.getActive(
+      walletAddress ?? this.provider.getSelectedAccount()?.address,
+    );
+    return descriptor ? this.toSigningSession(descriptor) : null;
   }
 
   async revokeSigningSession(id: string): Promise<void> {
@@ -281,5 +306,27 @@ export class NativeThruChain implements IThruChain {
       revoke: () => this.revokeSigningSession(descriptor.id),
       toJSON: () => ({ ...descriptor }),
     };
+  }
+
+  private async requestSignedTransaction(
+    transaction: ThruTransactionIntent,
+    walletAddress?: string,
+    signingSessionId?: string,
+  ): Promise<string> {
+    const response = await this.bridge.sendMessage({
+      id: createRequestId(),
+      type: POST_MESSAGE_REQUEST_TYPES.SIGN_TRANSACTION,
+      payload: {
+        walletAddress,
+        programAddress: transaction.programAddress,
+        instructionData: transaction.instructionData,
+        readWriteAddresses: transaction.readWriteAddresses,
+        readOnlyAddresses: transaction.readOnlyAddresses,
+        review: transaction.review,
+        signingSessionId,
+      },
+      origin: this.origin,
+    });
+    return response.result.signedTransaction;
   }
 }

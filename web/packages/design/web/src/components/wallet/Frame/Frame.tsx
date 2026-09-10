@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cn } from "../../../utils";
+import "../island.css";
 import "./Frame.css";
 
 const Check = (p: React.SVGProps<SVGSVGElement>) => (
@@ -16,11 +17,16 @@ const X = (p: React.SVGProps<SVGSVGElement>) => (
 export interface FrameSite {
   /** Site label, e.g. "app.thru.org". */
   label: string;
+  /** Site identity mark shown before the label (a `Disc`, an `<img>`, …).
+   *  Defaults to the brick Thru circle. */
+  icon?: React.ReactNode;
   /** Show a verified check badge. */
   verified?: boolean;
   /** Optional chip text, e.g. "mainnet". */
   tag?: string;
 }
+
+export type FrameAnimate = "in" | "out" | false;
 
 export interface FrameProps {
   /** Layout width: dialog (narrow) or full. */
@@ -29,25 +35,39 @@ export interface FrameProps {
   site: FrameSite;
   /** Close handler — the X button. */
   onClose?: () => void;
+  /** Play the island open / close motion on the frame itself. Leave unset
+   *  when the frame sits inside a `WalletOverlay`, which animates the popup. */
+  animate?: FrameAnimate;
   children: React.ReactNode;
   className?: string;
 }
 
 /**
- * Frame — the wallet chrome: a top bar with the site identity (logo, label,
+ * Frame — the wallet chrome: a top bar with the site identity (mark, label,
  * optional verified badge + tag) and a close button, wrapping the screen
  * content. Self-contained light surface so it reads over a dark stage.
  */
 export const Frame = React.forwardRef<HTMLDivElement, FrameProps>(
-  function Frame({ mode = "dialog", site, onClose, children, className }, ref) {
+  function Frame({ mode = "dialog", site, onClose, animate = false, children, className }, ref) {
     return (
-      <div ref={ref} className={cn("tds-frame", `tds-frame--${mode}`, className)}>
+      <div
+        ref={ref}
+        className={cn(
+          "tds-frame",
+          `tds-frame--${mode}`,
+          animate === "in" && "tds-frame--in",
+          animate === "out" && "tds-frame--out",
+          className,
+        )}
+      >
         <div className="tds-frame__bar">
           <span className="tds-frame__site">
-            <span className="tds-frame__logo" aria-hidden />
-            {site.label}
+            {site.icon ?? <span className="tds-frame__logo" aria-hidden />}
+            <span className="tds-frame__label" title={site.label}>
+              {site.label}
+            </span>
             {site.verified && (
-              <span className="tds-frame__verified">
+              <span className="tds-frame__verified" title="Verified site">
                 <Check width={11} height={11} />
               </span>
             )}

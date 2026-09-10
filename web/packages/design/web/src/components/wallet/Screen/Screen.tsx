@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cn } from "../../../utils";
+import { styledDiv } from "../../../lib/styled";
 import "./Screen.css";
 
 const Info = (p: React.SVGProps<SVGSVGElement>) => (
@@ -15,11 +16,19 @@ const ChevronRight = (p: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+export type ScreenHeaderTone = "neutral" | "success" | "danger" | "plain";
+
 export interface ScreenHeaderProps {
   /** Centered badge glyph; defaults to an info icon. */
   icon?: React.ReactNode;
+  /**
+   * Badge treatment. `neutral` is the quiet surface pill, `success` the
+   * grass pill, `danger` the brick-tint pill. `plain` drops the pill so a
+   * self-contained mark (the Thru disc, the dove) sits directly in the hero.
+   */
+  tone?: ScreenHeaderTone;
   /** Title text. */
-  title: string;
+  title: React.ReactNode;
   /** Optional subtitle / supporting content. */
   content?: React.ReactNode;
   className?: string;
@@ -29,10 +38,12 @@ export interface ScreenHeaderProps {
  * ScreenHeader — a centered badge, title, and optional subtitle for the top of
  * a wallet Screen. Presentational; also available as `Screen.Header`.
  */
-export function ScreenHeader({ icon, title, content, className }: ScreenHeaderProps) {
+export function ScreenHeader({ icon, tone = "neutral", title, content, className }: ScreenHeaderProps) {
   return (
     <div className={cn("tds-screen__header", className)}>
-      <span className="tds-screen__badge">{icon ?? <Info width={16} height={16} />}</span>
+      <span className={cn("tds-screen__badge", `tds-screen__badge--${tone}`)}>
+        {icon ?? <Info width={16} height={16} />}
+      </span>
       <div className="tds-screen__title">{title}</div>
       {content && <div className="tds-screen__sub">{content}</div>}
     </div>
@@ -48,17 +59,23 @@ export interface ScreenProps {
   children: React.ReactNode;
   /** Optional bottom action row (label + chevron). */
   bottomAction?: ScreenBottomAction;
+  /** Optional footer rendered under the body — typically `Screen.Actions`. */
+  footer?: React.ReactNode;
+  /** Cap the body height and let it scroll (long review screens). */
+  scroll?: boolean;
   className?: string;
 }
 
 /**
  * Screen — the body of a wallet flow: scrollable content plus an optional
- * bottom action row. Pair with `Screen.Header`. Presentational; data via props.
+ * footer / bottom action row. Pair with `Screen.Header`, `Screen.Box` (a quiet
+ * info panel) and `Screen.Actions` (a two-button footer). Presentational.
  */
-function ScreenRoot({ children, bottomAction, className }: ScreenProps) {
+function ScreenRoot({ children, bottomAction, footer, scroll = false, className }: ScreenProps) {
   return (
     <div className={cn("tds-screen", className)}>
-      <div className="tds-screen__body">{children}</div>
+      <div className={cn("tds-screen__body", scroll && "tds-screen__body--scroll")}>{children}</div>
+      {footer}
       {bottomAction && (
         <button type="button" className="tds-screen__bottom" onClick={bottomAction.onClick}>
           <span>{bottomAction.label}</span>
@@ -69,4 +86,13 @@ function ScreenRoot({ children, bottomAction, className }: ScreenProps) {
   );
 }
 
-export const Screen = Object.assign(ScreenRoot, { Header: ScreenHeader });
+/** A quiet surface panel for grouped rows (steps, error text, a summary). */
+const ScreenBox = styledDiv("tds-screen__box");
+/** The two-button footer row: children stretch to equal widths. */
+const ScreenActions = styledDiv("tds-screen__actions");
+
+export const Screen = Object.assign(ScreenRoot, {
+  Header: ScreenHeader,
+  Box: ScreenBox,
+  Actions: ScreenActions,
+});

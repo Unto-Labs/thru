@@ -1,0 +1,34 @@
+/* Checklist — bordered capability list with hairline separators. */
+.tds-checklist {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--color-border-tertiary);
+  background: var(--color-surface-higher);
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-none);
+}
+
+.tds-checklist__item {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  min-height: 36px;
+  font-size: 13px;
+  color: var(--color-text-primary);
+}
+
+.tds-checklist__check {
+  color: var(--grass-400);
+  display: inline-flex;
+  flex: none;
+}
+
+.tds-checklist__sep {
+  height: 1px;
+  background: var(--color-border-tertiary);
+  margin: 0 var(--space-3);
+}

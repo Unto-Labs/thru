@@ -21,26 +21,31 @@ import {
   type DepositRequestPayload,
   type DepositResult,
   type DepositUiConfig,
+  type GetConnectionStateResult,
   type ManageAccountsResult,
+  type AccountMenuPayload,
+  type AccountMenuResult,
+  type WalletTheme,
   type PrepareDepositPayload,
   type ThruNetwork,
 } from './protocol';
 import {
   createPreparedDepositSnapshot,
   ensureDepositAccountForWallet,
+  createDepositsApi,
   formatDepositAmount,
   getDepositAccountStateForWallet,
   getReusablePreparedDepositDestination,
   getValidatedDepositDestination,
   signDepositTransactionWithActiveSession,
-  waitForDepositBalanceForWallet,
+  waitForDepositForWallet,
   type DepositAccountState,
   type DepositsApi,
   type EnsureDepositAccountParams,
   type GetDepositAccountStateParams,
   type PreparedDepositSnapshot,
   type SignDepositTransactionPayload,
-  type WaitForDepositBalanceParams,
+  type WaitForDepositParams,
 } from './deposit';
 import {
   SigningSessionDescriptorStore,
@@ -48,7 +53,16 @@ import {
   resolveSigningSessionStorageKey,
   type SigningSessionStorage,
 } from './signing-sessions';
+import type { WalletSDKStorage } from './storage';
+import type {
+  AccountsApi,
+  ConnectionApi,
+  SigningSessionsApi,
+  WalletConnectOptions,
+  WalletSDK,
+} from './sdk-contract';
 import { createThruClient, Thru } from '@thru/sdk/client';
+import { base64ToBytes } from './encoding';
 import {
   type TransactionSigningScheme,
   withTransactionSigningScheme,
@@ -60,9 +74,24 @@ import {
   withTelemetryParameters,
   type TelemetryAppContext,
 } from './telemetry';
+import {
+  CHECKING_WALLET_AVAILABILITY,
+  ConnectionHintStore,
+  connectionResultFromState,
+  disconnectedWalletAvailability,
+  getDefaultBrowserConnectionStorage,
+  resolveConnectionHintStorageKey,
+  walletAvailabilityFromConnectResult,
+  walletAvailabilityFromConnectionState,
+  walletAvailabilityFromError,
+  type ConnectionStorage,
+  type WalletAvailability,
+} from './connection-state';
 
 export interface BrowserSDKConfig {
   iframeUrl?: string;
+  /** The host page's color scheme (default light); the wallet's frames draw to match. */
+  theme?: WalletTheme;
   /** Share sanitized operational diagnostics with Thru. Defaults to true. */
   telemetryEnabled?: boolean;
   /** Opaque host-app-provided label stamped on telemetry for cross-session
@@ -72,10 +101,17 @@ export interface BrowserSDKConfig {
   /** Bounded host-app-provided dimensions stamped on telemetry events
       (at most 5 short keys/values). Never interpreted by the SDK. */
   appContext?: TelemetryAppContext;
+  metadata?: ConnectMetadataInput;
+  autoRestore?: boolean;
+  storage?: WalletSDKStorage | false;
+  /** @deprecated Use storage. */
+  connectionStorage?: ConnectionStorage | false;
+  connectionStorageKey?: string;
   addressTypes?: AddressTypeValue[];
   rpcUrl?: string;
   network?: ThruNetwork;
   depositUiConfig?: DepositUiConfig;
+  /** @deprecated Use storage. */
   signingSessionStorage?: SigningSessionStorage | false;
   signingSessionStorageKey?: string;
   transactionSigningScheme?: TransactionSigningScheme;
@@ -83,13 +119,15 @@ export interface BrowserSDKConfig {
     providers: string[];
   };
 }
-export interface ConnectOptions {
-  metadata?: ConnectMetadataInput;
-  /** Custom name for a passkey created during this connect flow. */
-  passkeyName?: string;
-}
 
-export type SDKEvent = 'connect' | 'disconnect' | 'lock' | 'error' | 'accountChanged';
+export interface ConnectOptions extends WalletConnectOptions {}
+
+export type SDKEvent =
+  | 'connect'
+  | 'disconnect'
+  | 'error'
+  | 'accountChanged'
+  | 'availabilityChanged';
 
 export type EventCallback = (...args: any[]) => void;
 
@@ -97,7 +135,7 @@ export type EventCallback = (...args: any[]) => void;
  * Browser SDK - Main entry point for dApp developers
  * Wraps EmbeddedProvider with a clean, simple API
  */
-export class BrowserSDK {
+export class BrowserSDK implements WalletSDK {
   private provider: EmbeddedProvider;
   private telemetry: TelemetryClient;
   private eventListeners = new Map<SDKEvent, Set<EventCallback>>();
@@ -111,17 +149,57 @@ export class BrowserSDK {
     DepositDestination,
     PreparedDepositSnapshot
   >();
+  private walletAvailability: WalletAvailability = CHECKING_WALLET_AVAILABILITY;
+  private readonly defaultMetadata?: ConnectMetadataInput;
+  private readonly autoRestore: boolean;
+  private readonly connectionHints?: ConnectionHintStore;
+  private readonly signingSessions?: SigningSessionDescriptorStore;
 
-  readonly deposits: DepositsApi = {
+  readonly connection: ConnectionApi = {
+    connect: (options) => this.connect(options),
+    disconnect: () => this.disconnect(),
+    getState: () => this.getWalletAvailability(),
+    refresh: (options) => this.refreshWalletAvailability(options),
+  };
+
+  readonly accounts: AccountsApi = {
+    getSelected: () => this.getSelectedAccount(),
+    select: (address) => this.selectAccount(address),
+    manage: () => this.manageAccounts(),
+  };
+
+  readonly sessions: SigningSessionsApi = {
+    create: (options) => this.thru.createSigningSession(options),
+    renewSession: (options) => this.thru.renewSession(options),
+    get: (id) => this.thru.getSigningSession(id),
+    list: () => this.thru.getSigningSessions(),
+    getActive: (walletAddress) =>
+      this.thru.getActiveSigningSession(walletAddress),
+    revoke: (id) => this.thru.revokeSigningSession(id),
+  };
+
+  readonly deposits: DepositsApi = createDepositsApi({
     prepare: (targetOrPayload) => this.prepareDeposit(targetOrPayload),
     ensureAccount: (params) => this.ensureDepositAccount(params),
     open: (payload) => this.deposit(payload),
     getProviders: async () => [...this.depositProviders],
     getAccountState: (params) => this.getDepositAccountState(params),
-    waitForBalance: (params) => this.waitForDepositBalance(params),
+    waitForDeposit: (params) => this.waitForDepositBalance(params),
     formatAmount: (amountRaw, destination) =>
       this.formatDepositAmount(amountRaw, destination),
-  };
+  });
+
+  private readonly iframeUrl: string;
+
+  /** The wallet URL this SDK loads (with its signing-scheme / telemetry query). */
+  getIframeUrl(): string {
+    return this.iframeUrl;
+  }
+
+  /** The host theme the wallet frames draw for. */
+  getTheme(): WalletTheme {
+    return this.provider.getTheme();
+  }
 
   constructor(config: BrowserSDKConfig = {}) {
     const configuredIframeUrl = withTransactionSigningScheme(
@@ -137,6 +215,7 @@ export class BrowserSDK {
       config.appContextId,
       config.appContext,
     );
+    this.iframeUrl = iframeUrl;
     const walletOrigin = new URL(iframeUrl).origin;
     const appOrigin =
       typeof window !== 'undefined' && window.location.origin
@@ -156,10 +235,14 @@ export class BrowserSDK {
         network: config.network,
       },
     });
+    const defaultStorage =
+      config.storage === false
+        ? null
+        : config.storage ?? getDefaultBrowserSigningSessionStorage();
     const storage =
       config.signingSessionStorage === false
         ? null
-        : config.signingSessionStorage ?? getDefaultBrowserSigningSessionStorage();
+        : config.signingSessionStorage ?? defaultStorage;
     const signingSessions = storage
       ? new SigningSessionDescriptorStore(
           storage,
@@ -168,14 +251,27 @@ export class BrowserSDK {
             appOrigin,
             storageKey: config.signingSessionStorageKey,
           }),
+          this.telemetry,
         )
       : undefined;
+    this.signingSessions = signingSessions;
+    const connectionStorage =
+      config.connectionStorage === false
+        ? null
+        : config.connectionStorage ?? defaultStorage ?? getDefaultBrowserConnectionStorage();
+
+    this.thruClient = createThruClient({
+      baseUrl: config.rpcUrl,
+    });
 
     try {
       this.provider = new EmbeddedProvider({
         iframeUrl,
+        theme: config.theme,
         addressTypes: config.addressTypes || [AddressType.THRU],
         signingSessions,
+        broadcastTransaction: (signedTransaction) =>
+          this.thruClient.transactions.send(base64ToBytes(signedTransaction)),
         network: config.network,
         depositUiConfig: config.depositUiConfig,
         telemetry: this.telemetry,
@@ -191,11 +287,20 @@ export class BrowserSDK {
     );
     this.telemetry.record(TELEMETRY_EVENTS.SDK_CONSTRUCTED);
     this.defaultNetwork = config.network;
+    this.defaultMetadata = config.metadata;
+    this.autoRestore = config.autoRestore ?? true;
+    this.connectionHints = connectionStorage
+      ? new ConnectionHintStore(
+          connectionStorage,
+          resolveConnectionHintStorageKey({
+            walletOrigin,
+            appOrigin,
+            storageKey: config.connectionStorageKey,
+          }),
+          this.telemetry,
+        )
+      : undefined;
     this.depositProviders = new Set(config.deposits?.providers ?? ['unifold']);
-
-    this.thruClient = createThruClient({
-      baseUrl: config.rpcUrl,
-    });
 
     // Forward provider events to SDK events
     this.setupEventForwarding();
@@ -245,7 +350,20 @@ export class BrowserSDK {
         outcome: 'success',
         durationMs: Date.now() - startedAt,
       });
+
+      if (!this.autoRestore) {
+        this.setWalletAvailability(disconnectedWalletAvailability());
+        return;
+      }
+
+      const hint = await this.readConnectionHint();
+      await this.signingSessions?.list();
+      await this.refreshWalletAvailability({
+        metadata: this.defaultMetadata,
+        preferredAccountAddress: hint?.selectedAccountAddress,
+      });
     } catch (error) {
+      this.setWalletAvailability(walletAvailabilityFromError(error));
       this.telemetry.record(TELEMETRY_EVENTS.SDK_INITIALIZE_FAILED, {
         operation: 'initialize',
         outcome: 'error',
@@ -254,6 +372,7 @@ export class BrowserSDK {
         errorCode: getTelemetryErrorCode(error),
         message: error,
       });
+      this.emit('error', error);
       throw error;
     }
   }
@@ -261,6 +380,7 @@ export class BrowserSDK {
   /**
    * Connect to wallet
    * Shows wallet modal and requests connection
+   * @deprecated Use `connection.connect()`.
    */
   async connect(options?: ConnectOptions): Promise<ConnectResult> {
     // Auto-initialize if not done yet
@@ -293,17 +413,24 @@ export class BrowserSDK {
       const startedAt = Date.now();
       this.telemetry.record(TELEMETRY_EVENTS.SDK_CONNECT_STARTED, { operation: 'connect' });
       try {
-        const metadata = this.resolveMetadata(options?.metadata);
+        const hint = await this.readConnectionHint();
+        const metadata = this.resolveMetadata(options?.metadata ?? this.defaultMetadata);
         const passkeyName = sanitizePasskeyName(options?.passkeyName);
-        const providerOptions =
-          metadata || passkeyName
+        const providerOptions = {
+          ...(metadata ? { metadata } : {}),
+          ...(passkeyName ? { passkeyName } : {}),
+          ...(options?.preferredAccountAddress ?? hint?.selectedAccountAddress
             ? {
-                ...(metadata ? { metadata } : {}),
-                ...(passkeyName ? { passkeyName } : {}),
+                preferredAccountAddress:
+                  options?.preferredAccountAddress ?? hint?.selectedAccountAddress,
               }
-            : undefined;
+            : {}),
+          ...(options?.intent ? { intent: options.intent } : {}),
+        };
         const result = await this.provider.connect(providerOptions);
         this.lastConnectResult = result;
+        await this.persistSelectedAccount(result.selectedAccount?.address ?? null);
+        this.setWalletAvailability(walletAvailabilityFromConnectResult(result));
         this.telemetry.record(TELEMETRY_EVENTS.SDK_CONNECT_COMPLETED, {
           operation: 'connect',
           outcome: 'success',
@@ -341,6 +468,7 @@ export class BrowserSDK {
 
   /**
    * Disconnect from wallet
+   * @deprecated Use `connection.disconnect()`.
    */
   async disconnect(): Promise<void> {
     const startedAt = Date.now();
@@ -356,6 +484,9 @@ export class BrowserSDK {
       });
       this.emit('disconnect', {});
       this.lastConnectResult = null;
+      await this.connectionHints?.clear();
+      await this.signingSessions?.clear();
+      this.setWalletAvailability(disconnectedWalletAvailability(this.walletAvailability));
     } catch (error) {
       this.telemetry.record(TELEMETRY_EVENTS.SDK_DISCONNECT_FAILED, {
         operation: 'disconnect',
@@ -377,19 +508,49 @@ export class BrowserSDK {
     return this.provider.isConnected();
   }
 
-  /**
-   * Get all accounts
-   */
-  getAccounts(): WalletAccount[] {
-    const accounts = this.provider.getAccounts();
-    this.refreshCachedAccounts(accounts);
-    return accounts;
+  getWalletAvailability(): WalletAvailability {
+    return this.walletAvailability;
   }
 
+  async syncConnectionState(
+    options?: ConnectOptions & { preferredAccountAddress?: string },
+  ): Promise<GetConnectionStateResult | null> {
+    try {
+      if (!this.initialized) {
+        await this.provider.initialize();
+        this.initialized = true;
+      }
+      const metadata = this.resolveMetadata(options?.metadata ?? this.defaultMetadata);
+      const state = await this.provider.getConnectionState({
+        ...(metadata ? { metadata } : {}),
+        ...(options?.preferredAccountAddress
+          ? { preferredAccountAddress: options.preferredAccountAddress }
+          : {}),
+      });
+      const availability = walletAvailabilityFromConnectionState(state);
+      this.setWalletAvailability(availability);
+      await this.applyConnectionState(state, metadata);
+      return state;
+    } catch (error) {
+      this.setWalletAvailability(walletAvailabilityFromError(error));
+      this.emit('error', error);
+      return null;
+    }
+  }
+
+  async refreshWalletAvailability(
+    options?: ConnectOptions & { preferredAccountAddress?: string },
+  ): Promise<WalletAvailability> {
+    await this.syncConnectionState(options);
+    return this.walletAvailability;
+  }
+
+  /** @deprecated Use `accounts.getSelected()`. */
   getSelectedAccount(): WalletAccount | null {
     return this.provider.getSelectedAccount();
   }
 
+  /** @deprecated Use `accounts.select()`. */
   async selectAccount(publicKey: string): Promise<WalletAccount> {
     const startedAt = Date.now();
     this.telemetry.record(TELEMETRY_EVENTS.SDK_ACCOUNT_SELECTION_STARTED, {
@@ -404,20 +565,63 @@ export class BrowserSDK {
       durationMs: Date.now() - startedAt,
       walletAddress: account.address,
     });
+    await this.persistSelectedAccount(account.address);
+    if (this.lastConnectResult) {
+      this.setWalletAvailability(
+        walletAvailabilityFromConnectResult(this.lastConnectResult, account),
+      );
+    }
     return account;
   }
 
+  /** @deprecated Use `accounts.manage()`. */
   async manageAccounts(): Promise<ManageAccountsResult> {
     const startedAt = Date.now();
     this.telemetry.record(TELEMETRY_EVENTS.SDK_ACCOUNT_MANAGEMENT_STARTED, {
       operation: 'manage_accounts',
     });
     const result = await this.provider.manageAccounts();
-    this.refreshCachedAccounts(result.accounts, result.selectedAccount);
+    this.refreshCachedAccounts(
+      result.selectedAccount ? [result.selectedAccount] : [],
+      result.selectedAccount,
+    );
+    await this.persistSelectedAccount(result.selectedAccount?.address ?? null);
+    if (this.lastConnectResult) {
+      this.setWalletAvailability(
+        walletAvailabilityFromConnectResult(
+          this.lastConnectResult,
+          result.selectedAccount,
+        ),
+      );
+    }
     this.emit('accountChanged', result.selectedAccount);
     this.telemetry.record(TELEMETRY_EVENTS.SDK_ACCOUNT_MANAGEMENT_COMPLETED, {
       operation: 'manage_accounts',
       outcome: 'success',
+      durationMs: Date.now() - startedAt,
+      walletAddress: result.selectedAccount?.address,
+    });
+    return result;
+  }
+
+  /**
+   * Open the wallet's own account menu, drawn inside its frame under the
+   * host's account chip. The wallet handles switching, adding accounts, and
+   * signing out; the cached accounts follow the result.
+   */
+  async openAccountMenu(options: AccountMenuPayload): Promise<AccountMenuResult> {
+    const startedAt = Date.now();
+    this.telemetry.record(TELEMETRY_EVENTS.SDK_ACCOUNT_MANAGEMENT_STARTED, {
+      operation: 'account_menu',
+    });
+    const result = await this.provider.openAccountMenu(options);
+    if (result.accounts) {
+      this.refreshCachedAccounts(result.accounts, result.selectedAccount ?? null);
+      this.emit('accountChanged', result.selectedAccount ?? null);
+    }
+    this.telemetry.record(TELEMETRY_EVENTS.SDK_ACCOUNT_MANAGEMENT_COMPLETED, {
+      operation: 'account_menu',
+      outcome: result.action,
       durationMs: Date.now() - startedAt,
       walletAddress: result.selectedAccount?.address,
     });
@@ -509,16 +713,16 @@ export class BrowserSDK {
     });
   }
 
-  /** @deprecated Use `deposits.waitForBalance()`. */
+  /** @deprecated Use `deposits.waitForDeposit()`. */
   async waitForDepositBalance(
-    params: WaitForDepositBalanceParams
+    params: WaitForDepositParams
   ): Promise<DepositAccountState> {
     if (!this.initialized) {
       await this.initialize();
     }
     const { destination, walletAddress } =
       await this.resolveDepositDestination(params.destination);
-    return waitForDepositBalanceForWallet({
+    return waitForDepositForWallet({
       thru: this.thruClient,
       walletAddress,
       destination,
@@ -592,6 +796,9 @@ export class BrowserSDK {
         operation: 'disconnect',
         outcome: 'wallet_event',
       });
+      this.lastConnectResult = null;
+      void this.connectionHints?.clear();
+      this.setWalletAvailability(disconnectedWalletAvailability(this.walletAvailability));
       this.emit('disconnect', data);
     });
 
@@ -606,15 +813,6 @@ export class BrowserSDK {
       this.emit('error', data);
     });
 
-    this.provider.on(EMBEDDED_PROVIDER_EVENTS.LOCK, (data: any) => {
-      this.telemetry.record(TELEMETRY_EVENTS.SDK_WALLET_LOCKED, {
-        operation: 'lock',
-        outcome: 'locked',
-      });
-      this.emit('lock', data);
-      this.emit('disconnect', { reason: 'locked' });
-    });
-
     this.provider.on(EMBEDDED_PROVIDER_EVENTS.ACCOUNT_CHANGED, (data: any) => {
       const account = data?.account ?? data;
       this.telemetry.record(TELEMETRY_EVENTS.SDK_ACCOUNT_CHANGED, {
@@ -623,6 +821,12 @@ export class BrowserSDK {
         walletAddress: account?.address,
       });
       this.refreshCachedAccounts(this.provider.getAccounts(), account ?? null);
+      if (account?.address) void this.persistSelectedAccount(account.address);
+      if (this.lastConnectResult) {
+        this.setWalletAvailability(
+          walletAvailabilityFromConnectResult(this.lastConnectResult, account),
+        );
+      }
       this.emit('accountChanged', account);
     });
   }
@@ -641,9 +845,11 @@ export class BrowserSDK {
     this.connectInFlight = null;
     this.lastConnectResult = null;
     this.telemetry.destroy();
+    this.walletAvailability = CHECKING_WALLET_AVAILABILITY;
   }
 
   private resolveMetadata(input?: ConnectMetadataInput): ConnectMetadataInput | undefined {
+    input = input ?? this.defaultMetadata;
     const defaultOrigin = typeof window !== 'undefined' ? window.location.origin : undefined;
     if (!defaultOrigin && !input) {
       return undefined;
@@ -722,7 +928,7 @@ export class BrowserSDK {
             network: destination.network,
             depositTarget: destination.depositTarget,
           }
-        : DepositTarget.Credits
+        : DepositTarget.THRUSD
     );
     return {
       destination: destination
@@ -747,6 +953,65 @@ export class BrowserSDK {
         accounts: active.accounts,
         selectedAccount: active.selectedAccount,
       };
+    }
+  }
+
+  private setWalletAvailability(availability: WalletAvailability): void {
+    this.walletAvailability = availability;
+    this.emit('availabilityChanged', availability);
+  }
+
+  private async applyConnectionState(
+    state: GetConnectionStateResult,
+    requestedMetadata?: ConnectMetadataInput,
+  ): Promise<void> {
+    const result = connectionResultFromState(state);
+    if (!result) {
+      const wasConnected = this.provider.isConnected() || !!this.lastConnectResult;
+      this.provider.clearConnection();
+      this.lastConnectResult = null;
+      if (wasConnected) this.emit('disconnect', { reason: 'state_unavailable' });
+      return;
+    }
+
+    const normalized = normalizeActiveWalletAccounts(
+      result.accounts,
+      result.selectedAccount,
+    );
+    this.lastConnectResult = {
+      ...result,
+      accounts: normalized.accounts,
+      selectedAccount: normalized.selectedAccount,
+    };
+    await this.persistSelectedAccount(
+      normalized.selectedAccount?.address ?? null,
+    );
+    this.emit('connect', this.lastConnectResult);
+  }
+
+  private async readConnectionHint() {
+    try {
+      return (await this.connectionHints?.read()) ?? null;
+    } catch {
+      // The storage adapter has already recorded value-free diagnostics.
+      return null;
+    }
+  }
+
+  private async persistSelectedAccount(
+    selectedAccountAddress: string | null,
+  ): Promise<void> {
+    if (!this.connectionHints) return;
+    try {
+      if (!selectedAccountAddress) {
+        await this.connectionHints.clear();
+        return;
+      }
+      await this.connectionHints.write({
+        selectedAccountAddress,
+      });
+    } catch {
+      // A failed preference write must not undo wallet authorization.
     }
   }
 }

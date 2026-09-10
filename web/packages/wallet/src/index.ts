@@ -8,7 +8,7 @@ export type {
   ConnectedApp, ConnectResult, IThruChain, SignMessageParams,
   SignMessageResult, ThruSigningContext, ThruSigningSession,
   ThruSigningSessionCreateOptions, ThruSigningSessionDescriptor,
-  ThruSigningSessionInstruction, ThruSigningSessionInstructionCreateOptions,
+  ThruSigningSessionRenewOptions,
   ThruSigningSessionTimestamp, ThruTransactionIntent, WalletAccount
 } from './interfaces';
 export {
@@ -33,13 +33,23 @@ export type {
   DepositsApi,
   EnsureDepositAccountParams,
   GetDepositAccountStateParams,
-  WaitForDepositBalanceParams,
+  WaitForDepositParams,
 } from './deposit';
 export {
   DepositTransactionError,
+  createDepositsApi,
   formatDepositAmount,
 } from './deposit';
 export type { SigningSessionStorage } from './signing-sessions';
+export type { WalletSDKStorage } from './storage';
+export { WalletSDKStorageError } from './storage';
+export type {
+  AccountsApi,
+  ConnectionApi,
+  SigningSessionsApi,
+  WalletConnectOptions,
+  WalletSDK,
+} from './sdk-contract';
 export {
   TRANSACTION_SIGNING_SCHEME_SEARCH_PARAM,
   TransactionSigningScheme,
@@ -59,3 +69,11 @@ export type {
   TelemetrySeverity,
   TelemetrySource,
 } from './telemetry';
+export {
+  CHECKING_WALLET_AVAILABILITY,
+} from './connection-state';
+export type {
+  ConnectionStorage,
+  WalletAvailability,
+  WalletAvailabilityStatus,
+} from './connection-state';

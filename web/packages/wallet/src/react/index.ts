@@ -10,6 +10,7 @@ export {
 } from "./hooks/useAccounts";
 export { useThru } from "./hooks/useThru";
 export { useWallet } from "./hooks/useWallet";
+export { useWalletAvailability } from "./hooks/useWalletAvailability";
 
 export {
   BrowserSDK,
@@ -32,7 +33,7 @@ export type {
   DepositsApi,
   EnsureDepositAccountParams,
   GetDepositAccountStateParams,
-  WaitForDepositBalanceParams,
+  WaitForDepositParams,
 } from "../deposit";
 export { DepositTransactionError, formatDepositAmount } from "../deposit";
 
@@ -51,3 +52,9 @@ export type {
   WalletAccount,
 } from "../interfaces";
 export type { SigningSessionStorage } from "../signing-sessions";
+export type {
+  WalletAvailability,
+  WalletAvailabilityStatus,
+} from "../connection-state";
+export { WalletButton } from "./WalletButton";
+export type { WalletButtonProps } from "./WalletButton";

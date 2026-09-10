@@ -4,7 +4,7 @@ export {
   getDepositNetworkConfig,
   getDepositTargetConfig,
   validateDepositAccountState,
-  waitForDepositBalanceForWallet,
+  waitForDepositForWallet,
 } from "../deposit";
 
 export type {

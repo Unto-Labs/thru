@@ -1,31 +1,55 @@
 /* Self-contained light surface so the wallet chrome reads correctly even when
    placed over a dark demo stage (a popup over a dapp). */
 .tds-frame {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
   background: var(--color-surface-higher);
   color: var(--color-text-primary);
   border: 1px solid var(--color-border-secondary);
-  width: 300px;
+  width: 360px;
+  max-width: 100%;
   box-shadow: var(--shadow-lg);
   border-radius: var(--radius-none);
+  font-family: var(--font-sans);
 }
 .tds-frame--full {
-  width: 372px;
+  width: 440px;
+}
+
+/* Standalone island motion (the overlay animates its popup instead). */
+.tds-frame--in {
+  animation: tds-island-in 640ms var(--ease-standard) both;
+}
+.tds-frame--out {
+  animation: tds-island-out 480ms var(--ease-standard) both;
+  pointer-events: none;
 }
 
 .tds-frame__bar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-2) var(--space-3);
+  gap: var(--space-3);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--color-border-tertiary);
 }
 .tds-frame__site {
   display: flex;
   align-items: center;
   gap: var(--space-2);
+  min-width: 0;
   font-family: var(--font-mono);
   font-size: 12px;
   color: var(--color-text-primary);
+}
+/* A long host truncates in the middle of the bar rather than wrapping into
+   the close button. */
+.tds-frame__label {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 .tds-frame__logo {
   width: 22px;
@@ -53,17 +77,114 @@
   color: var(--color-text-tertiary);
 }
 .tds-frame__close {
+  box-sizing: border-box;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin: -4px 0;
+  padding: 0;
   background: none;
   border: none;
+  border-radius: var(--radius-none);
   cursor: pointer;
   color: var(--color-text-tertiary);
-  display: inline-flex;
+  transition:
+    color var(--duration-fast) var(--ease-standard),
+    background-color var(--duration-fast) var(--ease-standard);
 }
 .tds-frame__close:hover {
   color: var(--color-text-primary);
+  background: var(--color-surface-primary);
+}
+.tds-frame__close:focus-visible {
+  outline: 2px solid var(--color-border-brand);
+  outline-offset: 2px;
 }
 
 .tds-frame__content {
   display: flex;
   flex-direction: column;
+}
+
+/* ── Mobile: sheet chrome ───────────────────────────────────────────────────
+   The frame is a 360px floating panel on a desktop. Below 640px it is the
+   sheet itself: full width, only its top corners rounded, and a grabber above
+   the bar. Metrics are the design's - 52px bar, 24px mark, mono 13 label,
+   16px verified badge, 44px close target, 4px 16px 16px body.
+
+   The grabber is a pseudo-element so the sheet needs no different markup, and
+   so no caller has to know which presentation it is in. */
+
+@media (max-width: 640px) {
+  .tds-frame {
+    width: 100%;
+    /* Bound to the container, not unbounded: the width follows the viewport
+       and can never overrun it. */
+    max-width: 100%;
+    border-width: 0;
+    border-radius: 12px 12px 0 0;
+    padding-top: 4px;
+  }
+
+  .tds-frame::before {
+    content: '';
+    display: block;
+    width: 36px;
+    height: 4px;
+    margin: 4px auto 0;
+    border-radius: var(--radius-pill);
+    background: var(--color-border-secondary);
+    flex: none;
+  }
+
+  .tds-frame__bar {
+    height: 52px;
+    padding: 0 6px 0 16px;
+  }
+
+  .tds-frame__site {
+    font-size: 13px;
+  }
+
+  .tds-frame__logo {
+    width: 24px;
+    height: 24px;
+  }
+
+  .tds-frame__verified {
+    width: 16px;
+    height: 16px;
+  }
+
+  .tds-frame__chip {
+    font-size: 11px;
+    padding: 3px 8px;
+  }
+
+  .tds-frame__close {
+    width: 44px;
+    height: 44px;
+    margin: 0;
+  }
+
+  /* The home indicator sits under the sheet on iOS. */
+  .tds-frame__content {
+    padding-bottom: max(16px, env(safe-area-inset-bottom));
+    flex: 1;
+    min-height: 0;
+  }
+}
+
+/* A sheet is anchored to the bottom edge, so content taller than the viewport
+   would push the bar - and its close button - off the top with no way to
+   scroll back to it. Cap the sheet; the screen body scrolls inside it (see
+   Screen.css) so the bar and the action row both stay pinned. */
+@media (max-width: 640px) {
+  .tds-frame {
+    max-height: 92vh;
+    max-height: 92dvh;
+  }
 }

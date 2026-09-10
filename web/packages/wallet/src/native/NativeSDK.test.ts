@@ -9,6 +9,8 @@ import {
 import { NativeSDK } from "./NativeSDK";
 import { TransactionSigningScheme } from "../transaction-signing-scheme";
 import type { WebViewMessageEventLike } from "./provider/WebViewBridge";
+import { encodeAddress } from "@thru/sdk/helpers";
+import { SecureStoreTestStorage } from "../test-utils/secure-store";
 
 class MockWebView {
   injected: string[] = [];
@@ -17,16 +19,7 @@ class MockWebView {
   };
 }
 
-class MockStorage {
-  values = new Map<string, string>();
-  getItem = (key: string): string | null => this.values.get(key) ?? null;
-  setItem = (key: string, value: string): void => {
-    this.values.set(key, value);
-  };
-  removeItem = (key: string): void => {
-    this.values.delete(key);
-  };
-}
+class MockStorage extends SecureStoreTestStorage {}
 
 function frameIdFor(sdk: NativeSDK): string {
   const frameId = new URL(sdk.getIframeSrc()).searchParams.get("tn_frame_id");
@@ -102,9 +95,16 @@ async function wait(ms: number): Promise<void> {
 }
 
 async function waitForInjectedRequest(webView: MockWebView): Promise<string> {
+  return waitForInjectedRequestAt(webView, 0);
+}
+
+async function waitForInjectedRequestAt(
+  webView: MockWebView,
+  index: number,
+): Promise<string> {
   for (let i = 0; i < 60; i++) {
     await flush();
-    const script = webView.injected[0];
+    const script = webView.injected[index];
     if (script) return script;
     await wait(50);
   }
@@ -145,12 +145,19 @@ describe("NativeSDK", () => {
   });
 
   it("exposes the grouped deposit lifecycle API", () => {
+    expect(sdk.connection.getState).toBeTypeOf("function");
+    expect(sdk.accounts.getSelected).toBeTypeOf("function");
+    expect(sdk.accounts.manage).toBeTypeOf("function");
+    expect(sdk.sessions.getActive).toBeTypeOf("function");
+    expect(sdk.sessions.renewSession).toBeTypeOf("function");
+    expect(sdk.nativeOnboarding.signIn).toBeTypeOf("function");
+    expect(sdk.nativeOnboarding.createAccount).toBeTypeOf("function");
     expect(sdk.deposits.prepare).toBeTypeOf("function");
     expect(sdk.deposits.ensureAccount).toBeTypeOf("function");
     expect(sdk.deposits.open).toBeTypeOf("function");
     expect(sdk.deposits.getProviders).toBeTypeOf("function");
     expect(sdk.deposits.getAccountState).toBeTypeOf("function");
-    expect(sdk.deposits.waitForBalance).toBeTypeOf("function");
+    expect(sdk.deposits.waitForDeposit).toBeTypeOf("function");
     expect(sdk.deposits.formatAmount).toBeTypeOf("function");
 
     expect(sdk.prepareDeposit).toBeTypeOf("function");
@@ -563,9 +570,18 @@ describe("NativeSDK", () => {
     });
   });
 
-  it("persists a bundled transparent createAccount signing session", async () => {
+  it.each([false, true])("persists a bundled createAccount session or reports a completed wallet operation (storage failure=%s)", async (failStorage) => {
     sdk.destroy();
     const storage = new MockStorage();
+    const cause = new Error("Device storage unavailable");
+    if (failStorage) {
+      vi.spyOn(console, "warn").mockImplementation(() => {});
+      const write = storage.setItem.bind(storage);
+      vi.spyOn(storage, "setItem").mockImplementation((key, value) => {
+        if (key.startsWith("thru.wallet.signing-sessions.")) throw cause;
+        write(key, value);
+      });
+    }
     sdk = new NativeSDK({
       walletUrl: "http://localhost:3000/embedded/native/transparent",
       walletExperience: "transparent",
@@ -637,6 +653,13 @@ describe("NativeSDK", () => {
     };
     sdk.onMessage(responseMessage(frameId, request.id, result));
 
+    if (failStorage) {
+      await expect(promise).rejects.toMatchObject({
+        code: "SDK_STORAGE_ERROR", operation: "setItem",
+        category: "signing-sessions", walletOperationCompleted: true, cause,
+      });
+      return;
+    }
     await expect(promise).resolves.toEqual(result);
     await expect(sdk.thru.getSigningSessions()).resolves.toEqual([
       expect.objectContaining({
@@ -716,7 +739,7 @@ describe("NativeSDK", () => {
     expect(webView.injected).toEqual([]);
   });
 
-  it("prepares a signing-session refresh while transparently disconnected", async () => {
+  it("renews and broadcasts a signing session while transparently disconnected", async () => {
     sdk.destroy();
     const storage = new MockStorage();
     sdk = new NativeSDK({
@@ -728,12 +751,35 @@ describe("NativeSDK", () => {
     webView = new MockWebView();
     sdk.attachWebView(webView);
     const expiresAt = 1_900_000_000;
+    const walletAddress = encodeAddress(new Uint8Array(32).fill(10));
+    await (sdk as unknown as {
+      signingSessions: {
+        save(descriptor: {
+          id: string;
+          walletAddress: string;
+          publicKey: string;
+          authIdx: number;
+          expiresAt: number;
+          createdAt: number;
+        }): Promise<void>;
+      };
+    }).signingSessions.save({
+      id: "session_current",
+      walletAddress,
+      publicKey: "thru_current_address",
+      authIdx: 1,
+      expiresAt: expiresAt - 60,
+      createdAt: expiresAt - 600,
+    });
+    const broadcastTransaction = vi.fn(async () => "signature");
+    (sdk.thru as unknown as {
+      broadcastTransaction: (signedTransaction: string) => Promise<unknown>;
+    }).broadcastTransaction = broadcastTransaction;
 
     const frameId = frameIdFor(sdk);
-    const promise = sdk.thru.createSigningSessionInstruction({
-      walletAddress: "thru_test_address",
+    const promise = sdk.thru.renewSession({
+      walletAddress,
       expiresAt,
-      walletAccountIdx: 2,
     });
 
     sdk.onMessage(readyMessage(frameId));
@@ -742,7 +788,7 @@ describe("NativeSDK", () => {
       POST_MESSAGE_REQUEST_TYPES.CREATE_SIGNING_SESSION_INSTRUCTION,
     );
     expect(request.payload).toEqual({
-      walletAddress: "thru_test_address",
+      walletAddress,
       expiresAt: String(expiresAt),
       walletAccountIdx: 2,
     });
@@ -751,7 +797,7 @@ describe("NativeSDK", () => {
       responseMessage(frameId, request.id, {
         session: {
           id: "session_refresh",
-          walletAddress: "thru_test_address",
+          walletAddress,
           publicKey: "thru_refresh_address",
           authIdx: -1,
           expiresAt: String(expiresAt),
@@ -762,53 +808,42 @@ describe("NativeSDK", () => {
       }),
     );
 
-    await expect(promise).resolves.toEqual({
-      session: expect.objectContaining({
-        id: "session_refresh",
-        walletAddress: "thru_test_address",
-        publicKey: "thru_refresh_address",
-        authIdx: -1,
-        expiresAt,
-        createdAt: expiresAt - 120,
+    const signRequest = parseInjectedRequest(
+      await waitForInjectedRequestAt(webView, 1),
+    );
+    expect(signRequest.type).toBe(POST_MESSAGE_REQUEST_TYPES.SIGN_TRANSACTION);
+    expect(signRequest.payload).toEqual(
+      expect.objectContaining({
+        walletAddress,
+        instructionData: "AQID",
+        signingSessionId: "session_current",
       }),
-      programAddress: "thru_passkey_manager",
-      instructionData: new Uint8Array([1, 2, 3]),
-    });
-    expect(sdk.isConnected()).toBe(false);
-  });
+    );
+    sdk.onMessage(
+      responseMessage(frameId, signRequest.id, {
+        signedTransaction: "signed_refresh",
+      }),
+    );
 
-  it("confirms a signing-session refresh while transparently disconnected", async () => {
-    sdk.destroy();
-    const storage = new MockStorage();
-    sdk = new NativeSDK({
-      walletUrl: "http://localhost:3000/embedded/native/transparent",
-      walletExperience: "transparent",
-      origin: "thru-mobile://token-dummy",
-      storage,
-    });
-    webView = new MockWebView();
-    sdk.attachWebView(webView);
-    const expiresAt = 1_900_000_000;
-
-    const frameId = frameIdFor(sdk);
-    const promise = sdk.thru.confirmSigningSession("session_refresh");
-
-    sdk.onMessage(readyMessage(frameId));
-    const request = parseInjectedRequest(await waitForInjectedRequest(webView));
-    expect(request.type).toBe(
+    await flush();
+    expect(broadcastTransaction).toHaveBeenCalledWith("signed_refresh");
+    const confirmRequest = parseInjectedRequest(
+      await waitForInjectedRequestAt(webView, 2),
+    );
+    expect(confirmRequest.type).toBe(
       POST_MESSAGE_REQUEST_TYPES.CONFIRM_SIGNING_SESSION,
     );
-    expect(request.payload).toEqual({ sessionId: "session_refresh" });
+    expect(confirmRequest.payload).toEqual({ sessionId: "session_refresh" });
 
     const session = {
       id: "session_refresh",
-      walletAddress: "thru_test_address",
+      walletAddress,
       publicKey: "thru_refresh_address",
       authIdx: 2,
       expiresAt: String(expiresAt),
       createdAt: String(expiresAt - 120),
     };
-    sdk.onMessage(responseMessage(frameId, request.id, { session }));
+    sdk.onMessage(responseMessage(frameId, confirmRequest.id, { session }));
 
     await expect(promise).resolves.toEqual(
       expect.objectContaining({
@@ -820,7 +855,7 @@ describe("NativeSDK", () => {
     await expect(sdk.thru.getSigningSessions()).resolves.toEqual([
       expect.objectContaining({
         id: "session_refresh",
-        walletAddress: "thru_test_address",
+        walletAddress,
         authIdx: 2,
       }),
     ]);
@@ -884,7 +919,7 @@ describe("NativeSDK", () => {
     await flush();
 
     expect(webView.injected).toHaveLength(1);
-    const request = parseInjectedRequest(webView.injected[0]);
+    const request = parseInjectedRequest(await waitForInjectedRequest(webView));
     expect(request.type).toBe(POST_MESSAGE_REQUEST_TYPES.CONNECT);
     expect(request.origin).toBe("thru-mobile://token-dummy");
     expect(request.payload).toEqual({
@@ -1001,20 +1036,21 @@ describe("NativeSDK", () => {
       ...switchResult,
       accounts: [switchedAccount],
     });
-    expect(sdk.getAccounts()).toEqual([switchedAccount]);
     expect(sdk.getSelectedAccount()).toEqual(switchedAccount);
   });
 
-  it("does not persist or restore native connection snapshots", async () => {
+  it("persists only an account hint and restores through wallet verification", async () => {
     const storage = new MockStorage();
     const storageKey = "test-connection";
-    const selectedAccountStorageKey = `${storageKey}.selected-account.v1`;
+    const selectedAccountStorageKey = "test-selected-account";
     sdk.destroy();
     sdk = new NativeSDK({
       walletUrl: "http://localhost:3000/embedded",
       origin: "thru-mobile://token-dummy",
       storage,
       storageKey,
+      selectedAccountStorageKey,
+      metadata: { appId: "token_dummy_app", appName: "Token Dummy App" },
     });
     webView = new MockWebView();
     sdk.attachWebView(webView);
@@ -1069,10 +1105,33 @@ describe("NativeSDK", () => {
       origin: "thru-mobile://token-dummy",
       storage,
       storageKey,
+      selectedAccountStorageKey,
+      metadata: { appId: "token_dummy_app", appName: "Token Dummy App" },
     });
-    await expect(restored.restoreConnection()).resolves.toBeNull();
-    expect(restored.isConnected()).toBe(false);
-    expect(restored.getAccounts()).toEqual([]);
+    const restoredWebView = new MockWebView();
+    restored.attachWebView(restoredWebView);
+    const restorePromise = restored.restoreConnection();
+    const restoredFrameId = frameIdFor(restored);
+    restored.onMessage(readyMessage(restoredFrameId));
+    await flush();
+    await wait(0);
+    const restoreRequest = parseInjectedRequest(restoredWebView.injected[0]);
+    expect(restoreRequest.type).toBe(POST_MESSAGE_REQUEST_TYPES.GET_CONNECTION_STATE);
+    expect(restoreRequest.payload).toMatchObject({ preferredAccountAddress: selectedAccount.address });
+    restored.onMessage(responseMessage(restoredFrameId, restoreRequest.id, {
+      isAuthorized: true,
+      isConnected: true,
+      hasPasskey: true,
+      hasWalletAccount: true,
+      accounts: [initialAccount, selectedAccount],
+      selectedAccount,
+      metadata: result.metadata,
+    }));
+    await expect(restorePromise).resolves.toMatchObject({
+      selectedAccount,
+    });
+    expect(restored.isConnected()).toBe(true);
+    expect(restored.getSelectedAccount()).toEqual(selectedAccount);
     expect(storage.values.has(storageKey)).toBe(false);
     restored.destroy();
   });
@@ -1114,16 +1173,11 @@ describe("NativeSDK", () => {
     expect(manageRequest.type).toBe(POST_MESSAGE_REQUEST_TYPES.MANAGE_ACCOUNTS);
 
     const manageResult = {
-      accounts: [initialAccount, managedAccount],
       selectedAccount: managedAccount,
     };
     sdk.onMessage(responseMessage(frameId, manageRequest.id, manageResult));
 
-    await expect(managePromise).resolves.toEqual({
-      ...manageResult,
-      accounts: [managedAccount],
-    });
-    expect(sdk.getAccounts()).toEqual([managedAccount]);
+    await expect(managePromise).resolves.toEqual(manageResult);
     expect(sdk.getSelectedAccount()).toEqual(managedAccount);
   });
 
@@ -1253,7 +1307,6 @@ describe("NativeSDK", () => {
       ...result,
       accounts: [selectedAccount],
     });
-    expect(sdk.getAccounts()).toEqual([selectedAccount]);
     expect(sdk.getSelectedAccount()).toEqual(selectedAccount);
     expect(sdk.getWalletAvailability()).toMatchObject({
       accounts: [selectedAccount],
@@ -1297,11 +1350,12 @@ describe("NativeSDK", () => {
       origin: "thru-mobile://token-dummy",
       storage,
       storageKey,
+      autoRestore: false,
     });
 
-    await expect(sdk.restoreConnection({ hydrate: false })).resolves.toBeNull();
+    await expect(sdk.restoreConnection()).resolves.toBeNull();
     expect(sdk.isConnected()).toBe(false);
-    expect(sdk.getAccounts()).toEqual([]);
+    expect(sdk.getSelectedAccount()).toBeNull();
     expect(storage.values.has(storageKey)).toBe(false);
   });
 
@@ -1349,25 +1403,14 @@ describe("NativeSDK", () => {
 
     await expect(promise).resolves.toEqual(state);
     expect(sdk.isConnected()).toBe(true);
-    expect(sdk.getAccounts()).toEqual(state.accounts);
+    expect(sdk.getSelectedAccount()).toEqual(state.selectedAccount);
 
     const reconnectPromise = sdk.connect();
-    await flush();
-
-    const reconnectRequest = parseInjectedRequest(webView.injected[1]);
-    expect(reconnectRequest.type).toBe(POST_MESSAGE_REQUEST_TYPES.CONNECT);
-    sdk.onMessage(
-      responseMessage(frameId, reconnectRequest.id, {
-        accounts: state.accounts,
-        selectedAccount: state.selectedAccount,
-        status: "completed",
-        metadata: state.metadata,
-      }),
-    );
     await expect(reconnectPromise).resolves.toMatchObject({
       status: "completed",
       selectedAccount: state.selectedAccount,
     });
+    expect(webView.injected).toHaveLength(1);
   });
 
   it("reports wallet availability without hydrating unauthorized accounts", async () => {
@@ -1403,8 +1446,7 @@ describe("NativeSDK", () => {
     sdk.onMessage(responseMessage(frameId, request.id, state));
 
     await expect(promise).resolves.toMatchObject({
-      status: "ready",
-      isAuthorized: false,
+      status: "disconnected",
       hasPasskey: true,
       hasWalletAccount: true,
       accounts: [],
@@ -1413,16 +1455,20 @@ describe("NativeSDK", () => {
     });
     expect(availabilityEvents).toHaveLength(1);
     expect(availabilityEvents[0]).toMatchObject({
-      status: "ready",
+      status: "disconnected",
       hasPasskey: true,
       hasWalletAccount: true,
     });
     expect(sdk.isConnected()).toBe(false);
-    expect(sdk.getAccounts()).toEqual([]);
+    expect(sdk.getSelectedAccount()).toBeNull();
   });
 
-  it("clears stale native state when the wallet has no active passkey session", async () => {
+  it("restores an authorized account without an active passkey session", async () => {
     const storage = new MockStorage();
+    const oldHint = 'thru.wallet.connection-hint.v1:http%3A%2F%2Flocalhost%3A3000:thru-mobile%3A%2F%2Ftoken-dummy';
+    storage.values.set(oldHint, JSON.stringify({ version: 1, selectedAccountAddress: 'old-account' }));
+    const oldSessions = oldHint.replace('connection-hint', 'signing-sessions');
+    storage.values.set(oldSessions, JSON.stringify({ version: 1, sessions: [] }));
     const storageKey = "test-connection";
     const staleResult = {
       accounts: [
@@ -1478,7 +1524,6 @@ describe("NativeSDK", () => {
     const state = {
       isAuthorized: true,
       isConnected: true,
-      isUnlocked: false,
       hasPasskey: false,
       hasWalletAccount: true,
       accounts: staleResult.accounts,
@@ -1487,13 +1532,18 @@ describe("NativeSDK", () => {
     };
     sdk.onMessage(responseMessage(frameId, request.id, state));
 
-    await expect(promise).resolves.toEqual({
-      ...state,
-      accounts: [],
-      selectedAccount: null,
+    await expect(promise).resolves.toEqual(state);
+    expect(request.payload).not.toHaveProperty('preferredAccountAddress');
+    await expect(sdk.sessions.getActive()).resolves.toBeNull();
+    expect(storage.values.has(oldHint)).toBe(true);
+    expect(storage.values.has(oldSessions)).toBe(true);
+    expect(sdk.isConnected()).toBe(true);
+    expect(sdk.getSelectedAccount()).toEqual(state.selectedAccount);
+    expect(sdk.getWalletAvailability()).toMatchObject({
+      status: "connected",
+      hasPasskey: false,
+      selectedAccount: state.selectedAccount,
     });
-    expect(sdk.isConnected()).toBe(false);
-    expect(sdk.getAccounts()).toEqual([]);
     expect(storage.values.has(storageKey)).toBe(false);
   });
 
@@ -1533,11 +1583,12 @@ describe("NativeSDK", () => {
       origin: "thru-mobile://token-dummy",
       storage,
       storageKey,
+      autoRestore: false,
     });
     webView = new MockWebView();
     sdk.attachWebView(webView);
 
-    await expect(sdk.restoreConnection({ hydrate: false })).resolves.toBeNull();
+    await expect(sdk.restoreConnection()).resolves.toBeNull();
     expect(storage.values.has(storageKey)).toBe(false);
 
     const frameId = frameIdFor(sdk);
@@ -1563,8 +1614,8 @@ describe("NativeSDK", () => {
       code: ErrorCode.USER_REJECTED,
     });
     expect(sdk.isConnected()).toBe(false);
-    expect(sdk.getAccounts()).toEqual([]);
+    expect(sdk.getSelectedAccount()).toBeNull();
     expect(storage.values.has(storageKey)).toBe(false);
-    await expect(sdk.restoreConnection({ hydrate: false })).resolves.toBeNull();
+    await expect(sdk.restoreConnection()).resolves.toBeNull();
   });
 });

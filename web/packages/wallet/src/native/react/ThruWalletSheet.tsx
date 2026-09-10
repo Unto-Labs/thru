@@ -1,6 +1,6 @@
 /* Bottom-sheet host for the wallet WebView. Auto-opens on UI_SHOW (or
    any provider lifecycle that calls requestShow), auto-closes on
-   request resolution / DISCONNECT / LOCK. Mirrors how the iframe's
+   request resolution / DISCONNECT. Mirrors how the iframe's
    IframeManager.show()/hide() couples to UI_SHOW today. */
 
 import {
@@ -620,7 +620,7 @@ export const ThruWalletSheet = forwardRef<
   const refreshWalletAvailabilityIfReady = useCallback(() => {
     if (!wallet || didRefreshWalletAvailabilityRef.current) return;
     didRefreshWalletAvailabilityRef.current = true;
-    void wallet.refreshWalletAvailability();
+    void wallet.restoreConnection();
   }, [wallet]);
 
   const handleLoadEnd = useCallback(() => {

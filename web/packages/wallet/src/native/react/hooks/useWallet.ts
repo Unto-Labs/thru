@@ -70,6 +70,9 @@ export function useWallet() {
   return {
     /** Chain interface (`provider.thru`); undefined until connected. */
     wallet: wallet?.thru as IThruChain | undefined,
+    connection: wallet?.connection,
+    accountApi: wallet?.accounts,
+    sessions: wallet?.sessions,
     accounts,
     connect,
     signIn,

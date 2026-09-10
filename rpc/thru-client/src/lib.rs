@@ -974,7 +974,7 @@ impl Client {
 
     /// Get slot-level metrics for a specific slot.
     ///
-    /// Returns metrics including global state counters and collected fees for the specified slot.
+    /// Returns metrics including global state counters and distributed (absent-producer + claimed) fees for the specified slot.
     pub async fn get_slot_metrics(&self, slot: u64) -> Result<SlotMetrics> {
         let mut client = QueryServiceClient::new(self.channel.clone())
             .max_decoding_message_size(128 * 1024 * 1024)
@@ -1588,8 +1588,13 @@ pub struct Confirmation {
 pub struct SlotMetricsUpdate {
     /// Slot these metrics describe.
     pub slot: u64,
-    /// Total fees collected in the slot.
-    pub collected_fees: u64,
+    /// Fees credited to the absent-block-producer fee receiver this block
+    /// because the producer account was not live (UNTO-1293). Disjoint from
+    /// `claimed_fees`; total block fees = `absent_block_producer_fees` +
+    /// `claimed_fees`.
+    pub absent_block_producer_fees: u64,
+    /// Fees credited to a live block-producer account this block (UNTO-1293).
+    pub claimed_fees: u64,
     /// Running total of activated state across all accounts.
     pub global_activated_state_counter: u64,
     /// Running total of deactivated state across all accounts.
@@ -1698,7 +1703,8 @@ fn slot_metrics_from_response(
 
     Ok(SlotMetricsUpdate {
         slot: resp.slot,
-        collected_fees: resp.collected_fees,
+        absent_block_producer_fees: resp.absent_block_producer_fees,
+        claimed_fees: resp.claimed_fees,
         global_activated_state_counter: resp.global_activated_state_counter,
         global_deactivated_state_counter: resp.global_deactivated_state_counter,
         block_timestamp: match resp.block_timestamp {
@@ -2036,7 +2042,12 @@ pub struct SlotMetrics {
     pub slot: u64,
     pub global_activated_state_counter: u64,
     pub global_deactivated_state_counter: u64,
-    pub collected_fees: u64,
+    /// Fees credited to the absent-block-producer fee receiver this block
+    /// because the producer account was not live (UNTO-1293). Disjoint from
+    /// `claimed_fees`.
+    pub absent_block_producer_fees: u64,
+    /// Fees credited to a live block-producer account this block (UNTO-1293).
+    pub claimed_fees: u64,
     pub block_timestamp: Option<std::time::SystemTime>,
 }
 
@@ -2047,7 +2058,8 @@ impl SlotMetrics {
             slot: proto.slot,
             global_activated_state_counter: proto.global_activated_state_counter,
             global_deactivated_state_counter: proto.global_deactivated_state_counter,
-            collected_fees: proto.collected_fees,
+            absent_block_producer_fees: proto.absent_block_producer_fees,
+            claimed_fees: proto.claimed_fees,
             block_timestamp,
         }
     }
@@ -2260,7 +2272,8 @@ mod tests {
     ) -> servicesv1::StreamSlotMetricsResponse {
         servicesv1::StreamSlotMetricsResponse {
             slot: 42,
-            collected_fees: 7,
+            absent_block_producer_fees: 7,
+            claimed_fees: 4,
             consumed_compute_units: 9,
             consumed_state_units: 3,
             compressed_state_root: root,
@@ -2338,7 +2351,8 @@ mod tests {
     fn slot_metrics_carry_the_whole_response() {
         let resp = servicesv1::StreamSlotMetricsResponse {
             slot: 9,
-            collected_fees: 11,
+            absent_block_producer_fees: 11,
+            claimed_fees: 6,
             global_activated_state_counter: 22,
             global_deactivated_state_counter: 33,
             consumed_compute_units: 44,
@@ -2346,6 +2360,8 @@ mod tests {
             ..Default::default()
         };
         let m = slot_metrics_from_response(resp).expect("converts");
+        assert_eq!(m.absent_block_producer_fees, 11);
+        assert_eq!(m.claimed_fees, 6);
         assert_eq!(m.global_activated_state_counter, 22);
         assert!(m.block_timestamp.is_none(), "an unset timestamp stays None");
         assert_eq!(m.global_deactivated_state_counter, 33);

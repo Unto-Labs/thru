@@ -45,7 +45,7 @@ declare const process:
 
 export const DEFAULT_DEPOSIT_SYMBOL = "CREDITS";
 export const DEFAULT_DEPOSIT_DECIMALS = 6;
-export const DEFAULT_DEPOSIT_TARGET = DepositTarget.Credits;
+export const DEFAULT_DEPOSIT_TARGET = DepositTarget.THRUSD;
 export const CREDITS_TICKER = DEFAULT_DEPOSIT_SYMBOL;
 export const CREDITS_DECIMALS = DEFAULT_DEPOSIT_DECIMALS;
 
@@ -180,7 +180,7 @@ export type GetDepositAccountStateParams = {
   destination?: DepositDestination;
 };
 
-export type WaitForDepositBalanceParams = {
+export type WaitForDepositParams = {
   destination: DepositDestination;
   minimumBalanceRaw: bigint;
   signature?: string;
@@ -199,10 +199,33 @@ export interface DepositsApi {
   getAccountState(
     params?: GetDepositAccountStateParams,
   ): Promise<DepositAccountState>;
-  waitForBalance(
-    params: WaitForDepositBalanceParams,
+  waitForDeposit(
+    params: WaitForDepositParams,
   ): Promise<DepositAccountState>;
   formatAmount(amountRaw: bigint, destination: DepositDestination): string;
+}
+
+export interface DepositsApiDelegate {
+  prepare: DepositsApi["prepare"];
+  ensureAccount: DepositsApi["ensureAccount"];
+  open: DepositsApi["open"];
+  getProviders: DepositsApi["getProviders"];
+  getAccountState: DepositsApi["getAccountState"];
+  waitForDeposit: DepositsApi["waitForDeposit"];
+  formatAmount: DepositsApi["formatAmount"];
+}
+
+/** Construct the canonical deposit surface shared by every SDK transport. */
+export function createDepositsApi(delegate: DepositsApiDelegate): DepositsApi {
+  return {
+    prepare: delegate.prepare.bind(delegate),
+    ensureAccount: delegate.ensureAccount.bind(delegate),
+    open: delegate.open.bind(delegate),
+    getProviders: delegate.getProviders.bind(delegate),
+    getAccountState: delegate.getAccountState.bind(delegate),
+    waitForDeposit: delegate.waitForDeposit.bind(delegate),
+    formatAmount: delegate.formatAmount.bind(delegate),
+  };
 }
 
 export type SignDepositTransactionPayload = {
@@ -752,7 +775,7 @@ export async function waitForDepositAccountState(
   );
 }
 
-export async function waitForDepositBalanceForWallet(params: {
+export async function waitForDepositForWallet(params: {
   thru: Thru;
   walletAddress: string;
   destination: DepositDestination;

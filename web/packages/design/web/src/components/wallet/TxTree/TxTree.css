@@ -1,0 +1,228 @@
+/* TxTree — nested collapsible review tree. Indent per level rides on two
+   custom properties set by each Section from its depth. */
+
+.tds-txtree {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  font-family: var(--font-mono);
+  color: var(--color-text-primary);
+}
+
+.tds-txtree__dim {
+  color: var(--color-text-tertiary);
+  flex: none;
+}
+
+/* ── Sections ───────────────────────────────────────────────────── */
+.tds-txtree__section--root {
+  border: 1px solid var(--color-border-tertiary);
+  background: var(--color-surface-higher);
+}
+.tds-txtree__section--nested {
+  border-top: 1px solid var(--color-border-tertiary);
+}
+.tds-txtree__section--bare {
+  border: none;
+}
+
+.tds-txtree__trigger {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px var(--space-2) 8px var(--tds-txtree-trigger-left, 8px);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-primary);
+  text-align: left;
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+.tds-txtree__section--nested > .tds-txtree__trigger {
+  padding-top: 7px;
+  padding-bottom: 7px;
+  font-size: 11px;
+}
+.tds-txtree__trigger:hover {
+  background: var(--color-surface-primary);
+}
+.tds-txtree__trigger:focus-visible {
+  outline: 2px solid var(--color-border-brand);
+  outline-offset: -2px;
+}
+.tds-txtree__section--bare > .tds-txtree__trigger {
+  padding: 3px 0;
+  font-size: 11px;
+}
+.tds-txtree__section--bare > .tds-txtree__trigger:hover {
+  background: none;
+  color: var(--color-text-brand);
+}
+
+.tds-txtree__chev {
+  color: var(--color-text-tertiary);
+  flex: none;
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+.tds-txtree__trigger[data-panel-open] > .tds-txtree__chev {
+  transform: rotate(90deg);
+}
+.tds-txtree__label {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tds-txtree__meta {
+  color: var(--color-text-tertiary);
+  flex: none;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.tds-txtree__panel {
+  overflow: hidden;
+  height: var(--collapsible-panel-height);
+  transition: height var(--duration-fast) var(--ease-standard);
+}
+.tds-txtree__panel[data-starting-style],
+.tds-txtree__panel[data-ending-style] {
+  height: 0;
+}
+
+.tds-txtree__body {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 11px;
+}
+/* A root section's body sits under a rule, indented past the chevron. */
+.tds-txtree__section--root > .tds-txtree__panel > .tds-txtree__body {
+  border-top: 1px solid var(--color-border-tertiary);
+  padding: var(--space-2) var(--space-2) var(--space-2) var(--tds-txtree-body-left, 26px);
+}
+.tds-txtree__section--nested > .tds-txtree__panel > .tds-txtree__body {
+  padding: 0 var(--space-2) var(--space-2) var(--tds-txtree-body-left, 38px);
+}
+.tds-txtree__section--bare > .tds-txtree__panel > .tds-txtree__body {
+  padding: 0;
+}
+/* Account rows fill the section edge to edge (their own rules + indent). */
+.tds-txtree__section--root > .tds-txtree__panel > .tds-txtree__body:has(> .tds-txtree__account),
+.tds-txtree__section--root > .tds-txtree__panel > .tds-txtree__body:has(> .tds-txtree__section) {
+  border-top: none;
+  padding: 0;
+  gap: 0;
+}
+
+/* ── Leaves ─────────────────────────────────────────────────────── */
+.tds-txtree__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.tds-txtree__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.tds-txtree__value {
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tds-txtree__hex {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.tds-txtree__account {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px var(--space-2) 6px var(--tds-txtree-body-left, 26px);
+  border-top: 1px solid var(--color-border-tertiary);
+  font-size: 11px;
+}
+.tds-txtree__account-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.tds-txtree__account-name {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tds-txtree__account-addr {
+  gap: 6px;
+  font-size: 11px;
+  color: var(--color-text-secondary);
+}
+.tds-txtree__roles {
+  display: flex;
+  gap: 4px;
+  flex: none;
+}
+.tds-txtree__role {
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  background: var(--color-surface-lower);
+  color: var(--color-text-primary);
+  padding: 2px 5px;
+}
+
+/* Decoded data: a box that scrolls sideways, never wraps. */
+.tds-txtree__prebox {
+  margin: 3px 0 2px;
+  background: var(--color-surface-primary);
+  border: 1px solid var(--color-border-tertiary);
+  overflow-x: scroll;
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border-secondary) transparent;
+}
+.tds-txtree__pre {
+  box-sizing: border-box;
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.55;
+  color: var(--color-text-primary);
+  white-space: pre;
+  width: max-content;
+  min-width: 100%;
+}
+
+/* Raw bytes */
+.tds-txtree__bytes {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tds-txtree__bytes-hex {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  word-break: break-all;
+  max-height: 96px;
+  overflow: auto;
+  scrollbar-width: thin;
+}

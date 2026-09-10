@@ -1,0 +1,105 @@
+/* Dove — the Thru mark in flight. Color rides on a custom property so the
+   caller can pass `currentColor`; every motion is CSS keyframes. */
+.tds-dove {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  vertical-align: middle;
+  line-height: 0;
+  color: var(--tds-dove-color, var(--color-surface-brick));
+  flex: none;
+}
+.tds-dove__tilt,
+.tds-dove__bob {
+  display: inline-block;
+  line-height: 0;
+}
+.tds-dove__svg {
+  display: block;
+  overflow: visible;
+}
+
+.tds-dove__body,
+.tds-dove__wing {
+  fill: currentColor;
+  stroke: currentColor;
+  stroke-linejoin: round;
+  stroke-width: 0;
+  fill-opacity: 1;
+}
+.tds-dove__hinge {
+  transform-box: view-box;
+  transform-origin: 80px 72px;
+}
+
+/* Draw-on entrance: outline strokes on over 1.4s, then the fill fades in. */
+.tds-dove--draw .tds-dove__body,
+.tds-dove--draw .tds-dove__wing {
+  fill-opacity: 0;
+  animation:
+    tds-dove-draw 1.4s ease-out forwards,
+    tds-dove-fill 0.6s ease 1.15s forwards;
+}
+
+/* Flight: tilt on the outer wrapper, bob on the inner, wing on its hinge. */
+.tds-dove--fly .tds-dove__tilt {
+  animation: tds-dove-tilt 1.6s ease-in-out infinite;
+}
+.tds-dove--fly .tds-dove__bob {
+  animation: tds-dove-bob 0.8s ease-in-out infinite;
+}
+.tds-dove--fly.tds-dove--small .tds-dove__bob {
+  animation-name: tds-dove-bob-sm;
+}
+.tds-dove--fly .tds-dove__hinge {
+  animation: tds-dove-wing 0.8s ease-in-out infinite;
+}
+
+.tds-dove__streak {
+  position: absolute;
+  height: 1px;
+  background: var(--color-border-secondary);
+  animation: tds-dove-streak 1.1s linear infinite;
+}
+
+@keyframes tds-dove-draw {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes tds-dove-fill {
+  to { fill-opacity: 1; }
+}
+@keyframes tds-dove-tilt {
+  0%, 100% { transform: rotate(-3deg); }
+  50% { transform: rotate(3deg); }
+}
+@keyframes tds-dove-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+@keyframes tds-dove-bob-sm {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-1.2px); }
+}
+@keyframes tds-dove-wing {
+  0%, 100% { transform: rotate(0deg); }
+  50% { transform: rotate(-15deg); }
+}
+@keyframes tds-dove-streak {
+  0% { transform: translateX(24px); opacity: 0; }
+  25% { opacity: 1; }
+  100% { transform: translateX(-96px); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tds-dove--fly .tds-dove__tilt,
+  .tds-dove--fly .tds-dove__bob,
+  .tds-dove--fly .tds-dove__hinge,
+  .tds-dove__streak {
+    animation: none;
+  }
+  .tds-dove--draw .tds-dove__body,
+  .tds-dove--draw .tds-dove__wing {
+    animation-duration: 0.01ms;
+    animation-delay: 0ms;
+  }
+}

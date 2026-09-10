@@ -2,8 +2,8 @@ import { createContext } from 'react';
 import type {
   CreateAccountOptions,
   NativeSDK,
-  WalletAvailability,
 } from "../NativeSDK";
+import type { WalletAvailability } from "../../connection-state";
 import type { WalletAccount } from "../../interfaces";
 import type {
   CreateAccountResult,
@@ -18,28 +18,16 @@ import type {
   DepositsApi,
   EnsureDepositAccountParams,
   GetDepositAccountStateParams,
-  WaitForDepositBalanceParams,
+  WaitForDepositParams,
 } from "../../deposit";
 import { formatDepositAmount } from "../../deposit";
-
-export const CHECKING_WALLET_AVAILABILITY: WalletAvailability = {
-  status: 'checking',
-  isAuthorized: false,
-  isConnected: false,
-  isUnlocked: false,
-  hasPasskey: false,
-  hasWalletAccount: false,
-  accounts: [],
-  selectedAccount: null,
-  metadata: null,
-  error: null,
-};
+import type { Thru } from "@thru/sdk/client";
 
 export interface ThruContextValue {
   /** Initialized NativeSDK instance, or null while still constructing. */
   wallet: NativeSDK | null;
-  /** Lazily-instantiated Thru chain client (cast at the call site). */
-  thru: unknown;
+  /** Lazily-instantiated Thru chain client. */
+  thru: Thru | null;
   isConnected: boolean;
   isConnecting: boolean;
   accounts: WalletAccount[];
@@ -60,7 +48,7 @@ export interface ThruContextValue {
     params?: GetDepositAccountStateParams
   ) => Promise<DepositAccountState>;
   waitForDepositBalance: (
-    params: WaitForDepositBalanceParams
+    params: WaitForDepositParams
   ) => Promise<DepositAccountState>;
   formatDepositAmount: typeof formatDepositAmount;
   deposits: DepositsApi;

@@ -13,6 +13,7 @@ export type { ThruTransparentWalletBridgeProps } from './ThruTransparentWalletBr
 
 export { useWallet } from './hooks/useWallet';
 export { useWalletAvailability } from './hooks/useWalletAvailability';
+export { useNativeOnboarding } from './hooks/useNativeOnboarding';
 export { useAccounts } from './hooks/useAccounts';
 export { useThru } from './hooks/useThru';
 
@@ -24,8 +25,7 @@ export type {
   ThruSigningSession,
   ThruSigningSessionCreateOptions,
   ThruSigningSessionDescriptor,
-  ThruSigningSessionInstruction,
-  ThruSigningSessionInstructionCreateOptions,
+  ThruSigningSessionRenewOptions,
   ThruSigningSessionTimestamp,
   ThruTransactionIntent,
 } from "../../interfaces";
@@ -36,8 +36,8 @@ export type {
   NativeSDKConfig,
   NativeSDKStorage,
   NativeWalletExperience,
-  WalletAvailability,
 } from "../NativeSDK";
+export type { WalletAvailability } from "../../connection-state";
 export type {
   DepositDestination,
   DepositRequestPayload,
@@ -55,7 +55,7 @@ export type {
   DepositsApi,
   EnsureDepositAccountParams,
   GetDepositAccountStateParams,
-  WaitForDepositBalanceParams,
+  WaitForDepositParams,
 } from "../../deposit";
 export {
   DepositTransactionError,

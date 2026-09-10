@@ -4,7 +4,7 @@ import type { GetConnectionStateResult } from "./postMessage";
 export function normalizeConnectionStateResult(
   result: GetConnectionStateResult,
 ): GetConnectionStateResult {
-  if (!result.isAuthorized || !result.hasPasskey) {
+  if (!result.isAuthorized || !result.isConnected) {
     return { ...result, accounts: [], selectedAccount: null };
   }
 

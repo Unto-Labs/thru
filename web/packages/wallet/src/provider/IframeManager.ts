@@ -6,12 +6,14 @@ import type {
   PostMessageResponse,
   TelemetryContextMessage,
 } from './types/messages';
+import type { IframeReadyData, UiHideEventPayload, WalletTheme } from '../protocol';
 import {
   getSafeRequestTelemetryFields,
   getSafeResponseTelemetryFields,
 } from '../internal/telemetry-fields';
 import type { TelemetryClient } from '../telemetry';
 import {
+  EMBEDDED_PROVIDER_EVENTS,
   IFRAME_READY_EVENT,
   POST_MESSAGE_EVENT_TYPE,
   POST_MESSAGE_REQUEST_TYPES,
@@ -33,7 +35,13 @@ const TRUSTED_IFRAME_ORIGINS = [
 
 const SLOW_REQUEST_TIMEOUT_MS = 5 * 60 * 1000;
 const FAST_REQUEST_TIMEOUT_MS = 30 * 1000;
+/* A managed hide waits for the wallet's exit animation, capped so a bad
+   value never parks the frame over the page. */
+const MANAGED_HIDE_MAX_EXIT_MS = 1000;
+/* If the wallet never announces `ui_hide` after a response, hide anyway. */
+const MANAGED_HIDE_FALLBACK_MS = 4000;
 const PARENT_ORIGIN_SEARCH_PARAM = 'tn_parent_origin';
+const THEME_SEARCH_PARAM = 'tn_theme';
 export const WALLET_IFRAME_ALLOW =
   'publickey-credentials-get; publickey-credentials-create; payment *';
 const WALLET_IFRAME_BACKGROUND = 'transparent';
@@ -44,6 +52,7 @@ const SLOW_REQUEST_TYPES: ReadonlySet<string> = new Set([
   POST_MESSAGE_REQUEST_TYPES.SIGN_TRANSACTION,
   POST_MESSAGE_REQUEST_TYPES.SIGN_PASSKEY_CHALLENGE,
   POST_MESSAGE_REQUEST_TYPES.MANAGE_ACCOUNTS,
+  POST_MESSAGE_REQUEST_TYPES.ACCOUNT_MENU,
   POST_MESSAGE_REQUEST_TYPES.CREATE_SIGNING_SESSION,
   POST_MESSAGE_REQUEST_TYPES.CREATE_SIGNING_SESSION_INSTRUCTION,
   POST_MESSAGE_REQUEST_TYPES.CONFIRM_SIGNING_SESSION,
@@ -82,7 +91,14 @@ function isDevelopmentHostname(hostname: string): boolean {
 
 function isAllowedDevelopmentOrigin(url: URL): boolean {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
-  if (typeof window === 'undefined') return false;
+  if (process.env.NODE_ENV === 'production') return false;
+
+  /* Browser SDK construction can run during a development SSR pass before a
+     window exists. The client constructs and validates its own instance, so
+     permit only an explicitly development-shaped wallet hostname here. */
+  if (typeof window === 'undefined') {
+    return isDevelopmentHostname(url.hostname.toLowerCase());
+  }
 
   const appHostname = window.location.hostname.toLowerCase();
   if (!isDevelopmentHostname(appHostname)) return false;
@@ -146,7 +162,21 @@ export class IframeManager {
   private displayMode: 'modal' | 'inline' = 'modal';
   private inlineContainer: HTMLElement | null = null;
   private visible = false;
+  /* Declared by the wallet in its ready handshake: it announces `ui_hide`
+     when its UI closes, so a host hide after a response can wait for the
+     exit animation instead of cutting it off. */
+  private managedHide = false;
+  /* The wallet has shown UI (`ui_show`) since the frame was last hidden. */
+  private uiClaimed = false;
+  private hideTimer: ReturnType<typeof setTimeout> | null = null;
+  private hideFallbackTimer: ReturnType<typeof setTimeout> | null = null;
+  /* Callers waiting for a deferred hide to finish (`hide()` resolves). */
+  private hiddenWaiters: Array<() => void> = [];
   private telemetry?: TelemetryClient;
+  /* The host page's color scheme: carried on the URL so the wallet document
+     draws to match, and mirrored on the <iframe> so Chrome keeps the frame
+     transparent (a scheme mismatch paints it opaque). */
+  private theme: WalletTheme = 'light';
   private telemetryAppContextId?: string;
   private telemetryContext?: TelemetryAppContext;
   private telemetryContextUpdated = false;
@@ -156,11 +186,12 @@ export class IframeManager {
    */
   public onEvent?: (eventType: string, payload: any) => void;
 
-  constructor(iframeUrl: string, telemetry?: TelemetryClient) {
+  constructor(iframeUrl: string, telemetry?: TelemetryClient, options: { theme?: WalletTheme } = {}) {
     // Validate origin before accepting the URL
     validateIframeOrigin(iframeUrl);
 
     this.iframeUrl = iframeUrl;
+    this.theme = options.theme ?? 'light';
     this.iframeOrigin = new URL(iframeUrl).origin;
     /* Used to correlate postMessage traffic with the correct iframe instance.
        Important in dev (React Strict Mode) where iframes can be created twice. */
@@ -182,6 +213,10 @@ export class IframeManager {
     });
   }
 
+  getWalletOrigin(): string {
+    return this.iframeOrigin;
+  }
+
   private getIframeSrc(): string {
     const url = new URL(this.iframeUrl);
     url.searchParams.set('tn_frame_id', this.frameId);
@@ -189,7 +224,12 @@ export class IframeManager {
     if (parentOrigin) {
       url.searchParams.set(PARENT_ORIGIN_SEARCH_PARAM, parentOrigin);
     }
+    url.searchParams.set(THEME_SEARCH_PARAM, this.theme);
     return url.toString();
+  }
+
+  getTheme(): WalletTheme {
+    return this.theme;
   }
 
   /**
@@ -295,6 +335,7 @@ export class IframeManager {
         }
 
         if (event.data?.type === IFRAME_READY_EVENT) {
+          this.readCapabilities(event.data);
           cleanup();
           resolve();
         }
@@ -370,6 +411,8 @@ export class IframeManager {
    * Show iframe inline (embedded in container).
    */
   showInline(): void {
+    this.clearHideTimers();
+    this.settleHiddenWaiters();
     if (!this.iframe) {
       this.record(TELEMETRY_EVENTS.BRIDGE_VISIBILITY_IGNORED, {
         severity: 'warn',
@@ -390,6 +433,8 @@ export class IframeManager {
    * Show iframe as a full-screen modal.
    */
   showModal(): void {
+    this.clearHideTimers();
+    this.settleHiddenWaiters();
     if (!this.iframe) {
       this.record(TELEMETRY_EVENTS.BRIDGE_VISIBILITY_IGNORED, {
         severity: 'warn',
@@ -414,10 +459,23 @@ export class IframeManager {
   }
 
   /**
-   * Hide iframe modal
+   * Hide the iframe modal. A wallet that manages its own hiding and has UI
+   * up keeps the frame until its `ui_hide` (the exit animation), with a
+   * fallback so a lost event never leaves the frame over the page. Resolves
+   * once the frame is actually hidden, so a caller can hold its own state
+   * (a "Signing in…" button) through the wallet's exit animation.
    */
-  hide(): void {
-    this.setVisibility(false);
+  hide(): Promise<void> {
+    if (this.managedHide && this.uiClaimed && this.visible) {
+      if (!this.hideFallbackTimer) {
+        this.hideFallbackTimer = setTimeout(() => this.finishHide(), MANAGED_HIDE_FALLBACK_MS);
+      }
+      return new Promise((resolve) => {
+        this.hiddenWaiters.push(resolve);
+      });
+    }
+    this.finishHide();
+    return Promise.resolve();
   }
 
   isInline(): boolean {
@@ -429,6 +487,11 @@ export class IframeManager {
       return;
     }
 
+    /* Chrome paints a cross-origin iframe opaque when the <iframe> element's
+       used color scheme differs from the embedded document's. The wallet
+       document is light, so pin the element to light too; otherwise a dark
+       host (color-scheme: dark) sees a solid light sheet instead of its own
+       page behind the scrim. */
     if (this.displayMode === 'inline') {
       this.iframe.style.cssText = `
         position: relative;
@@ -438,6 +501,7 @@ export class IframeManager {
         z-index: 1;
         display: block;
         background: ${WALLET_IFRAME_BACKGROUND};
+        color-scheme: ${this.theme};
       `;
       return;
     }
@@ -452,6 +516,7 @@ export class IframeManager {
       z-index: 999999;
       display: block;
       background: ${WALLET_IFRAME_BACKGROUND};
+      color-scheme: ${this.theme};
     `;
   }
 
@@ -635,6 +700,7 @@ export class IframeManager {
     }
 
     if (data?.type === IFRAME_READY_EVENT) {
+      this.readCapabilities(data);
       this.record(TELEMETRY_EVENTS.BRIDGE_IFRAME_READY_RECEIVED, { severity: 'debug' });
       this.sendTelemetryContext();
       return;
@@ -659,10 +725,67 @@ export class IframeManager {
     this.record(TELEMETRY_EVENTS.BRIDGE_EVENT_RECEIVED, {
       operation: data.event,
     });
+    if (data.event === EMBEDDED_PROVIDER_EVENTS.UI_SHOW) {
+      this.uiClaimed = true;
+    } else if (data.event === EMBEDDED_PROVIDER_EVENTS.UI_HIDE) {
+      const exitMs = (data.data as UiHideEventPayload | undefined)?.exitMs;
+      this.hideAfterExit(typeof exitMs === 'number' ? exitMs : 0);
+    }
     // Forward to EmbeddedProvider via callback
     if (this.onEvent) {
       this.onEvent(data.event, data.data);
     }
+  }
+
+  private readCapabilities(data: { data?: unknown }): void {
+    const ready = data.data as IframeReadyData | undefined;
+    if (ready?.capabilities?.managedHide === true) {
+      this.managedHide = true;
+    }
+  }
+
+  private clearHideTimers(): void {
+    if (this.hideTimer) {
+      clearTimeout(this.hideTimer);
+      this.hideTimer = null;
+    }
+    if (this.hideFallbackTimer) {
+      clearTimeout(this.hideFallbackTimer);
+      this.hideFallbackTimer = null;
+    }
+  }
+
+  /**
+   * The wallet's UI is closing: give the host its pointer events back at
+   * once and hide the frame once the exit animation has played.
+   */
+  private hideAfterExit(exitMs: number): void {
+    if (this.displayMode === 'inline' || !this.visible) {
+      return;
+    }
+    this.clearHideTimers();
+    if (this.iframe) {
+      this.iframe.style.pointerEvents = 'none';
+    }
+    const delay = Math.min(Math.max(exitMs, 0), MANAGED_HIDE_MAX_EXIT_MS);
+    if (delay === 0) {
+      this.finishHide();
+      return;
+    }
+    this.hideTimer = setTimeout(() => this.finishHide(), delay);
+  }
+
+  private finishHide(): void {
+    this.clearHideTimers();
+    this.uiClaimed = false;
+    this.setVisibility(false);
+    this.settleHiddenWaiters();
+  }
+
+  private settleHiddenWaiters(): void {
+    const waiters = this.hiddenWaiters;
+    this.hiddenWaiters = [];
+    waiters.forEach((resolve) => resolve());
   }
 
   private isMessageFromIframe(event: MessageEvent): boolean {
@@ -689,6 +812,8 @@ export class IframeManager {
    * Destroy iframe and cleanup
    */
   destroy(): void {
+    this.clearHideTimers();
+    this.settleHiddenWaiters();
     this.record(TELEMETRY_EVENTS.BRIDGE_DESTROYED, {
       severity: 'debug',
       outcome: this.messageHandlers.size > 0 ? 'pending_requests_dropped' : 'success',

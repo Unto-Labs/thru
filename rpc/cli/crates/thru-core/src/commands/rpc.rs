@@ -391,7 +391,8 @@ pub async fn get_slot_metrics(
                                 "slot": metrics.slot,
                                 "global_activated_state_counter": metrics.global_activated_state_counter,
                                 "global_deactivated_state_counter": metrics.global_deactivated_state_counter,
-                                "collected_fees": metrics.collected_fees,
+                                "absent_block_producer_fees": metrics.absent_block_producer_fees,
+                                "claimed_fees": metrics.claimed_fees,
                                 "block_timestamp": metrics.block_timestamp.map(|ts| {
                                     ts.duration_since(std::time::UNIX_EPOCH)
                                         .map(|d| format!("{}.{:09}", d.as_secs(), d.subsec_nanos()))
@@ -404,7 +405,8 @@ pub async fn get_slot_metrics(
                         println!("Slot: {}", metrics.slot);
                         println!("Global Activated State Counter: {}", metrics.global_activated_state_counter);
                         println!("Global Deactivated State Counter: {}", metrics.global_deactivated_state_counter);
-                        println!("Collected Fees: {}", metrics.collected_fees);
+                        println!("Absent-Producer Fees: {}", metrics.absent_block_producer_fees);
+                        println!("Claimed Fees: {}", metrics.claimed_fees);
                         if let Some(ts) = metrics.block_timestamp {
                             if let Ok(duration) = ts.duration_since(std::time::UNIX_EPOCH) {
                                 println!("Block Timestamp: {}.{:09}", duration.as_secs(), duration.subsec_nanos());
@@ -470,7 +472,8 @@ pub async fn get_slot_metrics(
                         "slot": m.slot,
                         "global_activated_state_counter": m.global_activated_state_counter,
                         "global_deactivated_state_counter": m.global_deactivated_state_counter,
-                        "collected_fees": m.collected_fees,
+                        "absent_block_producer_fees": m.absent_block_producer_fees,
+                        "claimed_fees": m.claimed_fees,
                         "block_timestamp": m.block_timestamp.map(|ts| {
                             ts.duration_since(std::time::UNIX_EPOCH)
                                 .map(|d| format!("{}.{:09}", d.as_secs(), d.subsec_nanos()))
@@ -490,11 +493,12 @@ pub async fn get_slot_metrics(
                 println!("Slot Metrics ({} entries):", all_metrics.len());
                 println!("{:-<80}", "");
                 for m in &all_metrics {
-                    println!("Slot {}: activated={}, deactivated={}, fees={}",
+                    println!("Slot {}: activated={}, deactivated={}, absent_producer={}, claimed={}",
                         m.slot,
                         m.global_activated_state_counter,
                         m.global_deactivated_state_counter,
-                        m.collected_fees);
+                        m.absent_block_producer_fees,
+                        m.claimed_fees);
                 }
             }
             Ok(())

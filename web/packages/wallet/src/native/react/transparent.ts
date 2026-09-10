@@ -19,8 +19,7 @@ export type {
   ThruSigningSession,
   ThruSigningSessionCreateOptions,
   ThruSigningSessionDescriptor,
-  ThruSigningSessionInstruction,
-  ThruSigningSessionInstructionCreateOptions,
+  ThruSigningSessionRenewOptions,
   ThruSigningSessionTimestamp,
   ThruTransactionIntent,
 } from "../../interfaces";
@@ -31,6 +30,6 @@ export type {
   NativeSDKConfig,
   NativeSDKStorage,
   NativeWalletExperience,
-  WalletAvailability,
 } from "../NativeSDK";
+export type { WalletAvailability } from "../../connection-state";
 export type { ManageAccountsResult } from "../../protocol";

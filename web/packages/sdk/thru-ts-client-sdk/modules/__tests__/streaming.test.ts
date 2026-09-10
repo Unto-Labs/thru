@@ -446,7 +446,8 @@ describe("streaming", () => {
       slot: 42n,
       globalActivatedStateCounter: 111n,
       globalDeactivatedStateCounter: 222n,
-      collectedFees: 333n,
+      absentBlockProducerFees: 333n,
+      claimedFees: 666n,
       blockTimestamp: create(TimestampSchema, { seconds: 1_700_000_000n, nanos: 500 }),
       consumedComputeUnits: 444n,
       consumedStateUnits: 555,
@@ -471,7 +472,8 @@ describe("streaming", () => {
       expect(metric.slot).toBe(42n);
       expect(metric.globalActivatedStateCounter).toBe(111n);
       expect(metric.globalDeactivatedStateCounter).toBe(222n);
-      expect(metric.collectedFees).toBe(333n);
+      expect(metric.absentBlockProducerFees).toBe(333n);
+      expect(metric.claimedFees).toBe(666n);
       expect(metric.blockTimestamp?.seconds).toBe(1_700_000_000n);
       expect(metric.blockTimestamp?.nanos).toBe(500);
       /* UNTO-2581: these two were on the wire but dropped by the mapper. */

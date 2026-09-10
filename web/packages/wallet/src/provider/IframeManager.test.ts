@@ -32,6 +32,28 @@ describe('IframeManager', () => {
     manager.applyIframeStyles();
 
     expect(iframe.style.cssText).toContain('background: transparent;');
+    /* Matches the light wallet document so Chrome keeps the frame transparent
+       over a dark host (a color-scheme mismatch paints it opaque). */
+    expect(iframe.style.cssText).toContain('color-scheme: light;');
+  });
+
+  it('carries the host theme on the frame URL and the frame element', () => {
+    const iframe = { style: { cssText: '' } };
+    const manager = new IframeManager(
+      'https://app.tid.sh/embedded',
+      undefined,
+      { theme: 'dark' }
+    ) as unknown as {
+      iframe: typeof iframe;
+      applyIframeStyles: () => void;
+      getIframeSrc: () => string;
+      getTheme: () => string;
+    };
+    manager.iframe = iframe;
+    manager.applyIframeStyles();
+    expect(iframe.style.cssText).toContain('color-scheme: dark;');
+    expect(new URL(manager.getIframeSrc()).searchParams.get('tn_theme')).toBe('dark');
+    expect(manager.getTheme()).toBe('dark');
   });
 
   it('allows trusted deployed wallet origins', () => {
@@ -142,6 +164,94 @@ describe('IframeManager', () => {
     manager.destroy();
   });
 
+  it('hides at once on a response when the wallet does not manage hiding', async () => {
+    const { manager, frameId, iframe } = await readyManager();
+    dispatchWalletMessage(frameId, { type: 'event', event: 'ui_show', data: { reason: 'connect' } });
+    manager.showModal();
+    expect(iframe.style.visibility).toBe('visible');
+
+    manager.hide();
+    expect(iframe.style.visibility).toBe('hidden');
+    manager.destroy();
+  });
+
+  it('keeps a managed frame up through the wallet exit animation', async () => {
+    vi.useFakeTimers();
+    const { manager, frameId, iframe } = await readyManager({ managedHide: true });
+    dispatchWalletMessage(frameId, { type: 'event', event: 'ui_show', data: { reason: 'connect' } });
+    manager.showModal();
+    expect(iframe.style.visibility).toBe('visible');
+
+    /* The host's own hide (a response arrived) waits for the wallet. */
+    manager.hide();
+    expect(iframe.style.visibility).toBe('visible');
+    expect(iframe.style.pointerEvents).toBe('auto');
+
+    /* The wallet announces its exit: pointer events go at once, the frame
+       hides once the animation has played. */
+    dispatchWalletMessage(frameId, { type: 'event', event: 'ui_hide', data: { exitMs: 480 } });
+    expect(iframe.style.visibility).toBe('visible');
+    expect(iframe.style.pointerEvents).toBe('none');
+    await vi.advanceTimersByTimeAsync(479);
+    expect(iframe.style.visibility).toBe('visible');
+    await vi.advanceTimersByTimeAsync(1);
+    expect(iframe.style.visibility).toBe('hidden');
+
+    /* Once hidden the claim is cleared: a host hide with no wallet UI up is
+       immediate again. */
+    manager.showModal();
+    manager.hide();
+    expect(iframe.style.visibility).toBe('hidden');
+    manager.destroy();
+  });
+
+  it('resolves a deferred hide only once the frame is hidden', async () => {
+    vi.useFakeTimers();
+    const { manager, frameId, iframe } = await readyManager({ managedHide: true });
+    dispatchWalletMessage(frameId, { type: 'event', event: 'ui_show', data: { reason: 'connect' } });
+    manager.showModal();
+    let settled = false;
+    const hidden = manager.hide().then(() => {
+      settled = true;
+    });
+    await Promise.resolve();
+    expect(settled).toBe(false);
+    dispatchWalletMessage(frameId, { type: 'event', event: 'ui_hide', data: { exitMs: 480 } });
+    await vi.advanceTimersByTimeAsync(480);
+    await hidden;
+    expect(settled).toBe(true);
+    expect(iframe.style.visibility).toBe('hidden');
+    /* An unmanaged or already-hidden frame settles at once. */
+    await expect(manager.hide()).resolves.toBeUndefined();
+    manager.destroy();
+  });
+
+  it('falls back to hiding a managed frame when ui_hide never arrives', async () => {
+    vi.useFakeTimers();
+    const { manager, frameId, iframe } = await readyManager({ managedHide: true });
+    dispatchWalletMessage(frameId, { type: 'event', event: 'ui_show', data: { reason: 'connect' } });
+    manager.showModal();
+    manager.hide();
+    expect(iframe.style.visibility).toBe('visible');
+    await vi.advanceTimersByTimeAsync(4000);
+    expect(iframe.style.visibility).toBe('hidden');
+    manager.destroy();
+  });
+
+  it('cancels a pending managed hide when the wallet shows again', async () => {
+    vi.useFakeTimers();
+    const { manager, frameId, iframe } = await readyManager({ managedHide: true });
+    dispatchWalletMessage(frameId, { type: 'event', event: 'ui_show', data: { reason: 'connect' } });
+    manager.showModal();
+    manager.hide();
+    dispatchWalletMessage(frameId, { type: 'event', event: 'ui_hide', data: { exitMs: 480 } });
+    manager.showModal();
+    expect(iframe.style.pointerEvents).toBe('auto');
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(iframe.style.visibility).toBe('visible');
+    manager.destroy();
+  });
+
   it('records malformed and rejected wallet-origin messages', async () => {
     const { manager, telemetry, frameId } = await readyManager();
 
@@ -182,9 +292,17 @@ describe('IframeManager', () => {
     );
     manager.destroy();
   });
+
+  it('allows a Tailscale wallet during development SSR', () => {
+    const bridge = new IframeManager(
+      'https://wallet-dev.tailabc.ts.net/embedded'
+    );
+
+    expect(bridge).toBeInstanceOf(IframeManager);
+  });
 });
 
-async function readyManager(): Promise<{
+async function readyManager(capabilities?: { managedHide?: boolean }): Promise<{
   manager: IframeManager;
   telemetry: { record: ReturnType<typeof vi.fn> };
   iframe: HTMLIFrameElement;
@@ -198,7 +316,10 @@ async function readyManager(): Promise<{
   const readyPromise = manager.createIframe();
   const iframe = document.querySelector('iframe')!;
   const frameId = new URL(iframe.src).searchParams.get('tn_frame_id')!;
-  dispatchWalletMessage(frameId, { type: 'iframe:ready' });
+  dispatchWalletMessage(frameId, {
+    type: 'iframe:ready',
+    data: capabilities ? { ready: true, capabilities } : { ready: true },
+  });
   await readyPromise;
   return { manager, telemetry, iframe, frameId };
 }
