@@ -8,6 +8,8 @@ import type {
   ConnectMetadataInput,
   ConnectRequestPayload,
   ManageAccountsResult,
+  WalletTheme,
+  WalletThemePreference,
 } from "./protocol";
 import type { DepositsApi } from "./deposit";
 import type {
@@ -55,5 +57,11 @@ export interface WalletSDK {
   readonly sessions: SigningSessionsApi;
   readonly deposits: DepositsApi;
   readonly thru: IThruChain;
+  /** The resolved color scheme the wallet's surfaces draw for. */
+  getTheme(): WalletTheme;
+  /** The scheme the host asked for, which may be `system`. */
+  getThemePreference(): WalletThemePreference;
+  /** Restyle the wallet's open and future surfaces in place, without a reload. */
+  setTheme(theme: WalletThemePreference): void;
   destroy(): void;
 }

@@ -376,33 +376,6 @@ jobs:
         retention-days: 90
         if-no-files-found: error
 
-    # The checksums file is scoped with a thru-cli- prefix because the
-    # release hosts assets from several workflows; a bare SHA256SUMS that
-    # only covers the CLI tarballs would be misleading next to them. It
-    # covers the .deb/.rpm packages too, since they wrap the same binaries.
-    - name: Create thru CLI checksums
-      run: |
-        set -euo pipefail
-
-        : > cli-release-artifacts/thru-cli-SHA256SUMS
-        while IFS= read -r file; do
-          hash=$(sha256sum "$file" | awk '{print $1}')
-          filename=$(basename "$file")
-          printf '%s  %s\n' "$hash" "$filename" >> cli-release-artifacts/thru-cli-SHA256SUMS
-        done < <( { find cli-release-artifacts/cli-* -type f -name 'thru-cli-*.tar.gz';
-                    find cli-packages -type f \( -name '*.deb' -o -name '*.rpm' \); } | sort)
-
-        cat cli-release-artifacts/thru-cli-SHA256SUMS
-
-    # Also keep the checksums as a workflow artifact so publish-npm can
-    # verify the binaries it consumes from this same run.
-    - name: Upload thru CLI checksums to workflow
-      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
-      with:
-        name: cli-SHA256SUMS
-        path: cli-release-artifacts/thru-cli-SHA256SUMS
-        retention-days: 90
-
     # On workflow_dispatch the requested tag may not have a release (e.g. a
     # dry-run build); keep the artifacts on the workflow run instead of
     # failing the upload. publish-npm also keys off this so dry-runs never
@@ -418,6 +391,108 @@ jobs:
           echo "exists=false" >> "$GITHUB_OUTPUT"
           echo "::warning::No release found for ${TAG_NAME}; CLI artifacts remain on this workflow run only."
         fi
+
+    # releases/latest/download/ resolves against the newest non-prerelease
+    # release, so that is the only release where an alias does anything. A
+    # workflow_dispatch rebuild of an older tag would otherwise publish aliases
+    # to a release nothing points at AND prune them off the real latest one,
+    # 404ing every install URL in the docs until the next release.
+    - name: Resolve whether this is the latest release
+      id: latest-check
+      if: ${{ steps.release-check.outputs.exists == 'true' }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -euo pipefail
+
+        latest="$(gh release view --repo "${{ github.repository }}" \
+                    --json tagName --jq .tagName 2>/dev/null || true)"
+        if [ "${latest}" = "${TAG_NAME}" ]; then
+          echo "is_latest=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "is_latest=false" >> "$GITHUB_OUTPUT"
+          echo "::warning::${TAG_NAME} is not the latest release (${latest:-none}); leaving the unversioned aliases alone."
+        fi
+
+    # Unversioned copies of the Linux packages, so the install docs can point at
+    # releases/latest/download/<name> and never pin a version. GitHub resolves
+    # that path by exact asset name and has no asset symlink, so the alias has
+    # to exist as a real asset. Kept out of cli-packages/ so the cli-packages
+    # artifact and the test-linux-packages globs stay untouched.
+    - name: Create unversioned package aliases
+      run: |
+        set -euo pipefail
+
+        mkdir -p cli-package-aliases
+        while read -r glob alias; do
+          src="$(find cli-packages -maxdepth 1 -type f -name "$glob" -print -quit)"
+          if [ -z "$src" ]; then
+            echo "::warning::No ${glob} in this run; skipping its ${alias} alias."
+            continue
+          fi
+          cp "$src" "cli-package-aliases/${alias}"
+        done <<'EOF'
+        thru_*_amd64.deb thru_amd64.deb
+        thru_*_arm64.deb thru_arm64.deb
+        thru-*.x86_64.rpm thru-x86_64.rpm
+        thru-*.aarch64.rpm thru-aarch64.rpm
+        EOF
+
+        ls -l cli-package-aliases
+
+    # Must be a cli-* artifact: publish-npm downloads that pattern and runs
+    # `sha256sum -c` over every line of thru-cli-SHA256SUMS, which now includes
+    # the aliases. Without this the four alias files are missing there and npm
+    # publishing fails on every release.
+    - name: Upload thru package aliases to workflow
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      with:
+        name: cli-package-aliases
+        path: cli-package-aliases/
+        retention-days: 90
+        if-no-files-found: ignore
+
+    # The checksums file is scoped with a thru-cli- prefix because the
+    # release hosts assets from several workflows; a bare SHA256SUMS that
+    # only covers the CLI tarballs would be misleading next to them. It
+    # covers the .deb/.rpm packages too, since they wrap the same binaries.
+    - name: Create thru CLI checksums
+      env:
+        IS_LATEST: ${{ steps.latest-check.outputs.is_latest }}
+      run: |
+        set -euo pipefail
+
+        # The aliases are only uploaded to the latest release, so only that
+        # release's checksum file may list them. Listing them anywhere else
+        # publishes a SHA256SUMS naming assets that release does not have, and
+        # `sha256sum -c` fails for anyone verifying it. publish-npm is
+        # unaffected either way: it verifies the workflow artifacts, where the
+        # alias files always exist, and unlisted extra files are ignored.
+        alias_checksum_files() {
+          if [ "${IS_LATEST:-false}" = "true" ]; then
+            find cli-package-aliases -type f \( -name '*.deb' -o -name '*.rpm' \)
+          fi
+        }
+
+        : > cli-release-artifacts/thru-cli-SHA256SUMS
+        while IFS= read -r file; do
+          hash=$(sha256sum "$file" | awk '{print $1}')
+          filename=$(basename "$file")
+          printf '%s  %s\n' "$hash" "$filename" >> cli-release-artifacts/thru-cli-SHA256SUMS
+        done < <( { find cli-release-artifacts/cli-* -type f -name 'thru-cli-*.tar.gz';
+                    find cli-packages -type f \( -name '*.deb' -o -name '*.rpm' \);
+                    alias_checksum_files; } | sort)
+
+        cat cli-release-artifacts/thru-cli-SHA256SUMS
+
+    # Also keep the checksums as a workflow artifact so publish-npm can
+    # verify the binaries it consumes from this same run.
+    - name: Upload thru CLI checksums to workflow
+      uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+      with:
+        name: cli-SHA256SUMS
+        path: cli-release-artifacts/thru-cli-SHA256SUMS
+        retention-days: 90
 
     - name: Upload thru CLI artifacts
       if: ${{ steps.release-check.outputs.exists == 'true' }}
@@ -445,6 +520,46 @@ jobs:
         done
 
         gh release upload "${TAG_NAME}" cli-release-artifacts/thru-cli-SHA256SUMS --repo "${{ github.repository }}" --clobber
+
+    - name: Upload unversioned package aliases
+      if: ${{ steps.release-check.outputs.exists == 'true' && steps.latest-check.outputs.is_latest == 'true' }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -euo pipefail
+
+        for file in cli-package-aliases/*; do
+          if [ -f "$file" ]; then
+            echo "Uploading $(basename "$file")"
+            gh release upload "${TAG_NAME}" "$file" --repo "${{ github.repository }}" --clobber
+          fi
+        done
+
+    # releases/latest/download/ only ever resolves against the newest release, so
+    # an alias left on an older one is unreachable through any URL the docs emit
+    # (a direct link to an old release uses the versioned name). Dropping them
+    # keeps the duplication flat at one release's worth instead of growing a tail.
+    # Exact names only, never a glob: this deletes assets from a public repo, and
+    # a glob that drifted could take the versioned packages with it. Sweeps every
+    # non-current release rather than just the previous one, so a failed run heals
+    # itself on the next release.
+    - name: Prune unversioned aliases from older releases
+      if: ${{ steps.release-check.outputs.exists == 'true' && steps.latest-check.outputs.is_latest == 'true' }}
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        set -euo pipefail
+
+        for tag in $(gh release list --repo "${{ github.repository }}" --limit 100 \
+                       --json tagName --jq '.[].tagName'); do
+          [ "$tag" = "${TAG_NAME}" ] && continue
+          for alias in thru_amd64.deb thru_arm64.deb thru-x86_64.rpm thru-aarch64.rpm; do
+            if gh release delete-asset "$tag" "$alias" \
+                 --repo "${{ github.repository }}" --yes 2>/dev/null; then
+              echo "Pruned ${alias} from ${tag}"
+            fi
+          done
+        done
 
     - name: CLI Release Summary
       if: ${{ steps.release-check.outputs.exists == 'true' }}

@@ -10,6 +10,7 @@
 import type { CSSProperties } from 'react';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { ThruContext } from './ThruContext';
+import { useWalletTheme } from './useWalletTheme';
 import {
   DEFAULT_IFRAME_URL,
   WALLET_BUTTON_MESSAGES,
@@ -23,6 +24,15 @@ import {
 
 const PARENT_ORIGIN_SEARCH_PARAM = 'tn_parent_origin';
 const FRAME_ID_SEARCH_PARAM = 'tn_frame_id';
+const RELOAD_SEARCH_PARAM = 'tn_reload';
+const READY_WATCHDOG_BASE_MS = 8_000;
+const READY_WATCHDOG_MAX_ATTEMPTS = 3;
+
+/** How long to wait for the button frame's ready before forcing reload number `attempt + 1`; null once out of attempts. */
+export function walletButtonReloadDelayMs(attempt: number): number | null {
+  if (attempt >= READY_WATCHDOG_MAX_ATTEMPTS) return null;
+  return READY_WATCHDOG_BASE_MS * 2 ** attempt;
+}
 
 export interface WalletButtonProps {
   size?: WalletButtonState['size'];
@@ -37,7 +47,7 @@ export interface WalletButtonProps {
   network?: string;
   /** Explorer page of the connected account, for the menu. */
   explorerUrl?: string;
-  /** Match the host page (default: the SDK's configured theme). */
+  /** Pin this button and its menu to a scheme (default: follow the SDK's theme, live). */
   theme?: 'light' | 'dark';
   /** Which edge of the chip the menu aligns to (default right). */
   menuAlign?: 'left' | 'right';
@@ -76,11 +86,20 @@ export function WalletButton({
   className,
   style,
 }: WalletButtonProps) {
-  const { wallet, isConnected, isConnecting, selectedAccount, openAccountMenu } =
-    useContext(ThruContext);
+  const {
+    wallet,
+    isConnected,
+    isConnecting,
+    selectedAccount,
+    openAccountMenu,
+    deposit,
+    ensureDepositAccount,
+  } = useContext(ThruContext);
   const frameId = useMemo(() => createRequestId('btn'), []);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [ready, setReady] = useState(false);
+  /* Reloads of the button frame forced by the ready watchdog (see below). */
+  const [reloadAttempt, setReloadAttempt] = useState(0);
   const [frameSize, setFrameSize] = useState<FrameSize | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
   /* The frame URL carries the host origin, so the iframe is client-only. */
@@ -89,7 +108,8 @@ export function WalletButton({
     setMounted(true);
   }, []);
 
-  const theme = themeProp ?? wallet?.getTheme() ?? 'light';
+  const sdkTheme = useWalletTheme(wallet);
+  const theme = themeProp ?? sdkTheme;
   const baseUrl = iframeUrl ?? wallet?.getIframeUrl() ?? DEFAULT_IFRAME_URL;
   const buttonOrigin = useMemo(() => new URL(baseUrl).origin, [baseUrl]);
   const src = useMemo(() => {
@@ -98,8 +118,22 @@ export function WalletButton({
     if (typeof window !== 'undefined' && window.location.origin) {
       url.searchParams.set(PARENT_ORIGIN_SEARCH_PARAM, window.location.origin);
     }
+    if (reloadAttempt > 0) url.searchParams.set(RELOAD_SEARCH_PARAM, String(reloadAttempt));
     return url.toString();
-  }, [baseUrl, frameId]);
+  }, [baseUrl, frameId, reloadAttempt]);
+
+  /* The frame has no size until the wallet reports one, so a load that never
+     completes (a wallet server mid-restart, a very slow origin) leaves an
+     invisible control. If the frame has not said ready in time, reload it —
+     a few times, backing off — instead of staying blank until the host page
+     is reloaded by hand. */
+  useEffect(() => {
+    if (!mounted || ready) return;
+    const delay = walletButtonReloadDelayMs(reloadAttempt);
+    if (delay === null) return;
+    const timer = window.setTimeout(() => setReloadAttempt((n) => n + 1), delay);
+    return () => window.clearTimeout(timer);
+  }, [mounted, ready, reloadAttempt]);
 
   const address = selectedAccount?.address ?? '';
   const visualState: WalletButtonState['state'] =
@@ -164,7 +198,7 @@ export function WalletButton({
       if (!frameRect) return;
       setMenuOpen(true);
       try {
-        await openAccountMenu({
+        const result = await openAccountMenu({
           anchor: {
             x: frameRect.x + rect.x,
             y: frameRect.y + rect.y,
@@ -175,15 +209,39 @@ export function WalletButton({
           network,
           explorerUrl,
           balances: address && balance ? { [address]: balance } : undefined,
-          theme,
+          /* Only a pinned scheme travels with the menu; otherwise the popup
+             inherits the wallet document's theme and follows it live. */
+          ...(themeProp ? { theme: themeProp } : {}),
         });
+        /* "Add funds" in the wallet's menu: open the deposit sheet through the
+           regular request so the host sees deposit:* events and the outcome.
+           A fresh account has no deposit token account yet, and the sheet
+           refuses to run without one, so create it first (the wallet asks the
+           user to approve that transaction) — the same order a host's own
+           Add funds button follows. */
+        if (result.action === 'deposit') {
+          setMenuOpen(false);
+          await ensureDepositAccount();
+          await deposit({ to: address || undefined });
+        }
       } catch (error) {
         onError?.(error);
       } finally {
         setMenuOpen(false);
       }
     },
-    [address, balance, explorerUrl, menuAlign, network, onError, openAccountMenu, theme]
+    [
+      address,
+      balance,
+      deposit,
+      ensureDepositAccount,
+      explorerUrl,
+      menuAlign,
+      network,
+      onError,
+      openAccountMenu,
+      themeProp,
+    ]
   );
 
   useEffect(() => {

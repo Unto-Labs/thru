@@ -19,7 +19,7 @@ const SHELL_HTML_TEMPLATE = String.raw`<!doctype html>
   <iframe
     id="w"
     data-src="WALLET_URL_PLACEHOLDER"
-    allow="publickey-credentials-get *; publickey-credentials-create *"
+    allow="publickey-credentials-get WALLET_ORIGIN_PLACEHOLDER; publickey-credentials-create WALLET_ORIGIN_PLACEHOLDER"
   ></iframe>
   <script>
     (function () {
@@ -45,7 +45,19 @@ const SHELL_HTML_TEMPLATE = String.raw`<!doctype html>
           /* drop unserializable messages */
         }
       }
+      function themeFromSrc() {
+        try {
+          return new URL(f.dataset.src).searchParams.get('tn_theme') === 'dark' ? 'dark' : 'light';
+        } catch (err) {
+          return 'light';
+        }
+      }
       function postToWallet(msg) {
+        /* Chromium paints the frame opaque when its color-scheme differs
+           from the wallet document's, so the frame follows the host theme. */
+        if (msg && msg.type === 'wallet:theme' && (msg.theme === 'light' || msg.theme === 'dark')) {
+          f.style.colorScheme = msg.theme;
+        }
         if (!f.contentWindow) return;
         var outbound = msg;
         if (msg && typeof msg === 'object') {
@@ -81,13 +93,13 @@ const SHELL_HTML_TEMPLATE = String.raw`<!doctype html>
         postShell('shell:iframe-error', { src: f.src });
       });
       postShell('shell:loading', { src: f.dataset.src });
+      f.style.colorScheme = themeFromSrc();
       f.src = f.dataset.src;
     })();
   </script>
 </body>
 </html>`;
-const SHELL_PLACEHOLDER_PATTERN =
-  /WALLET_URL_PLACEHOLDER|WALLET_ORIGIN_PLACEHOLDER/g;
+const SHELL_PLACEHOLDER_PATTERN = /WALLET_URL_PLACEHOLDER|WALLET_ORIGIN_PLACEHOLDER/g;
 
 export interface ShellOptions {
   walletUrl: string;
@@ -104,8 +116,6 @@ export interface ShellOptions {
  */
 export function getShellHtml(opts: ShellOptions): string {
   return SHELL_HTML_TEMPLATE.replace(SHELL_PLACEHOLDER_PATTERN, (placeholder) =>
-    placeholder === 'WALLET_URL_PLACEHOLDER'
-      ? opts.walletUrl
-      : opts.walletOrigin
+    placeholder === 'WALLET_URL_PLACEHOLDER' ? opts.walletUrl : opts.walletOrigin
   );
 }

@@ -13,10 +13,16 @@ import {
   StyleSheet,
   Text,
   View,
+  useWindowDimensions,
 } from "react-native";
-import { font, radius, text, touch } from "./tokens";
+import { font, radius, space, text, touch } from "./tokens";
 import { makeStyles } from "./theme";
 import { IconClose } from "./Icons";
+import { safeAreaBottomInset } from "./Chrome";
+
+/* The sheet reaches the screen edge, so its own spacer clears the home
+   indicator: the environment inset on web, the iPhone value natively. */
+const DEFAULT_BOTTOM_INSET = safeAreaBottomInset(space[3], 34);
 
 export function Sheet({
   visible,
@@ -24,14 +30,24 @@ export function Sheet({
   onClose,
   children,
   keyboardAvoiding = false,
+  bottomInset = DEFAULT_BOTTOM_INSET,
+  presentation = "sheet",
 }: {
   visible: boolean;
   title: string;
   onClose: () => void;
   children: ReactNode;
   keyboardAvoiding?: boolean;
+  /** Space under the content; pass a safe-area-derived value when known. */
+  bottomInset?: number;
+  /** Keep the native bottom sheet by default. `adaptive` uses a bounded
+      dialog on wide web viewports while preserving the sheet elsewhere. */
+  presentation?: "sheet" | "adaptive";
 }) {
   const styles = useStyles();
+  const { width } = useWindowDimensions();
+  const isDialog =
+    Platform.OS === "web" && presentation === "adaptive" && width >= 840;
   const [mounted, setMounted] = useState(visible);
   const progress = useRef(new Animated.Value(0)).current;
 
@@ -54,13 +70,23 @@ export function Sheet({
     return () => animation.stop();
   }, [mounted, progress, visible]);
 
-  const translateY = progress.interpolate({ inputRange: [0, 1], outputRange: [400, 0] });
+  const translateY = progress.interpolate({
+    inputRange: [0, 1],
+    outputRange: [isDialog ? 24 : 400, 0],
+  });
   const panel = (
     <Animated.View
       style={[
         styles.panel,
-        keyboardAvoiding ? styles.keyboardPanel : styles.absolutePanel,
-        { transform: [{ translateY }] },
+        isDialog
+          ? styles.dialogPanel
+          : keyboardAvoiding
+            ? styles.keyboardPanel
+            : styles.absolutePanel,
+        {
+          opacity: isDialog ? progress : 1,
+          transform: [{ translateY }],
+        },
       ]}
     >
       <View style={styles.header}>
@@ -76,7 +102,7 @@ export function Sheet({
         </Pressable>
       </View>
       {children}
-      <View style={styles.bottomInset} />
+      <View style={{ height: bottomInset }} />
     </Animated.View>
   );
 
@@ -90,7 +116,14 @@ export function Sheet({
           onPress={onClose}
         />
       </Animated.View>
-      {keyboardAvoiding ? (
+      {isDialog ? (
+        <KeyboardAvoidingView
+          pointerEvents="box-none"
+          style={styles.dialogLayer}
+        >
+          {panel}
+        </KeyboardAvoidingView>
+      ) : keyboardAvoiding ? (
         <KeyboardAvoidingView
           behavior={Platform.OS === "ios" ? "padding" : "height"}
           pointerEvents="box-none"
@@ -125,6 +158,21 @@ const useStyles = makeStyles((c) => ({
     justifyContent: "flex-end",
   },
   keyboardPanel: { width: "100%" },
+  dialogLayer: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
+  },
+  dialogPanel: {
+    borderColor: c.border,
+    borderRadius: radius.sheet,
+    borderWidth: 1,
+    maxHeight: "calc(100dvh - 48px)" as unknown as number,
+    maxWidth: 480,
+    overflow: "hidden",
+    width: "100%",
+  },
   header: {
     height: touch.navH,
     flexDirection: "row",
@@ -134,5 +182,4 @@ const useStyles = makeStyles((c) => ({
   },
   title: { flex: 1, fontFamily: font.sansSemiBold, fontSize: text.md, color: c.fg },
   close: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
-  bottomInset: { height: 34 },
 }));

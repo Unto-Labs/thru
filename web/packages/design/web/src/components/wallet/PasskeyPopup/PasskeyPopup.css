@@ -1,0 +1,308 @@
+/* PasskeyPopup — the first-party passkey window. The root fills its parent
+   (a flex column: the page's viewport wrapper, or a fixed frame in the
+   gallery); the column centers with auto margins so tall content scrolls
+   instead of clipping its top. */
+.tds-ppopup {
+  position: relative;
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: 0;
+  background: var(--color-surface-higher);
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  /* The canvas sets no line-height; don't inherit a host's preflight. */
+  line-height: normal;
+}
+
+/* ── Header ─────────────────────────────────────────────────────────── */
+/* Header and footer heights exclude their hairline (the design's 56 + 1 and
+   44 + 1), whatever box-sizing the host sets. */
+.tds-ppopup__bar {
+  box-sizing: content-box;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  height: 56px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--color-border-tertiary);
+}
+.tds-ppopup__lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex: none;
+  color: var(--color-text-primary);
+}
+
+/* The mono chip shared by the header's host tag and the origin cell's
+   network tag. */
+.tds-ppopup__chip {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: var(--radius-xs);
+  background: var(--color-surface-primary);
+  color: var(--color-text-tertiary);
+}
+.tds-ppopup__env {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.tds-ppopup__env > svg {
+  flex: none;
+}
+
+/* ── Body ───────────────────────────────────────────────────────────── */
+.tds-ppopup__body {
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-5) var(--space-6);
+  overflow-y: auto;
+}
+.tds-ppopup__col {
+  width: 100%;
+  max-width: 360px;
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.tds-ppopup__head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tds-ppopup__title {
+  font-size: 20px;
+  font-weight: var(--fw-semibold);
+  letter-spacing: -0.3px;
+  line-height: 1.2;
+  color: var(--color-text-primary);
+}
+.tds-ppopup__sub {
+  font-size: 14px;
+  line-height: 1.45;
+  color: var(--color-text-tertiary);
+  text-wrap: pretty;
+}
+.tds-ppopup__pending {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.tds-ppopup__spin.tds-spinner {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  border-width: 1.5px;
+  border-color: var(--color-border-secondary);
+  border-top-color: var(--color-text-tertiary);
+}
+
+/* ── Origin / account cell ──────────────────────────────────────────── */
+.tds-ppopup__cell {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 54px;
+  padding: 0 14px;
+  border: 1px solid var(--color-border-tertiary);
+  background: var(--color-surface-higher);
+}
+.tds-ppopup__cell-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.tds-ppopup__cell-main--skel {
+  gap: 6px;
+}
+.tds-ppopup__cell-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: var(--fw-medium);
+  color: var(--color-text-primary);
+}
+.tds-ppopup__cell-sub {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+.tds-ppopup__cell-sub--sm {
+  font-size: 11px;
+}
+.tds-ppopup__ellipsis {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.tds-ppopup__verified {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  display: grid;
+  place-items: center;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-grass);
+  color: var(--color-text-primary-inverse);
+}
+.tds-ppopup__addr {
+  font-size: 13px;
+  color: var(--color-text-primary);
+}
+.tds-ppopup__bal {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+
+/* ── Skeleton ───────────────────────────────────────────────────────── */
+.tds-ppopup__skel {
+  display: block;
+  flex: none;
+  background: var(--color-surface-lower);
+  animation: tds-ppopup-pulse 1.4s ease-in-out infinite;
+}
+.tds-ppopup__skel--disc {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-pill);
+}
+.tds-ppopup__skel--name {
+  width: 44%;
+  height: 10px;
+}
+.tds-ppopup__skel--host {
+  width: 28%;
+  height: 8px;
+  animation-delay: 0.2s;
+}
+.tds-ppopup__skel--row {
+  flex: 1;
+  max-width: 70%;
+  height: 10px;
+}
+@keyframes tds-ppopup-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* ── Steps (page scale) ─────────────────────────────────────────────── */
+.tds-ppopup__steps.tds-steps {
+  padding: 10px 14px;
+}
+.tds-ppopup__steps .tds-steps__row {
+  gap: 10px;
+  min-height: 22px;
+}
+
+/* ── Error box (page scale) ─────────────────────────────────────────── */
+.tds-ppopup .tds-errbox {
+  padding: 10px 14px;
+  gap: 6px;
+}
+.tds-ppopup .tds-errbox__copy {
+  min-height: 28px;
+}
+
+/* ── Actions ────────────────────────────────────────────────────────── */
+.tds-ppopup__actions {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+/* The design's square mono call to action at 40px. */
+.tds-ppopup__btn.tds-btn {
+  box-sizing: border-box;
+  width: 100%;
+  height: 40px;
+  padding: 0 20px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+/* Focus arrives programmatically on ready, so keep the ink fill and let the
+   ring alone mark it. */
+.tds-ppopup__btn.tds-btn--primary:focus-visible {
+  background: var(--color-surface-lower-inverse);
+}
+.tds-ppopup__btn.tds-btn--primary:hover:not(:disabled) {
+  background: var(--color-surface-lower-inverse);
+  opacity: 0.9;
+}
+.tds-ppopup__btn.tds-btn--outline:hover:not(:disabled) {
+  border-color: var(--color-border-strong);
+}
+.tds-ppopup__btn.tds-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+/* ── Footer ─────────────────────────────────────────────────────────── */
+.tds-ppopup__foot {
+  box-sizing: content-box;
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0 20px;
+  border-top: 1px solid var(--color-border-tertiary);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  text-align: center;
+}
+
+/* Visually hidden, still read (the live region, the verified label). */
+.tds-ppopup__sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+@media (max-width: 400px) {
+  .tds-ppopup__body {
+    padding: 20px var(--space-4);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tds-ppopup .tds-spinner,
+  .tds-ppopup .tds-steps__spin,
+  .tds-ppopup__skel {
+    animation: none;
+  }
+}

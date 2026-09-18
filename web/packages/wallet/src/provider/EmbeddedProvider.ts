@@ -19,7 +19,7 @@ import {
   type ConnectMetadataInput,
   type ConnectRequestPayload,
   type DepositDestination,
-  type DepositRequestPayload,
+  type DepositRequestMessagePayload,
   type DepositResult,
   type DepositUiConfig,
   type GetConnectionStateResult,
@@ -416,6 +416,11 @@ export class EmbeddedProvider {
     return this.iframeManager.getTheme();
   }
 
+  /** Restyle the wallet frames for a new host color scheme, without a reload. */
+  setTheme(theme: WalletTheme): void {
+    this.iframeManager.setTheme(theme);
+  }
+
   /**
    * Open the wallet's account menu inside its frame, anchored under the host's
    * account chip. Resolves when the menu closes; a switch or an account
@@ -488,7 +493,7 @@ export class EmbeddedProvider {
    * third-party deposit widget; crediting is authoritative on the server
    * webhook, so the returned result only reports the terminal UX state.
    */
-  async deposit(payload: DepositRequestPayload): Promise<DepositResult> {
+  async deposit(payload: DepositRequestMessagePayload): Promise<DepositResult> {
     if (this.inlineMode) {
       this.iframeManager.showInline();
     } else {
@@ -501,6 +506,9 @@ export class EmbeddedProvider {
         type: POST_MESSAGE_REQUEST_TYPES.DEPOSIT,
         payload: {
           ...payload,
+          ...(payload.destination || payload.network || !this.defaultNetwork
+            ? {}
+            : { network: this.defaultNetwork }),
           ...(this.depositUiConfig
             ? { resolvedDepositUiConfig: this.depositUiConfig }
             : {}),

@@ -655,6 +655,18 @@ fn pad_seed(seed: &[u8]) -> [u8; 32] {
     padded
 }
 
+/// Reject creation when `account` already holds committed on-chain state.
+///
+/// `is_new` mirrors `TN_ACCOUNT_FLAG_NEW`, which the runtime sets on an
+/// account's CREATION state proof (the address has no committed state yet) and
+/// clears on the EXISTING proof (`tn_runtime.c`). So an account with real
+/// committed data always reads back `is_new == false`:
+///   - `None` / `Some(_)` + `is_new`  => empty slot, safe to create over;
+///   - `Some(_)` + `!is_new`          => a real account, reject as "already exists".
+///
+/// This is a best-effort pre-flight check: an unfinalized creation racing in a
+/// concurrent block isn't visible here, but the on-chain create then fails, so
+/// the "already exists" invariant is still enforced authoritatively on-chain.
 async fn ensure_account_absent(
     client: &Client,
     account: &Pubkey,

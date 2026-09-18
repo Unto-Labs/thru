@@ -19,7 +19,7 @@
   <iframe
     id="w"
     data-src="WALLET_URL_PLACEHOLDER"
-    allow="publickey-credentials-get *; publickey-credentials-create *"
+    allow="publickey-credentials-get WALLET_ORIGIN_PLACEHOLDER; publickey-credentials-create WALLET_ORIGIN_PLACEHOLDER"
   ></iframe>
   <script>
     (function () {
@@ -45,7 +45,19 @@
           /* drop unserializable messages */
         }
       }
+      function themeFromSrc() {
+        try {
+          return new URL(f.dataset.src).searchParams.get('tn_theme') === 'dark' ? 'dark' : 'light';
+        } catch (err) {
+          return 'light';
+        }
+      }
       function postToWallet(msg) {
+        /* Chromium paints the frame opaque when its color-scheme differs
+           from the wallet document's, so the frame follows the host theme. */
+        if (msg && msg.type === 'wallet:theme' && (msg.theme === 'light' || msg.theme === 'dark')) {
+          f.style.colorScheme = msg.theme;
+        }
         if (!f.contentWindow) return;
         var outbound = msg;
         if (msg && typeof msg === 'object') {
@@ -81,6 +93,7 @@
         postShell('shell:iframe-error', { src: f.src });
       });
       postShell('shell:loading', { src: f.dataset.src });
+      f.style.colorScheme = themeFromSrc();
       f.src = f.dataset.src;
     })();
   </script>

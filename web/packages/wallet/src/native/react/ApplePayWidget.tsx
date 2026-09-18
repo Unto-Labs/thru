@@ -29,6 +29,27 @@ import {
   shouldCloseCoinbasePayment,
   type CoinbasePaymentProgress,
 } from "./coinbase-webview";
+import { useThru } from "./hooks/useThru";
+import { useWalletTheme } from "../../react/useWalletTheme";
+
+/* The fallback chrome around Coinbase's page, per wallet theme. Coinbase's
+   own page (and its Apple Pay control) keeps its own look. */
+const FALLBACK_CHROME = {
+  light: {
+    surface: "#ffffff",
+    border: "#d8dfe3",
+    title: "#151b1e",
+    cancel: "#b52f36",
+    hint: "#56636a",
+  },
+  dark: {
+    surface: "#181b1b",
+    border: "#334747",
+    title: "#f9fbfb",
+    cancel: "#ed787e",
+    hint: "#b6cece",
+  },
+} as const;
 
 /* This adapter follows Coinbase's mobile reference widget:
    https://github.com/mlion-cb/onramp-v2-mobile-demo/blob/master/components/onramp/ApplePayWidget.tsx
@@ -63,6 +84,7 @@ export function ApplePayWidget({
   onLoadError,
 }: ApplePayWidgetProps) {
   const webViewRef = useRef<WebViewType | null>(null);
+  const chrome = FALLBACK_CHROME[useWalletTheme(useThru().wallet)];
   const sandboxUi = isCoinbaseApplePaySandboxUrl(paymentUrl);
   const [showFallback, setShowFallback] = useState(false);
   const [progress, setProgress] = useState<CoinbasePaymentProgress>("pending");
@@ -178,15 +200,18 @@ export function ApplePayWidget({
       onStartShouldSetResponder={() => true}
       style={[
         styles.overlay,
-        showFallback ? styles.fallbackOverlay : null,
         showFallback
-          ? { paddingTop: topInset, paddingBottom: bottomInset }
+          ? {
+              backgroundColor: chrome.surface,
+              paddingTop: topInset,
+              paddingBottom: bottomInset,
+            }
           : null,
       ]}
     >
       {showFallback ? (
-        <View style={styles.header}>
-          <Text style={styles.title}>Apple Pay</Text>
+        <View style={[styles.header, { borderBottomColor: chrome.border }]}>
+          <Text style={[styles.title, { color: chrome.title }]}>Apple Pay</Text>
           {canCancelCoinbasePayment(progress) ? (
             <Pressable
               accessibilityRole="button"
@@ -195,7 +220,9 @@ export function ApplePayWidget({
               onPress={onCancel}
               style={styles.cancelButton}
             >
-              <Text style={styles.cancelText}>Cancel</Text>
+              <Text style={[styles.cancelText, { color: chrome.cancel }]}>
+                Cancel
+              </Text>
             </Pressable>
           ) : null}
         </View>
@@ -246,7 +273,10 @@ export function ApplePayWidget({
             style={styles.webView}
           />
           {showFallback ? (
-            <Text style={styles.hint} accessibilityLiveRegion="polite">
+            <Text
+              style={[styles.hint, { color: chrome.hint }]}
+              accessibilityLiveRegion="polite"
+            >
               {sandboxUi
                 ? "Confirm the simulated payment in Coinbase's sandbox popup."
                 : canCancelCoinbasePayment(progress)
@@ -266,12 +296,8 @@ const styles = StyleSheet.create({
     backgroundColor: "transparent",
     zIndex: 2,
   },
-  fallbackOverlay: {
-    backgroundColor: "#ffffff",
-  },
   header: {
     alignItems: "center",
-    borderBottomColor: "#d8dfe3",
     borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: "row",
     justifyContent: "space-between",
@@ -279,7 +305,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
   },
   title: {
-    color: "#151b1e",
     fontSize: 16,
     fontWeight: "600",
   },
@@ -290,7 +315,6 @@ const styles = StyleSheet.create({
     minWidth: 64,
   },
   cancelText: {
-    color: "#b52f36",
     fontSize: 16,
     fontWeight: "600",
   },
@@ -312,7 +336,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   hint: {
-    color: "#56636a",
     fontSize: 13,
     lineHeight: 18,
     textAlign: "center",

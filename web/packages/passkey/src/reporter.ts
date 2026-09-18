@@ -31,6 +31,11 @@ export interface PasskeyCeremonyReporter {
 
 export interface PasskeyReportingOptions {
   ceremonyReporter?: PasskeyCeremonyReporter;
+  /** False prohibits popup routing even when explicitly requested. */
+  allowPopupFallback?: boolean;
+  /** Explicit popup mode must be invoked from a user interaction. */
+  promptMode?: 'auto' | 'inline' | 'popup';
+  signal?: AbortSignal;
 }
 
 export interface PasskeyCeremonyResult {

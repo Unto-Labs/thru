@@ -1554,7 +1554,10 @@ export type GetStateRootsRequest = Message<"thru.services.v1.GetStateRootsReques
   /**
    * The slot to retrieve state roots up to (inclusive).
    * Returns up to 257 state roots ending at this slot.
-   * If not specified, returns state roots ending at the latest available slot.
+   * If not specified, returns state roots ending at the latest slot at or
+   * below the durable cursor. A slot above the durable cursor is rejected
+   * with FAILED_PRECONDITION; if no slot is durable yet the call returns
+   * UNAVAILABLE.
    *
    * @generated from field: optional uint64 slot = 1;
    */
@@ -1618,7 +1621,11 @@ export const GetStateRootsResponseSchema: GenMessage<GetStateRootsResponse> = /*
  */
 export type GetActiveStateHashesRequest = Message<"thru.services.v1.GetActiveStateHashesRequest"> & {
   /**
-   * The upper bound slot (inclusive). If not specified, defaults to the latest finalized slot.
+   * The upper bound slot (inclusive). If not specified, defaults to the
+   * durable cursor: the highest slot the node has durably committed, which
+   * lags the finalized slot GetHeight reports by design. An end_slot above
+   * the durable cursor is rejected with FAILED_PRECONDITION; if no slot is
+   * durable yet the call returns UNAVAILABLE.
    *
    * @generated from field: optional uint64 end_slot = 1;
    */

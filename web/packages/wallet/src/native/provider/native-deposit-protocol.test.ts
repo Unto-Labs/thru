@@ -24,7 +24,7 @@ const DESTINATION: DepositDestination = {
   tokenAccountAddress: "ta_token_account",
   mintAddress: "ta_mint",
   tokenProgramAddress: "ta_token_program",
-  symbol: "CREDITS",
+  symbol: "THRUSD",
   decimals: 6,
 };
 const DEPOSIT_UI_CONFIG: DepositUiConfig = {

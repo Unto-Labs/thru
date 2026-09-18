@@ -300,6 +300,40 @@ describe('WebViewBridge', () => {
     ]);
   });
 
+  it('carries the host theme on the wallet URL', () => {
+    expect(new URL(bridge.getIframeSrc()).searchParams.get('tn_theme')).toBe('light');
+    const darkBridge = new WebViewBridge({ walletUrl: WALLET_URL, theme: 'dark' });
+    expect(new URL(darkBridge.getIframeSrc()).searchParams.get('tn_theme')).toBe('dark');
+    expect(darkBridge.getTheme()).toBe('dark');
+    darkBridge.destroy();
+  });
+
+  it('pushes theme changes to the loaded wallet and restates them after a reload', () => {
+    /* Before ready there is nobody to tell; the URL carries it instead. */
+    bridge.setTheme('dark');
+    expect(webView.injected).toHaveLength(0);
+    expect(new URL(bridge.getIframeSrc()).searchParams.get('tn_theme')).toBe('dark');
+
+    const themeMessage = (theme: string) => ({
+      type: 'wallet:theme',
+      origin: bridge.walletOrigin,
+      frameId: bridge.frameId,
+      theme,
+    });
+
+    bridge.onMessage(readyMessage(bridge.frameId));
+    expect(webView.injected.map(parseInjectedTelemetryContext)).toEqual([themeMessage('dark')]);
+
+    webView.injected.length = 0;
+    bridge.setTheme('light');
+    bridge.setTheme('light');
+    expect(webView.injected.map(parseInjectedTelemetryContext)).toEqual([themeMessage('light')]);
+
+    webView.injected.length = 0;
+    bridge.onMessage(readyMessage(bridge.frameId));
+    expect(webView.injected.map(parseInjectedTelemetryContext)).toEqual([themeMessage('light')]);
+  });
+
   it('propagates cleared telemetry context to the loaded wallet', () => {
     const contextBridge = new WebViewBridge({
       walletUrl: WALLET_URL,

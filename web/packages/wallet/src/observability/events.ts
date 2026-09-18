@@ -16,6 +16,7 @@ export const TELEMETRY_EVENTS = {
   BRIDGE_IFRAME_LOADED: 'bridge.iframe.loaded',
   BRIDGE_IFRAME_READY: 'bridge.iframe.ready',
   BRIDGE_IFRAME_READY_RECEIVED: 'bridge.iframe.ready.received',
+  BRIDGE_IFRAME_READY_RETRY: 'bridge.iframe.ready.retry',
   BRIDGE_IFRAME_READY_TIMEOUT: 'bridge.iframe.ready.timeout',
   BRIDGE_MESSAGE_IGNORED: 'bridge.message.ignored',
   BRIDGE_MESSAGE_MALFORMED: 'bridge.message.malformed',
@@ -50,6 +51,12 @@ export const TELEMETRY_EVENTS = {
   PASSKEY_AUTHENTICATION_STARTED: 'passkey.authentication_started',
   PASSKEY_REGISTRATION_COMPLETED: 'passkey.registration_completed',
   PASSKEY_REGISTRATION_STARTED: 'passkey.registration_started',
+  /* One WebAuthn prompt: outcome = prompt mode (inline | popup); a failure
+     carries the browser's error name and message, so the reason a popup
+     opened, or a ceremony was refused, is in the wallet's own log. */
+  PASSKEY_CEREMONY_STARTED: 'passkey.ceremony_started',
+  PASSKEY_CEREMONY_FINISHED: 'passkey.ceremony_finished',
+  PASSKEY_CEREMONY_FAILED: 'passkey.ceremony_failed',
   PROVIDER_ACCOUNT_CHANGED: 'provider.account.changed',
   PROVIDER_ACCOUNT_SELECTED: 'provider.account.selected',
   PROVIDER_CONNECT_FAILED: 'provider.connect.failed',

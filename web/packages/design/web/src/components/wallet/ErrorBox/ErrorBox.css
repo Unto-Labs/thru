@@ -1,0 +1,18 @@
+.tds-errbox {
+  gap: var(--space-1);
+}
+.tds-errbox__msg {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+}
+/* The link hugs its label instead of stretching across the panel. */
+.tds-errbox__copy {
+  align-self: flex-start;
+}

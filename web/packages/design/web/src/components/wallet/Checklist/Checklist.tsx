@@ -11,16 +11,21 @@ const Check = (p: React.SVGProps<SVGSVGElement>) => (
 export interface ChecklistProps {
   /** One row per entry — what the site is asking for. */
   items: React.ReactNode[];
+  /**
+   * `outline` (default): hairline-bordered list on the raised surface.
+   * `box`: a quiet surface panel with taller rows (the passkey popup).
+   */
+  variant?: "outline" | "box";
   className?: string;
 }
 
 /**
- * Checklist — a bordered list of granted capabilities, each led by a grass
- * check (the permissions screen's "this site is asking to…" list).
+ * Checklist — a list of granted capabilities, each led by a grass check (the
+ * permissions screen's "this site is asking to…" list).
  */
-export function Checklist({ items, className }: ChecklistProps) {
+export function Checklist({ items, variant = "outline", className }: ChecklistProps) {
   return (
-    <ul className={cn("tds-checklist", className)}>
+    <ul className={cn("tds-checklist", variant === "box" && "tds-checklist--box", className)}>
       {items.map((item, i) => (
         <React.Fragment key={i}>
           {i > 0 && <li className="tds-checklist__sep" role="separator" aria-hidden />}

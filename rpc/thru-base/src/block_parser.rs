@@ -63,6 +63,38 @@ pub struct TnBlockHeaderBody {
     pub block_time_ns: u64,
 }
 
+/// Domain prefix for the block-commitment hash, exactly the 19 bytes of
+/// "tn-block-commitment" with no trailing NUL (matches C
+/// TN_BLOCK_COMMITMENT_DOMAIN).
+pub const BLOCK_COMMITMENT_DOMAIN: &[u8] = b"tn-block-commitment";
+
+/// Compute the canonical block-commitment hash (Reward Check Plan A):
+///
+/// ```text
+/// txn_data_hash = blake3(txn_region)
+/// commitment    = header_body || u64le(txn_region.len()) || txn_data_hash || footer_body
+/// block_hash    = blake3("tn-block-commitment" || commitment)
+/// ```
+///
+/// `header_body` is the verbatim 104-byte serialized header body (excluding the
+/// header signature) and `footer_body` is the verbatim 8-byte serialized footer
+/// body, matching the C `tn_block_commitment_t` byte layout.  This is the single
+/// Rust source of truth shared by the block-builder and stress block-wire paths.
+pub fn compute_commitment_hash(header_body: &[u8], txn_region: &[u8], footer_body: &[u8]) -> [u8; 32] {
+    let txn_data_hash = blake3::hash(txn_region);
+
+    let mut commitment = Vec::with_capacity(header_body.len() + 8 + 32 + footer_body.len());
+    commitment.extend_from_slice(header_body);
+    commitment.extend_from_slice(&(txn_region.len() as u64).to_le_bytes());
+    commitment.extend_from_slice(txn_data_hash.as_bytes());
+    commitment.extend_from_slice(footer_body);
+
+    let mut hasher = blake3::Hasher::new();
+    hasher.update(BLOCK_COMMITMENT_DOMAIN);
+    hasher.update(&commitment);
+    *hasher.finalize().as_bytes()
+}
+
 #[repr(C)]
 #[derive(Clone, Copy, Debug)]
 pub struct TnBlockFooter {
@@ -749,5 +781,91 @@ mod tests {
         let result = BlockParser::parse_transactions(&short_data);
         assert!(result.is_ok());
         assert_eq!(result.unwrap().len(), 0); // Should return empty list, not error
+    }
+}
+
+#[cfg(test)]
+mod commitment_tests {
+    use super::*;
+    use std::mem;
+
+    /// Canonical commitment-hash fixture, computed by the C reference (fd_blake3)
+    /// and verified byte-for-byte against the SDK BLAKE3 port.  C, Go, and Rust
+    /// must all produce this value (Reward Check Plan A).
+    const CANONICAL_TXN_DATA_HASH: &str =
+        "1bfa6706ab80c3557f525aba41900ecf793737dde6c18b6d62dc480de67597eb";
+    const CANONICAL_COMMITMENT_HASH: &str =
+        "d19fd7b41d7a525e744c17802f422dafae3a275fb2c1f2b799af073406008b55";
+
+    fn fixture() -> (Vec<u8>, Vec<u8>, Vec<u8>) {
+        let header_body: Vec<u8> = (0..104u32).map(|i| ((i * 7 + 1) & 0xff) as u8).collect();
+        let txn_region: Vec<u8> = (0..50u32).map(|i| ((i * 3 + 5) & 0xff) as u8).collect();
+        let footer_body = 4242u64.to_le_bytes().to_vec();
+        (header_body, txn_region, footer_body)
+    }
+
+    #[test]
+    fn commitment_hash_matches_canonical_vector() {
+        let (header_body, txn_region, footer_body) = fixture();
+
+        let txn_data_hash = blake3::hash(&txn_region);
+        assert_eq!(hex::encode(txn_data_hash.as_bytes()), CANONICAL_TXN_DATA_HASH);
+
+        let h = compute_commitment_hash(&header_body, &txn_region, &footer_body);
+        assert_eq!(hex::encode(h), CANONICAL_COMMITMENT_HASH);
+    }
+
+    #[test]
+    fn commitment_domain_has_no_trailing_nul() {
+        assert_eq!(BLOCK_COMMITMENT_DOMAIN.len(), 19);
+        assert_eq!(BLOCK_COMMITMENT_DOMAIN, b"tn-block-commitment");
+    }
+
+    #[test]
+    fn header_body_layout_matches_c() {
+        // sizeof(tn_block_header_body_t) == 104.
+        assert_eq!(mem::size_of::<TnBlockHeaderBody>(), 104);
+
+        let body = TnBlockHeaderBody {
+            block_version: 1,
+            padding: [0u8; 5],
+            chain_id: 0xBEEF,
+            block_producer: [0xAA; 32],
+            bond_amount_lock_up: 0,
+            expiry_timestamp: 0,
+            start_slot: 0,
+            expiry_after: 0,
+            max_block_size: 0,
+            max_compute_units: 0,
+            max_state_units: 0,
+            reserved: [0u8; 4],
+            weight_slot: 0x1122_3344_5566_7788,
+            block_time_ns: 0x99AA_BBCC_DDEE_FF00,
+        };
+        let bytes = unsafe {
+            std::slice::from_raw_parts(&body as *const _ as *const u8, mem::size_of::<TnBlockHeaderBody>())
+        };
+        // chain_id is little-endian at offset 6.
+        assert_eq!(bytes[6], 0xEF);
+        assert_eq!(bytes[7], 0xBE);
+        // block_producer starts at offset 8.
+        assert_eq!(bytes[8], 0xAA);
+        assert_eq!(bytes[39], 0xAA);
+        // weight_slot (offset 88, TN_BLOCK_HEADER_BODY_OFF_WEIGHT_SLOT) — the
+        // offset the on-chain validator memcpy's for the weight lookup.
+        assert_eq!(&bytes[88..96], &0x1122_3344_5566_7788u64.to_le_bytes());
+        // block_time_ns (offset 96) pins the tail boundary so a reserved-size
+        // change can't silently shift weight_slot.
+        assert_eq!(&bytes[96..104], &0x99AA_BBCC_DDEE_FF00u64.to_le_bytes());
+    }
+
+    #[test]
+    fn mutating_attestor_payment_changes_hash() {
+        let (header_body, txn_region, footer_body) = fixture();
+        let a = compute_commitment_hash(&header_body, &txn_region, &footer_body);
+        let mut footer2 = footer_body.clone();
+        footer2[0] ^= 0xFF;
+        let b = compute_commitment_hash(&header_body, &txn_region, &footer2);
+        assert_ne!(a, b);
     }
 }

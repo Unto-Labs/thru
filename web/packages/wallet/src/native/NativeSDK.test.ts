@@ -171,7 +171,7 @@ describe("NativeSDK", () => {
       tokenAccountAddress: "ta_token_account",
       mintAddress: "ta_mint",
       tokenProgramAddress: "ta_token_program",
-      symbol: "CREDITS",
+      symbol: "THRUSD",
       decimals: 6,
     };
     const internals = sdk as unknown as {
@@ -216,7 +216,7 @@ describe("NativeSDK", () => {
       tokenAccountAddress: "ta_first_token_account",
       mintAddress: "ta_mint",
       tokenProgramAddress: "ta_token_program",
-      symbol: "CREDITS",
+      symbol: "THRUSD",
       decimals: 6,
     };
     const secondDestination = {
@@ -270,6 +270,34 @@ describe("NativeSDK", () => {
       "coinbase",
     ]);
     configured.destroy();
+  });
+
+  it("resolves the theme onto the wallet URL and switches it live", () => {
+    const themed = new NativeSDK({
+      walletUrl: "http://localhost:3000/embedded",
+      origin: "thru-mobile://theme",
+      telemetryEnabled: false,
+      theme: "system",
+    });
+    const changes: string[] = [];
+    themed.on("themeChanged", (theme) => changes.push(theme));
+    const urlTheme = () =>
+      new URL(themed.getIframeSrc()).searchParams.get("tn_theme");
+
+    /* No OS reading yet: system draws light. */
+    expect(urlTheme()).toBe("light");
+    themed.setSystemTheme("dark");
+    expect(themed.getTheme()).toBe("dark");
+    expect(themed.getThemePreference()).toBe("system");
+    expect(urlTheme()).toBe("dark");
+
+    /* A fixed choice ignores the OS. */
+    themed.setTheme("light");
+    themed.setSystemTheme("light");
+    themed.setSystemTheme("dark");
+    expect(changes).toEqual(["dark", "light"]);
+    expect(sdk.getTheme()).toBe("light");
+    themed.destroy();
   });
 
   it("defaults iOS WebView mode to shell iframe", () => {

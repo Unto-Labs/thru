@@ -75,6 +75,7 @@ export interface CellProps {
   chevron?: boolean;
   disabled?: boolean;
   onPress?: () => void;
+  style?: StyleProp<ViewStyle>;
 }
 
 export function Cell({
@@ -88,6 +89,7 @@ export function Cell({
   chevron,
   disabled,
   onPress,
+  style,
 }: CellProps) {
   const styles = useStyles();
   const colors = useThemeColors();
@@ -107,6 +109,7 @@ export function Cell({
       style={({ pressed }) => [
         styles.cell,
         subtitle ? { height: touch.cellHLg } : null,
+        style,
         pressed && onPress && !disabled ? { backgroundColor: colors.bgMuted } : null,
         disabled ? { opacity: 0.5 } : null,
       ]}

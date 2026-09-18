@@ -9,8 +9,11 @@ import {
   POST_MESSAGE_EVENT_TYPE,
   POST_MESSAGE_REQUEST_TYPES,
   TELEMETRY_CONTEXT_MESSAGE_TYPE,
+  WALLET_THEME_MESSAGE_TYPE,
   createRequestId,
   type TelemetryContextMessage,
+  type WalletTheme,
+  type WalletThemeMessage,
   type InferSuccessfulPostMessageResponse,
   type PostMessageEvent,
   type PostMessageRequest,
@@ -148,6 +151,8 @@ export interface WebViewBridgeOptions {
   /** Bounded host-app-provided dimensions forwarded to the wallet. */
   telemetryContext?: TelemetryAppContext;
   telemetry?: NativeTelemetryRecorder;
+  /** The host's resolved color scheme the wallet draws for (default light). */
+  theme?: WalletTheme;
 }
 
 export interface NativeTelemetryFields {
@@ -190,6 +195,10 @@ export class WebViewBridge {
   private telemetryContext?: TelemetryAppContext;
   private telemetryContextUpdated = false;
   private readonly telemetry?: NativeTelemetryRecorder;
+  private theme: WalletTheme;
+  /* The theme changed after the host may have built the WebView URL, so a
+     wallet document that (re)loads must be told again. */
+  private themeUpdated = false;
 
   private webView: WebViewRefLike | null = null;
   private ready = false;
@@ -218,6 +227,7 @@ export class WebViewBridge {
     this.telemetryAppContextId = options.telemetryAppContextId;
     this.telemetryContext = options.telemetryContext;
     this.telemetry = options.telemetry;
+    this.theme = options.theme ?? 'light';
     this.recordTelemetry(TELEMETRY_EVENTS.BRIDGE_CONSTRUCTED, {
       severity: 'info',
       outcome: 'created',
@@ -249,7 +259,52 @@ export class WebViewBridge {
     } else {
       url.searchParams.delete('tn_telemetry_context');
     }
+    url.searchParams.set('tn_theme', this.theme);
     return url.toString();
+  }
+
+  getTheme(): WalletTheme {
+    return this.theme;
+  }
+
+  /**
+   * Restyle the wallet for a new host color scheme. A loaded wallet hears it
+   * by message (never a reload); a later load carries it on the URL.
+   */
+  setTheme(theme: WalletTheme): void {
+    if (theme === this.theme) return;
+    this.theme = theme;
+    this.themeUpdated = true;
+    this.sendTheme();
+  }
+
+  private sendTheme(): void {
+    if (this.destroyed || !this.ready || !this.webView) return;
+    const message: WalletThemeMessage = {
+      type: WALLET_THEME_MESSAGE_TYPE,
+      origin: this.walletOrigin,
+      frameId: this.frameId,
+      theme: this.theme,
+    };
+    this.injectControlMessage(message);
+  }
+
+  /* Fire-and-forget host -> wallet message, through the shell when present. */
+  private injectControlMessage(message: TelemetryContextMessage | WalletThemeMessage): void {
+    if (!this.webView) return;
+    const script = `try {
+      var msg = ${JSON.stringify(message)};
+      if (window.__pushIn) {
+        window.__pushIn(msg);
+      } else {
+        window.postMessage(msg, window.location.origin);
+      }
+    } catch (e) {} ; true;`;
+    try {
+      this.webView.injectJavaScript(script);
+    } catch {
+      /* Control messages are best effort and never block wallet use. */
+    }
   }
 
   /** Set or clear the correlation label carried by wallet telemetry. */
@@ -283,19 +338,7 @@ export class WebViewBridge {
         : {}),
       ...(this.telemetryContext ? { appContext: this.telemetryContext } : {}),
     };
-    const script = `try {
-      var msg = ${JSON.stringify(message)};
-      if (window.__pushIn) {
-        window.__pushIn(msg);
-      } else {
-        window.postMessage(msg, window.location.origin);
-      }
-    } catch (e) {} ; true;`;
-    try {
-      this.webView.injectJavaScript(script);
-    } catch {
-      /* Telemetry correlation is best effort and never blocks wallet use. */
-    }
+    this.injectControlMessage(message);
   }
 
   /**
@@ -390,6 +433,7 @@ export class WebViewBridge {
       /* A replacement document only carries the load-time values from its
          URL, so restate the current ones. */
       this.sendTelemetryContext();
+      if (this.themeUpdated) this.sendTheme();
       return;
     }
     this.ready = true;
@@ -404,6 +448,7 @@ export class WebViewBridge {
       outcome: 'ready',
     });
     this.sendTelemetryContext();
+    if (this.themeUpdated) this.sendTheme();
   }
 
   /**

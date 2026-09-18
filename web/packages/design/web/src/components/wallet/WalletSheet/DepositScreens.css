@@ -1,0 +1,721 @@
+/* WalletSheet — the Add funds screens: chooser, crypto rail, card rail,
+   Coinbase verification, pending, funded. Field labels are the Input recipe
+   (mono 11px uppercase); selects wear the Menu popup look. */
+
+/* Left-aligned rail header (no badge) */
+.tds-dep__rail-title {
+  font-size: 16px;
+  font-weight: var(--fw-semibold);
+  letter-spacing: -0.2px;
+  color: var(--color-text-primary);
+}
+.tds-dep__rail-sub {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  text-wrap: pretty;
+  margin-top: 4px;
+}
+
+/* Chooser rows */
+.tds-dep__methods {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.tds-dep__method {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3);
+  background: var(--color-surface-primary);
+  border: 1px solid transparent;
+  border-radius: var(--radius-none);
+  cursor: pointer;
+  text-align: left;
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+.tds-dep__method:hover {
+  border-color: var(--color-border-strong);
+}
+.tds-dep__method:active {
+  transform: translateY(1px);
+}
+.tds-dep__method:focus-visible {
+  outline: 2px solid var(--color-border-brand);
+  outline-offset: 2px;
+}
+.tds-dep__method-art {
+  display: inline-flex;
+  align-items: center;
+  width: 52px;
+  flex: none;
+}
+.tds-dep__fan {
+  display: inline-flex;
+  border-radius: var(--radius-pill);
+  box-shadow: 0 0 0 2px var(--color-surface-primary);
+  flex: none;
+}
+.tds-dep__fan + .tds-dep__fan {
+  margin-left: -7px;
+}
+.tds-dep__logo {
+  display: block;
+  border-radius: var(--radius-pill);
+  flex: none;
+}
+.tds-dep__method-glyph {
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  color: var(--color-text-primary);
+}
+.tds-dep__method-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.tds-dep__method-title {
+  font-size: 13px;
+  font-weight: var(--fw-semibold);
+}
+.tds-dep__method-sub {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tds-dep__method-chev {
+  color: var(--color-text-tertiary);
+  flex: none;
+}
+/* Accordion rows (chooser `open` set): the row is a collapsible trigger and
+   the rail unfolds in a panel under it. The item carries the row's surface
+   so the unfolded panel reads as one card; the panel rides Base UI's height
+   var so it eases open and shut (the frame follows). */
+.tds-dep__item {
+  background: var(--color-surface-primary);
+  border: 1px solid transparent;
+  border-radius: var(--radius-none);
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+.tds-dep__item:has(> .tds-dep__method:hover) {
+  border-color: var(--color-border-strong);
+}
+.tds-dep__item > .tds-dep__method {
+  background: transparent;
+  border: 0;
+}
+.tds-dep__item > .tds-dep__method:hover {
+  border-color: transparent;
+}
+.tds-dep__method-chev {
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+.tds-dep__method[data-panel-open] .tds-dep__method-chev {
+  transform: rotate(90deg);
+}
+.tds-dep__panel {
+  overflow: hidden;
+  height: var(--collapsible-panel-height);
+  transition: height 280ms var(--ease-standard);
+}
+.tds-dep__panel[data-starting-style],
+.tds-dep__panel[data-ending-style] {
+  height: 0;
+}
+.tds-dep__panel-body {
+  padding: 0 var(--space-3) var(--space-3);
+}
+.tds-dep__embedded {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tds-dep__panel {
+    transition: none;
+  }
+}
+
+.tds-dep__lands {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 0 var(--space-1);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+.tds-dep__lands-acct {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+}
+.tds-dep__lands-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: var(--radius-pill);
+  flex: none;
+}
+
+/* Field + label */
+.tds-dep__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  position: relative;
+}
+.tds-dep__label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+}
+
+/* Select (network / pay with) */
+.tds-dep__select {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 40px;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-higher);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-none);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-text-primary);
+  text-align: left;
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+.tds-dep__select:hover,
+.tds-dep__select[data-popup-open] {
+  border-color: var(--color-text-primary);
+}
+.tds-dep__select:focus-visible {
+  outline: 2px solid var(--color-border-brand);
+  outline-offset: 2px;
+}
+.tds-dep__select[data-disabled] {
+  cursor: default;
+  opacity: 0.6;
+}
+.tds-dep__select-icon {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-primary);
+}
+.tds-dep__select-icon > img {
+  width: 16px;
+  height: 16px;
+}
+.tds-dep__select-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tds-dep__select-chev {
+  display: inline-flex;
+  color: var(--color-text-tertiary);
+  flex: none;
+  margin-left: auto;
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+.tds-dep__select[data-popup-open] .tds-dep__select-chev {
+  transform: rotate(180deg);
+}
+/* Above the WalletOverlay island (z 61): the select lives inside the sheet. */
+.tds-dep__positioner {
+  z-index: 70;
+}
+.tds-dep__popup {
+  box-sizing: border-box;
+  width: var(--anchor-width);
+  max-height: var(--available-height);
+  overflow: auto;
+  background: var(--color-surface-higher);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--radius-none);
+  box-shadow: var(--shadow-md);
+  padding: var(--space-1) 0;
+  outline: none;
+}
+.tds-dep__option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px var(--space-3);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-primary);
+  cursor: default;
+  user-select: none;
+}
+.tds-dep__option[data-highlighted] {
+  background: var(--color-surface-lower-inverse);
+  color: var(--color-text-primary-inverse);
+}
+.tds-dep__option-text {
+  flex: 1;
+  min-width: 0;
+}
+.tds-dep__option-check {
+  display: inline-flex;
+  flex: none;
+}
+.tds-dep__option:not([data-selected]) .tds-dep__option-check {
+  visibility: hidden;
+}
+
+/* QR */
+.tds-dep__qr-row {
+  display: flex;
+  justify-content: center;
+  padding: var(--space-1) 0;
+}
+.tds-dep__qr {
+  box-sizing: border-box;
+  position: relative;
+  display: grid;
+  place-items: center;
+  padding: 8px;
+  background: var(--color-surface-higher);
+  border: 1px solid var(--color-border-strong);
+}
+.tds-dep__qr-svg {
+  display: block;
+  fill: var(--color-text-primary);
+}
+.tds-dep__qr--empty {
+  background:
+    repeating-linear-gradient(
+      45deg,
+      var(--color-surface-primary) 0 6px,
+      var(--color-surface-higher) 6px 12px
+    );
+}
+.tds-dep__qr-mark {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+.tds-dep__qr-mark > svg {
+  display: block;
+  background: var(--color-surface-higher);
+  padding: 3px;
+  box-sizing: content-box;
+}
+
+/* Address + attached copy */
+.tds-dep__addr {
+  padding: var(--space-3);
+  background: var(--color-surface-higher);
+  border: 1px solid var(--color-border-strong);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-primary);
+  word-break: break-all;
+  line-height: 1.5;
+}
+.tds-dep__addr--empty {
+  color: var(--color-text-tertiary);
+  min-height: 42px;
+}
+.tds-dep__copy {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  width: 100%;
+  min-height: 40px;
+  margin-top: -6px;
+  font-family: var(--font-sans);
+  font-weight: var(--fw-semibold);
+  font-size: 13px;
+  line-height: 1;
+  border: 1px solid var(--color-border-strong);
+  border-top: none;
+  border-radius: var(--radius-none);
+  cursor: pointer;
+  background: var(--color-surface-primary);
+  color: var(--color-text-primary);
+  transition: background-color var(--duration-fast) var(--ease-standard);
+}
+.tds-dep__copy:hover:not(:disabled) {
+  background: var(--color-surface-lower);
+}
+.tds-dep__copy:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.tds-dep__copy:disabled {
+  cursor: default;
+  color: var(--color-text-tertiary);
+}
+.tds-dep__copy-check {
+  display: inline-flex;
+  color: var(--grass-400);
+}
+
+/* Back link */
+.tds-dep__back {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+.tds-dep__back:hover,
+.tds-dep__link:hover {
+  color: var(--color-text-primary);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.tds-dep__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+
+/* Amount panel */
+.tds-dep__amount {
+  background: var(--color-surface-higher);
+  border: 1px solid var(--color-border-strong);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.tds-dep__amount-row {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  font-family: var(--font-mono);
+}
+.tds-dep__amount-cur {
+  font-size: 20px;
+  color: var(--color-text-tertiary);
+}
+.tds-dep__amount-val,
+.tds-dep__amount-input {
+  font-size: 30px;
+  letter-spacing: -0.5px;
+  color: var(--color-text-primary);
+}
+/* The amount is typed, not only picked: a bare input inside the panel. */
+.tds-dep__amount-input {
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: 0;
+  background: transparent;
+  font-family: inherit;
+  line-height: 1.1;
+  outline: none;
+}
+.tds-dep__amount-input:disabled {
+  color: var(--color-text-tertiary);
+}
+.tds-dep__amount:focus-within {
+  border-color: var(--color-text-primary);
+}
+.tds-dep__amount-row {
+  cursor: text;
+}
+/* Contact asked for inline on the card form. */
+.tds-dep__card-contact {
+  gap: 10px;
+}
+.tds-dep__amount-unit {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+.tds-dep__presets {
+  display: flex;
+  gap: 6px;
+}
+.tds-dep__preset {
+  flex: 1;
+  padding: 6px 0;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1;
+  border-radius: var(--radius-none);
+  cursor: pointer;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface-higher);
+  color: var(--color-text-primary);
+  transition: border-color var(--duration-fast) var(--ease-standard);
+}
+.tds-dep__preset:hover:not(:disabled) {
+  border-color: var(--color-text-primary);
+}
+.tds-dep__preset--on {
+  background: var(--color-surface-lower-inverse);
+  color: var(--color-text-primary-inverse);
+  border-color: var(--color-surface-lower-inverse);
+}
+.tds-dep__preset:disabled {
+  cursor: default;
+}
+.tds-dep__quote {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+  padding: 0 2px;
+}
+.tds-dep__quote strong {
+  color: var(--color-text-primary);
+  font-weight: var(--fw-semibold);
+}
+
+/* Coinbase terms */
+.tds-dep__terms {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--color-text-tertiary);
+  text-wrap: pretty;
+}
+.tds-dep__terms a {
+  color: var(--color-text-secondary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.tds-dep__terms a:hover {
+  color: var(--color-text-primary);
+}
+
+/* Coinbase frame chrome */
+.tds-dep__cb {
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface-higher);
+}
+.tds-dep__cb-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--color-border-tertiary);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--color-text-tertiary);
+}
+.tds-dep__cb-host {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.tds-dep__cb-body {
+  padding: 10px;
+}
+.tds-dep__cb-body--tall {
+  padding: 14px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.tds-dep__cb-body > iframe {
+  display: block;
+  width: 100%;
+  border: 0;
+}
+
+/* The frame slot without the chrome (the popup carries it) */
+.tds-dep__cb-bare {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* While the payment runs in Coinbase's own window */
+.tds-dep__popup-note {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--color-text-secondary);
+  text-wrap: pretty;
+}
+
+/* Coinbase-styled pay button (Apple's/Google's geometry — not tokenized) */
+.tds-dep__pay {
+  width: 100%;
+  height: 40px;
+  background: #000;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: -0.1px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  cursor: pointer;
+}
+.tds-dep__pay:hover:not(:disabled) {
+  background: #1d1d1f;
+}
+.tds-dep__pay:active:not(:disabled) {
+  transform: translateY(1px);
+}
+.tds-dep__pay:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.tds-dep__pay--loading {
+  cursor: progress;
+}
+.tds-dep__pay-spin {
+  width: 14px;
+  height: 14px;
+  border-radius: var(--radius-pill);
+  border: 2px solid rgba(255, 255, 255, 0.28);
+  border-top-color: #fff;
+  animation: tds-dep-spin 0.7s linear infinite;
+}
+@keyframes tds-dep-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Verify footer */
+.tds-dep__verify-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-top: var(--space-1);
+}
+.tds-dep__verify-foot .tds-dep__back {
+  align-self: auto;
+  color: var(--color-text-secondary);
+}
+.tds-dep__attribution {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--color-text-tertiary);
+}
+
+/* Pending footer */
+.tds-dep__pending-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+.tds-dep__note {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+
+/* Funded */
+.tds-dep__done-head .tds-screen__title {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  letter-spacing: -0.4px;
+}
+.tds-dep__rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-primary);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.tds-dep__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  min-height: 18px;
+}
+.tds-dep__row-label {
+  color: var(--color-text-tertiary);
+}
+.tds-dep__row-value {
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tds-dep__row-value--strong {
+  font-weight: var(--fw-semibold);
+}
+
+/* Your details (Coinbase guest checkout contact) */
+.tds-dep__contact-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+.tds-dep__contact-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tds-dep__contact-phone {
+  position: relative;
+}
+.tds-dep__contact-phone .tds-dep__contact-input {
+  padding-left: 64px;
+}
+.tds-dep__contact-cc {
+  position: absolute;
+  left: 12px;
+  bottom: 14px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  pointer-events: none;
+}
+.tds-dep__contact-error {
+  font-size: 12px;
+  color: var(--color-text-danger);
+}

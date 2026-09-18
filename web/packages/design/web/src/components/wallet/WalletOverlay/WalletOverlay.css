@@ -1,4 +1,4 @@
-/* WalletOverlay — light scrim + top-center island popup. Enter / exit ride on
+/* WalletOverlay — scrim + top-center island popup. Enter / exit ride on
    Base UI's [data-open] / [data-ending-style] hooks with keyframes (which
    always fire animationend, so the unmount never stalls). The z-index sits
    well under the hosted wallet iframe (999999) on purpose. */
@@ -39,6 +39,26 @@
 }
 .tds-woverlay--contained {
   position: absolute;
+}
+
+/* A popup taller than the window (the Add funds accordion with a rail
+   unfolded) is capped to the viewport and its screen body scrolls, the way
+   the mobile sheet already does; the bar and any action row stay put. */
+.tds-woverlay .tds-frame {
+  max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - 24px);
+}
+.tds-woverlay .tds-frame__content,
+.tds-woverlay .tds-screen {
+  flex: 1;
+  min-height: 0;
+}
+.tds-woverlay .tds-screen__body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -92,5 +112,20 @@
 
   .tds-woverlay[data-ending-style] {
     animation: tds-wsheet-slide-out 360ms var(--ease-standard) both;
+  }
+}
+
+/* ── Dark theme ─────────────────────────────────────────────────────────────
+   Over a dark host a teal-gray wash would lighten the page, so the scrim
+   deepens instead. Kept last so it wins over the equal-specificity light
+   rules above at both widths. */
+
+:where([data-theme="dark"]) .tds-woverlay__scrim {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+@media (max-width: 640px) {
+  :where([data-theme="dark"]) .tds-woverlay__scrim {
+    background: rgba(0, 0, 0, 0.72);
   }
 }

@@ -117,16 +117,38 @@
     "react-native-webview": ">=13"
   },
   "peerDependenciesMeta": {
-    "@gorhom/bottom-sheet": { "optional": true },
-    "expo": { "optional": true },
-    "expo-brightness": { "optional": true },
-    "expo-modules-core": { "optional": true },
-    "react-native": { "optional": true },
-    "react-native-gesture-handler": { "optional": true },
-    "react-native-qrcode-styled": { "optional": true },
-    "react-native-reanimated": { "optional": true },
-    "react-native-safe-area-context": { "optional": true },
-    "react-native-svg": { "optional": true },
-    "react-native-webview": { "optional": true }
+    "@gorhom/bottom-sheet": {
+      "optional": true
+    },
+    "expo": {
+      "optional": true
+    },
+    "expo-brightness": {
+      "optional": true
+    },
+    "expo-modules-core": {
+      "optional": true
+    },
+    "react-native": {
+      "optional": true
+    },
+    "react-native-gesture-handler": {
+      "optional": true
+    },
+    "react-native-qrcode-styled": {
+      "optional": true
+    },
+    "react-native-reanimated": {
+      "optional": true
+    },
+    "react-native-safe-area-context": {
+      "optional": true
+    },
+    "react-native-svg": {
+      "optional": true
+    },
+    "react-native-webview": {
+      "optional": true
+    }
   }
 }

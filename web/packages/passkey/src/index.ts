@@ -93,3 +93,11 @@ export type {
   PasskeyCeremonyCredentialJson,
   PasskeyReportingOptions,
 } from './reporter';
+
+export {
+  setPasskeyRecoveryHandler,
+  cancelPasskeyCeremony,
+  type PasskeyRecoveryRequest,
+  type PasskeyRouteEvent,
+} from './ceremony';
+export { PasskeyIframeRestrictionError, type PasskeyRestrictionReason } from './capabilities';

@@ -98,7 +98,7 @@ const DESTINATION: DepositDestination = {
   tokenAccountAddress: "ta_token_account",
   mintAddress: "ta_mint",
   tokenProgramAddress: "ta_token_program",
-  symbol: "CREDITS",
+  symbol: "THRUSD",
   decimals: 6,
 };
 
@@ -131,7 +131,7 @@ const RUNTIME_CONFIG: DepositRuntimeConfig = {
         credits: {
           mint_address: "ta_mint",
           token_program_address: "ta_token_program",
-          symbol: "CREDITS",
+          symbol: "THRUSD",
           decimals: 6,
         },
       },
@@ -306,7 +306,7 @@ describe("wallet deposit account helpers", () => {
       programAddress: "ta_token_program",
       review: {
         appName: "Thru Wallet",
-        instruction: "initialize_token_account(symbol: CREDITS)",
+        instruction: "initialize_token_account(symbol: THRUSD)",
       },
     };
 

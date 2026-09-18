@@ -72,11 +72,39 @@
 #define TN_CRYPTO_ERR_DESERIALIZE_SIGNATURE_BYTES_IS_NULL       (-49)
 #define TN_CRYPTO_ERR_DESERIALIZE_SIGNATURE_ENCODING_REJECTED   (-50)
 #define TN_CRYPTO_ERR_DESERIALIZE_SIGNATURE_NOT_IN_G2           (-51)
+#define TN_CRYPTO_ERR_PUBKEY_ACC_ACC_IS_NULL                    (-52)
+#define TN_CRYPTO_ERR_PUBKEY_ACC_PUBKEY_IS_NULL                 (-53)
+#define TN_CRYPTO_ERR_PUBKEY_ACC_OUTPUT_IS_NULL                 (-54)
+#define TN_CRYPTO_ERR_SIGNATURE_ACC_ACC_IS_NULL                 (-55)
+#define TN_CRYPTO_ERR_SIGNATURE_ACC_SIGNATURE_IS_NULL           (-56)
+#define TN_CRYPTO_ERR_SIGNATURE_ACC_OUTPUT_IS_NULL              (-57)
+#define TN_CRYPTO_ERR_PUBKEY_ACC_BATCH_COUNT                    (-58)
 
 /* BLS types for certificates - use actual blst types */
 typedef blst_scalar    tn_bls_private_key_t;
 typedef blst_p1_affine tn_bls_pubkey_t;
 typedef blst_p2_affine tn_bls_signature_t;
+
+/* Accumulator types for folding many points into one aggregate.
+
+   tn_crypto_aggregate_pubkeys and tn_crypto_aggregate_signatures each convert
+   back to affine coordinates, which costs one field inversion.  Folding n
+   points through them therefore costs n inversions where one would do.  A G1
+   inversion measures about 2.5 us against 0.5 us for the point addition it
+   accompanies, so the fold runs roughly 6x slower than it needs to: at the
+   8192-validator cap, 24.5 ms rather than 4.2 ms.
+
+   The accumulators keep the running sum in projective coordinates and pay the
+   single inversion in _fini.  Use them wherever more than two points are
+   folded; the pairwise functions remain correct and are fine for exactly two. */
+
+typedef blst_p1 tn_bls_pubkey_acc_t;
+typedef blst_p2 tn_bls_signature_acc_t;
+
+/* Largest batch tn_crypto_pubkey_acc_add_batch accepts in one call.  Chosen so
+   the gathered scratch stays a modest fixed cost while capturing most of the
+   batching win; larger chunks buy very little beyond this. */
+#define TN_CRYPTO_PUBKEY_BATCH_MAX (256UL)
 
 /* Serialized point sizes for wire format */
 #define TN_CRYPTO_G1_UNCOMPRESSED_SIZE (96UL)  /* G1 uncompressed: x (48) + y (48) */
@@ -112,6 +140,19 @@ int tn_crypto_verify_signature( tn_bls_signature_t const * signature,
                                 tn_bls_pubkey_t const * pubkey,
                                 void const * message, ulong message_len );
 
+/* tn_crypto_verify_signature_prechecked verifies a single signature WITHOUT
+   performing the G1 and G2 subgroup checks.
+
+   Same contract as tn_crypto_verify_aggregate_prechecked: only call this when
+   both points have provably already been subgroup-checked on this code path,
+   which in practice means immediately after tn_crypto_deserialize_pubkey and
+   tn_crypto_deserialize_signature.  When in doubt use
+   tn_crypto_verify_signature, which checks. */
+int tn_crypto_verify_signature_prechecked( tn_bls_signature_t const * signature,
+                                           tn_bls_pubkey_t const *    pubkey,
+                                           void const *               message,
+                                           ulong                      message_len );
+
 /* tn_crypto_aggregate_signatures aggregates two signatures */
 int tn_crypto_aggregate_signatures( tn_bls_signature_t *       aggregate,
                                     tn_bls_signature_t const * sig1,
@@ -121,6 +162,48 @@ int tn_crypto_aggregate_signatures( tn_bls_signature_t *       aggregate,
 int tn_crypto_aggregate_pubkeys( tn_bls_pubkey_t *       aggregate,
                                  tn_bls_pubkey_t const * pk1,
                                  tn_bls_pubkey_t const * pk2 );
+
+/* tn_crypto_pubkey_acc_init seeds an accumulator with its first public key.
+   Mirrors the pairwise fold, which likewise copies the first key rather than
+   starting from the identity. */
+int tn_crypto_pubkey_acc_init( tn_bls_pubkey_acc_t *   acc,
+                               tn_bls_pubkey_t const * pubkey );
+
+/* tn_crypto_pubkey_acc_add adds one public key into an accumulator. */
+int tn_crypto_pubkey_acc_add( tn_bls_pubkey_acc_t *   acc,
+                              tn_bls_pubkey_t const * pubkey );
+
+/* tn_crypto_pubkey_acc_add_batch adds cnt public keys into an accumulator in
+   one call, using blst's batched mixed addition rather than cnt separate
+   additions.  cnt must not exceed TN_CRYPTO_PUBKEY_BATCH_MAX.
+
+   Worth roughly a further 1.6x over repeated tn_crypto_pubkey_acc_add when
+   folding thousands of keys: at the 8192-validator cap, 4.2 ms drops to 2.6 ms.
+   Callers that fold fewer than a few dozen keys should just use _add. */
+#ifndef THRU_VM
+int tn_crypto_pubkey_acc_add_batch( tn_bls_pubkey_acc_t *   acc,
+                                    tn_bls_pubkey_t const * pubkeys,
+                                    ulong                   cnt,
+                                    int                     seed_acc );
+#endif
+
+/* tn_crypto_pubkey_acc_fini converts an accumulator to an affine aggregate
+   public key.  This is where the single field inversion is paid. */
+int tn_crypto_pubkey_acc_fini( tn_bls_pubkey_t *           aggregate,
+                               tn_bls_pubkey_acc_t const * acc );
+
+/* tn_crypto_signature_acc_init seeds an accumulator with its first signature. */
+int tn_crypto_signature_acc_init( tn_bls_signature_acc_t *   acc,
+                                  tn_bls_signature_t const * signature );
+
+/* tn_crypto_signature_acc_add adds one signature into an accumulator. */
+int tn_crypto_signature_acc_add( tn_bls_signature_acc_t *   acc,
+                                 tn_bls_signature_t const * signature );
+
+/* tn_crypto_signature_acc_fini converts an accumulator to an affine aggregate
+   signature.  This is where the single field inversion is paid. */
+int tn_crypto_signature_acc_fini( tn_bls_signature_t *           aggregate,
+                                  tn_bls_signature_acc_t const * acc );
 
 /* tn_crypto_subtract_signature subtracts a signature from aggregate */
 int tn_crypto_subtract_signature( tn_bls_signature_t *       aggregate,
@@ -138,6 +221,23 @@ int tn_crypto_verify_aggregate_with_dst( tn_bls_signature_t const * aggregate_si
                                          ulong                      message_len,
                                          uchar const *              dst,
                                          ulong                      dst_len );
+
+/* tn_crypto_verify_aggregate_prechecked verifies an aggregate signature
+   WITHOUT performing the G1 and G2 subgroup checks.
+
+   Only call this when the caller can prove both points have already been
+   subgroup-checked on this code path -- in practice, immediately after
+   tn_crypto_deserialize_pubkey and tn_crypto_deserialize_signature, which
+   perform exactly those checks.  Passing a point that has not been checked
+   makes the verification meaningless: a point on the curve but outside the
+   prime-order subgroup is not rejected, and BLS12-381 G1 has a non-trivial
+   cofactor, so on-curve does not imply in-subgroup.
+
+   When in doubt use tn_crypto_verify_aggregate, which checks. */
+int tn_crypto_verify_aggregate_prechecked( tn_bls_signature_t const * aggregate_sig,
+                                           tn_bls_pubkey_t const *    aggregate_pk,
+                                           void const *               message,
+                                           ulong                      message_len );
 
 /* tn_crypto_verify_aggregate verifies an aggregate signature
    using the default consensus DST ("TN_CONSENSUS_V1"). */

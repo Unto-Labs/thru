@@ -93,5 +93,8 @@ The web wallet iframe design, as composable parts (see the gallery's
   `Row`, `Hex`, `Account`, `Pre`, `Bytes`).
 - `ConnectButton` — the dapp-side drop-in: idle / loading / connected chip
   with the account menu (manage, switch, add, explorer, sign out).
+- `DepositButton` — the host's funding entry point ("Add funds" / "Adding
+  funds…", optional trailing balance; `ghost` is the inline text-link form)
+  that calls `thru.deposit()`.
 - `Dove` — the animated mark that replaces a spinner after a 2 s wait;
   `ThruDisc`, `ThruWordmark`, `PoweredBy` brand marks.

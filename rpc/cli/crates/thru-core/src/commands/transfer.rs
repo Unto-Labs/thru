@@ -1,9 +1,9 @@
 //! Transfer command implementation
 
 use std::time::Duration;
-use thru_base::{tn_tools::Pubkey, txn_tools::EOA_PROGRAM};
 use thru_base::txn_lib::TnPubkey;
 use thru_base::txn_tools::TransactionBuilder;
+use thru_base::{tn_tools::Pubkey, txn_tools::EOA_PROGRAM};
 
 use crate::config::Config;
 use crate::crypto::keypair_from_hex;
@@ -18,6 +18,7 @@ pub async fn handle_transfer_command(
     src: &str,
     dst: &str,
     value: u64,
+    build_only: bool,
     json_format: bool,
 ) -> Result<(), CliError> {
     // Validate transfer amount
@@ -74,13 +75,14 @@ pub async fn handle_transfer_command(
     })?;
 
     // Get chain ID
-    let chain_info = client.get_chain_info().await.map_err(|e| {
-        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
-    })?;
+    let chain_info = client
+        .get_chain_info()
+        .await
+        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
 
     // Build transfer transaction
     let mut transaction = TransactionBuilder::build_transfer(
-        src_keypair.public_key,        // fee_payer
+        src_keypair.public_key, // fee_payer
         EOA_PROGRAM,
         dst_pubkey,                    // to_account
         value,                         // amount
@@ -97,6 +99,29 @@ pub async fn handle_transfer_command(
     transaction.sign(&src_keypair.private_key).map_err(|e| {
         CliError::TransactionSubmission(format!("Failed to sign transaction: {}", e))
     })?;
+
+    // Build-only: emit the signed txn as base64 and skip submit. Used to embed a
+    // fee-paying transfer into an externally-produced block (e.g. the
+    // send-block fee-distribution e2e).
+    if build_only {
+        use base64::{Engine, engine::general_purpose};
+        let wire = transaction.to_wire();
+        let base64_transaction = general_purpose::STANDARD.encode(&wire);
+        if json_format {
+            let response = serde_json::json!({
+                "transfer": {
+                    "status": "success",
+                    "build_only": true,
+                    "base64_transaction": base64_transaction,
+                    "size_bytes": wire.len(),
+                }
+            });
+            output::print_output(response, json_format);
+        } else {
+            println!("{}", base64_transaction);
+        }
+        return Ok(());
+    }
 
     // Submit the transaction
     let transaction_bytes = transaction.to_wire();

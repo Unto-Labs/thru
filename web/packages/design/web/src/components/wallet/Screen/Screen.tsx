@@ -17,6 +17,8 @@ const ChevronRight = (p: React.SVGProps<SVGSVGElement>) => (
 );
 
 export type ScreenHeaderTone = "neutral" | "success" | "danger" | "plain";
+/** `md` is the sheet scale; `lg` the page scale (the passkey popup window). */
+export type ScreenHeaderSize = "md" | "lg";
 
 export interface ScreenHeaderProps {
   /** Centered badge glyph; defaults to an info icon. */
@@ -31,6 +33,8 @@ export interface ScreenHeaderProps {
   title: React.ReactNode;
   /** Optional subtitle / supporting content. */
   content?: React.ReactNode;
+  /** `lg`: 48px badge, 20px title, 14px subtitle. Default `md`. */
+  size?: ScreenHeaderSize;
   className?: string;
 }
 
@@ -38,9 +42,16 @@ export interface ScreenHeaderProps {
  * ScreenHeader — a centered badge, title, and optional subtitle for the top of
  * a wallet Screen. Presentational; also available as `Screen.Header`.
  */
-export function ScreenHeader({ icon, tone = "neutral", title, content, className }: ScreenHeaderProps) {
+export function ScreenHeader({
+  icon,
+  tone = "neutral",
+  title,
+  content,
+  size = "md",
+  className,
+}: ScreenHeaderProps) {
   return (
-    <div className={cn("tds-screen__header", className)}>
+    <div className={cn("tds-screen__header", size === "lg" && "tds-screen__header--lg", className)}>
       <span className={cn("tds-screen__badge", `tds-screen__badge--${tone}`)}>
         {icon ?? <Info width={16} height={16} />}
       </span>

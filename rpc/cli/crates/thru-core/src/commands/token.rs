@@ -78,6 +78,105 @@ fn resolve_token_program(
     }
 }
 
+/// Where a resolved token program address came from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum TokenProgramSource {
+    /// `--token-program` was passed.
+    Flag,
+    /// Owner of the mint or token account the command names.
+    OnChain,
+    /// Config `token_program_public_key`.
+    Config,
+}
+
+/// Pick the token program for a command that names an existing mint or token
+/// account. An explicit `--token-program` wins; otherwise the account's
+/// on-chain owner is the program that manages it; config is the last resort.
+fn choose_token_program(
+    flag_program: Option<[u8; 32]>,
+    onchain_owner: Option<[u8; 32]>,
+    config_program: [u8; 32],
+) -> ([u8; 32], TokenProgramSource) {
+    if let Some(bytes) = flag_program {
+        (bytes, TokenProgramSource::Flag)
+    } else if let Some(bytes) = onchain_owner {
+        (bytes, TokenProgramSource::OnChain)
+    } else {
+        (config_program, TokenProgramSource::Config)
+    }
+}
+
+/// Resolve the token program for a command that names an existing mint or
+/// token account (`account`, described by `label`). Without `--token-program`
+/// the account's owner is read from chain, so mints under any token program
+/// deployment work without configuration. A failed lookup falls back to the
+/// configured program and says so on stderr.
+async fn resolve_token_program_for_account(
+    config: &Config,
+    client: &Client,
+    token_program: Option<&str>,
+    account: &[u8; 32],
+    label: &str,
+    json_format: bool,
+) -> Result<(Pubkey, [u8; 32]), CliError> {
+    if token_program.is_some() {
+        return resolve_token_program(config, token_program);
+    }
+
+    let (_config_pubkey, config_bytes) = resolve_token_program(config, None)?;
+    let account_address = tn_pubkey_to_address_string(account);
+
+    let lookup = client
+        .get_account_info(
+            &Pubkey::from_bytes(account),
+            None,
+            Some(VersionContext::Current),
+        )
+        .await;
+
+    let (onchain_owner, fallback_reason) = match lookup {
+        Ok(Some(info)) if !info.is_deleted => match info.owner.to_bytes() {
+            // A zero owner is the system program: a plain account, not a mint
+            // or token account.
+            Ok(owner) if owner == [0u8; 32] => (
+                None,
+                Some("it is a plain account, not owned by a token program".to_string()),
+            ),
+            Ok(owner) => (Some(owner), None),
+            Err(e) => (None, Some(format!("its owner could not be decoded: {}", e))),
+        },
+        Ok(_) => (None, Some("it was not found on chain".to_string())),
+        Err(e) => (None, Some(format!("the lookup failed: {}", e))),
+    };
+
+    let (bytes, source) = choose_token_program(None, onchain_owner, config_bytes);
+
+    if !json_format {
+        match source {
+            TokenProgramSource::OnChain if bytes != config_bytes => {
+                println!(
+                    "  Token program: {} (owner of {} {})",
+                    tn_pubkey_to_address_string(&bytes),
+                    label,
+                    account_address
+                );
+            }
+            TokenProgramSource::Config => {
+                eprintln!(
+                    "Note: using configured token program {} because {} {} could not be used ({}). Pass --token-program to choose one.",
+                    tn_pubkey_to_address_string(&bytes),
+                    label,
+                    account_address,
+                    fallback_reason.unwrap_or_default()
+                );
+            }
+            _ => {}
+        }
+    }
+
+    Ok((Pubkey::from_bytes(&bytes), bytes))
+}
+
 fn derive_mint_account_pubkey(
     token_program_pubkey: &Pubkey,
     creator_pubkey: &[u8; 32],
@@ -189,11 +288,10 @@ struct TransactionContext {
 /// Setup common transaction context after all local inputs have been resolved.
 async fn setup_transaction_context(
     config: &Config,
+    client: Client,
     fee_payer_keypair: KeyPair,
     token_program_bytes: [u8; 32],
 ) -> Result<TransactionContext, CliError> {
-    let client = create_rpc_client(config)?;
-
     // Get current nonce and block height
     let account_info = client
         .get_account_info(&fee_payer_keypair.address_string, None, None)
@@ -703,12 +801,22 @@ async fn initialize_account(
     let mint_pubkey = validate_address_or_hex(mint)?;
     let owner_pubkey = validate_address_or_hex(owner)?;
 
-    // Resolve token program and fee payer
-    let (token_program_pubkey, token_program_bytes) = resolve_token_program(config, token_program)?;
+    // Resolve fee payer
     let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
 
     // Create RPC client
     let client = create_rpc_client(config)?;
+
+    // The mint's owner is the token program that manages it
+    let (token_program_pubkey, token_program_bytes) = resolve_token_program_for_account(
+        config,
+        &client,
+        token_program,
+        &mint_pubkey,
+        "mint",
+        json_format,
+    )
+    .await?;
 
     // Get current nonce and block height
     let account_info = client
@@ -872,12 +980,22 @@ async fn transfer(
     let to_pubkey = validate_address_or_hex(to)?;
 
     // Resolve local transaction inputs before making RPC requests.
-    let (_token_program_pubkey, token_program_bytes) =
-        resolve_token_program(config, token_program)?;
     let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
 
+    // The source token account's owner is the token program that manages it
+    let client = create_rpc_client(config)?;
+    let (_token_program_pubkey, token_program_bytes) = resolve_token_program_for_account(
+        config,
+        &client,
+        token_program,
+        &from_pubkey,
+        "token account",
+        json_format,
+    )
+    .await?;
+
     // Setup transaction context
-    let context = setup_transaction_context(config, fee_payer_keypair, token_program_bytes)
+    let context = setup_transaction_context(config, client, fee_payer_keypair, token_program_bytes)
         .await
         .map_err(|e| handle_account_not_found_error(e, "token_transfer", json_format))?;
 
@@ -960,14 +1078,23 @@ async fn mint_to(
     let to_pubkey = validate_address_or_hex(to)?;
 
     // Resolve and validate every local transaction input before making RPC requests.
-    let (_token_program_pubkey, token_program_bytes) =
-        resolve_token_program(config, token_program)?;
     let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
     let authority_pubkey =
         resolve_authorized_actor(authority, "Mint authority", &fee_payer_keypair)?;
+    // The mint's owner is the token program that manages it
+    let client = create_rpc_client(config)?;
+    let (_token_program_pubkey, token_program_bytes) = resolve_token_program_for_account(
+        config,
+        &client,
+        token_program,
+        &mint_pubkey,
+        "mint",
+        json_format,
+    )
+    .await?;
 
     // Setup transaction context
-    let context = setup_transaction_context(config, fee_payer_keypair, token_program_bytes)
+    let context = setup_transaction_context(config, client, fee_payer_keypair, token_program_bytes)
         .await
         .map_err(|e| handle_account_not_found_error(e, "token_mint_to", json_format))?;
 
@@ -1050,14 +1177,23 @@ async fn burn(
     let mint_pubkey = validate_address_or_hex(mint)?;
 
     // Resolve configuration
-    let (_token_program_pubkey, token_program_bytes) =
-        resolve_token_program(config, token_program)?;
     let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
     let authority_pubkey =
         resolve_authorized_actor(authority, "Burn authority", &fee_payer_keypair)?;
 
     // Create RPC client
     let client = create_rpc_client(config)?;
+
+    // The mint's owner is the token program that manages it
+    let (_token_program_pubkey, token_program_bytes) = resolve_token_program_for_account(
+        config,
+        &client,
+        token_program,
+        &mint_pubkey,
+        "mint",
+        json_format,
+    )
+    .await?;
 
     // Get current nonce and block height
     let account_info = client
@@ -1163,14 +1299,23 @@ async fn close_account(
     let destination_pubkey = validate_address_or_hex(destination)?;
 
     // Resolve configuration
-    let (_token_program_pubkey, token_program_bytes) =
-        resolve_token_program(config, token_program)?;
     let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
     let authority_pubkey =
         resolve_authorized_actor(authority, "Close authority", &fee_payer_keypair)?;
 
     // Create RPC client
     let client = create_rpc_client(config)?;
+
+    // The token account's owner is the token program that manages it
+    let (_token_program_pubkey, token_program_bytes) = resolve_token_program_for_account(
+        config,
+        &client,
+        token_program,
+        &account_pubkey,
+        "token account",
+        json_format,
+    )
+    .await?;
 
     // Get current nonce and block height
     let account_info = client
@@ -1273,14 +1418,23 @@ async fn freeze_account(
     let mint_pubkey = validate_address_or_hex(mint)?;
 
     // Resolve configuration
-    let (_token_program_pubkey, token_program_bytes) =
-        resolve_token_program(config, token_program)?;
     let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
     let authority_pubkey =
         resolve_authorized_actor(authority, "Freeze authority", &fee_payer_keypair)?;
 
     // Create RPC client
     let client = create_rpc_client(config)?;
+
+    // The mint's owner is the token program that manages it
+    let (_token_program_pubkey, token_program_bytes) = resolve_token_program_for_account(
+        config,
+        &client,
+        token_program,
+        &mint_pubkey,
+        "mint",
+        json_format,
+    )
+    .await?;
 
     // Get current nonce and block height
     let account_info = client
@@ -1383,14 +1537,23 @@ async fn thaw_account(
     let mint_pubkey = validate_address_or_hex(mint)?;
 
     // Resolve configuration
-    let (_token_program_pubkey, token_program_bytes) =
-        resolve_token_program(config, token_program)?;
     let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
     let authority_pubkey =
         resolve_authorized_actor(authority, "Thaw authority", &fee_payer_keypair)?;
 
     // Create RPC client
     let client = create_rpc_client(config)?;
+
+    // The mint's owner is the token program that manages it
+    let (_token_program_pubkey, token_program_bytes) = resolve_token_program_for_account(
+        config,
+        &client,
+        token_program,
+        &mint_pubkey,
+        "mint",
+        json_format,
+    )
+    .await?;
 
     // Get current nonce and block height
     let account_info = client
@@ -1801,7 +1964,14 @@ async fn derive_token_account(
 
     // Use the token_seed for PDA derivation with token program as owner
     // This matches account_create() call in process.rs line 87-92
-    let (token_program_pubkey, _) = resolve_token_program(config, token_program)?;
+    // The mint's owner is the token program that manages it
+    let (token_program_pubkey, token_program_bytes) = if token_program.is_some() {
+        resolve_token_program(config, token_program)?
+    } else {
+        let client = create_rpc_client(config)?;
+        resolve_token_program_for_account(config, &client, None, &mint_pubkey, "mint", json_format)
+            .await?
+    };
 
     // Derive the final token account address using the token_seed
     let token_account_base_pubkey = thru_base::crypto_utils::derive_program_address(
@@ -1828,7 +1998,8 @@ async fn derive_token_account(
                 "token_account_address": token_account_address,
                 "mint": mint,
                 "owner": owner,
-                "seed": hex::encode(&seed_bytes)
+                "seed": hex::encode(&seed_bytes),
+                "token_program": tn_pubkey_to_address_string(&token_program_bytes)
             }
         });
         crate::output::print_output(response, true);
@@ -1953,6 +2124,48 @@ mod tests {
         .expect_err("mismatched authority must fail before the invalid RPC URL is used");
 
         assert!(error.to_string().contains("must match the fee payer"));
+    }
+
+    #[test]
+    fn token_program_prefers_flag_then_onchain_owner_then_config() {
+        let flag = [1u8; 32];
+        let owner = [2u8; 32];
+        let configured = [3u8; 32];
+
+        assert_eq!(
+            choose_token_program(Some(flag), Some(owner), configured),
+            (flag, TokenProgramSource::Flag)
+        );
+        assert_eq!(
+            choose_token_program(None, Some(owner), configured),
+            (owner, TokenProgramSource::OnChain)
+        );
+        assert_eq!(
+            choose_token_program(None, None, configured),
+            (configured, TokenProgramSource::Config)
+        );
+    }
+
+    #[tokio::test]
+    async fn derive_token_account_with_explicit_program_stays_offline() {
+        let config = Config {
+            rpc_base_url: "not a valid RPC URL".to_string(),
+            ..Config::default()
+        };
+        let mint = KeyPair::from_hex_private_key("mint", hex::encode([4u8; 32])).unwrap();
+        let owner = KeyPair::from_hex_private_key("owner", hex::encode([5u8; 32])).unwrap();
+        let program = Config::default().token_program_public_key;
+
+        derive_token_account(
+            &config,
+            mint.address_string.as_str(),
+            owner.address_string.as_str(),
+            None,
+            Some(program.as_str()),
+            true,
+        )
+        .await
+        .expect("an explicit --token-program must not need the RPC endpoint");
     }
 
     fn build_token_account_blob(

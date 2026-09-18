@@ -373,6 +373,99 @@ types:
 }
 
 #[test]
+fn byte_offsets_advance_across_jagged_array_elements() {
+    let reflector = reflector_from_yaml(
+        r#"
+abi:
+  package: test.format
+  abi-version: 1
+  package-version: "0.1.0"
+  description: "format test"
+  imports: []
+types:
+- name: Call
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: data_size
+        field-type:
+          primitive: u8
+      - name: data
+        field-type:
+          array:
+            size:
+              field-ref:
+                path: ["data_size"]
+            element-type:
+              primitive: u8
+- name: Calls
+  kind:
+    struct:
+      packed: true
+      fields:
+      - name: call_count
+        field-type:
+          primitive: u8
+      - name: calls
+        field-type:
+          array:
+            jagged: true
+            size:
+              field-ref:
+                path: ["call_count"]
+            element-type:
+              type-ref:
+                name: Call
+"#,
+    );
+    /* Two variable-length calls: 2 bytes of data, then 3 bytes of data */
+    let bytes = [2u8, 2, 0xaa, 0xbb, 3, 0xcc, 0xdd, 0xee];
+    let reflected = reflector
+        .reflect(&bytes, "Calls")
+        .expect("reflection succeeds");
+    let formatted = format_reflection_with_options(
+        &reflected,
+        &FormatOptions {
+            include_byte_offsets: true,
+            ..FormatOptions::default()
+        },
+    );
+
+    let calls = formatted
+        .value
+        .as_object()
+        .and_then(|obj| obj.get("calls"))
+        .and_then(JsonValue::as_array)
+        .expect("calls array");
+    assert_eq!(calls.len(), 2);
+
+    let field_range = |call: &JsonValue, name: &str| -> (u64, u64) {
+        let range = call
+            .as_object()
+            .and_then(|obj| obj.get(name))
+            .and_then(JsonValue::as_object)
+            .and_then(|field| field.get("_byteRange"))
+            .and_then(JsonValue::as_object)
+            .unwrap_or_else(|| panic!("{name} byte range"));
+        (
+            range
+                .get("offset")
+                .and_then(JsonValue::as_u64)
+                .expect("offset"),
+            range.get("size").and_then(JsonValue::as_u64).expect("size"),
+        )
+    };
+
+    /* Each jagged element starts after the runtime size of its predecessor,
+    so the second element must not reuse the first element's offsets. */
+    assert_eq!(field_range(&calls[0], "data_size"), (1, 1));
+    assert_eq!(field_range(&calls[0], "data"), (2, 2));
+    assert_eq!(field_range(&calls[1], "data_size"), (4, 1));
+    assert_eq!(field_range(&calls[1], "data"), (5, 3));
+}
+
+#[test]
 fn token_account_fixture_formats() {
     let reflector = load_reflector_with_imports("../type-library/tn_token_program.abi.yaml");
     let token_account_hex =

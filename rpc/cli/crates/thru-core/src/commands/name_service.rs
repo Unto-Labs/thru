@@ -758,7 +758,13 @@ async fn initialize_registry(
     // Create RPC client
     let client = create_rpc_client(config)?;
 
-    // Registrar must be new/inactive; wrapper will create it
+    // Registrar must be absent; the wrapper creates it. `is_new` mirrors
+    // TN_ACCOUNT_FLAG_NEW: the runtime sets it on the CREATION state proof (no
+    // committed state yet) and clears it on EXISTING (tn_runtime.c), so a real
+    // committed account always reads back is_new == false. Hence `Some(_)` +
+    // is_new is an empty slot (safe to create over) and only `!is_new` is
+    // "already exists". An unfinalized creation racing in a concurrent block
+    // isn't visible here, but the on-chain create then fails authoritatively.
     let root_registrar_pubkey = Pubkey::from_bytes(&root_registrar_account_pubkey);
     if let Some(existing) = client
         .get_account_info(&root_registrar_pubkey, None, None)
@@ -852,6 +858,13 @@ async fn initialize_registry(
     let config_account_bytes = config_account_pubkey
         .to_bytes()
         .map_err(|e| CliError::Crypto(format!("Failed to convert config pubkey to bytes: {}", e)))?;
+    // Config account must be absent. `is_new` mirrors TN_ACCOUNT_FLAG_NEW: the
+    // runtime sets it on the CREATION state proof (no committed state yet) and
+    // clears it on EXISTING (tn_runtime.c), so a real committed account reads
+    // back is_new == false. Hence `Some(_)` + is_new is an empty slot (safe to
+    // create over) and only `!is_new` is "already exists". An unfinalized
+    // creation racing in a concurrent block isn't visible here, but the on-chain
+    // create then fails authoritatively.
     if let Some(existing_config) = client
         .get_account_info(&config_account_pubkey, None, None)
         .await

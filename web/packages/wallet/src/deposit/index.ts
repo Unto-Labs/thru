@@ -43,11 +43,27 @@ declare const process:
     }
   | undefined;
 
-export const DEFAULT_DEPOSIT_SYMBOL = "CREDITS";
+export const DEFAULT_DEPOSIT_SYMBOL = "THRUSD";
+/** The deposit token's former name, still present in older deployed config. */
+export const LEGACY_DEPOSIT_SYMBOL = "CREDITS";
 export const DEFAULT_DEPOSIT_DECIMALS = 6;
 export const DEFAULT_DEPOSIT_TARGET = DepositTarget.THRUSD;
-export const CREDITS_TICKER = DEFAULT_DEPOSIT_SYMBOL;
-export const CREDITS_DECIMALS = DEFAULT_DEPOSIT_DECIMALS;
+export const THRUSD_TICKER = DEFAULT_DEPOSIT_SYMBOL;
+export const THRUSD_DECIMALS = DEFAULT_DEPOSIT_DECIMALS;
+/** @deprecated Use THRUSD_TICKER. */
+export const CREDITS_TICKER = THRUSD_TICKER;
+/** @deprecated Use THRUSD_DECIMALS. */
+export const CREDITS_DECIMALS = THRUSD_DECIMALS;
+
+/* The deposit token was renamed from CREDITS to THRUSD at the display layer
+   only: the on-chain ticker and the config target key are unchanged, and
+   deployed config may still say CREDITS. Normalize here so every surface that
+   reads a prepared destination shows the current name regardless of which
+   config value it was built from. */
+export function normalizeDepositSymbol(symbol: string | undefined): string {
+  if (!symbol || symbol === LEGACY_DEPOSIT_SYMBOL) return DEFAULT_DEPOSIT_SYMBOL;
+  return symbol;
+}
 
 const DEFAULT_TOKEN_PROGRAM_ADDRESS =
   "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKqq";
@@ -157,9 +173,16 @@ export function getValidatedDepositDestination(
   actual: DepositDestination,
   expected: Readonly<DepositDestination>,
 ): DepositDestination {
+  /* A destination prepared before the CREDITS -> THRUSD rename (cached by a
+     dapp, or built by an older wallet) still names the token CREDITS. That is
+     the same token, so compare the normalized symbol. */
+  const supplied: DepositDestination = {
+    ...actual,
+    symbol: normalizeDepositSymbol(actual.symbol),
+  };
   const mismatches = (
     Object.keys(expected) as Array<keyof DepositDestination>
-  ).filter((key) => actual[key] !== expected[key]);
+  ).filter((key) => supplied[key] !== expected[key]);
   if (mismatches.length > 0) {
     throw new Error(
       `Prepared deposit destination no longer matches wallet config: ${mismatches.join(", ")}`,
@@ -378,6 +401,7 @@ export const DEPOSIT_TOKEN_PROGRAM_ADDRESS =
   readPublicEnv("NEXT_PUBLIC_TOKEN_PROGRAM_ADDRESS") ??
   readPublicEnv("EXPO_PUBLIC_TOKEN_PROGRAM_ADDRESS") ??
   DEFAULT_TOKEN_PROGRAM_ADDRESS;
+/** @deprecated Use DEPOSIT_TOKEN_PROGRAM_ADDRESS. */
 export const CREDITS_TOKEN_PROGRAM_ADDRESS = DEPOSIT_TOKEN_PROGRAM_ADDRESS;
 
 function parseDepositNetworkConfigs(
@@ -419,7 +443,7 @@ function parseDepositNetworkConfigs(
               depositTarget,
               rpcUrl: value.rpc_url,
               mintAddress: target.mint_address,
-              symbol: target.symbol || DEFAULT_DEPOSIT_SYMBOL,
+              symbol: normalizeDepositSymbol(target.symbol),
               decimals:
                 target.decimals === undefined
                   ? DEFAULT_DEPOSIT_DECIMALS
@@ -583,8 +607,13 @@ export function getDepositTargetConfig(
   return createDepositConfig(runtimeConfig).getTarget(network, depositTarget);
 }
 
-export function getCreditsMintAddress(): string {
+export function getDepositMintAddress(): string {
   return getDepositTargetConfig().mintAddress;
+}
+
+/** @deprecated Use getDepositMintAddress. */
+export function getCreditsMintAddress(): string {
+  return getDepositMintAddress();
 }
 
 export function parseDepositAmount(
@@ -603,8 +632,9 @@ export function parseDepositAmount(
   return raw > 0n ? raw : null;
 }
 
+/** @deprecated Use parseDepositAmount(input, THRUSD_DECIMALS). */
 export function parseCreditsAmount(input: string): bigint | null {
-  return parseDepositAmount(input, CREDITS_DECIMALS);
+  return parseDepositAmount(input, THRUSD_DECIMALS);
 }
 
 export function formatDepositAmount(
@@ -621,8 +651,9 @@ export function formatDepositAmount(
   return fraction ? `${wholeLabel}.${fraction}` : wholeLabel;
 }
 
+/** @deprecated Use formatDepositAmount(amountRaw, THRUSD_DECIMALS). */
 export function formatCreditsAmount(amountRaw: bigint): string {
-  return formatDepositAmount(amountRaw, CREDITS_DECIMALS);
+  return formatDepositAmount(amountRaw, THRUSD_DECIMALS);
 }
 
 export function buildDepositDestination(params: {

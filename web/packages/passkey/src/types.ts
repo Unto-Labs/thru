@@ -100,6 +100,8 @@ export interface PasskeyPopupCreateRequestPayload {
 }
 
 export interface PasskeyPopupGetStoredRequestPayload {
+  rpId?: string;
+  preferDiscoverable?: boolean;
   challengeBase64Url: string;
   context?: PasskeyPopupContext;
 }

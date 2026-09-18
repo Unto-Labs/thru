@@ -44,10 +44,53 @@ export const EMBEDDED_PROVIDER_EVENTS = {
    */
   UI_HIDE: "ui_hide",
   ACCOUNT_CHANGED: "account_changed",
+  /* Add funds lifecycle, so a host can react (refresh a balance, toast)
+     without waiting on the deposit() promise. `deposit:pending` fires as soon
+     as the money is committed — card payment authorized, or crypto transfer
+     detected — while the sheet is still open; it is sent at most once per
+     deposit. */
+  DEPOSIT_OPENED: "deposit:opened",
+  DEPOSIT_PENDING: "deposit:pending",
+  DEPOSIT_COMPLETED: "deposit:completed",
+  DEPOSIT_CANCELLED: "deposit:cancelled",
 } as const;
 
 export interface UiHideEventPayload {
   exitMs?: number;
+}
+
+/** Which Add funds rail a deposit runs on. */
+export type DepositMethod = "crypto" | "card";
+
+export interface DepositOpenedEventPayload {
+  /** Undefined while the user is still on the chooser. */
+  method?: DepositMethod;
+  destination: DepositDestination;
+}
+
+export interface DepositPendingEventPayload {
+  method: DepositMethod;
+  destination: DepositDestination;
+  providerDepositId?: string;
+}
+
+export interface DepositCompletedEventPayload {
+  method: DepositMethod;
+  destination: DepositDestination;
+  /** Formatted amount credited, e.g. "250.00". */
+  amount: string;
+  /** Raw (base-unit) amount credited, when observed. */
+  amountRaw?: string;
+  /** Asset the deposit lands as (the destination symbol). */
+  asset: string;
+  /** Thru mint transaction id, when surfaced. */
+  txId?: string;
+  providerDepositId?: string;
+}
+
+export interface DepositCancelledEventPayload {
+  method?: DepositMethod;
+  destination: DepositDestination;
 }
 
 export type EmbeddedProviderEvent =
@@ -89,6 +132,32 @@ export interface TelemetryContextMessage {
   appContextId?: string;
   /** Absent clears the dimensions the wallet received at load. */
   appContext?: TelemetryAppContext;
+}
+
+/**
+ * Host -> wallet control message carrying the host's resolved color scheme.
+ * Fire-and-forget: sent when the host theme changes (and again when a wallet
+ * document reloads) so open and future wallet surfaces restyle without the
+ * frame reloading. The load-time value rides on the `tn_theme` URL param.
+ */
+export const WALLET_THEME_MESSAGE_TYPE = "wallet:theme" as const;
+
+export interface WalletThemeMessage {
+  type: typeof WALLET_THEME_MESSAGE_TYPE;
+  origin: string;
+  frameId: string;
+  theme: WalletTheme;
+}
+
+export function isWalletThemeMessage(value: unknown): value is WalletThemeMessage {
+  if (!value || typeof value !== "object") return false;
+  const message = value as Partial<WalletThemeMessage>;
+  return (
+    message.type === WALLET_THEME_MESSAGE_TYPE &&
+    typeof message.origin === "string" &&
+    typeof message.frameId === "string" &&
+    (message.theme === "light" || message.theme === "dark")
+  );
 }
 
 export const DEFAULT_IFRAME_URL = "http://localhost:3010/embedded";
@@ -160,10 +229,13 @@ export interface ManageAccountsRequestMessage extends BaseRequest {
   payload?: undefined;
 }
 
-/** Viewport rect of the host control the account menu anchors to. */
-/** The host page's color scheme; the wallet frames draw to match. */
+/** The host page's resolved color scheme; the wallet frames draw to match. */
 export type WalletTheme = "light" | "dark";
 
+/** What a host asks for: a fixed scheme, or `system` to follow the OS setting. */
+export type WalletThemePreference = WalletTheme | "system";
+
+/** Viewport rect of the host control the account menu anchors to. */
 export interface AccountMenuAnchor {
   x: number;
   y: number;
@@ -298,7 +370,8 @@ export interface ManageAccountsResult {
   selectedAccount: WalletAccount | null;
 }
 
-export type AccountMenuAction = "closed" | "switched" | "accounts-updated" | "signed-out";
+/** `deposit`: the user picked "Add funds"; the host follows up with `deposit()`. */
+export type AccountMenuAction = "closed" | "switched" | "accounts-updated" | "signed-out" | "deposit";
 
 export interface AccountMenuResult {
   action: AccountMenuAction;
@@ -682,19 +755,35 @@ export interface DepositContactPrefill {
   phoneNumber?: string;
 }
 
-/** Funding surface to open for an Unifold deposit. */
-export type DepositFundingMethod = "crypto" | "stripe_link";
+/** Funding surface to open for a deposit (`card` is the Coinbase rail). */
+export type DepositFundingMethod = "crypto" | "stripe_link" | "card";
 
-/** Provider-neutral request for a prepared token destination. */
+/**
+ * Request to open the wallet's Add funds sheet.
+ *
+ *   thru.deposit({})                         → the chooser (crypto / card)
+ *   thru.deposit({ method: "card", amount: "50" }) → straight into a rail
+ *
+ * `destination` is optional: the wallet derives the connected account's
+ * configured token account itself. Legacy callers that pass `providerId` +
+ * `destination` go straight into that provider's rail.
+ */
 export interface DepositRequestPayload {
-  /** Defaults to Unifold so existing `deposits.open({ destination })` callers keep working. */
+  /** Provider to open (`unifold` | `coinbase`); derived from `method` when omitted. */
   providerId?: string;
   /**
    * Unifold funding surface. Omitted values preserve the historical crypto
    * transfer flow so existing callers never receive a new method chooser.
    */
   fundingMethod?: DepositFundingMethod;
-  destination: DepositDestination;
+  /** Rail to open directly; omit for the chooser. */
+  method?: DepositMethod;
+  /** Account the funds should land in; must be the connected account. */
+  to?: string;
+  /** Suggested USD amount for the card rail (alias of `paymentAmount`). */
+  amount?: string;
+  /** Prepared token destination; the wallet derives it when omitted. */
+  destination?: DepositDestination;
   paymentAmount?: string;
   /** Prefills the onramp screen; the user can still edit every value. */
   contact?: DepositContactPrefill;
@@ -714,6 +803,10 @@ export interface CoinbaseOnrampContact {
 export type DepositRequestMessagePayload = DepositRequestPayload & {
   /** Internal wallet bridge field resolved from provider mount-time config. */
   resolvedDepositUiConfig?: DepositUiConfig;
+  /** Providers the host SDK enables; the chooser offers their intersection with the wallet's own config. */
+  enabledProviders?: string[];
+  /** Provider network to derive the destination on when none was prepared (filled by the SDK). */
+  network?: ThruNetwork;
 };
 
 export interface DepositResult {

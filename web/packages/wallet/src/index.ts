@@ -36,6 +36,9 @@ export type {
   WaitForDepositParams,
 } from './deposit';
 export {
+  DEFAULT_DEPOSIT_SYMBOL,
+  LEGACY_DEPOSIT_SYMBOL,
+  normalizeDepositSymbol,
   DepositTransactionError,
   createDepositsApi,
   formatDepositAmount,

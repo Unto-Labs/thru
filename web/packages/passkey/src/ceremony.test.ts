@@ -42,6 +42,8 @@ describe('reported WebAuthn ceremonies', () => {
   beforeEach(() => {
     vi.stubGlobal('window', {
       PublicKeyCredential: function PublicKeyCredential() {},
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
     });
   });
 
@@ -101,6 +103,7 @@ describe('reported WebAuthn ceremonies', () => {
     );
 
     expect(get).toHaveBeenCalledExactlyOnceWith({
+      signal: expect.any(AbortSignal),
       publicKey: expect.not.objectContaining({
         allowCredentials: expect.anything(),
       }),
@@ -207,24 +210,19 @@ describe('reported WebAuthn ceremonies', () => {
     expect(reporter.finished).not.toHaveBeenCalled();
   });
 
-  it('reports one terminal for an assertion that succeeds after a focus retry', async () => {
-    vi.useFakeTimers();
+  it('reports a focus failure once and leaves retry to the user', async () => {
     const reporter = createReporter();
-    const get = vi
-      .fn()
-      .mockRejectedValueOnce(new DOMException('The document is not focused.', 'NotAllowedError'))
-      .mockResolvedValueOnce(createAssertion());
+    const error = new DOMException('The document is not focused.', 'NotAllowedError');
+    const get = vi.fn().mockRejectedValue(error);
     vi.stubGlobal('navigator', { credentials: { get } });
-
-    const pending = signWithDiscoverablePasskey(new Uint8Array([10]), 'wallet.example', {
-      ceremonyReporter: reporter,
-    });
-    await vi.runAllTimersAsync();
-    await pending;
-
-    expect(get).toHaveBeenCalledTimes(2);
+    await expect(
+      signWithDiscoverablePasskey(new Uint8Array([10]), 'wallet.example', {
+        ceremonyReporter: reporter,
+      })
+    ).rejects.toBe(error);
+    expect(get).toHaveBeenCalledOnce();
     expect(reporter.started).toHaveBeenCalledOnce();
-    expect(reporter.finished).toHaveBeenCalledOnce();
-    expect(reporter.failed).not.toHaveBeenCalled();
+    expect(reporter.failed).toHaveBeenCalledOnce();
+    expect(reporter.finished).not.toHaveBeenCalled();
   });
 });

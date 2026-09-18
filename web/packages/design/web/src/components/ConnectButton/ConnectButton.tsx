@@ -78,6 +78,8 @@ export interface ConnectButtonProps {
   onSwitch?: (account: ConnectAccount, index: number) => void;
   /** "Add account"; omit to hide the item. */
   onAddAccount?: () => void;
+  /** Menu "Add funds"; omit to hide the item. */
+  onAddFunds?: () => void;
   /** Menu "Sign out". */
   onDisconnect?: () => void;
   /** Label of the sign-out item (default "Sign out"). */
@@ -135,6 +137,7 @@ export const ConnectButton = React.forwardRef<HTMLElement, ConnectButtonProps>(
       onOpenMenu,
       onSwitch,
       onAddAccount,
+      onAddFunds,
       onDisconnect,
       disconnectLabel = "Sign out",
       menuAlign = "right",
@@ -266,6 +269,7 @@ export const ConnectButton = React.forwardRef<HTMLElement, ConnectButtonProps>(
               explorerHref={explorerHref}
               onSwitch={handleSwitch}
               onAddAccount={onAddAccount}
+              onAddFunds={onAddFunds}
               onDisconnect={onDisconnect}
               disconnectLabel={disconnectLabel}
               onNavigate={() => setOpen(false)}

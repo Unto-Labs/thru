@@ -26,9 +26,16 @@ import {
   type AccountMenuPayload,
   type AccountMenuResult,
   type WalletTheme,
+  type WalletThemePreference,
   type PrepareDepositPayload,
   type ThruNetwork,
 } from './protocol';
+import {
+  normalizeWalletThemePreference,
+  readSystemTheme,
+  resolveWalletTheme,
+  watchSystemTheme,
+} from './theme';
 import {
   createPreparedDepositSnapshot,
   ensureDepositAccountForWallet,
@@ -90,8 +97,12 @@ import {
 
 export interface BrowserSDKConfig {
   iframeUrl?: string;
-  /** The host page's color scheme (default light); the wallet's frames draw to match. */
-  theme?: WalletTheme;
+  /**
+   * The color scheme the wallet's sheets and menus draw for (default light):
+   * `light`, `dark`, or `system` to follow the OS setting. Change it later
+   * with setTheme().
+   */
+  theme?: WalletThemePreference;
   /** Share sanitized operational diagnostics with Thru. Defaults to true. */
   telemetryEnabled?: boolean;
   /** Opaque host-app-provided label stamped on telemetry for cross-session
@@ -127,7 +138,15 @@ export type SDKEvent =
   | 'disconnect'
   | 'error'
   | 'accountChanged'
-  | 'availabilityChanged';
+  | 'availabilityChanged'
+  /* Add funds lifecycle (see DepositOpenedEventPayload and friends). */
+  | 'deposit:opened'
+  | 'deposit:pending'
+  | 'deposit:completed'
+  | 'deposit:cancelled'
+  /* The resolved wallet theme changed (a setTheme() call, or the OS setting
+     under `system`); the listener receives the new WalletTheme. */
+  | 'themeChanged';
 
 export type EventCallback = (...args: any[]) => void;
 
@@ -154,6 +173,9 @@ export class BrowserSDK implements WalletSDK {
   private readonly autoRestore: boolean;
   private readonly connectionHints?: ConnectionHintStore;
   private readonly signingSessions?: SigningSessionDescriptorStore;
+  private themePreference: WalletThemePreference = 'light';
+  private systemTheme: WalletTheme = 'light';
+  private stopWatchingSystemTheme: (() => void) | null = null;
 
   readonly connection: ConnectionApi = {
     connect: (options) => this.connect(options),
@@ -196,9 +218,25 @@ export class BrowserSDK implements WalletSDK {
     return this.iframeUrl;
   }
 
-  /** The host theme the wallet frames draw for. */
+  /** The resolved color scheme the wallet frames draw for. */
   getTheme(): WalletTheme {
     return this.provider.getTheme();
+  }
+
+  /** The scheme the host asked for, which may be `system`. */
+  getThemePreference(): WalletThemePreference {
+    return this.themePreference;
+  }
+
+  /**
+   * Change the color scheme the wallet draws for: `light`, `dark`, or
+   * `system` to follow the OS setting. Open and future wallet surfaces
+   * restyle in place; the wallet is not reloaded.
+   */
+  setTheme(theme: WalletThemePreference): void {
+    this.themePreference = normalizeWalletThemePreference(theme);
+    this.syncSystemThemeWatcher();
+    this.applyTheme();
   }
 
   constructor(config: BrowserSDKConfig = {}) {
@@ -264,10 +302,13 @@ export class BrowserSDK implements WalletSDK {
       baseUrl: config.rpcUrl,
     });
 
+    this.themePreference = normalizeWalletThemePreference(config.theme);
+    this.systemTheme = readSystemTheme();
+
     try {
       this.provider = new EmbeddedProvider({
         iframeUrl,
-        theme: config.theme,
+        theme: resolveWalletTheme(this.themePreference, this.systemTheme),
         addressTypes: config.addressTypes || [AddressType.THRU],
         signingSessions,
         broadcastTransaction: (signedTransaction) =>
@@ -304,6 +345,29 @@ export class BrowserSDK implements WalletSDK {
 
     // Forward provider events to SDK events
     this.setupEventForwarding();
+    this.syncSystemThemeWatcher();
+  }
+
+  /* Follow the OS setting only while the host asks for `system`. */
+  private syncSystemThemeWatcher(): void {
+    if (this.themePreference !== 'system') {
+      this.stopWatchingSystemTheme?.();
+      this.stopWatchingSystemTheme = null;
+      return;
+    }
+    if (this.stopWatchingSystemTheme) return;
+    this.systemTheme = readSystemTheme();
+    this.stopWatchingSystemTheme = watchSystemTheme((systemTheme) => {
+      this.systemTheme = systemTheme;
+      this.applyTheme();
+    });
+  }
+
+  private applyTheme(): void {
+    const theme = resolveWalletTheme(this.themePreference, this.systemTheme);
+    if (theme === this.provider.getTheme()) return;
+    this.provider.setTheme(theme);
+    this.emit('themeChanged', theme);
   }
 
   /**
@@ -669,15 +733,29 @@ export class BrowserSDK implements WalletSDK {
    *
    * @deprecated Use `deposits.open()`.
    */
-  async deposit(payload: DepositRequestPayload): Promise<DepositResult> {
+  async deposit(payload: DepositRequestPayload = {}): Promise<DepositResult> {
     if (!this.initialized) {
       await this.initialize();
     }
-    const providerId = payload.providerId ?? 'unifold';
-    if (!this.depositProviders.has(providerId)) {
+    /* `method` picks the rail; an explicit providerId (legacy callers) wins.
+       Neither → the wallet shows its chooser, restricted to the providers
+       this SDK enables. */
+    const providerId =
+      payload.providerId ??
+      (payload.method === 'card'
+        ? 'coinbase'
+        : payload.method === 'crypto' || payload.destination
+          ? 'unifold'
+          : undefined);
+    if (providerId !== undefined && !this.depositProviders.has(providerId)) {
       throw new Error(`Deposit provider is not configured: ${providerId}`);
     }
-    return this.provider.deposit({ ...payload, providerId });
+    return this.provider.deposit({
+      ...payload,
+      ...(providerId ? { providerId } : {}),
+      ...(payload.amount && !payload.paymentAmount ? { paymentAmount: payload.amount } : {}),
+      enabledProviders: [...this.depositProviders],
+    });
   }
 
   /** @deprecated Use `deposits.ensureAccount()`. */
@@ -829,6 +907,17 @@ export class BrowserSDK implements WalletSDK {
       }
       this.emit('accountChanged', account);
     });
+
+    /* The wallet reports the Add funds lifecycle as it happens; the
+       deposit() promise still resolves with the terminal state. */
+    for (const event of [
+      EMBEDDED_PROVIDER_EVENTS.DEPOSIT_OPENED,
+      EMBEDDED_PROVIDER_EVENTS.DEPOSIT_PENDING,
+      EMBEDDED_PROVIDER_EVENTS.DEPOSIT_COMPLETED,
+      EMBEDDED_PROVIDER_EVENTS.DEPOSIT_CANCELLED,
+    ] as const) {
+      this.provider.on(event, (data: any) => this.emit(event, data));
+    }
   }
 
   /**
@@ -839,6 +928,8 @@ export class BrowserSDK implements WalletSDK {
       operation: 'destroy',
       outcome: 'success',
     });
+    this.stopWatchingSystemTheme?.();
+    this.stopWatchingSystemTheme = null;
     this.provider.destroy();
     this.eventListeners.clear();
     this.initialized = false;

@@ -23,7 +23,7 @@ images=(
 case "$scope" in
   e2e)
     case "$suite" in
-      go|streaming)
+      go|streaming|grpclogs)
         images+=("ubuntu:24.04" "golang:1.26-bookworm")
         ;;
       cli)
@@ -33,7 +33,7 @@ case "$scope" in
         images+=("ubuntu:24.04" "golang:1.26-bookworm" "node:26-bookworm" "node:26-slim")
         ;;
       "")
-        echo "e2e image scope requires a suite: go, cli, ts, or streaming" >&2
+        echo "e2e image scope requires a suite: go, cli, ts, streaming, or grpclogs" >&2
         exit 2
         ;;
       *)

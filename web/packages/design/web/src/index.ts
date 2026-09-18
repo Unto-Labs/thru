@@ -110,7 +110,23 @@ export { Detail } from "./components/Detail/Detail";
 export type { DetailProps, DetailVariant } from "./components/Detail/Detail";
 
 // Wallet
-export { CHAINS, TOKENS, chainMeta, tokenMeta } from "./components/wallet/registry";
+export { DepositButton } from "./components/wallet/DepositButton/DepositButton";
+export type {
+  DepositButtonProps,
+  DepositButtonState,
+  DepositButtonSize,
+  DepositButtonVariant,
+} from "./components/wallet/DepositButton/DepositButton";
+export {
+  CHAINS,
+  TOKENS,
+  CHAIN_ID_BITCOIN,
+  CHAIN_ID_SOLANA,
+  chainMeta,
+  tokenMeta,
+} from "./components/wallet/registry";
+export { NETWORK_LOGOS } from "./components/wallet/assets/logos";
+export type { NetworkLogoKey } from "./components/wallet/assets/logos";
 export type { AssetMeta } from "./components/wallet/registry";
 export { Disc } from "./components/wallet/Disc/Disc";
 export type { DiscProps, DiscSize } from "./components/wallet/Disc/Disc";
@@ -143,6 +159,7 @@ export type {
   ScreenProps,
   ScreenHeaderProps,
   ScreenHeaderTone,
+  ScreenHeaderSize,
   ScreenBottomAction,
 } from "./components/wallet/Screen/Screen";
 export { PresetsInput } from "./components/wallet/PresetsInput/PresetsInput";
@@ -155,6 +172,8 @@ export { ThruDisc, ThruWordmark, PoweredBy } from "./components/wallet/Brand/Bra
 export type { ThruDiscProps, ThruWordmarkProps, PoweredByProps } from "./components/wallet/Brand/Brand";
 export { Dove } from "./components/wallet/Dove/Dove";
 export type { DoveProps } from "./components/wallet/Dove/Dove";
+export { ErrorBox } from "./components/wallet/ErrorBox/ErrorBox";
+export type { ErrorBoxProps } from "./components/wallet/ErrorBox/ErrorBox";
 export {
   AccountMenuPopup,
   AccountAvatar,
@@ -195,5 +214,38 @@ export type {
   WalletSheetTxPendingProps,
   WalletSheetTxDoneProps,
 } from "./components/wallet/WalletSheet/WalletSheet";
+export {
+  DepositQr,
+  CoinbaseFrame,
+  CoinbaseTerms,
+  DepositPayButton,
+  DEFAULT_DEPOSIT_PAY_METHODS,
+  DEFAULT_DEPOSIT_PRESETS,
+  COINBASE_GUEST_CHECKOUT_TERMS_HREF,
+  COINBASE_USER_AGREEMENT_HREF,
+  COINBASE_PRIVACY_POLICY_HREF,
+} from "./components/wallet/WalletSheet/DepositScreens";
+export type {
+  WalletSheetDepositMethod,
+  WalletSheetDepositProps,
+  WalletSheetDepositCryptoProps,
+  WalletSheetDepositCardProps,
+  WalletSheetDepositVerifyProps,
+  WalletSheetDepositPendingProps,
+  WalletSheetDepositDoneProps,
+  WalletSheetDepositDoneRow,
+  DepositDestinationInfo,
+  DepositNetworkOption,
+  DepositPayMethodOption,
+  DepositQrProps,
+} from "./components/wallet/WalletSheet/DepositScreens";
+export { PasskeyPopup } from "./components/wallet/PasskeyPopup/PasskeyPopup";
+export type {
+  PasskeyPopupProps,
+  PasskeyPopupState,
+  PasskeyPopupFlow,
+  PasskeyPopupSite,
+  PasskeyPopupAccount,
+} from "./components/wallet/PasskeyPopup/PasskeyPopup";
 export { WalletOverlay } from "./components/wallet/WalletOverlay/WalletOverlay";
 export type { WalletOverlayProps } from "./components/wallet/WalletOverlay/WalletOverlay";

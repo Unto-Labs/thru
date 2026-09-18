@@ -5,15 +5,15 @@
   "packageManager": "pnpm@10.33.4",
   "scripts": {
     "build": "pnpm -r build",
-    "test": "pnpm -r --if-present --filter './packages/*' --filter './packages-private/*' --filter './clob/packages/*' --filter './clob/apps/*' --filter './wallet/admin' --filter './wallet/frontend/packages/*' --filter './wallet/packages/*' --filter './faucet' test:run",
+    "test": "pnpm -r --if-present --filter './packages/*' --filter './packages-private/*' --filter './clob/packages/*' --filter './clob/apps/*' --filter './wallet/admin' --filter './wallet/frontend/packages/*' --filter './wallet/packages/*' --filter './faucet' --filter './wallet-app' test:run",
     "test:watch": "pnpm -r --if-present --filter './packages/*' --filter './packages-private/*' --filter './clob/packages/*' --filter './clob/apps/*' --filter './wallet/admin' --filter './wallet/frontend/packages/*' --filter './wallet/packages/*' test:watch",
     "test:coverage": "pnpm -r --if-present --filter './packages/*' --filter './packages-private/*' --filter './clob/packages/*' --filter './clob/apps/*' --filter './wallet/admin' --filter './wallet/frontend/packages/*' --filter './wallet/packages/*' test:coverage",
     "test:wallet": "pnpm --filter thru-wallet test",
     "test:sdk": "pnpm --filter @thru/sdk test",
     "unifold": "pnpm --filter @thru/unifold-automation roundtrip",
-    "test:mobile-qa": "pnpm --dir passkey-demo-dapp test:mobile-qa",
-    "test:mobile-qa:wallet-auth": "pnpm --dir passkey-demo-dapp test:mobile-qa:wallet-auth",
-    "test:mobile-qa:unit": "pnpm --dir passkey-demo-dapp test:mobile-qa:unit"
+    "test:mobile-qa": "pnpm --dir wallet-app test:mobile-qa",
+    "test:mobile-qa:wallet-auth": "pnpm --dir wallet-app test:mobile-qa:wallet-auth",
+    "test:mobile-qa:unit": "pnpm --dir wallet-app test:mobile-qa:unit"
   },
   "devDependencies": {
     "@babel/generator": "^7.29.7",
@@ -39,9 +39,9 @@
       "js-yaml@<3.15.1": "^3.15.1",
       "js-yaml@>=4.0.0 <4.3.1": "^4.3.1",
       "nanoid@<3.3.18": "^3.3.18",
-      "next@>=16.0.0 <16.2.11": "16.2.11",
+      "next@>=16.0.0 <16.3.4": "16.3.4",
       "postcss@<8.5.18": "^8.5.18",
-      "sharp@<0.35.0": "^0.35.0",
+      "sharp@<0.35.4": "^0.35.4",
       "shell-quote@<1.9.0": "^1.9.0",
       "undici@>=7.0.0 <7.29.0": "^7.29.0",
       "uuid@<11.1.1": ">=11.1.1",

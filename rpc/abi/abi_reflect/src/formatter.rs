@@ -536,7 +536,7 @@ fn format_array_with_options(
         .iter()
         .map(|elem| {
             let elem_offset = cumulative_offset;
-            let elem_size = elem.type_info.size.unwrap_or(0);
+            let elem_size = reflected_runtime_size(elem).unwrap_or(0);
             cumulative_offset += elem_size;
             format_node_with_options(elem, None, elem_offset, options)
         })

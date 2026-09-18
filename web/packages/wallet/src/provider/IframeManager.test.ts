@@ -3,7 +3,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { POST_MESSAGE_REQUEST_TYPES } from '../protocol';
 import type { TelemetryClient } from '../telemetry';
-import { IframeManager, WALLET_IFRAME_ALLOW } from './IframeManager';
+import { IframeManager, WALLET_IFRAME_ALLOW, walletIframeAllow } from './IframeManager';
 
 beforeEach(() => {
   document.body.replaceChildren();
@@ -15,15 +15,21 @@ afterEach(() => {
 });
 
 describe('IframeManager', () => {
+  it.each(['https://app.tid.sh', 'https://staging-app.tid.sh'])(
+    'delegates WebAuthn only to configured origin %s',
+    (origin) => {
+      expect(walletIframeAllow(`${origin}/embedded?theme=dark`)).toBe(
+        `publickey-credentials-get ${origin}; publickey-credentials-create ${origin}; payment *`
+      );
+    }
+  );
   it('delegates Payment Request through the wallet iframe', () => {
     expect(WALLET_IFRAME_ALLOW).toContain('payment *');
   });
 
   it('uses a transparent iframe background by default', () => {
     const iframe = { style: { cssText: '' } };
-    const manager = new IframeManager(
-      'https://app.tid.sh/embedded'
-    ) as unknown as {
+    const manager = new IframeManager('https://app.tid.sh/embedded') as unknown as {
       iframe: typeof iframe;
       applyIframeStyles: () => void;
     };
@@ -39,11 +45,9 @@ describe('IframeManager', () => {
 
   it('carries the host theme on the frame URL and the frame element', () => {
     const iframe = { style: { cssText: '' } };
-    const manager = new IframeManager(
-      'https://app.tid.sh/embedded',
-      undefined,
-      { theme: 'dark' }
-    ) as unknown as {
+    const manager = new IframeManager('https://app.tid.sh/embedded', undefined, {
+      theme: 'dark',
+    }) as unknown as {
       iframe: typeof iframe;
       applyIframeStyles: () => void;
       getIframeSrc: () => string;
@@ -56,15 +60,68 @@ describe('IframeManager', () => {
     expect(manager.getTheme()).toBe('dark');
   });
 
+  it('restyles the frame element for a new theme and keeps it on screen', () => {
+    const iframe = { style: { cssText: '' } as Record<string, string>, contentWindow: null };
+    const manager = new IframeManager('https://app.tid.sh/embedded') as unknown as {
+      iframe: typeof iframe;
+      visible: boolean;
+      setTheme: (theme: 'light' | 'dark') => void;
+    };
+    manager.iframe = iframe;
+    manager.visible = true;
+
+    manager.setTheme('dark');
+
+    expect(iframe.style.cssText).toContain('color-scheme: dark;');
+    expect(iframe.style.visibility).toBe('visible');
+    expect(iframe.style.pointerEvents).toBe('auto');
+  });
+
+  it('tells a loaded wallet about a new theme without reloading it', async () => {
+    const { manager, frameId, iframe } = await readyManager();
+    const src = iframe.src;
+    const postMessage = vi.spyOn(iframe.contentWindow!, 'postMessage');
+
+    manager.setTheme('dark');
+
+    expect(manager.getTheme()).toBe('dark');
+    expect(iframe.src).toBe(src);
+    expect(postMessage).toHaveBeenCalledWith(
+      { type: 'wallet:theme', origin: window.location.origin, frameId, theme: 'dark' },
+      'https://app.tid.sh'
+    );
+    /* A later (re)load starts in the new theme. */
+    expect(new URL(manager.getIframeSrc()).searchParams.get('tn_theme')).toBe('dark');
+
+    postMessage.mockClear();
+    manager.setTheme('dark');
+    expect(postMessage).not.toHaveBeenCalled();
+    manager.destroy();
+  });
+
+  it('resends a changed theme when the wallet document reloads', async () => {
+    const { manager, frameId, iframe } = await readyManager();
+    const postMessage = vi.spyOn(iframe.contentWindow!, 'postMessage');
+
+    /* Nothing to say while the load-time theme still holds. */
+    dispatchWalletMessage(frameId, { type: 'iframe:ready', data: { ready: true } });
+    expect(postMessage).not.toHaveBeenCalled();
+
+    manager.setTheme('dark');
+    postMessage.mockClear();
+    dispatchWalletMessage(frameId, { type: 'iframe:ready', data: { ready: true } });
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'wallet:theme', theme: 'dark' }),
+      'https://app.tid.sh'
+    );
+    manager.destroy();
+  });
+
   it('allows trusted deployed wallet origins', () => {
     const thruBridge = new IframeManager('https://app.tid.sh/embedded');
     const tidBridge = new IframeManager('https://wallet.tid.sh/embedded');
-    const stagingAppBridge = new IframeManager(
-      'https://staging-app.tid.sh/embedded'
-    );
-    const stagingBridge = new IframeManager(
-      'https://wallet.staging.web.5f1.net/embedded'
-    );
+    const stagingAppBridge = new IframeManager('https://staging-app.tid.sh/embedded');
+    const stagingBridge = new IframeManager('https://wallet.staging.web.5f1.net/embedded');
 
     expect(thruBridge).toBeInstanceOf(IframeManager);
     expect(tidBridge).toBeInstanceOf(IframeManager);
@@ -73,9 +130,9 @@ describe('IframeManager', () => {
   });
 
   it('rejects untrusted production wallet origins', () => {
-    expect(
-      () => new IframeManager('https://evil.example.com/embedded')
-    ).toThrow(/Untrusted iframe origin/);
+    expect(() => new IframeManager('https://evil.example.com/embedded')).toThrow(
+      /Untrusted iframe origin/
+    );
   });
 
   it('records a correlated request success', async () => {
@@ -104,7 +161,7 @@ describe('IframeManager', () => {
         requestId: request.id,
         operation: request.type,
         outcome: 'success',
-      }),
+      })
     );
     manager.destroy();
   });
@@ -133,9 +190,52 @@ describe('IframeManager', () => {
         requestId: request.id,
         outcome: 'wallet_error',
         errorCode: 'WALLET_LOCKED',
-      }),
+      })
     );
     manager.destroy();
+  });
+
+  it('reloads the frame once when the first ready deadline passes, then fails for good', async () => {
+    vi.useFakeTimers();
+    const telemetry = { record: vi.fn() };
+    const manager = new IframeManager(
+      'https://app.tid.sh/embedded',
+      telemetry as unknown as TelemetryClient
+    );
+    const readyPromise = manager.createIframe();
+    const iframe = document.querySelector('iframe')!;
+    const firstSrc = iframe.src;
+    const frameId = new URL(iframe.src).searchParams.get('tn_frame_id')!;
+
+    /* First deadline: no ready → one reload with the same frame id. */
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(telemetry.record).toHaveBeenCalledWith(
+      'bridge.iframe.ready.retry',
+      expect.objectContaining({ outcome: 'retry' })
+    );
+    expect(new URL(iframe.src).searchParams.get('tn_frame_id')).toBe(frameId);
+    expect(iframe.src).toBe(firstSrc);
+
+    /* The warm second load answers in time. */
+    dispatchWalletMessage(frameId, { type: 'iframe:ready', data: { ready: true } });
+    await readyPromise;
+    expect(telemetry.record).toHaveBeenCalledWith(
+      'bridge.iframe.ready',
+      expect.objectContaining({ outcome: 'success' })
+    );
+    manager.destroy();
+
+    /* Two silences in a row is the real failure. */
+    document.body.replaceChildren();
+    const failing = new IframeManager(
+      'https://app.tid.sh/embedded',
+      telemetry as unknown as TelemetryClient
+    );
+    const failingPromise = failing.createIframe();
+    const rejection = expect(failingPromise).rejects.toThrow(/Iframe ready timeout/);
+    await vi.advanceTimersByTimeAsync(20_000);
+    await rejection;
+    failing.destroy();
   });
 
   it('records request timeouts', async () => {
@@ -159,14 +259,18 @@ describe('IframeManager', () => {
         requestId: request.id,
         errorCode: 'TIMEOUT',
         outcome: 'timeout',
-      }),
+      })
     );
     manager.destroy();
   });
 
   it('hides at once on a response when the wallet does not manage hiding', async () => {
     const { manager, frameId, iframe } = await readyManager();
-    dispatchWalletMessage(frameId, { type: 'event', event: 'ui_show', data: { reason: 'connect' } });
+    dispatchWalletMessage(frameId, {
+      type: 'event',
+      event: 'ui_show',
+      data: { reason: 'connect' },
+    });
     manager.showModal();
     expect(iframe.style.visibility).toBe('visible');
 
@@ -178,7 +282,11 @@ describe('IframeManager', () => {
   it('keeps a managed frame up through the wallet exit animation', async () => {
     vi.useFakeTimers();
     const { manager, frameId, iframe } = await readyManager({ managedHide: true });
-    dispatchWalletMessage(frameId, { type: 'event', event: 'ui_show', data: { reason: 'connect' } });
+    dispatchWalletMessage(frameId, {
+      type: 'event',
+      event: 'ui_show',
+      data: { reason: 'connect' },
+    });
     manager.showModal();
     expect(iframe.style.visibility).toBe('visible');
 
@@ -208,7 +316,11 @@ describe('IframeManager', () => {
   it('resolves a deferred hide only once the frame is hidden', async () => {
     vi.useFakeTimers();
     const { manager, frameId, iframe } = await readyManager({ managedHide: true });
-    dispatchWalletMessage(frameId, { type: 'event', event: 'ui_show', data: { reason: 'connect' } });
+    dispatchWalletMessage(frameId, {
+      type: 'event',
+      event: 'ui_show',
+      data: { reason: 'connect' },
+    });
     manager.showModal();
     let settled = false;
     const hidden = manager.hide().then(() => {
@@ -229,7 +341,11 @@ describe('IframeManager', () => {
   it('falls back to hiding a managed frame when ui_hide never arrives', async () => {
     vi.useFakeTimers();
     const { manager, frameId, iframe } = await readyManager({ managedHide: true });
-    dispatchWalletMessage(frameId, { type: 'event', event: 'ui_show', data: { reason: 'connect' } });
+    dispatchWalletMessage(frameId, {
+      type: 'event',
+      event: 'ui_show',
+      data: { reason: 'connect' },
+    });
     manager.showModal();
     manager.hide();
     expect(iframe.style.visibility).toBe('visible');
@@ -241,7 +357,11 @@ describe('IframeManager', () => {
   it('cancels a pending managed hide when the wallet shows again', async () => {
     vi.useFakeTimers();
     const { manager, frameId, iframe } = await readyManager({ managedHide: true });
-    dispatchWalletMessage(frameId, { type: 'event', event: 'ui_show', data: { reason: 'connect' } });
+    dispatchWalletMessage(frameId, {
+      type: 'event',
+      event: 'ui_show',
+      data: { reason: 'connect' },
+    });
     manager.showModal();
     manager.hide();
     dispatchWalletMessage(frameId, { type: 'event', event: 'ui_hide', data: { exitMs: 480 } });
@@ -259,7 +379,7 @@ describe('IframeManager', () => {
       new MessageEvent('message', {
         origin: 'https://app.tid.sh',
         data: 'not-an-object',
-      }),
+      })
     );
     dispatchWalletMessage('different-frame', {
       id: 'wrong-frame',
@@ -274,29 +394,27 @@ describe('IframeManager', () => {
 
     expect(telemetry.record).toHaveBeenCalledWith(
       'bridge.message.ignored',
-      expect.objectContaining({ outcome: 'malformed' }),
+      expect.objectContaining({ outcome: 'malformed' })
     );
     expect(telemetry.record).toHaveBeenCalledWith(
       'bridge.message.ignored',
-      expect.objectContaining({ outcome: 'frame_mismatch' }),
+      expect.objectContaining({ outcome: 'frame_mismatch' })
     );
     expect(telemetry.record).toHaveBeenCalledWith(
       'bridge.response.ignored',
       expect.objectContaining({
         outcome: 'unknown_request',
-      }),
+      })
     );
     expect(telemetry.record).not.toHaveBeenCalledWith(
       'bridge.response.ignored',
-      expect.objectContaining({ requestId: 'unknown-request' }),
+      expect.objectContaining({ requestId: 'unknown-request' })
     );
     manager.destroy();
   });
 
   it('allows a Tailscale wallet during development SSR', () => {
-    const bridge = new IframeManager(
-      'https://wallet-dev.tailabc.ts.net/embedded'
-    );
+    const bridge = new IframeManager('https://wallet-dev.tailabc.ts.net/embedded');
 
     expect(bridge).toBeInstanceOf(IframeManager);
   });
@@ -311,7 +429,7 @@ async function readyManager(capabilities?: { managedHide?: boolean }): Promise<{
   const telemetry = { record: vi.fn() };
   const manager = new IframeManager(
     'https://app.tid.sh/embedded',
-    telemetry as unknown as TelemetryClient,
+    telemetry as unknown as TelemetryClient
   );
   const readyPromise = manager.createIframe();
   const iframe = document.querySelector('iframe')!;
@@ -324,14 +442,11 @@ async function readyManager(capabilities?: { managedHide?: boolean }): Promise<{
   return { manager, telemetry, iframe, frameId };
 }
 
-function dispatchWalletMessage(
-  frameId: string,
-  data: Record<string, unknown>,
-): void {
+function dispatchWalletMessage(frameId: string, data: Record<string, unknown>): void {
   window.dispatchEvent(
     new MessageEvent('message', {
       origin: 'https://app.tid.sh',
       data: { ...data, frameId },
-    }),
+    })
   );
 }

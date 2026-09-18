@@ -12,7 +12,9 @@ export const PASSKEY_POPUP_REQUEST_EVENT = 'thru:passkey-popup-request';
 export const PASSKEY_POPUP_RESPONSE_EVENT = 'thru:passkey-popup-response';
 export const PASSKEY_POPUP_CHANNEL = 'thru:passkey-popup-channel';
 
-const PASSKEY_POPUP_TIMEOUT_MS = 60000;
+/** How long the opener waits for a popup response, counted from when it
+ *  opens the window. The popup page uses it to stay inside that window. */
+export const PASSKEY_POPUP_TIMEOUT_MS = 60000;
 
 export function closePopup(popup: Window | null | undefined): void {
   if (popup && !popup.closed) {
@@ -49,14 +51,15 @@ export async function requestPasskeyPopup<T>(
       mode: 'popup',
       allowCredentials: action === 'get' ? true : undefined,
     },
-    () => requestPasskeyPopupImpl<T>(action, payload, preopenedPopup)
+    () => requestPasskeyPopupImpl<T>(action, payload, preopenedPopup, options.signal)
   );
 }
 
 async function requestPasskeyPopupImpl<T>(
   action: PasskeyPopupAction,
   payload: PasskeyPopupRequestPayload,
-  preopenedPopup?: Window | null
+  preopenedPopup?: Window | null,
+  signal?: AbortSignal
 ): Promise<T> {
   if (typeof window === 'undefined') {
     throw new Error('Passkey popup is only available in the browser');
@@ -74,6 +77,7 @@ async function requestPasskeyPopupImpl<T>(
     let requestSent = false;
 
     const cleanup = () => {
+      signal?.removeEventListener('abort', onAbort);
       if (timeout) {
         clearTimeout(timeout);
         timeout = null;
@@ -87,6 +91,12 @@ async function requestPasskeyPopupImpl<T>(
         channel.removeEventListener('message', handleChannelMessage);
         channel.close();
       }
+    };
+
+    const onAbort = () => {
+      cleanup();
+      closePopup(popup);
+      reject(new DOMException('Passkey request cancelled', 'AbortError'));
     };
 
     const sendRequest = (viaChannel: boolean) => {
@@ -132,7 +142,7 @@ async function requestPasskeyPopupImpl<T>(
     };
 
     const handleMessage = (event: MessageEvent) => {
-      if (event.origin !== targetOrigin) {
+      if (event.origin !== targetOrigin || event.source !== popup) {
         return;
       }
 
@@ -174,6 +184,12 @@ async function requestPasskeyPopupImpl<T>(
 
     if (channel) {
       channel.addEventListener('message', handleChannelMessage);
+    }
+
+    signal?.addEventListener('abort', onAbort, { once: true });
+    if (signal?.aborted) {
+      onAbort();
+      return;
     }
 
     if (!popup) {

@@ -13,7 +13,24 @@ type __TnIrNode =
       readonly right: __TnIrNode;
     }
   | {
+      readonly op: "sub";
+      readonly left: __TnIrNode;
+      readonly right: __TnIrNode;
+    }
+  | {
       readonly op: "mul";
+      readonly left: __TnIrNode;
+      readonly right: __TnIrNode;
+    }
+  | {
+      readonly op:
+        | "div"
+        | "mod"
+        | "bitAnd"
+        | "bitOr"
+        | "bitXor"
+        | "leftShift"
+        | "rightShift";
       readonly left: __TnIrNode;
       readonly right: __TnIrNode;
     }
@@ -314,6 +331,32 @@ function __tnCheckedAdd(lhs: bigint, rhs: bigint): bigint {
   return (sum as unknown) as bigint;
 }
 
+function __tnCheckedSub(lhs: bigint, rhs: bigint): bigint {
+  if (__tnHasNativeBigInt) {
+    const result = (lhs as bigint) - (rhs as bigint);
+    if (result < BigInt(0)) {
+      __tnRaiseIrError(
+        "tn.ir.overflow",
+        "IR runtime detected negative size via subtraction"
+      );
+    }
+    return result;
+  }
+  const left = lhs as unknown as number;
+  const right = rhs as unknown as number;
+  const diff = left - right;
+  if (diff < 0 || !Number.isFinite(diff)) {
+    __tnRaiseIrError(
+      "tn.ir.overflow",
+      "IR runtime detected invalid subtraction result"
+    );
+  }
+  if (!Number.isSafeInteger(diff)) {
+    __tnWarnOnce("[thru-net] Precision loss while polyfilling BigInt subtraction");
+  }
+  return (diff as unknown) as bigint;
+}
+
 function __tnCheckedMul(lhs: bigint, rhs: bigint): bigint {
   if (__tnHasNativeBigInt) {
     const result = (lhs as bigint) * (rhs as bigint);
@@ -340,6 +383,74 @@ function __tnCheckedMul(lhs: bigint, rhs: bigint): bigint {
     );
   }
   return (product as unknown) as bigint;
+}
+
+function __tnCheckedDiv(lhs: bigint, rhs: bigint): bigint {
+  if (__tnBigIntEquals(rhs, __tnToBigInt(0))) {
+    __tnRaiseIrError("tn.ir.overflow", "IR runtime division by zero");
+  }
+  if (__tnHasNativeBigInt) return (lhs as bigint) / (rhs as bigint);
+  const quotient = Math.floor((lhs as unknown as number) / (rhs as unknown as number));
+  return (quotient as unknown) as bigint;
+}
+
+function __tnCheckedMod(lhs: bigint, rhs: bigint): bigint {
+  if (__tnBigIntEquals(rhs, __tnToBigInt(0))) {
+    __tnRaiseIrError("tn.ir.overflow", "IR runtime modulo by zero");
+  }
+  if (__tnHasNativeBigInt) return (lhs as bigint) % (rhs as bigint);
+  return (((lhs as unknown as number) % (rhs as unknown as number)) as unknown) as bigint;
+}
+
+function __tnBitwise(
+  lhs: bigint,
+  rhs: bigint,
+  op: "and" | "or" | "xor"
+): bigint {
+  if (__tnHasNativeBigInt) {
+    if (op === "and") return (lhs as bigint) & (rhs as bigint);
+    if (op === "or") return (lhs as bigint) | (rhs as bigint);
+    return (lhs as bigint) ^ (rhs as bigint);
+  }
+  const left = lhs as unknown as number;
+  const right = rhs as unknown as number;
+  const maxU32 = 0xffffffff;
+  if (
+    !Number.isInteger(left) ||
+    !Number.isInteger(right) ||
+    left < 0 ||
+    right < 0 ||
+    left > maxU32 ||
+    right > maxU32
+  ) {
+    __tnRaiseIrError(
+      "tn.ir.overflow",
+      "IR runtime bitwise operation requires BigInt for values outside u32 range"
+    );
+  }
+  const result = op === "and" ? left & right : op === "or" ? left | right : left ^ right;
+  return ((result >>> 0) as unknown) as bigint;
+}
+
+function __tnCheckedShift(
+  lhs: bigint,
+  rhs: bigint,
+  direction: "left" | "right"
+): bigint {
+  const amount = __tnBigIntToNumber(rhs, "IR shift amount");
+  if (amount < 0 || amount >= 64 || !Number.isInteger(amount)) {
+    __tnRaiseIrError("tn.ir.overflow", "IR runtime invalid shift amount");
+  }
+  if (__tnHasNativeBigInt) {
+    const shift = BigInt(amount);
+    return direction === "left" ? (lhs as bigint) << shift : (lhs as bigint) >> shift;
+  }
+  const value = lhs as unknown as number;
+  const result = direction === "left" ? value * 2 ** amount : Math.floor(value / 2 ** amount);
+  if (!Number.isSafeInteger(result)) {
+    __tnWarnOnce("[thru-net] Precision loss while polyfilling BigInt shift");
+  }
+  return (result as unknown) as bigint;
 }
 
 function __tnAlign(value: bigint, alignment: number): bigint {
@@ -640,6 +751,9 @@ function __tnEvalIrNode(
     case "const":
       return node.value;
     case "field": {
+      if (node.param === "__buffer_size" && ctx.buffer) {
+        return __tnToBigInt(ctx.buffer.length);
+      }
       const val = ctx.params[node.param];
       if (val === undefined) {
         const prefix = ctx.typeName ? `${ctx.typeName}: ` : "";
@@ -660,10 +774,55 @@ function __tnEvalIrNode(
         );
         return __tnCheckedAdd(left, right);
       }
+    case "sub":
+      return __tnCheckedSub(
+        __tnEvalIrNode(node.left, ctx, baseOffset),
+        __tnEvalIrNode(node.right, ctx, baseOffset)
+      );
     case "mul":
       return __tnCheckedMul(
         __tnEvalIrNode(node.left, ctx, baseOffset),
         __tnEvalIrNode(node.right, ctx, baseOffset)
+      );
+    case "div":
+      return __tnCheckedDiv(
+        __tnEvalIrNode(node.left, ctx, baseOffset),
+        __tnEvalIrNode(node.right, ctx, baseOffset)
+      );
+    case "mod":
+      return __tnCheckedMod(
+        __tnEvalIrNode(node.left, ctx, baseOffset),
+        __tnEvalIrNode(node.right, ctx, baseOffset)
+      );
+    case "bitAnd":
+      return __tnBitwise(
+        __tnEvalIrNode(node.left, ctx, baseOffset),
+        __tnEvalIrNode(node.right, ctx, baseOffset),
+        "and"
+      );
+    case "bitOr":
+      return __tnBitwise(
+        __tnEvalIrNode(node.left, ctx, baseOffset),
+        __tnEvalIrNode(node.right, ctx, baseOffset),
+        "or"
+      );
+    case "bitXor":
+      return __tnBitwise(
+        __tnEvalIrNode(node.left, ctx, baseOffset),
+        __tnEvalIrNode(node.right, ctx, baseOffset),
+        "xor"
+      );
+    case "leftShift":
+      return __tnCheckedShift(
+        __tnEvalIrNode(node.left, ctx, baseOffset),
+        __tnEvalIrNode(node.right, ctx, baseOffset),
+        "left"
+      );
+    case "rightShift":
+      return __tnCheckedShift(
+        __tnEvalIrNode(node.left, ctx, baseOffset),
+        __tnEvalIrNode(node.right, ctx, baseOffset),
+        "right"
       );
     case "align":
       return __tnAlign(__tnEvalIrNode(node.node, ctx, baseOffset), node.alignment);
@@ -797,7 +956,7 @@ __tnRegisterDynamicValidate("Pubkey", (buffer) => { const result = Pubkey.valida
 
 const __tn_ir_AmmAddLiquidityInstruction = {
   typeName: "AmmAddLiquidityInstruction",
-  root: { op: "const", value: 34n }
+  root: { op: "const", value: 42n }
 } as const;
 
 export class AmmAddLiquidityInstruction {
@@ -1019,6 +1178,24 @@ export class AmmAddLiquidityInstruction {
     this.set_max_amount_mint_two(value);
   }
 
+  get_min_lp_out(): bigint {
+    const offset = 34;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_min_lp_out(value: bigint): void {
+    const offset = 34;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get min_lp_out(): bigint {
+    return this.get_min_lp_out();
+  }
+
+  set min_lp_out(value: bigint) {
+    this.set_min_lp_out(value);
+  }
+
   private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
     return __tnEvalFootprint(__tn_ir_AmmAddLiquidityInstruction.root, { params: __tnParams });
   }
@@ -1049,12 +1226,12 @@ export class AmmAddLiquidityInstruction {
   }
 
   static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
-    if (buffer.length < 34) return { ok: false, code: "tn.buffer_too_small", consumed: 34 };
-    return { ok: true, consumed: 34 };
+    if (buffer.length < 42) return { ok: false, code: "tn.buffer_too_small", consumed: 42 };
+    return { ok: true, consumed: 42 };
   }
 
-  static new(pool_account_idx: number, depositor_account_idx: number, depositor_token_one_account_idx: number, depositor_token_two_account_idx: number, depositor_lp_account_idx: number, vault_one_account_idx: number, vault_two_account_idx: number, lp_mint_account_idx: number, token_program_account_idx: number, max_amount_mint_one: bigint, max_amount_mint_two: bigint): AmmAddLiquidityInstruction {
-    const buffer = new Uint8Array(34);
+  static new(pool_account_idx: number, depositor_account_idx: number, depositor_token_one_account_idx: number, depositor_token_two_account_idx: number, depositor_lp_account_idx: number, vault_one_account_idx: number, vault_two_account_idx: number, lp_mint_account_idx: number, token_program_account_idx: number, max_amount_mint_one: bigint, max_amount_mint_two: bigint, min_lp_out: bigint): AmmAddLiquidityInstruction {
+    const buffer = new Uint8Array(42);
     const view = new DataView(buffer.buffer);
 
     let offset = 0;
@@ -1069,6 +1246,7 @@ export class AmmAddLiquidityInstruction {
     view.setUint16(16, token_program_account_idx, true); /* token_program_account_idx (little-endian) */
     view.setBigUint64(18, max_amount_mint_one, true); /* max_amount_mint_one (little-endian) */
     view.setBigUint64(26, max_amount_mint_two, true); /* max_amount_mint_two (little-endian) */
+    view.setBigUint64(34, min_lp_out, true); /* min_lp_out (little-endian) */
 
     return new AmmAddLiquidityInstruction(buffer);
   }
@@ -1092,7 +1270,7 @@ export class AmmAddLiquidityInstructionBuilder {
   private view: DataView;
 
   constructor() {
-    this.buffer = new Uint8Array(34);
+    this.buffer = new Uint8Array(42);
     this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
   }
 
@@ -1150,6 +1328,12 @@ export class AmmAddLiquidityInstructionBuilder {
   set_max_amount_mint_two(value: bigint): this {
     const cast = __tnToBigInt(value);
     this.view.setBigUint64(26, cast, true);
+    return this;
+  }
+
+  set_min_lp_out(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(34, cast, true);
     return this;
   }
 
@@ -1318,7 +1502,7 @@ __tnRegisterDynamicValidate("AmmError", (buffer) => { const result = AmmError.va
 
 const __tn_ir_AmmSwapInstruction = {
   typeName: "AmmSwapInstruction",
-  root: { op: "const", value: 24n }
+  root: { op: "const", value: 32n }
 } as const;
 
 export class AmmSwapInstruction {
@@ -1504,6 +1688,24 @@ export class AmmSwapInstruction {
     this.set_amount_in(value);
   }
 
+  get_min_amount_out(): bigint {
+    const offset = 24;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_min_amount_out(value: bigint): void {
+    const offset = 24;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get min_amount_out(): bigint {
+    return this.get_min_amount_out();
+  }
+
+  set min_amount_out(value: bigint) {
+    this.set_min_amount_out(value);
+  }
+
   private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
     return __tnEvalFootprint(__tn_ir_AmmSwapInstruction.root, { params: __tnParams });
   }
@@ -1534,12 +1736,12 @@ export class AmmSwapInstruction {
   }
 
   static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
-    if (buffer.length < 24) return { ok: false, code: "tn.buffer_too_small", consumed: 24 };
-    return { ok: true, consumed: 24 };
+    if (buffer.length < 32) return { ok: false, code: "tn.buffer_too_small", consumed: 32 };
+    return { ok: true, consumed: 32 };
   }
 
-  static new(pool_account_idx: number, user_transfer_authority_idx: number, user_input_account_idx: number, user_output_account_idx: number, vault_input_account_idx: number, vault_output_account_idx: number, lp_mint_account_idx: number, token_program_account_idx: number, amount_in: bigint): AmmSwapInstruction {
-    const buffer = new Uint8Array(24);
+  static new(pool_account_idx: number, user_transfer_authority_idx: number, user_input_account_idx: number, user_output_account_idx: number, vault_input_account_idx: number, vault_output_account_idx: number, lp_mint_account_idx: number, token_program_account_idx: number, amount_in: bigint, min_amount_out: bigint): AmmSwapInstruction {
+    const buffer = new Uint8Array(32);
     const view = new DataView(buffer.buffer);
 
     let offset = 0;
@@ -1552,6 +1754,7 @@ export class AmmSwapInstruction {
     view.setUint16(12, lp_mint_account_idx, true); /* lp_mint_account_idx (little-endian) */
     view.setUint16(14, token_program_account_idx, true); /* token_program_account_idx (little-endian) */
     view.setBigUint64(16, amount_in, true); /* amount_in (little-endian) */
+    view.setBigUint64(24, min_amount_out, true); /* min_amount_out (little-endian) */
 
     return new AmmSwapInstruction(buffer);
   }
@@ -1575,7 +1778,7 @@ export class AmmSwapInstructionBuilder {
   private view: DataView;
 
   constructor() {
-    this.buffer = new Uint8Array(24);
+    this.buffer = new Uint8Array(32);
     this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
   }
 
@@ -1625,6 +1828,12 @@ export class AmmSwapInstructionBuilder {
     return this;
   }
 
+  set_min_amount_out(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(24, cast, true);
+    return this;
+  }
+
   build(): Uint8Array {
     return this.buffer.slice();
   }
@@ -1650,7 +1859,7 @@ __tnRegisterDynamicValidate("AmmSwapInstruction", (buffer) => { const result = A
 
 const __tn_ir_AmmWithdrawLiquidityInstruction = {
   typeName: "AmmWithdrawLiquidityInstruction",
-  root: { op: "const", value: 26n }
+  root: { op: "const", value: 42n }
 } as const;
 
 export class AmmWithdrawLiquidityInstruction {
@@ -1854,6 +2063,42 @@ export class AmmWithdrawLiquidityInstruction {
     this.set_lp_amount(value);
   }
 
+  get_min_amount_one_out(): bigint {
+    const offset = 26;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_min_amount_one_out(value: bigint): void {
+    const offset = 26;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get min_amount_one_out(): bigint {
+    return this.get_min_amount_one_out();
+  }
+
+  set min_amount_one_out(value: bigint) {
+    this.set_min_amount_one_out(value);
+  }
+
+  get_min_amount_two_out(): bigint {
+    const offset = 34;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_min_amount_two_out(value: bigint): void {
+    const offset = 34;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get min_amount_two_out(): bigint {
+    return this.get_min_amount_two_out();
+  }
+
+  set min_amount_two_out(value: bigint) {
+    this.set_min_amount_two_out(value);
+  }
+
   private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
     return __tnEvalFootprint(__tn_ir_AmmWithdrawLiquidityInstruction.root, { params: __tnParams });
   }
@@ -1884,12 +2129,12 @@ export class AmmWithdrawLiquidityInstruction {
   }
 
   static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
-    if (buffer.length < 26) return { ok: false, code: "tn.buffer_too_small", consumed: 26 };
-    return { ok: true, consumed: 26 };
+    if (buffer.length < 42) return { ok: false, code: "tn.buffer_too_small", consumed: 42 };
+    return { ok: true, consumed: 42 };
   }
 
-  static new(pool_account_idx: number, withdrawer_account_idx: number, withdrawer_token_one_account_idx: number, withdrawer_token_two_account_idx: number, withdrawer_lp_account_idx: number, vault_one_account_idx: number, vault_two_account_idx: number, lp_mint_account_idx: number, token_program_account_idx: number, lp_amount: bigint): AmmWithdrawLiquidityInstruction {
-    const buffer = new Uint8Array(26);
+  static new(pool_account_idx: number, withdrawer_account_idx: number, withdrawer_token_one_account_idx: number, withdrawer_token_two_account_idx: number, withdrawer_lp_account_idx: number, vault_one_account_idx: number, vault_two_account_idx: number, lp_mint_account_idx: number, token_program_account_idx: number, lp_amount: bigint, min_amount_one_out: bigint, min_amount_two_out: bigint): AmmWithdrawLiquidityInstruction {
+    const buffer = new Uint8Array(42);
     const view = new DataView(buffer.buffer);
 
     let offset = 0;
@@ -1903,6 +2148,8 @@ export class AmmWithdrawLiquidityInstruction {
     view.setUint16(14, lp_mint_account_idx, true); /* lp_mint_account_idx (little-endian) */
     view.setUint16(16, token_program_account_idx, true); /* token_program_account_idx (little-endian) */
     view.setBigUint64(18, lp_amount, true); /* lp_amount (little-endian) */
+    view.setBigUint64(26, min_amount_one_out, true); /* min_amount_one_out (little-endian) */
+    view.setBigUint64(34, min_amount_two_out, true); /* min_amount_two_out (little-endian) */
 
     return new AmmWithdrawLiquidityInstruction(buffer);
   }
@@ -1926,7 +2173,7 @@ export class AmmWithdrawLiquidityInstructionBuilder {
   private view: DataView;
 
   constructor() {
-    this.buffer = new Uint8Array(26);
+    this.buffer = new Uint8Array(42);
     this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
   }
 
@@ -1978,6 +2225,18 @@ export class AmmWithdrawLiquidityInstructionBuilder {
   set_lp_amount(value: bigint): this {
     const cast = __tnToBigInt(value);
     this.view.setBigUint64(18, cast, true);
+    return this;
+  }
+
+  set_min_amount_one_out(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(26, cast, true);
+    return this;
+  }
+
+  set_min_amount_two_out(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(34, cast, true);
     return this;
   }
 
@@ -3678,21 +3937,21 @@ export class AmmInstruction {
     {
       name: "add_liquidity",
       tag: 1,
-      payloadSize: 34,
+      payloadSize: 42,
       payloadType: "AmmInstruction::payload::add_liquidity",
       createPayloadBuilder: () => __tnMaybeCallBuilder(AmmAddLiquidityInstruction),
     },
     {
       name: "withdraw_liquidity",
       tag: 2,
-      payloadSize: 26,
+      payloadSize: 42,
       payloadType: "AmmInstruction::payload::withdraw_liquidity",
       createPayloadBuilder: () => __tnMaybeCallBuilder(AmmWithdrawLiquidityInstruction),
     },
     {
       name: "swap",
       tag: 3,
-      payloadSize: 24,
+      payloadSize: 32,
       payloadType: "AmmInstruction::payload::swap",
       createPayloadBuilder: () => __tnMaybeCallBuilder(AmmSwapInstruction),
     },
@@ -3930,7 +4189,7 @@ export class AmmInstructionBuilder {
   }
 
   private __tnAssign_discriminant(value: number): void {
-    this.__tnField_discriminant = value & 0xff;
+    this.__tnField_discriminant = value;
     this.__tnInvalidate();
   }
 
@@ -5524,7 +5783,7 @@ export class AmmEventBuilder {
   }
 
   private __tnAssign_event_type(value: number): void {
-    this.__tnField_event_type = value & 0xff;
+    this.__tnField_event_type = value;
     this.__tnInvalidate();
   }
 

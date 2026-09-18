@@ -7,10 +7,13 @@ import {
   AMM_INSTRUCTION_ADD_LIQUIDITY,
   AMM_INSTRUCTION_INIT_POOL,
   AMM_INSTRUCTION_SWAP,
+  AMM_INSTRUCTION_WITHDRAW_LIQUIDITY,
+  AmmInstruction,
   AMM_POOL_METADATA_SIZE,
   createAddLiquidityInstruction,
   createInitPoolInstruction,
   createSwapInstruction,
+  createWithdrawLiquidityInstruction,
   deriveAmmPoolAddresses,
   parseAmmPoolMetadata,
   quoteAmmSwapExactIn,
@@ -166,7 +169,7 @@ describe('amm helpers', () => {
     ]);
   });
 
-  it('packs add_liquidity and swap instructions', async () => {
+  it('round-trips bounded instructions with the packed C wire layout', async () => {
     const accounts = Array.from({ length: 10 }, (_, idx) => key(idx + 1));
     const indexes = Object.fromEntries(accounts.map((account, idx) => [bytesToHex(account), idx + 2]));
     const addLiquidity = await createAddLiquidityInstruction({
@@ -181,6 +184,7 @@ describe('amm helpers', () => {
       tokenProgramAccountBytes: accounts[8],
       maxAmountMintOne: 5_000_000n,
       maxAmountMintTwo: 10_000_000n,
+      minLpOut: 4_000_000n,
     })(context(indexes));
     const swap = await createSwapInstruction({
       poolAccountBytes: accounts[0],
@@ -192,19 +196,105 @@ describe('amm helpers', () => {
       lpMintAccountBytes: accounts[6],
       tokenProgramAccountBytes: accounts[7],
       amountIn: 1_234_567n,
+      minAmountOut: 765_432n,
+    })(context(indexes));
+    const withdraw = await createWithdrawLiquidityInstruction({
+      poolAccountBytes: accounts[0],
+      withdrawerAccountBytes: accounts[1],
+      withdrawerTokenOneAccountBytes: accounts[2],
+      withdrawerTokenTwoAccountBytes: accounts[3],
+      withdrawerLpAccountBytes: accounts[4],
+      vaultOneAccountBytes: accounts[5],
+      vaultTwoAccountBytes: accounts[6],
+      lpMintAccountBytes: accounts[7],
+      tokenProgramAccountBytes: accounts[8],
+      lpAmount: 1_000n,
+      minAmountOneOut: 222n,
+      minAmountTwoOut: 333n,
     })(context(indexes));
 
-    expect(addLiquidity.length).toBe(38);
-    expect(swap.length).toBe(28);
+    expect(addLiquidity.length).toBe(46);
+    expect(swap.length).toBe(36);
+    expect(withdraw.length).toBe(46);
     expect(Array.from(addLiquidity.slice(0, 4))).toEqual([
       AMM_INSTRUCTION_ADD_LIQUIDITY, 0, 0, 0,
     ]);
     expect(Array.from(swap.slice(0, 4))).toEqual([
       AMM_INSTRUCTION_SWAP, 0, 0, 0,
     ]);
+    expect(Array.from(withdraw.slice(0, 4))).toEqual([
+      AMM_INSTRUCTION_WITHDRAW_LIQUIDITY, 0, 0, 0,
+    ]);
     expect(new DataView(addLiquidity.buffer).getBigUint64(22, true)).toBe(5_000_000n);
     expect(new DataView(addLiquidity.buffer).getBigUint64(30, true)).toBe(10_000_000n);
     expect(new DataView(swap.buffer).getBigUint64(20, true)).toBe(1_234_567n);
+    expect(new DataView(addLiquidity.buffer).getBigUint64(38, true)).toBe(4_000_000n);
+    expect(new DataView(swap.buffer).getBigUint64(28, true)).toBe(765_432n);
+    expect(new DataView(withdraw.buffer).getBigUint64(22, true)).toBe(1_000n);
+    expect(new DataView(withdraw.buffer).getBigUint64(30, true)).toBe(222n);
+    expect(new DataView(withdraw.buffer).getBigUint64(38, true)).toBe(333n);
+    expect(AmmInstruction.from_array(addLiquidity)?.payload().asAddLiquidity()?.min_lp_out)
+      .toBe(4_000_000n);
+    expect(AmmInstruction.from_array(swap)?.payload().asSwap()?.min_amount_out)
+      .toBe(765_432n);
+    const withdrawal = AmmInstruction.from_array(withdraw)?.payload().asWithdrawLiquidity();
+    expect(withdrawal?.min_amount_one_out).toBe(222n);
+    expect(withdrawal?.min_amount_two_out).toBe(333n);
+    for (const [instruction, oldSize] of [[addLiquidity, 38], [swap, 28], [withdraw, 30]] as const) {
+      expect(() => AmmInstruction.from_array(instruction.subarray(0, oldSize))?.payload()).toThrow();
+    }
+  });
+
+  describe('minimum output input bounds', () => {
+    const account = key(1);
+    const args = {
+      poolAccountBytes: account,
+      depositorAccountBytes: account,
+      depositorTokenOneAccountBytes: account,
+      depositorTokenTwoAccountBytes: account,
+      depositorLpAccountBytes: account,
+      withdrawerAccountBytes: account,
+      withdrawerTokenOneAccountBytes: account,
+      withdrawerTokenTwoAccountBytes: account,
+      withdrawerLpAccountBytes: account,
+      userTransferAuthorityBytes: account,
+      userInputAccountBytes: account,
+      userOutputAccountBytes: account,
+      vaultOneAccountBytes: account,
+      vaultTwoAccountBytes: account,
+      vaultInputAccountBytes: account,
+      vaultOutputAccountBytes: account,
+      lpMintAccountBytes: account,
+      tokenProgramAccountBytes: account,
+      maxAmountMintOne: 1n,
+      maxAmountMintTwo: 1n,
+      lpAmount: 1n,
+      amountIn: 1n,
+      minLpOut: 0n,
+      minAmountOneOut: 0n,
+      minAmountTwoOut: 0n,
+      minAmountOut: 0n,
+    };
+    const lookup = context({ [bytesToHex(account)]: 0 });
+    const bounds = [
+      { create: createAddLiquidityInstruction, field: 'minLpOut', offset: 38 },
+      { create: createWithdrawLiquidityInstruction, field: 'minAmountOneOut', offset: 30 },
+      { create: createWithdrawLiquidityInstruction, field: 'minAmountTwoOut', offset: 38 },
+      { create: createSwapInstruction, field: 'minAmountOut', offset: 28 },
+    ] as const;
+
+    it.each(bounds)('encodes zero and maximum u64 for $field without truncation', async ({ create, field, offset }) => {
+      for (const minimum of [0n, 0xffffffffffffffffn]) {
+        const data = await create({ ...args, [field]: minimum })(lookup);
+        expect(new DataView(data.buffer).getBigUint64(offset, true)).toBe(minimum);
+      }
+    });
+
+    it.each(bounds)('rejects missing and out-of-range $field', async ({ create, field }) => {
+      for (const minimum of [undefined, -1n, 0x10000000000000000n]) {
+        await expect(create({ ...args, [field]: minimum })(lookup)).rejects.toThrow(field);
+      }
+    });
   });
 
   it('parses pool metadata', () => {

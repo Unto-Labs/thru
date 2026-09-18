@@ -271,13 +271,3 @@ export function IconShield({ size = 18, color }: IconProps) {
     </Svg>
   );
 }
-
-export function IconBackspace({ size = 20, color }: IconProps) {
-  const c = useIconColor(color, "muted");
-  return (
-    <Svg {...base(size)}>
-      <Path d="M9 5h12v14H9L3 12l6-7Z" {...stroke(c)} />
-      <Path d="M12 9.5l5 5M17 9.5l-5 5" {...stroke(c)} />
-    </Svg>
-  );
-}

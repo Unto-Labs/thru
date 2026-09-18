@@ -20,6 +20,7 @@ export {
   PASSKEY_POPUP_REQUEST_EVENT,
   PASSKEY_POPUP_RESPONSE_EVENT,
   PASSKEY_POPUP_CHANNEL,
+  PASSKEY_POPUP_TIMEOUT_MS,
   openPasskeyPopupWindow,
   closePopup,
   requestPasskeyPopup,

@@ -45,6 +45,8 @@ export type {
   DepositUiConfig,
   ManageAccountsResult,
   PrepareDepositPayload,
+  WalletTheme,
+  WalletThemePreference,
 } from "../../protocol";
 export {
   DepositTarget,

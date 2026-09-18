@@ -2,7 +2,7 @@ abi:
   package: thru.program.amm
   name: "AMM Program"
   abi-version: 1
-  package-version: 0.1.0
+  package-version: 0.2.0
   description: ABI for the Thru AMM program instructions, pool account state, and events
   imports:
     # thru_primitives
@@ -152,6 +152,10 @@ types:
       - name: max_amount_mint_two
         field-type:
           primitive: u64
+      # Inclusive minimum LP output; zero explicitly disables this bound.
+      - name: min_lp_out
+        field-type:
+          primitive: u64
 - name: AmmWithdrawLiquidityInstruction
   kind:
     struct:
@@ -187,6 +191,14 @@ types:
       - name: lp_amount
         field-type:
           primitive: u64
+      # Inclusive minimum token-one output; zero explicitly disables this bound.
+      - name: min_amount_one_out
+        field-type:
+          primitive: u64
+      # Inclusive minimum token-two output; zero explicitly disables this bound.
+      - name: min_amount_two_out
+        field-type:
+          primitive: u64
 - name: AmmSwapInstruction
   kind:
     struct:
@@ -217,6 +229,10 @@ types:
         field-type:
           primitive: u16
       - name: amount_in
+        field-type:
+          primitive: u64
+      # Inclusive minimum swap output; zero explicitly disables this bound.
+      - name: min_amount_out
         field-type:
           primitive: u64
 - name: AmmInstruction
@@ -301,6 +317,7 @@ types:
             name: Pubkey
             package: "thru.common.primitives"
 - name: AmmError
+  # Code 20 (TN_AMM_ERR_SLIPPAGE_EXCEEDED): an output is below its signed minimum.
   kind:
     struct:
       packed: true

@@ -71,6 +71,44 @@ export default function Root() {
 Expo apps should install the config plugin from `@thru/wallet/native/plugin`.
 The SDK trusts both production wallet hosts: `app.tid.sh` and `wallet.tid.sh`.
 
+## Theme
+
+The wallet's sheets, menus and account button draw for the host page's color
+scheme. Pass `light`, `dark`, or `system` to follow the OS setting; the default
+is `light`. Changes apply live: open and future wallet surfaces restyle in
+place, and the wallet is not reloaded.
+
+```tsx
+import { ThruProvider } from '@thru/wallet/react';
+
+<ThruProvider config={config} theme={isDark ? 'dark' : 'light'}>
+  <App />
+</ThruProvider>;
+```
+
+React Native takes the same `theme` prop on `ThruProvider` from
+`@thru/wallet/native/react`, where `system` follows the device appearance.
+`config.theme` is still read as the initial value; the top-level prop wins.
+
+Outside React:
+
+```ts
+const sdk = new BrowserSDK({ theme: 'system' });
+
+sdk.setTheme('dark');
+sdk.getTheme(); // resolved: 'light' | 'dark'
+sdk.getThemePreference(); // as requested: 'light' | 'dark' | 'system'
+sdk.on('themeChanged', (theme) => console.log('wallet now draws', theme));
+```
+
+A `NativeSDK` used without `ThruProvider` resolves `system` from
+`sdk.setSystemTheme(...)`, fed from React Native's `Appearance` API.
+
+- `WalletButton` follows the SDK theme; set its `theme` prop only to pin one
+  button (and its menu) to a scheme.
+- The deposit screens follow the theme unless `depositUiConfig.appearance` is
+  set, which takes precedence.
+
 ## Operational telemetry
 
 `telemetryEnabled` controls privacy-safe operational diagnostics for both the

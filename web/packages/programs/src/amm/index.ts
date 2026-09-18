@@ -85,6 +85,7 @@ export const AMM_ERROR_LABELS: Record<number, string> = {
   17: 'Liquidity bounds',
   18: 'Vault mismatch',
   19: 'LP mint mismatch',
+  20: 'Slippage exceeded',
 };
 
 const PUBKEY_LENGTH = 32;
@@ -169,6 +170,8 @@ export interface AddLiquidityArgs {
   tokenProgramAccountBytes: Uint8Array;
   maxAmountMintOne: bigint;
   maxAmountMintTwo: bigint;
+  /** Inclusive minimum LP output; zero explicitly disables this bound. */
+  minLpOut: bigint;
 }
 
 export interface WithdrawLiquidityArgs {
@@ -182,6 +185,10 @@ export interface WithdrawLiquidityArgs {
   lpMintAccountBytes: Uint8Array;
   tokenProgramAccountBytes: Uint8Array;
   lpAmount: bigint;
+  /** Inclusive minimum token-one output; zero explicitly disables this bound. */
+  minAmountOneOut: bigint;
+  /** Inclusive minimum token-two output; zero explicitly disables this bound. */
+  minAmountTwoOut: bigint;
 }
 
 export interface SwapArgs {
@@ -194,6 +201,8 @@ export interface SwapArgs {
   lpMintAccountBytes: Uint8Array;
   tokenProgramAccountBytes: Uint8Array;
   amountIn: bigint;
+  /** Inclusive minimum swap output; zero explicitly disables this bound. */
+  minAmountOut: bigint;
 }
 
 export function sortAmmMints(
@@ -292,6 +301,7 @@ export function createAddLiquidityInstruction(args: AddLiquidityArgs): Instructi
   return async (context: AccountLookupContext): Promise<Uint8Array> => {
     assertU64(args.maxAmountMintOne, 'maxAmountMintOne');
     assertU64(args.maxAmountMintTwo, 'maxAmountMintTwo');
+    assertU64(args.minLpOut, 'minLpOut');
     const payload = new AmmAddLiquidityInstructionBuilder()
       .set_pool_account_idx(accountIndex(context, args.poolAccountBytes))
       .set_depositor_account_idx(accountIndex(context, args.depositorAccountBytes))
@@ -304,6 +314,7 @@ export function createAddLiquidityInstruction(args: AddLiquidityArgs): Instructi
       .set_token_program_account_idx(accountIndex(context, args.tokenProgramAccountBytes))
       .set_max_amount_mint_one(args.maxAmountMintOne)
       .set_max_amount_mint_two(args.maxAmountMintTwo)
+      .set_min_lp_out(args.minLpOut)
       .build();
     return buildAmmInstruction('add_liquidity', payload);
   };
@@ -312,6 +323,8 @@ export function createAddLiquidityInstruction(args: AddLiquidityArgs): Instructi
 export function createWithdrawLiquidityInstruction(args: WithdrawLiquidityArgs): InstructionData {
   return async (context: AccountLookupContext): Promise<Uint8Array> => {
     assertU64(args.lpAmount, 'lpAmount');
+    assertU64(args.minAmountOneOut, 'minAmountOneOut');
+    assertU64(args.minAmountTwoOut, 'minAmountTwoOut');
     const payload = new AmmWithdrawLiquidityInstructionBuilder()
       .set_pool_account_idx(accountIndex(context, args.poolAccountBytes))
       .set_withdrawer_account_idx(accountIndex(context, args.withdrawerAccountBytes))
@@ -323,6 +336,8 @@ export function createWithdrawLiquidityInstruction(args: WithdrawLiquidityArgs):
       .set_lp_mint_account_idx(accountIndex(context, args.lpMintAccountBytes))
       .set_token_program_account_idx(accountIndex(context, args.tokenProgramAccountBytes))
       .set_lp_amount(args.lpAmount)
+      .set_min_amount_one_out(args.minAmountOneOut)
+      .set_min_amount_two_out(args.minAmountTwoOut)
       .build();
     return buildAmmInstruction('withdraw_liquidity', payload);
   };
@@ -331,6 +346,7 @@ export function createWithdrawLiquidityInstruction(args: WithdrawLiquidityArgs):
 export function createSwapInstruction(args: SwapArgs): InstructionData {
   return async (context: AccountLookupContext): Promise<Uint8Array> => {
     assertU64(args.amountIn, 'amountIn');
+    assertU64(args.minAmountOut, 'minAmountOut');
     const payload = new AmmSwapInstructionBuilder()
       .set_pool_account_idx(accountIndex(context, args.poolAccountBytes))
       .set_user_transfer_authority_idx(accountIndex(context, args.userTransferAuthorityBytes))
@@ -341,6 +357,7 @@ export function createSwapInstruction(args: SwapArgs): InstructionData {
       .set_lp_mint_account_idx(accountIndex(context, args.lpMintAccountBytes))
       .set_token_program_account_idx(accountIndex(context, args.tokenProgramAccountBytes))
       .set_amount_in(args.amountIn)
+      .set_min_amount_out(args.minAmountOut)
       .build();
     return buildAmmInstruction('swap', payload);
   };
@@ -400,7 +417,7 @@ function assertU16(value: number, label: string): void {
 }
 
 function assertU64(value: bigint, label: string): void {
-  if (value < 0n || value > 0xffffffffffffffffn) {
+  if (typeof value !== 'bigint' || value < 0n || value > 0xffffffffffffffffn) {
     throw new Error(`${label} must be between 0 and 18446744073709551615`);
   }
 }

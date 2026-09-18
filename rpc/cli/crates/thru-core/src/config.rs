@@ -170,6 +170,11 @@ impl KeyManager {
     }
 }
 
+/// Default block-producer bond program address (genesis 0x0D01).
+fn default_bp_program_public_key() -> String {
+    "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADQEO".to_string()
+}
+
 /// Named network profile
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NetworkConfig {
@@ -212,6 +217,10 @@ pub struct Config {
 
     /// WTHRU program public key
     pub wthru_program_public_key: String,
+
+    /// Block-producer (BP) bond program public key (genesis 0x0D01)
+    #[serde(default = "default_bp_program_public_key")]
+    pub bp_program_public_key: String,
 
     /// Base name service program public key
     pub name_service_program_public_key: String,
@@ -284,6 +293,7 @@ impl Default for Config {
             consensus_unclaimed_vault_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAUR"
                 .to_string(),
             wthru_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcH".to_string(),
+            bp_program_public_key: default_bp_program_public_key(),
             name_service_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUF"
                 .to_string(),
             thru_registrar_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYG"
@@ -503,6 +513,17 @@ impl Config {
 
         Pubkey::new(self.wthru_program_public_key.clone())
             .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()).into())
+    }
+
+    /// Resolve the configured block-producer bond program public key (0x0D01)
+    pub fn get_bp_program_pubkey(&self) -> Result<Pubkey, CliError> {
+        let key = if self.bp_program_public_key.trim().is_empty() {
+            default_bp_program_public_key()
+        } else {
+            self.bp_program_public_key.clone()
+        };
+
+        Pubkey::new(key).map_err(|e| ConfigError::InvalidPublicKey(e.to_string()).into())
     }
 
     /// Get the configuration file path

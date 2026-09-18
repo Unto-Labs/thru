@@ -971,7 +971,10 @@ message GetChainInfoResponse {
 message GetStateRootsRequest {
   // The slot to retrieve state roots up to (inclusive).
   // Returns up to 257 state roots ending at this slot.
-  // If not specified, returns state roots ending at the latest available slot.
+  // If not specified, returns state roots ending at the latest slot at or
+  // below the durable cursor. A slot above the durable cursor is rejected
+  // with FAILED_PRECONDITION; if no slot is durable yet the call returns
+  // UNAVAILABLE.
   optional uint64 slot = 1 [(google.api.field_behavior) = OPTIONAL];
 }
 
@@ -988,7 +991,11 @@ message GetStateRootsResponse {
 
 // GetActiveStateHashesRequest retrieves active state hashes for a range of slots.
 message GetActiveStateHashesRequest {
-  // The upper bound slot (inclusive). If not specified, defaults to the latest finalized slot.
+  // The upper bound slot (inclusive). If not specified, defaults to the
+  // durable cursor: the highest slot the node has durably committed, which
+  // lags the finalized slot GetHeight reports by design. An end_slot above
+  // the durable cursor is rejected with FAILED_PRECONDITION; if no slot is
+  // durable yet the call returns UNAVAILABLE.
   optional uint64 end_slot = 1 [(google.api.field_behavior) = OPTIONAL];
   // The lower bound slot (inclusive). If not specified, defaults to max(0, end_slot - 127).
   optional uint64 start_slot = 2 [(google.api.field_behavior) = OPTIONAL];

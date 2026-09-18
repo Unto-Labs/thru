@@ -42,6 +42,7 @@ import {
 } from "./WebViewBridge";
 import { resolveSessionExpirySeconds } from "../../signing-sessions";
 import type { ThruSigningSessionCreateOptions } from "../../interfaces";
+import type { WalletTheme } from "../../protocol";
 
 const DEFAULT_WALLET_URL = "https://app.tid.sh/embedded/native";
 const DEFAULT_ORIGIN = "thru-mobile://app";
@@ -70,6 +71,8 @@ export interface NativeProviderConfig {
   broadcastTransaction?: (signedTransaction: string) => Promise<unknown>;
   network?: ThruNetwork;
   depositUiConfig?: DepositUiConfig;
+  /** The host's resolved color scheme the wallet draws for (default light). */
+  theme?: WalletTheme;
 }
 
 export interface ConnectOptions {
@@ -160,6 +163,7 @@ export class NativeProvider {
       telemetryAppContextId: config.telemetryAppContextId,
       telemetryContext: config.telemetryContext,
       telemetry: config.telemetry,
+      theme: config.theme,
     });
     this.recordTelemetry(TELEMETRY_EVENTS.BRIDGE_PROVIDER_CONSTRUCTED, {
       severity: "info",
@@ -228,6 +232,15 @@ export class NativeProvider {
   /** Set or clear the host-app dimensions carried by later WebView loads. */
   setTelemetryContext(value: TelemetryAppContext | null): void {
     this.bridge.setTelemetryContext(value);
+  }
+
+  getTheme(): WalletTheme {
+    return this.bridge.getTheme();
+  }
+
+  /** Restyle the wallet WebView for a new host color scheme, without a reload. */
+  setTheme(theme: WalletTheme): void {
+    this.bridge.setTheme(theme);
   }
 
   /** Hand the bridge a WebView ref. Required before connect/sign. */

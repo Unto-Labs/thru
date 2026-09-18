@@ -181,3 +181,50 @@
 .tds-connect-menu__pad {
   height: var(--space-1);
 }
+
+/* Developer mode: a checkbox item drawn as a switch row; stays open on toggle. */
+.tds-connect-menu__toggle {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.tds-connect-menu__toggle-text {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.tds-connect-menu__toggle-hint {
+  font-size: 11px;
+  color: var(--color-text-tertiary);
+}
+.tds-connect-menu__toggle[data-highlighted] .tds-connect-menu__toggle-hint {
+  color: inherit;
+  opacity: 0.8;
+}
+.tds-connect-menu__switch {
+  flex: none;
+  position: relative;
+  width: 28px;
+  height: 16px;
+  border-radius: 999px;
+  background: var(--color-border-strong);
+  transition: background 120ms ease;
+}
+.tds-connect-menu__switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 12px;
+  height: 12px;
+  border-radius: 999px;
+  background: var(--color-surface-higher);
+  transition: transform 120ms ease;
+}
+.tds-connect-menu__toggle[data-checked] .tds-connect-menu__switch {
+  background: var(--color-text-primary);
+}
+.tds-connect-menu__toggle[data-checked] .tds-connect-menu__switch-thumb {
+  transform: translateX(12px);
+}

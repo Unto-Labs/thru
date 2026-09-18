@@ -112,6 +112,11 @@ pub enum Commands {
 
         /// Amount to transfer
         value: u64,
+
+        /// Build and sign the transfer but emit it as base64 instead of
+        /// submitting (for inclusion in an externally-produced block).
+        #[arg(long = "build-only")]
+        build_only: bool,
     },
 
     /// Uploader account commands for arbitrary file payloads
@@ -196,6 +201,13 @@ pub enum Commands {
     Wthru {
         #[command(subcommand)]
         subcommand: WthruCommands,
+    },
+
+    /// Block-producer (BP) bond program commands
+    #[command(name = "bond")]
+    Bond {
+        #[command(subcommand)]
+        subcommand: BondCommands,
     },
 
     /// Validator program commands
@@ -1281,6 +1293,50 @@ pub enum UtilCommands {
         #[command(subcommand)]
         subcommand: ConvertCommands,
     },
+
+    /// Derive the ed25519 public key (or a full identity keyfile) from a private key.
+    ///
+    /// The private key (a 32-byte ed25519 seed, 64 hex chars, optional "0x") is
+    /// taken from the positional argument, else --file, else (only when asked)
+    /// --stdin. In text mode only the selected value is printed (pipe-friendly);
+    /// --json emits the public forms, and private material only when it is
+    /// asked for (--reveal-private-key, --format identity-json).
+    #[command(name = "derive")]
+    Derive {
+        /// Hex private key / 32-byte ed25519 seed. If omitted, use --file or --stdin.
+        private_key: Option<String>,
+
+        /// Read the private key from this file instead of the argument.
+        #[arg(long = "file")]
+        file: Option<String>,
+
+        /// Read the private key from stdin (only when explicitly requested).
+        #[arg(long = "stdin")]
+        stdin: bool,
+
+        /// What to emit (text mode): hex public key, thru-format public key, or
+        /// the identity keyfile JSON [seed||pubkey] (which includes the private key).
+        /// In --json mode this also selects whether "identity_json" is emitted.
+        #[arg(long = "format", value_enum, default_value = "hex")]
+        format: DeriveFormat,
+
+        /// Echo the private key back in --json output ("private_key_hex").
+        /// Off by default so structured output carries no signing material.
+        #[arg(long = "reveal-private-key")]
+        reveal_private_key: bool,
+    },
+}
+
+/// Output selection for `util derive`.
+#[derive(Copy, Clone, PartialEq, Eq, Debug, ValueEnum)]
+pub enum DeriveFormat {
+    /// Public key as 64-char hex
+    Hex,
+    /// Public key in thru format (ta…)
+    Thrufmt,
+    /// Identity keyfile JSON array `[seed(32)..pubkey(32)]` (includes the private key) —
+    /// the format `fullnode keys new identity` writes
+    IdentityJson,
 }
 
 /// Format conversion subcommands
@@ -1371,7 +1427,8 @@ pub enum TokenCommands {
         #[arg(long)]
         fee_payer: Option<String>,
 
-        /// Override token program address (ta... or hex)
+        /// Token program address (ta... or hex); defaults to the configured
+        /// token_program_public_key
         #[arg(long = "token-program")]
         token_program: Option<String>,
     },
@@ -1395,7 +1452,8 @@ pub enum TokenCommands {
         #[arg(long)]
         fee_payer: Option<String>,
 
-        /// Override token program address (ta... or hex)
+        /// Token program address (ta... or hex); defaults to the on-chain owner of
+        /// the mint
         #[arg(long = "token-program")]
         token_program: Option<String>,
     },
@@ -1415,7 +1473,8 @@ pub enum TokenCommands {
         #[arg(long)]
         fee_payer: Option<String>,
 
-        /// Override token program address (ta... or hex)
+        /// Token program address (ta... or hex); defaults to the on-chain owner of
+        /// the token account
         #[arg(long = "token-program")]
         token_program: Option<String>,
     },
@@ -1438,7 +1497,8 @@ pub enum TokenCommands {
         #[arg(long)]
         fee_payer: Option<String>,
 
-        /// Override token program address (ta... or hex)
+        /// Token program address (ta... or hex); defaults to the on-chain owner of
+        /// the mint
         #[arg(long = "token-program")]
         token_program: Option<String>,
     },
@@ -1461,7 +1521,8 @@ pub enum TokenCommands {
         #[arg(long)]
         fee_payer: Option<String>,
 
-        /// Override token program address (ta... or hex)
+        /// Token program address (ta... or hex); defaults to the on-chain owner of
+        /// the mint
         #[arg(long = "token-program")]
         token_program: Option<String>,
     },
@@ -1481,7 +1542,8 @@ pub enum TokenCommands {
         #[arg(long)]
         fee_payer: Option<String>,
 
-        /// Override token program address (ta... or hex)
+        /// Token program address (ta... or hex); defaults to the on-chain owner of
+        /// the token account
         #[arg(long = "token-program")]
         token_program: Option<String>,
     },
@@ -1501,7 +1563,8 @@ pub enum TokenCommands {
         #[arg(long)]
         fee_payer: Option<String>,
 
-        /// Override token program address (ta... or hex)
+        /// Token program address (ta... or hex); defaults to the on-chain owner of
+        /// the mint
         #[arg(long = "token-program")]
         token_program: Option<String>,
     },
@@ -1521,7 +1584,8 @@ pub enum TokenCommands {
         #[arg(long)]
         fee_payer: Option<String>,
 
-        /// Override token program address (ta... or hex)
+        /// Token program address (ta... or hex); defaults to the on-chain owner of
+        /// the mint
         #[arg(long = "token-program")]
         token_program: Option<String>,
     },
@@ -1538,7 +1602,8 @@ pub enum TokenCommands {
         #[arg(long)]
         seed: Option<String>,
 
-        /// Override token program address (ta... or hex)
+        /// Token program address (ta... or hex); defaults to the on-chain owner of
+        /// the mint
         #[arg(long = "token-program")]
         token_program: Option<String>,
     },
@@ -1551,7 +1616,8 @@ pub enum TokenCommands {
         /// Seed for derivation (32 bytes hex)
         seed: String,
 
-        /// Override token program address (ta... or hex)
+        /// Token program address (ta... or hex); defaults to the configured
+        /// token_program_public_key
         #[arg(long = "token-program")]
         token_program: Option<String>,
     },
@@ -1995,6 +2061,219 @@ pub enum WthruCommands {
     },
 }
 
+/// Block-producer (BP) bond program subcommands
+#[derive(Subcommand)]
+pub enum BondCommands {
+    /// Create a block-producer bond account (and its WTHRU token account).
+    ///
+    /// Mode is auto-selected: when --signer resolves to the same key as
+    /// --fee-payer the bond is created self-pay (Mode 1); otherwise the signer
+    /// EOA-signs a challenge and a third party pays (Mode 2).
+    Create {
+        /// Signer key name (the block-producer identity; CLI must hold it).
+        /// Defaults to the --fee-payer key.
+        #[arg(long)]
+        signer: Option<String>,
+
+        /// Fee payer key name (defaults to 'default')
+        #[arg(long = "fee-payer")]
+        fee_payer: Option<String>,
+
+        /// Stored bond authority pubkey (key name, ta… or hex). Data only — not
+        /// a signer. Defaults to the signer pubkey.
+        #[arg(long)]
+        authority: Option<String>,
+
+        /// Override the bond token-account mint (defaults to canonical WTHRU)
+        #[arg(long = "mint")]
+        mint: Option<String>,
+
+        /// Override BP program address (ta… or hex)
+        #[arg(long = "program")]
+        program: Option<String>,
+
+        /// Override token program address (ta… or hex)
+        #[arg(long = "token-program")]
+        token_program: Option<String>,
+    },
+
+    /// Stage tokens into the bond from the operator's WTHRU token account
+    Deposit {
+        /// Block-producer signer (key name, ta… or hex) — derives the bond PDA
+        signer: String,
+
+        /// Source WTHRU token account (owned by the fee payer)
+        source_ta: String,
+
+        /// Amount to stage
+        amount: u64,
+
+        /// Fee payer = bond authority (defaults to 'default')
+        #[arg(long = "fee-payer")]
+        fee_payer: Option<String>,
+
+        #[arg(long = "mint")]
+        mint: Option<String>,
+
+        #[arg(long = "program")]
+        program: Option<String>,
+
+        #[arg(long = "token-program")]
+        token_program: Option<String>,
+    },
+
+    /// Activate/deactivate bond (move staged<->active, raise unlock slot)
+    Update {
+        /// Block-producer signer (key name, ta… or hex)
+        signer: String,
+
+        /// Target active_bond amount
+        #[arg(long = "active")]
+        active: u64,
+
+        /// New unlock slot (raised to max(current, this)); default 0
+        #[arg(long = "unlock-slot")]
+        unlock_slot: Option<u64>,
+
+        /// Fee payer = bond authority (defaults to 'default')
+        #[arg(long = "fee-payer")]
+        fee_payer: Option<String>,
+
+        /// Override attestor table address (defaults to config 0x0C02)
+        #[arg(long = "attestor-table")]
+        attestor_table: Option<String>,
+
+        #[arg(long = "program")]
+        program: Option<String>,
+    },
+
+    /// Withdraw tokens out of the bond to a destination token account
+    Withdraw {
+        /// Block-producer signer (key name, ta… or hex)
+        signer: String,
+
+        /// Destination WTHRU token account
+        dest_ta: String,
+
+        /// Amount to withdraw
+        amount: u64,
+
+        /// Withdraw from 'staged' (immediate) or 'active' (lockout-gated)
+        #[arg(long = "from", default_value = "staged")]
+        from: String,
+
+        /// Fee payer = bond authority (defaults to 'default')
+        #[arg(long = "fee-payer")]
+        fee_payer: Option<String>,
+
+        /// Override attestor table address (defaults to config 0x0C02)
+        #[arg(long = "attestor-table")]
+        attestor_table: Option<String>,
+
+        #[arg(long = "mint")]
+        mint: Option<String>,
+
+        #[arg(long = "program")]
+        program: Option<String>,
+
+        #[arg(long = "token-program")]
+        token_program: Option<String>,
+    },
+
+    /// Rotate the bond authority
+    SetAuthority {
+        /// Block-producer signer (key name, ta… or hex)
+        signer: String,
+
+        /// New bond authority pubkey (key name, ta… or hex)
+        new_authority: String,
+
+        /// Current bond authority = fee payer (defaults to 'default')
+        #[arg(long = "fee-payer")]
+        fee_payer: Option<String>,
+
+        #[arg(long = "program")]
+        program: Option<String>,
+    },
+
+    /// Sweep stray inbound transfers out of the bond token account
+    Sweep {
+        /// Block-producer signer (key name, ta… or hex)
+        signer: String,
+
+        /// Destination WTHRU token account
+        dest_ta: String,
+
+        /// Fee payer = bond authority (defaults to 'default')
+        #[arg(long = "fee-payer")]
+        fee_payer: Option<String>,
+
+        #[arg(long = "mint")]
+        mint: Option<String>,
+
+        #[arg(long = "program")]
+        program: Option<String>,
+
+        #[arg(long = "token-program")]
+        token_program: Option<String>,
+    },
+
+    /// Delete the bond account (requires active==0 && staged==0)
+    Delete {
+        /// Block-producer signer (key name, ta… or hex)
+        signer: String,
+
+        /// Recipient of the returned native lamports (key name, ta… or hex)
+        dest: String,
+
+        /// Fee payer = bond authority (defaults to 'default')
+        #[arg(long = "fee-payer")]
+        fee_payer: Option<String>,
+
+        #[arg(long = "program")]
+        program: Option<String>,
+    },
+
+    /// Show the decoded bond account state
+    Show {
+        /// Block-producer signer (key name, ta… or hex)
+        signer: String,
+
+        #[arg(long = "mint")]
+        mint: Option<String>,
+
+        #[arg(long = "program")]
+        program: Option<String>,
+
+        #[arg(long = "token-program")]
+        token_program: Option<String>,
+    },
+
+    /// Print the derived bond account address for a signer
+    DeriveAddress {
+        /// Block-producer signer (key name, ta… or hex)
+        signer: String,
+
+        #[arg(long = "program")]
+        program: Option<String>,
+    },
+
+    /// Print the derived bond token account address for a signer
+    DeriveTokenAccount {
+        /// Block-producer signer (key name, ta… or hex)
+        signer: String,
+
+        #[arg(long = "mint")]
+        mint: Option<String>,
+
+        #[arg(long = "program")]
+        program: Option<String>,
+
+        #[arg(long = "token-program")]
+        token_program: Option<String>,
+    },
+}
+
 /// Validator program subcommands
 #[derive(Subcommand)]
 pub enum ValidatorCommands {
@@ -2011,14 +2290,18 @@ pub enum ValidatorCommands {
         /// Validator BLS public key as 96-byte uncompressed hex
         #[arg(
             long = "bls-pubkey",
-            conflicts_with = "bls_seed",
-            required_unless_present = "bls_seed"
+            conflicts_with_all = ["bls_seed", "bls_key"],
+            required_unless_present_any = ["bls_seed", "bls_key"]
         )]
         bls_pubkey: Option<String>,
 
         /// Deterministic test seed used to derive a valid BLS public key
-        #[arg(long = "bls-seed", conflicts_with = "bls_pubkey")]
+        #[arg(long = "bls-seed", conflicts_with_all = ["bls_pubkey", "bls_key"])]
         bls_seed: Option<u64>,
+
+        /// Path to the node's bls.json (the canonical BLS key the node signs with)
+        #[arg(long = "bls-key", conflicts_with_all = ["bls_pubkey", "bls_seed"])]
+        bls_key: Option<String>,
 
         /// Claim authority pubkey or key name (defaults to fee payer)
         #[arg(long = "claim-authority")]
@@ -2170,6 +2453,25 @@ pub enum ValidatorCommands {
     Info {
         /// Validator SID, address, or configured key name
         validator: String,
+
+        /// Override attestor table account address
+        #[arg(long = "attestor-table")]
+        attestor_table: Option<String>,
+    },
+
+    /// Derive and print the node's BLS public key from its bls.json
+    #[command(name = "bls-pubkey")]
+    BlsPubkey {
+        /// Path to the node's bls.json (JSON byte array; first 32 bytes are the BLS scalar)
+        #[arg(long = "bls-key")]
+        bls_key: String,
+    },
+
+    /// Show this operator's validator status and turnover-window verdict
+    Status {
+        /// Validator identity pubkey or key name (defaults to the configured 'default' key)
+        #[arg(long = "identity")]
+        identity: Option<String>,
 
         /// Override attestor table account address
         #[arg(long = "attestor-table")]
@@ -3506,6 +3808,161 @@ mod tests {
                 assert_eq!(attestor_table.as_deref(), Some("ta_table"));
             }
             _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn parses_validator_bls_pubkey_command() {
+        let cli = Cli::try_parse_from([
+            "thru",
+            "validator",
+            "bls-pubkey",
+            "--bls-key",
+            "/tmp/bls.json",
+        ])
+        .expect("validator bls-pubkey should parse");
+
+        match cli.command {
+            Commands::Validator {
+                subcommand: ValidatorCommands::BlsPubkey { bls_key },
+            } => {
+                assert_eq!(bls_key, "/tmp/bls.json");
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn validator_bls_pubkey_requires_bls_key() {
+        let result = Cli::try_parse_from(["thru", "validator", "bls-pubkey"]);
+        assert!(result.is_err(), "bls-pubkey without --bls-key must fail");
+    }
+
+    #[test]
+    fn parses_validator_status_command_with_identity() {
+        let cli = Cli::try_parse_from([
+            "thru",
+            "validator",
+            "status",
+            "--identity",
+            "acc_0",
+            "--attestor-table",
+            "ta_table",
+        ])
+        .expect("validator status should parse");
+
+        match cli.command {
+            Commands::Validator {
+                subcommand:
+                    ValidatorCommands::Status {
+                        identity,
+                        attestor_table,
+                    },
+            } => {
+                assert_eq!(identity.as_deref(), Some("acc_0"));
+                assert_eq!(attestor_table.as_deref(), Some("ta_table"));
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn parses_validator_status_command_without_identity() {
+        let cli = Cli::try_parse_from(["thru", "validator", "status"])
+            .expect("validator status without identity should parse");
+
+        match cli.command {
+            Commands::Validator {
+                subcommand:
+                    ValidatorCommands::Status {
+                        identity,
+                        attestor_table,
+                    },
+            } => {
+                assert_eq!(identity, None);
+                assert_eq!(attestor_table, None);
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn parses_validator_activate_with_bls_key() {
+        let cli = Cli::try_parse_from([
+            "thru",
+            "validator",
+            "activate",
+            "--source-token-account",
+            "ta_source",
+            "--token-amount",
+            "1000",
+            "--bls-key",
+            "/tmp/bls.json",
+        ])
+        .expect("validator activate with bls key should parse");
+
+        match cli.command {
+            Commands::Validator {
+                subcommand:
+                    ValidatorCommands::Activate {
+                        bls_pubkey,
+                        bls_seed,
+                        bls_key,
+                        ..
+                    },
+            } => {
+                assert_eq!(bls_pubkey, None);
+                assert_eq!(bls_seed, None);
+                assert_eq!(bls_key.as_deref(), Some("/tmp/bls.json"));
+            }
+            _ => panic!("unexpected command"),
+        }
+    }
+
+    #[test]
+    fn validator_activate_requires_a_bls_source() {
+        // None of --bls-pubkey / --bls-seed / --bls-key -> clap rejects.
+        let result = Cli::try_parse_from([
+            "thru",
+            "validator",
+            "activate",
+            "--source-token-account",
+            "ta_source",
+            "--token-amount",
+            "1000",
+        ]);
+        assert!(result.is_err(), "activate with no BLS source must fail");
+    }
+
+    #[test]
+    fn validator_activate_rejects_conflicting_bls_sources() {
+        // Every pair among the three sources must conflict at parse time.
+        for pair in [
+            vec!["--bls-pubkey", &"11".repeat(96), "--bls-seed", "1"],
+            vec![
+                "--bls-key",
+                "/tmp/bls.json",
+                "--bls-pubkey",
+                &"11".repeat(96),
+            ],
+            vec!["--bls-key", "/tmp/bls.json", "--bls-seed", "1"],
+        ] {
+            let mut args = vec![
+                "thru",
+                "validator",
+                "activate",
+                "--source-token-account",
+                "ta_source",
+                "--token-amount",
+                "1000",
+            ];
+            args.extend(pair.iter().copied());
+            let result = Cli::try_parse_from(args);
+            assert!(
+                result.is_err(),
+                "conflicting BLS sources {:?} must fail to parse",
+                pair
+            );
         }
     }
 

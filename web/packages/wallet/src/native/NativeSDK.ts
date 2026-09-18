@@ -29,7 +29,10 @@ import {
   type PrepareDepositPayload,
   type SigningSessionDescriptorPayload,
   type ThruNetwork,
+  type WalletTheme,
+  type WalletThemePreference,
 } from "../protocol";
+import { normalizeWalletThemePreference, resolveWalletTheme } from "../theme";
 import {
   createPreparedDepositSnapshot,
   ensureDepositAccountForWallet,
@@ -116,6 +119,13 @@ export interface NativeSDKConfig {
   origin?: string;
   /** Default app metadata used for connection and transparent hydration. */
   metadata?: ConnectMetadataInput;
+  /**
+   * The color scheme the wallet's sheets draw for (default light): `light`,
+   * `dark`, or `system`. React Native has no matchMedia, so `system` resolves
+   * from setSystemTheme(), which ThruProvider feeds from useColorScheme().
+   * Change it later with setTheme().
+   */
+  theme?: WalletThemePreference;
   autoRestore?: boolean;
   rpcUrl?: string;
   network?: ThruNetwork;
@@ -167,7 +177,9 @@ export type SDKEvent =
   | "disconnect"
   | "error"
   | "accountChanged"
-  | "availabilityChanged";
+  | "availabilityChanged"
+  /* The resolved wallet theme changed; the listener receives the WalletTheme. */
+  | "themeChanged";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 export type EventCallback = (...args: any[]) => void;
@@ -244,6 +256,8 @@ export class NativeSDK implements WalletSDK {
     PreparedDepositSnapshot
   >();
   private readonly autoRestore: boolean;
+  private themePreference: WalletThemePreference = "light";
+  private systemTheme: WalletTheme = "light";
 
   readonly connection: ConnectionApi = {
     connect: (options) => this.connect(options),
@@ -345,9 +359,11 @@ export class NativeSDK implements WalletSDK {
         )
       : undefined;
     this.signingSessions = signingSessions;
+    this.themePreference = normalizeWalletThemePreference(config.theme);
     try {
       this.provider = new NativeProvider({
         walletUrl,
+        theme: resolveWalletTheme(this.themePreference, this.systemTheme),
         telemetryEnabled: config.telemetryEnabled ?? true,
         telemetrySessionId,
         telemetryAppContextId: this.telemetry.getAppContextId(),
@@ -398,6 +414,42 @@ export class NativeSDK implements WalletSDK {
   setContext(context: TelemetryAppContext | null): void {
     this.telemetry.setContext(context);
     this.provider.setTelemetryContext(this.telemetry.getContext() ?? null);
+  }
+
+  /** The resolved color scheme the wallet WebView draws for. */
+  getTheme(): WalletTheme {
+    return this.provider.getTheme();
+  }
+
+  /** The scheme the host asked for, which may be `system`. */
+  getThemePreference(): WalletThemePreference {
+    return this.themePreference;
+  }
+
+  /**
+   * Change the color scheme the wallet draws for: `light`, `dark`, or
+   * `system`. A loaded wallet restyles in place; it is not reloaded.
+   */
+  setTheme(theme: WalletThemePreference): void {
+    this.themePreference = normalizeWalletThemePreference(theme);
+    this.applyTheme();
+  }
+
+  /**
+   * Report the OS color scheme that `system` resolves to. ThruProvider feeds
+   * this from useColorScheme(); hosts driving NativeSDK directly call it from
+   * React Native's Appearance API.
+   */
+  setSystemTheme(theme: WalletTheme): void {
+    this.systemTheme = theme === "dark" ? "dark" : "light";
+    this.applyTheme();
+  }
+
+  private applyTheme(): void {
+    const theme = resolveWalletTheme(this.themePreference, this.systemTheme);
+    if (theme === this.provider.getTheme()) return;
+    this.provider.setTheme(theme);
+    this.emit("themeChanged", theme);
   }
 
   /** Hand the WebView ref to the underlying provider/bridge. */

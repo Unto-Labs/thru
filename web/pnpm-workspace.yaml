@@ -15,7 +15,7 @@ packages:
   - 'wallet-auth-manager'
   - 'wallet-keypair-manager'
   - 'chain-indexer'
-  - 'passkey-demo-dapp'
+  - 'wallet-app'
   - 'wallet'
   - 'wallet/admin'
   - 'wallet/frontend/site'

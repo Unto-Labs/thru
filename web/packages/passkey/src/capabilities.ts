@@ -1,10 +1,23 @@
 import type { PasskeyClientCapabilities } from './types';
 
-const globalProcess = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process;
+const globalProcess = (globalThis as { process?: { env?: Record<string, string | undefined> } })
+  .process;
 const DEBUG = globalProcess?.env?.NEXT_PUBLIC_PASSKEY_DEBUG === '1';
 
 let cachedClientCapabilities: PasskeyClientCapabilities | null | undefined;
 let clientCapabilitiesPromise: Promise<PasskeyClientCapabilities | null> | null = null;
+const inlineRefusals = new Map<PasskeyPromptAction, PasskeyRestrictionReason>();
+
+export function markInlinePasskeyRefused(
+  action: PasskeyPromptAction,
+  reason: PasskeyRestrictionReason
+): void {
+  inlineRefusals.set(action, reason);
+}
+
+export function resetInlinePasskeyRefusal(): void {
+  inlineRefusals.clear();
+}
 
 export function isWebAuthnSupported(): boolean {
   const supported =
@@ -33,9 +46,11 @@ async function fetchPasskeyClientCapabilities(): Promise<PasskeyClientCapabiliti
     return null;
   }
 
-  const getClientCapabilities = (window.PublicKeyCredential as {
-    getClientCapabilities?: () => Promise<PasskeyClientCapabilities>;
-  }).getClientCapabilities;
+  const getClientCapabilities = (
+    window.PublicKeyCredential as {
+      getClientCapabilities?: () => Promise<PasskeyClientCapabilities>;
+    }
+  ).getClientCapabilities;
 
   if (typeof getClientCapabilities !== 'function') {
     return null;
@@ -102,154 +117,123 @@ export function isInIframe(): boolean {
 
 export type PasskeyPromptAction = 'get' | 'create';
 
-export async function shouldUsePasskeyPopup(action: PasskeyPromptAction): Promise<boolean> {
-  if (!isInIframe()) {
+export type PasskeyRestrictionReason =
+  'policy-denied' | 'unsupported-create' | 'ancestor-restriction';
+
+export class PasskeyIframeRestrictionError extends Error {
+  readonly name = 'PasskeyIframeRestrictionError';
+  constructor(
+    readonly action: PasskeyPromptAction,
+    readonly reason: PasskeyRestrictionReason
+  ) {
+    super(
+      reason === 'unsupported-create'
+        ? 'This browser needs a separate window to create a passkey.'
+        : 'This browser cannot use passkeys inside the embedded wallet.'
+    );
+  }
+}
+
+type Policy = { allowsFeature?: (name: string) => boolean };
+
+export function getPermissionsPolicyAllowsFeature(feature: string): boolean | null {
+  if (typeof document === 'undefined') return null;
+  const doc = document as Document & { permissionsPolicy?: Policy; featurePolicy?: Policy };
+  const policy =
+    typeof doc.permissionsPolicy?.allowsFeature === 'function'
+      ? doc.permissionsPolicy
+      : doc.featurePolicy;
+  if (typeof policy?.allowsFeature !== 'function') return null;
+  try {
+    return policy.allowsFeature.call(policy, feature);
+  } catch {
+    return null;
+  }
+}
+
+function isCrossOriginIframe(): boolean {
+  if (!isInIframe()) return false;
+  try {
+    // Check every ancestor, including a same-origin top with a cross-origin intermediate frame.
+    let ancestor = window.parent;
+    while (ancestor !== window) {
+      if (ancestor.location.origin !== window.location.origin) return true;
+      if (ancestor === ancestor.parent) break;
+      ancestor = ancestor.parent;
+    }
     return false;
-  }
-  const mode = await getPasskeyPromptMode(action);
-  return mode === 'popup';
-}
-
-type PasskeyPromptMode = 'inline' | 'popup';
-
-function getPermissionsPolicyAllowsFeature(feature: string): boolean | null {
-  if (typeof document === 'undefined') {
-    return null;
-  }
-
-  const policy = (document as { permissionsPolicy?: { allowsFeature?: (name: string) => boolean } })
-    .permissionsPolicy;
-  const featurePolicy = (document as { featurePolicy?: { allowsFeature?: (name: string) => boolean } })
-    .featurePolicy;
-  const allowsFeature = policy?.allowsFeature || featurePolicy?.allowsFeature;
-
-  if (typeof allowsFeature !== 'function') {
-    return null;
-  }
-
-  try {
-    return allowsFeature(feature);
   } catch {
-    return null;
+    return true;
   }
 }
 
-function getCachedPromptMode(action: PasskeyPromptAction): PasskeyPromptMode | 'unknown' {
-  if (!isInIframe()) {
-    return 'inline';
-  }
-
-  if (cachedClientCapabilities === undefined && !clientCapabilitiesPromise) {
-    preloadPasskeyClientCapabilities();
-  }
-
-  const feature =
-    action === 'create' ? 'publickey-credentials-create' : 'publickey-credentials-get';
-  const policyAllows = getPermissionsPolicyAllowsFeature(feature);
-  const capabilities = getCachedPasskeyClientCapabilities();
-  const supportsInline =
-    capabilities?.passkeyPlatformAuthenticator === true ||
-    capabilities?.userVerifyingPlatformAuthenticator === true;
-
-  if (policyAllows === false) {
-    return 'popup';
-  }
-
-  if (capabilities === undefined) {
-    return 'unknown';
-  }
-
-  if (!supportsInline) {
-    return 'popup';
-  }
-
-  return 'inline';
+function isKnownWebKit(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent;
+  // Includes iOS browsers backed by WebKit, but excludes Chromium/Firefox desktop.
+  return /AppleWebKit/i.test(ua) && !/(Chrome|Chromium|Edg|OPR|Android)\//i.test(ua);
 }
 
-export async function getPasskeyPromptMode(action: PasskeyPromptAction): Promise<PasskeyPromptMode> {
-  if (!isInIframe()) {
-    return 'inline';
+/** Synchronous and independent of asynchronous authenticator capability probes. */
+export function getPasskeyRestriction(
+  action: PasskeyPromptAction
+): PasskeyIframeRestrictionError | null {
+  if (!isInIframe()) return null;
+  const remembered = inlineRefusals.get(action);
+  if (remembered) return new PasskeyIframeRestrictionError(action, remembered);
+  if (getPermissionsPolicyAllowsFeature(`publickey-credentials-${action}`) === false) {
+    return new PasskeyIframeRestrictionError(action, 'policy-denied');
   }
-
-  const feature =
-    action === 'create' ? 'publickey-credentials-create' : 'publickey-credentials-get';
-  const policyAllows = getPermissionsPolicyAllowsFeature(feature);
-  const capabilities = await getPasskeyClientCapabilities();
-  const supportsInline =
-    capabilities?.passkeyPlatformAuthenticator === true ||
-    capabilities?.userVerifyingPlatformAuthenticator === true;
-
-  if (DEBUG) {
-    console.log('[Passkey] Prompt mode check:', {
-      action,
-      policyAllows,
-      supportsInline,
-      capabilities,
-    });
+  if (action === 'create' && isCrossOriginIframe() && isKnownWebKit()) {
+    return new PasskeyIframeRestrictionError(action, 'unsupported-create');
   }
-
-  if (!supportsInline) {
-    return 'popup';
-  }
-
-  if (policyAllows === false) {
-    return 'popup';
-  }
-
-  return 'inline';
+  return null;
 }
 
-export function maybePreopenPopup(action: PasskeyPromptAction, openPopupFn: () => Window): Window | null {
-  const cachedMode = getCachedPromptMode(action);
-  if (cachedMode !== 'popup') {
-    return null;
-  }
+export async function getPasskeyPromptMode(
+  action: PasskeyPromptAction
+): Promise<'inline' | 'popup'> {
+  return getPasskeyRestriction(action) ? 'popup' : 'inline';
+}
 
-  try {
-    return openPopupFn();
-  } catch {
-    return null;
+export async function shouldUsePasskeyPopup(action: PasskeyPromptAction): Promise<boolean> {
+  return Boolean(getPasskeyRestriction(action));
+}
+
+/** Compatibility helper: implicit routing must never open speculative windows. */
+export function maybePreopenPopup(
+  _action: PasskeyPromptAction,
+  _openPopupFn: () => Window
+): Window | null {
+  return null;
+}
+
+export function classifyIframeRestriction(
+  error: unknown,
+  action: PasskeyPromptAction
+): PasskeyIframeRestrictionError | null {
+  if (!isInIframe()) return null;
+  const name = error && typeof error === 'object' && 'name' in error ? String(error.name) : '';
+  const message =
+    error && typeof error === 'object' && 'message' in error
+      ? String(error.message).toLowerCase()
+      : '';
+  if (name === 'AbortError' || /cancel|aborted/.test(message)) return null;
+  if (
+    message.includes("invalid 'sameoriginwithancestors' value") ||
+    message.includes('origin of the document is not the same as its ancestors')
+  ) {
+    return new PasskeyIframeRestrictionError(action, 'ancestor-restriction');
   }
+  if (
+    (name === 'NotAllowedError' || name === 'SecurityError') &&
+    /permissions?[ -]policy/.test(message)
+  ) {
+    return new PasskeyIframeRestrictionError(action, 'policy-denied');
+  }
+  return null;
 }
 
 export function shouldFallbackToPopup(error: unknown): boolean {
-  if (!isInIframe()) {
-    return false;
-  }
-
-  const name =
-    error && typeof error === 'object' && 'name' in error ? String((error as { name?: unknown }).name) : '';
-  const message =
-    error && typeof error === 'object' && 'message' in error
-      ? String((error as { message?: unknown }).message)
-      : '';
-  const normalized = `${name} ${message}`.toLowerCase();
-
-  if (
-    normalized.includes('cancel') ||
-    normalized.includes('canceled') ||
-    normalized.includes('cancelled') ||
-    normalized.includes('user canceled') ||
-    normalized.includes('user cancelled') ||
-    normalized.includes('aborted')
-  ) {
-    return false;
-  }
-
-  if (normalized.includes('securityerror')) {
-    return true;
-  }
-
-  if (normalized.includes('notallowederror')) {
-    if (
-      normalized.includes('permission') ||
-      normalized.includes('policy') ||
-      normalized.includes('iframe') ||
-      normalized.includes('frame')
-    ) {
-      return true;
-    }
-  }
-
-  return false;
+  return Boolean(classifyIframeRestriction(error, 'get'));
 }

@@ -67,6 +67,8 @@ export type {
   GetConnectionStateResult,
   ManageAccountsResult,
   PrepareDepositPayload,
+  WalletTheme,
+  WalletThemePreference,
 } from '../protocol';
 export { DepositTarget, ThruNetwork } from '../protocol';
 export type {

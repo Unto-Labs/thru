@@ -15,7 +15,7 @@ use thru_client::{Client, ClientBuilder, TransactionDetails};
 
 const CONSENSUS_VALIDATOR_FEE: u64 = 0;
 const CONSENSUS_VALIDATOR_STATE_HEADER_SIZE: usize = 216;
-const CONSENSUS_STATE_BASE_HEADER_SIZE: usize = 240;
+const CONSENSUS_STATE_BASE_HEADER_SIZE: usize = 248;
 const CONSENSUS_ATTESTOR_SEAT_SIZE: usize = 152;
 const CONSENSUS_VALIDATOR_METADATA_SIZE: usize = 40;
 const CONSENSUS_WEIGHT_UPDATE_SIZE: usize = 32;
@@ -332,6 +332,108 @@ fn parse_bls_pubkey_hex(value: &str) -> Result<[u8; 96], CliError> {
     Ok(bls_pubkey_affine_bytes(&pubkey))
 }
 
+/// Load a BLS private-key scalar from a `bls.json` file and return the first 32
+/// bytes (the BLS scalar). Mirrors `tn_load_bls_private_key` (keys.c:247-329):
+/// the file is a JSON byte array of 32 bytes (BLS-only) or 64 bytes (legacy
+/// identity+BLS, first 32 used). Scalar validation (`blst_sk_check`, which
+/// rejects zero / out-of-range) happens in the derivation helpers
+/// (`derive_bls_pubkey_raw_from_key_file` / `derive_bls_serialized_from_key_file`).
+fn load_bls_key_file(path: &str) -> Result<[u8; 32], CliError> {
+    let contents = std::fs::read_to_string(path).map_err(|e| {
+        CliError::Validation(format!("Failed to read BLS key file '{}': {}", path, e))
+    })?;
+
+    let bytes: Vec<u8> = serde_json::from_str(&contents).map_err(|e| {
+        CliError::Validation(format!(
+            "BLS key file '{}' must be a JSON array of byte values: {}",
+            path, e
+        ))
+    })?;
+
+    if bytes.len() != 32 && bytes.len() != 64 {
+        return Err(CliError::Validation(format!(
+            "BLS key file '{}' must contain 32 or 64 bytes, got {}",
+            path,
+            bytes.len()
+        )));
+    }
+
+    let mut scalar = [0u8; 32];
+    scalar.copy_from_slice(&bytes[..32]);
+    Ok(scalar)
+}
+
+/// Derive the node's BLS public key from its `bls.json` in the **raw
+/// `blst_p1_affine` struct** representation (Montgomery limbs), byte-for-byte
+/// identical to what `keys_bls` prints and what genesis stores into each attestor
+/// seat. This is the form shown by `validator table`/`info` and the one a `bls.json`
+/// owner sees on-chain, so it is what `validator bls-pubkey` prints.
+///
+/// Replicates `tn_crypto_derive_pubkey` (tn_crypto.c:253): `blst_scalar_from_bendian`,
+/// then `blst_sk_check`, `blst_sk_to_pk_in_g1`, and `blst_p1_to_affine`, then reads the
+/// raw 96-byte affine exactly as `keys_bls` hex-encodes it
+/// (`fd_hex_encode((uchar*)&bls_pubkey, 96)`, keys.c:352) and as genesis memcpys it
+/// into the seat (tn_genesis_attestor.c:367).
+///
+/// NOTE: this is NOT `blst_p1_affine_serialize`'s canonical big-endian form. The
+/// canonical form is what an ACTIVATE transaction must carry (see
+/// `derive_bls_serialized_from_key_file`); the program deserializes it back into
+/// this raw affine for storage.
+fn derive_bls_pubkey_raw_from_key_file(path: &str) -> Result<[u8; 96], CliError> {
+    let scalar_bytes = load_bls_key_file(path)?;
+
+    /* SAFETY: every blst call below writes into a fully-owned, default-initialized
+       value, and the scalar pointer references a 32-byte local array. The final
+       read copies exactly sizeof(blst_p1_affine) == 96 bytes out of the affine. */
+    unsafe {
+        let mut scalar = blst::blst_scalar::default();
+        blst::blst_scalar_from_bendian(&mut scalar, scalar_bytes.as_ptr());
+
+        if !blst::blst_sk_check(&scalar) {
+            return Err(CliError::Validation(format!(
+                "BLS key file '{}' does not contain a valid BLS private key scalar (zero or out of range)",
+                path
+            )));
+        }
+
+        let mut pubkey_proj = blst::blst_p1::default();
+        blst::blst_sk_to_pk_in_g1(&mut pubkey_proj, &scalar);
+
+        let mut pubkey_affine = blst::blst_p1_affine::default();
+        blst::blst_p1_to_affine(&mut pubkey_affine, &pubkey_proj);
+
+        let mut raw = [0u8; 96];
+        let affine_bytes = std::slice::from_raw_parts(
+            (&pubkey_affine as *const blst::blst_p1_affine) as *const u8,
+            96,
+        );
+        raw.copy_from_slice(affine_bytes);
+        Ok(raw)
+    }
+}
+
+/// Derive the node's BLS public key from its `bls.json` in the **canonical
+/// uncompressed serialized** representation (`blst_p1_affine_serialize`, 96-byte
+/// big-endian x||y). This is the form an ACTIVATE transaction must carry: the
+/// consensus-validator program runs `tn_crypto_deserialize_pubkey` on the activate
+/// argument (program line 561) before storing the raw affine into the seat — so
+/// `--bls-key` activation must send this serialized form, exactly like a pasted
+/// `--bls-pubkey` or a `--bls-seed`-derived key.
+///
+/// `BlsSecretKey::from_bytes` performs `blst_scalar_from_bendian` + `blst_sk_check`
+/// (rejecting zero / out-of-range), and `sk_to_pk().serialize()` == the program's
+/// expected canonical form.
+fn derive_bls_serialized_from_key_file(path: &str) -> Result<[u8; 96], CliError> {
+    let scalar = load_bls_key_file(path)?;
+    let secret_key = BlsSecretKey::from_bytes(&scalar).map_err(|_| {
+        CliError::Validation(format!(
+            "BLS key file '{}' does not contain a valid BLS private key scalar (zero or out of range)",
+            path
+        ))
+    })?;
+    Ok(secret_key.sk_to_pk().serialize())
+}
+
 fn derive_bls_pubkey_from_seed(seed: u64) -> Result<[u8; 96], CliError> {
     let mut ikm = [0u8; 32];
     for (idx, byte) in ikm.iter_mut().enumerate() {
@@ -362,15 +464,19 @@ fn bls_pubkey_affine_bytes(pubkey: &BlsPublicKey) -> [u8; 96] {
 fn resolve_bls_pubkey(
     bls_pubkey: Option<&str>,
     bls_seed: Option<u64>,
+    bls_key: Option<&str>,
 ) -> Result<[u8; 96], CliError> {
-    match (bls_pubkey, bls_seed) {
-        (Some(value), None) => parse_bls_pubkey_hex(value),
-        (None, Some(seed)) => derive_bls_pubkey_from_seed(seed),
-        (Some(_), Some(_)) => Err(CliError::Validation(
-            "Use either --bls-pubkey or --bls-seed, not both".to_string(),
+    match (bls_pubkey, bls_seed, bls_key) {
+        (Some(value), None, None) => parse_bls_pubkey_hex(value),
+        (None, Some(seed), None) => derive_bls_pubkey_from_seed(seed),
+        /* The program deserializes the activate argument, so it must be the
+           canonical serialized form — NOT the raw affine that `bls-pubkey` prints. */
+        (None, None, Some(path)) => derive_bls_serialized_from_key_file(path),
+        (None, None, None) => Err(CliError::Validation(
+            "One of --bls-pubkey, --bls-seed, or --bls-key is required".to_string(),
         )),
-        (None, None) => Err(CliError::Validation(
-            "Either --bls-pubkey or --bls-seed is required".to_string(),
+        _ => Err(CliError::Validation(
+            "Use only one of --bls-pubkey, --bls-seed, or --bls-key".to_string(),
         )),
     }
 }
@@ -463,19 +569,19 @@ fn parse_validator_table(data: &[u8], attestor_table: [u8; 32], current_slot: u6
     let delta1 = read_u64(base_header, 0, "delta1")?;
     let delta2 = read_u64(base_header, 8, "delta2")?;
     let base_server_count = read_u64(base_header, 16, "base_server_count")?;
-    let frontier = read_u64(base_header, 24, "frontier")?;
-    let stake_slots_off = read_u64(base_header, 48, "stake_slots_off")? as usize;
-    let base_weights_off = read_u64(base_header, 56, "base_weights_off")? as usize;
-    let total_weights_off = read_u64(base_header, 64, "total_weights_off")? as usize;
-    let weight_updates_off = read_u64(base_header, 80, "weight_updates_off")? as usize;
-    let weight_updates_head = read_u64(base_header, 96, "weight_updates_head")?;
-    let weight_updates_cnt = read_u64(base_header, 112, "weight_updates_cnt")?;
-    let total_weights_head = read_u64(base_header, 144, "total_weights_head")?;
-    let total_weights_tail = read_u64(base_header, 152, "total_weights_tail")?;
-    let blocks_per_faulty_turnover = read_u64(base_header, 200, "blocks_per_faulty_turnover")?;
-    let turnover_ring_head_slot = read_u64(base_header, 216, "turnover_ring_head_slot")?;
-    let turnover_sum_added = read_u64(base_header, 224, "turnover_sum_added")?;
-    let turnover_sum_removed = read_u64(base_header, 232, "turnover_sum_removed")?;
+    let frontier = read_u64(base_header, 32, "frontier")?;
+    let stake_slots_off = read_u64(base_header, 56, "stake_slots_off")? as usize;
+    let base_weights_off = read_u64(base_header, 64, "base_weights_off")? as usize;
+    let total_weights_off = read_u64(base_header, 72, "total_weights_off")? as usize;
+    let weight_updates_off = read_u64(base_header, 88, "weight_updates_off")? as usize;
+    let weight_updates_head = read_u64(base_header, 104, "weight_updates_head")?;
+    let weight_updates_cnt = read_u64(base_header, 120, "weight_updates_cnt")?;
+    let total_weights_head = read_u64(base_header, 152, "total_weights_head")?;
+    let total_weights_tail = read_u64(base_header, 160, "total_weights_tail")?;
+    let blocks_per_faulty_turnover = read_u64(base_header, 208, "blocks_per_faulty_turnover")?;
+    let turnover_ring_head_slot = read_u64(base_header, 224, "turnover_ring_head_slot")?;
+    let turnover_sum_added = read_u64(base_header, 232, "turnover_sum_added")?;
+    let turnover_sum_removed = read_u64(base_header, 240, "turnover_sum_removed")?;
 
     if base_server_count != server_count {
         return Err(CliError::Validation(format!(
@@ -648,15 +754,93 @@ fn parse_validator_table(data: &[u8], attestor_table: [u8; 32], current_slot: u6
     })
 }
 
-fn check_activate_turnover_window(table: &ValidatorTable, token_amount: u64) -> Result<(), CliError> {
-    let Some(turnover_limit) = table.turnover_limit else {
-        return Ok(());
+/// Descriptive snapshot of the on-chain turnover window (no hypothetical amount).
+/// `disabled` (turnover OFF), `unavailable` (limit not derivable) and a populated
+/// window state are kept distinct — see `turnover_window_state`.
+#[derive(Debug, Clone)]
+enum TurnoverVerdict {
+    /// `blocks_per_faulty_turnover == 0` → turnover is OFF on-chain.
+    Disabled,
+    /// `turnover_limit == None` → the CLI could not derive a usable total weight
+    /// (NOT the same as disabled; see `parse_validator_table`).
+    Unavailable,
+    /// Limit known → descriptive current-window state.
+    State(TurnoverWindow),
+}
+
+#[derive(Debug, Clone)]
+struct TurnoverWindow {
+    window_slots: u64,
+    sum_added: u64,
+    sum_removed: u64,
+    limit: u64,
+    headroom: u64,
+    head_slot: u64,
+    window_end_slot: Option<u64>,
+    remaining_slots: Option<u64>,
+    fresh_chain: bool,
+}
+
+/// Current turnover-window state (descriptive; never errors). `Disabled` vs
+/// `Unavailable` are distinct: `turnover_limit == None` means the limit was not
+/// derivable (`parse_validator_table` leaves it `None` when `total_weights_tail
+/// <= total_weights_head` or the head weight is 0), NOT that turnover is off.
+/// Turnover is only OFF when `blocks_per_faulty_turnover == 0`.
+fn turnover_window_state(table: &ValidatorTable) -> TurnoverVerdict {
+    if table.blocks_per_faulty_turnover == 0 {
+        return TurnoverVerdict::Disabled;
+    }
+
+    let Some(limit) = table.turnover_limit else {
+        return TurnoverVerdict::Unavailable;
     };
 
-    let projected_added = table.turnover_sum_added.saturating_add(token_amount);
-    if projected_added <= turnover_limit {
+    let window_end_slot = if table.turnover_ring_head_slot == CONSENSUS_STATE_NO_SLOT {
+        None
+    } else {
+        Some(
+            table
+                .turnover_ring_head_slot
+                .saturating_add(table.blocks_per_faulty_turnover),
+        )
+    };
+    let remaining_slots = window_end_slot.map(|slot| slot.saturating_sub(table.current_slot));
+
+    TurnoverVerdict::State(TurnoverWindow {
+        window_slots: table.blocks_per_faulty_turnover,
+        sum_added: table.turnover_sum_added,
+        sum_removed: table.turnover_sum_removed,
+        limit,
+        headroom: limit.saturating_sub(table.turnover_sum_added),
+        head_slot: table.turnover_ring_head_slot,
+        window_end_slot,
+        remaining_slots,
+        fresh_chain: table.current_slot < table.blocks_per_faulty_turnover,
+    })
+}
+
+/// Activation-specific predicate (no `Err`). Models ONLY `turnover_sum_added`:
+/// activation never touches `turnover_sum_removed` (deactivation does), matching
+/// the existing activate pre-check. NOT a full turnover check.
+fn turnover_accepts_activation(table: &ValidatorTable, added_weight: u64) -> bool {
+    match table.turnover_limit {
+        None => true,
+        Some(limit) => table.turnover_sum_added.saturating_add(added_weight) <= limit,
+    }
+}
+
+fn check_activate_turnover_window(table: &ValidatorTable, token_amount: u64) -> Result<(), CliError> {
+    if turnover_accepts_activation(table, token_amount) {
         return Ok(());
     }
+
+    /* turnover_accepts_activation only returns false when turnover_limit is Some,
+       so the limit is known here. Build the rejection message from the window
+       state, preserving the existing wording exactly. */
+    let turnover_limit = table
+        .turnover_limit
+        .expect("turnover_accepts_activation returns true when the limit is unknown");
+    let projected_added = table.turnover_sum_added.saturating_add(token_amount);
 
     let window_end_slot = if table.turnover_ring_head_slot == CONSENSUS_STATE_NO_SLOT {
         None
@@ -698,25 +882,65 @@ fn check_activate_turnover_window(table: &ValidatorTable, token_amount: u64) -> 
     Err(CliError::Validation(message))
 }
 
+/// Optional lookup that distinguishes "bad input" from "valid identity, absent
+/// from the table". Returns `Err` only when `validator` cannot be resolved to a
+/// sid/pubkey at all (unknown key name / malformed address). `Ok(None)` means the
+/// input resolved cleanly but no matching seat exists (NOT REGISTERED).
+fn find_validator_entry<'a>(
+    table: &'a ValidatorTable,
+    config: &Config,
+    validator: &str,
+) -> Result<Option<&'a ValidatorEntry>, CliError> {
+    if let Ok(sid) = validator.parse::<u64>() {
+        return Ok(table.validators.iter().find(|entry| entry.sid == sid));
+    }
+
+    let identity = resolve_pubkey_or_key_name(config, validator)?;
+    Ok(table.validators.iter().find(|entry| entry.identity == identity))
+}
+
 fn resolve_validator_entry<'a>(
     table: &'a ValidatorTable,
     config: &Config,
     validator: &str,
 ) -> Result<&'a ValidatorEntry, CliError> {
-    if let Ok(sid) = validator.parse::<u64>() {
-        return table
-            .validators
-            .iter()
-            .find(|entry| entry.sid == sid)
-            .ok_or_else(|| CliError::Validation(format!("Validator SID {} not found", sid)));
+    match find_validator_entry(table, config, validator)? {
+        Some(entry) => Ok(entry),
+        None => {
+            if let Ok(sid) = validator.parse::<u64>() {
+                Err(CliError::Validation(format!("Validator SID {} not found", sid)))
+            } else {
+                Err(CliError::Validation(format!(
+                    "Validator '{}' not found in table",
+                    validator
+                )))
+            }
+        }
     }
+}
 
-    let identity = resolve_pubkey_or_key_name(config, validator)?;
-    table
-        .validators
-        .iter()
-        .find(|entry| entry.identity == identity)
-        .ok_or_else(|| CliError::Validation(format!("Validator '{}' not found in table", validator)))
+/// Resolve the pubkey shown by `validator status`. When the seat exists, use its
+/// identity so a numeric sid still renders its pubkey. When absent, the input
+/// must be re-resolved as a key name / address — but a bare numeric sid has no
+/// pubkey to display, so report it as not registered rather than letting
+/// `resolve_pubkey_or_key_name` fail with a confusing key-resolution error.
+fn resolve_status_identity(
+    entry: Option<&ValidatorEntry>,
+    config: &Config,
+    identity_input: &str,
+) -> Result<[u8; 32], CliError> {
+    match entry {
+        Some(e) => Ok(e.identity),
+        None => {
+            if let Ok(sid) = identity_input.parse::<u64>() {
+                return Err(CliError::Validation(format!(
+                    "Validator SID {} is not registered",
+                    sid
+                )));
+            }
+            resolve_pubkey_or_key_name(config, identity_input)
+        }
+    }
 }
 
 async fn fetch_validator_table(
@@ -773,6 +997,7 @@ pub async fn handle_validator_command(
             token_amount,
             bls_pubkey,
             bls_seed,
+            bls_key,
             claim_authority,
             fee_payer,
             program,
@@ -786,6 +1011,7 @@ pub async fn handle_validator_command(
                 token_amount,
                 bls_pubkey.as_deref(),
                 bls_seed,
+                bls_key.as_deref(),
                 claim_authority.as_deref(),
                 fee_payer.as_deref(),
                 program.as_deref(),
@@ -885,6 +1111,13 @@ pub async fn handle_validator_command(
             validator,
             attestor_table,
         } => show_validator_info(config, &validator, attestor_table.as_deref(), json_format).await,
+        ValidatorCommands::BlsPubkey { bls_key } => {
+            show_bls_pubkey(&bls_key, json_format)
+        }
+        ValidatorCommands::Status {
+            identity,
+            attestor_table,
+        } => show_validator_status(config, identity.as_deref(), attestor_table.as_deref(), json_format).await,
     }
 }
 
@@ -895,6 +1128,7 @@ async fn activate(
     token_amount: u64,
     bls_pubkey: Option<&str>,
     bls_seed: Option<u64>,
+    bls_key: Option<&str>,
     claim_authority: Option<&str>,
     fee_payer: Option<&str>,
     program: Option<&str>,
@@ -905,7 +1139,7 @@ async fn activate(
 ) -> Result<(), CliError> {
     ensure_nonzero_amount("activation", token_amount)?;
 
-    let bls_pubkey = resolve_bls_pubkey(bls_pubkey, bls_seed)?;
+    let bls_pubkey = resolve_bls_pubkey(bls_pubkey, bls_seed, bls_key)?;
 
     let accounts = resolve_consensus_accounts(
         config,
@@ -1369,6 +1603,187 @@ async fn show_validator_info(
     Ok(())
 }
 
+/// `validator bls-pubkey --bls-key <bls.json>` — derive and print the node's BLS
+/// public key from its `bls.json`. A `bls.json` carries no identity, so there is
+/// no identity line; the BLS pubkey is rendered as bare lowercase 192-char hex
+/// under `bls_pubkey_hex` (consistent with `info`/`table`).
+fn show_bls_pubkey(bls_key: &str, json_format: bool) -> Result<(), CliError> {
+    let bls_pubkey = derive_bls_pubkey_raw_from_key_file(bls_key)?;
+    let bls_pubkey_hex = hex::encode(bls_pubkey);
+
+    if json_format {
+        let response = serde_json::json!({
+            "validator_bls_pubkey": {
+                "status": "success",
+                "bls_pubkey_hex": bls_pubkey_hex,
+            }
+        });
+        crate::output::print_output(response, true);
+    } else {
+        println!("bls-pubkey: {}", bls_pubkey_hex);
+    }
+
+    Ok(())
+}
+
+/// Render the turnover portion of `validator status`.
+/// Human form: one line. JSON form: the `turnover` object pinned in the plan.
+fn turnover_status_human(verdict: &TurnoverVerdict) -> String {
+    match verdict {
+        TurnoverVerdict::Disabled => "disabled (turnover off on-chain)".to_string(),
+        TurnoverVerdict::Unavailable => "unavailable (limit not derivable)".to_string(),
+        TurnoverVerdict::State(window) => {
+            let mut line = format!(
+                "{}/{} used, headroom {}",
+                window.sum_added, window.limit, window.headroom
+            );
+            match (window.window_end_slot, window.remaining_slots) {
+                (Some(end), Some(remaining)) => {
+                    line.push_str(&format!(" (clears ~slot {}, in ~{} slots)", end, remaining));
+                }
+                (Some(end), None) => {
+                    line.push_str(&format!(" (clears ~slot {})", end));
+                }
+                _ => {}
+            }
+            if window.fresh_chain {
+                line.push_str(
+                    "; fresh chain: the genesis activation still counts against the turnover budget until the initial window ages out",
+                );
+            }
+            line
+        }
+    }
+}
+
+fn turnover_status_json(verdict: &TurnoverVerdict) -> serde_json::Value {
+    match verdict {
+        TurnoverVerdict::Disabled => serde_json::json!({ "state": "disabled" }),
+        TurnoverVerdict::Unavailable => serde_json::json!({ "state": "unavailable" }),
+        TurnoverVerdict::State(window) => serde_json::json!({
+            "state": "ok",
+            "window_slots": window.window_slots,
+            "sum_added": window.sum_added,
+            "sum_removed": window.sum_removed,
+            "limit": window.limit,
+            "headroom": window.headroom,
+            "head_slot": window.head_slot,
+            "window_end_slot": window.window_end_slot,
+            "remaining_slots": window.remaining_slots,
+            "fresh_chain": window.fresh_chain,
+        }),
+    }
+}
+
+/// Stable status label: `"active"` (registered + weight) / `"inactive"`
+/// (registered, no weight) / `"not_registered"` (no seat).
+fn status_label(entry: Option<&ValidatorEntry>) -> &'static str {
+    match entry {
+        None => "not_registered",
+        Some(e) if e.active => "active",
+        Some(_) => "inactive",
+    }
+}
+
+/// Build the pinned `validator_status` JSON object. `registered=false` ⇒
+/// `sid`/`claim_authority` null and `weight`/`unclaimed_tokens` 0.
+fn validator_status_json(
+    entry: Option<&ValidatorEntry>,
+    identity_address: &str,
+    verdict: &TurnoverVerdict,
+) -> serde_json::Value {
+    serde_json::json!({
+        "status": status_label(entry),
+        "registered": entry.is_some(),
+        "identity": identity_address,
+        "sid": entry.map(|e| e.sid),
+        "weight": entry.map(|e| e.weight).unwrap_or(0),
+        "unclaimed_tokens": entry.map(|e| e.unclaimed_tokens).unwrap_or(0),
+        "claim_authority": entry.map(|e| to_address_string(&e.claim_authority)),
+        "turnover": turnover_status_json(verdict),
+    })
+}
+
+/// `validator status [--identity ..] [--attestor-table ..]` — operator-framed
+/// view of this validator's seat plus the turnover-window verdict. Defaults to
+/// the configured `default` key.
+///
+/// A malformed/unresolvable identity is a CLI error. A key name or address that
+/// resolves but holds no seat renders NOT REGISTERED against its own pubkey. A
+/// bare numeric sid with no seat is the one exception: the view always prints an
+/// identity pubkey, and an unseated sid is a table index that names no key, so it
+/// is reported as a not-registered error rather than rendered (see
+/// `resolve_status_identity`).
+async fn show_validator_status(
+    config: &Config,
+    identity: Option<&str>,
+    attestor_table: Option<&str>,
+    json_format: bool,
+) -> Result<(), CliError> {
+    let identity_input = identity.unwrap_or("default");
+    let table = fetch_validator_table(config, attestor_table).await?;
+    /* find_validator_entry errors only on unresolvable input (unknown key name /
+       malformed address); Ok(None) is a resolved-but-absent identity. */
+    let entry = find_validator_entry(&table, config, identity_input)?;
+    /* The identity is always shown. Prefer the seat's identity when found (so a
+       numeric sid still resolves to its pubkey); a bare sid with no seat is
+       reported as not registered rather than as a key-resolution failure. */
+    let identity_pubkey = resolve_status_identity(entry, config, identity_input)?;
+    let identity_address = to_address_string(&identity_pubkey);
+    let key_name = if config.keys.get_key(identity_input).is_ok() {
+        Some(identity_input.to_string())
+    } else {
+        None
+    };
+    let verdict = turnover_window_state(&table);
+
+    if json_format {
+        let response = serde_json::json!({
+            "validator_status": validator_status_json(entry, &identity_address, &verdict),
+        });
+        crate::output::print_output(response, true);
+    } else {
+        println!(
+            "validator status (table {} @ slot {})",
+            to_address_string(&table.attestor_table),
+            table.current_slot
+        );
+        let identity_suffix = match &key_name {
+            Some(name) => format!("   (key: {})", name),
+            None => String::new(),
+        };
+        println!("  identity:          {}{}", identity_address, identity_suffix);
+        match entry {
+            None => {
+                println!("  status:            NOT REGISTERED");
+            }
+            Some(e) => {
+                println!(
+                    "  status:            {} (sid {})",
+                    if e.active { "ACTIVE" } else { "INACTIVE" },
+                    e.sid
+                );
+                println!("  weight:            {}", e.weight);
+                println!(
+                    "  unclaimed rewards: {}  (vault {})",
+                    e.unclaimed_tokens,
+                    to_address_string(&table.unclaimed_vault)
+                );
+                let claim_authority_address = to_address_string(&e.claim_authority);
+                let claim_suffix = if e.claim_authority == e.identity {
+                    "   (= identity)"
+                } else {
+                    ""
+                };
+                println!("  claim authority:   {}{}", claim_authority_address, claim_suffix);
+            }
+        }
+        println!("  turnover window:   {}", turnover_status_human(&verdict));
+    }
+
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1410,25 +1825,26 @@ mod tests {
         write_u64(&mut data, base_sm_off, 16);
         write_u64(&mut data, base_sm_off + 8, 8);
         write_u64(&mut data, base_sm_off + 16, server_count as u64);
-        write_u64(&mut data, base_sm_off + 24, 42);
-        write_u64(&mut data, base_sm_off + 48, stake_slots_off as u64);
-        write_u64(&mut data, base_sm_off + 56, base_weights_off as u64);
-        write_u64(&mut data, base_sm_off + 64, total_weights_off as u64);
-        write_u64(&mut data, base_sm_off + 80, weight_updates_off as u64);
-        write_u64(&mut data, base_sm_off + 96, 0);
-        write_u64(&mut data, base_sm_off + 112, 1);
-        write_u64(&mut data, base_sm_off + 144, 0);
-        write_u64(&mut data, base_sm_off + 152, 1);
-        write_u64(&mut data, base_sm_off + 160, 0);
-        write_u64(&mut data, base_sm_off + 168, u64::MAX);
+        write_u64(&mut data, base_sm_off + 24, 64);
+        write_u64(&mut data, base_sm_off + 32, 42);
+        write_u64(&mut data, base_sm_off + 56, stake_slots_off as u64);
+        write_u64(&mut data, base_sm_off + 64, base_weights_off as u64);
+        write_u64(&mut data, base_sm_off + 72, total_weights_off as u64);
+        write_u64(&mut data, base_sm_off + 88, weight_updates_off as u64);
+        write_u64(&mut data, base_sm_off + 104, 0);
+        write_u64(&mut data, base_sm_off + 120, 1);
+        write_u64(&mut data, base_sm_off + 152, 0);
+        write_u64(&mut data, base_sm_off + 160, 1);
+        write_u64(&mut data, base_sm_off + 168, 0);
         write_u64(&mut data, base_sm_off + 176, u64::MAX);
         write_u64(&mut data, base_sm_off + 184, u64::MAX);
-        data[base_sm_off + 192..base_sm_off + 196].copy_from_slice(&12i32.to_le_bytes());
-        write_u64(&mut data, base_sm_off + 200, 128);
-        write_u64(&mut data, base_sm_off + 208, 2048);
-        write_u64(&mut data, base_sm_off + 216, 0);
-        write_u64(&mut data, base_sm_off + 224, 10);
-        write_u64(&mut data, base_sm_off + 232, 0);
+        write_u64(&mut data, base_sm_off + 192, u64::MAX);
+        data[base_sm_off + 200..base_sm_off + 204].copy_from_slice(&12i32.to_le_bytes());
+        write_u64(&mut data, base_sm_off + 208, 128);
+        write_u64(&mut data, base_sm_off + 216, 2048);
+        write_u64(&mut data, base_sm_off + 224, 0);
+        write_u64(&mut data, base_sm_off + 232, 10);
+        write_u64(&mut data, base_sm_off + 240, 0);
 
         let seat0_off = base_sm_off + stake_slots_off;
         data[seat0_off..seat0_off + 32].copy_from_slice(&[0x61u8; 32]);
@@ -1512,7 +1928,7 @@ mod tests {
 
     #[test]
     fn resolves_bls_pubkey_from_seed() {
-        let pubkey = resolve_bls_pubkey(None, Some(5)).expect("bls seed should resolve");
+        let pubkey = resolve_bls_pubkey(None, Some(5), None).expect("bls seed should resolve");
         assert_eq!(pubkey, BLS_SEED_5_AFFINE_BYTES);
     }
 
@@ -1587,5 +2003,455 @@ mod tests {
         assert_eq!(accounts.attestor_table, ATTESTOR_TABLE);
         assert_eq!(accounts.token_program, TOKEN_PROGRAM);
         assert_eq!(accounts.unclaimed_vault, UNCLAIMED_VAULT);
+    }
+
+    // ----------------------------------------------------------------------
+    // BLS key-file derivation
+    //
+    // Fixed vectors (checked in, generated offline / cross-checked against the
+    // running genesis node via the e2e `validator` scenario, test 8):
+    //   * scalar = 1 (big-endian [0,..,0,1]) — the BLS12-381 G1 generator.
+    //     - canonical serialize == the well-known G1 generator (independent of
+    //       this code; from the BLS12-381 spec) — proves the scalar->point math.
+    //     - raw affine == the in-memory blst_p1_affine (Montgomery) form printed
+    //       by `keys_bls`/shown on-chain — the form `validator bls-pubkey` emits.
+    // The raw vs serialized split mirrors the on-chain reality: seats store the
+    // raw affine, but an ACTIVATE arg carries the canonical form (the program
+    // deserializes it).
+    // ----------------------------------------------------------------------
+
+    /// BLS12-381 G1 generator, uncompressed canonical (x||y). This is a spec
+    /// constant, NOT produced by the code under test.
+    const G1_GENERATOR_UNCOMPRESSED: &str = "17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1";
+
+    /// Raw in-memory `blst_p1_affine` (Montgomery) form of the generator — the
+    /// representation `keys_bls` hex-encodes and genesis stores in each seat.
+    const G1_GENERATOR_RAW_AFFINE: &str = "160c53fd9087b35cf5ff769967fc1778c1a13b14c7954f1547e7d0f3cd6aaef040f4db21cc6eceed75fb0b9e417701127122e70cd593acba8efd18791a63228cce250757135f59dd945140502958ac51c05900ad3f8c1c0e6aa20850fc3ebc0b";
+
+    fn write_bls_key_file(bytes: &[u8]) -> tempfile::NamedTempFile {
+        use std::io::Write;
+        let json = format!(
+            "[{}]",
+            bytes
+                .iter()
+                .map(|b| b.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        );
+        let mut file = tempfile::NamedTempFile::new().expect("temp bls.json");
+        file.write_all(json.as_bytes()).expect("write bls.json");
+        file.flush().expect("flush bls.json");
+        file
+    }
+
+    fn scalar_one_bytes() -> [u8; 32] {
+        let mut bytes = [0u8; 32];
+        bytes[31] = 1;
+        bytes
+    }
+
+    #[test]
+    fn derive_bls_serialized_matches_g1_generator_for_scalar_one() {
+        let file = write_bls_key_file(&scalar_one_bytes());
+        let serialized = derive_bls_serialized_from_key_file(file.path().to_str().unwrap())
+            .expect("scalar 1 should derive");
+        assert_eq!(hex::encode(serialized), G1_GENERATOR_UNCOMPRESSED);
+    }
+
+    #[test]
+    fn derive_bls_raw_affine_for_scalar_one() {
+        let file = write_bls_key_file(&scalar_one_bytes());
+        let raw = derive_bls_pubkey_raw_from_key_file(file.path().to_str().unwrap())
+            .expect("scalar 1 should derive");
+        assert_eq!(hex::encode(raw), G1_GENERATOR_RAW_AFFINE);
+    }
+
+    #[test]
+    fn bls_raw_and_serialized_forms_differ() {
+        // The two representations of the same key must not be confused: the seat
+        // (raw) and the ACTIVATE wire arg (serialized) are different byte strings.
+        let file = write_bls_key_file(&scalar_one_bytes());
+        let path = file.path().to_str().unwrap();
+        let raw = derive_bls_pubkey_raw_from_key_file(path).unwrap();
+        let serialized = derive_bls_serialized_from_key_file(path).unwrap();
+        assert_ne!(raw, serialized);
+    }
+
+    #[test]
+    fn derive_bls_is_deterministic() {
+        let file = write_bls_key_file(&scalar_one_bytes());
+        let path = file.path().to_str().unwrap();
+        let first = derive_bls_pubkey_raw_from_key_file(path).unwrap();
+        let second = derive_bls_pubkey_raw_from_key_file(path).unwrap();
+        assert_eq!(first, second);
+    }
+
+    #[test]
+    fn load_bls_key_file_accepts_64_byte_legacy_and_uses_first_32() {
+        let mut legacy = vec![0u8; 64];
+        legacy[31] = 1; // first 32 = scalar 1
+        legacy[63] = 9; // trailing identity bytes are ignored
+        let file = write_bls_key_file(&legacy);
+        let raw = derive_bls_pubkey_raw_from_key_file(file.path().to_str().unwrap())
+            .expect("legacy 64-byte file should derive from first 32 bytes");
+        assert_eq!(hex::encode(raw), G1_GENERATOR_RAW_AFFINE);
+    }
+
+    #[test]
+    fn load_bls_key_file_rejects_zero_scalar() {
+        let file = write_bls_key_file(&[0u8; 32]);
+        let err = derive_bls_pubkey_raw_from_key_file(file.path().to_str().unwrap())
+            .expect_err("zero scalar must be rejected by blst_sk_check");
+        assert!(err.to_string().contains("valid BLS private key scalar"));
+    }
+
+    #[test]
+    fn load_bls_key_file_rejects_wrong_length() {
+        let file = write_bls_key_file(&[1u8; 33]);
+        let err = load_bls_key_file(file.path().to_str().unwrap())
+            .expect_err("33-byte array must be rejected");
+        assert!(err.to_string().contains("32 or 64 bytes"));
+    }
+
+    #[test]
+    fn load_bls_key_file_rejects_missing_file() {
+        let err = load_bls_key_file("/nonexistent/path/to/bls.json")
+            .expect_err("missing file must be rejected");
+        assert!(err.to_string().contains("Failed to read BLS key file"));
+    }
+
+    #[test]
+    fn load_bls_key_file_rejects_non_array_json() {
+        use std::io::Write;
+        let mut file = tempfile::NamedTempFile::new().unwrap();
+        file.write_all(b"\"not an array\"").unwrap();
+        file.flush().unwrap();
+        let err = load_bls_key_file(file.path().to_str().unwrap())
+            .expect_err("non-array JSON must be rejected");
+        assert!(err.to_string().contains("JSON array of byte values"));
+    }
+
+    #[test]
+    fn resolve_bls_pubkey_from_key_file_uses_serialized_form() {
+        // `--bls-key` feeds activation, so it must produce the canonical form.
+        let file = write_bls_key_file(&scalar_one_bytes());
+        let resolved = resolve_bls_pubkey(None, None, Some(file.path().to_str().unwrap()))
+            .expect("bls-key should resolve");
+        assert_eq!(hex::encode(resolved), G1_GENERATOR_UNCOMPRESSED);
+    }
+
+    #[test]
+    fn resolve_bls_pubkey_rejects_multiple_sources() {
+        let err = resolve_bls_pubkey(Some("aa"), Some(1), None)
+            .expect_err("two BLS sources must be rejected");
+        assert!(err.to_string().contains("only one"));
+    }
+
+    #[test]
+    fn resolve_bls_pubkey_rejects_no_source() {
+        let err =
+            resolve_bls_pubkey(None, None, None).expect_err("no BLS source must be rejected");
+        assert!(err.to_string().contains("is required"));
+    }
+
+    // ----------------------------------------------------------------------
+    // find_validator_entry: Err (bad input) vs Ok(None) (absent) vs Ok(Some)
+    // ----------------------------------------------------------------------
+
+    #[test]
+    fn find_validator_entry_returns_some_for_known_sid() {
+        let config = create_test_config();
+        let table =
+            parse_validator_table(&build_test_validator_table_bytes(), [0xaau8; 32], 100, None)
+                .unwrap();
+        let entry = find_validator_entry(&table, &config, "0").expect("lookup ok");
+        assert_eq!(entry.map(|e| e.sid), Some(0));
+    }
+
+    #[test]
+    fn find_validator_entry_returns_none_for_absent_sid() {
+        let config = create_test_config();
+        let table =
+            parse_validator_table(&build_test_validator_table_bytes(), [0xaau8; 32], 100, None)
+                .unwrap();
+        // sid 9999 resolves fine (numeric) but is absent -> Ok(None), NOT Err.
+        let entry = find_validator_entry(&table, &config, "9999").expect("absent sid is Ok(None)");
+        assert!(entry.is_none());
+    }
+
+    #[test]
+    fn find_validator_entry_returns_none_for_resolvable_but_absent_identity() {
+        let config = create_test_config();
+        let table =
+            parse_validator_table(&build_test_validator_table_bytes(), [0xaau8; 32], 100, None)
+                .unwrap();
+        // `alice` is a configured key (resolves) but is not in the table -> Ok(None).
+        let entry =
+            find_validator_entry(&table, &config, "alice").expect("resolvable-but-absent is Ok(None)");
+        assert!(entry.is_none());
+    }
+
+    #[test]
+    fn find_validator_entry_errors_on_unresolvable_input() {
+        let config = create_test_config();
+        let table =
+            parse_validator_table(&build_test_validator_table_bytes(), [0xaau8; 32], 100, None)
+                .unwrap();
+        let err = find_validator_entry(&table, &config, "definitely-not-a-key")
+            .expect_err("unknown key name must Err, not Ok(None)");
+        assert!(err.to_string().contains("neither a valid public key nor a configured key name"));
+    }
+
+    #[test]
+    fn resolve_validator_entry_preserves_not_found_messages() {
+        let config = create_test_config();
+        let table =
+            parse_validator_table(&build_test_validator_table_bytes(), [0xaau8; 32], 100, None)
+                .unwrap();
+        let sid_err = resolve_validator_entry(&table, &config, "9999").unwrap_err();
+        assert!(sid_err.to_string().contains("Validator SID 9999 not found"));
+        let name_err = resolve_validator_entry(&table, &config, "alice").unwrap_err();
+        assert!(name_err.to_string().contains("Validator 'alice' not found in table"));
+    }
+
+    // ----------------------------------------------------------------------
+    // resolve_status_identity: which pubkey `validator status` displays, and
+    // the not-registered messaging for the three None shapes (sid / key / addr).
+    // ----------------------------------------------------------------------
+
+    #[test]
+    fn status_identity_uses_seat_identity_for_known_sid() {
+        let config = create_test_config();
+        let table =
+            parse_validator_table(&build_test_validator_table_bytes(), [0xaau8; 32], 100, None)
+                .unwrap();
+        let entry = find_validator_entry(&table, &config, "0").expect("lookup ok");
+        let pubkey = resolve_status_identity(entry, &config, "0")
+            .expect("registered sid resolves to its seat identity");
+        assert_eq!(pubkey, table.validators[0].identity);
+    }
+
+    #[test]
+    fn status_identity_reports_not_registered_for_absent_sid() {
+        let config = create_test_config();
+        // A bare numeric sid with no seat has no pubkey to display: it must report
+        // "not registered" rather than the confusing key-resolution failure that
+        // resolve_pubkey_or_key_name would otherwise produce for "9999".
+        let err = resolve_status_identity(None, &config, "9999")
+            .expect_err("absent sid must be a clean not-registered error");
+        let msg = err.to_string();
+        assert!(msg.contains("Validator SID 9999 is not registered"), "got: {msg}");
+        assert!(
+            !msg.contains("neither a valid public key"),
+            "must not leak the key-resolution error: {msg}"
+        );
+    }
+
+    #[test]
+    fn status_identity_resolves_absent_but_known_key_name() {
+        let config = create_test_config();
+        // `alice` resolves (configured key) but has no seat: NOT REGISTERED is
+        // rendered against alice's real pubkey, so the identity must resolve.
+        let pubkey = resolve_status_identity(None, &config, "alice")
+            .expect("resolvable-but-absent key name still yields a pubkey to show");
+        assert_ne!(pubkey, [0u8; 32]);
+    }
+
+    #[test]
+    fn status_identity_errors_on_unresolvable_key_name() {
+        let config = create_test_config();
+        let err = resolve_status_identity(None, &config, "definitely-not-a-key")
+            .expect_err("unknown key name must error");
+        assert!(err
+            .to_string()
+            .contains("neither a valid public key nor a configured key name"));
+    }
+
+    // ----------------------------------------------------------------------
+    // turnover window: disabled / unavailable / state, and activation predicate
+    // ----------------------------------------------------------------------
+
+    fn table_with_turnover(
+        blocks_per_faulty_turnover: u64,
+        turnover_limit: Option<u64>,
+        turnover_sum_added: u64,
+        turnover_ring_head_slot: u64,
+        current_slot: u64,
+    ) -> ValidatorTable {
+        ValidatorTable {
+            attestor_table: [0u8; 32],
+            attestor_mint: [0u8; 32],
+            token_program: [0u8; 32],
+            converted_vault: [0u8; 32],
+            unclaimed_vault: [0u8; 32],
+            admin: [0u8; 32],
+            current_slot,
+            account_slot: None,
+            data_size: 0,
+            server_count: 0,
+            occupied_validators: 0,
+            delta1: 0,
+            delta2: 0,
+            frontier: 0,
+            pending_decay: 0,
+            last_decay_calc_slot: 0,
+            last_decay_emit_slot: 0,
+            last_processed_slot: 0,
+            weight_updates_cnt: 0,
+            total_weights_head: 0,
+            total_weights_tail: 0,
+            blocks_per_faulty_turnover,
+            turnover_ring_head_slot,
+            turnover_sum_added,
+            turnover_sum_removed: 0,
+            turnover_limit,
+            total_weight: 0,
+            validators: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn turnover_window_state_disabled_when_window_zero() {
+        let table = table_with_turnover(0, Some(100), 10, 0, 50);
+        assert!(matches!(turnover_window_state(&table), TurnoverVerdict::Disabled));
+    }
+
+    #[test]
+    fn turnover_window_state_unavailable_when_limit_none() {
+        // Window is on (non-zero) but the limit could not be derived.
+        let table = table_with_turnover(100, None, 10, 0, 50);
+        assert!(matches!(turnover_window_state(&table), TurnoverVerdict::Unavailable));
+    }
+
+    #[test]
+    fn turnover_window_state_describes_active_window() {
+        let table = table_with_turnover(100, Some(100), 72, 8880, 8880);
+        match turnover_window_state(&table) {
+            TurnoverVerdict::State(window) => {
+                assert_eq!(window.window_slots, 100);
+                assert_eq!(window.sum_added, 72);
+                assert_eq!(window.limit, 100);
+                assert_eq!(window.headroom, 28);
+                assert_eq!(window.head_slot, 8880);
+                assert_eq!(window.window_end_slot, Some(8980));
+                assert_eq!(window.remaining_slots, Some(100));
+                assert!(!window.fresh_chain);
+            }
+            other => panic!("expected State, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn turnover_window_state_flags_fresh_chain_and_no_slot_head() {
+        // current_slot < window -> fresh chain; head == NO_SLOT -> no end slot.
+        let table = table_with_turnover(256, Some(199999), 1000000, CONSENSUS_STATE_NO_SLOT, 6);
+        match turnover_window_state(&table) {
+            TurnoverVerdict::State(window) => {
+                assert!(window.fresh_chain);
+                assert_eq!(window.window_end_slot, None);
+                assert_eq!(window.remaining_slots, None);
+                assert_eq!(window.headroom, 0); // saturating_sub: 199999 - 1000000
+            }
+            other => panic!("expected State, got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn turnover_accepts_activation_semantics() {
+        let table = table_with_turnover(100, Some(100), 72, 0, 50);
+        assert!(turnover_accepts_activation(&table, 28)); // 72 + 28 == 100
+        assert!(!turnover_accepts_activation(&table, 29)); // 72 + 29 > 100
+        // Unknown limit never blocks client-side.
+        let unknown = table_with_turnover(100, None, 72, 0, 50);
+        assert!(turnover_accepts_activation(&unknown, u64::MAX));
+    }
+
+    #[test]
+    fn turnover_status_json_shapes() {
+        let disabled = turnover_status_json(&TurnoverVerdict::Disabled);
+        assert_eq!(disabled["state"], "disabled");
+        let unavailable = turnover_status_json(&TurnoverVerdict::Unavailable);
+        assert_eq!(unavailable["state"], "unavailable");
+
+        let table = table_with_turnover(100, Some(100), 72, 8880, 8880);
+        let state = turnover_status_json(&turnover_window_state(&table));
+        assert_eq!(state["state"], "ok");
+        assert_eq!(state["limit"], 100);
+        assert_eq!(state["headroom"], 28);
+        assert_eq!(state["window_end_slot"], 8980);
+    }
+
+    #[test]
+    fn turnover_status_human_forms() {
+        assert!(turnover_status_human(&TurnoverVerdict::Disabled).contains("disabled"));
+        assert!(turnover_status_human(&TurnoverVerdict::Unavailable).contains("unavailable"));
+        let table = table_with_turnover(100, Some(100), 72, 8880, 8880);
+        let line = turnover_status_human(&turnover_window_state(&table));
+        assert!(line.contains("72/100 used"));
+        assert!(line.contains("headroom 28"));
+        assert!(line.contains("clears ~slot 8980"));
+    }
+
+    // ----------------------------------------------------------------------
+    // status classification + JSON shape: active / inactive / not_registered
+    // ----------------------------------------------------------------------
+
+    fn sample_entry(active: bool) -> ValidatorEntry {
+        ValidatorEntry {
+            sid: 7,
+            identity: [0x61u8; 32],
+            bls_pubkey_hex: "ab".repeat(96),
+            claim_authority: [0x88u8; 32],
+            unclaimed_tokens: 420,
+            weight: if active { 1_000_000 } else { 0 },
+            weight_source: if active { "base" } else { "inactive" },
+            last_slot_updates: 0,
+            last_id_updates: 0,
+            latest_weight_update_idx: 0,
+            active,
+        }
+    }
+
+    #[test]
+    fn status_label_classifies_all_states() {
+        assert_eq!(status_label(None), "not_registered");
+        assert_eq!(status_label(Some(&sample_entry(true))), "active");
+        assert_eq!(status_label(Some(&sample_entry(false))), "inactive");
+    }
+
+    #[test]
+    fn validator_status_json_active() {
+        let entry = sample_entry(true);
+        let verdict = TurnoverVerdict::Disabled;
+        let json = validator_status_json(Some(&entry), "ta_identity", &verdict);
+        assert_eq!(json["status"], "active");
+        assert_eq!(json["registered"], true);
+        assert_eq!(json["identity"], "ta_identity");
+        assert_eq!(json["sid"], 7);
+        assert_eq!(json["weight"], 1_000_000);
+        assert_eq!(json["unclaimed_tokens"], 420);
+        assert_eq!(json["claim_authority"], to_address_string(&[0x88u8; 32]));
+        assert_eq!(json["turnover"]["state"], "disabled");
+    }
+
+    #[test]
+    fn validator_status_json_inactive() {
+        let entry = sample_entry(false);
+        let json = validator_status_json(Some(&entry), "ta_identity", &TurnoverVerdict::Disabled);
+        assert_eq!(json["status"], "inactive");
+        assert_eq!(json["registered"], true);
+        assert_eq!(json["weight"], 0);
+    }
+
+    #[test]
+    fn validator_status_json_not_registered() {
+        let json = validator_status_json(None, "ta_identity", &TurnoverVerdict::Disabled);
+        assert_eq!(json["status"], "not_registered");
+        assert_eq!(json["registered"], false);
+        assert_eq!(json["identity"], "ta_identity");
+        assert!(json["sid"].is_null());
+        assert!(json["claim_authority"].is_null());
+        assert_eq!(json["weight"], 0);
+        assert_eq!(json["unclaimed_tokens"], 0);
     }
 }

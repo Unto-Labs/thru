@@ -2,12 +2,21 @@
 # .rpm packages. The packages are thin wrappers around the same binaries that
 # ship in the thru-cli-Linux-*.tar.gz release assets; they are built and
 # attached to the GitHub release by .github/workflows/cli-artifacts.yml so
-# cloud VMs without npm can install via apt/dnf directly from the release:
+# cloud VMs without npm can install via apt/dnf directly from the release.
 #
-#   curl -fsSLO https://github.com/Unto-Labs/thru/releases/latest/download/thru_<version>_amd64.deb
-#   sudo apt install ./thru_<version>_amd64.deb
+# The versioned names produced here are thru_<version>_<arch>.deb and
+# thru-<version>-1.<arch>.rpm (the -1 is nFPM's default release number, since
+# this config sets no `release:`). The workflow also uploads unversioned copies
+# so the install docs never pin a version -- releases/latest/download/ resolves
+# by exact asset name, so a literal <version> in that path 404s as soon as a new
+# release lands. Those aliases are what the docs use:
 #
-#   sudo dnf install https://github.com/Unto-Labs/thru/releases/latest/download/thru-<version>.x86_64.rpm
+#   curl -fsSLO https://github.com/Unto-Labs/thru/releases/latest/download/thru_amd64.deb
+#   sudo apt install ./thru_amd64.deb
+#
+#   sudo dnf install https://github.com/Unto-Labs/thru/releases/latest/download/thru-x86_64.rpm
+#
+# (arm64 equivalents: thru_arm64.deb and thru-aarch64.rpm)
 #
 # NFPM_VERSION, NFPM_ARCH (amd64|arm64), and NFPM_BIN (path to the extracted
 # thru binary) are provided by the workflow.

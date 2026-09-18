@@ -37,9 +37,9 @@ function createHarness(blocked = false) {
   };
   vi.stubGlobal('window', browser);
   const reporter = { started: vi.fn(), finished: vi.fn(), failed: vi.fn() };
-  const emit = (data: unknown, origin = ORIGIN) => {
+  const emit = (data: unknown, origin = ORIGIN, source: unknown = popup) => {
     for (const listener of [...listeners]) {
-      listener({ origin, source: popup, data } as unknown as MessageEvent);
+      listener({ origin, source, data } as unknown as MessageEvent);
     }
   };
   const ready = () => {
@@ -62,6 +62,19 @@ describe('popup ceremony reporting', () => {
   afterEach(() => {
     vi.useRealTimers();
     vi.unstubAllGlobals();
+  });
+
+  it('aborting closes the window and removes listeners and timers', async () => {
+    const harness = createHarness();
+    const controller = new AbortController();
+    const pending = requestPasskeyPopup('get', GET_PAYLOAD, undefined, {
+      signal: controller.signal,
+    });
+    const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    controller.abort();
+    await rejected;
+    expect(harness.popup.closed).toBe(true);
+    harness.expectCleanedUp();
   });
 
   it('reports a blocked popup once and releases its listeners', async () => {
@@ -185,6 +198,7 @@ describe('popup ceremony reporting', () => {
     };
     harness.emit({ ...response, requestId: 'other-request' });
     harness.emit(response, 'https://other.example');
+    harness.emit(response, ORIGIN, {});
     expect(harness.reporter.failed).not.toHaveBeenCalled();
     expect(harness.popup.close).not.toHaveBeenCalled();
     const rejected = expect(pending).rejects.toMatchObject(response.error);

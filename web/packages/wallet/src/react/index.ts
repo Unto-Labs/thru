@@ -26,6 +26,8 @@ export {
   type DepositResult,
   type PrepareDepositPayload,
   type SDKEvent,
+  type WalletTheme,
+  type WalletThemePreference,
 } from "../index";
 
 export type {

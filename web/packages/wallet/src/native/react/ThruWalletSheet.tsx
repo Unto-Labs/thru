@@ -39,8 +39,25 @@ import type { WebViewRefLike } from "../provider/WebViewBridge";
 import QRCodeStyledImport from "react-native-qrcode-styled";
 import { useThru } from "./hooks/useThru";
 import { enableWebAuthnSupport } from "./android-webauthn";
+import { useWalletTheme } from "../../react/useWalletTheme";
 
-const DEFAULT_SHEET_BACKGROUND_COLOR = "#f9fbfb";
+/* The sheet chrome the wallet document cannot draw (the area behind the
+   WebView, the handle, the loading state), per wallet theme. Mirrors
+   @thru/design/mobile's theme colors, which this package cannot depend on. */
+const SHEET_CHROME = {
+  light: {
+    background: "#f9fbfb",
+    handle: "#cdd5db",
+    title: "#172b29",
+    detail: "#4b635f",
+  },
+  dark: {
+    background: "#181b1b",
+    handle: "#436465",
+    title: "#f9fbfb",
+    detail: "#b6cece",
+  },
+} as const;
 const DEFAULT_SNAP_POINTS: (string | number)[] = ["50%", "85%"];
 const DEFAULT_FIT_CONTENT_MAX_SHEET_RATIO = 0.75;
 const DEFAULT_FIT_CONTENT_MIN_SHEET_RATIO = 0;
@@ -294,7 +311,7 @@ export interface ThruWalletSheetProps {
   snapPoints?: (string | number)[];
   /** Initial detent index when opening. Default: first detent. */
   initialOpenIndex?: number;
-  /** Optional override for the bottom sheet background colour. */
+  /** Optional override for the bottom sheet background colour (default follows the wallet theme). */
   backgroundColor?: string;
 }
 
@@ -312,11 +329,13 @@ export const ThruWalletSheet = forwardRef<
   {
     snapPoints,
     initialOpenIndex,
-    backgroundColor = DEFAULT_SHEET_BACKGROUND_COLOR,
+    backgroundColor: backgroundColorOverride,
   },
   ref,
 ) {
   const { wallet } = useThru();
+  const chrome = SHEET_CHROME[useWalletTheme(wallet)];
+  const backgroundColor = backgroundColorOverride ?? chrome.background;
   const { height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const sheetRef = useRef<BottomSheetType>(null);
@@ -866,10 +885,12 @@ export const ThruWalletSheet = forwardRef<
   const renderHandle = useCallback(
     () => (
       <View style={[styles.handleContainer, { backgroundColor }]}>
-        <View style={styles.handleIndicator} />
+        <View
+          style={[styles.handleIndicator, { backgroundColor: chrome.handle }]}
+        />
       </View>
     ),
-    [backgroundColor],
+    [backgroundColor, chrome],
   );
 
   const renderBackdrop = useCallback(
@@ -989,11 +1010,13 @@ export const ThruWalletSheet = forwardRef<
             pointerEvents="none"
             style={[styles.loadingOverlay, { backgroundColor }]}
           >
-            <Text style={styles.loadingTitle}>
+            <Text style={[styles.loadingTitle, { color: chrome.title }]}>
               {webViewError ? "Wallet failed to load" : walletLoadStatus}
             </Text>
             {webViewError ? (
-              <Text style={styles.loadingDetail}>{webViewError}</Text>
+              <Text style={[styles.loadingDetail, { color: chrome.detail }]}>
+                {webViewError}
+              </Text>
             ) : null}
           </View>
         ) : null}
@@ -1086,13 +1109,11 @@ const styles = StyleSheet.create({
     paddingTop: 4,
   },
   handleIndicator: {
-    backgroundColor: "#cdd5db",
     borderRadius: 999,
     height: 4,
     width: 42,
   },
   loadingDetail: {
-    color: "#4b635f",
     fontSize: 13,
     lineHeight: 18,
     maxWidth: 280,
@@ -1110,7 +1131,6 @@ const styles = StyleSheet.create({
     top: 0,
   },
   loadingTitle: {
-    color: "#172b29",
     fontSize: 16,
     fontWeight: "600",
     textAlign: "center",

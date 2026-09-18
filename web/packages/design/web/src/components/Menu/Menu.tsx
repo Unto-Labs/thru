@@ -30,6 +30,8 @@ export const Menu = {
   Positioner: Base.Positioner,
   Popup: styledPart(Base.Popup, "tds-menu-popup"),
   Item: styledPart(Base.Item, "tds-menu-item"),
+  /** A toggling row that can stay open (`closeOnClick={false}`); styled like Item. */
+  CheckboxItem: styledPart(Base.CheckboxItem, "tds-menu-item"),
   Separator: styledDiv("tds-menu-sep"),
   Group: Base.Group,
   GroupLabel: styledPart(Base.GroupLabel, "tds-menu-label"),

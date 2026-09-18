@@ -146,3 +146,31 @@ Key popup types exported from `@thru/passkey/popup`:
 - `PasskeyPopupSigningResult`
 - `PasskeyPopupStoredSigningResult`
 - `PasskeyPopupAccount`
+
+### Embedded browser recovery
+
+Delegate `publickey-credentials-get` and `publickey-credentials-create` to the
+exact wallet origin in the host's Permissions-Policy header and iframe `allow`
+attribute. Unknown browser capability APIs do not prevent inline ceremonies.
+WebKit cross-origin creation and confirmed iframe restrictions require an
+explicit user action to continue in a popup; cancellation and generic security
+errors never trigger automatic popup fallback.
+
+Hosted integrations can register `setPasskeyRecoveryHandler(handler, reporter)`
+from `@thru/passkey/web`. Render the request's `retry` and `cancel` actions in
+existing wallet UI. Call `retry` directly from a click handler: it opens the
+window synchronously and resumes only the pending ceremony. Keep the request's
+original approval mounted until completion. The returned cleanup function aborts
+pending work. `cancelPasskeyCeremony()` also cancels on host dismissal.
+
+Without a recovery handler, restricted calls reject with
+`PasskeyIframeRestrictionError` (`action` and `reason`). All browser registration
+and signing functions accept `promptMode: 'auto' | 'inline' | 'popup'`,
+`allowPopupFallback`, and `signal`. Explicit `popup` mode must be called from a
+user interaction. `allowPopupFallback: false` always prohibits popup routing,
+including when `promptMode: 'popup'` is supplied.
+
+Only one ceremony can run per document. A failed assertion does not automatically
+retry after a focus error or ambiguous cancellation. Show an explicit retry in
+the existing approval UI. Missing stored credentials can use discoverable
+sign-in; popup recovery preserves the requested RP ID and selected credential.

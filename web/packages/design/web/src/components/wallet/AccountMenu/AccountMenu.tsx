@@ -33,6 +33,18 @@ const GearIcon = (p: React.SVGProps<SVGSVGElement>) => (
     <path d="M12 3v2.5M12 18.5V21M3 12h2.5M18.5 12H21M5.6 5.6l1.8 1.8M16.6 16.6l1.8 1.8M5.6 18.4l1.8-1.8M16.6 7.4l1.8-1.8" stroke="currentColor" strokeWidth="1.6" strokeLinecap="square" />
   </svg>
 );
+const PlusCircle = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 16 16" fill="none" aria-hidden {...p}>
+    <circle cx="8" cy="8" r="6.25" stroke="currentColor" strokeWidth="1.5" />
+    <path d="M8 5v6M5 8h6" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square" />
+  </svg>
+);
+const CodeIcon = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" {...p}>
+    <polyline points="16 18 22 12 16 6" />
+    <polyline points="8 6 2 12 8 18" />
+  </svg>
+);
 const ArrowUpRight = (p: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 24 24" fill="none" aria-hidden {...p}>
     <path d="M7 17 17 7M9 7h8v8" stroke="currentColor" strokeWidth="1.8" strokeLinecap="square" />
@@ -88,6 +100,15 @@ export interface AccountMenuPopupProps {
   onSwitch?: (account: ConnectAccount, index: number) => void;
   /** "Add account"; omit to hide the item. */
   onAddAccount?: () => void;
+  /** "Add funds" — opens the wallet's deposit sheet; omit to hide the item. */
+  onAddFunds?: () => void;
+  /** Developer mode row (a checkbox item); omit `onDeveloperModeChange` to hide it. */
+  developerMode?: boolean;
+  onDeveloperModeChange?: (enabled: boolean) => void;
+  developerModeLabel?: React.ReactNode;
+  /** One line under the label, e.g. "Card purchases use Coinbase's sandbox". */
+  developerModeHint?: React.ReactNode;
+  addFundsLabel?: React.ReactNode;
   /** "Sign out". */
   onDisconnect?: () => void;
   disconnectLabel?: React.ReactNode;
@@ -124,6 +145,12 @@ export const AccountMenuPopup = React.forwardRef<HTMLDivElement, AccountMenuPopu
       onSwitch,
       onAddAccount,
       onManageAccounts,
+      onAddFunds,
+      developerMode = false,
+      onDeveloperModeChange,
+      developerModeLabel = "Developer mode",
+      developerModeHint,
+      addFundsLabel = "Add funds",
       onDisconnect,
       disconnectLabel = "Sign out",
       onNavigate,
@@ -190,6 +217,17 @@ export const AccountMenuPopup = React.forwardRef<HTMLDivElement, AccountMenuPopu
               <ArrowUpRight width={12} height={12} />
             </a>
           </div>
+        )}
+        {onAddFunds && (
+          <>
+            <Menu.Separator className="tds-connect-menu__sep" />
+            <Menu.Item onClick={() => onAddFunds()}>
+              <span className="tds-connect-menu__icon">
+                <PlusCircle width={14} height={14} />
+              </span>
+              {addFundsLabel}
+            </Menu.Item>
+          </>
         )}
         {(others.length > 0 || onAddAccount || onManageAccounts || manageAccountsHref) && (
           <>
@@ -263,6 +301,25 @@ export const AccountMenuPopup = React.forwardRef<HTMLDivElement, AccountMenuPopu
             </span>
             View on explorer
           </Menu.Item>
+        )}
+        {onDeveloperModeChange && (
+          <Menu.CheckboxItem
+            className="tds-connect-menu__toggle"
+            checked={developerMode}
+            onCheckedChange={(checked) => onDeveloperModeChange(Boolean(checked))}
+            closeOnClick={false}
+          >
+            <span className="tds-connect-menu__icon">
+              <CodeIcon width={14} height={14} />
+            </span>
+            <span className="tds-connect-menu__toggle-text">
+              <span>{developerModeLabel}</span>
+              {developerModeHint && <span className="tds-connect-menu__toggle-hint">{developerModeHint}</span>}
+            </span>
+            <span className="tds-connect-menu__switch" aria-hidden="true">
+              <span className="tds-connect-menu__switch-thumb" />
+            </span>
+          </Menu.CheckboxItem>
         )}
         <Menu.Item className="tds-connect-menu__danger" onClick={() => onDisconnect?.()}>
           <span className="tds-connect-menu__icon">

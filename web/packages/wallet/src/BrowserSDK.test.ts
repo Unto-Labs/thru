@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 const { providerConfigs, providerInstances } = vi.hoisted(() => ({
-  providerConfigs: [] as Array<{ iframeUrl?: string; telemetry?: unknown }>,
+  providerConfigs: [] as Array<{ iframeUrl?: string; telemetry?: unknown; theme?: string }>,
   providerInstances: [] as any[],
 }));
 
@@ -11,6 +11,8 @@ vi.mock("./provider/EmbeddedProvider", () => ({
     private accounts: any[] = [];
     private selectedAccount: any = null;
     private connected = false;
+    theme = "light";
+    themeChanges: string[] = [];
     connectionState: any = {
       isAuthorized: false,
       isConnected: false,
@@ -23,9 +25,19 @@ vi.mock("./provider/EmbeddedProvider", () => ({
     };
     connectionStateRequests: any[] = [];
 
-    constructor(config: { iframeUrl?: string; telemetry?: unknown }) {
+    constructor(config: { iframeUrl?: string; telemetry?: unknown; theme?: string }) {
+      this.theme = config.theme ?? "light";
       providerConfigs.push(config);
       providerInstances.push(this);
+    }
+
+    getTheme(): string {
+      return this.theme;
+    }
+
+    setTheme(theme: string): void {
+      this.theme = theme;
+      this.themeChanges.push(theme);
     }
 
     on(event: string, callback: (data?: unknown) => void): void {
@@ -91,6 +103,7 @@ import { BrowserSDK } from "./BrowserSDK";
 import { EMBEDDED_PROVIDER_EVENTS } from "./protocol";
 import { TransactionSigningScheme } from "./transaction-signing-scheme";
 import { SecureStoreTestStorage } from "./test-utils/secure-store";
+import { stubColorSchemeMedia } from "./test-utils/match-media";
 
 class MockStorage extends SecureStoreTestStorage {}
 
@@ -113,6 +126,57 @@ beforeEach(() => {
 });
 afterEach(() => vi.unstubAllGlobals());
 
+describe("BrowserSDK theme", () => {
+  it("draws for the configured theme and defaults to light", () => {
+    new BrowserSDK();
+    new BrowserSDK({ theme: "dark" });
+    expect(providerConfigs.map((config) => config.theme)).toEqual(["light", "dark"]);
+  });
+
+  it("follows the OS setting live under system", () => {
+    const media = stubColorSchemeMedia(true);
+    const sdk = new BrowserSDK({ theme: "system" });
+    const provider = providerInstances[0];
+    const changes: string[] = [];
+    sdk.on("themeChanged", (theme) => changes.push(theme));
+
+    expect(providerConfigs[0].theme).toBe("dark");
+    expect(sdk.getTheme()).toBe("dark");
+    expect(sdk.getThemePreference()).toBe("system");
+
+    media.setDark(false);
+    expect(provider.themeChanges).toEqual(["light"]);
+    expect(changes).toEqual(["light"]);
+
+    sdk.destroy();
+    expect(media.listeners.size).toBe(0);
+  });
+
+  it("switches in place and only watches the OS while asked to", () => {
+    const media = stubColorSchemeMedia(false);
+    const sdk = new BrowserSDK({ theme: "light" });
+    const provider = providerInstances[0];
+    const changes: string[] = [];
+    sdk.on("themeChanged", (theme) => changes.push(theme));
+    expect(media.listeners.size).toBe(0);
+
+    sdk.setTheme("dark");
+    sdk.setTheme("dark");
+    expect(provider.themeChanges).toEqual(["dark"]);
+    expect(changes).toEqual(["dark"]);
+
+    sdk.setTheme("system");
+    expect(media.listeners.size).toBe(1);
+    expect(sdk.getTheme()).toBe("light");
+
+    sdk.setTheme("dark");
+    expect(media.listeners.size).toBe(0);
+    media.setDark(false);
+    expect(changes).toEqual(["dark", "light", "dark"]);
+    sdk.destroy();
+  });
+});
+
 describe("BrowserSDK transaction signing scheme", () => {
   it("revalidates a prepared destination after the selected account changes", async () => {
     const firstDestination = {
@@ -121,7 +185,7 @@ describe("BrowserSDK transaction signing scheme", () => {
       tokenAccountAddress: "ta_first_token_account",
       mintAddress: "ta_mint",
       tokenProgramAddress: "ta_token_program",
-      symbol: "CREDITS",
+      symbol: "THRUSD",
       decimals: 6,
     };
     const secondDestination = {

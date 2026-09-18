@@ -9,11 +9,12 @@ import { Steps, type StepItem } from "../Steps/Steps";
 import { Checklist } from "../Checklist/Checklist";
 import { Details } from "../Details/Details";
 import { Disc } from "../Disc/Disc";
-import { Dove } from "../Dove/Dove";
 import { ThruDisc, PoweredBy } from "../Brand/Brand";
-import { CopyButton } from "../CopyButton/CopyButton";
+import { ErrorBox } from "../ErrorBox/ErrorBox";
 import { TxTree } from "../TxTree/TxTree";
 import { Collapsible } from "@base-ui/react/collapsible";
+import { useWaitStages, WaitHero, WALLET_SHEET_SLOW_MS, WALLET_SHEET_ESCALATE_MS } from "./wait";
+import { DepositScreens } from "./DepositScreens";
 import "./WalletSheet.css";
 
 /* ── Icons ─────────────────────────────────────────────────────────── */
@@ -47,7 +48,14 @@ export type WalletSheetScreen =
   | "error"
   | "tx"
   | "txPending"
-  | "txDone";
+  | "txDone"
+  | "deposit"
+  | "depositCrypto"
+  | "depositCard"
+  | "depositContact"
+  | "depositVerify"
+  | "depositPending"
+  | "depositDone";
 
 export type WalletSheetFlow = "signin" | "signup";
 
@@ -56,55 +64,7 @@ export interface WalletSheetDetail {
   value: React.ReactNode;
 }
 
-/** Wait this long on a spinner before the dove takes over. */
-export const WALLET_SHEET_SLOW_MS = 2000;
-/** Wait this long before the loading copy escalates and offers Retry / Cancel. */
-export const WALLET_SHEET_ESCALATE_MS = 8000;
-
-function useWaitStages(
-  key: React.Key | undefined,
-  slowAfterMs: number,
-  escalateAfterMs: number,
-  canEscalate: boolean,
-) {
-  const [slow, setSlow] = React.useState(false);
-  const [escalated, setEscalated] = React.useState(false);
-  React.useEffect(() => {
-    setSlow(false);
-    setEscalated(false);
-    const t1 = slowAfterMs > 0 ? window.setTimeout(() => setSlow(true), slowAfterMs) : null;
-    const t2 =
-      canEscalate && escalateAfterMs > 0
-        ? window.setTimeout(() => setEscalated(true), escalateAfterMs)
-        : null;
-    return () => {
-      if (t1 != null) window.clearTimeout(t1);
-      if (t2 != null) window.clearTimeout(t2);
-    };
-  }, [key, slowAfterMs, escalateAfterMs, canEscalate]);
-  return { slow, escalated };
-}
-
-function WaitHero({
-  slow,
-  title,
-  content,
-}: {
-  slow: boolean;
-  title: React.ReactNode;
-  content?: React.ReactNode;
-}) {
-  return slow ? (
-    <Screen.Header
-      tone="plain"
-      icon={<Dove size={52} draw aria-label="Still loading" />}
-      title={title}
-      content={content}
-    />
-  ) : (
-    <Screen.Header icon={<Spinner tone="brick" />} title={title} content={content} />
-  );
-}
+export { WALLET_SHEET_SLOW_MS, WALLET_SHEET_ESCALATE_MS } from "./wait";
 
 /* ── Root ──────────────────────────────────────────────────────────── */
 export type WalletSheetRootProps = FrameProps;
@@ -367,12 +327,7 @@ function ErrorScreen({
     <>
       <Screen>
         <Screen.Header tone="danger" icon={<X width={16} height={16} />} title={title} content={description} />
-        {message && (
-          <Screen.Box className="tds-wsheet__errbox">
-            <div className="tds-wsheet__errmsg">{message}</div>
-            <CopyButton value={message} text label="Copy error" />
-          </Screen.Box>
-        )}
+        {message && <ErrorBox message={message} />}
         {onRetry && (
           <Button variant="primary" className="tds-wsheet__cta" onClick={onRetry}>
             {retryLabel}
@@ -718,7 +673,9 @@ function TxDone({
  *   </WalletSheet.Root>
  *
  * Screens: SignIn, Loading, Permissions, Connected, Error, TxApprove,
- * TxPending, TxDone. All presentational — the host drives the state machine.
+ * TxPending, TxDone, and the Add funds set — Deposit (chooser), DepositCrypto,
+ * DepositCard, DepositVerify, DepositPending, DepositDone. All presentational —
+ * the host drives the state machine.
  * Pair with `WalletOverlay` for the top-center island presentation.
  */
 export const WalletSheet = {
@@ -731,5 +688,6 @@ export const WalletSheet = {
   TxApprove,
   TxPending,
   TxDone,
+  ...DepositScreens,
   PoweredBy,
 };

@@ -62,22 +62,6 @@
   white-space: nowrap;
 }
 
-/* Error message box */
-.tds-wsheet__errbox {
-  gap: var(--space-1);
-}
-.tds-wsheet__errmsg {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 1.5;
-  color: var(--color-text-secondary);
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  word-break: break-word;
-}
-
 /* Approve: tighter body, capped height, summary panel + advanced tree */
 .tds-wsheet__tx > .tds-screen__body {
   padding: var(--space-3);
@@ -231,5 +215,17 @@
     font-family: var(--font-mono);
     font-weight: var(--fw-semibold);
     font-size: 15px;
+  }
+
+  /* A field stacked with those actions takes the same 48px, as the Input's
+     `lg` size does at every width. Doubled classes so this wins over the
+     Input's own rules whichever stylesheet loads last. */
+  .tds-input-wrap.tds-wsheet__input {
+    box-sizing: border-box;
+    min-height: 48px;
+    padding: 0 var(--space-3);
+  }
+  .tds-wsheet__input .tds-input {
+    font-size: 16px;
   }
 }

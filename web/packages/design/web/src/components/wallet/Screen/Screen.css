@@ -60,6 +60,31 @@
   text-wrap: pretty;
 }
 
+/* Page scale — the passkey popup window. */
+.tds-screen__header--lg {
+  gap: 10px;
+  padding: var(--space-2) 0;
+}
+.tds-screen__header--lg .tds-screen__badge {
+  width: 48px;
+  height: 48px;
+}
+.tds-screen__header--lg .tds-screen__badge--plain {
+  width: auto;
+  height: auto;
+  min-width: 48px;
+  min-height: 48px;
+}
+.tds-screen__header--lg .tds-screen__title {
+  font-size: 20px;
+  letter-spacing: -0.3px;
+  line-height: 1.2;
+}
+.tds-screen__header--lg .tds-screen__sub {
+  font-size: 14px;
+  line-height: 1.45;
+}
+
 .tds-screen__box {
   background: var(--color-surface-primary);
   padding: var(--space-2) var(--space-3);

@@ -35,6 +35,9 @@
   "scripts": {
     "typecheck": "tsc --noEmit && tsc --noEmit -p mobile/tsconfig.json"
   },
+  "dependencies": {
+    "qrcode": "^1.5.4"
+  },
   "peerDependencies": {
     "@base-ui/react": "^1.6.0",
     "react": "^18.0.0 || ^19.0.0",
@@ -51,10 +54,11 @@
   },
   "devDependencies": {
     "@base-ui/react": "^1.6.0",
+    "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
-    "react": "19.2.6",
-    "react-dom": "19.2.6",
+    "react": "19.2.7",
+    "react-dom": "19.2.7",
     "react-native": "0.83.6",
     "react-native-svg": "15.15.5",
     "typescript": "^6.0.3"

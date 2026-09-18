@@ -21,17 +21,8 @@ import {
   parseDerSignature,
   normalizeLowS,
 } from '@thru/programs/passkey-manager';
-import {
-  isWebAuthnSupported,
-  getPasskeyPromptMode,
-  isInIframe,
-  maybePreopenPopup,
-  shouldFallbackToPopup,
-  type PasskeyPromptAction,
-} from './capabilities';
-import { requestPasskeyPopup, openPasskeyPopupWindow, closePopup } from './popup';
-
-const WEB_AUTHN_FOCUS_RETRY_DELAYS_MS = [150, 300, 600, 1000, 1500];
+import { runPasskeyCeremony } from './ceremony';
+import { requestPasskeyPopup } from './popup';
 
 /**
  * Sign a challenge with an existing passkey (by credential ID).
@@ -42,15 +33,15 @@ export async function signWithPasskey(
   rpId: string,
   options: PasskeyReportingOptions = {}
 ): Promise<PasskeySigningResult> {
-  if (!isWebAuthnSupported()) {
-    throw new Error('WebAuthn is not supported in this browser');
-  }
-
-  return runWithPromptMode(
+  return runPasskeyCeremony(
     'get',
-    () => signWithPasskeyInline(credentialId, challenge, rpId, options),
-    (preopenedPopup) =>
-      signWithPasskeyViaPopup(credentialId, challenge, rpId, preopenedPopup, options)
+    (signal) => signWithPasskeyInline(credentialId, challenge, rpId, { ...options, signal }),
+    (preopenedPopup, signal) =>
+      signWithPasskeyViaPopup(credentialId, challenge, rpId, preopenedPopup, {
+        ...options,
+        signal,
+      }),
+    options
   );
 }
 
@@ -65,74 +56,57 @@ export async function signWithStoredPasskey(
   context?: PasskeyPopupContext,
   options: PasskeyStoredSigningOptions = {}
 ): Promise<PasskeyStoredSigningResult> {
-  if (!isWebAuthnSupported()) {
-    throw new Error('WebAuthn is not supported in this browser');
-  }
-
-  const allowPopupFallback = options.allowPopupFallback ?? true;
-  const allowDiscoverableFallback = options.allowDiscoverableFallback ?? true;
-  const preopenedPopup = allowPopupFallback
-    ? maybePreopenPopup('get', openPasskeyPopupWindow)
-    : null;
-  const promptMode = allowPopupFallback ? await getPasskeyPromptMode('get') : 'inline';
-  const storedPasskey = preferredPasskey;
-  const canUsePopup = allowPopupFallback && isInIframe();
-
-  if (!allowDiscoverableFallback && !storedPasskey) {
-    closePopup(preopenedPopup);
+  if (options.allowDiscoverableFallback === false && !preferredPasskey) {
     throw new Error('No stored passkey available for this wallet');
   }
-
-  if (options.preferDiscoverable) {
-    closePopup(preopenedPopup);
-    return signWithDiscoverableStoredPasskey(
-      challenge,
-      storedPasskey?.rpId ?? rpId,
-      allPasskeys,
-      options
-    );
-  }
-
-  if (promptMode === 'popup' || (canUsePopup && !storedPasskey)) {
-    return requestStoredPasskeyPopup(challenge, preopenedPopup, context, options);
-  }
-
-  closePopup(preopenedPopup);
-
-  try {
-    if (storedPasskey) {
-      try {
-        const result = await signWithPasskeyInline(
-          storedPasskey.credentialId,
-          challenge,
-          storedPasskey.rpId,
-          options
-        );
-        return {
-          ...result,
-          passkey: storedPasskey,
-        };
-      } catch (error) {
-        if (!allowDiscoverableFallback || !shouldFallbackToDiscoverable(error)) {
-          throw error;
+  return runPasskeyCeremony(
+    'get',
+    async (signal) => {
+      const inlineOptions = { ...options, signal };
+      if (preferredPasskey && !options.preferDiscoverable) {
+        try {
+          const result = await signWithPasskeyInline(
+            preferredPasskey.credentialId,
+            challenge,
+            preferredPasskey.rpId,
+            inlineOptions
+          );
+          return { ...result, passkey: preferredPasskey };
+        } catch (error) {
+          if (options.allowDiscoverableFallback === false || !shouldFallbackToDiscoverable(error))
+            throw error;
         }
-        return signWithDiscoverableStoredPasskey(
-          challenge,
-          storedPasskey.rpId,
-          allPasskeys,
-          options
-        );
       }
-    }
-
-    return signWithDiscoverableStoredPasskey(challenge, rpId, allPasskeys, options);
-  } catch (error) {
-    if (canUsePopup && shouldFallbackToPopup(error)) {
-      return requestStoredPasskeyPopup(challenge, undefined, context, options);
-    }
-
-    throw error;
-  }
+      return signWithDiscoverableStoredPasskey(
+        challenge,
+        preferredPasskey?.rpId ?? rpId,
+        allPasskeys,
+        inlineOptions
+      );
+    },
+    async (opened, signal) => {
+      // Preserve the selected signing credential; a popup must not switch accounts.
+      if (preferredPasskey && !options.preferDiscoverable) {
+        const signed = await signWithPasskeyViaPopup(
+          preferredPasskey.credentialId,
+          challenge,
+          preferredPasskey.rpId,
+          opened,
+          { ...options, signal }
+        );
+        return { ...signed, passkey: preferredPasskey };
+      }
+      return requestStoredPasskeyPopup(
+        challenge,
+        opened,
+        context,
+        { ...options, signal },
+        rpId,
+        true
+      );
+    },
+    options
+  );
 }
 
 async function signWithDiscoverableStoredPasskey(
@@ -141,7 +115,7 @@ async function signWithDiscoverableStoredPasskey(
   allPasskeys: PasskeyMetadata[],
   options: PasskeyReportingOptions
 ): Promise<PasskeyStoredSigningResult> {
-  const discoverable = await signWithDiscoverablePasskey(challenge, rpId, options);
+  const discoverable = await signWithDiscoverablePasskeyInline(challenge, rpId, options);
   const matchingPasskey =
     allPasskeys.find((p) => p.credentialId === discoverable.credentialId) ?? null;
   const now = new Date().toISOString();
@@ -186,7 +160,6 @@ function shouldFallbackToDiscoverable(error: unknown): boolean {
   }
 
   return (
-    normalized.includes('notallowederror') ||
     normalized.includes('invalidstateerror') ||
     normalized.includes('notfounderror') ||
     normalized.includes('not found') ||
@@ -204,10 +177,29 @@ export async function signWithDiscoverablePasskey(
   rpId: string,
   options: PasskeyReportingOptions = {}
 ): Promise<PasskeyDiscoverableSigningResult> {
-  if (!isWebAuthnSupported()) {
-    throw new Error('WebAuthn is not supported in this browser');
-  }
+  return runPasskeyCeremony(
+    'get',
+    (signal) => signWithDiscoverablePasskeyInline(challenge, rpId, { ...options, signal }),
+    async (opened, signal) => {
+      const result = await requestStoredPasskeyPopup(
+        challenge,
+        opened,
+        undefined,
+        { ...options, signal },
+        rpId,
+        true
+      );
+      return { ...result, credentialId: result.passkey.credentialId, rpId: result.passkey.rpId };
+    },
+    options
+  );
+}
 
+async function signWithDiscoverablePasskeyInline(
+  challenge: Uint8Array,
+  rpId: string,
+  options: PasskeyReportingOptions
+): Promise<PasskeyDiscoverableSigningResult> {
   const resolvedRpId = rpId;
   const result = await signWithPasskeyAssertion(challenge, resolvedRpId, undefined, options);
 
@@ -225,29 +217,6 @@ export async function signWithDiscoverablePasskey(
 }
 
 // Internal helpers
-
-async function runWithPromptMode<T>(
-  action: PasskeyPromptAction,
-  inlineFn: () => Promise<T>,
-  popupFn: (preopenedPopup?: Window | null) => Promise<T>
-): Promise<T> {
-  const preopenedPopup = maybePreopenPopup(action, openPasskeyPopupWindow);
-  const promptMode = await getPasskeyPromptMode(action);
-  if (promptMode === 'popup') {
-    return popupFn(preopenedPopup);
-  }
-
-  closePopup(preopenedPopup);
-
-  try {
-    return await inlineFn();
-  } catch (error) {
-    if (shouldFallbackToPopup(error)) {
-      return popupFn();
-    }
-    throw error;
-  }
-}
 
 async function signWithPasskeyInline(
   credentialId: string,
@@ -296,7 +265,10 @@ async function signWithPasskeyAssertion(
     options.ceremonyReporter,
     { kind: 'get', mode: 'inline', allowCredentials: Boolean(credentialId) },
     async () => {
-      const assertion = await getPasskeyAssertionWithFocusRetry(getOptions);
+      const assertion = (await navigator.credentials.get({
+        publicKey: getOptions,
+        signal: options.signal,
+      })) as PublicKeyCredential | null;
 
       if (!assertion) {
         throw new Error('Passkey authentication was cancelled');
@@ -333,48 +305,6 @@ async function signWithPasskeyAssertion(
   );
 }
 
-async function getPasskeyAssertionWithFocusRetry(
-  publicKey: PublicKeyCredentialRequestOptions
-): Promise<PublicKeyCredential | null> {
-  for (let attempt = 0; ; attempt += 1) {
-    try {
-      return (await navigator.credentials.get({
-        publicKey,
-      })) as PublicKeyCredential | null;
-    } catch (error) {
-      const retryDelayMs = WEB_AUTHN_FOCUS_RETRY_DELAYS_MS[attempt];
-      if (retryDelayMs === undefined || !isDocumentNotFocusedError(error)) {
-        throw error;
-      }
-      await waitForFocusRetry(retryDelayMs);
-    }
-  }
-}
-
-function isDocumentNotFocusedError(error: unknown): boolean {
-  const name =
-    error && typeof error === 'object' && 'name' in error
-      ? String((error as { name?: unknown }).name)
-      : '';
-  const message =
-    error && typeof error === 'object' && 'message' in error
-      ? String((error as { message?: unknown }).message)
-      : '';
-  const normalized = `${name} ${message}`.toLowerCase();
-  return normalized.includes('document is not focused');
-}
-
-function waitForFocusRetry(delayMs: number): Promise<void> {
-  return new Promise((resolve) => {
-    const finish = () => setTimeout(resolve, delayMs);
-    if (typeof requestAnimationFrame !== 'function') {
-      finish();
-      return;
-    }
-    requestAnimationFrame(() => requestAnimationFrame(finish));
-  });
-}
-
 async function signWithPasskeyViaPopup(
   credentialId: string,
   challenge: Uint8Array,
@@ -400,12 +330,16 @@ async function requestStoredPasskeyPopup(
   challenge: Uint8Array,
   preopenedPopup: Window | null | undefined,
   context: PasskeyPopupContext | undefined,
-  options: PasskeyReportingOptions
+  options: PasskeyReportingOptions,
+  rpId: string,
+  preferDiscoverable = false
 ): Promise<PasskeyStoredSigningResult> {
   const result = await requestPasskeyPopup<PasskeyPopupStoredSigningResult>(
     'getStored',
     {
       challengeBase64Url: bytesToBase64Url(challenge),
+      rpId,
+      preferDiscoverable,
       context,
     },
     preopenedPopup,

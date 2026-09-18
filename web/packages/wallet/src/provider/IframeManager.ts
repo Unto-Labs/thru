@@ -6,7 +6,13 @@ import type {
   PostMessageResponse,
   TelemetryContextMessage,
 } from './types/messages';
-import type { IframeReadyData, UiHideEventPayload, WalletTheme } from '../protocol';
+import type {
+  IframeReadyData,
+  UiHideEventPayload,
+  WalletTheme,
+  WalletThemeMessage,
+} from '../protocol';
+import { WALLET_THEME_MESSAGE_TYPE } from '../protocol';
 import {
   getSafeRequestTelemetryFields,
   getSafeResponseTelemetryFields,
@@ -14,6 +20,7 @@ import {
 import type { TelemetryClient } from '../telemetry';
 import {
   EMBEDDED_PROVIDER_EVENTS,
+  ErrorCode,
   IFRAME_READY_EVENT,
   POST_MESSAGE_EVENT_TYPE,
   POST_MESSAGE_REQUEST_TYPES,
@@ -42,12 +49,22 @@ const MANAGED_HIDE_MAX_EXIT_MS = 1000;
 const MANAGED_HIDE_FALLBACK_MS = 4000;
 const PARENT_ORIGIN_SEARCH_PARAM = 'tn_parent_origin';
 const THEME_SEARCH_PARAM = 'tn_theme';
-export const WALLET_IFRAME_ALLOW =
-  'publickey-credentials-get; publickey-credentials-create; payment *';
+export function walletIframeAllow(walletUrl: string): string {
+  const origin = new URL(walletUrl).origin;
+  return `publickey-credentials-get ${origin}; publickey-credentials-create ${origin}; payment *`;
+}
+
+/** @deprecated Use walletIframeAllow with the configured wallet URL. */
+export const WALLET_IFRAME_ALLOW = walletIframeAllow('https://app.tid.sh');
 const WALLET_IFRAME_BACKGROUND = 'transparent';
 
+/* Anything the wallet answers by asking the user. Thirty seconds is a timeout
+   for a machine, not for someone reading a consent sheet. */
 const SLOW_REQUEST_TYPES: ReadonlySet<string> = new Set([
   POST_MESSAGE_REQUEST_TYPES.CONNECT,
+  /* Disconnect raises a consent sheet in the wallet's web presentation, so it
+     waits on a tap exactly like the rest of these. */
+  POST_MESSAGE_REQUEST_TYPES.DISCONNECT,
   POST_MESSAGE_REQUEST_TYPES.SIGN_MESSAGE,
   POST_MESSAGE_REQUEST_TYPES.SIGN_TRANSACTION,
   POST_MESSAGE_REQUEST_TYPES.SIGN_PASSKEY_CHALLENGE,
@@ -115,14 +132,11 @@ function validateIframeOrigin(iframeUrl: string): void {
   try {
     url = new URL(iframeUrl);
   } catch (error) {
-    throw new Error(
-      `Invalid iframe URL: ${iframeUrl}. URL must be a valid absolute URL.`
-    );
+    throw new Error(`Invalid iframe URL: ${iframeUrl}. URL must be a valid absolute URL.`);
   }
 
   const origin = url.origin;
-  const isAllowed =
-    TRUSTED_IFRAME_ORIGINS.includes(origin) || isAllowedDevelopmentOrigin(url);
+  const isAllowed = TRUSTED_IFRAME_ORIGINS.includes(origin) || isAllowedDevelopmentOrigin(url);
 
   if (!isAllowed) {
     throw new Error(
@@ -173,10 +187,14 @@ export class IframeManager {
   /* Callers waiting for a deferred hide to finish (`hide()` resolves). */
   private hiddenWaiters: Array<() => void> = [];
   private telemetry?: TelemetryClient;
-  /* The host page's color scheme: carried on the URL so the wallet document
-     draws to match, and mirrored on the <iframe> so Chrome keeps the frame
+  /* The host page's resolved color scheme: carried on the URL so the wallet
+     document draws to match from its first paint, pushed by message when it
+     changes, and mirrored on the <iframe> so Chrome keeps the frame
      transparent (a scheme mismatch paints it opaque). */
   private theme: WalletTheme = 'light';
+  /* The theme changed after the frame URL was built, so a wallet document
+     that reloads in place must be told again. */
+  private themeUpdated = false;
   private telemetryAppContextId?: string;
   private telemetryContext?: TelemetryAppContext;
   private telemetryContextUpdated = false;
@@ -186,7 +204,11 @@ export class IframeManager {
    */
   public onEvent?: (eventType: string, payload: any) => void;
 
-  constructor(iframeUrl: string, telemetry?: TelemetryClient, options: { theme?: WalletTheme } = {}) {
+  constructor(
+    iframeUrl: string,
+    telemetry?: TelemetryClient,
+    options: { theme?: WalletTheme } = {}
+  ) {
     // Validate origin before accepting the URL
     validateIframeOrigin(iframeUrl);
 
@@ -202,10 +224,7 @@ export class IframeManager {
     });
   }
 
-  private record(
-    event: string,
-    fields: Parameters<TelemetryClient['record']>[1] = {},
-  ): void {
+  private record(event: string, fields: Parameters<TelemetryClient['record']>[1] = {}): void {
     this.telemetry?.record(event, {
       source: 'bridge',
       frameId: this.frameId,
@@ -217,7 +236,7 @@ export class IframeManager {
     return this.iframeOrigin;
   }
 
-  private getIframeSrc(): string {
+  getIframeSrc(): string {
     const url = new URL(this.iframeUrl);
     url.searchParams.set('tn_frame_id', this.frameId);
     const parentOrigin = getCurrentWindowOrigin();
@@ -230,6 +249,64 @@ export class IframeManager {
 
   getTheme(): WalletTheme {
     return this.theme;
+  }
+
+  /**
+   * Restyle the wallet for a new host color scheme without reloading it: the
+   * frame element follows at once, the wallet document hears it by message,
+   * and any later (re)load carries it on the URL.
+   */
+  setTheme(theme: WalletTheme): void {
+    if (theme === this.theme) return;
+    this.theme = theme;
+    this.themeUpdated = true;
+    if (this.iframe) {
+      this.applyIframeStyles();
+      /* applyIframeStyles replaces cssText, which drops the visibility styles. */
+      this.setVisibility(this.visible);
+    }
+    this.sendTheme();
+  }
+
+  /* Best effort: a wallet that is not ready yet has no listener, and its ready
+     handshake sends the theme again. */
+  private sendTheme(): void {
+    const target = this.iframe?.contentWindow;
+    const parentOrigin = getCurrentWindowOrigin();
+    if (!target || !parentOrigin) return;
+    const message: WalletThemeMessage = {
+      type: WALLET_THEME_MESSAGE_TYPE,
+      origin: parentOrigin,
+      frameId: this.frameId,
+      theme: this.theme,
+    };
+    try {
+      target.postMessage(message, this.iframeOrigin);
+    } catch {
+      /* The frame has not reached the wallet origin yet; ready resends. */
+    }
+  }
+
+  /** Wallet origin (e.g. https://app.tid.sh) this manager is bound to. */
+  get walletOrigin(): string {
+    return this.iframeOrigin;
+  }
+
+  /**
+   * Fail every in-flight request. Used when the host tears the wallet
+   * surface down before the wallet answered (e.g. a dismissed sheet).
+   */
+  rejectPendingRequests(message = 'User rejected the request'): void {
+    for (const [id, handler] of Array.from(this.messageHandlers.entries())) {
+      handler({
+        id,
+        success: false,
+        error: {
+          code: ErrorCode.USER_REJECTED,
+          message,
+        },
+      });
+    }
   }
 
   /**
@@ -264,7 +341,7 @@ export class IframeManager {
         });
         /* Delegate WebAuthn for passkey auth and Payment Request for the
            wallet-owned Coinbase Apple Pay iframe. */
-        this.iframe.allow = WALLET_IFRAME_ALLOW;
+        this.iframe.allow = walletIframeAllow(this.iframe.src);
         this.applyIframeStyles();
         /* Keep hidden (but still load) until the wallet asks to show UI. */
         this.setVisibility(false);
@@ -280,7 +357,26 @@ export class IframeManager {
         window.addEventListener('message', this.messageListener);
       }
 
-      await this.waitForReady();
+      try {
+        await this.waitForReady();
+      } catch (error) {
+        /* One more try before giving up: a slow first load (cold caches, a
+           slow name lookup) can push the wallet's ready past the deadline
+           while the second load, warm, is quick. Without this a host that
+           auto-restores its session shows "signed out" until the user
+           reloads by hand. */
+        if (!(error instanceof Error) || !/ready timeout/i.test(error.message) || !this.iframe) {
+          throw error;
+        }
+        this.record(TELEMETRY_EVENTS.BRIDGE_IFRAME_READY_RETRY, {
+          operation: 'initialize',
+          outcome: 'retry',
+          severity: 'warn',
+          durationMs: Date.now() - startedAt,
+        });
+        this.iframe.src = this.getIframeSrc();
+        await this.waitForReady();
+      }
       this.record(TELEMETRY_EVENTS.BRIDGE_IFRAME_READY, {
         operation: 'initialize',
         outcome: 'success',
@@ -349,10 +445,7 @@ export class IframeManager {
    * Record the load-time correlation values, which the iframe URL already
    * carries, so a later update never clears them by omission.
    */
-  primeTelemetryContext(
-    appContextId: string | null,
-    context: TelemetryAppContext | null,
-  ): void {
+  primeTelemetryContext(appContextId: string | null, context: TelemetryAppContext | null): void {
     this.telemetryAppContextId = appContextId ?? undefined;
     this.telemetryContext = context ?? undefined;
   }
@@ -385,9 +478,7 @@ export class IframeManager {
       type: TELEMETRY_CONTEXT_MESSAGE_TYPE,
       origin: parentOrigin,
       frameId: this.frameId,
-      ...(this.telemetryAppContextId
-        ? { appContextId: this.telemetryAppContextId }
-        : {}),
+      ...(this.telemetryAppContextId ? { appContextId: this.telemetryAppContextId } : {}),
       ...(this.telemetryContext ? { appContext: this.telemetryContext } : {}),
     };
     try {
@@ -489,9 +580,9 @@ export class IframeManager {
 
     /* Chrome paints a cross-origin iframe opaque when the <iframe> element's
        used color scheme differs from the embedded document's. The wallet
-       document is light, so pin the element to light too; otherwise a dark
-       host (color-scheme: dark) sees a solid light sheet instead of its own
-       page behind the scrim. */
+       document follows the host theme, so the element carries the same
+       scheme; otherwise the host sees a solid sheet instead of its own page
+       behind the scrim. */
     if (this.displayMode === 'inline') {
       this.iframe.style.cssText = `
         position: relative;
@@ -506,11 +597,18 @@ export class IframeManager {
       return;
     }
 
+    /* --thru-wallet-frame-max-width lets a host that presents itself in a
+       fixed-width column (a phone-shaped app on a desktop) keep the wallet
+       surface in that same column instead of spanning the viewport. Hosts
+       that do not set it resolve to `none`, which with the centering below is
+       identical to the full-bleed overlay this has always been. */
     this.iframe.style.cssText = `
       position: fixed;
       top: 0;
-      left: 0;
+      left: 50%;
+      transform: translateX(-50%);
       width: 100%;
+      max-width: var(--thru-wallet-frame-max-width, none);
       height: 100%;
       border: none;
       z-index: 999999;
@@ -703,6 +801,7 @@ export class IframeManager {
       this.readCapabilities(data);
       this.record(TELEMETRY_EVENTS.BRIDGE_IFRAME_READY_RECEIVED, { severity: 'debug' });
       this.sendTelemetryContext();
+      if (this.themeUpdated) this.sendTheme();
       return;
     }
 
@@ -833,5 +932,3 @@ export class IframeManager {
     this.messageHandlers.clear();
   }
 }
-
-

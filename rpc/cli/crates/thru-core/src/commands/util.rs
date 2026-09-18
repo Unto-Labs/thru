@@ -1,9 +1,12 @@
 //! Utility command implementations for format conversion
 
 use anyhow::Result;
-use thru_base::tn_tools::{Pubkey, Signature};
+use std::io::Read;
+use thru_base::tn_tools::{KeyPair, Pubkey, Signature};
 
-use crate::cli::{ConvertCommands, PubkeyConvertCommands, SignatureConvertCommands, UtilCommands};
+use crate::cli::{
+    ConvertCommands, DeriveFormat, PubkeyConvertCommands, SignatureConvertCommands, UtilCommands,
+};
 use crate::error::CliError;
 use crate::output::OutputFormat;
 
@@ -11,7 +14,123 @@ use crate::output::OutputFormat;
 pub fn execute_util_command(cmd: UtilCommands, output_format: OutputFormat) -> Result<()> {
     match cmd {
         UtilCommands::Convert { subcommand } => execute_convert_command(subcommand, output_format),
+        UtilCommands::Derive {
+            private_key,
+            file,
+            stdin,
+            format,
+            reveal_private_key,
+        } => execute_derive(
+            private_key,
+            file,
+            stdin,
+            format,
+            reveal_private_key,
+            output_format,
+        ),
     }
+}
+
+/// Derive the ed25519 public key from a private key (seed). The seed is taken
+/// from `private_key`, else `file`, else (only when `stdin` is set) stdin.
+///
+/// Neither output mode emits private material unless it was asked for:
+/// `reveal_private_key` adds the raw seed to JSON output, and the identity
+/// keyfile (which embeds the seed) is emitted only for `DeriveFormat::IdentityJson`.
+fn execute_derive(
+    private_key: Option<String>,
+    file: Option<String>,
+    stdin: bool,
+    format: DeriveFormat,
+    reveal_private_key: bool,
+    output_format: OutputFormat,
+) -> Result<()> {
+    /* Resolve the private key: argument > --file > --stdin. stdin is never read
+       implicitly (so the command never blocks waiting on a tty/pipe). */
+    let raw = if let Some(k) = private_key {
+        k
+    } else if let Some(path) = file {
+        std::fs::read_to_string(&path)
+            .map_err(|e| CliError::Crypto(format!("Failed to read key file '{}': {}", path, e)))?
+    } else if stdin {
+        let mut buf = String::new();
+        std::io::stdin().read_to_string(&mut buf).map_err(|e| {
+            CliError::Crypto(format!("Failed to read private key from stdin: {}", e))
+        })?;
+        buf
+    } else {
+        return Err(CliError::Crypto(
+            "no private key provided: pass it as an argument, or via --file <path> or --stdin"
+                .to_string(),
+        )
+        .into());
+    };
+
+    let trimmed = raw.trim();
+    let hex_seed = trimmed.strip_prefix("0x").unwrap_or(trimmed);
+    if hex_seed.len() != 64 {
+        return Err(CliError::Crypto(format!(
+            "Invalid private key: expected 64 hex characters (32-byte ed25519 seed), got {}",
+            hex_seed.len()
+        ))
+        .into());
+    }
+    let seed_bytes = hex::decode(hex_seed)
+        .map_err(|e| CliError::Crypto(format!("Invalid hex private key: {}", e)))?;
+    let mut seed = [0u8; 32];
+    seed.copy_from_slice(&seed_bytes);
+
+    /* Derive the public key (same ed25519 derivation the node uses). */
+    let keypair = KeyPair::from_hex_private_key("derive", hex_seed)
+        .map_err(|e| CliError::Crypto(format!("Failed to derive public key: {}", e)))?;
+    let pub_bytes = keypair.public_key;
+    let pub_hex = hex::encode(pub_bytes);
+    let pub_thrufmt = Pubkey::from_bytes(&pub_bytes).to_string();
+
+    /* identity keyfile array = [seed(32) || pubkey(32)] — the 64-int format
+       `fullnode keys new identity` writes and fd_keyload_load parses. */
+    let mut identity: Vec<u8> = Vec::with_capacity(64);
+    identity.extend_from_slice(&seed);
+    identity.extend_from_slice(&pub_bytes);
+    let identity_json = format!(
+        "[{}]",
+        identity
+            .iter()
+            .map(|b| b.to_string())
+            .collect::<Vec<_>>()
+            .join(",")
+    );
+
+    match output_format {
+        OutputFormat::Json => {
+            /* Public material only by default: --json output routinely ends up in
+               CI logs and structured log sinks, so the seed is echoed back only
+               on explicit request, and the identity keyfile (which embeds the
+               seed) only when it is the selected format. */
+            let mut result = serde_json::json!({
+                "public_key_hex": pub_hex,
+                "public_key_thrufmt": pub_thrufmt,
+            });
+            let fields = result
+                .as_object_mut()
+                .expect("derive JSON result is an object");
+            if reveal_private_key {
+                fields.insert("private_key_hex".to_string(), serde_json::json!(hex_seed));
+            }
+            if format == DeriveFormat::IdentityJson {
+                fields.insert("identity_json".to_string(), serde_json::json!(identity));
+            }
+            println!("{}", serde_json::to_string_pretty(&result)?);
+        }
+        OutputFormat::Text => match format {
+            /* Raw value only, so it can be piped into a file. */
+            DeriveFormat::Hex => println!("{}", pub_hex),
+            DeriveFormat::Thrufmt => println!("{}", pub_thrufmt),
+            DeriveFormat::IdentityJson => println!("{}", identity_json),
+        },
+    }
+
+    Ok(())
 }
 
 /// Execute conversion commands

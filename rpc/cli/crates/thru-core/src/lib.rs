@@ -108,8 +108,16 @@ pub async fn run() -> anyhow::Result<()> {
         Commands::GetSlotMetrics { slot, end_slot } => {
             commands::rpc::get_slot_metrics(&config, slot, end_slot, cli.json).await
         }
-        Commands::Transfer { src, dst, value } => {
-            commands::transfer::handle_transfer_command(&config, &src, &dst, value, cli.json).await
+        Commands::Transfer {
+            src,
+            dst,
+            value,
+            build_only,
+        } => {
+            commands::transfer::handle_transfer_command(
+                &config, &src, &dst, value, build_only, cli.json,
+            )
+            .await
         }
         Commands::Token { subcommand } => {
             commands::token::handle_token_command(&config, subcommand, cli.json).await
@@ -125,6 +133,9 @@ pub async fn run() -> anyhow::Result<()> {
         }
         Commands::Wthru { subcommand } => {
             commands::wthru::handle_wthru_command(&config, subcommand, cli.json).await
+        }
+        Commands::Bond { subcommand } => {
+            commands::bond::handle_bond_command(&config, subcommand, cli.json).await
         }
         Commands::Validator { subcommand } => {
             commands::consensus_validator::handle_validator_command(&config, subcommand, cli.json)

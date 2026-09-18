@@ -1,0 +1,7 @@
+/* The long-wait dove carries the status role so the swap from the spinner
+   keeps announcing "loading". */
+.tds-wait__dove {
+  display: inline-grid;
+  place-items: center;
+  line-height: 0;
+}

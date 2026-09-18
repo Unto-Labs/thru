@@ -17,6 +17,21 @@
   width: 440px;
 }
 
+/* Content swaps inside a mounted frame (`animateResize`): the box eases to
+   its new size instead of jumping. Frame.tsx pins the height from the old
+   value to the new one so the transition has two lengths to run between;
+   width follows the mode class (dialog ↔ full). 280ms mirrors RESIZE_MS. */
+.tds-frame--resize {
+  transition:
+    height 280ms var(--ease-standard),
+    width 280ms var(--ease-standard);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tds-frame--resize {
+    transition: none;
+  }
+}
+
 /* Standalone island motion (the overlay animates its popup instead). */
 .tds-frame--in {
   animation: tds-island-in 640ms var(--ease-standard) both;

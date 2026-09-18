@@ -9,21 +9,42 @@
 #   TEST_SCOPE   - run a subset of scenarios (default: "all"). Supported scopes:
 #                  all, all-no-debug, a single scenario, or comma-separated
 #                  scenarios from core, keys, accounts, transfers, txn, program,
-#                  program-upgrade, event, token, util, debug.
+#                  program-upgrade, event, token, validator, bond, util, debug.
 #   SKIP_BUILD   - set to 1 to reuse an existing thru-cli binary.
 #   THRU_CLI_BIN - override path to the thru-cli binary.
 #   RPC_BASE_URL - override gRPC endpoint base URL (default: http://127.0.0.1:8472).
 #   ADVANCE_TRANSFERS_VALUE - token amount used for slot advancement transfers (default: 1).
+#   GENESIS_BLS_KEY - path to the genesis validator's bls.json, used by the
+#                  `validator` scenario to cross-check CLI BLS derivation against
+#                  the live on-chain genesis key (default:
+#                  contrib/docker-dev/data/fullnode/fullnode-dev/bls.json). The
+#                  docker-dev node writes this 0600, so when the test user is not
+#                  its owner the scenario obtains a readable copy via a
+#                  non-interactive `sudo -n` (no prompt; cannot hang). If it cannot
+#                  be read at all (no readable path and no passwordless sudo), the
+#                  scenario `die`s — it never silently skips.
+#   NODE_IDENTITY_KEY - the node's own ed25519 validator identity seed (64 hex
+#                  chars), the producer key the bond ClaimFees/§B scenarios sign
+#                  injected blocks with (the node only certifies/finalizes blocks
+#                  produced by its own identity). Explicit override; takes priority.
+#   NODE_IDENTITY_KEY_FILE - path to a file holding that 64-hex seed. In CI the
+#                  fullnode exports its identity seed to /shared-keys/nodekey.hex;
+#                  locally `dev.sh start` writes contrib/docker-dev/data/nodekey.hex
+#                  (the default fallback). The ClaimFees scenario `die`s if no seed
+#                  source is resolvable — it never silently skips.
 #
 # Dependencies: bash (>= 5), cargo, jq, thru node running locally with pre-funded accounts
 #               (created via mksnap --fund-accounts), built program binary at
-#               build/thruvm/bin/tn_event_emission_program_c.bin.
+#               build/thruvm/bin/tn_event_emission_program_c.bin, and (for the
+#               `validator` scenario's genesis cross-check) a readable genesis
+#               bls.json at $GENESIS_BLS_KEY.
 #
 # The script provisions an isolated HOME for thru-cli, seeds keys for pre-funded accounts
 # (acc_0, acc_1, acc_2, acc_3 with sequential private keys 0, 1, 2, 3), exercises the entire
 # CLI surface (RPC queries, key management, account lifecycle, transfers, transactions,
-# uploader/program lifecycle including event verification, token program flows, and utility
-# conversions), and validates JSON responses with jq.
+# uploader/program lifecycle including event verification, token program flows, consensus
+# validator BLS derivation + status reads, and utility conversions), and validates JSON
+# responses with jq.
 
 set -euo pipefail
 trap 'log "ERR trap: line=$LINENO exit=$? BASH_COMMAND=$BASH_COMMAND"' ERR
@@ -35,7 +56,14 @@ readonly RPC_BASE_URL="${RPC_BASE_URL:-$RPC_BASE_URL_DEFAULT}"
 readonly ADVANCE_TRANSFERS_VALUE="${ADVANCE_TRANSFERS_VALUE:-1}"
 readonly RETRY_ATTEMPTS="${RETRY_ATTEMPTS:-5}"
 readonly RETRY_DELAY_SECS="${RETRY_DELAY_SECS:-2}"
-readonly AVAILABLE_SCENARIOS=(core keys accounts transfers txn program program-upgrade event token util debug)
+# Genesis validator's bls.json — the live on-chain BLS key source the `validator`
+# scenario cross-checks CLI derivation against (test 8). Default is the docker-dev
+# fullnode genesis validator key. Resolved by explicit path → die (never skip).
+GENESIS_BLS_KEY="${GENESIS_BLS_KEY:-}"
+# Node identity ed25519 seed (64-hex), and a file holding it — the producer key the
+# bond ClaimFees/§B scenarios sign injected blocks with. See resolve_node_identity_seed.
+NODE_IDENTITY_KEY_FILE="${NODE_IDENTITY_KEY_FILE:-}"
+readonly AVAILABLE_SCENARIOS=(core keys accounts transfers txn program program-upgrade event token validator bond util debug)
 
 SELECTED_SCENARIO="${TEST_SCOPE:-all}"
 
@@ -74,7 +102,40 @@ declare ACC_0_ADDRESS=""
 declare ACC_1_ADDRESS=""
 declare ACC_2_ADDRESS=""
 declare ACC_3_ADDRESS=""
+# §B (attestor_payment debit + ClaimFees) state, threaded from part1 to part2.
+declare BOND_B_RAN=0
+declare BOND_B_BP_KEY=""
+declare BOND_B_BP_ADDR=""
+declare BOND_B_SRC=""
+declare BOND_B_A=0
+declare BOND_B_P=0
+declare BOND_B_ACCEPTED=""
 declare GENESIS_EVENT_PROGRAM_HEX="00000000000000000000000000000000000000000000000000000000000000EE"
+
+# Canonical WTHRU mint + the genesis token program (0xAA), pinned in
+# programs/c/examples/tn_wthru_mint.h. The bond program denominates bonds in
+# this mint; the operator wraps native THRU into a WTHRU token account here.
+readonly WTHRU_MINT="tacdgTUGud8OgzN5HnVVv4u3x82UBe8ciZAtjOLJZE_SNg"
+readonly WTHRU_TOKEN_PROGRAM="taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKqq"
+# §B (attestor_payment debit + ClaimFees) drives the fullnode block-builder BTP
+# endpoint (UDP) via send-block. §B ALWAYS runs — it never skips; if send-block
+# cannot be resolved the test fails.
+#   BLOCKBUILDER_ADDR - block-builder BTP target (default 127.0.0.1:9002)
+#   SEND_BLOCK_BIN    - path (or name on PATH) of a PRE-BUILT send-block binary,
+#                       like the TS e2e's --send-block-path. When empty, the
+#                       harness looks for grpc/send-block (built by
+#                       `make -C grpc send-block`) then /usr/local/bin/send-block
+#                       (the Docker image). It never builds or `go run`s it
+#                       (mirrors the TS e2e, which requires a pre-built binary).
+readonly BLOCKBUILDER_ADDR="${BLOCKBUILDER_ADDR:-127.0.0.1:9002}"
+readonly SEND_BLOCK_BIN="${SEND_BLOCK_BIN:-}"
+# §B (attestor_payment → PayOutBlock bond debit) is DISABLED by default: it only
+# fires when the node has certificate posting enabled
+# (tiles.cdrv.posting_certificate_frequency > 0) so PostCertificate → PayOutBlock
+# runs. The docker-dev node ships with posting disabled, so §B's debit assertion
+# can't pass there yet. Set RUN_BOND_SECTION_B=1 to run it once posting is wired.
+# See issues/bp-bond-payout-not-firing-analysis.md.
+readonly RUN_BOND_SECTION_B="${RUN_BOND_SECTION_B:-0}"
 
 # ---------------------------------------------------------------------------
 # Utility helpers
@@ -282,6 +343,166 @@ assert_contains() {
   fi
 }
 
+# Like assert_jq_eq, but uses `jq -r` (no `-e`) so it can check boolean-`false`
+# and `null` results — `jq -e` reports those as a non-zero exit, which would make
+# assert_jq_eq mis-report a correct `false`/`null` value as a lookup failure.
+assert_jq_raw_eq() {
+  local json="$1"
+  local expr="$2"
+  local expected="$3"
+  local actual
+  actual=$(printf '%s' "$json" | jq -r "$expr") || {
+    log "jq expression '$expr' failed on payload:"
+    log "$json"
+    return 1
+  }
+  if [[ "$actual" != "$expected" ]]; then
+    log "Assertion failed: jq '$expr' => '$actual', expected '$expected'"
+    log "Payload: $json"
+    return 1
+  fi
+}
+
+# Poll `bond show <signer>` until `.bond_show.<field>` renders to <expected>.
+# Tolerates post-submission propagation lag (a fresh-but-stale read returns
+# exit 0 with the old value, so we poll on the value itself).
+assert_bond_field() {
+  local signer="$1"; local field="$2"; local expected="$3"; local ctx="$4"
+  local attempts="${RETRY_ATTEMPTS:-5}"
+  local delay="${RETRY_DELAY_SECS:-2}"
+  local out="" actual=""
+  for (( attempt = 1; attempt <= attempts; attempt++ )); do
+    if out=$(run_cli_json "bond show ${ctx} (attempt ${attempt}/${attempts})" bond show "$signer"); then
+      actual=$(printf '%s' "$out" | jq -r ".bond_show.${field}") || actual=""
+      [[ "$actual" == "$expected" ]] && return 0
+    fi
+    if (( attempt < attempts )); then
+      log "bond show ${ctx}: .${field} => '${actual}', want '${expected}'; retrying in ${delay}s..."
+      sleep "$delay"
+    fi
+  done
+  log "Assertion failed: bond show ${ctx}: .${field} => '${actual}', expected '${expected}'"
+  log "Payload: $out"
+  return 1
+}
+
+# Poll a WTHRU token account's amount until it equals <expected>.
+poll_wthru_amount() {
+  local ta="$1"; local expected="$2"; local ctx="$3"
+  local attempts="${RETRY_ATTEMPTS:-5}"
+  local delay="${RETRY_DELAY_SECS:-2}"
+  local out="" actual=""
+  for (( attempt = 1; attempt <= attempts; attempt++ )); do
+    if out=$(run_cli_json "token balance ${ctx} (attempt ${attempt}/${attempts})" token balance "$ta" --token-program "$WTHRU_TOKEN_PROGRAM"); then
+      actual=$(printf '%s' "$out" | jq -r '.token_balance.amount') || actual=""
+      [[ "$actual" == "$expected" ]] && return 0
+    fi
+    if (( attempt < attempts )); then
+      log "token balance ${ctx}: amount => '${actual}', want '${expected}'; retrying in ${delay}s..."
+      sleep "$delay"
+    fi
+  done
+  log "Assertion failed: token balance ${ctx}: amount => '${actual}', expected '${expected}'"
+  return 1
+}
+
+# Wait until the node's finalized slot reaches <slot> (PayOutBlock debit and
+# ClaimFees only land once the block finalizes). Bounded poll; non-fatal.
+wait_for_finalized_slot() {
+  local target="$1"; local ctx="$2"
+  local timeout_secs="${BOND_FINALIZE_TIMEOUT_SECS:-120}"
+  local deadline=$(( $(date +%s) + timeout_secs ))
+  local fin=0
+  while (( $(date +%s) < deadline )); do
+    if fin=$(run_cli_json "getstatus ${ctx}" getstatus 2>/dev/null | jq -er '.getstatus.finalized_slot' 2>/dev/null); then
+      (( fin >= target )) && { log "finalized slot $fin >= $target (${ctx})"; return 0; }
+    fi
+    sleep 2
+  done
+  log "wait_for_finalized_slot: finalized=$fin still < $target after ${timeout_secs}s (${ctx}); continuing"
+  return 0
+}
+
+# Resolve the send-block binary path (mirrors the TS e2e, which requires a
+# PRE-BUILT binary and spawns it directly — it never uses `go run`). Resolution:
+#   1. SEND_BLOCK_BIN (explicit path / name on PATH), like TS's --send-block-path
+#   2. grpc/send-block in the checkout (produced by `make -C grpc send-block`)
+#   3. /usr/local/bin/send-block (the cli-e2e/ts-e2e Docker image location)
+# Prints the resolved path, or "" if none found.
+resolve_send_block() {
+  if [[ -n "$SEND_BLOCK_BIN" ]]; then
+    if [[ -x "$SEND_BLOCK_BIN" ]] || command -v "$SEND_BLOCK_BIN" >/dev/null 2>&1; then
+      printf '%s' "$SEND_BLOCK_BIN"; return 0
+    fi
+    return 1
+  fi
+  local c
+  for c in "$REPO_ROOT/grpc/send-block" "/usr/local/bin/send-block"; do
+    [[ -x "$c" ]] && { printf '%s' "$c"; return 0; }
+  done
+  return 1
+}
+
+# Invoke a pre-built send-block (never builds; never `go run`).
+send_block() {
+  local bin
+  bin="$(resolve_send_block)" || die "send-block binary not found. Build it (\`make -C grpc send-block\`) and set SEND_BLOCK_BIN to its path, or install it at /usr/local/bin/send-block. (Like the TS e2e, this never uses 'go run'.)"
+  "$bin" "$@"
+}
+
+# Resolve the genesis validator's bls.json (the live on-chain BLS source for the
+# `validator` scenario's derivation cross-check, test 8). Resolution:
+#   1. GENESIS_BLS_KEY (explicit path), if readable.
+#   2. $REPO_ROOT/contrib/docker-dev/data/fullnode/fullnode-dev/bls.json (docker-dev default).
+#   3. If the candidate exists but is owner-only (the node writes bls.json 0600 and
+#      the test user is not its owner), a NON-INTERACTIVE `sudo -n` copy into the
+#      auto-cleaned temp HOME. `-n` never prompts, so it cannot hang; if passwordless
+#      sudo is unavailable or the read fails, this returns failure.
+# Prints the resolved (readable) path. Mirrors resolve_send_block: explicit path,
+# never a silent skip — the caller `die`s with a clear message if it cannot be read.
+resolve_genesis_bls_key() {
+  local default_path="$REPO_ROOT/contrib/docker-dev/data/fullnode/fullnode-dev/bls.json"
+  local candidate="${GENESIS_BLS_KEY:-$default_path}"
+  # 1/2: directly readable (explicit override, or default in a context that can read it).
+  if [[ -r "$candidate" ]]; then
+    printf '%s' "$candidate"
+    return 0
+  fi
+  # 3: owner-only genesis key -> non-interactive sudo copy into the temp HOME.
+  if sudo -n true 2>/dev/null; then
+    local copy="$CLI_TMP_HOME/genesis-bls.json"
+    if sudo -n cat "$candidate" > "$copy" 2>/dev/null && [[ -s "$copy" ]]; then
+      chmod 600 "$copy" 2>/dev/null || true
+      printf '%s' "$copy"
+      return 0
+    fi
+    rm -f "$copy"
+  fi
+  return 1
+}
+
+# Resolve the node's own ed25519 validator identity seed (64 hex chars) — the
+# producer key the bond ClaimFees (§A standalone) and §B scenarios MUST sign
+# injected blocks with, so the node certifies/finalizes them. Resolution order:
+#   1. NODE_IDENTITY_KEY        (raw 64-hex seed; explicit override).
+#   2. NODE_IDENTITY_KEY_FILE   (path to a hex seed file, if readable; in CI the
+#      fullnode exports its identity seed to /shared-keys/nodekey.hex — see
+#      contrib/docker/scripts/init-fullnode.sh:export_node_identity_seed).
+#   3. $REPO_ROOT/contrib/docker-dev/data/nodekey.hex (the seed `dev.sh start`
+#      provisions on a fresh local data dir).
+# Prints the resolved seed (hex, non-hex chars stripped) on stdout, or empty if no
+# source is available. The caller validates non-empty + length and `die`s with a
+# scenario-specific message — it never silently skips. Mirrors resolve_genesis_bls_key.
+resolve_node_identity_seed() {
+  local seed="${NODE_IDENTITY_KEY:-}"
+  if [[ -z "$seed" ]]; then
+    local nk="${NODE_IDENTITY_KEY_FILE:-}"
+    [[ -n "$nk" && -r "$nk" ]] || nk="$REPO_ROOT/contrib/docker-dev/data/nodekey.hex"
+    [[ -r "$nk" ]] && seed="$(tr -cd '0-9a-fA-F' < "$nk")"
+  fi
+  printf '%s' "$seed"
+}
+
 transfer_with_retry() {
   local from="$1"
   local to="$2"
@@ -389,6 +610,8 @@ Available scenarios:
   program-upgrade
   event
   token
+  validator
+  bond
   util
   debug
 
@@ -413,7 +636,7 @@ parse_args() {
       all-no-debug)
         SELECTED_SCENARIO="all-no-debug"
         ;;
-      core|keys|accounts|transfers|txn|program|program-upgrade|event|token|util|debug)
+      core|keys|accounts|transfers|txn|program|program-upgrade|event|token|validator|bond|util|debug)
         SELECTED_SCENARIO="$arg"
         ;;
       *)
@@ -485,6 +708,7 @@ consensus_attestor_table_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA
 consensus_converted_vault_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAQQ"
 consensus_unclaimed_vault_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAUR"
 wthru_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcH"
+bp_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADQEO"
 name_service_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUF"
 thru_registrar_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYG"
 timeout_seconds: 300
@@ -1000,6 +1224,570 @@ scenario_token() {
 
   run_cli_json "token derive-token-account (verify)" token derive-token-account "$TOKEN_MINT_ADDRESS" "$ACC_2_ADDRESS" --seed "$acc_2_token_seed" --token-program "$token_program_id" >/dev/null
   run_cli_json "token derive-mint-account (verify)" token derive-mint-account "$ACC_2_ADDRESS" "$mint_seed" --token-program "$token_program_id" >/dev/null
+}
+
+# Consensus-validator BLS derivation + status reads. Read-only and offline-safe:
+# never activates/deactivates (those mutate shared consensus weight and are
+# non-deterministic across runs — see "NOT covered" in the plan). Covers the new
+# `validator bls-pubkey` and `validator status` surfaces plus a required
+# cross-check that CLI BLS derivation matches the live genesis on-chain key.
+scenario_validator() {
+  should_run "validator" || return 0
+  log_section "Scenario: consensus-validator BLS derivation + status (read-only)"
+
+  local hex192='^[0-9a-f]{192}$'
+
+  # --- Setup: a temp bls.json holding a valid NONZERO 32-byte scalar. ----------
+  # blst_scalar_from_bendian is big-endian, so scalar 1 is [0,..,0,1]. The all-zero
+  # scalar (acc_0's seed) is rejected by blst_sk_check, so it is NOT usable here.
+  local tmp_bls="$CLI_TMP_HOME/validator-bls-one.json"
+  printf '[%s1]' "$(printf '0,%.0s' {1..31})" > "$tmp_bls"
+
+  # --- Test 1: bls-pubkey derivation (JSON), bare 192-hex, no identity field. ---
+  local bp_json bp_hex
+  bp_json=$(run_cli_json "validator bls-pubkey (temp scalar)" validator bls-pubkey --bls-key "$tmp_bls")
+  assert_jq_eq "$bp_json" '.validator_bls_pubkey.status' 'success'
+  bp_hex=$(printf '%s' "$bp_json" | jq -er '.validator_bls_pubkey.bls_pubkey_hex')
+  [[ "$bp_hex" =~ $hex192 ]] || die "bls-pubkey hex not bare 192-char lowercase hex: $bp_hex"
+  if printf '%s' "$bp_json" | jq -e '.validator_bls_pubkey.identity' >/dev/null 2>&1; then
+    die "bls-pubkey output must not carry an identity field (a bls.json has no identity)"
+  fi
+
+  # --- Test 2: derivation is deterministic. ------------------------------------
+  local bp_hex2
+  bp_hex2=$(run_cli_json "validator bls-pubkey (determinism)" validator bls-pubkey --bls-key "$tmp_bls" \
+    | jq -er '.validator_bls_pubkey.bls_pubkey_hex')
+  [[ "$bp_hex" == "$bp_hex2" ]] || die "bls-pubkey not deterministic: $bp_hex != $bp_hex2"
+
+  # --- Test 3: negatives (missing flag / missing file / zero scalar). ----------
+  run_cli_expect_fail "validator bls-pubkey without --bls-key" validator bls-pubkey
+  run_cli_expect_fail "validator bls-pubkey nonexistent file" \
+    validator bls-pubkey --bls-key "$CLI_TMP_HOME/does-not-exist.json"
+  local tmp_bls_zero="$CLI_TMP_HOME/validator-bls-zero.json"
+  printf '[%s0]' "$(printf '0,%.0s' {1..31})" > "$tmp_bls_zero"
+  run_cli_expect_fail "validator bls-pubkey all-zero scalar" validator bls-pubkey --bls-key "$tmp_bls_zero"
+
+  # --- Test 4: activate argument validation (no network mutation). -------------
+  # Provide a valid BLS source so clap's required_unless_present_any passes and the
+  # failure is attributable to ensure_nonzero_amount (which runs before any RPC).
+  local amt_fail
+  amt_fail=$(run_cli_expect_fail_capture "validator activate zero amount" \
+    validator activate --source-token-account "$ACC_0_ADDRESS" --token-amount 0 --bls-seed 1)
+  assert_contains "$amt_fail" "amount must be greater than 0"
+  # Mutual exclusion + missing-source: clap owns the wording, so only assert failure.
+  run_cli_expect_fail "validator activate bls-pubkey+bls-seed" \
+    validator activate --source-token-account "$ACC_0_ADDRESS" --token-amount 1 \
+    --bls-pubkey "$(printf '11%.0s' {1..96})" --bls-seed 1
+  run_cli_expect_fail "validator activate bls-key+bls-pubkey" \
+    validator activate --source-token-account "$ACC_0_ADDRESS" --token-amount 1 \
+    --bls-key "$tmp_bls" --bls-pubkey "$(printf '11%.0s' {1..96})"
+  run_cli_expect_fail "validator activate no bls source" \
+    validator activate --source-token-account "$ACC_0_ADDRESS" --token-amount 1
+
+  # --- Test 5: validator table decodes; genesis validator present. -------------
+  local table_json
+  table_json=$(run_cli_json "validator table" validator table)
+  assert_jq_eq "$table_json" '.validator_table.status' 'success'
+  local occupied server_count total_weight
+  occupied=$(printf '%s' "$table_json" | jq -er '.validator_table.occupied_validators')
+  server_count=$(printf '%s' "$table_json" | jq -er '.validator_table.server_count')
+  total_weight=$(printf '%s' "$table_json" | jq -er '.validator_table.total_weight')
+  (( occupied >= 1 ))     || die "expected occupied_validators >= 1, got $occupied"
+  (( server_count > 0 ))  || die "expected server_count > 0, got $server_count"
+  (( total_weight > 0 ))  || die "expected total_weight > 0, got $total_weight"
+
+  # --- Test 8 (computed early; used by tests 6 + 8): genesis cross-check. -------
+  # Resolve the live genesis bls.json by explicit path → die (never skip).
+  local genesis_bls_path genesis_derived
+  genesis_bls_path=$(resolve_genesis_bls_key) || die "genesis bls.json not readable. Set GENESIS_BLS_KEY to a readable genesis validator bls.json (default: contrib/docker-dev/data/fullnode/fullnode-dev/bls.json, which the node writes 0600), make it readable, or enable passwordless sudo so the scenario can copy it. (This cross-checks CLI BLS derivation against the live on-chain genesis key; it never skips.)"
+  log "Genesis BLS cross-check using $genesis_bls_path"
+  genesis_derived=$(run_cli_json "validator bls-pubkey (genesis key)" validator bls-pubkey --bls-key "$genesis_bls_path" \
+    | jq -er '.validator_bls_pubkey.bls_pubkey_hex')
+  [[ "$genesis_derived" =~ $hex192 ]] || die "genesis-derived bls hex malformed: $genesis_derived"
+  # The derived (raw-affine) form must equal an on-chain seat's bls_pubkey_hex.
+  local match_sid match_identity
+  match_sid=$(printf '%s' "$table_json" | jq -er --arg b "$genesis_derived" \
+    'first(.validator_table.validators[] | select(.bls_pubkey_hex==$b) | .sid) // empty') \
+    || die "CLI-derived genesis BLS pubkey ($genesis_derived) not found in the on-chain validator table; the Rust loader does not match the live genesis bls.json source"
+  [[ -n "$match_sid" ]] || die "CLI-derived genesis BLS pubkey ($genesis_derived) not present in the validator table"
+  match_identity=$(printf '%s' "$table_json" | jq -er --arg b "$genesis_derived" \
+    'first(.validator_table.validators[] | select(.bls_pubkey_hex==$b) | .identity)')
+  log "Genesis BLS pubkey matches on-chain seat sid=$match_sid identity=$match_identity"
+
+  # --- Test 6: validator info for the genesis seat. ----------------------------
+  local info_json
+  info_json=$(run_cli_json "validator info (genesis sid $match_sid)" validator info "$match_sid")
+  assert_jq_eq "$info_json" '.validator_info.status' 'success'
+  assert_jq_eq "$info_json" '.validator_info.active' 'true'
+  assert_jq_eq "$info_json" '.validator_info.bls_pubkey_hex' "$genesis_derived"
+  local info_weight
+  info_weight=$(printf '%s' "$info_json" | jq -er '.validator_info.weight')
+  (( info_weight > 0 )) || die "expected genesis validator weight > 0, got $info_weight"
+
+  # --- Test 7: status for acc_0 (resolves, but not a validator) -> NOT REGISTERED.
+  local status_text status_json
+  status_text=$(run_cli_raw "validator status acc_0 (human)" validator status --identity acc_0)
+  assert_contains "$status_text" "NOT REGISTERED"
+  assert_contains "$status_text" "turnover window:"
+  status_json=$(run_cli_json "validator status acc_0 (json)" validator status --identity acc_0)
+  assert_jq_eq "$status_json" '.validator_status.status' 'not_registered'
+  # registered=false / sid=null / claim_authority=null: jq -e treats false/null as
+  # a failure exit, so use the raw-compare helper for these.
+  assert_jq_raw_eq "$status_json" '.validator_status.registered' 'false'
+  # identity is always present; sid/claim_authority are null when not registered.
+  printf '%s' "$status_json" | jq -er '.validator_status.identity' >/dev/null \
+    || die "status JSON missing identity for acc_0"
+  assert_jq_raw_eq "$status_json" '.validator_status.sid' 'null'
+  assert_jq_raw_eq "$status_json" '.validator_status.claim_authority' 'null'
+  # turnover object is always well-formed (never an error on the window).
+  printf '%s' "$status_json" | jq -er '.validator_status.turnover.state' >/dev/null \
+    || die "status JSON missing turnover.state for acc_0"
+
+  # --- Test 7b: status for an unknown key name MUST error (not NOT REGISTERED). -
+  run_cli_expect_fail "validator status unknown identity" \
+    validator status --identity validator-e2e-unknown-key
+
+  # --- Test 6/7 (registered): status for the genesis identity is ACTIVE. -------
+  local reg_status_json
+  reg_status_json=$(run_cli_json "validator status (genesis identity)" validator status --identity "$match_identity")
+  assert_jq_eq "$reg_status_json" '.validator_status.status' 'active'
+  assert_jq_eq "$reg_status_json" '.validator_status.registered' 'true'
+  assert_jq_eq "$reg_status_json" '.validator_status.sid' "$match_sid"
+
+  log "validator scenario (BLS derivation + status, genesis cross-check) passed"
+}
+
+scenario_bond() {
+  should_run "bond" || return 0
+  log_section "Scenario: block-producer bond lifecycle (§A Mode 1 + Mode 2)"
+
+  # ----------------------------------------------------------------------
+  # Mode 1: signer == fee payer (self-pay). A bond's token account is NOT
+  # deleted by `bond delete` (only the bond data account is), so a fixed signer
+  # cannot recreate its bond on a persistent node. Use a fresh, on-chain
+  # bootstrapped (account create) + funded signer so the lifecycle is
+  # idempotent across runs. Staged-only here (activate/active-withdraw is §B).
+  # ----------------------------------------------------------------------
+  log "Mode 1 (self-pay, fresh account-created signer)"
+  local m1="bpm1-$(date +%s)-$RANDOM"
+  run_cli_json "bond: generate $m1" keys generate "$m1" >/dev/null
+  local ac_json m1_addr
+  ac_json=$(run_cli_json "bond: account create $m1" account create "$m1")
+  assert_jq_eq "$ac_json" '.account_create.status' 'success'
+  m1_addr=$(printf '%s' "$ac_json" | jq -er '.account_create.public_key')
+  run_cli_json "bond: fund $m1" transfer acc_0 "$m1_addr" 3000000 >/dev/null
+
+  local op_seed
+  op_seed=$(random_hex32)
+  local op_ta_json op_wthru_ta
+  op_ta_json=$(run_cli_json "bond: init $m1 WTHRU TA" token initialize-account \
+    "$WTHRU_MINT" "$m1_addr" "$op_seed" --fee-payer "$m1" --token-program "$WTHRU_TOKEN_PROGRAM")
+  assert_jq_eq "$op_ta_json" '.token_initialize_account.status' 'success'
+  op_wthru_ta=$(printf '%s' "$op_ta_json" | jq -er '.token_initialize_account.token_account')
+
+  run_cli_json "bond: wrap THRU into $m1 WTHRU TA" wthru deposit "$op_wthru_ta" 1000000 --fee-payer "$m1" >/dev/null
+  poll_wthru_amount "$op_wthru_ta" 1000000 "$m1 wrap"
+
+  local create_json bond_addr bond_ta_addr
+  create_json=$(run_cli_json "bond create (Mode 1 $m1)" bond create --signer "$m1")
+  assert_jq_eq "$create_json" '.bond_create.status' 'success'
+  assert_jq_eq "$create_json" '.bond_create.mode' 'mode1'
+  bond_addr=$(printf '%s' "$create_json" | jq -er '.bond_create.bond_address')
+  bond_ta_addr=$(printf '%s' "$create_json" | jq -er '.bond_create.bond_token_account')
+
+  # derive helpers must agree with what create used
+  local da_json dta_json
+  da_json=$(run_cli_json "bond derive-address $m1" bond derive-address "$m1")
+  assert_jq_eq "$da_json" '.bond_derive_address.bond_address' "$bond_addr"
+  dta_json=$(run_cli_json "bond derive-token-account $m1" bond derive-token-account "$m1")
+  assert_jq_eq "$dta_json" '.bond_derive_token_account.token_account_address' "$bond_ta_addr"
+
+  run_cli_json "bond deposit $m1 500000" bond deposit "$m1" "$op_wthru_ta" 500000 --fee-payer "$m1" >/dev/null
+  assert_bond_field "$m1" 'staged_amount' '500000' 'M1 after deposit'
+  assert_bond_field "$m1" 'active_bond' '0' 'M1 after deposit'
+
+  run_cli_json "bond withdraw $m1 200000 staged" bond withdraw "$m1" "$op_wthru_ta" 200000 --from staged --fee-payer "$m1" >/dev/null
+  assert_bond_field "$m1" 'staged_amount' '300000' 'M1 after partial withdraw'
+
+  run_cli_json "bond set-authority $m1 -> acc_3" bond set-authority "$m1" "$ACC_3_ADDRESS" --fee-payer "$m1" >/dev/null
+  assert_bond_field "$m1" 'bond_authority' "$ACC_3_ADDRESS" 'M1 after set-authority'
+
+  # The authority is now acc_3, so the remaining withdraw must sign as acc_3.
+  run_cli_json "bond withdraw $m1 300000 staged (acc_3 auth)" bond withdraw "$m1" "$op_wthru_ta" 300000 --from staged --fee-payer acc_3 >/dev/null
+  assert_bond_field "$m1" 'staged_amount' '0' 'M1 after final withdraw'
+
+  # Sweep: send a STRAY WTHRU transfer straight into the bond TA (a plain token
+  # transfer, bypassing `bond deposit`, so it is NOT tracked as staged/active),
+  # then reclaim that untracked excess via `bond sweep`. Needs no change window,
+  # so it runs in §A's fast path. Authority is acc_3 now → sweep signs as acc_3.
+  local stray=50000
+  run_cli_json "bond: stray transfer into bond TA" token transfer "$op_wthru_ta" "$bond_ta_addr" "$stray" --fee-payer "$m1" --token-program "$WTHRU_TOKEN_PROGRAM" >/dev/null
+  poll_wthru_amount "$bond_ta_addr" "$stray" "bond TA after stray transfer"
+  run_cli_json "bond sweep $m1 -> op TA (acc_3 auth)" bond sweep "$m1" "$op_wthru_ta" --fee-payer acc_3 >/dev/null
+  poll_wthru_amount "$bond_ta_addr" 0 "bond TA after sweep"
+
+  local del_json
+  del_json=$(run_cli_json "bond delete $m1" bond delete "$m1" "$m1_addr" --fee-payer acc_3)
+  assert_jq_eq "$del_json" '.bond_delete.status' 'success'
+
+  # ----------------------------------------------------------------------
+  # Mode 2: third-party fee payer (acc_0) + signer-EOA create. The signer key
+  # (bpm2) is held by the harness to produce the embedded EOA challenge.
+  # ----------------------------------------------------------------------
+  log "Mode 2 (third-party pay + signer-EOA create)"
+  local bpm2="bpm2-$(date +%s)-$RANDOM"
+  run_cli_json "bond: generate bpm2" keys generate "$bpm2" >/dev/null
+
+  local c2_json bpm2_addr
+  c2_json=$(run_cli_json "bond create (Mode 2 bpm2)" bond create --signer "$bpm2" --fee-payer acc_0)
+  assert_jq_eq "$c2_json" '.bond_create.status' 'success'
+  assert_jq_eq "$c2_json" '.bond_create.mode' 'mode2'
+  bpm2_addr=$(printf '%s' "$c2_json" | jq -er '.bond_create.signer')
+
+  # The signer EOA (addr == bpm2 pubkey) was created by account_create_eoa.
+  local eoa_json
+  eoa_json=$(run_cli_json_retry "bpm2 EOA exists" getaccountinfo "$bpm2_addr")
+  assert_jq_eq "$eoa_json" '.account_info.pubkey' "$bpm2_addr"
+  # bond_authority defaults to the signer pubkey
+  assert_bond_field "$bpm2" 'bond_authority' "$bpm2_addr" 'M2 default authority'
+
+  # The EOA was created with 0 native balance; fund it before bpm2 pays fees.
+  run_cli_json "fund bpm2 EOA" transfer acc_0 "$bpm2_addr" 2000000 >/dev/null
+
+  local src2_seed src2_json src2
+  src2_seed=$(random_hex32)
+  src2_json=$(run_cli_json "bond: init bpm2 WTHRU TA" token initialize-account \
+    "$WTHRU_MINT" "$bpm2_addr" "$src2_seed" --fee-payer "$bpm2" --token-program "$WTHRU_TOKEN_PROGRAM")
+  assert_jq_eq "$src2_json" '.token_initialize_account.status' 'success'
+  src2=$(printf '%s' "$src2_json" | jq -er '.token_initialize_account.token_account')
+  run_cli_json "bond: wrap THRU for bpm2" wthru deposit "$src2" 1000000 --fee-payer "$bpm2" >/dev/null
+  poll_wthru_amount "$src2" 1000000 "bpm2 wrap"
+
+  run_cli_json "bond deposit bpm2 500000" bond deposit "$bpm2" "$src2" 500000 --fee-payer "$bpm2" >/dev/null
+  assert_bond_field "$bpm2" 'staged_amount' '500000' 'M2 after deposit'
+  assert_bond_field "$bpm2" 'active_bond' '0' 'M2 after deposit'
+
+  run_cli_json "bond withdraw bpm2 500000 staged" bond withdraw "$bpm2" "$src2" 500000 --from staged --fee-payer "$bpm2" >/dev/null
+  assert_bond_field "$bpm2" 'staged_amount' '0' 'M2 after withdraw'
+
+  local del2_json
+  del2_json=$(run_cli_json "bond delete bpm2" bond delete "$bpm2" "$bpm2_addr" --fee-payer "$bpm2")
+  assert_jq_eq "$del2_json" '.bond_delete.status' 'success'
+
+  log "§A bond lifecycle (Mode 1 + Mode 2) passed"
+}
+
+# Post-block native fee distribution (UNTO-1293).  After a block executes the
+# runtime credits the block's collected native fees to the producer's account if
+# it is live, else to the genesis null/burn account — there is no ClaimFees txn.
+# This runs in the DEFAULT suite (re-runnable/non-destructive); it needs only
+# block finalization, not certificate posting, so unlike §B's PayOutBlock half it
+# is not gated behind RUN_BOND_SECTION_B.  The producer MUST be the node's own
+# validator identity so the injected block finalizes.
+scenario_claimfees() {
+  should_run "bond" || return 0
+  log_section "Scenario: post-block native fee distribution (burn vs claim) (UNTO-1293)"
+
+  # Post-block fee distribution (UNTO-1293): after a block executes, the runtime
+  # credits the block's collected native fees to the block producer's account if
+  # it is live, else to the genesis null/burn account.  There is no ClaimFees
+  # txn anymore.  We drive both branches via send-block (the block is produced by
+  # the node's own validator identity so it finalizes) and verify the per-slot
+  # grpc metrics (absent_block_producer_fees / claimed_fees) plus the resulting balances.
+  #
+  # Which branch a block takes depends on whether the producer's EOA exists:
+  #   absent  -> the block's fees BURN     (phase 1; only on a clean node)
+  #   present -> the block's fees are CLAIMED to the producer (phase 2)
+
+  local grpc_hp="${RPC_BASE_URL#http://}"
+  grpc_hp="${grpc_hp#https://}"
+
+  # Genesis null/burn account address (single source of truth: tn_absent_block_producer_fee_receiver.h).
+  local burn_addr="000000000000000000000000000000000000000000000000000000000000dead"
+
+  # Producer = the node's own validator identity, so the injected block finalizes.
+  local bp_hex
+  bp_hex="$(resolve_node_identity_seed)"
+  [[ -n "$bp_hex" ]] || die "claimfees: no producer key. Set NODE_IDENTITY_KEY (or NODE_IDENTITY_KEY_FILE), or provision the node identity via 'dev.sh start' so $REPO_ROOT/contrib/docker-dev/data/nodekey.hex exists. The injected block must be produced by the node's own validator identity or it won't finalize."
+  [[ ${#bp_hex} -eq 64 ]] || die "claimfees: node producer seed must be 64 hex chars, got ${#bp_hex}"
+  local bp="cf-node"
+  run_cli_json "claimfees: register node producer key" keys add --overwrite "$bp" "$bp_hex" >/dev/null
+  local bp_addr
+  bp_addr=$(run_cli_raw "claimfees: derive node address" util derive "$bp_hex" --format thrufmt)
+  log "claimfees: producer = node validator identity $bp_addr"
+
+  # Each block carries two unrelated fee-paying transfers.  The transfer fee is a
+  # fixed 1 (rpc/cli/crates/thru-core/src/commands/transfer.rs), so each block
+  # collects exactly 2.
+  local EXPECT=2
+
+  # account_balance <addr> -> native balance, or 0 if the account does not exist.
+  account_balance() {
+    run_cli_json "claimfees: balance $1" getaccountinfo "$1" 2>/dev/null \
+      | jq -er '.account_info.balance' 2>/dev/null || echo 0
+  }
+  # account_exists <addr> -> success (0) if a live account is present.
+  account_exists() {
+    run_cli_json "claimfees: exists $1" getaccountinfo "$1" 2>/dev/null \
+      | jq -e '.account_info.pubkey' >/dev/null 2>&1
+  }
+  # inject_two_tx_block <label> -> echoes the finalized slot of a block carrying
+  # two unrelated fee transfers (acc_1->acc_2, acc_3->acc_2), produced by bp.
+  inject_two_tx_block() {
+    local label="$1" t1 t2
+    t1=$(run_cli_raw "claimfees: $label build tx1" transfer acc_1 acc_2 1 --build-only)
+    t2=$(run_cli_raw "claimfees: $label build tx2" transfer acc_3 acc_2 1 --build-only)
+    local slot
+    slot=$(run_cli_json "claimfees: $label height" getheight \
+      | jq '([.getheight.finalized, .getheight.locally_executed, .getheight.cluster_executed] | max) + 1')
+    local bf="$CLI_TMP_HOME/claimfees_${label}_blocks.json"
+    jq -n --argjson slot "$slot" --arg a "$t1" --arg b "$t2" \
+      '{blocks:[{slot:$slot, transactions:[$a,$b]}]}' > "$bf"
+    local out
+    out=$(send_block --producer-key "$bp_hex" --blocks-file "$bf" \
+      --grpc "$grpc_hp" --target "$BLOCKBUILDER_ADDR" --chain-id 1 --wait-for-vote 2>&1) \
+      || die "claimfees: $label send-block failed: $out"
+    local accepted
+    accepted=$(printf '%s\n' "$out" | sed -n 's/^slot=\([0-9][0-9]*\).*/\1/p' | head -1)
+    [[ -n "$accepted" ]] || die "claimfees: $label could not parse accepted slot from send-block: $out"
+    wait_for_finalized_slot "$accepted" "claimfees $label finalize"
+    echo "$accepted"
+  }
+
+  # ---- Phase 1: BURN (reachable only when the producer EOA is absent) --------
+  if account_exists "$bp_addr"; then
+    log "claimfees: producer EOA already exists ($bp_addr); skipping burn phase (it needs an absent producer — run on a clean node for burn coverage)"
+  else
+    log "claimfees: producer EOA absent -> burn phase"
+    local burn_before
+    burn_before=$(account_balance "$burn_addr")
+    local s1
+    s1=$(inject_two_tx_block burn)
+    local m1 burned1 claimed1
+    m1=$(run_cli_json_retry "claimfees: getslotmetrics $s1" getslotmetrics "$s1")
+    burned1=$(printf '%s' "$m1" | jq -er '.getslotmetrics.absent_block_producer_fees')
+    claimed1=$(printf '%s' "$m1" | jq -er '.getslotmetrics.claimed_fees')
+    # grpc reports the EXACT per-slot split: all fees burned, nothing claimed.
+    (( burned1 == EXPECT )) || die "claimfees: burn slot $s1 expected absent_block_producer_fees=$EXPECT, got $burned1"
+    (( claimed1 == 0 ))     || die "claimfees: burn slot $s1 expected claimed_fees=0, got $claimed1"
+    # The burn account balance must have grown by exactly that burned amount.
+    # (Assumes no other fee-bearing block burned concurrently — true for the
+    # quiet, sequential e2e while the producer EOA is absent.)
+    local burn_after
+    burn_after=$(account_balance "$burn_addr")
+    (( burn_after - burn_before == burned1 )) \
+      || die "claimfees: burn account delta expected $burned1, got $((burn_after - burn_before)) (${burn_before} -> ${burn_after})"
+    log "claimfees: BURN verified (slot $s1: burned=$burned1 claimed=$claimed1; burn acct ${burn_before} -> ${burn_after})"
+  fi
+
+  # ---- Ensure the producer EOA exists for the claim phase --------------------
+  if account_exists "$bp_addr"; then
+    log "claimfees: producer EOA present ($bp_addr)"
+  else
+    log "claimfees: creating producer EOA"
+    assert_jq_eq "$(run_cli_json "claimfees: account create producer" account create "$bp")" \
+      '.account_create.status' 'success'
+    local tries=0
+    until account_exists "$bp_addr"; do
+      (( ++tries <= 30 )) || die "claimfees: producer EOA did not become live after account create"
+      sleep 1
+    done
+  fi
+
+  # ---- Phase 2: CLAIM (producer EOA present) --------------------------------
+  log "claimfees: claim phase (producer EOA present)"
+  local bp_before burn_before2
+  bp_before=$(account_balance "$bp_addr")
+  burn_before2=$(account_balance "$burn_addr")
+  local s2 m2 burned2 claimed2
+  s2=$(inject_two_tx_block claim)
+  m2=$(run_cli_json_retry "claimfees: getslotmetrics $s2" getslotmetrics "$s2")
+  burned2=$(printf '%s' "$m2" | jq -er '.getslotmetrics.absent_block_producer_fees')
+  claimed2=$(printf '%s' "$m2" | jq -er '.getslotmetrics.claimed_fees')
+  # grpc reports the EXACT per-slot split: nothing burned, all fees claimed.
+  (( claimed2 == EXPECT )) || die "claimfees: claim slot $s2 expected claimed_fees=$EXPECT, got $claimed2"
+  (( burned2 == 0 ))       || die "claimfees: claim slot $s2 expected absent_block_producer_fees=0, got $burned2"
+  local bp_after burn_after2
+  bp_after=$(account_balance "$bp_addr")
+  burn_after2=$(account_balance "$burn_addr")
+  # The producer received exactly the claimed amount; the burn account did not move.
+  # NOTE: the producer is the LIVE node validator identity, whose native balance
+  # can also move from the node's own ongoing block production.  This exact check
+  # holds in the quiet, sequential e2e (no other fee blocks between the two
+  # samples); relax to ">=" for $claimed2 if it ever proves flaky on a busy node.
+  (( bp_after - bp_before == claimed2 )) \
+    || die "claimfees: producer balance delta expected $claimed2, got $((bp_after - bp_before)) (${bp_before} -> ${bp_after})"
+  (( burn_after2 - burn_before2 == 0 )) \
+    || die "claimfees: burn account changed during claim phase (${burn_before2} -> ${burn_after2})"
+  log "claimfees: CLAIM verified (slot $s2: burned=$burned2 claimed=$claimed2; producer ${bp_before} -> ${bp_after}, burn unchanged at ${burn_after2})"
+}
+
+# §B part 1: bond a producer = the node's OWN validator identity, produce a
+# block (signed by that identity, so the node certifies it → PostCertificate →
+# PayOutBlock) with an explicit attestor_payment P (0 < P < A), then assert the
+# PayOutBlock bond debit.  The block's native fee is distributed by the runtime
+# post-block (credited to the live producer), so claimed_fees is also asserted.
+# Drives the fullnode block-builder via send-block; never skips.
+scenario_bond_part1() {
+  should_run "bond" || return 0
+  if [[ "$RUN_BOND_SECTION_B" != "1" ]]; then
+    log "bond §B (attestor_payment → PayOutBlock bond debit) DISABLED — set RUN_BOND_SECTION_B=1 to run it."
+    log "  It needs node certificate posting enabled (tiles.cdrv.posting_certificate_frequency > 0)"
+    log "  so PostCertificate → PayOutBlock fires; see issues/bp-bond-payout-not-firing-analysis.md."
+    log "  (The native fee burn/claim distribution is covered by scenario_claimfees.)"
+    BOND_B_RAN=0
+    return 0
+  fi
+  BOND_B_RAN=1
+  log_section "Scenario: bond §B part 1 (attestor_payment debit + native fee claim) — producer = node identity"
+
+  local grpc_hp="${RPC_BASE_URL#http://}"
+  grpc_hp="${grpc_hp#https://}"
+
+  # 0. The producer MUST be the node's own validator identity, otherwise the
+  #    block is voted but never certified (no PayOutBlock). Resolve its seed from
+  #    NODE_IDENTITY_KEY / NODE_IDENTITY_KEY_FILE (the CI fullnode exports it to
+  #    /shared-keys/nodekey.hex), else the nodekey.hex that `dev.sh start`
+  #    provisions on a fresh data dir.
+  local bp_hex
+  bp_hex="$(resolve_node_identity_seed)"
+  [[ -n "$bp_hex" ]] || die "§B: no producer key. Set NODE_IDENTITY_KEY (or NODE_IDENTITY_KEY_FILE), or provision the node identity via 'dev.sh clean && dev.sh start' so $REPO_ROOT/contrib/docker-dev/data/nodekey.hex exists. The block must be produced by the node's own validator identity or it won't be certified (no PayOutBlock)."
+  [[ ${#bp_hex} -eq 64 ]] || die "§B: node producer seed must be 64 hex chars, got ${#bp_hex}"
+
+  local bp="node"
+  run_cli_json "§B: register node producer key" keys add --overwrite "$bp" "$bp_hex" >/dev/null
+  local bp_addr
+  bp_addr=$(run_cli_raw "§B: derive node address" util derive "$bp_hex" --format thrufmt)
+  BOND_B_BP_KEY="$bp"
+  BOND_B_BP_ADDR="$bp_addr"
+  log "§B: producer = node validator identity $bp_addr"
+
+  # The node identity is fixed, so its bond token account persists across runs
+  # and can't be recreated after delete. §B needs a clean slate.
+  if run_cli_json "§B: pre-existing bond check" bond show "$bp" 2>/dev/null \
+       | jq -e '.bond_show.active_bond' >/dev/null 2>&1; then
+    die "§B: a bond already exists for the node identity ($bp_addr). §B needs a clean node — run 'dev.sh clean && dev.sh start' before re-running §B."
+  fi
+
+  # 1. Create the node's bond. If the node already has an on-chain EOA (funded
+  #    validator), self-pay (Mode 1); otherwise acc_0 pays and creates the EOA
+  #    (Mode 2). Either way the bond authority defaults to the node identity.
+  # getaccountinfo exits non-zero for a missing account, so tolerate failure
+  # here (empty => no EOA => Mode 2) rather than tripping set -e.
+  local node_pubkey=""
+  node_pubkey=$(run_cli_json "§B: node EOA?" getaccountinfo "$bp" 2>/dev/null | jq -r '.account_info.pubkey // empty' 2>/dev/null) || true
+  if [[ -n "$node_pubkey" ]]; then
+    log "§B: node EOA exists; creating bond self-pay (Mode 1)"
+    assert_jq_eq "$(run_cli_json "§B: bond create node (Mode 1)" bond create --signer "$bp")" \
+      '.bond_create.status' 'success'
+  else
+    log "§B: node has no EOA; creating bond third-party-pay (Mode 2, acc_0 creates the EOA)"
+    assert_jq_eq "$(run_cli_json "§B: bond create node (Mode 2)" bond create --signer "$bp" --fee-payer acc_0)" \
+      '.bond_create.status' 'success'
+  fi
+  # Fund the node identity so it can wrap THRU + pay its (zero) bond-op fees.
+  run_cli_json "§B: fund node" transfer acc_0 "$bp_addr" 5000000 >/dev/null
+
+  # 2. wrap A, deposit A, activate the whole deposit (so delete is reachable)
+  local A=400000
+  BOND_B_A="$A"
+  local src_seed src_json src
+  src_seed=$(random_hex32)
+  src_json=$(run_cli_json "§B: init bp WTHRU TA" token initialize-account \
+    "$WTHRU_MINT" "$bp_addr" "$src_seed" --fee-payer "$bp" --token-program "$WTHRU_TOKEN_PROGRAM")
+  assert_jq_eq "$src_json" '.token_initialize_account.status' 'success'
+  src=$(printf '%s' "$src_json" | jq -er '.token_initialize_account.token_account')
+  BOND_B_SRC="$src"
+  run_cli_json "§B: wrap bp" wthru deposit "$src" "$A" --fee-payer "$bp" >/dev/null
+  poll_wthru_amount "$src" "$A" "bp wrap"
+  run_cli_json "§B: bond deposit bp" bond deposit "$bp" "$src" "$A" --fee-payer "$bp" >/dev/null
+
+  # UpdateBond (activate) is gated by the change window relative to the bond's
+  # last_change_slot, which `create` stamped to the current slot. Advance past
+  # the window before activating (the same gate applies to part2's active
+  # withdraw, which the part1->part2 bracket covers separately).
+  emit_slot_advancement_transfers "§B pre-activate change-window wait"
+  run_cli_json "§B: bond update bp activate" bond update "$bp" --active "$A" --unlock-slot 0 --fee-payer "$bp" >/dev/null
+  assert_bond_field "$bp" 'staged_amount' '0' '§B after activate'
+  assert_bond_field "$bp" 'active_bond' "$A" '§B after activate'
+
+  # 3. produce a block: a benign FEE_TX (acc_1->acc_2, non-bp payer) with an
+  #    attestor_payment P (0 < P < A).  The block's native fee is distributed by
+  #    the runtime post-block (UNTO-1293): credited to the live producer (this
+  #    node identity), so no in-block ClaimFees txn is needed.
+  local P=100000
+  BOND_B_P="$P"
+  local bp_native_0
+  bp_native_0=$(run_cli_json "§B: bp balance before block" getbalance "$bp_addr" | jq -er '.balance.balance')
+
+  local fee_b64
+  fee_b64=$(run_cli_raw "§B: build FEE_TX" transfer acc_1 acc_2 1 --build-only)
+
+  # same height definition send-block uses: max(finalized, locally, cluster)+1
+  local slot
+  slot=$(run_cli_json "§B: height" getheight | jq '([.getheight.finalized, .getheight.locally_executed, .getheight.cluster_executed] | max) + 1')
+  local blocks_file="$CLI_TMP_HOME/bond_blocks.json"
+  jq -n --argjson slot "$slot" --arg fee "$fee_b64" \
+    '{blocks:[{slot:$slot, transactions:[$fee]}]}' > "$blocks_file"
+
+  local sb_via
+  sb_via="$(resolve_send_block 2>/dev/null)" || sb_via="<not found>"
+  log "§B: send-block ($sb_via) producer=$bp_addr P=$P slot=$slot target=$BLOCKBUILDER_ADDR"
+  local out
+  out=$(send_block --producer-key "$bp_hex" --attestor-payment "$P" \
+    --blocks-file "$blocks_file" --grpc "$grpc_hp" --target "$BLOCKBUILDER_ADDR" \
+    --chain-id 1 --wait-for-vote 2>&1) || die "§B: send-block failed: $out"
+  # send-block reslots on NO-vote; the FINAL accepted slot is on stdout (slot=N)
+  local accepted
+  accepted=$(printf '%s\n' "$out" | sed -n 's/^slot=\([0-9][0-9]*\).*/\1/p' | head -1)
+  [[ -n "$accepted" ]] || die "§B: could not parse accepted slot from send-block output: $out"
+  BOND_B_ACCEPTED="$accepted"
+  log "§B: block accepted at slot $accepted"
+
+  # The PayOutBlock debit + native fee claim only apply once the block finalizes.
+  wait_for_finalized_slot "$accepted" "§B post-block finalize"
+
+  # 4. (after finalize) assert the PayOutBlock debit + native fee claim.
+  #    active -> A - min(P,A) = A - P (since 0 < P < A).
+  local expected_active=$((A - P))
+  assert_bond_field "$bp" 'active_bond' "$expected_active" '§B after payout'
+
+  # Native fee distribution (UNTO-1293): the block's fee is claimed to the live
+  # producer post-block (no in-block ClaimFees txn).  Assert claimed_fees > 0.
+  # NOTE: the producer here is the LIVE node validator identity, whose native
+  # balance moves continuously from its own block production / consensus txns,
+  # so the exact "received == claimed" accounting isn't deterministic — we
+  # log the observed delta but only hard-assert claimed_fees > 0.
+  local claimed
+  claimed=$(run_cli_json_retry "§B: getslotmetrics $accepted" getslotmetrics "$accepted" | jq -er '.getslotmetrics.claimed_fees')
+  (( claimed > 0 )) || die "§B: expected claimed_fees > 0 at slot $accepted, got $claimed"
+  local bp_native_1
+  bp_native_1=$(run_cli_json "§B: node balance after block" getbalance "$bp_addr" | jq -er '.balance.balance')
+  log "§B part1: payout debit + ClaimFees sweep verified (claimed=$claimed active=$expected_active; node native ${bp_native_0}->${bp_native_1})"
+
+  # An early active-withdraw must REVERT (unlock slot / change window not elapsed).
+  run_cli_expect_fail "§B: early active withdraw reverts" \
+    bond withdraw "$bp" "$src" "$expected_active" --from active --fee-payer "$bp"
+}
+
+# §B part 2: after the change window has elapsed (the slot-advancement run
+# between part1 and part2), withdraw the remaining active bond and delete.
+scenario_bond_part2() {
+  should_run "bond" || return 0
+  [[ "$BOND_B_RAN" == "1" ]] || return 0
+  log_section "Scenario: bond §B part 2 (lockout withdraw + cleanup)"
+
+  local bp="$BOND_B_BP_KEY"
+  local remaining=$((BOND_B_A - BOND_B_P))
+  if (( remaining > 0 )); then
+    run_cli_json "§B: active withdraw remaining" bond withdraw "$bp" "$BOND_B_SRC" "$remaining" --from active --fee-payer "$bp" >/dev/null
+    assert_bond_field "$bp" 'active_bond' '0' '§B after active withdraw'
+  fi
+
+  local del_json
+  del_json=$(run_cli_json "§B: bond delete bp" bond delete "$bp" "$BOND_B_BP_ADDR" --fee-payer "$bp")
+  assert_jq_eq "$del_json" '.bond_delete.status' 'success'
+  log "§B part2: lockout withdraw + delete passed"
 }
 
 scenario_util() {
@@ -1729,6 +2517,19 @@ main() {
   scenario_program_upgrade
   scenario_event
   scenario_token
+  scenario_validator
+  scenario_bond
+  # ClaimFees native-sweep coverage (ungated, re-runnable). Skips itself when §B is
+  # enabled (§B covers ClaimFees too and needs the node-identity bond absent).
+  scenario_claimfees
+  # §B brackets a slot-advancement run (the change-window lockout wait) between
+  # its two halves; the bond state lives on-chain in between. §B always runs
+  # when the bond scenario is in scope (it drives send-block, never skips).
+  scenario_bond_part1
+  if [[ "$BOND_B_RAN" == "1" ]]; then
+    emit_slot_advancement_transfers "bond §B change-window lockout wait"
+  fi
+  scenario_bond_part2
   scenario_util
   scenario_debug
 

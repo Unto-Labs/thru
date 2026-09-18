@@ -114,6 +114,24 @@ fn build_consensus_validator_tx(
         .with_memory_units(CONSENSUS_VALIDATOR_DEFAULT_MEMORY_UNITS)
 }
 
+/// Base transaction for BP bond mutating ops (deposit/withdraw/update/sweep/
+/// set-authority/delete).  Generous budget within the (very large) block
+/// limits; each op does at most one token-program CPI plus small bond writes.
+fn bp_base_tx(
+    fee_payer: TnPubkey,
+    bp_program: TnPubkey,
+    fee: u64,
+    nonce: u64,
+    start_slot: u64,
+) -> Transaction {
+    Transaction::new(fee_payer, bp_program, fee, nonce)
+        .with_start_slot(start_slot)
+        .with_expiry_after(100)
+        .with_compute_units(50_000_000)
+        .with_state_units(50_000)
+        .with_memory_units(50_000)
+}
+
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub struct UploaderWriteOptions {
     pub skip_elf_check: bool,
@@ -1270,6 +1288,256 @@ mod tests {
         );
         assert_eq!(&instruction[14..46], &subject_attestor);
         assert_eq!(&instruction[46..78], &new_claim_authority);
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Block-producer (BP) bond builder tests                              */
+    /* ------------------------------------------------------------------ */
+
+    /// Cross-language guard: the Rust bond/TA derivation must byte-match the C
+    /// contract in tn_block_producer_derivation.h.  The expected vectors below
+    /// were computed directly from that contract (signer=0x11*32,
+    /// bp_program=0x0D01, token_program=0xAA, wthru_mint = TN_WTHRU_MINT_ADDR_BYTES).
+    /// If this drifts, the CLI would derive a different bond PDA than the program
+    /// re-derives and every create would revert with BOND_ADDR_MISMATCH.
+    #[test]
+    fn test_bp_bond_derivation_matches_c() {
+        let signer = [0x11u8; 32];
+        let mut bp_program = [0u8; 32];
+        bp_program[30] = 0x0D;
+        bp_program[31] = 0x01;
+        let mut token_program = [0u8; 32];
+        token_program[31] = 0xAA;
+        let wthru_mint: [u8; 32] = [
+            0x71, 0xD8, 0x13, 0x50, 0x6B, 0x9D, 0xF0, 0xE8, 0x33, 0x37, 0x91, 0xE7, 0x55, 0x5B,
+            0xF8, 0xBB, 0x7C, 0x7C, 0xD9, 0x40, 0x5E, 0xF1, 0xC8, 0x99, 0x02, 0xD8, 0xCE, 0x2C,
+            0x96, 0x44, 0xFD, 0x23,
+        ];
+
+        let expected_bond: [u8; 32] = [
+            0x79, 0x2e, 0x8c, 0x94, 0x08, 0xa3, 0x9e, 0x2e, 0x67, 0xcf, 0xf8, 0x67, 0x28, 0xc5,
+            0xd5, 0x90, 0x7c, 0xa1, 0x01, 0x44, 0x52, 0x15, 0xd4, 0x91, 0x59, 0x5c, 0xb6, 0x9d,
+            0xe4, 0x9f, 0xca, 0x6d,
+        ];
+        let expected_bond_ta: [u8; 32] = [
+            0xbc, 0xa7, 0x94, 0x54, 0x6c, 0xf0, 0xa2, 0xe5, 0x7e, 0xf0, 0x01, 0xac, 0x54, 0xac,
+            0xe3, 0x03, 0xbb, 0x1b, 0xf4, 0x4e, 0xd7, 0x04, 0x93, 0xaf, 0x56, 0x65, 0xea, 0x38,
+            0x19, 0x39, 0xb2, 0x24,
+        ];
+
+        assert_eq!(bp_bond_account_address(&bp_program, &signer), expected_bond);
+        assert_eq!(
+            bp_bond_ta_address(&token_program, &bp_program, &wthru_mint, &signer),
+            expected_bond_ta
+        );
+    }
+
+    /// The canonical WTHRU mint derivation (wthru_program 0x07, token_program
+    /// 0xAA, seed "wthru") must equal TN_WTHRU_MINT_ADDR_BYTES from
+    /// programs/c/examples/tn_wthru_mint.h, since the bond TA derivation depends
+    /// on the mint bytes.
+    #[test]
+    fn test_wthru_canonical_mint_matches_c() {
+        use sha2::{Digest, Sha256};
+        let mut wthru_program = [0u8; 32];
+        wthru_program[31] = 0x07;
+        let mut token_program = [0u8; 32];
+        token_program[31] = 0xAA;
+        let mut mint_seed = [0u8; 32];
+        mint_seed[..5].copy_from_slice(b"wthru");
+
+        let inner = {
+            let mut h = Sha256::new();
+            h.update(wthru_program);
+            h.update(mint_seed);
+            let d = h.finalize();
+            let mut s = [0u8; 32];
+            s.copy_from_slice(&d[..32]);
+            s
+        };
+        let mint = crate::tn_public_address::create_program_defined_account_address(
+            &token_program,
+            false,
+            &inner,
+        );
+        let expected: [u8; 32] = [
+            0x71, 0xD8, 0x13, 0x50, 0x6B, 0x9D, 0xF0, 0xE8, 0x33, 0x37, 0x91, 0xE7, 0x55, 0x5B,
+            0xF8, 0xBB, 0x7C, 0x7C, 0xD9, 0x40, 0x5E, 0xF1, 0xC8, 0x99, 0x02, 0xD8, 0xCE, 0x2C,
+            0x96, 0x44, 0xFD, 0x23,
+        ];
+        assert_eq!(mint, expected);
+    }
+
+    #[test]
+    fn test_bp_create_account_mode1_layout() {
+        let fee_payer = [0x01u8; 32]; // == signer in Mode 1
+        let bp_program = [0xf0u8; 32];
+        let token_program = [0x90u8; 32];
+        let bond_account = [0x20u8; 32];
+        let bond_ta = [0x30u8; 32];
+        let mint = [0x40u8; 32];
+        let signer = fee_payer; // Mode 1: signer is the fee payer
+        let authority = [0x55u8; 32];
+
+        let tx = TransactionBuilder::build_bp_create_account(
+            fee_payer,
+            bp_program,
+            token_program,
+            bond_account,
+            bond_ta,
+            mint,
+            signer,
+            authority,
+            false,         // Mode 1
+            [0u8; 64],     // no signature
+            vec![0xAA; 8], // bond proof
+            vec![0xBB; 8], // ta proof
+            vec![],        // no eoa proof
+            0,
+            0,
+            5,
+        )
+        .expect("mode1 create should build");
+
+        let instr = tx.instructions.expect("instruction bytes");
+        assert_eq!(
+            u32::from_le_bytes(instr[0..4].try_into().unwrap()),
+            TN_BP_INSTRUCTION_CREATE_ACCOUNT
+        );
+        // create_signer_eoa byte is at offset 4 + 10 = 14
+        assert_eq!(instr[14], 0u8, "Mode 1 create_signer_eoa must be 0");
+        assert_eq!(instr[15], 0u8, "reserved must be 0");
+        // signer_pubkey at 16..48, bond_authority at 48..80
+        assert_eq!(&instr[16..48], &signer);
+        assert_eq!(&instr[48..80], &authority);
+        // proof sizes at 144..152 (bond), 152..160 (ta), 160..168 (eoa)
+        assert_eq!(u64::from_le_bytes(instr[144..152].try_into().unwrap()), 8);
+        assert_eq!(u64::from_le_bytes(instr[152..160].try_into().unwrap()), 8);
+        assert_eq!(
+            u64::from_le_bytes(instr[160..168].try_into().unwrap()),
+            0,
+            "Mode 1 eoa_proof_size must be 0"
+        );
+        // 164-byte args header + 16 bytes of proofs
+        assert_eq!(instr.len(), 4 + 164 + 16);
+        // The signer EOA is not added as an account in Mode 1.
+        assert!(!tx.rw_accs.clone().unwrap_or_default().contains(&signer) || signer == fee_payer);
+    }
+
+    #[test]
+    fn test_bp_create_account_mode2_layout() {
+        let fee_payer = [0x01u8; 32];
+        let bp_program = [0xf0u8; 32];
+        let token_program = [0x90u8; 32];
+        let bond_account = [0x20u8; 32];
+        let bond_ta = [0x30u8; 32];
+        let mint = [0x40u8; 32];
+        let signer = [0x2au8; 32]; // distinct from fee payer
+        let authority = [0x55u8; 32];
+        let sig = [0x77u8; 64];
+
+        let tx = TransactionBuilder::build_bp_create_account(
+            fee_payer,
+            bp_program,
+            token_program,
+            bond_account,
+            bond_ta,
+            mint,
+            signer,
+            authority,
+            true, // Mode 2
+            sig,
+            vec![0xAA; 8],
+            vec![0xBB; 8],
+            vec![0xCC; 12], // eoa proof
+            0,
+            0,
+            5,
+        )
+        .expect("mode2 create should build");
+
+        let instr = tx.instructions.expect("instruction bytes");
+        assert_eq!(instr[14], 1u8, "Mode 2 create_signer_eoa must be 1");
+        assert_eq!(&instr[80..144], &sig, "signature must be embedded");
+        assert_eq!(u64::from_le_bytes(instr[144..152].try_into().unwrap()), 8);
+        assert_eq!(u64::from_le_bytes(instr[152..160].try_into().unwrap()), 8);
+        assert_eq!(
+            u64::from_le_bytes(instr[160..168].try_into().unwrap()),
+            12,
+            "Mode 2 eoa_proof_size must be the eoa proof len"
+        );
+        assert_eq!(instr.len(), 4 + 164 + 8 + 8 + 12);
+        // The signer EOA (== signer_pubkey) must be a writable account.
+        assert!(
+            tx.rw_accs.clone().unwrap_or_default().contains(&signer),
+            "Mode 2 signer EOA must be in the writable set"
+        );
+        // signer_eoa_idx (offset 4+8=12) must be a valid, non-zero index.
+        let signer_eoa_idx = u16::from_le_bytes(instr[12..14].try_into().unwrap());
+        assert!(
+            signer_eoa_idx >= 2,
+            "signer EOA must not collide with fee payer/program"
+        );
+    }
+
+    #[test]
+    fn test_bp_delete_dest_equals_fee_payer() {
+        let fee_payer = [0x09u8; 32];
+        let bp_program = [0xf0u8; 32];
+        let bond_account = [0x20u8; 32];
+
+        let tx = TransactionBuilder::build_bp_delete_account(
+            fee_payer,
+            bp_program,
+            bond_account,
+            fee_payer, // dest == fee payer
+            0,
+            0,
+            5,
+        )
+        .expect("delete should build");
+
+        let instr = tx.instructions.expect("instruction bytes");
+        assert_eq!(
+            u32::from_le_bytes(instr[0..4].try_into().unwrap()),
+            TN_BP_INSTRUCTION_DELETE_ACCOUNT
+        );
+        let dest_idx = u16::from_le_bytes(instr[6..8].try_into().unwrap());
+        assert_eq!(dest_idx, 0u16, "dest==fee-payer must collapse to index 0");
+    }
+
+    #[test]
+    fn test_bp_sign_eoa_creation_verifies() {
+        use ed25519_dalek::{Signature, SigningKey, Verifier};
+        let priv_key = [0x2au8; 32];
+        let signing_key = SigningKey::from_bytes(&priv_key);
+        let verifying_key = signing_key.verifying_key();
+        let signer: TnPubkey = verifying_key.to_bytes();
+        let fee_payer: TnPubkey = [0x5cu8; 32];
+        let chain_id: u16 = 1;
+        let sig_bytes = bp_sign_eoa_creation(&priv_key, chain_id, &fee_payer, &signer);
+        let signature = Signature::from_bytes(&sig_bytes);
+        // Strict Ed25519 over the 82-byte canonical EOA-create authorization --
+        // what tsys_account_create_eoa checks (tn_vm_syscall_account_create_eoa).
+        let msg = build_eoa_create_message(chain_id, &fee_payer, &signer);
+        assert_eq!(msg.len(), EOA_CREATE_MSG_SZ);
+        assert!(verifying_key.verify_strict(&msg, &signature).is_ok());
+        // The pre-#2927 zero-byte message must NOT verify: that is the bug that
+        // made every Mode 2 bond create revert with SYSCALL_INVALID_SIGNATURE.
+        assert!(verifying_key.verify_strict(&[0u8; 32], &signature).is_err());
+        // Binding: a different fee payer or chain id yields a different message.
+        let other_payer_msg = build_eoa_create_message(chain_id, &[0u8; 32], &signer);
+        let other_chain_msg = build_eoa_create_message(2, &fee_payer, &signer);
+        assert!(
+            verifying_key
+                .verify_strict(&other_payer_msg, &signature)
+                .is_err()
+        );
+        assert!(
+            verifying_key
+                .verify_strict(&other_chain_msg, &signature)
+                .is_err()
+        );
     }
 }
 
@@ -3816,6 +4084,84 @@ pub const TN_THRU_REGISTRAR_INSTRUCTION_PURCHASE_DOMAIN: u32 = 1;
 pub const TN_THRU_REGISTRAR_INSTRUCTION_RENEW_LEASE: u32 = 2;
 pub const TN_THRU_REGISTRAR_INSTRUCTION_CLAIM_EXPIRED_DOMAIN: u32 = 3;
 
+/* Block-producer (BP) bond program instruction discriminants (u32).
+Mirrors programs/c/examples/tn_block_producer_program.h.  Contiguous 0..7
+(UNTO-1293 removed ClaimFees and closed the discriminant gaps). */
+pub const TN_BP_INSTRUCTION_CREATE_ACCOUNT: u32 = 0;
+pub const TN_BP_INSTRUCTION_SET_BOND_AUTHORITY: u32 = 1;
+pub const TN_BP_INSTRUCTION_DEPOSIT: u32 = 2;
+pub const TN_BP_INSTRUCTION_WITHDRAWAL: u32 = 3;
+pub const TN_BP_INSTRUCTION_UPDATE_BOND: u32 = 4;
+pub const TN_BP_INSTRUCTION_DELETE_ACCOUNT: u32 = 5;
+pub const TN_BP_INSTRUCTION_SWEEP: u32 = 6;
+pub const TN_BP_INSTRUCTION_PAY_OUT_BLOCK: u32 = 7;
+
+/* BP bond derivation — single source of truth is
+programs/c/examples/tn_block_producer_derivation.h.  These mirror it byte
+for byte (asserted by test_bp_bond_derivation_matches_c). */
+
+/// SHA256( prefix || signer ) — the bond / bond-TA seed.
+fn bp_seed_with_prefix(prefix: &[u8], signer: &[u8; 32]) -> [u8; 32] {
+    use sha2::{Digest, Sha256};
+    let mut hasher = Sha256::new();
+    hasher.update(prefix);
+    hasher.update(signer);
+    let hash = hasher.finalize();
+    let mut out = [0u8; 32];
+    out.copy_from_slice(&hash[..32]);
+    out
+}
+
+/// bond = PDA( SHA256("bp_bond" || signer), bp_program ).
+pub fn bp_bond_account_address(bp_program: &[u8; 32], signer: &[u8; 32]) -> [u8; 32] {
+    let seed = bp_seed_with_prefix(b"bp_bond", signer);
+    crate::tn_public_address::create_program_defined_account_address(bp_program, false, &seed)
+}
+
+/// bond_ta = PDA( SHA256(bp_program || wthru_mint || SHA256("bp_bond_ta" ||
+/// signer)), token_program ).
+pub fn bp_bond_ta_address(
+    token_program: &[u8; 32],
+    bp_program: &[u8; 32],
+    wthru_mint: &[u8; 32],
+    signer: &[u8; 32],
+) -> [u8; 32] {
+    use sha2::{Digest, Sha256};
+    let ta_seed = bp_seed_with_prefix(b"bp_bond_ta", signer);
+    let mut hasher = Sha256::new();
+    hasher.update(bp_program);
+    hasher.update(wthru_mint);
+    hasher.update(&ta_seed);
+    let hash = hasher.finalize();
+    let mut token_seed = [0u8; 32];
+    token_seed.copy_from_slice(&hash[..32]);
+    crate::tn_public_address::create_program_defined_account_address(
+        token_program,
+        false,
+        &token_seed,
+    )
+}
+
+/// Ed25519 (RFC 8032, strict) signature over the canonical EOA-create
+/// authorization message [`build_eoa_create_message`]:
+/// `"tn_eoa_create_v1" || chain_id LE || fee_payer || signer` (82 bytes),
+/// proving control of `signer_private_key`.  This is exactly what
+/// `tsys_account_create_eoa` verifies (`tn_vm_syscall_account_create_eoa`)
+/// and what the BP CreateAccount Mode 2 path requires as
+/// `signer_eoa_signature`.  The message binds the chain id and the paying fee
+/// payer, so a signature is valid for one (chain, fee payer, signer) triple.
+pub fn bp_sign_eoa_creation(
+    signer_private_key: &[u8; 32],
+    chain_id: u16,
+    fee_payer: &TnPubkey,
+    signer_pubkey: &TnPubkey,
+) -> [u8; 64] {
+    use ed25519_dalek::{Signer, SigningKey};
+    let signing_key = SigningKey::from_bytes(signer_private_key);
+    let msg = build_eoa_create_message(chain_id, fee_payer, signer_pubkey);
+    signing_key.sign(&msg).to_bytes()
+}
+
 /// Helper function to add sorted accounts and return their indices
 fn add_sorted_accounts(tx: Transaction, accounts: &[(TnPubkey, bool)]) -> (Transaction, Vec<u16>) {
     // Separate RW and RO accounts, sort each group separately
@@ -4438,6 +4784,267 @@ impl TransactionBuilder {
             recipient_account_idx,
             amount,
         )?;
+
+        Ok(tx.with_instructions(instruction_data))
+    }
+
+    /// Build a block-producer (BP) bond CreateAccount transaction (disc 0).
+    ///
+    /// Two modes (see tn_block_producer_program.h:124-145):
+    /// * Mode 1 (`create_signer_eoa == false`): the signer IS the fee payer; the
+    ///   runtime-verified txn signature proves control.  `eoa_proof` must be
+    ///   empty and `signer_eoa_signature` is ignored (pass zeros).
+    /// * Mode 2 (`create_signer_eoa == true`): a third party pays.  The program
+    ///   creates the signer's EOA via `account_create_eoa`, which requires
+    ///   `signer_eoa_signature` = Ed25519 by the signer's key over the canonical
+    ///   EOA-create authorization (chain id, fee payer, signer; see
+    ///   [`bp_sign_eoa_creation`]) and the signer-EOA CREATION `eoa_proof`.
+    ///
+    /// Account writability: bond=rw, bond_ta=rw, mint=ro, token_program=ro, and
+    /// in Mode 2 the signer EOA (== signer_pubkey) = rw (it is created here).
+    #[allow(clippy::too_many_arguments)]
+    pub fn build_bp_create_account(
+        fee_payer: TnPubkey,
+        bp_program: TnPubkey,
+        token_program: TnPubkey,
+        bond_account: TnPubkey,
+        bond_ta: TnPubkey,
+        mint_account: TnPubkey,
+        signer_pubkey: TnPubkey,
+        bond_authority: TnPubkey,
+        create_signer_eoa: bool,
+        signer_eoa_signature: [u8; 64],
+        bond_proof: Vec<u8>,
+        ta_proof: Vec<u8>,
+        eoa_proof: Vec<u8>,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let tx = Transaction::new(fee_payer, bp_program, fee, nonce)
+            .with_start_slot(start_slot)
+            .with_expiry_after(100)
+            .with_compute_units(50_000_000)
+            .with_state_units(50_000)
+            .with_memory_units(50_000);
+
+        let mut accounts: Vec<(TnPubkey, bool)> = vec![
+            (bond_account, true),
+            (bond_ta, true),
+            (mint_account, false),
+            (token_program, false),
+        ];
+        if create_signer_eoa {
+            /* The signer EOA is created by account_create_eoa, so it must be a
+            writable creating account (mirrors the C Mode 2 test). */
+            accounts.push((signer_pubkey, true));
+        }
+
+        let (tx, indices) = add_sorted_accounts(tx, &accounts);
+        let bond_account_idx = indices[0];
+        let bond_ta_idx = indices[1];
+        let mint_account_idx = indices[2];
+        let token_program_idx = indices[3];
+        let signer_eoa_idx = if create_signer_eoa { indices[4] } else { 0u16 };
+
+        let instruction_data = build_bp_create_account_instruction(
+            token_program_idx,
+            bond_account_idx,
+            bond_ta_idx,
+            mint_account_idx,
+            signer_eoa_idx,
+            create_signer_eoa,
+            &signer_pubkey,
+            &bond_authority,
+            &signer_eoa_signature,
+            &bond_proof,
+            &ta_proof,
+            &eoa_proof,
+        )?;
+
+        Ok(tx.with_instructions(instruction_data))
+    }
+
+    /// Build a BP SetBondAuthority transaction (disc 2).  The current bond
+    /// authority signs by being the fee payer.
+    pub fn build_bp_set_authority(
+        fee_payer: TnPubkey,
+        bp_program: TnPubkey,
+        bond_account: TnPubkey,
+        new_bond_authority: TnPubkey,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let tx = bp_base_tx(fee_payer, bp_program, fee, nonce, start_slot);
+        let (tx, indices) = add_sorted_accounts(tx, &[(bond_account, true)]);
+        let bond_account_idx = indices[0];
+
+        let mut instruction_data = Vec::new();
+        instruction_data.extend_from_slice(&TN_BP_INSTRUCTION_SET_BOND_AUTHORITY.to_le_bytes());
+        instruction_data.extend_from_slice(&bond_account_idx.to_le_bytes());
+        instruction_data.extend_from_slice(&new_bond_authority);
+
+        Ok(tx.with_instructions(instruction_data))
+    }
+
+    /// Build a BP Deposit transaction (disc 3).  Stages `amount` from the
+    /// operator's `source_ta` into the bond TA.  The bond authority and the
+    /// source-TA owner are both the fee payer.
+    #[allow(clippy::too_many_arguments)]
+    pub fn build_bp_deposit(
+        fee_payer: TnPubkey,
+        bp_program: TnPubkey,
+        token_program: TnPubkey,
+        bond_account: TnPubkey,
+        bond_ta: TnPubkey,
+        source_ta: TnPubkey,
+        amount: u64,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let tx = bp_base_tx(fee_payer, bp_program, fee, nonce, start_slot);
+        let accounts = [
+            (bond_account, true),
+            (bond_ta, true),
+            (source_ta, true),
+            (token_program, false),
+        ];
+        let (tx, indices) = add_sorted_accounts(tx, &accounts);
+
+        let mut instruction_data = Vec::new();
+        instruction_data.extend_from_slice(&TN_BP_INSTRUCTION_DEPOSIT.to_le_bytes());
+        instruction_data.extend_from_slice(&indices[3].to_le_bytes()); // token_program_idx
+        instruction_data.extend_from_slice(&indices[0].to_le_bytes()); // bond_account_idx
+        instruction_data.extend_from_slice(&indices[1].to_le_bytes()); // bond_ta_idx
+        instruction_data.extend_from_slice(&indices[2].to_le_bytes()); // source_ta_idx
+        instruction_data.extend_from_slice(&amount.to_le_bytes());
+
+        Ok(tx.with_instructions(instruction_data))
+    }
+
+    /// Build a BP Withdrawal transaction (disc 4).  `from_active` selects the
+    /// staged (immediate) or active (lockout-gated) path.
+    #[allow(clippy::too_many_arguments)]
+    pub fn build_bp_withdrawal(
+        fee_payer: TnPubkey,
+        bp_program: TnPubkey,
+        token_program: TnPubkey,
+        bond_account: TnPubkey,
+        bond_ta: TnPubkey,
+        dest_ta: TnPubkey,
+        attestor_table: TnPubkey,
+        from_active: bool,
+        amount: u64,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let tx = bp_base_tx(fee_payer, bp_program, fee, nonce, start_slot);
+        let accounts = [
+            (bond_account, true),
+            (bond_ta, true),
+            (dest_ta, true),
+            (attestor_table, false),
+            (token_program, false),
+        ];
+        let (tx, indices) = add_sorted_accounts(tx, &accounts);
+
+        let mut instruction_data = Vec::new();
+        instruction_data.extend_from_slice(&TN_BP_INSTRUCTION_WITHDRAWAL.to_le_bytes());
+        instruction_data.extend_from_slice(&indices[4].to_le_bytes()); // token_program_idx
+        instruction_data.extend_from_slice(&indices[0].to_le_bytes()); // bond_account_idx
+        instruction_data.extend_from_slice(&indices[1].to_le_bytes()); // bond_ta_idx
+        instruction_data.extend_from_slice(&indices[2].to_le_bytes()); // dest_ta_idx
+        instruction_data.extend_from_slice(&indices[3].to_le_bytes()); // attestor_table_idx
+        instruction_data.push(if from_active { 1u8 } else { 0u8 });
+        instruction_data.extend_from_slice(&amount.to_le_bytes());
+
+        Ok(tx.with_instructions(instruction_data))
+    }
+
+    /// Build a BP UpdateBond transaction (disc 5).  Moves funds between staged
+    /// and active to reach `new_active`, raising `unlock_slot`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn build_bp_update_bond(
+        fee_payer: TnPubkey,
+        bp_program: TnPubkey,
+        bond_account: TnPubkey,
+        attestor_table: TnPubkey,
+        new_unlock_slot: u64,
+        new_active: u64,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let tx = bp_base_tx(fee_payer, bp_program, fee, nonce, start_slot);
+        let accounts = [(bond_account, true), (attestor_table, false)];
+        let (tx, indices) = add_sorted_accounts(tx, &accounts);
+
+        let mut instruction_data = Vec::new();
+        instruction_data.extend_from_slice(&TN_BP_INSTRUCTION_UPDATE_BOND.to_le_bytes());
+        instruction_data.extend_from_slice(&indices[0].to_le_bytes()); // bond_account_idx
+        instruction_data.extend_from_slice(&indices[1].to_le_bytes()); // attestor_table_idx
+        instruction_data.extend_from_slice(&new_unlock_slot.to_le_bytes());
+        instruction_data.extend_from_slice(&new_active.to_le_bytes());
+
+        Ok(tx.with_instructions(instruction_data))
+    }
+
+    /// Build a BP DeleteAccount transaction (disc 6).  Returns native lamports
+    /// to `dest`; requires active==0 && staged==0 && slot>=unlock_slot.  `dest`
+    /// may equal the fee payer (collapses to index 0 via add_sorted_accounts).
+    pub fn build_bp_delete_account(
+        fee_payer: TnPubkey,
+        bp_program: TnPubkey,
+        bond_account: TnPubkey,
+        dest: TnPubkey,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let tx = bp_base_tx(fee_payer, bp_program, fee, nonce, start_slot);
+        let accounts = [(bond_account, true), (dest, true)];
+        let (tx, indices) = add_sorted_accounts(tx, &accounts);
+
+        let mut instruction_data = Vec::new();
+        instruction_data.extend_from_slice(&TN_BP_INSTRUCTION_DELETE_ACCOUNT.to_le_bytes());
+        instruction_data.extend_from_slice(&indices[0].to_le_bytes()); // bond_account_idx
+        instruction_data.extend_from_slice(&indices[1].to_le_bytes()); // dest_idx
+
+        Ok(tx.with_instructions(instruction_data))
+    }
+
+    /// Build a BP Sweep transaction (disc 7).  Reclaims stray inbound transfers
+    /// (bond_TA.balance - active - staged) to `dest_ta`.
+    #[allow(clippy::too_many_arguments)]
+    pub fn build_bp_sweep(
+        fee_payer: TnPubkey,
+        bp_program: TnPubkey,
+        token_program: TnPubkey,
+        bond_account: TnPubkey,
+        bond_ta: TnPubkey,
+        dest_ta: TnPubkey,
+        fee: u64,
+        nonce: u64,
+        start_slot: u64,
+    ) -> Result<Transaction> {
+        let tx = bp_base_tx(fee_payer, bp_program, fee, nonce, start_slot);
+        let accounts = [
+            (bond_account, true),
+            (bond_ta, true),
+            (dest_ta, true),
+            (token_program, false),
+        ];
+        let (tx, indices) = add_sorted_accounts(tx, &accounts);
+
+        let mut instruction_data = Vec::new();
+        instruction_data.extend_from_slice(&TN_BP_INSTRUCTION_SWEEP.to_le_bytes());
+        instruction_data.extend_from_slice(&indices[3].to_le_bytes()); // token_program_idx
+        instruction_data.extend_from_slice(&indices[0].to_le_bytes()); // bond_account_idx
+        instruction_data.extend_from_slice(&indices[1].to_le_bytes()); // bond_ta_idx
+        instruction_data.extend_from_slice(&indices[2].to_le_bytes()); // dest_ta_idx
 
         Ok(tx.with_instructions(instruction_data))
     }
@@ -5723,6 +6330,57 @@ fn build_wthru_withdraw_instruction(
     instruction_data.extend_from_slice(&owner_account_idx.to_le_bytes());
     instruction_data.extend_from_slice(&recipient_account_idx.to_le_bytes());
     instruction_data.extend_from_slice(&amount.to_le_bytes());
+
+    Ok(instruction_data)
+}
+
+/// Build BP CreateAccount (disc 0) instruction data.
+///
+/// Wire layout = u32 discriminant || tn_bp_create_account_args (packed, 164 B)
+/// || bond_proof || ta_proof || eoa_proof.  The args struct field order mirrors
+/// tn_block_producer_program.h:146-161 exactly.
+#[allow(clippy::too_many_arguments)]
+fn build_bp_create_account_instruction(
+    token_program_idx: u16,
+    bond_account_idx: u16,
+    bond_ta_idx: u16,
+    mint_account_idx: u16,
+    signer_eoa_idx: u16,
+    create_signer_eoa: bool,
+    signer_pubkey: &[u8; 32],
+    bond_authority: &[u8; 32],
+    signer_eoa_signature: &[u8; 64],
+    bond_proof: &[u8],
+    ta_proof: &[u8],
+    eoa_proof: &[u8],
+) -> Result<Vec<u8>> {
+    let bond_proof_size =
+        u64::try_from(bond_proof.len()).map_err(|_| anyhow::anyhow!("bond proof too large"))?;
+    let ta_proof_size =
+        u64::try_from(ta_proof.len()).map_err(|_| anyhow::anyhow!("ta proof too large"))?;
+    let eoa_proof_size =
+        u64::try_from(eoa_proof.len()).map_err(|_| anyhow::anyhow!("eoa proof too large"))?;
+
+    let mut instruction_data = Vec::new();
+    instruction_data.extend_from_slice(&TN_BP_INSTRUCTION_CREATE_ACCOUNT.to_le_bytes());
+    /* tn_bp_create_account_args (packed) */
+    instruction_data.extend_from_slice(&token_program_idx.to_le_bytes());
+    instruction_data.extend_from_slice(&bond_account_idx.to_le_bytes());
+    instruction_data.extend_from_slice(&bond_ta_idx.to_le_bytes());
+    instruction_data.extend_from_slice(&mint_account_idx.to_le_bytes());
+    instruction_data.extend_from_slice(&signer_eoa_idx.to_le_bytes());
+    instruction_data.push(if create_signer_eoa { 1u8 } else { 0u8 }); // create_signer_eoa
+    instruction_data.push(0u8); // reserved (must be 0)
+    instruction_data.extend_from_slice(signer_pubkey);
+    instruction_data.extend_from_slice(bond_authority);
+    instruction_data.extend_from_slice(signer_eoa_signature);
+    instruction_data.extend_from_slice(&bond_proof_size.to_le_bytes());
+    instruction_data.extend_from_slice(&ta_proof_size.to_le_bytes());
+    instruction_data.extend_from_slice(&eoa_proof_size.to_le_bytes());
+    /* trailing proofs */
+    instruction_data.extend_from_slice(bond_proof);
+    instruction_data.extend_from_slice(ta_proof);
+    instruction_data.extend_from_slice(eoa_proof);
 
     Ok(instruction_data)
 }
