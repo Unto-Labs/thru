@@ -41,11 +41,11 @@ no package repository setup is needed:
 
 ```bash
 # Debian / Ubuntu
-curl -fsSLO https://github.com/Unto-Labs/thru/releases/download/v0.3.0/thru_0.3.0_amd64.deb
-sudo apt install ./thru_0.3.0_amd64.deb
+curl -fsSLO https://github.com/Unto-Labs/thru/releases/latest/download/thru_amd64.deb
+sudo apt install ./thru_amd64.deb
 
 # RHEL / Rocky / Alma / Fedora / Amazon Linux (dnf accepts URLs directly)
-sudo dnf install https://github.com/Unto-Labs/thru/releases/download/v0.3.0/thru-0.3.0.x86_64.rpm
+sudo dnf install https://github.com/Unto-Labs/thru/releases/latest/download/thru-x86_64.rpm
 ```
 
 Packages installed this way are not picked up by `apt upgrade` /
