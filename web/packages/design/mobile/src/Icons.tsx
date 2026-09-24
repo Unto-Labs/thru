@@ -271,3 +271,94 @@ export function IconShield({ size = 18, color }: IconProps) {
     </Svg>
   );
 }
+
+/** A caution: the triangle, in saffron unless told otherwise. */
+export function IconWarning({ size = 16, color }: IconProps) {
+  const colors = useThemeColors();
+  const c = color ?? colors.saffron;
+  return (
+    <Svg {...base(size)}>
+      <Path d="M12 4 21 20H3L12 4Z" {...stroke(c)} />
+      <Path d="M12 10v5M12 17.5v.5" {...stroke(c)} />
+    </Svg>
+  );
+}
+
+/** A problem: the circled bang, in the error red unless told otherwise. */
+export function IconAlert({ size = 16, color }: IconProps) {
+  const colors = useThemeColors();
+  const c = color ?? colors.error;
+  return (
+    <Svg {...base(size)}>
+      <Circle cx={12} cy={12} r={9} {...stroke(c)} />
+      <Path d="M12 7v6M12 16v1" {...stroke(c)} />
+    </Svg>
+  );
+}
+
+/** A keypad's delete key. */
+export function IconBackspace({ size = 24, color }: IconProps) {
+  const c = useIconColor(color);
+  return (
+    <Svg {...base(size)}>
+      <Path d="M8 5h13v14H8l-6-7 6-7Z" {...stroke(c)} />
+      <Path d="m11 9 6 6M17 9l-6 6" {...stroke(c)} />
+    </Svg>
+  );
+}
+
+/** Edit this value: the pencil. */
+export function IconEdit({ size = 16, color }: IconProps) {
+  const c = useIconColor(color, "subtle");
+  return (
+    <Svg {...base(size)}>
+      <Path d="M4 20h4L19 9l-4-4L4 16v4Z" {...stroke(c)} />
+      <Path d="m13 7 4 4" {...stroke(c)} />
+    </Svg>
+  );
+}
+
+/* The buttons Safari shows on its way to Add to Home Screen, redrawn in the
+   kit's line style so install instructions can point at them: Share, the
+   ••• More button (iOS 26), the Page Menu button (iOS 27), and Add to Home
+   Screen's plus-in-a-square. */
+
+export function IconShare({ size = 21, color }: IconProps) {
+  const c = useIconColor(color);
+  return (
+    <Svg {...base(size)}>
+      <Path d="M8.5 9H5v12h14V9h-3.5" {...stroke(c)} />
+      <Path d="M12 3v12M8 7l4-4 4 4" {...stroke(c)} />
+    </Svg>
+  );
+}
+
+export function IconMore({ size = 21, color }: IconProps) {
+  const c = useIconColor(color);
+  return (
+    <Svg {...base(size)}>
+      <Circle cx={5} cy={12} r={1.6} fill={c} />
+      <Circle cx={12} cy={12} r={1.6} fill={c} />
+      <Circle cx={19} cy={12} r={1.6} fill={c} />
+    </Svg>
+  );
+}
+
+export function IconPageMenu({ size = 21, color }: IconProps) {
+  const c = useIconColor(color);
+  return (
+    <Svg {...base(size)}>
+      <Path d="M4 6h16M4 12h16M4 18h10" {...stroke(c)} />
+    </Svg>
+  );
+}
+
+export function IconPlusSquare({ size = 21, color }: IconProps) {
+  const c = useIconColor(color);
+  return (
+    <Svg {...base(size)}>
+      <Rect x={3.5} y={3.5} width={17} height={17} {...stroke(c)} />
+      <Path d="M12 8v8M8 12h8" {...stroke(c)} />
+    </Svg>
+  );
+}

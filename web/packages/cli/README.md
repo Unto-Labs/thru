@@ -35,18 +35,40 @@ Fedora, SUSE). Alpine/musl is not supported.
 
 Each release also ships `.deb` and `.rpm` packages (x86_64 and aarch64)
 built from the same binaries, for machines without npm — e.g. cloud VMs.
-Grab the file for your platform from the [releases
-page](https://github.com/Unto-Labs/thru/releases) and install it directly;
-no package repository setup is needed:
+The `releases/latest/download/` URLs below always resolve to the newest
+release, so no package repository setup is needed and nothing to update here
+between versions. Run only the one block that matches your distro and
+architecture.
+
+Debian / Ubuntu:
 
 ```bash
-# Debian / Ubuntu
-curl -fsSLO https://github.com/Unto-Labs/thru/releases/download/v0.3.0/thru_0.3.0_amd64.deb
-sudo apt install ./thru_0.3.0_amd64.deb
-
-# RHEL / Rocky / Alma / Fedora / Amazon Linux (dnf accepts URLs directly)
-sudo dnf install https://github.com/Unto-Labs/thru/releases/download/v0.3.0/thru-0.3.0.x86_64.rpm
+# x86_64
+curl -fsSLO https://github.com/Unto-Labs/thru/releases/latest/download/thru_amd64.deb
+sudo apt install ./thru_amd64.deb
 ```
+
+```bash
+# arm64
+curl -fsSLO https://github.com/Unto-Labs/thru/releases/latest/download/thru_arm64.deb
+sudo apt install ./thru_arm64.deb
+```
+
+RHEL / Rocky / Alma / Fedora / Amazon Linux (`dnf` accepts the URL directly):
+
+```bash
+# x86_64
+sudo dnf install https://github.com/Unto-Labs/thru/releases/latest/download/thru-x86_64.rpm
+```
+
+```bash
+# aarch64
+sudo dnf install https://github.com/Unto-Labs/thru/releases/latest/download/thru-aarch64.rpm
+```
+
+To pin a specific version instead, take the versioned asset from the [releases
+page](https://github.com/Unto-Labs/thru/releases) — `thru_<version>_amd64.deb`
+or `thru-<version>-1.x86_64.rpm`.
 
 Packages installed this way are not picked up by `apt upgrade` /
 `dnf upgrade` (there is no hosted repository); to update, install the

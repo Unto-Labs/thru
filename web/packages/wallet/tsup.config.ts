@@ -62,6 +62,7 @@ export default defineConfig([
   },
   {
     entry: {
+      networks: 'src/networks.ts',
       native: 'src/native/index.ts',
       'native/react': 'src/native/react/index.ts',
       'native/react/transparent': 'src/native/react/transparent.ts',

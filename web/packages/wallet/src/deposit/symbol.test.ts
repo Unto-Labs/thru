@@ -5,16 +5,27 @@ import {
   createDepositConfig,
   getValidatedDepositDestination,
   normalizeDepositSymbol,
+  formatTokenAmountLabel,
 } from "./index";
 import { DepositTarget, ThruNetwork } from "../protocol/postMessage";
 
 /* The deposit token was renamed at the display layer only. Deployed config may
-   still carry the old symbol; every destination built from it must say THRUSD. */
+   still carry the old symbol; every destination built from it must say $. */
 describe("deposit symbol normalization", () => {
-  it("maps the legacy symbol and an absent symbol to THRUSD, and keeps others", () => {
+  it("prefixes dollar amounts while preserving signs, precision, and other tokens", () => {
+    expect(formatTokenAmountLabel("1,250.00", "THRUSD")).toBe("$1,250.00");
+    expect(formatTokenAmountLabel("+25.00", "$")).toBe("+$25.00");
+    expect(formatTokenAmountLabel("-0.50", "ThruUSD")).toBe("-$0.50");
+    expect(formatTokenAmountLabel("<0.000001", "$")).toBe("<$0.000001");
+    expect(formatTokenAmountLabel("2.5", "THRU")).toBe("2.5 THRU");
+  });
+  it("maps the legacy symbol and an absent symbol to $, and keeps others", () => {
     expect(normalizeDepositSymbol(LEGACY_DEPOSIT_SYMBOL)).toBe(DEFAULT_DEPOSIT_SYMBOL);
     expect(normalizeDepositSymbol(undefined)).toBe(DEFAULT_DEPOSIT_SYMBOL);
     expect(normalizeDepositSymbol("")).toBe(DEFAULT_DEPOSIT_SYMBOL);
+    for (const legacy of ["THRUSD", "ThruUSD", "Thru USD", "thrusd", "$"]) {
+      expect(normalizeDepositSymbol(legacy)).toBe("$");
+    }
     expect(normalizeDepositSymbol("OTHER")).toBe("OTHER");
   });
 
@@ -25,18 +36,24 @@ describe("deposit symbol normalization", () => {
       tokenAccountAddress: "ta_token_account",
       mintAddress: "ta_mint",
       tokenProgramAddress: "ta_token_program",
-      symbol: "THRUSD",
+      symbol: "$",
       decimals: 6,
     };
     expect(
       getValidatedDepositDestination({ ...expected, symbol: "CREDITS" }, expected),
     ).toEqual(expected);
+    for (const legacy of ["CREDITS", "THRUSD", "ThruUSD", "Thru USD"]) {
+      const snapshot = { ...expected, symbol: legacy };
+      expect(getValidatedDepositDestination(snapshot, snapshot)).toEqual(expected);
+      expect(getValidatedDepositDestination(expected, snapshot)).toEqual(expected);
+      expect(snapshot.symbol).toBe(legacy);
+    }
     expect(() =>
       getValidatedDepositDestination({ ...expected, symbol: "OTHER" }, expected),
     ).toThrow("no longer matches wallet config: symbol");
   });
 
-  it("reports THRUSD for a target whose config still says CREDITS", () => {
+  it("reports $ for a target whose config still says CREDITS", () => {
     const config = createDepositConfig({
       defaultNetwork: "alphanet",
       networkConfigJson: JSON.stringify({
@@ -56,7 +73,7 @@ describe("deposit symbol normalization", () => {
       }),
     });
     const target = config.getTarget("alphanet", "credits");
-    expect(target.symbol).toBe("THRUSD");
+    expect(target.symbol).toBe("$");
     expect(target.depositTarget).toBe("credits");
   });
 });

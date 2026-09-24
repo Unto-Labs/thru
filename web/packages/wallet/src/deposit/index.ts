@@ -43,7 +43,7 @@ declare const process:
     }
   | undefined;
 
-export const DEFAULT_DEPOSIT_SYMBOL = "THRUSD";
+export const DEFAULT_DEPOSIT_SYMBOL = "$";
 /** The deposit token's former name, still present in older deployed config. */
 export const LEGACY_DEPOSIT_SYMBOL = "CREDITS";
 export const DEFAULT_DEPOSIT_DECIMALS = 6;
@@ -55,14 +55,23 @@ export const CREDITS_TICKER = THRUSD_TICKER;
 /** @deprecated Use THRUSD_DECIMALS. */
 export const CREDITS_DECIMALS = THRUSD_DECIMALS;
 
-/* The deposit token was renamed from CREDITS to THRUSD at the display layer
+/* The deposit token was renamed from CREDITS / THRUSD to $ at the display layer
    only: the on-chain ticker and the config target key are unchanged, and
-   deployed config may still say CREDITS. Normalize here so every surface that
+   deployed config may still carry a legacy name. Normalize here so every surface that
    reads a prepared destination shows the current name regardless of which
    config value it was built from. */
 export function normalizeDepositSymbol(symbol: string | undefined): string {
-  if (!symbol || symbol === LEGACY_DEPOSIT_SYMBOL) return DEFAULT_DEPOSIT_SYMBOL;
+  if (!symbol || /^(?:credits|thrusd|thru\s*usd)$/i.test(symbol))
+    return DEFAULT_DEPOSIT_SYMBOL;
   return symbol;
+}
+
+/** Format a display amount without changing its precision or digit grouping. */
+export function formatTokenAmountLabel(amount: string, symbol: string): string {
+  const displaySymbol = normalizeDepositSymbol(symbol);
+  if (displaySymbol !== "$") return `${amount} ${displaySymbol}`;
+  const sign = amount.match(/^(?:[<>]=?|[+-])/)?.[0] ?? "";
+  return `${sign}$${amount.slice(sign.length)}`;
 }
 
 const DEFAULT_TOKEN_PROGRAM_ADDRESS =
@@ -130,6 +139,7 @@ export interface DepositProviderConfig {
 }
 
 export interface DepositNetworkConfig {
+  chainId?: number;
   network: string;
   unifoldProject?: DepositUnifoldProjectConfig;
   defaultDepositTarget: string;
@@ -173,16 +183,20 @@ export function getValidatedDepositDestination(
   actual: DepositDestination,
   expected: Readonly<DepositDestination>,
 ): DepositDestination {
-  /* A destination prepared before the CREDITS -> THRUSD rename (cached by a
-     dapp, or built by an older wallet) still names the token CREDITS. That is
-     the same token, so compare the normalized symbol. */
+  /* Either side may come from an older wallet or a cached snapshot. Compare
+     legacy display symbols in their canonical form without relaxing identity
+     checks for the mint, token account, or network. */
+  const canonical: DepositDestination = {
+    ...expected,
+    symbol: normalizeDepositSymbol(expected.symbol),
+  };
   const supplied: DepositDestination = {
     ...actual,
     symbol: normalizeDepositSymbol(actual.symbol),
   };
   const mismatches = (
-    Object.keys(expected) as Array<keyof DepositDestination>
-  ).filter((key) => supplied[key] !== expected[key]);
+    Object.keys(canonical) as Array<keyof DepositDestination>
+  ).filter((key) => supplied[key] !== canonical[key]);
   if (mismatches.length > 0) {
     throw new Error(
       `Prepared deposit destination no longer matches wallet config: ${mismatches.join(", ")}`,
@@ -192,7 +206,7 @@ export function getValidatedDepositDestination(
   /* Never pass the caller-controlled object beyond validation. A property
      getter could otherwise return a different value when downstream code
      reads it after this check. */
-  return { ...expected };
+  return canonical;
 }
 
 export type EnsureDepositAccountParams = {
@@ -222,9 +236,7 @@ export interface DepositsApi {
   getAccountState(
     params?: GetDepositAccountStateParams,
   ): Promise<DepositAccountState>;
-  waitForDeposit(
-    params: WaitForDepositParams,
-  ): Promise<DepositAccountState>;
+  waitForDeposit(params: WaitForDepositParams): Promise<DepositAccountState>;
   formatAmount(amountRaw: bigint, destination: DepositDestination): string;
 }
 
@@ -313,8 +325,10 @@ type RawDepositTargetConfig = {
 type RawNetworkConfig = Record<
   string,
   {
+    chain_id?: number;
     rpc_url?: string;
     default_deposit_target?: string;
+    faucet_only?: boolean;
     targets?: Record<string, RawDepositTargetConfig>;
     providers?: Record<
       string,
@@ -482,10 +496,17 @@ function parseDepositNetworkConfigs(
           public: Object.freeze(publicConfig),
         });
       }
-      if (providers.size === 0) {
+      /* Omitting payment settings is valid only when explicitly intentional. */
+      if (value.faucet_only !== undefined && typeof value.faucet_only !== "boolean") {
+        throw new Error(`Deposit config for network ${network} faucet_only must be a boolean`);
+      }
+      if (providers.size === 0 && value.faucet_only !== true) {
         throw new Error(
-          `Deposit config for network ${network} must contain providers`,
+          `Deposit config for network ${network} must contain providers unless faucet_only is true`,
         );
+      }
+      if (value.faucet_only === true && providers.size > 0) {
+        throw new Error(`Faucet-only network ${network} must not configure paid providers`);
       }
 
       const rawUnifold = value.providers?.unifold;
@@ -524,6 +545,8 @@ function parseDepositNetworkConfigs(
         network,
         {
           network,
+          chainId:
+            value.chain_id === undefined ? undefined : Number(value.chain_id),
           ...(unifoldProject ? { unifoldProject } : {}),
           defaultDepositTarget,
           depositTargets,
@@ -861,7 +884,10 @@ export async function waitForDepositForWallet(params: {
 
   throwIfAborted(params.signal);
   const latestBalance = latestState
-    ? `${latestState.balanceLabel} ${params.destination.symbol}`
+    ? formatTokenAmountLabel(
+        latestState.balanceLabel,
+        params.destination.symbol,
+      )
     : "unknown";
   const message =
     `Deposit confirmed off-chain, but the ${params.destination.symbol} balance did not update after ` +

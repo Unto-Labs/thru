@@ -1,0 +1,8 @@
+test-case:
+  name: "array_structs_top_level_points"
+  abi-file: "../../abi_definitions/array_structs.abi.yaml"
+  type: "Point2DArray5"
+  description: "Decode and reencode a named array directly, including negative coordinates"
+  tags: ["arrays", "top-level", "structs", "type-ref"]
+  # Points: (10, -20), (30, 40), (-50, 60), (70, -80), (90, 100)
+  binary-hex: "0a 00 00 00 ec ff ff ff 1e 00 00 00 28 00 00 00 ce ff ff ff 3c 00 00 00 46 00 00 00 b0 ff ff ff 5a 00 00 00 64 00 00 00"

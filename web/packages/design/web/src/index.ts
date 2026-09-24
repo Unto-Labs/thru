@@ -136,7 +136,7 @@ export { TokenIcon } from "./components/wallet/TokenIcon/TokenIcon";
 export type { TokenIconProps } from "./components/wallet/TokenIcon/TokenIcon";
 export { ButtonArea } from "./components/wallet/ButtonArea/ButtonArea";
 export type { ButtonAreaProps } from "./components/wallet/ButtonArea/ButtonArea";
-export { CopyButton, useCopy } from "./components/wallet/CopyButton/CopyButton";
+export { CopyButton, copyText, useCopy } from "./components/wallet/CopyButton/CopyButton";
 export type { CopyButtonProps } from "./components/wallet/CopyButton/CopyButton";
 export { Spacer } from "./components/wallet/Spacer/Spacer";
 export type { SpacerProps } from "./components/wallet/Spacer/Spacer";
@@ -230,6 +230,7 @@ export type {
   WalletSheetDepositProps,
   WalletSheetDepositCryptoProps,
   WalletSheetDepositCardProps,
+  WalletSheetDepositFaucetProps,
   WalletSheetDepositVerifyProps,
   WalletSheetDepositPendingProps,
   WalletSheetDepositDoneProps,
@@ -249,3 +250,6 @@ export type {
 } from "./components/wallet/PasskeyPopup/PasskeyPopup";
 export { WalletOverlay } from "./components/wallet/WalletOverlay/WalletOverlay";
 export type { WalletOverlayProps } from "./components/wallet/WalletOverlay/WalletOverlay";
+
+export { ThruUsdLogo, type ThruUsdLogoProps } from "./ThruUsdLogo";
+export { isThruUsdSymbol } from "../../tokens/src/thrusd";

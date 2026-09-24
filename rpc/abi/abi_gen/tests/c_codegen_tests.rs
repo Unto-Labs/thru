@@ -456,3 +456,209 @@ types:
 
     let _ = fs::remove_file(&temp_file);
 }
+
+#[test]
+fn test_c_top_level_arrays() {
+    let abi: AbiFile = serde_yml::from_str(
+        &fs::read_to_string("tests/compliance_tests/abi_definitions/array_structs.abi.yaml")
+            .unwrap(),
+    )
+    .unwrap();
+    let mut resolver = TypeResolver::new();
+    for typedef in abi.types {
+        resolver.add_typedef(typedef);
+    }
+    let inline: abi_gen::abi::types::TypeDef = serde_yml::from_str(
+        r#"
+name: InlinePoints
+kind:
+  array:
+    element-type:
+      struct:
+        packed: true
+        fields:
+          - name: x
+            field-type:
+              primitive: i32
+    size:
+      literal:
+        u32: 2
+"#,
+    )
+    .unwrap();
+    resolver.add_typedef(inline);
+    resolver.resolve_all().unwrap();
+    let output_dir = std::env::temp_dir().join("abi_c_top_level_arrays");
+    fs::create_dir_all(&output_dir).unwrap();
+    let header = CCodeGenerator::new(
+        &resolver,
+        CCodeGeneratorOptions {
+            output_dir: output_dir.to_string_lossy().into_owned(),
+            ..Default::default()
+        },
+    )
+    .emit_code(&collect_resolved_refs(&resolver));
+    let test_code = format!(
+        r#"{header}
+#include <assert.h>
+int main( void ) {{
+    Point2DArray5_t points = {{ {{ .x = 10, .y = -20 }} }};
+    U8Array3_t bytes = {{ 1, 0x34, 0xff }};
+    U8Matrix2x3_t matrix = {{ {{1, 2, 3}}, {{4, 5, 6}} }};
+    InlinePoints_t inline_points = {{ {{ .x = -42 }}, {{ .x = 99 }} }};
+    _Static_assert( sizeof(points) == 40, "point array size" );
+    _Static_assert( sizeof(bytes) == 3, "primitive array size" );
+    _Static_assert( sizeof(matrix) == 6, "matrix size" );
+    _Static_assert( sizeof(inline_points) == 8, "inline array size" );
+    assert( points[0].x == 10 && points[0].y == -20 );
+    points[4].x = 123;
+    assert( points[4].x == 123 );
+    assert( bytes[2] == 0xff && matrix[1][2] == 6 );
+    assert( inline_points[0].x == -42 && inline_points[1].x == 99 );
+    uint64_t consumed;
+    assert( Point2DArray5_validate_ir( sizeof(points), &consumed ) == 0 );
+    assert( consumed == sizeof(points) );
+    assert( Point2DArray5_validate_ir( sizeof(points) - 1, &consumed ) != 0 );
+    assert( Point2DArray5_footprint_ir() == sizeof(points) );
+    return 0;
+}}
+"#
+    );
+    fs::write(output_dir.join("test.c"), test_code).unwrap();
+    let compilation = Command::new("gcc")
+        .args([
+            "-std=c11",
+            "-Werror=implicit-function-declaration",
+            "test.c",
+            "functions.c",
+            "-o",
+            "test",
+        ])
+        .current_dir(&output_dir)
+        .output()
+        .unwrap();
+    assert!(
+        compilation.status.success(),
+        "{}",
+        String::from_utf8_lossy(&compilation.stderr)
+    );
+    assert!(
+        Command::new(output_dir.join("test"))
+            .status()
+            .unwrap()
+            .success()
+    );
+}
+
+/* Compile declarations separately from definitions, then check actual C layout. */
+fn run_array_layout_regression(test_name: &str, body: &str) {
+    let resolver = resolve_types_from_abi("tests/compliance_data/top_level_array_layouts.abi.yaml")
+        .expect("resolve array layout regressions");
+    let output_dir = std::env::temp_dir().join(test_name);
+    fs::create_dir_all(&output_dir).unwrap();
+    CCodeGenerator::new(
+        &resolver,
+        CCodeGeneratorOptions {
+            output_dir: output_dir.to_string_lossy().into_owned(),
+            ..Default::default()
+        },
+    )
+    .emit_code(&collect_resolved_refs(&resolver));
+    fs::write(
+        output_dir.join("test.c"),
+        format!("#include <assert.h>\n#include <string.h>\n#include \"types.h\"\nint main(void) {{\n{body}\nreturn 0;\n}}\n"),
+    )
+    .unwrap();
+    let compilation = Command::new("gcc")
+        .args([
+            "-std=c11",
+            "-Werror=implicit-function-declaration",
+            "test.c",
+            "functions.c",
+            "-o",
+            "test",
+        ])
+        .current_dir(&output_dir)
+        .output()
+        .unwrap();
+    assert!(
+        compilation.status.success(),
+        "{}",
+        String::from_utf8_lossy(&compilation.stderr)
+    );
+    assert!(
+        Command::new(output_dir.join("test"))
+            .status()
+            .unwrap()
+            .success()
+    );
+}
+
+#[test]
+fn test_c_top_level_union_array_stride() {
+    run_array_layout_regression(
+        "abi_c_union_array_stride",
+        r#"
+    _Static_assert( sizeof(InlineUnions_t) == 10, "inline union array footprint" );
+    _Static_assert( sizeof(ReferencedUnions_t) == 10, "referenced union array footprint" );
+    InlineUnions_t inline_values = {{1, 2, 3, 4, 5}, {6, 7, 8, 9, 10}};
+    ReferencedUnions_t ref_values;
+    memcpy( ref_values, inline_values, sizeof(ref_values) );
+    assert( sizeof(inline_values[0]) == 5 );
+    assert( ref_values[1][0] == 6 && ref_values[1][4] == 10 );
+    assert( (uint8_t *)(&ref_values[1]) - (uint8_t *)(&ref_values[0]) == 5 );
+    assert( InlineUnions_footprint_ir() == sizeof(inline_values) );
+    assert( ReferencedUnions_footprint_ir() == sizeof(ref_values) );
+    uint64_t consumed;
+    assert( ReferencedUnions_validate_ir( 10, &consumed ) == 0 && consumed == 10 );
+    assert( ReferencedUnions_validate_ir( 9, &consumed ) != 0 );
+    "#,
+    );
+}
+
+#[test]
+fn test_c_top_level_buffer_sized_arrays() {
+    run_array_layout_regression(
+        "abi_c_buffer_sized_arrays",
+        r#"
+    /* Runtime dimensions expose a flat byte view, never an incomplete row. */
+    BufferBytes_t bytes = {1, 2, 3, 4, 5, 6};
+    VariableRows_t rows = {1, 2, 3, 4, 5, 6};
+    assert( sizeof(bytes) == 6 && sizeof(rows) == 6 );
+    assert( bytes[5] == 6 && rows[3] == 4 );
+    assert( BufferBytes_footprint_ir( 6 ) == 6 );
+    uint64_t consumed;
+    assert( BufferBytes_validate_ir( 6, &consumed ) == 0 && consumed == 6 );
+    assert( BufferBytes_validate_ir( 0, &consumed ) == 0 && consumed == 0 );
+    "#,
+    );
+}
+
+#[test]
+fn test_c_top_level_custom_alignment_stride() {
+    run_array_layout_regression(
+        "abi_c_custom_alignment_stride",
+        r#"
+    _Static_assert( sizeof(ReducedAlignmentArray_t) == 10, "reduced alignment ABI footprint" );
+    _Static_assert( sizeof(InlineReducedAlignmentArray_t) == 10, "inline ABI footprint" );
+    _Static_assert( sizeof(PackedTailAlignmentArray_t) == 10, "packed ABI omits tail padding" );
+    ReducedAlignmentArray_t values = {{1, 2, 3, 4, 5}, {6, 7, 8, 9, 10}};
+    InlineReducedAlignmentArray_t inline_values;
+    PackedTailAlignmentArray_t packed_values;
+    memcpy( inline_values, values, sizeof(values) );
+    memcpy( packed_values, values, sizeof(values) );
+    assert( values[1][0] == 6 && inline_values[1][4] == 10 && packed_values[1][4] == 10 );
+    assert( (uint8_t *)&values[1] - (uint8_t *)&values[0] == 5 );
+    assert( ReducedAlignmentArray_footprint_ir() == sizeof(values) );
+    assert( InlineReducedAlignmentArray_footprint_ir() == sizeof(inline_values) );
+    assert( PackedTailAlignmentArray_footprint_ir() == sizeof(packed_values) );
+    uint64_t consumed;
+    assert( ReducedAlignmentArray_validate_ir( 10, &consumed ) == 0 && consumed == 10 );
+    assert( ReducedAlignmentArray_validate_ir( 9, &consumed ) != 0 );
+    /* A compatible raised alignment retains native field access. */
+    RaisedAlignmentArray_t native_values = {{ .word = 1, .byte = 2 }, { .word = 3, .byte = 4 }};
+    assert( native_values[1].word == 3 && native_values[1].byte == 4 );
+    assert( sizeof(native_values) == 16 && RaisedAlignmentArray_footprint_ir() == 16 );
+    "#,
+    );
+}

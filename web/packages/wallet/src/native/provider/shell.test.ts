@@ -11,15 +11,16 @@ const TEST_SHELL_OPTIONS = {
 };
 
 describe('native shell HTML', () => {
-  it('delegates WebAuthn to the configured wallet origin only', () => {
+  it('delegates WebAuthn and clipboard writes to the configured wallet origin only', () => {
     const html = getShellHtml({
       walletUrl: 'https://staging-app.tid.sh/embedded',
       walletOrigin: 'https://staging-app.tid.sh',
     });
     expect(html).toContain(
-      'publickey-credentials-get https://staging-app.tid.sh; publickey-credentials-create https://staging-app.tid.sh'
+      'publickey-credentials-get https://staging-app.tid.sh; publickey-credentials-create https://staging-app.tid.sh; clipboard-write https://staging-app.tid.sh'
     );
     expect(html).not.toContain('publickey-credentials-get *');
+    expect(html).not.toContain('clipboard-write *');
   });
   it('does not delegate payment permission to the wallet iframe', () => {
     const html = getShellHtml(TEST_SHELL_OPTIONS);

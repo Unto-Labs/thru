@@ -21,6 +21,8 @@
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
+  /* 24px under the "Add funds" title, with the body gap and header padding. */
+  margin-top: var(--space-2);
 }
 .tds-dep__method {
   box-sizing: border-box;
@@ -345,157 +347,27 @@
   color: var(--color-text-tertiary);
   min-height: 42px;
 }
-.tds-dep__copy {
-  box-sizing: border-box;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-2);
-  width: 100%;
-  min-height: 40px;
-  margin-top: -6px;
-  font-family: var(--font-sans);
-  font-weight: var(--fw-semibold);
-  font-size: 13px;
-  line-height: 1;
-  border: 1px solid var(--color-border-strong);
-  border-top: none;
-  border-radius: var(--radius-none);
-  cursor: pointer;
-  background: var(--color-surface-primary);
-  color: var(--color-text-primary);
-  transition: background-color var(--duration-fast) var(--ease-standard);
-}
-.tds-dep__copy:hover:not(:disabled) {
-  background: var(--color-surface-lower);
-}
-.tds-dep__copy:active:not(:disabled) {
-  transform: translateY(1px);
-}
-.tds-dep__copy:disabled {
-  cursor: default;
-  color: var(--color-text-tertiary);
-}
 .tds-dep__copy-check {
   display: inline-flex;
   color: var(--grass-400);
 }
 
-/* Back link */
+/* Back link: a ghost Button, centred under the form. */
 .tds-dep__back {
   align-self: center;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  font-family: var(--font-sans);
-  font-size: 12px;
-  color: var(--color-text-tertiary);
-}
-.tds-dep__back:hover,
-.tds-dep__link:hover {
-  color: var(--color-text-primary);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.tds-dep__link {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  font-family: var(--font-sans);
-  font-size: 12px;
-  color: var(--color-text-secondary);
 }
 
-/* Amount panel */
-.tds-dep__amount {
-  background: var(--color-surface-higher);
-  border: 1px solid var(--color-border-strong);
-  padding: var(--space-3);
+/* Amount presets: a design ToggleGroup stretched across the field. */
+.tds-dep__presets {
   display: flex;
-  flex-direction: column;
-  gap: 10px;
+  width: 100%;
 }
-.tds-dep__amount-row {
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
-  font-family: var(--font-mono);
-}
-.tds-dep__amount-cur {
-  font-size: 20px;
-  color: var(--color-text-tertiary);
-}
-.tds-dep__amount-val,
-.tds-dep__amount-input {
-  font-size: 30px;
-  letter-spacing: -0.5px;
-  color: var(--color-text-primary);
-}
-/* The amount is typed, not only picked: a bare input inside the panel. */
-.tds-dep__amount-input {
+.tds-dep__preset {
   flex: 1;
-  min-width: 0;
-  padding: 0;
-  margin: 0;
-  border: 0;
-  background: transparent;
-  font-family: inherit;
-  line-height: 1.1;
-  outline: none;
-}
-.tds-dep__amount-input:disabled {
-  color: var(--color-text-tertiary);
-}
-.tds-dep__amount:focus-within {
-  border-color: var(--color-text-primary);
-}
-.tds-dep__amount-row {
-  cursor: text;
 }
 /* Contact asked for inline on the card form. */
 .tds-dep__card-contact {
   gap: 10px;
-}
-.tds-dep__amount-unit {
-  margin-left: auto;
-  font-size: 11px;
-  color: var(--color-text-tertiary);
-}
-.tds-dep__presets {
-  display: flex;
-  gap: 6px;
-}
-.tds-dep__preset {
-  flex: 1;
-  padding: 6px 0;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 1;
-  border-radius: var(--radius-none);
-  cursor: pointer;
-  border: 1px solid var(--color-border-strong);
-  background: var(--color-surface-higher);
-  color: var(--color-text-primary);
-  transition: border-color var(--duration-fast) var(--ease-standard);
-}
-.tds-dep__preset:hover:not(:disabled) {
-  border-color: var(--color-text-primary);
-}
-.tds-dep__preset--on {
-  background: var(--color-surface-lower-inverse);
-  color: var(--color-text-primary-inverse);
-  border-color: var(--color-surface-lower-inverse);
-}
-.tds-dep__preset:disabled {
-  cursor: default;
 }
 .tds-dep__quote {
   display: flex;
@@ -580,49 +452,6 @@
   text-wrap: pretty;
 }
 
-/* Coinbase-styled pay button (Apple's/Google's geometry — not tokenized) */
-.tds-dep__pay {
-  width: 100%;
-  height: 40px;
-  background: #000;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  font-family: var(--font-sans);
-  font-weight: 600;
-  font-size: 14px;
-  letter-spacing: -0.1px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  cursor: pointer;
-}
-.tds-dep__pay:hover:not(:disabled) {
-  background: #1d1d1f;
-}
-.tds-dep__pay:active:not(:disabled) {
-  transform: translateY(1px);
-}
-.tds-dep__pay:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-.tds-dep__pay--loading {
-  cursor: progress;
-}
-.tds-dep__pay-spin {
-  width: 14px;
-  height: 14px;
-  border-radius: var(--radius-pill);
-  border: 2px solid rgba(255, 255, 255, 0.28);
-  border-top-color: #fff;
-  animation: tds-dep-spin 0.7s linear infinite;
-}
-@keyframes tds-dep-spin {
-  to { transform: rotate(360deg); }
-}
-
 /* Verify footer */
 .tds-dep__verify-foot {
   display: flex;
@@ -633,7 +462,6 @@
 }
 .tds-dep__verify-foot .tds-dep__back {
   align-self: auto;
-  color: var(--color-text-secondary);
 }
 .tds-dep__attribution {
   font-family: var(--font-mono);

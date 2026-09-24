@@ -12,6 +12,7 @@
       "types": "./tokens/src/index.ts",
       "import": "./tokens/src/index.ts"
     },
+    "./assets/thrusd.svg": "./assets/thrusd.svg",
     "./tokens/css": "./tokens/src/all.css",
     "./tokens/neutral.css": "./tokens/src/neutral.css",
     "./tokens/tokens.css": "./tokens/src/tokens.css",
@@ -30,7 +31,8 @@
   "files": [
     "tokens/src",
     "web/src",
-    "mobile/src"
+    "mobile/src",
+    "assets/thrusd.svg"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit && tsc --noEmit -p mobile/tsconfig.json"

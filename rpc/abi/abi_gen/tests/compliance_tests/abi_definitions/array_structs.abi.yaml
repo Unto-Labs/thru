@@ -155,3 +155,26 @@ types:
                 size:
                   field-ref:
                     path: ["size2"]
+
+  - name: "U8Array3"
+    kind:
+      array:
+        element-type:
+          primitive: u8
+        size:
+          literal:
+            u32: 3
+
+  - name: "U8Matrix2x3"
+    kind:
+      array:
+        element-type:
+          array:
+            element-type:
+              primitive: u8
+            size:
+              literal:
+                u32: 3
+        size:
+          literal:
+            u32: 2

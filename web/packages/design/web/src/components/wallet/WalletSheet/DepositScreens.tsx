@@ -5,6 +5,8 @@ import QRCode from "qrcode";
 import { cn } from "../../../utils";
 import { Button } from "../../Button/Button";
 import { Input } from "../../Input/Input";
+import { Spinner } from "../../Spinner/Spinner";
+import { ToggleGroup } from "../../Toggle/Toggle";
 import { Screen } from "../Screen/Screen";
 import { Steps, type StepItem } from "../Steps/Steps";
 import { Disc } from "../Disc/Disc";
@@ -54,6 +56,17 @@ const CardIcon = (p: React.SVGProps<SVGSVGElement>) => (
     <path d="M7 14.5h4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="square" />
   </svg>
 );
+const DropIcon = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 24 24" fill="none" aria-hidden {...p}>
+    <path
+      d="M12 3.5c3 3.6 6 7.2 6 10.5a6 6 0 0 1-12 0c0-3.3 3-6.9 6-10.5Z"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinejoin="round"
+    />
+    <path d="M9 14.5a3 3 0 0 0 3 3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+  </svg>
+);
 const PhoneWaves = (p: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 24 24" fill="none" aria-hidden {...p}>
     <rect x="5" y="3" width="10" height="18" rx="1.5" stroke="currentColor" strokeWidth="1.5" />
@@ -74,7 +87,8 @@ const ShieldCheck = (p: React.SVGProps<SVGSVGElement>) => (
 );
 
 /* ── Types ─────────────────────────────────────────────────────────── */
-export type WalletSheetDepositMethod = "crypto" | "card";
+/** `faucet` is the test faucet a wallet offers in developer mode. */
+export type WalletSheetDepositMethod = "crypto" | "card" | "faucet";
 
 export interface DepositDestinationInfo {
   /** Account name, e.g. "Main". */
@@ -119,10 +133,10 @@ function RailHeader({ title, description }: { title: React.ReactNode; descriptio
 
 function BackLink({ onClick, children }: { onClick?: () => void; children: React.ReactNode }) {
   return (
-    <button type="button" className="tds-dep__back" onClick={onClick}>
+    <Button variant="ghost" size="sm" className="tds-dep__back" onClick={onClick}>
       <ChevronLeft width={12} height={12} />
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -282,9 +296,9 @@ export function CoinbaseFrame({
 }
 
 /**
- * The design's stand-in for Coinbase's wallet-pay button (black, 6px radius,
- * system semibold) — shown inside the frame chrome until an order exists and
- * Coinbase's own button takes over.
+ * The card rail's pay action ("Buy with Apple Pay"), shown until an order
+ * exists and Coinbase's own button takes over: the design system's primary
+ * Button, with a Spinner while the order is being created.
  */
 export function DepositPayButton({
   children,
@@ -300,16 +314,16 @@ export function DepositPayButton({
   className?: string;
 }) {
   return (
-    <button
-      type="button"
-      className={cn("tds-dep__pay", loading && "tds-dep__pay--loading", className)}
+    <Button
+      variant="primary"
+      className={cn("tds-wsheet__cta", className)}
       onClick={loading ? undefined : onClick}
       disabled={disabled}
       aria-busy={loading || undefined}
     >
-      {loading && <span className="tds-dep__pay-spin" aria-hidden />}
+      {loading && <Spinner tone="inherit" />}
       {children}
-    </button>
+    </Button>
   );
 }
 
@@ -325,10 +339,13 @@ export interface WalletSheetDepositProps {
   cryptoChainIds?: number[];
   cardTitle?: React.ReactNode;
   cardDescription?: React.ReactNode;
+  faucetTitle?: React.ReactNode;
+  faucetDescription?: React.ReactNode;
   /** "Deposits land in ● Main · taAAAA…AAMD" footer; omit to hide. */
   destination?: DepositDestinationInfo;
   onCrypto?: () => void;
   onCard?: () => void;
+  onFaucet?: () => void;
   /**
    * Accordion mode: the method unfolded under its row (`null` = all folded).
    * The rows toggle instead of navigating — a row click calls `onCrypto` /
@@ -340,10 +357,12 @@ export interface WalletSheetDepositProps {
   /** Content unfolded under the crypto / card row (accordion mode). */
   cryptoPanel?: React.ReactNode;
   cardPanel?: React.ReactNode;
+  faucetPanel?: React.ReactNode;
   /** The panel bodies, for a host that renders into them (a portal). They
    *  stay mounted — hidden — while folded, so the refs are stable. */
   cryptoPanelRef?: React.Ref<HTMLDivElement>;
   cardPanelRef?: React.Ref<HTMLDivElement>;
+  faucetPanelRef?: React.Ref<HTMLDivElement>;
 }
 
 interface DepositMethodRowProps {
@@ -396,22 +415,27 @@ function DepositMethodRow({ art, title, description, onSelect, open, onCollapse,
 
 function DepositScreen({
   title = "Add funds",
-  description = "Choose how to fund your Thru Wallet. Whatever you send, it arrives as THRUSD.",
+  description = "Choose how to fund your Thru Wallet. Whatever you send, it arrives as $.",
   methods = ["crypto", "card"],
   cryptoTitle = "Deposit crypto",
   cryptoDescription = "Any chain, any token · from a wallet or exchange",
   cryptoChainIds = [1, 501, 8453],
   cardTitle = "Buy with card",
   cardDescription = "Apple Pay · Google Pay · debit · US",
+  faucetTitle = "Test faucet",
+  faucetDescription = "Test tokens with no real value · developer mode",
   destination,
   onCrypto,
   onCard,
+  onFaucet,
   open,
   onCollapse,
   cryptoPanel,
   cardPanel,
+  faucetPanel,
   cryptoPanelRef,
   cardPanelRef,
+  faucetPanelRef,
 }: WalletSheetDepositProps) {
   const accordion = open !== undefined;
   return (
@@ -448,6 +472,22 @@ function DepositScreen({
             onCollapse={onCollapse}
             panel={cardPanel}
             panelRef={cardPanelRef}
+          />
+        )}
+        {methods.includes("faucet") && (
+          <DepositMethodRow
+            art={
+              <span className="tds-dep__method-glyph">
+                <DropIcon width={20} height={20} />
+              </span>
+            }
+            title={faucetTitle}
+            description={faucetDescription}
+            onSelect={onFaucet}
+            open={accordion ? open === "faucet" : undefined}
+            onCollapse={onCollapse}
+            panel={faucetPanel}
+            panelRef={faucetPanelRef}
           />
         )}
       </div>
@@ -493,7 +533,7 @@ export interface WalletSheetDepositCryptoProps {
 
 function DepositCrypto({
   title = "Deposit crypto",
-  description = "Send tokens from any network. Deposits settle as THRUSD.",
+  description = "Send tokens from any network. Deposits settle as $.",
   networkLabel = "Network",
   networks,
   network,
@@ -533,9 +573,9 @@ function DepositCrypto({
         <div className={cn("tds-dep__addr", !address && "tds-dep__addr--empty")}>
           {address ?? " "}
         </div>
-        <button
-          type="button"
-          className="tds-dep__copy"
+        <Button
+          variant="outline"
+          className="tds-wsheet__cta"
           disabled={!address}
           onClick={() => address && copy(address)}
         >
@@ -547,7 +587,7 @@ function DepositCrypto({
             <CopyIcon width={14} height={14} />
           )}
           {notifying ? copiedLabel : copyLabel}
-        </button>
+        </Button>
       </div>
       {children}
     </>
@@ -608,7 +648,7 @@ export interface WalletSheetDepositCardProps {
   amount: number;
   presets?: number[];
   onAmountChange?: (amount: number) => void;
-  /** Formatted receive amount, e.g. "49.00 THRUSD"; omit to hide the line. */
+  /** Formatted receive amount, e.g. "$49.00"; omit to hide the line. */
   receive?: React.ReactNode;
   /** Formatted fee, e.g. "$1.00". */
   fee?: React.ReactNode;
@@ -682,43 +722,38 @@ function AmountField({
   return (
     <div className="tds-dep__field">
       <span className="tds-dep__label">{label}</span>
-      <div className="tds-dep__amount">
-        <label className="tds-dep__amount-row">
-          <span className="tds-dep__amount-cur">$</span>
-          <input
-            className="tds-dep__amount-input"
-            type="text"
-            inputMode="decimal"
-            autoComplete="off"
-            aria-label={ariaLabel}
-            value={text}
-            onChange={(event) => onInput(event.target.value)}
-            disabled={disabled}
-          />
-          <span className="tds-dep__amount-unit">USD</span>
-        </label>
-        <div className="tds-dep__presets" role="radiogroup" aria-label={ariaLabel}>
-          {presets.map((v) => (
-            <button
-              key={v}
-              type="button"
-              role="radio"
-              aria-checked={v === amount}
-              className={cn("tds-dep__preset", v === amount && "tds-dep__preset--on")}
-              onClick={() => onAmountChange?.(v)}
-              disabled={disabled}
-            >
-              ${v}
-            </button>
-          ))}
-        </div>
-      </div>
+      <Input
+        size="lg"
+        inputMode="decimal"
+        autoComplete="off"
+        aria-label={ariaLabel}
+        value={text}
+        onChange={(event) => onInput(event.target.value)}
+        disabled={disabled}
+      />
+      <ToggleGroup.Group
+        className="tds-dep__presets"
+        aria-label={ariaLabel}
+        value={presets.includes(amount) ? [String(amount)] : []}
+        onValueChange={(values) => {
+          /* Single choice: pressing the selected preset again keeps it. */
+          const next = values[0];
+          if (next !== undefined) onAmountChange?.(Number(next));
+        }}
+        disabled={disabled}
+      >
+        {presets.map((v) => (
+          <ToggleGroup.Item key={v} value={String(v)} className="tds-dep__preset">
+            ${v}
+          </ToggleGroup.Item>
+        ))}
+      </ToggleGroup.Group>
     </div>
   );
 }
 
 function DepositCard({
-  title = "Buy THRUSD",
+  title = "Buy $",
   description = "Pay with Apple Pay or Google Pay · US only.",
   payLabel = "Pay with",
   payMethods = DEFAULT_DEPOSIT_PAY_METHODS,
@@ -804,6 +839,85 @@ function DepositCard({
   }
   return (
     <Screen scroll className="tds-dep__card">
+      <RailHeader title={title} description={description} />
+      {fields}
+      {onBack && <BackLink onClick={onBack}>{backLabel}</BackLink>}
+    </Screen>
+  );
+}
+
+/* ── Test faucet (developer mode) ──────────────────────────────────── */
+const DEFAULT_FAUCET_PRESETS = [10, 100, 1000];
+
+export interface WalletSheetDepositFaucetProps {
+  title?: React.ReactNode;
+  description?: React.ReactNode;
+  amountLabel?: React.ReactNode;
+  /** Amount of test tokens to request. */
+  amount: number;
+  presets?: number[];
+  onAmountChange?: (amount: number) => void;
+  onSubmit?: () => void;
+  submitLabel?: React.ReactNode;
+  /** A funding request is in flight: the inputs freeze and the button spins. */
+  submitting?: boolean;
+  submittingLabel?: React.ReactNode;
+  /** The button can't be used yet (e.g. no amount, or the account isn't ready). */
+  disabled?: boolean;
+  onBack?: () => void;
+  backLabel?: React.ReactNode;
+  /** Render only the fields — no header, screen padding or back link — for
+   *  the chooser's accordion panel. */
+  embedded?: boolean;
+}
+
+function DepositFaucet({
+  title = "Test faucet",
+  description = "Adds test tokens with no real value. Only on test networks.",
+  amountLabel = "Amount",
+  amount,
+  presets = DEFAULT_FAUCET_PRESETS,
+  onAmountChange,
+  onSubmit,
+  submitLabel = "Get test tokens",
+  submitting = false,
+  submittingLabel = "Funding…",
+  disabled = false,
+  onBack,
+  backLabel = "Other ways to add funds",
+  embedded = false,
+}: WalletSheetDepositFaucetProps) {
+  const fields = (
+    <>
+      <AmountField
+        label={amountLabel}
+        amount={amount}
+        presets={presets}
+        onAmountChange={onAmountChange}
+        disabled={submitting}
+      />
+      <Button
+        variant="primary"
+        className="tds-wsheet__cta"
+        onClick={onSubmit}
+        disabled={disabled || submitting}
+        aria-busy={submitting || undefined}
+      >
+        {submitting && <Spinner tone="inherit" />}
+        {submitting ? submittingLabel : submitLabel}
+      </Button>
+    </>
+  );
+  if (embedded) {
+    return (
+      <div className="tds-dep__faucet tds-dep__embedded">
+        {description != null && <div className="tds-dep__rail-sub">{description}</div>}
+        {fields}
+      </div>
+    );
+  }
+  return (
+    <Screen className="tds-dep__faucet">
       <RailHeader title={title} description={description} />
       {fields}
       {onBack && <BackLink onClick={onBack}>{backLabel}</BackLink>}
@@ -1009,16 +1123,23 @@ function DepositPending({
     <Screen>
       <WaitHero
         slow={slow}
-        title={title ?? (method === "card" ? "Processing payment" : "Deposit detected")}
+        title={
+          title ??
+          (method === "card"
+            ? "Processing payment"
+            : method === "faucet"
+              ? "Adding test tokens"
+              : "Deposit detected")
+        }
         content={description}
       />
       <Steps items={steps} />
       <div className="tds-dep__pending-foot">
         <span className="tds-dep__note">{note}</span>
         {onClose && (
-          <button type="button" className="tds-dep__link" onClick={onClose}>
+          <Button variant="ghost" size="sm" onClick={onClose}>
             {closeLabel}
-          </button>
+          </Button>
         )}
       </div>
     </Screen>
@@ -1034,7 +1155,7 @@ export interface WalletSheetDepositDoneRow {
 }
 
 export interface WalletSheetDepositDoneProps {
-  /** Mono headline, e.g. "+250.00 THRUSD". */
+  /** Mono headline, e.g. "+$250.00". */
   amount: React.ReactNode;
   description?: React.ReactNode;
   rows?: WalletSheetDepositDoneRow[];
@@ -1073,6 +1194,7 @@ export const DepositScreens = {
   Deposit: DepositScreen,
   DepositCrypto,
   DepositCard,
+  DepositFaucet,
   DepositContact,
   DepositVerify,
   DepositPending,

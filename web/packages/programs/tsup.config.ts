@@ -13,6 +13,7 @@ export default defineConfig({
     "abi-manager/index": "src/abi-manager/index.ts",
     "uploader/index": "src/uploader/index.ts",
     "deploy/index": "src/deploy/index.ts",
+    "perp/index": "src/perp/index.ts",
   },
   format: ["cjs", "esm"],
   dts: true,

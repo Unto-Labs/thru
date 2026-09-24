@@ -1,3 +1,9 @@
+import {
+  withWalletNetwork,
+  networkScopedStorage,
+  type ResolvedWalletNetwork,
+  type WalletNetworkSelection,
+} from "../networks";
 import { TELEMETRY_EVENTS } from "../observability";
 import { getErrorCode, getErrorMessage } from "../internal/telemetry-fields";
 import {
@@ -126,8 +132,16 @@ export interface NativeSDKConfig {
    * Change it later with setTheme().
    */
   theme?: WalletThemePreference;
+  /**
+   * Developer mode (default off): the wallet shows raw errors with a Copy
+   * action, runs card purchases on Coinbase's sandbox, and offers the test
+   * faucet in Add funds. The wallet's own account-menu switch also turns it
+   * on. Change it later with setDeveloperMode().
+   */
+  developerMode?: boolean;
   autoRestore?: boolean;
   rpcUrl?: string;
+  walletNetwork?: WalletNetworkSelection;
   network?: ThruNetwork;
   depositUiConfig?: DepositUiConfig;
   addressTypes?: AddressTypeValue[];
@@ -173,6 +187,7 @@ export interface CreateAccountOptions {
 export type RestoreConnectionOptions = Record<string, never>;
 
 export type SDKEvent =
+  | "networkChanged"
   | "connect"
   | "disconnect"
   | "error"
@@ -231,6 +246,51 @@ function signingSessionDescriptorFromWire(
  * sheet owns the WebView lifecycle.
  */
 export class NativeSDK implements WalletSDK {
+  private readonly requiresNetworkProtocol: boolean;
+  private activeNetwork: ResolvedWalletNetwork | null = null;
+  getNetwork(): ResolvedWalletNetwork | null {
+    return this.activeNetwork;
+  }
+  async switchNetwork(
+    selection: WalletNetworkSelection,
+  ): Promise<ResolvedWalletNetwork> {
+    if (!this.initialized) await this.initialize();
+    const network = await this.provider.switchNetwork(selection);
+    this.applyNetwork(network);
+    return network;
+  }
+  private availableDepositProviders(): string[] {
+    return [...this.depositProviders].filter(
+      (id) =>
+        !this.activeNetwork ||
+        this.activeNetwork.depositProviders?.includes(id),
+    );
+  }
+  private assertDepositNetwork(requested?: string): void {
+    if (
+      this.activeNetwork &&
+      (!(this.activeNetwork.depositConfigured ?? this.activeNetwork.depositProviders?.length) ||
+        (requested && requested !== this.activeNetwork.id))
+    )
+      throw new Error("Add funds unavailable on this network");
+  }
+  private applyNetwork(network: ResolvedWalletNetwork): void {
+    if (
+      this.activeNetwork?.scope === network.scope &&
+      this.activeNetwork.rpcUrl === network.rpcUrl &&
+      this.activeNetwork.name === network.name
+    )
+      return;
+    const previous = this.activeNetwork;
+    this.activeNetwork = network;
+    this.lastConnectResult = null;
+    this.rpcUrl = network.transportUrl ?? network.rpcUrl;
+    this.thruClient = null;
+    this.setWalletAvailability(disconnectedWalletAvailability());
+    if (previous) this.emit("disconnect", { reason: "network_changed" });
+    this.emit("networkChanged", network);
+  }
+
   private provider: NativeProvider;
   private eventListeners = new Map<SDKEvent, Set<EventCallback>>();
   private initialized = false;
@@ -292,7 +352,7 @@ export class NativeSDK implements WalletSDK {
     prepare: (targetOrPayload) => this.prepareDeposit(targetOrPayload),
     ensureAccount: (params) => this.ensureDepositAccount(params),
     open: (payload) => this.deposit(payload),
-    getProviders: async () => [...this.depositProviders],
+    getProviders: async () => this.availableDepositProviders(),
     getAccountState: (params) => this.getDepositAccountState(params),
     waitForDeposit: (params) => this.waitForDepositBalance(params),
     formatAmount: (amountRaw, destination) =>
@@ -300,22 +360,33 @@ export class NativeSDK implements WalletSDK {
   });
 
   constructor(config: NativeSDKConfig = {}) {
+    this.requiresNetworkProtocol = config.walletNetwork !== undefined;
     this.origin = config.origin ?? "thru-mobile://app";
     this.rpcUrl = config.rpcUrl;
-    this.storage = config.storage;
+    this.storage = config.storage
+      ? networkScopedStorage(
+          config.storage,
+          () => this.activeNetwork?.scope ?? "pending",
+        )
+      : undefined;
     this.storageKey = config.storageKey ?? DEFAULT_STORAGE_KEY;
     this.iosWebViewMode = config.iosWebViewMode ?? "shell-iframe";
     this.walletExperience = config.walletExperience ?? "standard";
     this.defaultMetadata = config.metadata;
     this.autoRestore = config.autoRestore ?? true;
     this.defaultNetwork = config.network;
-    this.depositProviders = new Set(config.deposits?.providers ?? ['unifold']);
-    const walletUrl = withTransactionSigningScheme(
+    this.depositProviders = new Set(config.deposits?.providers ?? ["unifold"]);
+    const walletUrl = withWalletNetwork(
+      withTransactionSigningScheme(
       config.walletUrl ??
         (this.walletExperience === "transparent"
           ? DEFAULT_TRANSPARENT_WALLET_URL
           : DEFAULT_NATIVE_WALLET_URL),
       config.transactionSigningScheme,
+      ),
+      config.walletNetwork,
+      config.rpcUrl,
+      JSON.stringify([this.origin, config.metadata?.appId ?? ""]),
     );
     const telemetrySessionId = createTelemetrySessionId();
     this.telemetry = new TelemetryClient({
@@ -352,8 +423,7 @@ export class NativeSDK implements WalletSDK {
           resolveSigningSessionStorageKey({
             walletOrigin,
             appOrigin: this.origin,
-            storageKey:
-              config.signingSessionStorageKey,
+            storageKey: config.signingSessionStorageKey,
           }),
           this.telemetry,
         )
@@ -364,6 +434,7 @@ export class NativeSDK implements WalletSDK {
       this.provider = new NativeProvider({
         walletUrl,
         theme: resolveWalletTheme(this.themePreference, this.systemTheme),
+        developerMode: config.developerMode === true,
         telemetryEnabled: config.telemetryEnabled ?? true,
         telemetrySessionId,
         telemetryAppContextId: this.telemetry.getAppContextId(),
@@ -443,6 +514,15 @@ export class NativeSDK implements WalletSDK {
   setSystemTheme(theme: WalletTheme): void {
     this.systemTheme = theme === "dark" ? "dark" : "light";
     this.applyTheme();
+  }
+
+  /**
+   * Turn this app's developer mode on or off. A loaded wallet follows in
+   * place; it is not reloaded. Turning it off leaves the wallet's own
+   * account-menu switch as it was.
+   */
+  setDeveloperMode(enabled: boolean): void {
+    this.provider.setDeveloperMode(enabled === true);
   }
 
   private applyTheme(): void {
@@ -541,6 +621,13 @@ export class NativeSDK implements WalletSDK {
     });
     try {
       await this.provider.initialize();
+      if (
+        this.requiresNetworkProtocol &&
+        !this.provider.supportsNetworkSwitching()
+      )
+        throw new Error(
+          "Wallet network selection requires a compatible hosted wallet.",
+        );
       this.initialized = true;
       this.telemetry.record(TELEMETRY_EVENTS.SDK_INITIALIZE_COMPLETED, {
         severity: "info",
@@ -609,7 +696,10 @@ export class NativeSDK implements WalletSDK {
                 ...(passkeyName ? { passkeyName } : {}),
               }
             : undefined;
+        const scope = this.activeNetwork?.scope;
         const result = await this.provider.connect(providerOptions);
+        if (scope !== this.activeNetwork?.scope)
+          throw new Error("Wallet network changed; reconnect.");
         if (!isAccountSwitch) {
           await this.applyPreferredSelectedAccount(result.accounts);
         }
@@ -869,10 +959,14 @@ export class NativeSDK implements WalletSDK {
       typeof depositTargetOrPayload === "string"
         ? { depositTarget: depositTargetOrPayload }
         : (depositTargetOrPayload ?? {});
+    this.assertDepositNetwork(payload.network);
     const selectedAccountBefore = this.provider.getSelectedAccount();
     const destination = await this.provider.prepareDeposit({
       ...payload,
-      network: payload.network ?? this.defaultNetwork,
+      network:
+        payload.network ??
+        (this.activeNetwork?.id as ThruNetwork | undefined) ??
+        this.defaultNetwork,
     });
     const selectedAccountAfter = this.provider.getSelectedAccount();
     if (
@@ -899,8 +993,9 @@ export class NativeSDK implements WalletSDK {
    */
   async deposit(payload: DepositRequestPayload): Promise<DepositResult> {
     if (!this.initialized) await this.initialize();
-    const providerId = payload.providerId ?? 'unifold';
-    if (!this.depositProviders.has(providerId)) {
+    this.assertDepositNetwork(payload.destination?.network);
+    const providerId = payload.providerId ?? "unifold";
+    if (!this.availableDepositProviders().includes(providerId)) {
       throw new Error(`Deposit provider is not configured: ${providerId}`);
     }
     return this.provider.deposit({ ...payload, providerId });
@@ -911,14 +1006,17 @@ export class NativeSDK implements WalletSDK {
     params: EnsureDepositAccountParams = {},
   ): Promise<DepositAccountState> {
     if (!this.initialized) await this.initialize();
-    const { destination, walletAddress } = await this.resolveDepositDestination(
-      params.destination,
-    );
-    return ensureDepositAccountForWallet({
-      thru: this.getThru(),
-      walletAddress,
-      destination,
-      signTransaction: (payload) => this.signDepositTransaction(payload),
+    return this.provider.withNetworkOperation(async () => {
+      this.assertDepositNetwork(params.destination?.network);
+      const { destination, walletAddress } = await this.resolveDepositDestination(
+        params.destination,
+      );
+      return ensureDepositAccountForWallet({
+        thru: this.getThru(),
+        walletAddress,
+        destination,
+        signTransaction: (payload) => this.signDepositTransaction(payload),
+      });
     });
   }
 
@@ -927,13 +1025,16 @@ export class NativeSDK implements WalletSDK {
     params: GetDepositAccountStateParams = {},
   ): Promise<DepositAccountState> {
     if (!this.initialized) await this.initialize();
-    const { destination, walletAddress } = await this.resolveDepositDestination(
-      params.destination,
-    );
-    return getDepositAccountStateForWallet({
-      thru: this.getThru(),
-      walletAddress,
-      destination,
+    return this.provider.withNetworkOperation(async () => {
+      this.assertDepositNetwork(params.destination?.network);
+      const { destination, walletAddress } = await this.resolveDepositDestination(
+        params.destination,
+      );
+      return getDepositAccountStateForWallet({
+        thru: this.getThru(),
+        walletAddress,
+        destination,
+      });
     });
   }
 
@@ -942,15 +1043,18 @@ export class NativeSDK implements WalletSDK {
     params: WaitForDepositParams,
   ): Promise<DepositAccountState> {
     if (!this.initialized) await this.initialize();
-    const { destination, walletAddress } = await this.resolveDepositDestination(
-      params.destination,
-    );
-    return waitForDepositForWallet({
-      thru: this.getThru(),
-      walletAddress,
-      destination,
-      minimumBalanceRaw: params.minimumBalanceRaw,
-      signature: params.signature,
+    return this.provider.withNetworkOperation(async () => {
+      this.assertDepositNetwork(params.destination?.network);
+      const { destination, walletAddress } = await this.resolveDepositDestination(
+        params.destination,
+      );
+      return waitForDepositForWallet({
+        thru: this.getThru(),
+        walletAddress,
+        destination,
+        minimumBalanceRaw: params.minimumBalanceRaw,
+        signature: params.signature,
+      });
     });
   }
 
@@ -998,7 +1102,10 @@ export class NativeSDK implements WalletSDK {
   /** Lazily-instantiated Thru chain client. */
   public getThru(): Thru {
     if (!this.thruClient) {
-      this.thruClient = createNativeThruClient(this.rpcUrl);
+      this.thruClient = createNativeThruClient(
+        this.rpcUrl,
+        this.activeNetwork?.transactionSigningScheme,
+      );
     }
     return this.thruClient;
   }
@@ -1061,6 +1168,9 @@ export class NativeSDK implements WalletSDK {
   }
 
   private setupEventForwarding(): void {
+    this.provider.on(EMBEDDED_PROVIDER_EVENTS.NETWORK_CHANGED, (data: any) =>
+      this.applyNetwork(data),
+    );
     /* CONNECT is emitted from connect() directly (with the resolved
        ConnectResult), so don't double-emit here. */
     this.provider.on(EMBEDDED_PROVIDER_EVENTS.DISCONNECT, (data) => {
@@ -1144,6 +1254,7 @@ export class NativeSDK implements WalletSDK {
   }
 
   private setWalletAvailability(availability: WalletAvailability): void {
+    if (this.activeNetwork) availability = { ...availability, network: this.activeNetwork };
     this.walletAvailability = availability;
     this.emit("availabilityChanged", availability);
   }
@@ -1243,8 +1354,11 @@ export class NativeSDK implements WalletSDK {
   private async clearPersistedConnection(): Promise<void> {
     if (!this.storage) return;
     try {
-      await withWalletSDKStorageErrors(this.storage, "connection", this.telemetry)
-        .removeItem(this.storageKey);
+      await withWalletSDKStorageErrors(
+        this.storage,
+        "connection",
+        this.telemetry,
+      ).removeItem(this.storageKey);
     } catch {
       // Legacy snapshot cleanup is best effort.
     }
@@ -1254,7 +1368,9 @@ export class NativeSDK implements WalletSDK {
     if (!this.connectionHints) return null;
 
     try {
-      return (await this.connectionHints.read())?.selectedAccountAddress ?? null;
+      return (
+        (await this.connectionHints.read())?.selectedAccountAddress ?? null
+      );
     } catch {
       // A transient read failure is not evidence that the hint is corrupt.
       return null;

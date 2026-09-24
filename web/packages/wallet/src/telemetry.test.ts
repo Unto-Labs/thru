@@ -4,6 +4,7 @@ import { encodeAddress, encodeSignature } from '@thru/sdk/helpers';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   TELEMETRY_APP_CONTEXT_SEARCH_PARAM,
+  TELEMETRY_APP_MODE_SEARCH_PARAM,
   TELEMETRY_CONTEXT_SEARCH_PARAM,
   TELEMETRY_ENABLED_SEARCH_PARAM,
   TELEMETRY_SESSION_SEARCH_PARAM,
@@ -45,6 +46,7 @@ describe('TelemetryClient', () => {
     expect(batches.flatMap((batch) => batch.events).map((event) => event.sequence))
       .toEqual(Array.from({ length: 45 }, (_, index) => index + 1));
     expect(batches[0].events[0].event).toBe('sdk.test.event');
+    expect(batches[0].events[0].appMode).toBe('browser');
 
     client.destroy();
   });
@@ -267,13 +269,13 @@ describe('TelemetryClient', () => {
     const client = new TelemetryClient({
       walletUrl: 'https://app.tid.sh/embedded',
       sessionId: 'session-custom-origin',
-      context: { appOrigin: 'thru-mobile://sweeps/callback?token=secret' },
+      context: { appOrigin: 'thru-mobile://example/callback?token=secret' },
     });
     client.record('sdk.origin.test');
     await client.flush();
 
     const batch = JSON.parse(fetchMock.mock.calls[0][1].body as string);
-    expect(batch.events[0].appOrigin).toBe('thru-mobile://sweeps');
+    expect(batch.events[0].appOrigin).toBe('thru-mobile://example');
     client.destroy();
   });
 
@@ -418,6 +420,25 @@ describe('telemetry URL and redaction helpers', () => {
     expect(new URL(stale).searchParams.has(TELEMETRY_CONTEXT_SEARCH_PARAM)).toBe(false);
   });
 
+  it('propagates a valid app mode and clears stale values', () => {
+    const withMode = new URL(
+      withTelemetryParameters(
+        'https://app.tid.sh/embedded',
+        true,
+        'session-123',
+        undefined,
+        undefined,
+        'pwa',
+      ),
+    );
+    expect(withMode.searchParams.get(TELEMETRY_APP_MODE_SEARCH_PARAM)).toBe('pwa');
+
+    const cleared = new URL(
+      withTelemetryParameters(withMode.toString(), true, 'session-123'),
+    );
+    expect(cleared.searchParams.has(TELEMETRY_APP_MODE_SEARCH_PARAM)).toBe(false);
+  });
+
   it('derives the endpoint from only the wallet origin', () => {
     expect(
       telemetryEndpointForWalletUrl(
@@ -431,7 +452,7 @@ describe('telemetry URL and redaction helpers', () => {
       'credential_id=abc cookie=session123 authorization=Bearer topsecret ' +
         'instruction_bytes=deadbeef account_contents=private ' +
         'https://example.com/callback?token=secret ' +
-        'thru-mobile://sweeps/callback?code=secret ' +
+        'thru-mobile://example/callback?code=secret ' +
         '/local/path?token=secret ' +
         '/fragment/path#private-section ' +
         'callback?code=bare-secret redirect#bare-fragment ' +
@@ -444,7 +465,7 @@ describe('telemetry URL and redaction helpers', () => {
     expect(message).toContain('instruction_bytes=[REDACTED]');
     expect(message).toContain('account_contents=[REDACTED]');
     expect(message).toContain('https://example.com/callback');
-    expect(message).toContain('thru-mobile://sweeps/callback');
+    expect(message).toContain('thru-mobile://example/callback');
     expect(message).toContain('/local/path');
     expect(message).toContain('/fragment/path');
     expect(message).toContain('callback');
@@ -502,6 +523,7 @@ function createClient(enabled = true): TelemetryClient {
       appOrigin: 'https://third-party.example/path?secret=1',
       sdkVersion: '1.2.3',
       platform: 'browser',
+      appMode: 'browser',
     },
   });
 }

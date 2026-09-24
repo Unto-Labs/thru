@@ -37,7 +37,8 @@ export function resolveSigningSessionStorageKey(params: {
 /** Only this explicit wallet response permits one passkey retry. */
 export function isSigningSessionUnavailable(error: unknown): boolean {
   return (
-    !!error && typeof error === "object" &&
+    !!error &&
+    typeof error === "object" &&
     (error as { code?: unknown }).code === "SIGNING_SESSION_UNAVAILABLE"
   );
 }
@@ -52,7 +53,8 @@ export function normalizeExpiresAt(
 ): number {
   if (value instanceof Date) {
     const millis = value.getTime();
-    if (!Number.isFinite(millis)) throw new Error(`${label} must be a valid Date`);
+    if (!Number.isFinite(millis))
+      throw new Error(`${label} must be a valid Date`);
     return Math.floor(millis / 1000);
   }
 
@@ -101,9 +103,17 @@ export function resolveSessionExpirySeconds(
   return normalizeExpiresAt(options.expiresAt!, "expiresAt");
 }
 
-export function assertSigningSessionWalletAccountIdx(walletAccountIdx: number): void {
-  if (!Number.isInteger(walletAccountIdx) || walletAccountIdx < 2 || walletAccountIdx > 0xffff) {
-    throw new Error("walletAccountIdx must be an account index between 2 and 65535");
+export function assertSigningSessionWalletAccountIdx(
+  walletAccountIdx: number,
+): void {
+  if (
+    !Number.isInteger(walletAccountIdx) ||
+    walletAccountIdx < 2 ||
+    walletAccountIdx > 0xffff
+  ) {
+    throw new Error(
+      "walletAccountIdx must be an account index between 2 and 65535",
+    );
   }
 }
 
@@ -133,12 +143,18 @@ export class SigningSessionDescriptorStore {
     key: string,
     telemetry?: Pick<TelemetryClient, "record">,
   ) {
-    this.storage = withWalletSDKStorageErrors(storage, "signing-sessions", telemetry);
+    this.storage = withWalletSDKStorageErrors(
+      storage,
+      "signing-sessions",
+      telemetry,
+    );
     this.key = key;
   }
 
   async list(): Promise<ThruSigningSessionDescriptor[]> {
+    const scope = this.storage.networkScope?.();
     const sessions = await this.read();
+    this.assertScope(scope);
     const active = sessions.filter(isActive);
     if (active.length !== sessions.length) {
       await this.write(active);
@@ -158,7 +174,8 @@ export class SigningSessionDescriptorStore {
     return (
       sessions
         .filter(
-          (session) => !walletAddress || session.walletAddress === walletAddress,
+          (session) =>
+            !walletAddress || session.walletAddress === walletAddress,
         )
         .sort((a, b) => b.expiresAt - a.expiresAt)[0] ?? null
     );
@@ -166,7 +183,11 @@ export class SigningSessionDescriptorStore {
 
   async save(descriptor: ThruSigningSessionDescriptor): Promise<void> {
     const normalized = normalizeDescriptor(descriptor);
-    const sessions = (await this.list()).filter((session) => session.id !== normalized.id);
+    const scope = this.storage.networkScope?.();
+    const sessions = (await this.list()).filter(
+      (session) => session.id !== normalized.id,
+    );
+    this.assertScope(scope);
     sessions.push(normalized);
     await this.write(sessions);
   }
@@ -175,18 +196,24 @@ export class SigningSessionDescriptorStore {
     descriptor: ThruSigningSessionDescriptor,
   ): Promise<void> {
     const normalized = normalizeDescriptor(descriptor);
+    const scope = this.storage.networkScope?.();
     const sessions = (await this.list()).filter(
       (session) =>
         session.id === normalized.id ||
         session.walletAddress !== normalized.walletAddress,
     );
-    const withoutCurrent = sessions.filter((session) => session.id !== normalized.id);
+    this.assertScope(scope);
+    const withoutCurrent = sessions.filter(
+      (session) => session.id !== normalized.id,
+    );
     withoutCurrent.push(normalized);
     await this.write(withoutCurrent);
   }
 
   async remove(id: string): Promise<void> {
+    const scope = this.storage.networkScope?.();
     const sessions = (await this.list()).filter((session) => session.id !== id);
+    this.assertScope(scope);
     if (sessions.length === 0) {
       await this.storage.removeItem(this.key);
       return;
@@ -198,13 +225,24 @@ export class SigningSessionDescriptorStore {
     await this.storage.removeItem(this.key);
   }
 
+  private assertScope(scope?: string): void {
+    if (scope !== this.storage.networkScope?.())
+      throw Object.assign(new Error("Wallet network changed; reconnect."), {
+        code: "NETWORK_CHANGED",
+      });
+  }
   private async read(): Promise<ThruSigningSessionDescriptor[]> {
+    const scope = this.storage.networkScope?.();
     const raw = await this.storage.getItem(this.key);
+    this.assertScope(scope);
     if (!raw) return [];
 
     try {
       const parsed = JSON.parse(raw) as Partial<SigningSessionStorePayload>;
-      if (parsed.version !== STORAGE_VERSION || !Array.isArray(parsed.sessions)) {
+      if (
+        parsed.version !== STORAGE_VERSION ||
+        !Array.isArray(parsed.sessions)
+      ) {
         await this.storage.removeItem(this.key);
         return [];
       }

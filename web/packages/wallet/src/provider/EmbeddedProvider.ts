@@ -1,3 +1,4 @@
+import type { WalletNetworkSelection } from '../networks';
 import { TELEMETRY_EVENTS, type TelemetryAppContext } from '../observability';
 import { getErrorCode } from '../internal/telemetry-fields';
 import {
@@ -23,6 +24,9 @@ import {
   type DepositResult,
   type DepositUiConfig,
   type GetConnectionStateResult,
+  type SelectAccountResult,
+  type WalletRestoreEnvelope,
+  type WalletRestoreRecord,
   type ManageAccountsResult,
   type AccountMenuPayload,
   type AccountMenuResult,
@@ -33,6 +37,7 @@ import {
   normalizeConnectionStateResult,
 } from '../protocol';
 import { connectionResultFromState } from '../connection-state';
+import { withNetworkOperation } from '../network-operations';
 import { IframeManager } from './IframeManager';
 import { EmbeddedThruChain } from './chains/ThruChain';
 import type { SigningSessionDescriptorStore } from '../signing-sessions';
@@ -42,6 +47,8 @@ export interface EmbeddedProviderConfig {
   iframeUrl?: string;
   /** The host page's color scheme; the wallet frames draw to match. */
   theme?: WalletTheme;
+  /** The host's developer mode (see BrowserSDKConfig.developerMode). */
+  developerMode?: boolean;
   addressTypes?: AddressTypeValue[];
   signingSessions?: SigningSessionDescriptorStore;
   broadcastTransaction?: (signedTransaction: string) => Promise<unknown>;
@@ -56,6 +63,8 @@ export interface ConnectOptions {
   passkeyName?: string;
   preferredAccountAddress?: string;
   intent?: ConnectRequestPayload['intent'];
+  /** The host-held restore record, for a wallet whose own store is empty. */
+  restore?: WalletRestoreRecord;
 }
 
 /**
@@ -63,6 +72,28 @@ export interface ConnectOptions {
  * Manages iframe lifecycle, connection state, and chain-specific interfaces
  */
 export class EmbeddedProvider {
+  withNetworkOperation<T>(operation: () => Promise<T>): Promise<T> {
+    return withNetworkOperation(this.iframeManager, window.location.origin, operation);
+  }
+  supportsNetworkSwitching() {
+    return this.iframeManager.supportsNetworkSwitching();
+  }
+  getNetwork() {
+    return this.iframeManager.getNetwork();
+  }
+  async switchNetwork(selection: WalletNetworkSelection) {
+    if (!this.iframeManager.supportsNetworkSwitching())
+      throw new Error('This wallet does not support network switching.');
+    const response = await this.iframeManager.sendMessage({
+      id: createRequestId(),
+      type: POST_MESSAGE_REQUEST_TYPES.SWITCH_NETWORK,
+      payload: selection,
+      origin: window.location.origin,
+    });
+    await this.iframeManager.waitForNetwork(response.result.scope, response.result.name);
+    return response.result;
+  }
+
   private iframeManager: IframeManager;
   private _thruChain?: IThruChain;
   private connected = false;
@@ -76,7 +107,10 @@ export class EmbeddedProvider {
   constructor(config: EmbeddedProviderConfig) {
     const iframeUrl = config.iframeUrl || DEFAULT_IFRAME_URL;
     this.telemetry = config.telemetry;
-    this.iframeManager = new IframeManager(iframeUrl, this.telemetry, { theme: config.theme });
+    this.iframeManager = new IframeManager(iframeUrl, this.telemetry, {
+      theme: config.theme,
+      developerMode: config.developerMode,
+    });
     this.defaultNetwork = config.network;
     this.depositUiConfig = config.depositUiConfig;
     this.telemetry?.record(TELEMETRY_EVENTS.PROVIDER_CONSTRUCTED, {
@@ -98,6 +132,11 @@ export class EmbeddedProvider {
         } else {
           this.iframeManager.showModal();
         }
+        return;
+      }
+
+      if (eventType === EMBEDDED_PROVIDER_EVENTS.NETWORK_CHANGED) {
+        this.clearConnection();
         return;
       }
 
@@ -178,7 +217,7 @@ export class EmbeddedProvider {
    * Connect to wallet
    * Shows iframe modal and requests connection
    */
-  async connect(options?: ConnectOptions): Promise<ConnectResult> {
+  async connect(options?: ConnectOptions): Promise<ConnectResult & WalletRestoreEnvelope> {
     // Emit connecting event
     this.emit(EMBEDDED_PROVIDER_EVENTS.CONNECT_START, {});
 
@@ -204,6 +243,9 @@ export class EmbeddedProvider {
       if (options?.passkeyName) {
         payload.passkeyName = options.passkeyName;
       }
+      if (options?.restore) {
+        payload.restore = options.restore;
+      }
 
       const response = await this.iframeManager.sendMessage({
         id: createRequestId(),
@@ -212,7 +254,10 @@ export class EmbeddedProvider {
         origin: window.location.origin,
       });
 
-      const result = normalizeWalletAccountResult(response.result);
+      /* The restore record is for the host's storage, not for the connection
+         the provider caches or announces. */
+      const { restore, ...walletResult } = response.result;
+      const result = normalizeWalletAccountResult(walletResult);
       this.connected = true;
       this.accounts = result.accounts;
       this.selectedAccount = result.selectedAccount;
@@ -231,7 +276,7 @@ export class EmbeddedProvider {
         this.iframeManager.hide();
       }
 
-      return result;
+      return restore ? { ...result, restore } : result;
     } catch (error) {
       /* A cancelled sign-in settles only once the wallet sheet has animated
          away, so the host's "Signing in…" state lasts through the exit. */
@@ -259,6 +304,7 @@ export class EmbeddedProvider {
     if (options?.preferredAccountAddress) {
       payload.preferredAccountAddress = options.preferredAccountAddress;
     }
+    if (options?.restore) payload.restore = options.restore;
 
     const response = await this.iframeManager.sendMessage({
       id: createRequestId(),
@@ -345,16 +391,16 @@ export class EmbeddedProvider {
     this.selectedAccount = normalized.selectedAccount;
   }
 
-  async selectAccount(publicKey: string): Promise<WalletAccount> {
+  async selectAccount(publicKey: string): Promise<SelectAccountResult> {
     if (!this.connected) {
-      throw new Error("Wallet not connected");
+      throw new Error('Wallet not connected');
     }
 
     const knownAccount =
       this.accounts.find((acc) => acc.address === publicKey) ?? null;
     if (!knownAccount) {
       console.warn(
-        "[EmbeddedProvider] Selecting account not present in local cache",
+        '[EmbeddedProvider] Selecting account not present in local cache',
       );
     }
     const payload: SelectAccountPayload = { publicKey };
@@ -375,12 +421,12 @@ export class EmbeddedProvider {
       outcome: 'success',
       walletAddress: account.address,
     });
-    return account;
+    return response.result;
   }
 
   async manageAccounts(): Promise<ManageAccountsResult> {
     if (!this.connected) {
-      throw new Error("Wallet not connected");
+      throw new Error('Wallet not connected');
     }
 
     if (this.inlineMode) {
@@ -421,14 +467,21 @@ export class EmbeddedProvider {
     this.iframeManager.setTheme(theme);
   }
 
+  /** Tell the wallet frames the host's developer mode, without a reload. */
+  setDeveloperMode(enabled: boolean): void {
+    this.iframeManager.setDeveloperMode(enabled);
+  }
+
   /**
    * Open the wallet's account menu inside its frame, anchored under the host's
    * account chip. Resolves when the menu closes; a switch or an account
    * manager run comes back with the resulting accounts.
    */
-  async openAccountMenu(payload: AccountMenuPayload): Promise<AccountMenuResult> {
+  async openAccountMenu(
+    payload: AccountMenuPayload,
+  ): Promise<AccountMenuResult> {
     if (!this.connected) {
-      throw new Error("Wallet not connected");
+      throw new Error('Wallet not connected');
     }
 
     if (this.inlineMode) {
@@ -471,12 +524,13 @@ export class EmbeddedProvider {
    * wallet account is authoritative.
    */
   async prepareDeposit(
-    depositTargetOrPayload?: PrepareDepositPayload['depositTarget'] | PrepareDepositPayload
+    depositTargetOrPayload?:
+      PrepareDepositPayload['depositTarget'] | PrepareDepositPayload,
   ): Promise<DepositDestination> {
     const payload =
       typeof depositTargetOrPayload === 'string'
         ? { depositTarget: depositTargetOrPayload }
-        : depositTargetOrPayload ?? {};
+        : (depositTargetOrPayload ?? {});
     const response = await this.iframeManager.sendMessage({
       id: createRequestId(),
       type: POST_MESSAGE_REQUEST_TYPES.PREPARE_DEPOSIT,
@@ -529,7 +583,7 @@ export class EmbeddedProvider {
    */
   get thru(): IThruChain {
     if (!this._thruChain) {
-      throw new Error("Thru chain not enabled in provider config");
+      throw new Error('Thru chain not enabled in provider config');
     }
     return this._thruChain;
   }
@@ -602,4 +656,3 @@ export class EmbeddedProvider {
     this.selectedAccount = null;
   }
 }
-

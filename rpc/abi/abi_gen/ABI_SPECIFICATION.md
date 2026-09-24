@@ -106,6 +106,33 @@ Layout: [element_0][element_1]...[element_N-1]
 Size: element_size × count
 ```
 
+A fixed-size array may be a named top-level type; it does not need a containing
+struct. It has the same wire layout as an array field, with no length prefix.
+For example, a named array `Point2DArray5` of five packed `Point2D` structs emits
+the C declaration `typedef Point2D_t Point2DArray5_t[5];`. Elements are accessed
+with ordinary C indexing, and nested array dimensions retain row-major order.
+Inline struct element definitions precede the array typedef. Validate the
+input length with `Point2DArray5_validate_ir` before copying bytes into an array;
+`Point2DArray5_footprint_ir` returns its required byte count. Both helpers are
+declared in the generated header.
+
+Native C element types are used only when their layout matches the ABI. Unions,
+enums, and structs containing them use byte rows sized from the resolved ABI
+element size. For example, two five-byte union elements emit
+`typedef uint8_t Values_t[2][5];`, so C tail padding cannot change the stride.
+Decode those element bytes separately instead of casting to a native union.
+
+Runtime-sized named arrays, including fixed outer arrays with variable inner
+dimensions, use a flat `typedef uint8_t Values_t[];` byte view. Their offsets
+require runtime layout information; there is no compile-time C element stride.
+IR helper availability remains subject to the existing layout support. For a
+supported layout referencing `__buffer_size`, the footprint helper takes a
+leading `uint64_t buf_sz` argument in both its declaration and definition.
+
+Rust exposes `from_slice`/`from_slice_mut` byte views for fixed-size named arrays;
+TypeScript exposes `from_array`, `length`, and `getElementBytes(index)`. These
+represent the array itself, without an extra wrapper field on the wire.
+
 **Example: Fixed array of u8**
 ```
 [u8; 32] - 32-byte fixed array

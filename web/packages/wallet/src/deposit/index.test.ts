@@ -98,7 +98,7 @@ const DESTINATION: DepositDestination = {
   tokenAccountAddress: "ta_token_account",
   mintAddress: "ta_mint",
   tokenProgramAddress: "ta_token_program",
-  symbol: "THRUSD",
+  symbol: "$",
   decimals: 6,
 };
 
@@ -131,7 +131,7 @@ const RUNTIME_CONFIG: DepositRuntimeConfig = {
         credits: {
           mint_address: "ta_mint",
           token_program_address: "ta_token_program",
-          symbol: "THRUSD",
+          symbol: "$",
           decimals: 6,
         },
       },
@@ -223,6 +223,61 @@ describe("wallet deposit account helpers", () => {
     expect(parse).toHaveBeenCalledOnce();
   });
 
+  it("supports a betanet token destination without paid deposit providers", () => {
+    const config = createDepositConfig({
+      defaultNetwork: "betanet",
+      networkConfigJson: JSON.stringify({
+        betanet: {
+          rpc_url: "https://rpc.betanet.thru.org",
+          chain_id: 2,
+          faucet_only: true,
+          default_deposit_target: "credits",
+          targets: {
+            credits: {
+              mint_address: "ta_betanet_mint",
+              token_program_address: "ta_betanet_program",
+              symbol: "THRUSD",
+              decimals: 6,
+            },
+          },
+          providers: {},
+        },
+      }),
+    });
+    expect(config.getNetwork().network).toBe(ThruNetwork.Betanet);
+    expect(config.getNetwork().providers.size).toBe(0);
+    expect(config.getTarget(ThruNetwork.Betanet, DepositTarget.THRUSD).mintAddress)
+      .toBe("ta_betanet_mint");
+  });
+
+  it.each([undefined, {}])("rejects missing payment providers without faucet-only opt-in (%j)", (providers) => {
+    const networks = JSON.parse(RUNTIME_CONFIG.networkConfigJson!);
+    networks.devnet.providers = providers;
+    expect(() => createDepositConfig({
+      ...RUNTIME_CONFIG,
+      networkConfigJson: JSON.stringify(networks),
+    })).toThrow("must contain providers unless faucet_only is true");
+  });
+
+  it("rejects a string faucet-only flag instead of treating it as an opt-in", () => {
+    const networks = JSON.parse(RUNTIME_CONFIG.networkConfigJson!);
+    networks.devnet.providers = {};
+    networks.devnet.faucet_only = "true";
+    expect(() => createDepositConfig({
+      ...RUNTIME_CONFIG,
+      networkConfigJson: JSON.stringify(networks),
+    })).toThrow("faucet_only must be a boolean");
+  });
+
+  it("rejects a faucet-only network that also configures paid providers", () => {
+    const networks = JSON.parse(RUNTIME_CONFIG.networkConfigJson!);
+    networks.devnet.faucet_only = true;
+    expect(() => createDepositConfig({
+      ...RUNTIME_CONFIG,
+      networkConfigJson: JSON.stringify(networks),
+    })).toThrow("must not configure paid providers");
+  });
+
   it("treats supplied runtime config as authoritative, including an empty object", () => {
     vi.stubEnv(
       "NEXT_PUBLIC_THRU_DEPOSIT_NETWORK_CONFIG_JSON",
@@ -306,7 +361,7 @@ describe("wallet deposit account helpers", () => {
       programAddress: "ta_token_program",
       review: {
         appName: "Thru Wallet",
-        instruction: "initialize_token_account(symbol: THRUSD)",
+        instruction: "initialize_token_account(symbol: $)",
       },
     };
 

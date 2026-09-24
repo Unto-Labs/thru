@@ -45,7 +45,7 @@ describe("NativeThruChain signing-session fallback", () => {
       result: { signedTransaction: "passkey_signed_transaction" },
     }));
     const chain = new NativeThruChain(
-      { sendMessage } as never,
+      { sendMessage, getNetworkGeneration: () => 0 } as never,
       {
         isConnected: () => false,
         isTransparent: () => true,
@@ -96,12 +96,16 @@ describe("NativeThruChain signing-session fallback", () => {
     const requestHide = vi.fn();
     const sendMessage = vi
       .fn()
-      .mockRejectedValueOnce(Object.assign(new Error("Signing session key missing"), {
+      .mockRejectedValueOnce(
+        Object.assign(new Error("Signing session key missing"), {
         code: "SIGNING_SESSION_UNAVAILABLE",
-      }))
-      .mockResolvedValueOnce({ result: { signedTransaction: "passkey-signed" } });
+        }),
+      )
+      .mockResolvedValueOnce({
+        result: { signedTransaction: "passkey-signed" },
+      });
     const chain = new NativeThruChain(
-      { sendMessage } as never,
+      { sendMessage, getNetworkGeneration: () => 0 } as never,
       {
         isConnected: () => true,
         isTransparent: () => false,
@@ -113,18 +117,32 @@ describe("NativeThruChain signing-session fallback", () => {
       signingSessions,
     );
 
-    await expect(chain.signTransaction({
+    await expect(
+      chain.signTransaction({
       programAddress: "program",
       instructionData: "AQID",
-    })).resolves.toBe("passkey-signed");
+      }),
+    ).resolves.toBe("passkey-signed");
 
-    expect(sendMessage).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      payload: expect.objectContaining({ signingSessionId: "session-active" }),
-    }));
-    expect(sendMessage).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      payload: expect.not.objectContaining({ signingSessionId: expect.anything() }),
-    }));
-    expect(requestShow).toHaveBeenCalledWith("sign-transaction-session-fallback");
+    expect(sendMessage).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          signingSessionId: "session-active",
+        }),
+      }),
+    );
+    expect(sendMessage).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        payload: expect.not.objectContaining({
+          signingSessionId: expect.anything(),
+        }),
+      }),
+    );
+    expect(requestShow).toHaveBeenCalledWith(
+      "sign-transaction-session-fallback",
+    );
     expect(requestHide).toHaveBeenCalledWith("sign-transaction-settled");
     await expect(chain.getSigningSession("session-active")).resolves.toBeNull();
   });

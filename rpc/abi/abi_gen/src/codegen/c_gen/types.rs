@@ -1,6 +1,6 @@
 use super::helpers::{escape_c_keyword, is_nested_complex_type};
 use crate::abi::expr::ConstantExpression;
-use crate::abi::resolved::{ResolvedType, ResolvedTypeKind, Size};
+use crate::abi::resolved::{ResolvedType, ResolvedTypeKind, Size, TypeResolver};
 use crate::abi::types::{FloatingPointType, IntegralType, PrimitiveType};
 use std::fmt::Write;
 
@@ -181,8 +181,64 @@ fn emit_struct_fields(
     }
 }
 
+/* Only expose native indexing when the emitted C element has the ABI layout.
+This is a representation check; sizes and strides come from the resolver. */
+fn has_native_array_element_layout(ty: &ResolvedType, resolver: Option<&TypeResolver>) -> bool {
+    let Size::Const(size) = ty.size else {
+        return false;
+    };
+    match &ty.kind {
+        ResolvedTypeKind::Primitive { .. } => true,
+        ResolvedTypeKind::Struct {
+            fields,
+            packed,
+            custom_alignment,
+        } => {
+            if let Some(alignment) = custom_alignment {
+                /* C adds tail padding even to packed structs, and aligned(N)
+                cannot lower a non-packed struct's natural field alignment. */
+                if size % alignment != 0
+                    || (!packed
+                        && fields
+                            .iter()
+                            .any(|field| field.field_type.alignment > *alignment))
+                {
+                    return false;
+                }
+            }
+            fields
+                .iter()
+                .all(|field| has_native_array_element_layout(&field.field_type, resolver))
+        }
+        ResolvedTypeKind::Array { element_type, .. } => {
+            /* Inline array fields only emit one dimension and cannot declare
+            inline complex element types in the existing struct emitter. */
+            matches!(
+                element_type.kind,
+                ResolvedTypeKind::Primitive { .. } | ResolvedTypeKind::TypeRef { .. }
+            ) && has_native_array_element_layout(element_type, resolver)
+        }
+        ResolvedTypeKind::TypeRef { target_name, .. } => resolver
+            .and_then(|r| r.get_type_info(target_name))
+            .is_some_and(|target| {
+                matches!(
+                    target.kind,
+                    ResolvedTypeKind::Struct { .. } | ResolvedTypeKind::Array { .. }
+                ) && has_native_array_element_layout(target, resolver)
+            }),
+        ResolvedTypeKind::Union { .. }
+        | ResolvedTypeKind::Enum { .. }
+        | ResolvedTypeKind::SizeDiscriminatedUnion { .. } => false,
+    }
+}
+
 /* Recursively emit type definitions, handling nested types first */
-fn emit_recursive_types(type_def: &ResolvedType, type_path: Option<String>, output: &mut String) {
+fn emit_recursive_types(
+    type_def: &ResolvedType,
+    type_path: Option<String>,
+    resolver: Option<&TypeResolver>,
+    output: &mut String,
+) {
     let current_name = type_path
         .clone()
         .unwrap_or_else(|| escape_c_keyword(&type_def.name));
@@ -192,7 +248,7 @@ fn emit_recursive_types(type_def: &ResolvedType, type_path: Option<String>, outp
             for field in fields {
                 if is_nested_complex_type(&field.field_type) {
                     let nested_path = format!("{}_{}", current_name, escape_c_keyword(&field.name));
-                    emit_recursive_types(&field.field_type, Some(nested_path), output);
+                    emit_recursive_types(&field.field_type, Some(nested_path), resolver, output);
                 }
             }
         }
@@ -201,7 +257,7 @@ fn emit_recursive_types(type_def: &ResolvedType, type_path: Option<String>, outp
                 if is_nested_complex_type(&variant.field_type) {
                     let nested_path =
                         format!("{}_{}", current_name, escape_c_keyword(&variant.name));
-                    emit_recursive_types(&variant.field_type, Some(nested_path), output);
+                    emit_recursive_types(&variant.field_type, Some(nested_path), resolver, output);
                 }
             }
         }
@@ -210,7 +266,12 @@ fn emit_recursive_types(type_def: &ResolvedType, type_path: Option<String>, outp
                 if is_nested_complex_type(&variant.variant_type) {
                     let nested_path =
                         format!("{}_{}", current_name, escape_c_keyword(&variant.name));
-                    emit_recursive_types(&variant.variant_type, Some(nested_path), output);
+                    emit_recursive_types(
+                        &variant.variant_type,
+                        Some(nested_path),
+                        resolver,
+                        output,
+                    );
                 }
             }
         }
@@ -219,7 +280,12 @@ fn emit_recursive_types(type_def: &ResolvedType, type_path: Option<String>, outp
                 if is_nested_complex_type(&variant.variant_type) {
                     let nested_path =
                         format!("{}_{}", current_name, escape_c_keyword(&variant.name));
-                    emit_recursive_types(&variant.variant_type, Some(nested_path), output);
+                    emit_recursive_types(
+                        &variant.variant_type,
+                        Some(nested_path),
+                        resolver,
+                        output,
+                    );
                 }
             }
         }
@@ -233,6 +299,69 @@ fn emit_recursive_types(type_def: &ResolvedType, type_path: Option<String>, outp
     }
 
     match &type_def.kind {
+        ResolvedTypeKind::Array { .. } => {
+            /* Variable layouts have no compile-time C element stride. Keep a
+            byte view instead of emitting incomplete inner dimensions. */
+            if matches!(type_def.size, Size::Variable(_)) {
+                writeln!(
+                    output,
+                    "/* Runtime-sized byte view: element offsets require runtime layout information. */"
+                )
+                .unwrap();
+                writeln!(output, "typedef uint8_t {}_t[];\n", current_name).unwrap();
+                return;
+            }
+            /* Preserve every dimension of a named array. Emit inline element
+            types before the typedef, just as for inline struct fields. */
+            let mut element = type_def;
+            let mut dimensions = String::new();
+            while let ResolvedTypeKind::Array {
+                element_type,
+                size_expression,
+                ..
+            } = &element.kind
+            {
+                if size_expression.is_constant() {
+                    write!(dimensions, "[{}]", size_expression.to_c_string()).unwrap();
+                } else {
+                    dimensions.push_str("[]");
+                }
+                element = element_type;
+            }
+            /* C unions can add tail padding absent from the ABI. Enums and
+            structs containing them may also lack a native C representation.
+            Preserve the canonical stride with one byte row per element. */
+            if !has_native_array_element_layout(element, resolver) {
+                let Size::Const(size) = element.size else {
+                    unreachable!()
+                };
+                writeln!(
+                    output,
+                    "/* Byte elements preserve the ABI stride; decode each element separately. */"
+                )
+                .unwrap();
+                writeln!(
+                    output,
+                    "typedef uint8_t {}_t{}[{}];\n",
+                    current_name, dimensions, size
+                )
+                .unwrap();
+                return;
+            }
+            let base_type = if is_nested_complex_type(element) {
+                let element_path = format!("{}_element", current_name);
+                emit_recursive_types(element, Some(element_path.clone()), resolver, output);
+                format!("{}_inner_t", element_path)
+            } else {
+                format_resolved_type_to_c(element, INDENT_FIELD)
+            };
+            write!(
+                output,
+                "typedef {} {}_t{};\n\n",
+                base_type, current_name, dimensions
+            )
+            .unwrap();
+        }
         ResolvedTypeKind::Struct {
             fields,
             packed,
@@ -352,11 +481,18 @@ fn emit_recursive_types(type_def: &ResolvedType, type_path: Option<String>, outp
 }
 
 pub fn emit_type(type_def: &ResolvedType) -> String {
+    emit_type_with_resolver(type_def, None)
+}
+
+pub(crate) fn emit_type_with_resolver(
+    type_def: &ResolvedType,
+    resolver: Option<&TypeResolver>,
+) -> String {
     let mut output = String::new();
     output.push_str(&format!(
         "/*  ----- TYPE DEFINITION FOR {} ----- */\n\n",
         type_def.name
     ));
-    emit_recursive_types(type_def, None, &mut output);
+    emit_recursive_types(type_def, None, resolver, &mut output);
     output
 }

@@ -62,10 +62,12 @@ export async function runPasskeyCeremony<T>(
   options: PasskeyReportingOptions = {}
 ): Promise<T> {
   if (activeCeremony) throw new Error('A passkey request is already in progress');
-  if (!isWebAuthnSupported()) throw new Error('WebAuthn is not supported in this browser');
+  /* Before the support check: a frame under a non-localhost HTTP page is not a
+     secure context, so WebAuthn is hidden there too and would read as unsupported. */
   if (typeof window !== 'undefined' && window.isSecureContext === false) {
     throw new Error('Passkeys require a secure HTTPS connection.');
   }
+  if (!isWebAuthnSupported()) throw new Error('WebAuthn is not supported in this browser');
   if (options.promptMode === 'popup' && options.allowPopupFallback === false) {
     throw new Error('Passkey popups are disabled');
   }

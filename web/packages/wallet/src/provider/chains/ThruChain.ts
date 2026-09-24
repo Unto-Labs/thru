@@ -1,3 +1,4 @@
+import { withNetworkOperation } from "../../network-operations";
 import {
   AddressType,
   type IThruChain,
@@ -128,7 +129,8 @@ export class EmbeddedThruChain implements IThruChain {
           signingSessionId,
         );
       } catch (error) {
-        if (!signingSessionId || !isSigningSessionUnavailable(error)) throw error;
+        if (!signingSessionId || !isSigningSessionUnavailable(error))
+          throw error;
         await this.signingSessions?.remove(signingSessionId);
         if (!shouldShowWallet) {
           this.iframeManager.show();
@@ -205,56 +207,58 @@ export class EmbeddedThruChain implements IThruChain {
   async renewSession(
     options: ThruSigningSessionRenewOptions,
   ): Promise<ThruSigningSession> {
-    /* Renewal is non-interactive and must keep working after auto-lock. The
-       existing session authorizes and broadcasts the replacement authority
-       before the wallet confirms it. */
-    if (!this.signingSessions) {
-      throw new Error("Signing session storage is not available");
-    }
-    if (!this.broadcastTransaction) {
-      throw new Error("Signing session transaction broadcast is not available");
-    }
+    return withNetworkOperation(this.iframeManager, window.location.origin, async () => {
+      /* Renewal is non-interactive and must keep working after auto-lock. The
+         existing session authorizes and broadcasts the replacement authority
+         before the wallet confirms it. */
+      if (!this.signingSessions) {
+        throw new Error("Signing session storage is not available");
+      }
+      if (!this.broadcastTransaction) {
+        throw new Error("Signing session transaction broadcast is not available");
+      }
 
-    const current = await this.signingSessions.getActive(options.walletAddress);
-    if (!current) {
-      throw new Error("An active signing session is required for renewal");
-    }
+      const current = await this.signingSessions.getActive(options.walletAddress);
+      if (!current) {
+        throw new Error("An active signing session is required for renewal");
+      }
 
-    const expiresAt = resolveSessionExpirySeconds(options);
-    const context = buildWalletAccountContext({
-      walletAddress: options.walletAddress,
-      readWriteAccounts: [],
-      readOnlyAccounts: [],
-    });
-    const prepared = await this.iframeManager.sendMessage({
-      id: createRequestId(),
-      type: POST_MESSAGE_REQUEST_TYPES.CREATE_SIGNING_SESSION_INSTRUCTION,
-      payload: {
+      const expiresAt = resolveSessionExpirySeconds(options);
+      const context = buildWalletAccountContext({
         walletAddress: options.walletAddress,
-        expiresAt: String(expiresAt),
-        walletAccountIdx: context.walletAccountIdx,
-      },
-      origin: window.location.origin,
-    });
-    const signedTransaction = await this.signTransaction({
-      walletAddress: options.walletAddress,
-      programAddress: prepared.result.programAddress,
-      instructionData: prepared.result.instructionData,
-      readWriteAddresses: context.readWriteAddresses,
-      readOnlyAddresses: context.readOnlyAddresses,
-      signingSessionId: current.id,
-    });
-    await this.broadcastTransaction(signedTransaction);
+        readWriteAccounts: [],
+        readOnlyAccounts: [],
+      });
+      const prepared = await this.iframeManager.sendMessage({
+        id: createRequestId(),
+        type: POST_MESSAGE_REQUEST_TYPES.CREATE_SIGNING_SESSION_INSTRUCTION,
+        payload: {
+          walletAddress: options.walletAddress,
+          expiresAt: String(expiresAt),
+          walletAccountIdx: context.walletAccountIdx,
+        },
+        origin: window.location.origin,
+      });
+      const signedTransaction = await this.signTransaction({
+        walletAddress: options.walletAddress,
+        programAddress: prepared.result.programAddress,
+        instructionData: prepared.result.instructionData,
+        readWriteAddresses: context.readWriteAddresses,
+        readOnlyAddresses: context.readOnlyAddresses,
+        signingSessionId: current.id,
+      });
+      await this.broadcastTransaction(signedTransaction);
 
-    const response = await this.iframeManager.sendMessage({
-      id: createRequestId(),
-      type: POST_MESSAGE_REQUEST_TYPES.CONFIRM_SIGNING_SESSION,
-      payload: { sessionId: prepared.result.session.id },
-      origin: window.location.origin,
+      const response = await this.iframeManager.sendMessage({
+        id: createRequestId(),
+        type: POST_MESSAGE_REQUEST_TYPES.CONFIRM_SIGNING_SESSION,
+        payload: { sessionId: prepared.result.session.id },
+        origin: window.location.origin,
+      });
+      const descriptor = descriptorFromWire(response.result.session);
+      await this.signingSessions.saveReplacingWalletSessions(descriptor);
+      return this.toSigningSession(descriptor);
     });
-    const descriptor = descriptorFromWire(response.result.session);
-    await this.signingSessions.saveReplacingWalletSessions(descriptor);
-    return this.toSigningSession(descriptor);
   }
 
   async getSigningSession(id: string): Promise<ThruSigningSession | null> {
@@ -296,15 +300,29 @@ export class EmbeddedThruChain implements IThruChain {
   private toSigningSession(
     descriptor: ThruSigningSessionDescriptor,
   ): ThruSigningSession {
+    const generation = this.iframeManager.getNetworkGeneration();
     return {
       ...descriptor,
-      signTransaction: (transaction) =>
-        this.signTransaction({
+      signTransaction: (transaction) => {
+        if (generation !== this.iframeManager.getNetworkGeneration())
+          return Promise.reject(
+            new Error(
+              "Wallet network changed; reconnect and create a new signing session.",
+            ),
+          );
+        return this.signTransaction({
           ...transaction,
           walletAddress: transaction.walletAddress ?? descriptor.walletAddress,
           signingSessionId: descriptor.id,
-        }),
-      revoke: () => this.revokeSigningSession(descriptor.id),
+        });
+      },
+      revoke: () => {
+        if (generation !== this.iframeManager.getNetworkGeneration())
+          return Promise.reject(
+            new Error("Wallet network changed; reconnect."),
+          );
+        return this.revokeSigningSession(descriptor.id);
+      },
       toJSON: () => ({ ...descriptor }),
     };
   }

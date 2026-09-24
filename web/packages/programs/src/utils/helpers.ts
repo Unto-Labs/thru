@@ -78,7 +78,7 @@ export function accountData(
 export function accountIndex(
   context: AccountLookupContext,
   account: Uint8Array,
-  label: string
+  label = 'account'
 ): number {
   const index = context.getAccountIndex(exactBytes(account, PUBKEY_LENGTH, label));
   assertU16(index, `${label} index`);

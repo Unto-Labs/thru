@@ -16,10 +16,10 @@ afterEach(() => {
 
 describe('IframeManager', () => {
   it.each(['https://app.tid.sh', 'https://staging-app.tid.sh'])(
-    'delegates WebAuthn only to configured origin %s',
+    'delegates WebAuthn and clipboard writes only to configured origin %s',
     (origin) => {
       expect(walletIframeAllow(`${origin}/embedded?theme=dark`)).toBe(
-        `publickey-credentials-get ${origin}; publickey-credentials-create ${origin}; payment *`
+        `publickey-credentials-get ${origin}; publickey-credentials-create ${origin}; payment *; clipboard-write ${origin}`
       );
     }
   );
@@ -112,6 +112,52 @@ describe('IframeManager', () => {
     dispatchWalletMessage(frameId, { type: 'iframe:ready', data: { ready: true } });
     expect(postMessage).toHaveBeenCalledWith(
       expect.objectContaining({ type: 'wallet:theme', theme: 'dark' }),
+      'https://app.tid.sh'
+    );
+    manager.destroy();
+  });
+
+  it('carries developer mode on the frame URL only while it is on', () => {
+    const off = new IframeManager('https://app.tid.sh/embedded');
+    expect(new URL(off.getIframeSrc()).searchParams.has('tn_developer_mode')).toBe(false);
+
+    const on = new IframeManager('https://app.tid.sh/embedded', undefined, {
+      developerMode: true,
+    });
+    expect(new URL(on.getIframeSrc()).searchParams.get('tn_developer_mode')).toBe('1');
+
+    on.setDeveloperMode(false);
+    expect(new URL(on.getIframeSrc()).searchParams.has('tn_developer_mode')).toBe(false);
+  });
+
+  it('tells a loaded wallet about developer mode and restates it after a reload', async () => {
+    const { manager, frameId, iframe } = await readyManager();
+    const src = iframe.src;
+    const postMessage = vi.spyOn(iframe.contentWindow!, 'postMessage');
+
+    /* Nothing to say while the load-time value still holds. */
+    dispatchWalletMessage(frameId, { type: 'iframe:ready', data: { ready: true } });
+    expect(postMessage).not.toHaveBeenCalled();
+
+    manager.setDeveloperMode(true);
+    expect(iframe.src).toBe(src);
+    expect(postMessage).toHaveBeenCalledWith(
+      {
+        type: 'wallet:developer-mode',
+        origin: window.location.origin,
+        frameId,
+        enabled: true,
+      },
+      'https://app.tid.sh'
+    );
+
+    postMessage.mockClear();
+    manager.setDeveloperMode(true);
+    expect(postMessage).not.toHaveBeenCalled();
+
+    dispatchWalletMessage(frameId, { type: 'iframe:ready', data: { ready: true } });
+    expect(postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'wallet:developer-mode', enabled: true }),
       'https://app.tid.sh'
     );
     manager.destroy();
@@ -412,6 +458,41 @@ describe('IframeManager', () => {
     );
     manager.destroy();
   });
+
+  it.each([
+    /* http://localhost: a secure context whose wallet continues passkeys in a new window. */
+    { secure: true, expected: 'continue in a new window', silentWallet: true },
+    /* Any other HTTP page: not a secure context, so the frame has no passkeys. */
+    { secure: false, expected: 'Passkeys are unavailable', silentWallet: false },
+  ])(
+    'warns once on an HTTP page (secure context: $secure)',
+    async ({ secure, expected, silentWallet }) => {
+      vi.resetModules();
+      vi.stubGlobal('isSecureContext', secure);
+      const { IframeManager: FreshManager } = await import('./IframeManager');
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      expect(window.location.protocol).toBe('http:');
+      const localWallet = new FreshManager('http://localhost:3013/embedded');
+      void localWallet.createIframe().catch(() => {});
+      /* A localhost wallet frame is exempt only while the page is a secure context. */
+      expect(warn).toHaveBeenCalledTimes(silentWallet ? 0 : 1);
+      const managers = [
+        localWallet,
+        new FreshManager('https://app.tid.sh/embedded'),
+        new FreshManager('https://app.tid.sh/embedded'),
+      ];
+      for (const manager of managers.slice(1)) void manager.createIframe().catch(() => {});
+
+      expect(warn).toHaveBeenCalledOnce();
+      expect(warn.mock.calls[0][0]).toContain(expected);
+      expect(warn.mock.calls[0][0]).toContain(
+        'https://thru.org/docs/wallet/embedded-wallet-integration/#serve-your-app-over-https-in-development'
+      );
+      for (const manager of managers) manager.destroy();
+      warn.mockRestore();
+      vi.unstubAllGlobals();
+    }
+  );
 
   it('allows a Tailscale wallet during development SSR', () => {
     const bridge = new IframeManager('https://wallet-dev.tailabc.ts.net/embedded');

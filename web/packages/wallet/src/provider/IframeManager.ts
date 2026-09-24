@@ -1,3 +1,4 @@
+import { BridgeNetworkState } from '../bridge-network-state';
 import { TELEMETRY_EVENTS, type TelemetryAppContext } from '../observability';
 import type {
   InferSuccessfulPostMessageResponse,
@@ -9,10 +10,15 @@ import type {
 import type {
   IframeReadyData,
   UiHideEventPayload,
+  WalletDeveloperModeMessage,
   WalletTheme,
   WalletThemeMessage,
 } from '../protocol';
-import { WALLET_THEME_MESSAGE_TYPE } from '../protocol';
+import {
+  WALLET_DEVELOPER_MODE_MESSAGE_TYPE,
+  WALLET_DEVELOPER_MODE_SEARCH_PARAM,
+  WALLET_THEME_MESSAGE_TYPE,
+} from '../protocol';
 import {
   getSafeRequestTelemetryFields,
   getSafeResponseTelemetryFields,
@@ -51,7 +57,7 @@ const PARENT_ORIGIN_SEARCH_PARAM = 'tn_parent_origin';
 const THEME_SEARCH_PARAM = 'tn_theme';
 export function walletIframeAllow(walletUrl: string): string {
   const origin = new URL(walletUrl).origin;
-  return `publickey-credentials-get ${origin}; publickey-credentials-create ${origin}; payment *`;
+  return `publickey-credentials-get ${origin}; publickey-credentials-create ${origin}; payment *; clipboard-write ${origin}`;
 }
 
 /** @deprecated Use walletIframeAllow with the configured wallet URL. */
@@ -132,18 +138,21 @@ function validateIframeOrigin(iframeUrl: string): void {
   try {
     url = new URL(iframeUrl);
   } catch (error) {
-    throw new Error(`Invalid iframe URL: ${iframeUrl}. URL must be a valid absolute URL.`);
+    throw new Error(
+      `Invalid iframe URL: ${iframeUrl}. URL must be a valid absolute URL.`,
+    );
   }
 
   const origin = url.origin;
-  const isAllowed = TRUSTED_IFRAME_ORIGINS.includes(origin) || isAllowedDevelopmentOrigin(url);
+  const isAllowed =
+    TRUSTED_IFRAME_ORIGINS.includes(origin) || isAllowedDevelopmentOrigin(url);
 
   if (!isAllowed) {
     throw new Error(
       `Untrusted iframe origin: ${origin}. ` +
         `Only trusted wallet origins are allowed: ${TRUSTED_IFRAME_ORIGINS.join(', ')}. ` +
         `Development builds also allow localhost, LAN, and Tailscale wallet origins. ` +
-        `This security check prevents malicious websites from loading unauthorized wallet iframes.`
+        `This security check prevents malicious websites from loading unauthorized wallet iframes.`,
     );
   }
 }
@@ -161,16 +170,74 @@ function getCurrentWindowOrigin(): string | null {
   return origin;
 }
 
+const HTTPS_DEVELOPMENT_DOCS_URL =
+  'https://thru.org/docs/wallet/embedded-wallet-integration/#serve-your-app-over-https-in-development';
+let warnedHttpHost = false;
+
+function isLocalhostHostname(hostname: string): boolean {
+  return (
+    hostname === 'localhost' ||
+    hostname.endsWith('.localhost') ||
+    hostname === '[::1]' ||
+    hostname.startsWith('127.')
+  );
+}
+
+/* Browsers refuse passkeys inside the wallet frame when this page is plain
+   HTTP, even http://localhost (Chrome reports "TLS certificate errors"). On a
+   localhost page the wallet continues them in a new window, and a localhost
+   wallet frame is exempt. Any other HTTP page is not a secure context, which
+   leaves the frame without passkeys at all. */
+function warnIfHttpHost(walletOrigin: string): void {
+  if (warnedHttpHost || typeof window === 'undefined') return;
+  if (window.location.protocol !== 'http:') return;
+  const insecurePage = window.isSecureContext === false;
+  if (!insecurePage && isLocalhostHostname(new URL(walletOrigin).hostname))
+    return;
+  warnedHttpHost = true;
+  console.warn(
+    `[WalletSDK] ${window.location.origin} is served over HTTP. ` +
+      (insecurePage
+        ? `Passkeys are unavailable in the embedded wallet on this page. ` +
+          `Serve your app over HTTPS, or use http://localhost during development: `
+        : `Browsers block passkeys inside the embedded wallet on HTTP pages, so passkey ` +
+          `prompts continue in a new window. Serve your app over HTTPS in development: `) +
+      HTTPS_DEVELOPMENT_DOCS_URL,
+  );
+}
+
 /**
  * Manages iframe lifecycle and postMessage communication
  * Handles creating, showing/hiding iframe, and message passing
  */
 export class IframeManager {
+  private readonly networkState = new BridgeNetworkState(
+    () => this.rejectPendingRequests(
+      'Wallet network changed; reconnect.', ErrorCode.NETWORK_CHANGED,
+    ),
+    (network) => this.onEvent?.('network_changed', network),
+  );
+  waitForNetwork(scope: string, name?: string): Promise<void> {
+    return this.networkState.waitForNetwork(scope, name);
+  }
+  supportsNetworkSwitching() {
+    return this.networkState.supported;
+  }
+  getNetwork() {
+    return this.networkState.network;
+  }
+  getNetworkGeneration() {
+    return this.networkState.generation;
+  }
+
   private iframe: HTMLIFrameElement | null = null;
   private iframeUrl: string;
   private iframeOrigin: string;
   private frameId: string;
-  private messageHandlers = new Map<string, (response: PostMessageResponse) => void>();
+  private messageHandlers = new Map<
+    string,
+    (response: PostMessageResponse) => void
+  >();
   private messageListener: ((event: MessageEvent) => void) | null = null;
   private readyPromise: Promise<void> | null = null;
   private displayMode: 'modal' | 'inline' = 'modal';
@@ -195,6 +262,10 @@ export class IframeManager {
   /* The theme changed after the frame URL was built, so a wallet document
      that reloads in place must be told again. */
   private themeUpdated = false;
+  /* The host's developer mode: on the URL for the first load, by message
+     when it changes (see setDeveloperMode). */
+  private developerMode = false;
+  private developerModeUpdated = false;
   private telemetryAppContextId?: string;
   private telemetryContext?: TelemetryAppContext;
   private telemetryContextUpdated = false;
@@ -207,13 +278,14 @@ export class IframeManager {
   constructor(
     iframeUrl: string,
     telemetry?: TelemetryClient,
-    options: { theme?: WalletTheme } = {}
+    options: { theme?: WalletTheme; developerMode?: boolean } = {},
   ) {
     // Validate origin before accepting the URL
     validateIframeOrigin(iframeUrl);
 
     this.iframeUrl = iframeUrl;
     this.theme = options.theme ?? 'light';
+    this.developerMode = options.developerMode === true;
     this.iframeOrigin = new URL(iframeUrl).origin;
     /* Used to correlate postMessage traffic with the correct iframe instance.
        Important in dev (React Strict Mode) where iframes can be created twice. */
@@ -224,7 +296,10 @@ export class IframeManager {
     });
   }
 
-  private record(event: string, fields: Parameters<TelemetryClient['record']>[1] = {}): void {
+  private record(
+    event: string,
+    fields: Parameters<TelemetryClient['record']>[1] = {},
+  ): void {
     this.telemetry?.record(event, {
       source: 'bridge',
       frameId: this.frameId,
@@ -244,7 +319,39 @@ export class IframeManager {
       url.searchParams.set(PARENT_ORIGIN_SEARCH_PARAM, parentOrigin);
     }
     url.searchParams.set(THEME_SEARCH_PARAM, this.theme);
+    if (this.developerMode) url.searchParams.set(WALLET_DEVELOPER_MODE_SEARCH_PARAM, '1');
+    else url.searchParams.delete(WALLET_DEVELOPER_MODE_SEARCH_PARAM);
     return url.toString();
+  }
+
+  /**
+   * Turn the host's developer mode on or off without reloading the wallet:
+   * the wallet document hears it by message, and any later (re)load carries
+   * it on the URL.
+   */
+  setDeveloperMode(enabled: boolean): void {
+    if (enabled === this.developerMode) return;
+    this.developerMode = enabled;
+    this.developerModeUpdated = true;
+    this.sendDeveloperMode();
+  }
+
+  /* Best effort, like sendTheme: the ready handshake sends it again. */
+  private sendDeveloperMode(): void {
+    const target = this.iframe?.contentWindow;
+    const parentOrigin = getCurrentWindowOrigin();
+    if (!target || !parentOrigin) return;
+    const message: WalletDeveloperModeMessage = {
+      type: WALLET_DEVELOPER_MODE_MESSAGE_TYPE,
+      origin: parentOrigin,
+      frameId: this.frameId,
+      enabled: this.developerMode,
+    };
+    try {
+      target.postMessage(message, this.iframeOrigin);
+    } catch {
+      /* The frame has not reached the wallet origin yet; ready resends. */
+    }
   }
 
   getTheme(): WalletTheme {
@@ -296,13 +403,16 @@ export class IframeManager {
    * Fail every in-flight request. Used when the host tears the wallet
    * surface down before the wallet answered (e.g. a dismissed sheet).
    */
-  rejectPendingRequests(message = 'User rejected the request'): void {
+  rejectPendingRequests(
+    message = 'User rejected the request',
+    code: ErrorCode = ErrorCode.USER_REJECTED,
+  ): void {
     for (const [id, handler] of Array.from(this.messageHandlers.entries())) {
       handler({
         id,
         success: false,
         error: {
-          code: ErrorCode.USER_REJECTED,
+          code,
           message,
         },
       });
@@ -315,12 +425,17 @@ export class IframeManager {
    */
   async createIframe(): Promise<void> {
     if (this.readyPromise) {
-      this.record(TELEMETRY_EVENTS.BRIDGE_IFRAME_CREATE_REUSED, { severity: 'debug' });
+      this.record(TELEMETRY_EVENTS.BRIDGE_IFRAME_CREATE_REUSED, {
+        severity: 'debug',
+      });
       return this.readyPromise;
     }
 
+    warnIfHttpHost(this.iframeOrigin);
     const startedAt = Date.now();
-    this.record(TELEMETRY_EVENTS.BRIDGE_IFRAME_CREATE_STARTED, { operation: 'initialize' });
+    this.record(TELEMETRY_EVENTS.BRIDGE_IFRAME_CREATE_STARTED, {
+      operation: 'initialize',
+    });
     this.readyPromise = (async () => {
       if (!this.iframe) {
         this.iframe = document.createElement('iframe');
@@ -339,8 +454,9 @@ export class IframeManager {
             durationMs: Date.now() - startedAt,
           });
         });
-        /* Delegate WebAuthn for passkey auth and Payment Request for the
-           wallet-owned Coinbase Apple Pay iframe. */
+        /* Delegate WebAuthn for passkey auth, Payment Request for the
+           wallet-owned Coinbase Apple Pay iframe, and clipboard writes for
+           the wallet's copy buttons (Chromium blocks them otherwise). */
         this.iframe.allow = walletIframeAllow(this.iframe.src);
         this.applyIframeStyles();
         /* Keep hidden (but still load) until the wallet asks to show UI. */
@@ -365,7 +481,11 @@ export class IframeManager {
            while the second load, warm, is quick. Without this a host that
            auto-restores its session shows "signed out" until the user
            reloads by hand. */
-        if (!(error instanceof Error) || !/ready timeout/i.test(error.message) || !this.iframe) {
+        if (
+          !(error instanceof Error) ||
+          !/ready timeout/i.test(error.message) ||
+          !this.iframe
+        ) {
           throw error;
         }
         this.record(TELEMETRY_EVENTS.BRIDGE_IFRAME_READY_RETRY, {
@@ -445,7 +565,10 @@ export class IframeManager {
    * Record the load-time correlation values, which the iframe URL already
    * carries, so a later update never clears them by omission.
    */
-  primeTelemetryContext(appContextId: string | null, context: TelemetryAppContext | null): void {
+  primeTelemetryContext(
+    appContextId: string | null,
+    context: TelemetryAppContext | null,
+  ): void {
     this.telemetryAppContextId = appContextId ?? undefined;
     this.telemetryContext = context ?? undefined;
   }
@@ -478,7 +601,9 @@ export class IframeManager {
       type: TELEMETRY_CONTEXT_MESSAGE_TYPE,
       origin: parentOrigin,
       frameId: this.frameId,
-      ...(this.telemetryAppContextId ? { appContextId: this.telemetryAppContextId } : {}),
+      ...(this.telemetryAppContextId
+        ? { appContextId: this.telemetryAppContextId }
+        : {}),
       ...(this.telemetryContext ? { appContext: this.telemetryContext } : {}),
     };
     try {
@@ -513,7 +638,10 @@ export class IframeManager {
       return;
     }
     this.displayMode = 'inline';
-    if (this.inlineContainer && this.iframe.parentElement !== this.inlineContainer) {
+    if (
+      this.inlineContainer &&
+      this.iframe.parentElement !== this.inlineContainer
+    ) {
       this.inlineContainer.appendChild(this.iframe);
     }
     this.applyIframeStyles();
@@ -559,7 +687,10 @@ export class IframeManager {
   hide(): Promise<void> {
     if (this.managedHide && this.uiClaimed && this.visible) {
       if (!this.hideFallbackTimer) {
-        this.hideFallbackTimer = setTimeout(() => this.finishHide(), MANAGED_HIDE_FALLBACK_MS);
+        this.hideFallbackTimer = setTimeout(
+          () => this.finishHide(),
+          MANAGED_HIDE_FALLBACK_MS,
+        );
       }
       return new Promise((resolve) => {
         this.hiddenWaiters.push(resolve);
@@ -639,8 +770,11 @@ export class IframeManager {
    * Send message to iframe and wait for response
    */
   async sendMessage<TRequest extends PostMessageRequest>(
-    request: TRequest
+    request: TRequest,
   ): Promise<InferSuccessfulPostMessageResponse<TRequest>> {
+    const queuedGeneration = this.networkState.network
+      ? this.networkState.generation
+      : null;
     const startedAt = Date.now();
     const safeRequestFields = getSafeRequestTelemetryFields(request);
     this.record(TELEMETRY_EVENTS.BRIDGE_REQUEST_QUEUED, {
@@ -680,7 +814,16 @@ export class IframeManager {
       throw new Error('Iframe not initialized - call createIframe() first');
     }
 
-    return new Promise<InferSuccessfulPostMessageResponse<TRequest>>((resolve, reject) => {
+    if (
+      queuedGeneration !== null &&
+      queuedGeneration !== this.networkState.generation
+    )
+      throw Object.assign(new Error('Wallet network changed; reconnect.'), {
+        code: ErrorCode.NETWORK_CHANGED,
+      });
+
+    return new Promise<InferSuccessfulPostMessageResponse<TRequest>>(
+      (resolve, reject) => {
       /* CONNECT, signing, and account-management requests require a human click and can take minutes.
          Keep a longer timeout to avoid breaking "inline connect button" flows. */
       const timeoutMs = SLOW_REQUEST_TYPES.has(request.type)
@@ -701,7 +844,9 @@ export class IframeManager {
       }, timeoutMs);
 
       // Store handler for this request
-      this.messageHandlers.set(request.id, (response: PostMessageResponse) => {
+        this.messageHandlers.set(
+          request.id,
+          (response: PostMessageResponse) => {
         clearTimeout(timeout);
         this.messageHandlers.delete(request.id);
 
@@ -712,11 +857,16 @@ export class IframeManager {
             outcome: 'success',
             durationMs: Date.now() - startedAt,
             ...safeRequestFields,
-            ...getSafeResponseTelemetryFields(request.type, response.result),
+                ...getSafeResponseTelemetryFields(
+                  request.type,
+                  response.result,
+                ),
           });
           resolve(response as InferSuccessfulPostMessageResponse<TRequest>);
         } else {
-          const error = new Error(response.error?.message || 'Unknown error');
+              const error = new Error(
+                response.error?.message || 'Unknown error',
+              );
           (error as any).code = response.error?.code;
           (error as any).data = response.error?.data;
           this.record(TELEMETRY_EVENTS.BRIDGE_REQUEST_FAILED, {
@@ -731,11 +881,20 @@ export class IframeManager {
           });
           reject(error);
         }
-      });
+          },
+        );
 
       // Send message to iframe
       try {
-        this.iframe!.contentWindow!.postMessage(request, this.iframeOrigin);
+          this.iframe!.contentWindow!.postMessage(
+            {
+              ...request,
+              networkScope: this.networkState.network?.scope,
+              networkGeneration:
+                request.networkGeneration ?? this.networkState.generation,
+            },
+            this.iframeOrigin,
+          );
         this.record(TELEMETRY_EVENTS.BRIDGE_REQUEST_STARTED, {
           requestId: request.id,
           operation: request.type,
@@ -754,7 +913,8 @@ export class IframeManager {
         });
         reject(error);
       }
-    });
+      },
+    );
   }
 
   /**
@@ -799,9 +959,12 @@ export class IframeManager {
 
     if (data?.type === IFRAME_READY_EVENT) {
       this.readCapabilities(data);
-      this.record(TELEMETRY_EVENTS.BRIDGE_IFRAME_READY_RECEIVED, { severity: 'debug' });
+      this.record(TELEMETRY_EVENTS.BRIDGE_IFRAME_READY_RECEIVED, {
+        severity: 'debug',
+      });
       this.sendTelemetryContext();
       if (this.themeUpdated) this.sendTheme();
+      if (this.developerModeUpdated) this.sendDeveloperMode();
       return;
     }
 
@@ -838,6 +1001,7 @@ export class IframeManager {
 
   private readCapabilities(data: { data?: unknown }): void {
     const ready = data.data as IframeReadyData | undefined;
+    this.networkState.readReady(ready);
     if (ready?.capabilities?.managedHide === true) {
       this.managedHide = true;
     }
@@ -901,7 +1065,10 @@ export class IframeManager {
     /* Some browsers (notably Safari) can provide a null `event.source` for
        cross-origin postMessage events. Frame id + origin is sufficient. */
     if (!event.source) return null;
-    if (this.iframe?.contentWindow && event.source !== this.iframe.contentWindow) {
+    if (
+      this.iframe?.contentWindow &&
+      event.source !== this.iframe.contentWindow
+    ) {
       return 'source_mismatch';
     }
     return null;
@@ -915,7 +1082,8 @@ export class IframeManager {
     this.settleHiddenWaiters();
     this.record(TELEMETRY_EVENTS.BRIDGE_DESTROYED, {
       severity: 'debug',
-      outcome: this.messageHandlers.size > 0 ? 'pending_requests_dropped' : 'success',
+      outcome:
+        this.messageHandlers.size > 0 ? 'pending_requests_dropped' : 'success',
     });
     if (this.iframe) {
       this.iframe.remove();

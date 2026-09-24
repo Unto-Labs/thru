@@ -24,6 +24,7 @@ import {
 } from "@thru/sdk/proto";
 import { mergeTransactionHeader } from "../utils/utils";
 import { generateStateProof } from "./proofs";
+import { getChainId } from "./chain";
 
 export interface CreateAccountOptions {
     /** The new account's public key (fee payer). */
@@ -132,6 +133,7 @@ export async function createAccount(
         fee: 0n,
         nonce: 0n,
         startSlot,
+        chainId: options.header?.chainId ?? (await getChainId(ctx)),
         expiryAfter: 100,
         computeUnits: 10_000,
         memoryUnits: 10_000,

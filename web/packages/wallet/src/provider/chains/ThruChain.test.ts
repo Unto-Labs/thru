@@ -50,7 +50,7 @@ describe("EmbeddedThruChain signing-session refresh", () => {
       result: { signedTransaction: "passkey_signed_transaction" },
     }));
     const chain = new EmbeddedThruChain(
-      { sendMessage, show, hide } as never,
+      { sendMessage, show, hide, getNetworkGeneration: () => 0 } as never,
       { isConnected: () => false } as never,
       signingSessions,
     );
@@ -128,7 +128,7 @@ describe("EmbeddedThruChain signing-session refresh", () => {
     });
     const broadcastTransaction = vi.fn(async () => "signature");
     const chain = new EmbeddedThruChain(
-      { sendMessage } as never,
+      { sendMessage, getNetworkGeneration: () => 0 } as never,
       { isConnected: () => false } as never,
       signingSessions,
       broadcastTransaction,
@@ -192,12 +192,16 @@ describe("EmbeddedThruChain signing-session refresh", () => {
     const hide = vi.fn();
     const sendMessage = vi
       .fn()
-      .mockRejectedValueOnce(Object.assign(new Error("Signing session key missing"), {
+      .mockRejectedValueOnce(
+        Object.assign(new Error("Signing session key missing"), {
         code: "SIGNING_SESSION_UNAVAILABLE",
-      }))
-      .mockResolvedValueOnce({ result: { signedTransaction: "passkey-signed" } });
+        }),
+      )
+      .mockResolvedValueOnce({
+        result: { signedTransaction: "passkey-signed" },
+      });
     const chain = new EmbeddedThruChain(
-      { sendMessage, show, hide } as never,
+      { sendMessage, show, hide, getNetworkGeneration: () => 0 } as never,
       {
         isConnected: () => true,
         getSelectedAccount: () => ({ address: "wallet-a" }),
@@ -205,17 +209,29 @@ describe("EmbeddedThruChain signing-session refresh", () => {
       signingSessions,
     );
 
-    await expect(chain.signTransaction({
+    await expect(
+      chain.signTransaction({
       programAddress: "program",
       instructionData: "AQID",
-    })).resolves.toBe("passkey-signed");
+      }),
+    ).resolves.toBe("passkey-signed");
 
-    expect(sendMessage).toHaveBeenNthCalledWith(1, expect.objectContaining({
-      payload: expect.objectContaining({ signingSessionId: "session-active" }),
-    }));
-    expect(sendMessage).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      payload: expect.not.objectContaining({ signingSessionId: expect.anything() }),
-    }));
+    expect(sendMessage).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({
+        payload: expect.objectContaining({
+          signingSessionId: "session-active",
+        }),
+      }),
+    );
+    expect(sendMessage).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        payload: expect.not.objectContaining({
+          signingSessionId: expect.anything(),
+        }),
+      }),
+    );
     expect(show).toHaveBeenCalledOnce();
     expect(hide).toHaveBeenCalledOnce();
     await expect(chain.getSigningSession("session-active")).resolves.toBeNull();

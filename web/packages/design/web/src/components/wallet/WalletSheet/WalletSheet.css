@@ -2,6 +2,9 @@
 
 .tds-wsheet__cta {
   width: 100%;
+  /* A CTA sits straight in a flex column; never let it squeeze below the
+     button's own height - the body scrolls instead. */
+  flex: none;
 }
 
 /* Loading escalation (8 s): copy swaps and Retry / Cancel appear. */

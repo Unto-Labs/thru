@@ -4,6 +4,7 @@ import {
   PASSKEY_POPUP_REQUEST_EVENT,
   PASSKEY_POPUP_RESPONSE_EVENT,
   requestPasskeyPopup,
+  setPasskeyPopupErrorDetails,
 } from './popup';
 import type { PasskeyPopupRequest } from './types';
 
@@ -130,6 +131,23 @@ describe('popup ceremony reporting', () => {
     expect(harness.reporter.finished).not.toHaveBeenCalled();
     expect(harness.popup.close).toHaveBeenCalledOnce();
     harness.expectCleanedUp();
+  });
+
+  it('tells the popup when it may show raw error text', async () => {
+    for (const show of [true, false]) {
+      setPasskeyPopupErrorDetails(show);
+      const harness = createHarness();
+      const pending = requestPasskeyPopup('get', GET_PAYLOAD);
+      const request = harness.ready();
+      expect(request.showErrorDetails).toBe(show ? true : undefined);
+      harness.emit({
+        type: PASSKEY_POPUP_RESPONSE_EVENT,
+        requestId: request.requestId,
+        success: true,
+        result: {},
+      });
+      await pending;
+    }
   });
 
   it('preserves original popup results and credential JSON with exactly one completion', async () => {

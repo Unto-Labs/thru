@@ -199,18 +199,23 @@ impl LanguageRunner for CRunner {
             .unwrap_or_default();
 
         /* Generate C test runner code using opaque wrapper API */
-        let test_runner_code = generate_c_test_runner_code_opaque(
-            &test_case.type_name,
-            &binary_file_path,
-            &referenced_primitive_fields,
-            &non_referenced_primitive_fields,
-            &enum_fields,
-            &array_fields,
-            &nested_fields,
-            &size_discriminated_union_fields,
-            &sdu_fields_with_variants,
-            &package,
-        );
+        let top_array = super::top_level_array::load(abi_file_path, &test_case.type_name)?;
+        let test_runner_code = if let Some(array) = top_array {
+            array.c(&test_case.type_name, binary_data)
+        } else {
+            generate_c_test_runner_code_opaque(
+                &test_case.type_name,
+                &binary_file_path,
+                &referenced_primitive_fields,
+                &non_referenced_primitive_fields,
+                &enum_fields,
+                &array_fields,
+                &nested_fields,
+                &size_discriminated_union_fields,
+                &sdu_fields_with_variants,
+                &package,
+            )
+        };
 
         let test_file_path = temp_dir.join("test.c");
         fs::write(&test_file_path, test_runner_code)?;
@@ -437,6 +442,9 @@ fn extract_field_info_opaque(
 
     for typedef in abi.get_types() {
         if typedef.name == type_name {
+            if matches!(typedef.kind, TypeKind::Array(_)) {
+                return Ok((vec![], vec![], vec![], vec![], vec![], vec![], package));
+            }
             if let TypeKind::Struct(struct_type) = &typedef.kind {
                 /* Extract which fields are referenced in expressions (like enum tag-refs and FAM sizes) */
                 let mut referenced_fields = HashSet::new();

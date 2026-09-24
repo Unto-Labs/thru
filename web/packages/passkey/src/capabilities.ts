@@ -118,7 +118,7 @@ export function isInIframe(): boolean {
 export type PasskeyPromptAction = 'get' | 'create';
 
 export type PasskeyRestrictionReason =
-  'policy-denied' | 'unsupported-create' | 'ancestor-restriction';
+  'policy-denied' | 'unsupported-create' | 'ancestor-restriction' | 'insecure-host';
 
 export class PasskeyIframeRestrictionError extends Error {
   readonly name = 'PasskeyIframeRestrictionError';
@@ -129,7 +129,9 @@ export class PasskeyIframeRestrictionError extends Error {
     super(
       reason === 'unsupported-create'
         ? 'This browser needs a separate window to create a passkey.'
-        : 'This browser cannot use passkeys inside the embedded wallet.'
+        : reason === 'insecure-host'
+          ? 'This app is not served over HTTPS, so passkeys cannot run inside the embedded wallet.'
+          : 'This browser cannot use passkeys inside the embedded wallet.'
     );
   }
 }
@@ -167,6 +169,21 @@ function isCrossOriginIframe(): boolean {
   }
 }
 
+const LOCALHOST_HOSTNAME = /^(?:localhost|.+\.localhost|127(?:\.\d{1,3}){3}|\[::1\])$/i;
+
+/* Browsers refuse WebAuthn in a frame whose top-level page is plain HTTP, even
+   http://localhost; Chrome reports it as "TLS certificate errors". Chrome only
+   exempts a localhost caller, so a localhost wallet frame stays inline.
+   Browsers without ancestorOrigins (Firefox) keep the inline attempt.
+   Only a localhost HTTP page can recover this way: under any other HTTP page the
+   frame is not a secure context, and runPasskeyCeremony fails closed first. */
+function isEmbeddedUnderHttpHost(): boolean {
+  const ancestors = window.location.ancestorOrigins;
+  if (!ancestors?.length) return false;
+  const top = ancestors[ancestors.length - 1];
+  return top.startsWith('http:') && !LOCALHOST_HOSTNAME.test(window.location.hostname);
+}
+
 function isKnownWebKit(): boolean {
   if (typeof navigator === 'undefined') return false;
   const ua = navigator.userAgent;
@@ -181,6 +198,9 @@ export function getPasskeyRestriction(
   if (!isInIframe()) return null;
   const remembered = inlineRefusals.get(action);
   if (remembered) return new PasskeyIframeRestrictionError(action, remembered);
+  if (isEmbeddedUnderHttpHost()) {
+    return new PasskeyIframeRestrictionError(action, 'insecure-host');
+  }
   if (getPermissionsPolicyAllowsFeature(`publickey-credentials-${action}`) === false) {
     return new PasskeyIframeRestrictionError(action, 'policy-denied');
   }

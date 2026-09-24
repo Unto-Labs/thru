@@ -1,7 +1,11 @@
 import { useCallback, useEffect, useRef } from 'react';
-import type { ConnectResult, IThruChain } from "../../../interfaces";
-import type { CreateAccountResult } from "../../../protocol";
-import type { ConnectOptions, CreateAccountOptions, SignInOptions } from "../../NativeSDK";
+import type { ConnectResult, IThruChain } from '../../../interfaces';
+import type { CreateAccountResult } from '../../../protocol';
+import type {
+  ConnectOptions,
+  CreateAccountOptions,
+  SignInOptions,
+} from '../../NativeSDK';
 import { useThru } from './useThru';
 import { waitForWallet } from './waitForWallet';
 
@@ -13,6 +17,8 @@ import { waitForWallet } from './waitForWallet';
 export function useWallet() {
   const {
     wallet,
+    network,
+    switchNetwork,
     isConnected,
     isConnecting,
     accounts,
@@ -34,17 +40,23 @@ export function useWallet() {
     walletRef.current = wallet;
   }, [wallet]);
 
-  const connect = useCallback(async (options?: ConnectOptions): Promise<ConnectResult> => {
+  const connect = useCallback(
+    async (options?: ConnectOptions): Promise<ConnectResult> => {
     const ready =
       walletRef.current ?? (await waitForWallet(() => walletRef.current));
     return ready.connect(options);
-  }, []);
+    },
+    [],
+  );
 
-  const signIn = useCallback(async (options: SignInOptions): Promise<ConnectResult> => {
+  const signIn = useCallback(
+    async (options: SignInOptions): Promise<ConnectResult> => {
     const ready =
       walletRef.current ?? (await waitForWallet(() => walletRef.current));
     return ready.signIn(options);
-  }, []);
+    },
+    [],
+  );
 
   const createTransparentAccount = useCallback(
     async (options?: CreateAccountOptions): Promise<CreateAccountResult> => {
@@ -61,13 +73,18 @@ export function useWallet() {
     await ready.disconnect();
   }, []);
 
-  const refreshWalletAvailability = useCallback(async (options?: ConnectOptions) => {
+  const refreshWalletAvailability = useCallback(
+    async (options?: ConnectOptions) => {
     const ready =
       walletRef.current ?? (await waitForWallet(() => walletRef.current));
     return ready.refreshWalletAvailability(options);
-  }, []);
+    },
+    [],
+  );
 
   return {
+    network,
+    switchNetwork,
     /** Chain interface (`provider.thru`); undefined until connected. */
     wallet: wallet?.thru as IThruChain | undefined,
     connection: wallet?.connection,

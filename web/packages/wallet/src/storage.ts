@@ -8,6 +8,8 @@ import type { TelemetryClient } from "./telemetry";
  * never use this interface.
  */
 export interface WalletSDKStorage {
+  /** Internal guard for operations spanning an asynchronous network transition. */
+  networkScope?: () => string;
   getItem: (key: string) => string | null | Promise<string | null>;
   setItem: (key: string, value: string) => void | Promise<void>;
   removeItem: (key: string) => void | Promise<void>;
@@ -28,7 +30,7 @@ export function resolveWalletSDKStorageKey(params: {
   return `thru.wallet.${params.kind}.v2.${hex(params.walletOrigin)}.${hex(params.appOrigin)}`;
 }
 
-export type WalletSDKStorageOperation = keyof WalletSDKStorage;
+export type WalletSDKStorageOperation = "getItem" | "setItem" | "removeItem";
 export type WalletSDKStorageCategory =
   "connection-hint" | "signing-sessions" | "connection";
 
@@ -104,6 +106,7 @@ export function withWalletSDKStorageErrors(
     }
   }
   return {
+    networkScope: storage.networkScope,
     getItem: (key) => run("getItem", () => storage.getItem(key)),
     setItem: (key, value) => run("setItem", () => storage.setItem(key, value)),
     removeItem: (key) => run("removeItem", () => storage.removeItem(key)),

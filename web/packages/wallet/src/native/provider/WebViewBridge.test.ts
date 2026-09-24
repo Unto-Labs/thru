@@ -6,7 +6,7 @@ import {
   EMBEDDED_PROVIDER_EVENTS,
   ErrorCode,
   createRequestId,
-} from "../../protocol";
+} from '../../protocol';
 import {
   WebViewBridge,
   type NativeTelemetryFields,
@@ -18,7 +18,7 @@ const ORIGINAL_NODE_ENV = process.env.NODE_ENV;
 
 function restoreNodeEnv(): void {
   if (ORIGINAL_NODE_ENV === undefined) {
-    Reflect.deleteProperty(process.env, "NODE_ENV");
+    Reflect.deleteProperty(process.env, 'NODE_ENV');
     return;
   }
   process.env.NODE_ENV = ORIGINAL_NODE_ENV;
@@ -46,7 +46,7 @@ function readyMessage(frameId: string): WebViewMessageEventLike {
 function responseMessage(
   frameId: string,
   id: string,
-  result: unknown
+  result: unknown,
 ): WebViewMessageEventLike {
   return {
     nativeEvent: {
@@ -59,7 +59,7 @@ function errorMessage(
   frameId: string,
   id: string,
   code: string,
-  message: string
+  message: string,
 ): WebViewMessageEventLike {
   return {
     nativeEvent: {
@@ -76,7 +76,7 @@ function errorMessage(
 function eventMessage(
   frameId: string,
   event: string,
-  data?: unknown
+  data?: unknown,
 ): WebViewMessageEventLike {
   return {
     nativeEvent: {
@@ -120,7 +120,7 @@ describe('WebViewBridge', () => {
 
   it('rejects untrusted wallet origins at construction', () => {
     expect(
-      () => new WebViewBridge({ walletUrl: 'https://evil.example.com/embed' })
+      () => new WebViewBridge({ walletUrl: 'https://evil.example.com/embed' }),
     ).toThrow(/Untrusted wallet origin/);
   });
 
@@ -134,7 +134,9 @@ describe('WebViewBridge', () => {
     const tailscaleBridge = new WebViewBridge({
       walletUrl: 'https://wallet-dev.tailabc.ts.net/embedded',
     });
-    expect(tailscaleBridge.walletOrigin).toBe('https://wallet-dev.tailabc.ts.net');
+    expect(tailscaleBridge.walletOrigin).toBe(
+      'https://wallet-dev.tailabc.ts.net',
+    );
     tailscaleBridge.destroy();
 
     const tailscaleIpBridge = new WebViewBridge({
@@ -170,13 +172,16 @@ describe('WebViewBridge', () => {
     productionBridge.destroy();
 
     expect(
-      () => new WebViewBridge({ walletUrl: 'http://localhost:3000/embedded' })
+      () => new WebViewBridge({ walletUrl: 'http://localhost:3000/embedded' }),
     ).toThrow(/Untrusted wallet origin/);
     expect(
-      () => new WebViewBridge({ walletUrl: 'https://wallet-dev.tailabc.ts.net/embedded' })
+      () =>
+        new WebViewBridge({
+          walletUrl: 'https://wallet-dev.tailabc.ts.net/embedded',
+        }),
     ).toThrow(/Untrusted wallet origin/);
     expect(
-      () => new WebViewBridge({ walletUrl: 'http://100.64.0.1:3000/embedded' })
+      () => new WebViewBridge({ walletUrl: 'http://100.64.0.1:3000/embedded' }),
     ).toThrow(/Untrusted wallet origin/);
   });
 
@@ -213,7 +218,7 @@ describe('WebViewBridge', () => {
       walletUrl: 'https://wallet.staging.web.5f1.net/embedded',
     });
     expect(stagingBridge.walletOrigin).toBe(
-      'https://wallet.staging.web.5f1.net'
+      'https://wallet.staging.web.5f1.net',
     );
     stagingBridge.destroy();
   });
@@ -223,7 +228,7 @@ describe('WebViewBridge', () => {
     (globalThis as typeof globalThis & { __DEV__?: boolean }).__DEV__ = false;
 
     expect(
-      () => new WebViewBridge({ walletUrl: 'http://localhost:3000/embedded' })
+      () => new WebViewBridge({ walletUrl: 'http://localhost:3000/embedded' }),
     ).toThrow(/Untrusted wallet origin/);
 
     (globalThis as typeof globalThis & { __DEV__?: boolean }).__DEV__ = true;
@@ -252,7 +257,7 @@ describe('WebViewBridge', () => {
 
     expect(src.searchParams.get('tn_telemetry')).toBe('0');
     expect(src.searchParams.get('tn_telemetry_session')).toBe(
-      'telemetry_native_test'
+      'telemetry_native_test',
     );
 
     optedOutBridge.destroy();
@@ -301,9 +306,16 @@ describe('WebViewBridge', () => {
   });
 
   it('carries the host theme on the wallet URL', () => {
-    expect(new URL(bridge.getIframeSrc()).searchParams.get('tn_theme')).toBe('light');
-    const darkBridge = new WebViewBridge({ walletUrl: WALLET_URL, theme: 'dark' });
-    expect(new URL(darkBridge.getIframeSrc()).searchParams.get('tn_theme')).toBe('dark');
+    expect(new URL(bridge.getIframeSrc()).searchParams.get('tn_theme')).toBe(
+      'light',
+    );
+    const darkBridge = new WebViewBridge({
+      walletUrl: WALLET_URL,
+      theme: 'dark',
+    });
+    expect(
+      new URL(darkBridge.getIframeSrc()).searchParams.get('tn_theme'),
+    ).toBe('dark');
     expect(darkBridge.getTheme()).toBe('dark');
     darkBridge.destroy();
   });
@@ -312,7 +324,9 @@ describe('WebViewBridge', () => {
     /* Before ready there is nobody to tell; the URL carries it instead. */
     bridge.setTheme('dark');
     expect(webView.injected).toHaveLength(0);
-    expect(new URL(bridge.getIframeSrc()).searchParams.get('tn_theme')).toBe('dark');
+    expect(new URL(bridge.getIframeSrc()).searchParams.get('tn_theme')).toBe(
+      'dark',
+    );
 
     const themeMessage = (theme: string) => ({
       type: 'wallet:theme',
@@ -322,16 +336,61 @@ describe('WebViewBridge', () => {
     });
 
     bridge.onMessage(readyMessage(bridge.frameId));
-    expect(webView.injected.map(parseInjectedTelemetryContext)).toEqual([themeMessage('dark')]);
+    expect(webView.injected.map(parseInjectedTelemetryContext)).toEqual([
+      themeMessage('dark'),
+    ]);
 
     webView.injected.length = 0;
     bridge.setTheme('light');
     bridge.setTheme('light');
-    expect(webView.injected.map(parseInjectedTelemetryContext)).toEqual([themeMessage('light')]);
+    expect(webView.injected.map(parseInjectedTelemetryContext)).toEqual([
+      themeMessage('light'),
+    ]);
 
     webView.injected.length = 0;
     bridge.onMessage(readyMessage(bridge.frameId));
-    expect(webView.injected.map(parseInjectedTelemetryContext)).toEqual([themeMessage('light')]);
+    expect(webView.injected.map(parseInjectedTelemetryContext)).toEqual([
+      themeMessage('light'),
+    ]);
+  });
+
+  it('carries developer mode on the wallet URL only while it is on', () => {
+    expect(new URL(bridge.getIframeSrc()).searchParams.has('tn_developer_mode')).toBe(false);
+    const devBridge = new WebViewBridge({ walletUrl: WALLET_URL, developerMode: true });
+    expect(new URL(devBridge.getIframeSrc()).searchParams.get('tn_developer_mode')).toBe('1');
+    devBridge.destroy();
+  });
+
+  it('pushes developer mode changes to the loaded wallet and restates them after a reload', () => {
+    /* Before ready there is nobody to tell; the URL carries it instead. */
+    bridge.setDeveloperMode(true);
+    expect(webView.injected).toHaveLength(0);
+    expect(new URL(bridge.getIframeSrc()).searchParams.get('tn_developer_mode')).toBe('1');
+
+    const developerModeMessage = (enabled: boolean) => ({
+      type: 'wallet:developer-mode',
+      origin: bridge.walletOrigin,
+      frameId: bridge.frameId,
+      enabled,
+    });
+
+    bridge.onMessage(readyMessage(bridge.frameId));
+    expect(webView.injected.map(parseInjectedTelemetryContext)).toEqual([
+      developerModeMessage(true),
+    ]);
+
+    webView.injected.length = 0;
+    bridge.setDeveloperMode(false);
+    bridge.setDeveloperMode(false);
+    expect(webView.injected.map(parseInjectedTelemetryContext)).toEqual([
+      developerModeMessage(false),
+    ]);
+
+    webView.injected.length = 0;
+    bridge.onMessage(readyMessage(bridge.frameId));
+    expect(webView.injected.map(parseInjectedTelemetryContext)).toEqual([
+      developerModeMessage(false),
+    ]);
   });
 
   it('propagates cleared telemetry context to the loaded wallet', () => {
@@ -382,7 +441,7 @@ describe('WebViewBridge', () => {
       Promise.race([
         ready,
         new Promise((res) => setTimeout(() => res('not-ready'), 30)),
-      ])
+      ]),
     ).resolves.toBe('not-ready');
   });
 
@@ -426,7 +485,7 @@ describe('WebViewBridge', () => {
     });
     await flush();
     bridge.onMessage(
-      errorMessage(bridge.frameId, id, ErrorCode.USER_REJECTED, 'nope')
+      errorMessage(bridge.frameId, id, ErrorCode.USER_REJECTED, 'nope'),
     );
     await expect(promise).rejects.toMatchObject({
       message: 'nope',
@@ -477,7 +536,7 @@ describe('WebViewBridge', () => {
     const seen: Array<{ event: string; data: unknown }> = [];
     bridge.onEvent = (event, data) => seen.push({ event, data });
     bridge.onMessage(
-      eventMessage(bridge.frameId, EMBEDDED_PROVIDER_EVENTS.UI_SHOW)
+      eventMessage(bridge.frameId, EMBEDDED_PROVIDER_EVENTS.UI_SHOW),
     );
     expect(seen).toEqual([
       { event: EMBEDDED_PROVIDER_EVENTS.UI_SHOW, data: undefined },
@@ -511,7 +570,7 @@ describe('WebViewBridge', () => {
     instrumentedBridge.onMessage(
       responseMessage(instrumentedBridge.frameId, id, {
         signedTransaction: 'SENSITIVE_RAW_TRANSACTION',
-      })
+      }),
     );
     await promise;
 
@@ -603,7 +662,7 @@ describe('WebViewBridge', () => {
 
     instrumentedBridge.onMessage({ nativeEvent: { data: '{invalid' } });
     instrumentedBridge.onMessage(
-      responseMessage('frame_other', 'req_other', { accounts: [] })
+      responseMessage('frame_other', 'req_other', { accounts: [] }),
     );
 
     expect(events).toContainEqual({
@@ -646,7 +705,7 @@ describe('WebViewBridge', () => {
     const failed = events.find(
       ({ event, fields }) =>
         event === 'bridge.request.failed' &&
-        fields?.outcome === 'injection_error'
+        fields?.outcome === 'injection_error',
     );
     expect(failed?.fields?.message).toBe('Unknown wallet bridge error');
     expect(JSON.stringify(events)).not.toContain('SENSITIVE_RAW_PAYLOAD');
@@ -668,7 +727,7 @@ describe('WebViewBridge', () => {
     await expect(promise).rejects.toThrow(/WebView not attached/);
   });
 
-  it('rejects awaitReady on destroy when ready hasn\'t arrived', async () => {
+  it("rejects awaitReady on destroy when ready hasn't arrived", async () => {
     const ready = bridge.awaitReady();
     bridge.destroy();
     await expect(ready).rejects.toThrow(/Bridge destroyed/);
@@ -692,4 +751,56 @@ describe('WebViewBridge', () => {
      tests; unit-testing them with fake timers leaks pending rejections
      past test boundaries. See SLOW_REQUEST_TIMEOUT_MS / FAST_REQUEST_TIMEOUT_MS
      in WebViewBridge.ts for the contract. */
+});
+
+describe('network generation fencing', () => {
+  it('rejects requests from the previous network and ignores late responses', async () => {
+    const bridge = new WebViewBridge({ walletUrl: WALLET_URL });
+    bridge.attachWebView(new MockWebView());
+    const network = (id: string) => ({
+      id,
+      name: id,
+      rpcUrl: `https://${id}.example`,
+      chainId: 1,
+      scope: `preset:${id}:1`,
+      custom: false,
+    });
+    const ready = (id: string, generation: number) =>
+      bridge.onMessage({
+        nativeEvent: {
+          data: JSON.stringify({
+            type: IFRAME_READY_EVENT,
+            frameId: bridge.frameId,
+            data: {
+              ready: true,
+              network: network(id),
+              networkGeneration: generation,
+              capabilities: { networkSwitching: true },
+            },
+          }),
+        },
+      });
+    ready('alphanet', 1);
+    const pending = bridge.sendMessage({
+      id: 'old',
+      type: POST_MESSAGE_REQUEST_TYPES.GET_ACCOUNTS,
+      origin: 'thru-mobile://test',
+    });
+    const rejected = expect(pending).rejects.toMatchObject({
+      code: 'NETWORK_CHANGED',
+    });
+    await flush();
+    const switched = bridge.waitForNetwork('preset:betanet:1');
+    ready('betanet', 2);
+    await rejected;
+    await switched;
+    bridge.onMessage(
+      responseMessage(bridge.frameId, 'old', {
+        accounts: [{ address: 'old-account' }],
+      }),
+    );
+    expect(bridge.getNetwork()?.id).toBe('betanet');
+    expect(bridge.getNetworkGeneration()).toBe(2);
+    bridge.destroy();
+  });
 });

@@ -7,10 +7,12 @@ import {
   sanitizeTelemetryAppContext,
   sanitizeTelemetryMessage,
   TELEMETRY_FIELD_LIMITS as FIELD_LIMITS,
+  TELEMETRY_APP_MODES,
   TELEMETRY_IDENTIFIER_PATTERN,
   TELEMETRY_MAX_EVENT_NAME_LENGTH as TELEMETRY_MAX_EVENT_LENGTH,
   TELEMETRY_VERSION_PATTERN,
   type TelemetryAppContext,
+  type TelemetryAppMode,
 } from './observability';
 import {
   decodeAddress,
@@ -21,7 +23,7 @@ import {
 import packageMetadata from '../package.json';
 
 export { sanitizeTelemetryMessage } from './observability';
-export type { TelemetryAppContext } from './observability';
+export type { TelemetryAppContext, TelemetryAppMode } from './observability';
 
 /** Package version embedded at build time (including release-workflow rewrites). */
 export const WALLET_SDK_VERSION = packageMetadata.version;
@@ -30,6 +32,7 @@ export const TELEMETRY_ENABLED_SEARCH_PARAM = 'tn_telemetry';
 export const TELEMETRY_SESSION_SEARCH_PARAM = 'tn_telemetry_session';
 export const TELEMETRY_APP_CONTEXT_SEARCH_PARAM = 'tn_telemetry_app_context';
 export const TELEMETRY_CONTEXT_SEARCH_PARAM = 'tn_telemetry_context';
+export const TELEMETRY_APP_MODE_SEARCH_PARAM = 'tn_telemetry_app_mode';
 
 const TELEMETRY_PATH = '/v1/telemetry';
 
@@ -57,6 +60,7 @@ export interface TelemetryEvent {
   sdkVersion?: string;
   walletVersion?: string;
   platform?: string;
+  appMode?: TelemetryAppMode;
   network?: string;
   operation?: string;
   durationMs?: number;
@@ -77,6 +81,7 @@ export type TelemetryContext = Partial<
     | 'sdkVersion'
     | 'walletVersion'
     | 'platform'
+    | 'appMode'
     | 'network'
     | 'operation'
     | 'walletAddress'
@@ -155,6 +160,7 @@ export function withTelemetryParameters(
   sessionId: string,
   appContextId?: string,
   appContext?: TelemetryAppContext,
+  appMode?: TelemetryAppMode,
 ): string {
   const url = new URL(walletUrl);
   url.searchParams.set(TELEMETRY_ENABLED_SEARCH_PARAM, enabled ? '1' : '0');
@@ -170,6 +176,11 @@ export function withTelemetryParameters(
     url.searchParams.set(TELEMETRY_CONTEXT_SEARCH_PARAM, encodedContext);
   } else {
     url.searchParams.delete(TELEMETRY_CONTEXT_SEARCH_PARAM);
+  }
+  if (isTelemetryAppMode(appMode)) {
+    url.searchParams.set(TELEMETRY_APP_MODE_SEARCH_PARAM, appMode);
+  } else {
+    url.searchParams.delete(TELEMETRY_APP_MODE_SEARCH_PARAM);
   }
   return url.toString();
 }
@@ -379,6 +390,7 @@ function buildTelemetryEvent(
   assignVersion(result, 'sdkVersion', fields.sdkVersion, FIELD_LIMITS.sdkVersion);
   assignVersion(result, 'walletVersion', fields.walletVersion, FIELD_LIMITS.walletVersion);
   assignString(result, 'platform', fields.platform, FIELD_LIMITS.platform);
+  if (isTelemetryAppMode(fields.appMode)) result.appMode = fields.appMode;
   assignString(result, 'network', fields.network, FIELD_LIMITS.network);
   assignString(result, 'operation', fields.operation, FIELD_LIMITS.operation);
   assignString(result, 'outcome', fields.outcome, FIELD_LIMITS.outcome);
@@ -412,6 +424,7 @@ function sanitizeContext(context?: TelemetryContext): TelemetryContext {
   assignVersion(result, 'sdkVersion', context.sdkVersion, FIELD_LIMITS.sdkVersion);
   assignVersion(result, 'walletVersion', context.walletVersion, FIELD_LIMITS.walletVersion);
   assignString(result, 'platform', context.platform, FIELD_LIMITS.platform);
+  if (isTelemetryAppMode(context.appMode)) result.appMode = context.appMode;
   assignString(result, 'network', context.network, FIELD_LIMITS.network);
   assignString(result, 'operation', context.operation, FIELD_LIMITS.operation);
   assignCanonicalAddress(result, 'walletAddress', context.walletAddress);
@@ -536,4 +549,8 @@ function isTelemetrySource(value: unknown): value is TelemetrySource {
 
 function isTelemetrySeverity(value: unknown): value is TelemetrySeverity {
   return TELEMETRY_SEVERITIES.has(value as TelemetrySeverity);
+}
+
+function isTelemetryAppMode(value: unknown): value is TelemetryAppMode {
+  return TELEMETRY_APP_MODES.includes(value as TelemetryAppMode);
 }

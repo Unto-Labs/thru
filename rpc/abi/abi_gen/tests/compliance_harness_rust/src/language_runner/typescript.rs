@@ -242,12 +242,17 @@ impl LanguageRunner for TypeScriptRunner {
         fs::write(&binary_file_path, binary_data)?;
 
         /* Generate test runner code */
-        let test_runner_code = generate_typescript_test_runner_code(
-            &test_case.type_name,
-            &binary_file_path,
-            &type_context.package,
-            &type_context.enum_metadata_json,
-        );
+        let top_array = super::top_level_array::load(abi_file_path, &test_case.type_name)?;
+        let test_runner_code = if let Some(array) = top_array {
+            array.typescript(&test_case.type_name, binary_data)
+        } else {
+            generate_typescript_test_runner_code(
+                &test_case.type_name,
+                &binary_file_path,
+                &type_context.package,
+                &type_context.enum_metadata_json,
+            )
+        };
         fs::write(src_dir.join("test.ts"), test_runner_code)?;
 
         /* Run strict no-emit check on the test project */

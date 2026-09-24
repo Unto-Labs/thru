@@ -154,7 +154,12 @@ exact wallet origin in the host's Permissions-Policy header and iframe `allow`
 attribute. Unknown browser capability APIs do not prevent inline ceremonies.
 WebKit cross-origin creation and confirmed iframe restrictions require an
 explicit user action to continue in a popup; cancellation and generic security
-errors never trigger automatic popup fallback.
+errors never trigger automatic popup fallback. A frame whose top-level page is
+`http://localhost` (or another loopback address) also continues in a popup,
+reason `insecure-host`, because browsers refuse WebAuthn there; a localhost
+wallet frame stays inline. Under any other HTTP page the frame is not a secure
+context, so every ceremony fails closed with "Passkeys require a secure HTTPS
+connection."
 
 Hosted integrations can register `setPasskeyRecoveryHandler(handler, reporter)`
 from `@thru/passkey/web`. Render the request's `retry` and `cancel` actions in

@@ -1,11 +1,17 @@
 import * as React from "react";
 import { cn } from "../../../utils";
+import { Button } from "../../Button/Button";
 import "../island.css";
 import "./Frame.css";
 
 const Check = (p: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 16 16" fill="none" aria-hidden {...p}>
     <path d="M3 8.5l3.5 3.5L13 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+const ChevronLeft = (p: React.SVGProps<SVGSVGElement>) => (
+  <svg viewBox="0 0 16 16" fill="none" aria-hidden {...p}>
+    <path d="M10 4 6 8l4 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 const X = (p: React.SVGProps<SVGSVGElement>) => (
@@ -58,12 +64,30 @@ function useAnimatedResize(
     let pinned = false;
     let settle = 0;
 
+    /* WebKit keeps a scroll container's size from the pinned layout once the
+       pin is released if its content changed while pinned: the funded
+       screen, whose rows fill in mid-swap, stayed 21px short and squeezed
+       its Done button. Toggling overflow makes WebKit size it again. */
+    const refreshScrollers = () => {
+      for (const el of content.querySelectorAll<HTMLElement>("*")) {
+        const overflowY = getComputedStyle(el).overflowY;
+        if (overflowY !== "auto" && overflowY !== "scroll") continue;
+        const { scrollTop } = el;
+        const inline = el.style.overflowY;
+        el.style.overflowY = "hidden";
+        void el.offsetHeight;
+        el.style.overflowY = inline;
+        el.scrollTop = scrollTop;
+      }
+    };
+
     const unpin = () => {
       window.clearTimeout(settle);
       settle = 0;
       pinned = false;
       frame.style.height = "";
       frame.style.overflow = "";
+      refreshScrollers();
       last = frame.getBoundingClientRect().height;
     };
 
@@ -130,10 +154,15 @@ function useAnimatedResize(
 export interface FrameProps {
   /** Layout width: dialog (narrow) or full. */
   mode?: "dialog" | "full";
-  /** Site identity shown in the top bar. */
-  site: FrameSite;
+  /** Site identity shown in the top bar; omit to leave it out. */
+  site?: FrameSite;
   /** Close handler — the X button. */
   onClose?: () => void;
+  /** Back handler: a back button on the left of the top bar, in place of
+   *  the site identity. */
+  onBack?: () => void;
+  /** Accessible name for the back button (default "Back"). */
+  backLabel?: string;
   /** Play the island open / close motion on the frame itself. Leave unset
    *  when the frame sits inside a `WalletOverlay`, which animates the popup. */
   animate?: FrameAnimate;
@@ -151,7 +180,17 @@ export interface FrameProps {
  */
 export const Frame = React.forwardRef<HTMLDivElement, FrameProps>(
   function Frame(
-    { mode = "dialog", site, onClose, animate = false, animateResize = false, children, className },
+    {
+      mode = "dialog",
+      site,
+      onClose,
+      onBack,
+      backLabel = "Back",
+      animate = false,
+      animateResize = false,
+      children,
+      className,
+    },
     ref,
   ) {
     const frameRef = React.useRef<HTMLDivElement | null>(null);
@@ -177,19 +216,37 @@ export const Frame = React.forwardRef<HTMLDivElement, FrameProps>(
           className,
         )}
       >
-        <div className="tds-frame__bar">
-          <span className="tds-frame__site">
-            {site.icon ?? <span className="tds-frame__logo" aria-hidden />}
-            <span className="tds-frame__label" title={site.label}>
-              {site.label}
-            </span>
-            {site.verified && (
-              <span className="tds-frame__verified" title="Verified site">
-                <Check width={11} height={11} />
+        <div
+          className={cn(
+            "tds-frame__bar",
+            !site && "tds-frame__bar--plain",
+            !site && !onBack && "tds-frame__bar--float",
+          )}
+        >
+          {onBack ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="tds-frame__back"
+              aria-label={backLabel}
+              onClick={onBack}
+            >
+              <ChevronLeft width={16} height={16} />
+            </Button>
+          ) : site ? (
+            <span className="tds-frame__site">
+              {site.icon ?? <span className="tds-frame__logo" aria-hidden />}
+              <span className="tds-frame__label" title={site.label}>
+                {site.label}
               </span>
-            )}
-            {site.tag && <span className="tds-frame__chip">{site.tag}</span>}
-          </span>
+              {site.verified && (
+                <span className="tds-frame__verified" title="Verified site">
+                  <Check width={11} height={11} />
+                </span>
+              )}
+              {site.tag && <span className="tds-frame__chip">{site.tag}</span>}
+            </span>
+          ) : null}
           <button type="button" className="tds-frame__close" aria-label="Close" onClick={onClose}>
             <X width={14} height={14} />
           </button>

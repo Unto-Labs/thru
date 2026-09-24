@@ -1,8 +1,9 @@
-import { createContext } from 'react';
 import type {
-  CreateAccountOptions,
-  NativeSDK,
-} from "../NativeSDK";
+  ResolvedWalletNetwork,
+  WalletNetworkSelection,
+} from "../../networks";
+import { createContext } from "react";
+import type { CreateAccountOptions, NativeSDK } from "../NativeSDK";
 import type { WalletAvailability } from "../../connection-state";
 import type { WalletAccount } from "../../interfaces";
 import type {
@@ -24,6 +25,10 @@ import { formatDepositAmount } from "../../deposit";
 import type { Thru } from "@thru/sdk/client";
 
 export interface ThruContextValue {
+  network: ResolvedWalletNetwork | null;
+  switchNetwork(
+    selection: WalletNetworkSelection,
+  ): Promise<ResolvedWalletNetwork>;
   /** Initialized NativeSDK instance, or null while still constructing. */
   wallet: NativeSDK | null;
   /** Lazily-instantiated Thru chain client. */
@@ -35,20 +40,23 @@ export interface ThruContextValue {
   walletAvailability: WalletAvailability;
   error: Error | null;
   selectAccount: (account: WalletAccount) => Promise<void>;
-  createAccount: (options?: CreateAccountOptions) => Promise<CreateAccountResult>;
+  createAccount: (
+    options?: CreateAccountOptions,
+  ) => Promise<CreateAccountResult>;
   manageAccounts: () => Promise<ManageAccountsResult>;
   prepareDeposit: (
-    depositTargetOrPayload?: PrepareDepositPayload['depositTarget'] | PrepareDepositPayload
+    depositTargetOrPayload?:
+      PrepareDepositPayload["depositTarget"] | PrepareDepositPayload,
   ) => Promise<DepositDestination>;
   deposit: (payload: DepositRequestPayload) => Promise<DepositResult>;
   ensureDepositAccount: (
-    params?: EnsureDepositAccountParams
+    params?: EnsureDepositAccountParams,
   ) => Promise<DepositAccountState>;
   getDepositAccountState: (
-    params?: GetDepositAccountStateParams
+    params?: GetDepositAccountStateParams,
   ) => Promise<DepositAccountState>;
   waitForDepositBalance: (
-    params: WaitForDepositParams
+    params: WaitForDepositParams,
   ) => Promise<DepositAccountState>;
   formatDepositAmount: typeof formatDepositAmount;
   deposits: DepositsApi;

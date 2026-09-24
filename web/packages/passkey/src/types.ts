@@ -116,6 +116,9 @@ export interface PasskeyPopupRequest {
   requestId: string;
   action: PasskeyPopupAction;
   payload: PasskeyPopupRequestPayload;
+  /** Whether the popup may show raw error text; set by the opener with
+   *  setPasskeyPopupErrorDetails. Absent means show only that it failed. */
+  showErrorDetails?: boolean;
 }
 
 export interface PasskeyPopupSigningResult extends PasskeyCeremonyResult {

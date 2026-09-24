@@ -28,12 +28,14 @@ export {
 } from './app-context';
 export { TELEMETRY_EVENTS, type TelemetryEventName } from './events';
 export {
+  TELEMETRY_APP_MODES,
   TELEMETRY_EVENT_NAME_PATTERN,
   TELEMETRY_FIELD_LIMITS,
   TELEMETRY_IDENTIFIER_PATTERN,
   TELEMETRY_MAX_EVENT_NAME_LENGTH,
   TELEMETRY_TOKEN_ACCOUNT_PATTERN,
   TELEMETRY_VERSION_PATTERN,
+  type TelemetryAppMode,
 } from './fields';
 export { createTelemetryId } from './ids';
 export {

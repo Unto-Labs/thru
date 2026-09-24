@@ -30,9 +30,13 @@ export async function fetchWithReadableBody(
   } as Response;
 }
 
-export function createNativeThruClient(rpcUrl?: string): Thru {
+export function createNativeThruClient(
+  rpcUrl?: string,
+  transactionSigningScheme?: import("@thru/sdk").TransactionSigningScheme,
+): Thru {
   return createThruClient({
     ...(rpcUrl ? { baseUrl: rpcUrl } : {}),
+    ...(transactionSigningScheme ? { transactionSigningScheme } : {}),
     transportOptions: { fetch: fetchWithReadableBody },
   });
 }

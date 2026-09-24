@@ -1,3 +1,4 @@
+import type { ResolvedWalletNetwork } from "../networks";
 export const AddressType = {
   THRU: "thru",
 } as const;
@@ -18,6 +19,7 @@ export interface AppMetadata {
 }
 
 export interface ConnectResult {
+  network?: ResolvedWalletNetwork;
   walletId?: string;
   accounts: WalletAccount[];
   selectedAccount?: WalletAccount | null;
@@ -34,6 +36,7 @@ export type ThruTransactionEncoding =
   (typeof ThruTransactionEncoding)[keyof typeof ThruTransactionEncoding];
 
 export interface ThruSigningContext {
+  network?: ResolvedWalletNetwork;
   mode: "managed_fee_payer";
   selectedAccountPublicKey: string | null;
   feePayerPublicKey: string;

@@ -183,18 +183,23 @@ path = "src/main.rs"
             .unwrap_or_default();
 
         /* Generate test runner code */
-        let test_runner_code = generate_rust_test_runner_code(
-            &test_case.type_name,
-            &binary_file_path,
-            &referenced_primitive_fields,
-            &non_referenced_primitive_fields,
-            &enum_fields,
-            &array_fields,
-            &nested_fields,
-            &size_discriminated_union_fields,
-            &sdu_fields_with_variants,
-            &package,
-        );
+        let top_array = super::top_level_array::load(abi_file_path, &test_case.type_name)?;
+        let test_runner_code = if let Some(array) = top_array {
+            array.rust(&test_case.type_name, binary_data)
+        } else {
+            generate_rust_test_runner_code(
+                &test_case.type_name,
+                &binary_file_path,
+                &referenced_primitive_fields,
+                &non_referenced_primitive_fields,
+                &enum_fields,
+                &array_fields,
+                &nested_fields,
+                &size_discriminated_union_fields,
+                &sdu_fields_with_variants,
+                &package,
+            )
+        };
         fs::write(src_dir.join("main.rs"), test_runner_code)?;
 
         /* Compile the test project */
@@ -460,6 +465,9 @@ fn extract_field_info(
 
     for typedef in abi.get_types() {
         if typedef.name == type_name {
+            if matches!(typedef.kind, TypeKind::Array(_)) {
+                return Ok((vec![], vec![], vec![], vec![], vec![], vec![], package));
+            }
             if let TypeKind::Struct(struct_type) = &typedef.kind {
                 /* Extract which fields are referenced in expressions (like enum tag-refs and FAM sizes) */
                 let mut referenced_fields = HashSet::new();
@@ -654,7 +662,7 @@ fn generate_rust_test_runner_code(
     non_referenced_primitive_fields: &[String],
     enum_fields: &[String],
     array_fields: &[(String, bool, bool, bool)], /* (field_name, is_byte_array, is_struct_array, is_jagged) */
-    nested_fields: &[(String, Vec<String>)], /* (field_name, nested_struct_field_names) */
+    nested_fields: &[(String, Vec<String>)],     /* (field_name, nested_struct_field_names) */
     size_discriminated_union_fields: &[String],
     sdu_fields_with_variants: &[(String, Vec<(String, u64)>)],
     package: &str,
@@ -892,7 +900,10 @@ fn main() {{
     } else {
         "reencoded_size"
     };
-    code.push_str(&format!("    let reencoded_data = &reencoded_buffer[..{}];\n", final_slice));
+    code.push_str(&format!(
+        "    let reencoded_data = &reencoded_buffer[..{}];\n",
+        final_slice
+    ));
 
     code.push_str(
         r#"

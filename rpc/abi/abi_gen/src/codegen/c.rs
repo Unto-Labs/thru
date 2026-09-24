@@ -1,8 +1,8 @@
 use crate::abi::resolved::{ResolvedType, ResolvedTypeKind, TypeResolver};
+use crate::codegen::c_gen::types::emit_type_with_resolver;
 use crate::codegen::c_gen::{
     collect_and_emit_nested_footprints, emit_checked_arithmetic_helpers, emit_footprint_fn,
     emit_forward_declarations, emit_ir_footprint_fn, emit_ir_validate_fn, emit_opaque_functions,
-    emit_type,
 };
 use crate::codegen::shared::builder::IrBuilder;
 use crate::codegen::shared::ir::TypeIr;
@@ -13,6 +13,7 @@ use std::fs;
 pub struct CCodeGenerator<'a> {
     options: CCodeGeneratorOptions<'a>,
     ir_builder: IrBuilder<'a>,
+    resolver: &'a TypeResolver,
 }
 
 pub struct CCodeGeneratorOptions<'a> {
@@ -42,6 +43,7 @@ impl<'a> CCodeGenerator<'a> {
         Self {
             options,
             ir_builder: IrBuilder::new(resolver),
+            resolver,
         }
     }
 
@@ -53,7 +55,7 @@ impl<'a> CCodeGenerator<'a> {
         // Generate types, forward declarations, and functions for each resolved type
         for resolved_type in resolved_types {
             if self.options.emit_type_definitions {
-                types_output.push_str(&emit_type(resolved_type));
+                types_output.push_str(&emit_type_with_resolver(resolved_type, Some(self.resolver)));
             }
             if self.options.emit_functions {
                 let mut type_ir: Option<TypeIr> = None;

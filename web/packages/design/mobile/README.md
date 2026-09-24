@@ -23,7 +23,30 @@ step.
   indicator marks the active tab)
 - **`Card` / `Cell` / `Badge` / `BalanceHero` / `Field` / `SectionLabel` /
   `StatusText`** — list rows, chips, the 44pt balance display
-- **`Sheet`** — bottom sheet (scrim, 12pt top radius, 360ms slide)
+- **`Sheet`** — bottom sheet (scrim, 12pt top radius, 360ms slide). `header="centered"`
+  puts the title between a back slot (`onBack`) and the close button over a
+  hairline; `height="fixed"` runs it from just under the status bar to the
+  bottom so the header stays put between pages, and on web it shortens from
+  the bottom while the keyboard is up. `onDismiss` handles the scrim, Escape
+  and system back separately from the close button; `dialogMinWidth` /
+  `dialogWidth` size the adaptive dialog; `animateIn={false}` shows a
+  remounted sheet already open. `useSheetLayout()` tells content whether it
+  is in the dialog and whether the keyboard is up
+- **`AmountDisplay` / `Keypad`** — the centred 44pt amount with its currency
+  sign leading (placeholder tone when empty, shrinks past 9 characters;
+  `editable` takes typed input with a caret, for wide layouts), and the 3 x 4
+  in-sheet keypad (digits, decimal point, delete; holding delete sends
+  `clear`). The caller applies keys and caps precision
+- **`AddressField` / `FieldHelper`** — a multi-line mono address field with
+  Paste (empty) or Clear (filled) inside it, focus ring in the accent; and the
+  helper line under a field in muted / checking / ok / warn / error tones, a
+  polite live region with an optional Retry
+- **`TickerPicker` / `TokenMark`** — the token row (mark, availability,
+  chevron, Max) that opens a checkable list even with one token, with a
+  loading state; and the ink-disc token mark
+- **`SummaryRows` / `Callout`** — review rows (72pt mono label, value, edit
+  glyph; locked while busy) and the square status block, neutral with a
+  spinner or error on the soft accent
 - **`Icons`** — stroke icon set (`react-native-svg`)
 - **`BrandMark`** — the Thru dove as a single vector path, tinted from the
   theme; `outline` strokes it instead of filling, and `BRAND_MARK_PATH` is
@@ -118,3 +141,15 @@ import {
 
 `design/thru-mobile.dc.html` — the imported Claude Design project this kit
 implements. Treat it as the design source of truth when extending the kit.
+
+## Demos
+
+`demos/` holds review screens for parts of the kit that are hard to judge from
+one static state: `LoadingLabScreen` cycles through the loading directions on
+a loop, and `BrandCheckScreen` shows every brand mark at several sizes in both
+themes. They are not exported from `@thru/design/mobile` and not in the
+package's `files`, so no app bundles them, and nothing renders them yet - the
+design gallery (`web/gallery`) covers only `@thru/design/web`. The mobile
+typecheck includes them, so they keep compiling as the components change.
+Review screens belong here rather than as routes in an app, where they ship
+to production.

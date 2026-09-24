@@ -1,4 +1,5 @@
 export {
+  formatTokenAmountLabel,
   buildDepositDestination,
   createDepositConfig,
   getDepositNetworkConfig,

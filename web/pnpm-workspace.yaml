@@ -5,6 +5,7 @@ packages:
   - 'clob'
   - 'clob/packages/*'
   - 'clob/apps/*'
+  - 'perps/*'
   - 'test-dapp'
   - 'explorer'
   - 'faucet'

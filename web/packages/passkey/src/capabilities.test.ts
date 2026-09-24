@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   getPasskeyPromptMode,
+  getPasskeyRestriction,
   getPermissionsPolicyAllowsFeature,
   classifyIframeRestriction,
   markInlinePasskeyRefused,
@@ -90,6 +91,38 @@ describe('operation-specific iframe routing', () => {
     const open = vi.fn();
     expect(maybePreopenPopup('create', open)).toBe(null);
     expect(open).not.toHaveBeenCalled();
+  });
+});
+
+describe('HTTP host pages', () => {
+  function embeddedUnder(ancestorOrigins: string[], hostname = 'app.tid.sh') {
+    Object.assign((window as any).location, { hostname, ancestorOrigins });
+  }
+  it('routes both operations to recovery when the top-level page is HTTP', async () => {
+    embeddedUnder(['http://localhost:3100']);
+    expect(getPasskeyRestriction('get')?.reason).toBe('insecure-host');
+    expect(await getPasskeyPromptMode('create')).toBe('popup');
+  });
+  it('judges the top-level page, not intermediate frames', async () => {
+    embeddedUnder(['https://widget.example', 'http://localhost:3100']);
+    expect(await getPasskeyPromptMode('get')).toBe('popup');
+    embeddedUnder(['http://localhost:3100', 'https://dapp.example']);
+    expect(await getPasskeyPromptMode('get')).toBe('inline');
+  });
+  it.each(['localhost', 'wallet.localhost', '127.0.0.1', '[::1]'])(
+    'keeps a localhost wallet frame inline: %s',
+    async (hostname) => {
+      embeddedUnder(['http://localhost:3000'], hostname);
+      expect(await getPasskeyPromptMode('get')).toBe('inline');
+    }
+  );
+  it('keeps inline under HTTPS or unknown top-level pages', async () => {
+    embeddedUnder(['https://dapp.example']);
+    expect(await getPasskeyPromptMode('get')).toBe('inline');
+    embeddedUnder(['null']);
+    expect(await getPasskeyPromptMode('get')).toBe('inline');
+    embeddedUnder([]);
+    expect(await getPasskeyPromptMode('get')).toBe('inline');
   });
 });
 

@@ -1,3 +1,7 @@
+import type {
+  ResolvedWalletNetwork,
+  WalletNetworkSelection,
+} from "../networks";
 import type { TelemetryAppContext } from "../observability";
 import type {
   AppMetadata,
@@ -5,8 +9,12 @@ import type {
   ThruSigningContext,
   WalletAccount,
 } from "../interfaces";
+import type { WalletRestoreEnvelope, WalletRestoreRecord } from "./connectionRestore";
 
 export const POST_MESSAGE_REQUEST_TYPES = {
+  GET_NETWORK: "getNetwork",
+  SWITCH_NETWORK: "switchNetwork",
+  NETWORK_OPERATION: "networkOperation",
   CONNECT: "connect",
   CREATE_ACCOUNT: "createAccount",
   DISCONNECT: "disconnect",
@@ -31,6 +39,7 @@ export type RequestType =
   (typeof POST_MESSAGE_REQUEST_TYPES)[keyof typeof POST_MESSAGE_REQUEST_TYPES];
 
 export const EMBEDDED_PROVIDER_EVENTS = {
+  NETWORK_CHANGED: "network_changed",
   CONNECT_START: "connect_start",
   CONNECT: "connect",
   DISCONNECT: "disconnect",
@@ -62,20 +71,27 @@ export interface UiHideEventPayload {
 /** Which Add funds rail a deposit runs on. */
 export type DepositMethod = "crypto" | "card";
 
+/**
+ * The rail a deposit event reports: an Add funds rail, or `faucet` for the
+ * test faucet the wallet offers in developer mode. Apps can't open the faucet
+ * directly; the user picks it in the chooser.
+ */
+export type DepositEventMethod = DepositMethod | "faucet";
+
 export interface DepositOpenedEventPayload {
   /** Undefined while the user is still on the chooser. */
-  method?: DepositMethod;
+  method?: DepositEventMethod;
   destination: DepositDestination;
 }
 
 export interface DepositPendingEventPayload {
-  method: DepositMethod;
+  method: DepositEventMethod;
   destination: DepositDestination;
   providerDepositId?: string;
 }
 
 export interface DepositCompletedEventPayload {
-  method: DepositMethod;
+  method: DepositEventMethod;
   destination: DepositDestination;
   /** Formatted amount credited, e.g. "250.00". */
   amount: string;
@@ -89,7 +105,7 @@ export interface DepositCompletedEventPayload {
 }
 
 export interface DepositCancelledEventPayload {
-  method?: DepositMethod;
+  method?: DepositEventMethod;
   destination: DepositDestination;
 }
 
@@ -110,10 +126,13 @@ export interface IframeReadyCapabilities {
    * the frame visible after a response until the exit animation has played.
    */
   managedHide?: boolean;
+  networkSwitching?: boolean;
 }
 
 export interface IframeReadyData {
   ready: true;
+  network?: ResolvedWalletNetwork;
+  networkGeneration?: number;
   capabilities?: IframeReadyCapabilities;
 }
 
@@ -149,7 +168,9 @@ export interface WalletThemeMessage {
   theme: WalletTheme;
 }
 
-export function isWalletThemeMessage(value: unknown): value is WalletThemeMessage {
+export function isWalletThemeMessage(
+  value: unknown,
+): value is WalletThemeMessage {
   if (!value || typeof value !== "object") return false;
   const message = value as Partial<WalletThemeMessage>;
   return (
@@ -157,6 +178,38 @@ export function isWalletThemeMessage(value: unknown): value is WalletThemeMessag
     typeof message.origin === "string" &&
     typeof message.frameId === "string" &&
     (message.theme === "light" || message.theme === "dark")
+  );
+}
+
+/**
+ * Host -> wallet control message carrying the host's developer mode. Like
+ * `wallet:theme` it is fire-and-forget: sent when the host changes it (and
+ * again when a wallet document reloads). The load-time value rides on the
+ * `tn_developer_mode` URL param. The wallet turns developer mode on when the
+ * host or its own account-menu switch asks for it.
+ */
+export const WALLET_DEVELOPER_MODE_MESSAGE_TYPE = "wallet:developer-mode" as const;
+
+/** Frame URL param for the load-time developer mode: `1` when on, absent when off. */
+export const WALLET_DEVELOPER_MODE_SEARCH_PARAM = "tn_developer_mode" as const;
+
+export interface WalletDeveloperModeMessage {
+  type: typeof WALLET_DEVELOPER_MODE_MESSAGE_TYPE;
+  origin: string;
+  frameId: string;
+  enabled: boolean;
+}
+
+export function isWalletDeveloperModeMessage(
+  value: unknown,
+): value is WalletDeveloperModeMessage {
+  if (!value || typeof value !== "object") return false;
+  const message = value as Partial<WalletDeveloperModeMessage>;
+  return (
+    message.type === WALLET_DEVELOPER_MODE_MESSAGE_TYPE &&
+    typeof message.origin === "string" &&
+    typeof message.frameId === "string" &&
+    typeof message.enabled === "boolean"
   );
 }
 
@@ -170,6 +223,8 @@ export const createRequestId = (prefix: string = REQUEST_ID_PREFIX): string => {
 };
 
 interface BaseRequest {
+  networkScope?: string;
+  networkGeneration?: number;
   id: string;
   origin: string;
 }
@@ -297,7 +352,22 @@ export interface DepositRequestMessage extends BaseRequest {
   payload: DepositRequestMessagePayload;
 }
 
+export interface GetNetworkRequestMessage extends BaseRequest {
+  type: "getNetwork";
+  payload?: undefined;
+}
+export interface SwitchNetworkRequestMessage extends BaseRequest {
+  type: "switchNetwork";
+  payload: WalletNetworkSelection;
+}
+export interface NetworkOperationRequestMessage extends BaseRequest {
+  type: "networkOperation";
+  payload: { operationId: string; busy: boolean };
+}
 export type PostMessageRequest =
+  | GetNetworkRequestMessage
+  | SwitchNetworkRequestMessage
+  | NetworkOperationRequestMessage
   | ConnectRequestMessage
   | CreateAccountRequestMessage
   | DisconnectRequestMessage
@@ -347,6 +417,7 @@ export interface GetAccountsResult {
 }
 
 export interface GetConnectionStateResult {
+  network?: ResolvedWalletNetwork;
   isAuthorized: boolean;
   isConnected: boolean;
   /** @deprecated Authentication is action-based; compatibility responses return true. */
@@ -356,6 +427,14 @@ export interface GetConnectionStateResult {
   accounts: WalletAccount[];
   selectedAccount: WalletAccount | null;
   metadata: AppMetadata | null;
+  /** Present when authorized: what the host keeps to restore this connection. */
+  restore?: WalletRestoreRecord;
+  /**
+   * The wallet rebuilt this authorization from the host's record because its
+   * own store was empty. Anything else the wallet held for the host, such as
+   * signing-session keys, is gone too.
+   */
+  restoredFromHost?: boolean;
 }
 
 export interface SelectAccountPayload {
@@ -364,24 +443,36 @@ export interface SelectAccountPayload {
 
 export interface SelectAccountResult {
   account: WalletAccount;
+  /** The host's restore record for the account now selected, when the wallet
+      holds an authorization for it; absent when it does not, so the host
+      keeps no record that would restore the wrong account. */
+  restore?: WalletRestoreRecord;
 }
 
 export interface ManageAccountsResult {
   selectedAccount: WalletAccount | null;
+  /** See SelectAccountResult.restore. */
+  restore?: WalletRestoreRecord;
 }
 
 /** `deposit`: the user picked "Add funds"; the host follows up with `deposit()`. */
-export type AccountMenuAction = "closed" | "switched" | "accounts-updated" | "signed-out" | "deposit";
+export type AccountMenuAction =
+  "closed" | "switched" | "accounts-updated" | "signed-out" | "deposit";
 
 export interface AccountMenuResult {
   action: AccountMenuAction;
   /** Present after a switch or after the account manager ran. */
   accounts?: WalletAccount[];
   selectedAccount?: WalletAccount | null;
+  /** See SelectAccountResult.restore. */
+  restore?: WalletRestoreRecord;
 }
 
 type RequestResultMap = {
-  [POST_MESSAGE_REQUEST_TYPES.CONNECT]: ConnectResult;
+  getNetwork: ResolvedWalletNetwork;
+  switchNetwork: ResolvedWalletNetwork;
+  networkOperation: { acknowledged: true };
+  [POST_MESSAGE_REQUEST_TYPES.CONNECT]: ConnectResult & WalletRestoreEnvelope;
   [POST_MESSAGE_REQUEST_TYPES.CREATE_ACCOUNT]: CreateAccountResult;
   [POST_MESSAGE_REQUEST_TYPES.DISCONNECT]: DisconnectResult;
   [POST_MESSAGE_REQUEST_TYPES.SIGN_MESSAGE]: SignMessageResult;
@@ -443,6 +534,7 @@ export interface PostMessageEvent<
 }
 
 export const ErrorCode = {
+  NETWORK_CHANGED: "NETWORK_CHANGED",
   USER_REJECTED: "USER_REJECTED",
   SIGNING_SESSION_UNAVAILABLE: "SIGNING_SESSION_UNAVAILABLE",
   INVALID_PASSWORD: "INVALID_PASSWORD",
@@ -469,6 +561,12 @@ export interface ConnectRequestPayload {
   intent?: ConnectIntent;
   /** App-provided name for a passkey created during this connect flow. */
   passkeyName?: string;
+  /**
+   * The restore record the wallet issued on an earlier connection, held by
+   * the host. The wallet consults it only when its own store has no
+   * authorization for this host.
+   */
+  restore?: WalletRestoreRecord;
 }
 
 /** WebAuthn user.name is capped by authenticators; keep names comfortably short. */
@@ -581,9 +679,8 @@ export interface RevokeSigningSessionResult {
 
 export enum ThruNetwork {
   Alphanet = "alphanet",
+  Betanet = "betanet",
   Devnet = "devnet",
-  SweepsStagingNet = "sweeps-staging-net",
-  Sweepnet = "sweepnet",
 }
 
 export enum DepositTarget {

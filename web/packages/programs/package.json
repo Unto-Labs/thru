@@ -81,6 +81,11 @@
       "types": "./dist/deploy/index.d.ts",
       "import": "./dist/deploy/index.js",
       "require": "./dist/deploy/index.cjs"
+    },
+    "./perp": {
+      "types": "./dist/perp/index.d.ts",
+      "import": "./dist/perp/index.js",
+      "require": "./dist/perp/index.cjs"
     }
   },
   "scripts": {

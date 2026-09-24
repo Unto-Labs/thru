@@ -1,0 +1,7 @@
+test-case:
+  name: "array_structs_top_level_matrix"
+  abi-file: "../../abi_definitions/array_structs.abi.yaml"
+  type: "U8Matrix2x3"
+  description: "Direct named array access and byte-for-byte round trip"
+  tags: ["arrays", "top-level", "fixed-size"]
+  binary-hex: "01 34 ff 02 78 80"

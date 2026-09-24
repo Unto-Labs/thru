@@ -4,13 +4,18 @@ import type { ManageAccountsResult } from '../../protocol';
 import { useEffect, useRef } from 'react';
 import { useThru } from './useThru';
 
-function waitForWallet(getWallet: () => BrowserSDK | null, timeout = 5000, interval = 100): Promise<BrowserSDK> {
+function waitForWallet(
+  getWallet: () => BrowserSDK | null,
+  timeout = 5000,
+  interval = 100,
+): Promise<BrowserSDK> {
   return new Promise((resolve, reject) => {
     const start = Date.now();
     const check = () => {
       const sdk = getWallet();
       if (sdk) return resolve(sdk);
-      if (Date.now() - start > timeout) return reject(new Error('SDK not initialized in time'));
+      if (Date.now() - start > timeout)
+        return reject(new Error('SDK not initialized in time'));
       setTimeout(check, interval);
     };
     check();
@@ -24,6 +29,8 @@ function waitForWallet(getWallet: () => BrowserSDK | null, timeout = 5000, inter
 export function useWallet() {
   const {
     wallet,
+    network,
+    switchNetwork,
     isConnected,
     accounts,
     selectedAccount,
@@ -82,6 +89,8 @@ export function useWallet() {
   };
 
   return {
+    network,
+    switchNetwork,
     wallet: wallet?.thru as IThruChain | undefined,
     connection: wallet?.connection,
     accountApi: wallet?.accounts,

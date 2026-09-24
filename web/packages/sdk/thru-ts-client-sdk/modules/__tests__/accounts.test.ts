@@ -3,7 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createMockAccount, createMockContext, generateTestAddress, generateTestPubkey } from "../../__tests__/helpers/test-utils";
 import { ConsensusStatus, CurrentVersionSchema, VersionContextSchema } from "@thru/sdk/proto";
 import { AccountView } from "@thru/sdk/proto";
-import { GenerateStateProofResponseSchema, ListAccountsResponseSchema } from "@thru/sdk/proto";
+import { GenerateStateProofResponseSchema, GetChainInfoResponseSchema, ListAccountsResponseSchema } from "@thru/sdk/proto";
 import { Account } from "../../domain/accounts";
 import { Filter, FilterParamValue } from "../../domain/filters";
 import { Pubkey } from "../../domain/primitives";
@@ -254,6 +254,52 @@ describe("accounts", () => {
   });
 
   describe("createAccount", () => {
+    it.each([2, 7331])("uses the RPC chain ID %i for account bootstrap", async (chainId) => {
+      const ctx = createMockContext();
+      vi.spyOn(ctx.query, "generateStateProof").mockResolvedValue(
+        create(GenerateStateProofResponseSchema, {
+          proof: { proof: new Uint8Array(64).fill(0x42), slot: 1000n },
+        }),
+      );
+      vi.spyOn(ctx.query, "getChainInfo").mockResolvedValue(
+        create(GetChainInfoResponseSchema, { chainId }),
+      );
+
+      const transaction = await createAccount(ctx, { publicKey: generateTestPubkey(0x01) });
+
+      expect(transaction.chainId).toBe(chainId);
+      expect(ctx.query.getChainInfo).toHaveBeenCalledTimes(1);
+    });
+
+    it("honors an explicit bootstrap chain ID without querying another one", async () => {
+      const ctx = createMockContext();
+      vi.spyOn(ctx.query, "generateStateProof").mockResolvedValue(
+        create(GenerateStateProofResponseSchema, {
+          proof: { proof: new Uint8Array(64).fill(0x42), slot: 1000n },
+        }),
+      );
+      const transaction = await createAccount(ctx, {
+        publicKey: generateTestPubkey(0x01),
+        header: { chainId: 42 },
+      });
+
+      expect(transaction.chainId).toBe(42);
+      expect(ctx.query.getChainInfo).not.toHaveBeenCalled();
+    });
+
+    it("fails bootstrap when the RPC chain ID cannot be read", async () => {
+      const ctx = createMockContext();
+      vi.spyOn(ctx.query, "generateStateProof").mockResolvedValue(
+        create(GenerateStateProofResponseSchema, {
+          proof: { proof: new Uint8Array(64).fill(0x42), slot: 1000n },
+        }),
+      );
+      vi.spyOn(ctx.query, "getChainInfo").mockRejectedValue(new Error("RPC unavailable"));
+
+      await expect(createAccount(ctx, { publicKey: generateTestPubkey(0x01) }))
+        .rejects.toThrow("RPC unavailable");
+    });
+
     it("should create account transaction", async () => {
       const ctx = createMockContext();
       const mockProof = create(GenerateStateProofResponseSchema, {

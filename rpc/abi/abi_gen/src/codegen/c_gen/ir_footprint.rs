@@ -20,14 +20,7 @@ impl<'a> IrFootprintEmitter<'a> {
     }
 
     pub fn emit(&self) -> Result<String, IrFootprintError> {
-        let mut params = format_ir_parameter_list(self.type_ir);
-        if contains_buffer_size_ref(&self.type_ir.root) {
-            if params == "void" {
-                params = "uint64_t buf_sz".to_string();
-            } else {
-                params = format!("uint64_t buf_sz, {}", params);
-            }
-        }
+        let params = format_ir_footprint_parameter_list(self.type_ir);
         let body = self.node_to_expr(&self.type_ir.root)?;
         let fn_name = sanitize_symbol(&format!("{}_footprint_ir", self.type_ir.type_name));
         Ok(format!(
@@ -187,6 +180,20 @@ pub(crate) fn sanitize_symbol(input: &str) -> String {
             other => other,
         })
         .collect()
+}
+
+/* Keep declarations and definitions in sync for buffer-dependent layouts. */
+pub fn format_ir_footprint_parameter_list(type_ir: &TypeIr) -> String {
+    let params = format_ir_parameter_list(type_ir);
+    if contains_buffer_size_ref(&type_ir.root) {
+        if params == "void" {
+            "uint64_t buf_sz".to_string()
+        } else {
+            format!("uint64_t buf_sz, {}", params)
+        }
+    } else {
+        params
+    }
 }
 
 pub fn format_ir_parameter_list(type_ir: &TypeIr) -> String {

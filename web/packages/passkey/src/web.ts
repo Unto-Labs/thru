@@ -64,3 +64,4 @@ export {
   type PasskeyRouteEvent,
 } from './ceremony';
 export { PasskeyIframeRestrictionError, type PasskeyRestrictionReason } from './capabilities';
+export { setPasskeyPopupErrorDetails } from './popup';

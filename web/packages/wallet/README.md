@@ -48,8 +48,19 @@ await sdk.disconnect();
 
 - Handles iframe creation and cleanup (`initialize`, `destroy`)
 - Connection helpers (`connect`, `disconnect`, `isConnected`, `selectAccount`)
+- Restores a remembered connection on `initialize()`. The wallet issues a small non-secret restore record with every authorized connection, which the SDK keeps in your origin's storage next to the selected address; on WebKit (Safari, iOS home-screen web apps) the wallet frame's own storage does not survive a quit, and that record is what lets the next launch reconnect without a passkey. Signing still prompts for the passkey once per launch. `connection.hasRememberedConnection()` answers synchronously whether a launch holds a record to restore from, so a host can open its signed-in shell before the wallet has replied. The record is cleared by `disconnect()` before the wallet is asked and comes back only if the wallet answers that the user cancelled the sign-out; a lost answer, a timeout or a revoke error leaves it cleared, so the worst case is one extra passkey on the next launch, never a session the user had left. It is also cleared by a sign-out inside the wallet and when the wallet refuses it. The record proves nothing by itself: a session rebuilt from one is read-only until a passkey ceremony proves the account is the user's, which the first signing or Add funds runs.
 - Event emitter for wallet state changes (`connect`, `disconnect`, `lock`, `error`, `accountChanged`)
 - Access to a typed Thru RPC client via `sdk.getThru()` for querying on-chain data or submitting transactions
+
+### Serve your app over HTTPS
+
+Browsers block passkeys inside the wallet iframe when your page uses plain
+HTTP, even `http://localhost` (Chrome reports "TLS certificate errors"). On a
+localhost HTTP page the wallet continues passkey prompts in a new window; on
+any other HTTP address passkeys are unavailable. The SDK logs a console
+warning in both cases. Serve your app over HTTPS in development, for example
+with `next dev --experimental-https` or `vite-plugin-mkcert`. See
+[Serve your app over HTTPS in development](https://thru.org/docs/wallet/embedded-wallet-integration/#serve-your-app-over-https-in-development).
 
 ## React Native
 
@@ -109,6 +120,28 @@ A `NativeSDK` used without `ThruProvider` resolves `system` from
 - The deposit screens follow the theme unless `depositUiConfig.appearance` is
   set, which takes precedence.
 
+## Developer mode
+
+Turn on developer mode for builds your team tests with. The wallet then:
+
+- shows the raw error, with a Copy action, on its failure screens;
+- runs card purchases on Coinbase's sandbox, so no money moves;
+- offers a Test faucet in the web Add funds sheet on alphanet. Its
+  `deposit:*` events report `method: 'faucet'`.
+
+It is off by default. The wallet's account menu has its own Developer mode
+switch, and either one turns it on: your app can't turn off a developer's own
+switch. Changes apply live, without reloading the wallet.
+
+```tsx
+<ThruProvider config={config} developerMode={settings.developerMode}>
+  <App />
+</ThruProvider>;
+```
+
+React Native's `ThruProvider` takes the same prop. Outside React, pass
+`developerMode` in the config and change it with `sdk.setDeveloperMode(...)`.
+
 ## Operational telemetry
 
 `telemetryEnabled` controls privacy-safe operational diagnostics for both the
@@ -151,9 +184,10 @@ jsonPayload.telemetryType="thru_wallet"
 jsonPayload.sessionId="<diagnostic-session-id>"
 ```
 
-Replace `sessionId` with `appOrigin`, `walletAddress`, `requestId`,
+Replace `sessionId` with `appMode`, `appOrigin`, `walletAddress`, `requestId`,
 `transactionSignature`, or `errorCode` to investigate a particular integration
-or operation. Configure the deployment's Cloud Logging bucket for 30-day
+or operation. `appMode` is `pwa` for an installed web app and `browser` for a
+regular browser tab. Configure the deployment's Cloud Logging bucket for 30-day
 retention; the SDK and ingestion code do not set logging-bucket retention.
 The ingestion endpoint is intentionally credential-free, so production rollout
 must also place a request-rate or quota policy in front of `/v1/telemetry` to

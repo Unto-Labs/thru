@@ -1,3 +1,7 @@
+import type {
+  ResolvedWalletNetwork,
+  WalletNetworkSelection,
+} from "../networks";
 import { BrowserSDK } from "../BrowserSDK";
 import type { WalletAccount } from "../interfaces";
 import type {
@@ -25,6 +29,10 @@ import { Thru } from "@thru/sdk/client";
 import { createContext } from "react";
 
 export interface ThruContextValue {
+  network: ResolvedWalletNetwork | null;
+  switchNetwork(
+    selection: WalletNetworkSelection,
+  ): Promise<ResolvedWalletNetwork>;
   wallet: BrowserSDK | null;
   isConnected: boolean;
   accounts: WalletAccount[];
@@ -56,6 +64,10 @@ export interface ThruContextValue {
 }
 
 const defaultContextValue: ThruContextValue = {
+  network: null,
+  switchNetwork: async () => {
+    throw new Error("Wallet not initialized");
+  },
   wallet: null,
   isConnected: false,
   accounts: [],

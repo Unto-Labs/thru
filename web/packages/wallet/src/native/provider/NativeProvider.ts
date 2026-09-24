@@ -1,3 +1,5 @@
+import { withNetworkOperation } from "../../network-operations";
+import type { WalletNetworkSelection } from "../../networks";
 import {
   TELEMETRY_EVENTS,
   type TelemetryAppContext,
@@ -73,6 +75,8 @@ export interface NativeProviderConfig {
   depositUiConfig?: DepositUiConfig;
   /** The host's resolved color scheme the wallet draws for (default light). */
   theme?: WalletTheme;
+  /** The host's developer mode (default off). */
+  developerMode?: boolean;
 }
 
 export interface ConnectOptions {
@@ -127,6 +131,28 @@ export function isTransparentContentPresentationReason(
  * `requestHide` callbacks - bottom sheet logic stays in the React layer.
  */
 export class NativeProvider {
+  withNetworkOperation<T>(operation: () => Promise<T>): Promise<T> {
+    return withNetworkOperation(this.bridge, this.origin, operation);
+  }
+  supportsNetworkSwitching() {
+    return this.bridge.supportsNetworkSwitching();
+  }
+  getNetwork() {
+    return this.bridge.getNetwork();
+  }
+  async switchNetwork(selection: WalletNetworkSelection) {
+    if (!this.bridge.supportsNetworkSwitching())
+      throw new Error("This wallet does not support network switching.");
+    const response = await this.bridge.sendMessage({
+      id: createRequestId(),
+      type: POST_MESSAGE_REQUEST_TYPES.SWITCH_NETWORK,
+      payload: selection,
+      origin: this.origin,
+    });
+    await this.bridge.waitForNetwork(response.result.scope, response.result.name);
+    return response.result;
+  }
+
   private readonly bridge: WebViewBridge;
   private readonly origin: string;
   private readonly transparent: boolean;
@@ -164,6 +190,7 @@ export class NativeProvider {
       telemetryContext: config.telemetryContext,
       telemetry: config.telemetry,
       theme: config.theme,
+      developerMode: config.developerMode,
     });
     this.recordTelemetry(TELEMETRY_EVENTS.BRIDGE_PROVIDER_CONSTRUCTED, {
       severity: "info",
@@ -190,6 +217,11 @@ export class NativeProvider {
 
       if (eventType === EMBEDDED_PROVIDER_EVENTS.UI_SHOW) {
         this.requestShow(eventType);
+        return;
+      }
+
+      if (eventType === EMBEDDED_PROVIDER_EVENTS.NETWORK_CHANGED) {
+        this.clearConnection();
         return;
       }
 
@@ -241,6 +273,11 @@ export class NativeProvider {
   /** Restyle the wallet WebView for a new host color scheme, without a reload. */
   setTheme(theme: WalletTheme): void {
     this.bridge.setTheme(theme);
+  }
+
+  /** Tell the wallet WebView the host's developer mode, without a reload. */
+  setDeveloperMode(enabled: boolean): void {
+    this.bridge.setDeveloperMode(enabled);
   }
 
   /** Hand the bridge a WebView ref. Required before connect/sign. */
@@ -686,10 +723,7 @@ export class NativeProvider {
     this.selectedAccount = account;
   }
 
-  private recordTelemetry(
-    event: string,
-    fields?: NativeTelemetryFields,
-  ): void {
+  private recordTelemetry(event: string, fields?: NativeTelemetryFields): void {
     try {
       this.telemetry?.(event, { frameId: this.bridge.frameId, ...fields });
     } catch {

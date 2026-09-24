@@ -2,7 +2,9 @@ use super::helpers::{
     escape_c_keyword, format_type_to_c, get_c_accessor_type, is_nested_complex_type,
     primitive_to_c_type, sanitize_type_name,
 };
-use super::ir_footprint::{format_ir_parameter_list, sanitize_symbol};
+use super::ir_footprint::{
+    format_ir_footprint_parameter_list, format_ir_parameter_list, sanitize_symbol,
+};
 use crate::abi::resolved::{ResolvedType, ResolvedTypeKind, Size};
 use crate::abi::types::PrimitiveType;
 use crate::codegen::shared::ir::TypeIr;
@@ -142,6 +144,9 @@ pub fn emit_forward_declarations(resolved_type: &ResolvedType, type_ir: Option<&
     );
 
     match &resolved_type.kind {
+        ResolvedTypeKind::Array { .. } => {
+            emit_ir_declarations(type_ir, &mut output);
+        }
         ResolvedTypeKind::Struct { fields, .. } => {
             /* Opaque wrapper forward declarations */
 
@@ -255,24 +260,7 @@ pub fn emit_forward_declarations(resolved_type: &ResolvedType, type_ir: Option<&
                 }
             }
 
-            if let Some(type_ir) = type_ir {
-                let fn_name = sanitize_symbol(&format!("{}_footprint_ir", type_ir.type_name));
-                let params = format_ir_parameter_list(type_ir);
-                output.push_str(&format!("uint64_t {}( {} );\n", fn_name, params));
-                let validate_fn = sanitize_symbol(&format!("{}_validate_ir", type_ir.type_name));
-                let validate_params = format_ir_parameter_list(type_ir);
-                if validate_params == "void" {
-                    output.push_str(&format!(
-                        "int {}( uint64_t buf_sz, uint64_t * out_bytes_consumed );\n",
-                        validate_fn
-                    ));
-                } else {
-                    output.push_str(&format!(
-                        "int {}( uint64_t buf_sz, uint64_t * out_bytes_consumed, {} );\n",
-                        validate_fn, validate_params
-                    ));
-                }
-            }
+            emit_ir_declarations(type_ir, &mut output);
 
             /* validate() */
             output.push_str(&format!("int {}_validate( uint8_t const * data, uint64_t data_len, uint64_t * out_size );\n",
@@ -879,4 +867,26 @@ pub fn emit_forward_declarations(resolved_type: &ResolvedType, type_ir: Option<&
     }
 
     output
+}
+
+/* Shared declarations for the canonical layout helpers. */
+fn emit_ir_declarations(type_ir: Option<&TypeIr>, output: &mut String) {
+    if let Some(type_ir) = type_ir {
+        let fn_name = sanitize_symbol(&format!("{}_footprint_ir", type_ir.type_name));
+        let params = format_ir_footprint_parameter_list(type_ir);
+        output.push_str(&format!("uint64_t {}( {} );\n", fn_name, params));
+        let validate_fn = sanitize_symbol(&format!("{}_validate_ir", type_ir.type_name));
+        let validate_params = format_ir_parameter_list(type_ir);
+        if validate_params == "void" {
+            output.push_str(&format!(
+                "int {}( uint64_t buf_sz, uint64_t * out_bytes_consumed );\n",
+                validate_fn
+            ));
+        } else {
+            output.push_str(&format!(
+                "int {}( uint64_t buf_sz, uint64_t * out_bytes_consumed, {} );\n",
+                validate_fn, validate_params
+            ));
+        }
+    }
 }

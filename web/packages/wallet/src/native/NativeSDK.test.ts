@@ -1,3 +1,4 @@
+import { networkStorageKey } from "../networks";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   ErrorCode,
@@ -198,14 +199,17 @@ describe("NativeSDK", () => {
     });
     const resolved = await internals.resolveDepositDestination(prepared);
 
-    expect(resolved).toEqual({ destination, walletAddress: "ta_wallet" });
+    expect(resolved).toEqual({
+      destination: { ...destination, symbol: "$" },
+      walletAddress: "ta_wallet",
+    });
     expect(resolved.destination).not.toBe(prepared);
     expect(prepare).toHaveBeenCalledOnce();
 
     prepared.symbol = "ALTERED";
-    await expect(
-      internals.resolveDepositDestination(prepared),
-    ).rejects.toThrow("Prepared deposit destination no longer matches wallet config: symbol");
+    await expect(internals.resolveDepositDestination(prepared)).rejects.toThrow(
+      "Prepared deposit destination no longer matches wallet config: symbol",
+    );
     expect(prepare).toHaveBeenCalledOnce();
   });
 
@@ -259,6 +263,24 @@ describe("NativeSDK", () => {
     expect(prepare).toHaveBeenCalledTimes(2);
   });
 
+  it("prepares a faucet-only destination but rejects paid deposits and other networks", async () => {
+    const internals = sdk as unknown as {
+      initialized: boolean;
+      activeNetwork: { id: string; depositConfigured: boolean; depositProviders: string[] };
+      provider: { prepareDeposit: (payload: unknown) => Promise<never> };
+    };
+    internals.initialized = true;
+    internals.activeNetwork = { id: "betanet", depositConfigured: true, depositProviders: [] };
+    const prepare = vi.spyOn(internals.provider, "prepareDeposit").mockResolvedValue({ network: "betanet" } as never);
+    await expect(sdk.deposits.prepare({ network: "betanet" as never })).resolves.toMatchObject({ network: "betanet" });
+    expect(prepare).toHaveBeenCalledOnce();
+    expect(await sdk.deposits.getProviders()).toEqual([]);
+    await expect(sdk.deposits.open({})).rejects.toThrow();
+    await expect(sdk.deposits.prepare({ network: "alphanet" as never })).rejects.toThrow("Add funds unavailable");
+    internals.activeNetwork.depositConfigured = false;
+    await expect(sdk.deposits.prepare({ network: "betanet" as never })).rejects.toThrow("Add funds unavailable");
+  });
+
   it("returns only the dapp-configured deposit provider IDs", async () => {
     const configured = new NativeSDK({
       walletUrl: "http://localhost:3000/embedded",
@@ -298,6 +320,22 @@ describe("NativeSDK", () => {
     expect(changes).toEqual(["dark", "light"]);
     expect(sdk.getTheme()).toBe("light");
     themed.destroy();
+  });
+
+  it("carries developer mode onto the wallet URL and switches it live", () => {
+    const dev = new NativeSDK({
+      walletUrl: "http://localhost:3000/embedded",
+      origin: "thru-mobile://developer-mode",
+      telemetryEnabled: false,
+      developerMode: true,
+    });
+    const urlFlag = () =>
+      new URL(dev.getIframeSrc()).searchParams.get("tn_developer_mode");
+
+    expect(urlFlag()).toBe("1");
+    dev.setDeveloperMode(false);
+    expect(urlFlag()).toBeNull();
+    dev.destroy();
   });
 
   it("defaults iOS WebView mode to shell iframe", () => {
@@ -373,9 +411,9 @@ describe("NativeSDK", () => {
     const iframeUrl = new URL(legacySdk.getIframeSrc());
 
     expect(iframeUrl.searchParams.get("existing")).toBe("1");
-    expect(
-      iframeUrl.searchParams.get("tn_transaction_signing_scheme"),
-    ).toBe("legacy");
+    expect(iframeUrl.searchParams.get("tn_transaction_signing_scheme")).toBe(
+      "legacy",
+    );
 
     legacySdk.destroy();
   });
@@ -495,7 +533,9 @@ describe("NativeSDK", () => {
   it("records native disconnect completion", async () => {
     const telemetry = (
       sdk as unknown as {
-        telemetry: { record: (event: string, fields?: Record<string, unknown>) => void };
+        telemetry: {
+          record: (event: string, fields?: Record<string, unknown>) => void;
+        };
       }
     ).telemetry;
     const record = vi.spyOn(telemetry, "record");
@@ -598,7 +638,9 @@ describe("NativeSDK", () => {
     });
   });
 
-  it.each([false, true])("persists a bundled createAccount session or reports a completed wallet operation (storage failure=%s)", async (failStorage) => {
+  it.each([false, true])(
+    "persists a bundled createAccount session or reports a completed wallet operation (storage failure=%s)",
+    async (failStorage) => {
     sdk.destroy();
     const storage = new MockStorage();
     const cause = new Error("Device storage unavailable");
@@ -634,7 +676,9 @@ describe("NativeSDK", () => {
     sdk.onMessage(readyMessage(frameId));
     await flush();
 
-    const request = parseInjectedRequest(await waitForInjectedRequest(webView));
+      const request = parseInjectedRequest(
+        await waitForInjectedRequest(webView),
+      );
     expect(request.type).toBe(POST_MESSAGE_REQUEST_TYPES.CREATE_ACCOUNT);
     expect(request.payload).toEqual({
       accountName: "JCoin Account",
@@ -683,8 +727,11 @@ describe("NativeSDK", () => {
 
     if (failStorage) {
       await expect(promise).rejects.toMatchObject({
-        code: "SDK_STORAGE_ERROR", operation: "setItem",
-        category: "signing-sessions", walletOperationCompleted: true, cause,
+          code: "SDK_STORAGE_ERROR",
+          operation: "setItem",
+          category: "signing-sessions",
+          walletOperationCompleted: true,
+          cause,
       });
       return;
     }
@@ -699,7 +746,8 @@ describe("NativeSDK", () => {
         createdAt: nowSeconds,
       }),
     ]);
-  });
+    },
+  );
 
   it("creates a signing session while transparently disconnected", async () => {
     sdk.destroy();
@@ -726,7 +774,9 @@ describe("NativeSDK", () => {
     expect(sdk.isConnected()).toBe(false);
     sdk.onMessage(readyMessage(frameId));
     const request = parseInjectedRequest(await waitForInjectedRequest(webView));
-    expect(request.type).toBe(POST_MESSAGE_REQUEST_TYPES.CREATE_SIGNING_SESSION);
+    expect(request.type).toBe(
+      POST_MESSAGE_REQUEST_TYPES.CREATE_SIGNING_SESSION,
+    );
     expect(request.payload).toEqual({
       walletAddress: "thru_test_address",
       expiresAt: String(expiresAt),
@@ -780,7 +830,8 @@ describe("NativeSDK", () => {
     sdk.attachWebView(webView);
     const expiresAt = 1_900_000_000;
     const walletAddress = encodeAddress(new Uint8Array(32).fill(10));
-    await (sdk as unknown as {
+    await (
+      sdk as unknown as {
       signingSessions: {
         save(descriptor: {
           id: string;
@@ -791,7 +842,8 @@ describe("NativeSDK", () => {
           createdAt: number;
         }): Promise<void>;
       };
-    }).signingSessions.save({
+      }
+    ).signingSessions.save({
       id: "session_current",
       walletAddress,
       publicKey: "thru_current_address",
@@ -800,9 +852,11 @@ describe("NativeSDK", () => {
       createdAt: expiresAt - 600,
     });
     const broadcastTransaction = vi.fn(async () => "signature");
-    (sdk.thru as unknown as {
+    (
+      sdk.thru as unknown as {
       broadcastTransaction: (signedTransaction: string) => Promise<unknown>;
-    }).broadcastTransaction = broadcastTransaction;
+      }
+    ).broadcastTransaction = broadcastTransaction;
 
     const frameId = frameIdFor(sdk);
     const promise = sdk.thru.renewSession({
@@ -996,7 +1050,7 @@ describe("NativeSDK", () => {
       label: "Account 2",
     };
     storage.setItem(
-      selectedAccountStorageKey,
+      networkStorageKey(selectedAccountStorageKey, "pending"),
       JSON.stringify({
         version: 1,
         origin: "thru-mobile://token-dummy",
@@ -1121,7 +1175,9 @@ describe("NativeSDK", () => {
     });
     expect(storage.values.has(storageKey)).toBe(false);
     const storedSelectedRaw =
-      storage.values.get(selectedAccountStorageKey) ?? "{}";
+      storage.values.get(
+        networkStorageKey(selectedAccountStorageKey, "pending"),
+      ) ?? "{}";
     const storedSelected = JSON.parse(storedSelectedRaw);
     expect(storedSelected.selectedAccountAddress).toBe(selectedAccount.address);
     expect(storedSelected).not.toHaveProperty("result");
@@ -1144,9 +1200,14 @@ describe("NativeSDK", () => {
     await flush();
     await wait(0);
     const restoreRequest = parseInjectedRequest(restoredWebView.injected[0]);
-    expect(restoreRequest.type).toBe(POST_MESSAGE_REQUEST_TYPES.GET_CONNECTION_STATE);
-    expect(restoreRequest.payload).toMatchObject({ preferredAccountAddress: selectedAccount.address });
-    restored.onMessage(responseMessage(restoredFrameId, restoreRequest.id, {
+    expect(restoreRequest.type).toBe(
+      POST_MESSAGE_REQUEST_TYPES.GET_CONNECTION_STATE,
+    );
+    expect(restoreRequest.payload).toMatchObject({
+      preferredAccountAddress: selectedAccount.address,
+    });
+    restored.onMessage(
+      responseMessage(restoredFrameId, restoreRequest.id, {
       isAuthorized: true,
       isConnected: true,
       hasPasskey: true,
@@ -1154,7 +1215,8 @@ describe("NativeSDK", () => {
       accounts: [initialAccount, selectedAccount],
       selectedAccount,
       metadata: result.metadata,
-    }));
+      }),
+    );
     await expect(restorePromise).resolves.toMatchObject({
       selectedAccount,
     });
@@ -1265,7 +1327,9 @@ describe("NativeSDK", () => {
 
     await selectPromise;
     const storedSelected = JSON.parse(
-      storage.values.get(selectedAccountStorageKey) ?? "{}",
+      storage.values.get(
+        networkStorageKey(selectedAccountStorageKey, "pending"),
+      ) ?? "{}",
     );
     expect(storedSelected.selectedAccountAddress).toBe(selectedAccount.address);
     expect(storage.values.has(storageKey)).toBe(false);
@@ -1286,7 +1350,7 @@ describe("NativeSDK", () => {
       label: "Account 2",
     };
     storage.setItem(
-      selectedAccountStorageKey,
+      networkStorageKey(selectedAccountStorageKey, "pending"),
       JSON.stringify({
         version: 1,
         origin: "thru-mobile://token-dummy",
@@ -1493,10 +1557,17 @@ describe("NativeSDK", () => {
 
   it("restores an authorized account without an active passkey session", async () => {
     const storage = new MockStorage();
-    const oldHint = 'thru.wallet.connection-hint.v1:http%3A%2F%2Flocalhost%3A3000:thru-mobile%3A%2F%2Ftoken-dummy';
-    storage.values.set(oldHint, JSON.stringify({ version: 1, selectedAccountAddress: 'old-account' }));
-    const oldSessions = oldHint.replace('connection-hint', 'signing-sessions');
-    storage.values.set(oldSessions, JSON.stringify({ version: 1, sessions: [] }));
+    const oldHint =
+      "thru.wallet.connection-hint.v1:http%3A%2F%2Flocalhost%3A3000:thru-mobile%3A%2F%2Ftoken-dummy";
+    storage.values.set(
+      oldHint,
+      JSON.stringify({ version: 1, selectedAccountAddress: "old-account" }),
+    );
+    const oldSessions = oldHint.replace("connection-hint", "signing-sessions");
+    storage.values.set(
+      oldSessions,
+      JSON.stringify({ version: 1, sessions: [] }),
+    );
     const storageKey = "test-connection";
     const staleResult = {
       accounts: [
@@ -1561,7 +1632,7 @@ describe("NativeSDK", () => {
     sdk.onMessage(responseMessage(frameId, request.id, state));
 
     await expect(promise).resolves.toEqual(state);
-    expect(request.payload).not.toHaveProperty('preferredAccountAddress');
+    expect(request.payload).not.toHaveProperty("preferredAccountAddress");
     await expect(sdk.sessions.getActive()).resolves.toBeNull();
     expect(storage.values.has(oldHint)).toBe(true);
     expect(storage.values.has(oldSessions)).toBe(true);

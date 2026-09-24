@@ -1,0 +1,170 @@
+abi:
+  package: test.top_level_array_layouts
+  abi-version: 1
+  package-version: "1.0.0"
+  description: C array layout regression cases
+
+types:
+  - name: FiveByteUnion
+    kind:
+      union:
+        packed: true
+        variants:
+          - name: word
+            variant-type:
+              primitive: u32
+          - name: bytes
+            variant-type:
+              array:
+                element-type:
+                  primitive: u8
+                size:
+                  literal:
+                    u32: 5
+
+  - name: ReferencedUnions
+    kind:
+      array:
+        element-type:
+          type-ref:
+            name: FiveByteUnion
+        size:
+          literal:
+            u32: 2
+
+  - name: InlineUnions
+    kind:
+      array:
+        element-type:
+          union:
+            packed: true
+            variants:
+              - name: word
+                variant-type:
+                  primitive: u32
+              - name: bytes
+                variant-type:
+                  array:
+                    element-type:
+                      primitive: u8
+                    size:
+                      literal:
+                        u32: 5
+        size:
+          literal:
+            u32: 2
+
+  - name: BufferBytes
+    kind:
+      array:
+        element-type:
+          primitive: u8
+        size:
+          field-ref:
+            path: [__buffer_size]
+
+  - name: VariableRows
+    kind:
+      array:
+        element-type:
+          array:
+            element-type:
+              primitive: u8
+            size:
+              div:
+                left:
+                  field-ref:
+                    path: [__buffer_size]
+                right:
+                  literal:
+                    u32: 2
+        size:
+          literal:
+            u32: 2
+
+  - name: ReducedAlignment
+    kind:
+      struct:
+        packed: false
+        aligned: 1
+        fields:
+          - name: word
+            field-type:
+              primitive: u32
+          - name: byte
+            field-type:
+              primitive: u8
+
+  - name: ReducedAlignmentArray
+    kind:
+      array:
+        element-type:
+          type-ref:
+            name: ReducedAlignment
+        size:
+          literal:
+            u32: 2
+
+  - name: PackedTailAlignment
+    kind:
+      struct:
+        packed: true
+        aligned: 4
+        fields:
+          - name: word
+            field-type:
+              primitive: u32
+          - name: byte
+            field-type:
+              primitive: u8
+
+  - name: PackedTailAlignmentArray
+    kind:
+      array:
+        element-type:
+          type-ref:
+            name: PackedTailAlignment
+        size:
+          literal:
+            u32: 2
+
+  - name: RaisedAlignment
+    kind:
+      struct:
+        packed: false
+        aligned: 8
+        fields:
+          - name: word
+            field-type:
+              primitive: u32
+          - name: byte
+            field-type:
+              primitive: u8
+
+  - name: RaisedAlignmentArray
+    kind:
+      array:
+        element-type:
+          type-ref:
+            name: RaisedAlignment
+        size:
+          literal:
+            u32: 2
+
+  - name: InlineReducedAlignmentArray
+    kind:
+      array:
+        element-type:
+          struct:
+            packed: false
+            aligned: 1
+            fields:
+              - name: word
+                field-type:
+                  primitive: u32
+              - name: byte
+                field-type:
+                  primitive: u8
+        size:
+          literal:
+            u32: 2

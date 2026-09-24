@@ -1,31 +1,36 @@
+import { BridgeNetworkState } from '../../bridge-network-state';
 import {
   TELEMETRY_EVENTS,
   encodeTelemetryAppContext,
   type TelemetryAppContext,
-} from "../../observability";
+} from '../../observability';
 import {
   ErrorCode,
   IFRAME_READY_EVENT,
   POST_MESSAGE_EVENT_TYPE,
   POST_MESSAGE_REQUEST_TYPES,
   TELEMETRY_CONTEXT_MESSAGE_TYPE,
+  WALLET_DEVELOPER_MODE_MESSAGE_TYPE,
+  WALLET_DEVELOPER_MODE_SEARCH_PARAM,
   WALLET_THEME_MESSAGE_TYPE,
   createRequestId,
   type TelemetryContextMessage,
+  type IframeReadyData,
+  type WalletDeveloperModeMessage,
   type WalletTheme,
   type WalletThemeMessage,
   type InferSuccessfulPostMessageResponse,
   type PostMessageEvent,
   type PostMessageRequest,
   type PostMessageResponse,
-} from "../../protocol";
+} from '../../protocol';
 import {
   getErrorCode as getSharedErrorCode,
   getErrorMessage as getSharedErrorMessage,
   getSafeRequestTelemetryFields,
   getSafeResponseTelemetryFields,
-} from "../../internal/telemetry-fields";
-import { sanitizeTelemetryMessage } from "../../telemetry";
+} from '../../internal/telemetry-fields';
+import { sanitizeTelemetryMessage } from '../../telemetry';
 
 /* RN-side analog of `web/packages/embedded-provider/src/IframeManager.ts`.
    The wallet ships unchanged. The shell HTML (src/shell.html) hosts an
@@ -95,24 +100,26 @@ function validateWalletOrigin(walletUrl: string): void {
     url = new URL(walletUrl);
   } catch {
     throw new Error(
-      `Invalid wallet URL: ${walletUrl}. URL must be a valid absolute URL.`
+      `Invalid wallet URL: ${walletUrl}. URL must be a valid absolute URL.`,
     );
   }
   const origin = url.origin;
   const isAllowed =
-    TRUSTED_WALLET_ORIGINS.includes(origin) ||
-    isAllowedDevelopmentOrigin(url);
+    TRUSTED_WALLET_ORIGINS.includes(origin) || isAllowedDevelopmentOrigin(url);
   if (!isAllowed) {
     throw new Error(
       `Untrusted wallet origin: ${origin}. Only trusted origins are allowed: ${TRUSTED_WALLET_ORIGINS.join(', ')}. ` +
-        'Development builds also allow localhost, LAN, and Tailscale wallet origins.'
+        'Development builds also allow localhost, LAN, and Tailscale wallet origins.',
     );
   }
 }
 
 function isNativeEmbeddedWalletPath(pathname: string): boolean {
   const normalized = pathname.replace(/\/+$/, '') || '/';
-  return normalized === '/embedded/native' || normalized.startsWith('/embedded/native/');
+  return (
+    normalized === '/embedded/native' ||
+    normalized.startsWith('/embedded/native/')
+  );
 }
 
 /* Minimal contract for a react-native-webview ref. We accept both refs
@@ -153,6 +160,8 @@ export interface WebViewBridgeOptions {
   telemetry?: NativeTelemetryRecorder;
   /** The host's resolved color scheme the wallet draws for (default light). */
   theme?: WalletTheme;
+  /** The host's developer mode (default off). */
+  developerMode?: boolean;
 }
 
 export interface NativeTelemetryFields {
@@ -185,6 +194,25 @@ export type NativeTelemetryRecorder = (
  * routing, timeouts - match the iframe implementation exactly.
  */
 export class WebViewBridge {
+  private readonly networkState = new BridgeNetworkState(
+    () => this.rejectPendingRequests(
+      'Wallet network changed; reconnect.', ErrorCode.NETWORK_CHANGED,
+    ),
+    (network) => this.onEvent?.('network_changed', network),
+  );
+  waitForNetwork(scope: string, name?: string): Promise<void> {
+    return this.networkState.waitForNetwork(scope, name);
+  }
+  supportsNetworkSwitching() {
+    return this.networkState.supported;
+  }
+  getNetwork() {
+    return this.networkState.network;
+  }
+  getNetworkGeneration() {
+    return this.networkState.generation;
+  }
+
   readonly walletUrl: string;
   readonly walletOrigin: string;
   readonly frameId: string;
@@ -199,6 +227,9 @@ export class WebViewBridge {
   /* The theme changed after the host may have built the WebView URL, so a
      wallet document that (re)loads must be told again. */
   private themeUpdated = false;
+  /* The host's developer mode, told again after a (re)load like the theme. */
+  private developerMode: boolean;
+  private developerModeUpdated = false;
 
   private webView: WebViewRefLike | null = null;
   private ready = false;
@@ -228,6 +259,7 @@ export class WebViewBridge {
     this.telemetryContext = options.telemetryContext;
     this.telemetry = options.telemetry;
     this.theme = options.theme ?? 'light';
+    this.developerMode = options.developerMode === true;
     this.recordTelemetry(TELEMETRY_EVENTS.BRIDGE_CONSTRUCTED, {
       severity: 'info',
       outcome: 'created',
@@ -249,7 +281,10 @@ export class WebViewBridge {
       url.searchParams.set('tn_telemetry_session', this.telemetrySessionId);
     }
     if (this.telemetryAppContextId) {
-      url.searchParams.set('tn_telemetry_app_context', this.telemetryAppContextId);
+      url.searchParams.set(
+        'tn_telemetry_app_context',
+        this.telemetryAppContextId,
+      );
     } else {
       url.searchParams.delete('tn_telemetry_app_context');
     }
@@ -260,7 +295,31 @@ export class WebViewBridge {
       url.searchParams.delete('tn_telemetry_context');
     }
     url.searchParams.set('tn_theme', this.theme);
+    if (this.developerMode) url.searchParams.set(WALLET_DEVELOPER_MODE_SEARCH_PARAM, '1');
+    else url.searchParams.delete(WALLET_DEVELOPER_MODE_SEARCH_PARAM);
     return url.toString();
+  }
+
+  /**
+   * Turn the host's developer mode on or off. A loaded wallet hears it by
+   * message (never a reload); a later load carries it on the URL.
+   */
+  setDeveloperMode(enabled: boolean): void {
+    if (enabled === this.developerMode) return;
+    this.developerMode = enabled;
+    this.developerModeUpdated = true;
+    this.sendDeveloperMode();
+  }
+
+  private sendDeveloperMode(): void {
+    if (this.destroyed || !this.ready || !this.webView) return;
+    const message: WalletDeveloperModeMessage = {
+      type: WALLET_DEVELOPER_MODE_MESSAGE_TYPE,
+      origin: this.walletOrigin,
+      frameId: this.frameId,
+      enabled: this.developerMode,
+    };
+    this.injectControlMessage(message);
   }
 
   getTheme(): WalletTheme {
@@ -290,7 +349,9 @@ export class WebViewBridge {
   }
 
   /* Fire-and-forget host -> wallet message, through the shell when present. */
-  private injectControlMessage(message: TelemetryContextMessage | WalletThemeMessage): void {
+  private injectControlMessage(
+    message: TelemetryContextMessage | WalletThemeMessage | WalletDeveloperModeMessage,
+  ): void {
     if (!this.webView) return;
     const script = `try {
       var msg = ${JSON.stringify(message)};
@@ -411,13 +472,16 @@ export class WebViewBridge {
 
   /** Record an iOS WebKit process termination without native event details. */
   recordWebViewContentProcessTerminated(): void {
-    this.recordTelemetry(TELEMETRY_EVENTS.BRIDGE_WEBVIEW_CONTENT_PROCESS_TERMINATED, {
+    this.recordTelemetry(
+      TELEMETRY_EVENTS.BRIDGE_WEBVIEW_CONTENT_PROCESS_TERMINATED,
+      {
       severity: 'error',
       operation: 'webview_load',
       outcome: 'content_process_terminated',
       errorCode: 'WEBVIEW_CONTENT_PROCESS_TERMINATED',
       ...this.getWebViewLoadDuration(),
-    });
+      },
+    );
   }
 
   /**
@@ -434,6 +498,7 @@ export class WebViewBridge {
          URL, so restate the current ones. */
       this.sendTelemetryContext();
       if (this.themeUpdated) this.sendTheme();
+      if (this.developerModeUpdated) this.sendDeveloperMode();
       return;
     }
     this.ready = true;
@@ -449,6 +514,7 @@ export class WebViewBridge {
     });
     this.sendTelemetryContext();
     if (this.themeUpdated) this.sendTheme();
+    if (this.developerModeUpdated) this.sendDeveloperMode();
   }
 
   /**
@@ -492,8 +558,11 @@ export class WebViewBridge {
    * iframe.postMessage) and resolve with the matching response.
    */
   async sendMessage<TRequest extends PostMessageRequest>(
-    request: TRequest
+    request: TRequest,
   ): Promise<InferSuccessfulPostMessageResponse<TRequest>> {
+    const queuedGeneration = this.networkState.network
+      ? this.networkState.generation
+      : null;
     const startedAt = Date.now();
     const safeRequestFields = getSafeRequestTelemetryFields(request);
     this.recordTelemetry(TELEMETRY_EVENTS.BRIDGE_REQUEST_STARTED, {
@@ -536,7 +605,9 @@ export class WebViewBridge {
       throw error;
     }
     if (!this.webView) {
-      const error = new Error('WebView not attached - call attachWebView() first');
+      const error = new Error(
+        'WebView not attached - call attachWebView() first',
+      );
       this.recordTelemetry(TELEMETRY_EVENTS.BRIDGE_REQUEST_FAILED, {
         severity: 'error',
         requestId: request.id,
@@ -550,6 +621,14 @@ export class WebViewBridge {
       });
       throw error;
     }
+
+    if (
+      queuedGeneration !== null &&
+      queuedGeneration !== this.networkState.generation
+    )
+      throw Object.assign(new Error('Wallet network changed; reconnect.'), {
+        code: ErrorCode.NETWORK_CHANGED,
+      });
 
     const timeoutMs = SLOW_REQUEST_TYPES.has(request.type)
       ? SLOW_REQUEST_TIMEOUT_MS
@@ -586,13 +665,13 @@ export class WebViewBridge {
             ...safeRequestFields,
             ...getSafeResponseTelemetryFields(request.type, response.result),
           });
-          resolve(
-            response as InferSuccessfulPostMessageResponse<TRequest>
-          );
+          resolve(response as InferSuccessfulPostMessageResponse<TRequest>);
         } else {
           const err = new Error(response.error?.message || 'Unknown error');
-          (err as { code?: string; data?: unknown }).code = response.error?.code;
-          (err as { code?: string; data?: unknown }).data = response.error?.data;
+          (err as { code?: string; data?: unknown }).code =
+            response.error?.code;
+          (err as { code?: string; data?: unknown }).data =
+            response.error?.data;
           this.recordTelemetry(TELEMETRY_EVENTS.BRIDGE_REQUEST_FAILED, {
             severity: 'warn',
             requestId: request.id,
@@ -609,7 +688,7 @@ export class WebViewBridge {
       });
 
       const script = `try {
-        var msg = ${JSON.stringify({ ...request, frameId: this.frameId })};
+        var msg = ${JSON.stringify({ ...request, frameId: this.frameId, networkScope: this.networkState.network?.scope, networkGeneration: request.networkGeneration ?? this.networkState.generation })};
         if (window.__pushIn) {
           window.__pushIn(msg);
         } else {
@@ -653,7 +732,10 @@ export class WebViewBridge {
    * Reject all in-flight wallet requests when the native host dismisses the
    * WebView without waiting for a wallet-side response.
    */
-  rejectPendingRequests(message = 'User rejected the request'): void {
+  rejectPendingRequests(
+    message = 'User rejected the request',
+    code: ErrorCode = ErrorCode.USER_REJECTED,
+  ): void {
     this.recordTelemetry(TELEMETRY_EVENTS.BRIDGE_REQUESTS_REJECTED, {
       severity: 'warn',
       outcome: 'user_rejected',
@@ -665,7 +747,7 @@ export class WebViewBridge {
         id,
         success: false,
         error: {
-          code: ErrorCode.USER_REJECTED,
+          code,
           message,
         },
       });
@@ -711,6 +793,7 @@ export class WebViewBridge {
     }
 
     if (msg.type === IFRAME_READY_EVENT) {
+      this.networkState.readReady(msg.data as IframeReadyData | undefined);
       this.markReady();
       return;
     }
@@ -779,10 +862,7 @@ export class WebViewBridge {
     });
   }
 
-  private recordTelemetry(
-    event: string,
-    fields?: NativeTelemetryFields,
-  ): void {
+  private recordTelemetry(event: string, fields?: NativeTelemetryFields): void {
     try {
       this.telemetry?.(event, { frameId: this.frameId, ...fields });
     } catch {

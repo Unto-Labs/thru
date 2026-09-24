@@ -78,4 +78,10 @@ export type {
   GetDepositAccountStateParams,
   WaitForDepositParams,
 } from '../deposit';
-export { DepositTransactionError, formatDepositAmount } from '../deposit';
+export {
+  DepositTransactionError,
+  formatDepositAmount,
+  formatTokenAmountLabel,
+} from '../deposit';
+
+export * from '../networks';

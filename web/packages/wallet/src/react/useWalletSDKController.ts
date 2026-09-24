@@ -1,3 +1,7 @@
+import type {
+  ResolvedWalletNetwork,
+  WalletNetworkSelection,
+} from "../networks";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   normalizeActiveWalletAccounts,
@@ -19,6 +23,7 @@ import { formatDepositAmount } from "../deposit";
 import type { DepositRequestPayload, PrepareDepositPayload } from "../protocol";
 
 type SDKEvent =
+  | "networkChanged"
   | "connect"
   | "disconnect"
   | "error"
@@ -31,11 +36,22 @@ export interface ObservableWalletSDK extends WalletSDK {
 }
 
 /** Shared React state and operation controller for browser and native SDKs. */
-export function useWalletSDKController<TSDK extends ObservableWalletSDK>(sdk: TSDK) {
+export function useWalletSDKController<TSDK extends ObservableWalletSDK>(
+  sdk: TSDK,
+) {
+  const [network, setNetwork] = useState<ResolvedWalletNetwork | null>(
+    sdk.getNetwork(),
+  );
+  const switchNetwork = useCallback(
+    (selection: WalletNetworkSelection) => sdk.switchNetwork(selection),
+    [sdk],
+  );
   const [isConnected, setIsConnected] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [accounts, setAccounts] = useState<WalletAccount[]>([]);
-  const [selectedAccount, setSelectedAccount] = useState<WalletAccount | null>(null);
+  const [selectedAccount, setSelectedAccount] = useState<WalletAccount | null>(
+    null,
+  );
   const [walletAvailability, setWalletAvailability] =
     useState<WalletAvailability>(CHECKING_WALLET_AVAILABILITY);
   const [error, setError] = useState<Error | null>(null);
@@ -45,7 +61,11 @@ export function useWalletSDKController<TSDK extends ObservableWalletSDK>(sdk: TS
       input && typeof input === "object" && "error" in input
         ? (input as { error?: unknown }).error
         : input;
-    setError(candidate instanceof Error ? candidate : new Error("Unknown wallet error"));
+    setError(
+      candidate instanceof Error
+        ? candidate
+        : new Error("Unknown wallet error"),
+    );
     setIsConnecting(false);
   }, []);
 
@@ -101,12 +121,18 @@ export function useWalletSDKController<TSDK extends ObservableWalletSDK>(sdk: TS
       }
     };
 
+    const handleNetworkChanged = (next: ResolvedWalletNetwork) => {
+      setNetwork(next);
+      setError(null);
+    };
+    sdk.on("networkChanged", handleNetworkChanged);
     sdk.on("connect", handleConnect);
     sdk.on("disconnect", handleDisconnect);
     sdk.on("error", captureError);
     sdk.on("accountChanged", handleAccountChanged);
     sdk.on("availabilityChanged", handleAvailabilityChanged);
     return () => {
+      sdk.off("networkChanged", handleNetworkChanged);
       sdk.off("connect", handleConnect);
       sdk.off("disconnect", handleDisconnect);
       sdk.off("error", captureError);
@@ -140,7 +166,9 @@ export function useWalletSDKController<TSDK extends ObservableWalletSDK>(sdk: TS
   }, [captureError, sdk, syncFromSDK]);
 
   const prepareDeposit = useCallback(
-    async (target?: PrepareDepositPayload["depositTarget"] | PrepareDepositPayload) => {
+    async (
+      target?: PrepareDepositPayload["depositTarget"] | PrepareDepositPayload,
+    ) => {
       try {
         return await sdk.deposits.prepare(target);
       } catch (nextError) {
@@ -164,7 +192,9 @@ export function useWalletSDKController<TSDK extends ObservableWalletSDK>(sdk: TS
   );
 
   const ensureDepositAccount = useCallback(
-    async (params: EnsureDepositAccountParams = {}): Promise<DepositAccountState> => {
+    async (
+      params: EnsureDepositAccountParams = {},
+    ): Promise<DepositAccountState> => {
       try {
         return await sdk.deposits.ensureAccount(params);
       } catch (nextError) {
@@ -176,7 +206,9 @@ export function useWalletSDKController<TSDK extends ObservableWalletSDK>(sdk: TS
   );
 
   const getDepositAccountState = useCallback(
-    async (params: GetDepositAccountStateParams = {}): Promise<DepositAccountState> => {
+    async (
+      params: GetDepositAccountStateParams = {},
+    ): Promise<DepositAccountState> => {
       try {
         return await sdk.deposits.getAccountState(params);
       } catch (nextError) {
@@ -220,6 +252,8 @@ export function useWalletSDKController<TSDK extends ObservableWalletSDK>(sdk: TS
   );
 
   return {
+    network,
+    switchNetwork,
     isConnected,
     isConnecting,
     accounts,

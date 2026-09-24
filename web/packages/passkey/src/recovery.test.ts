@@ -93,6 +93,22 @@ describe('explicit ceremony recovery', () => {
     expect(request).toBe(null);
     expect(opened.close).toHaveBeenCalled();
   });
+  it('sends an HTTP host page straight to popup recovery', async () => {
+    Object.assign((window as any).location, {
+      hostname: 'app.tid.sh',
+      ancestorOrigins: ['http://localhost:3100'],
+    });
+    const inline = vi.fn();
+    const popup = vi.fn().mockResolvedValue('signed');
+    const result = runPasskeyCeremony('get', inline, popup);
+    await flush();
+    expect(inline).not.toHaveBeenCalled();
+    expect(request?.route).toBe('popup');
+    expect(request?.restriction?.reason).toBe('insecure-host');
+    request!.retry();
+    await expect(result).resolves.toBe('signed');
+    expect(open).toHaveBeenCalledOnce();
+  });
   it('keeps blocked and closed popup retries in the recovery sheet', async () => {
     vi.stubGlobal('document', { permissionsPolicy: { allowsFeature: () => false } });
     open.mockReturnValueOnce(null);
@@ -199,6 +215,28 @@ describe('explicit ceremony recovery', () => {
     await expect(
       runPasskeyCeremony('get', vi.fn(), vi.fn(), { promptMode: 'popup' })
     ).rejects.toThrow('HTTPS');
+    expect(open).not.toHaveBeenCalled();
+  });
+  it('fails closed with an HTTPS error under a non-localhost HTTP page', async () => {
+    /* What Chrome exposes to the wallet frame under http://dapp.example. */
+    const frame = window as any;
+    frame.isSecureContext = false;
+    delete frame.PublicKeyCredential;
+    Object.assign(frame.location, {
+      hostname: 'app.tid.sh',
+      ancestorOrigins: ['http://dapp.example'],
+    });
+    vi.stubGlobal('navigator', { userAgent: 'Chrome/153.0' });
+    for (const action of ['get', 'create'] as const) {
+      const inline = vi.fn();
+      const popup = vi.fn();
+      await expect(runPasskeyCeremony(action, inline, popup)).rejects.toThrow(
+        'Passkeys require a secure HTTPS connection.'
+      );
+      expect(inline).not.toHaveBeenCalled();
+      expect(popup).not.toHaveBeenCalled();
+    }
+    expect(request).toBe(null);
     expect(open).not.toHaveBeenCalled();
   });
   it('enforces popup-disabled options across every public ceremony entry point', async () => {

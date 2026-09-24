@@ -91,7 +91,7 @@ export interface WalletSheetSignInProps {
 
 function SignIn({
   appName,
-  description = "Use your Thru Wallet passkey to continue.",
+  description,
   signInLabel = "Sign in with passkey",
   createLabel = "Create account",
   onSignIn,

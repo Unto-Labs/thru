@@ -1,3 +1,5 @@
+import { ThruUsdLogo } from "../../../ThruUsdLogo";
+import { isThruUsdSymbol, THRUSD_RED } from "../../../../../tokens/src/thrusd";
 import * as React from "react";
 import { Disc, type DiscSize } from "../Disc/Disc";
 import { tokenMeta } from "../registry";
@@ -30,15 +32,26 @@ export function TokenIcon({
   className,
 }: TokenIconProps) {
   const t = tokenMeta(symbol);
+  const branded =
+    isThruUsdSymbol(symbol) && !src && glyph == null && color == null;
+  const px =
+    typeof size === "number"
+      ? size
+      : { small: 16, medium: 24, large: 38 }[size];
+  const inset =
+    border === true ? (px <= 16 ? 1 : px <= 20 ? 2 : 3) : Number(border) || 0;
   return (
     <Disc
       className={className}
       size={size}
       border={border}
-      title={t.name}
-      color={color ?? t.color}
+      title={branded ? "ThruUSD" : t.name}
+      color={color ?? (branded ? THRUSD_RED : t.color)}
       src={src}
-      glyph={glyph ?? t.glyph}
+      glyph={
+        glyph ??
+        (branded ? <ThruUsdLogo size={Math.max(0, px - inset * 2)} /> : t.glyph)
+      }
       fallback={t.short[0] ?? "?"}
     />
   );

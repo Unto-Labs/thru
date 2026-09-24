@@ -19,14 +19,29 @@ export interface ThruProviderProps {
    * live. Falls back to `config.theme`, then light.
    */
   theme?: WalletThemePreference;
+  /**
+   * Ask the wallet for developer mode: raw errors, Coinbase's sandbox for
+   * card purchases, and the test faucet in Add funds. Changes apply live.
+   * Falls back to `config.developerMode`, then off.
+   */
+  developerMode?: boolean;
 }
 
 /** Browser wrapper around the shared wallet React controller. */
-export function ThruProvider({ children, config, theme }: ThruProviderProps) {
+export function ThruProvider({ children, config, theme, developerMode }: ThruProviderProps) {
   const requestedTheme = theme ?? config.theme ?? "light";
-  /* Built with the requested theme so the wallet frame's first load already
-     draws in it. */
-  const sdk = useMemo(() => new BrowserSDK({ ...config, theme: requestedTheme }), []);
+  const requestedDeveloperMode = developerMode ?? config.developerMode ?? false;
+  /* Built with the requested theme and developer mode so the wallet frame's
+     first load already has them. */
+  const sdk = useMemo(
+    () =>
+      new BrowserSDK({
+        ...config,
+        theme: requestedTheme,
+        developerMode: requestedDeveloperMode,
+      }),
+    [],
+  );
   const controller = useWalletSDKController(sdk);
 
   useEffect(() => {
@@ -42,6 +57,10 @@ export function ThruProvider({ children, config, theme }: ThruProviderProps) {
   useEffect(() => {
     sdk.setTheme(requestedTheme);
   }, [sdk, requestedTheme]);
+
+  useEffect(() => {
+    sdk.setDeveloperMode(requestedDeveloperMode);
+  }, [sdk, requestedDeveloperMode]);
 
   const openAccountMenu = useCallback(
     async (options: AccountMenuPayload): Promise<AccountMenuResult> => {

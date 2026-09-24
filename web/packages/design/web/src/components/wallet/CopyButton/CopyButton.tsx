@@ -14,9 +14,57 @@ const CheckIcon = (p: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
+/* Copy by selecting a hidden node and running the legacy copy command. A Range
+   selection rather than a focused textarea, so focus (and any dialog focus
+   trap) is left alone. */
+function copyWithSelection(value: string): boolean {
+  if (typeof document === "undefined") return false;
+  const selection = document.getSelection();
+  if (!selection) return false;
+  const saved = Array.from({ length: selection.rangeCount }, (_, i) => selection.getRangeAt(i));
+  const node = document.createElement("span");
+  node.textContent = value;
+  node.setAttribute("aria-hidden", "true");
+  node.style.cssText =
+    "position:fixed;top:0;left:0;clip:rect(0,0,0,0);white-space:pre;user-select:text;-webkit-user-select:text";
+  document.body.appendChild(node);
+  let copied = false;
+  try {
+    const range = document.createRange();
+    range.selectNodeContents(node);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    copied = document.execCommand("copy");
+  } catch {
+    copied = false;
+  } finally {
+    selection.removeAllRanges();
+    for (const range of saved) selection.addRange(range);
+    node.remove();
+  }
+  return copied;
+}
+
+/**
+ * copyText — write `value` to the clipboard; resolves true once it is there.
+ * Chromium refuses the async Clipboard API in a cross-origin iframe unless the
+ * host delegates `clipboard-write` (the embedded wallet can't count on that),
+ * so a refusal falls back to the legacy copy command, which still runs inside
+ * the click's user activation.
+ */
+export async function copyText(value: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(value);
+    return true;
+  } catch {
+    return copyWithSelection(value);
+  }
+}
+
 /**
  * useCopy — copy a string to the clipboard and expose a transient `notifying`
- * flag (true for `timeout` ms after a copy) so callers can flip their label/icon.
+ * flag (true for `timeout` ms after a successful copy) so callers can flip
+ * their label/icon.
  */
 export function useCopy(timeout = 800) {
   const [notifying, setNotifying] = React.useState(false);
@@ -28,11 +76,14 @@ export function useCopy(timeout = 800) {
     [],
   );
   const copy = React.useCallback(
-    (value: string) => {
-      navigator.clipboard?.writeText(value).catch(() => {});
-      if (timerRef.current != null) window.clearTimeout(timerRef.current);
-      setNotifying(true);
-      timerRef.current = window.setTimeout(() => setNotifying(false), timeout);
+    async (value: string) => {
+      const copied = await copyText(value);
+      if (copied) {
+        if (timerRef.current != null) window.clearTimeout(timerRef.current);
+        setNotifying(true);
+        timerRef.current = window.setTimeout(() => setNotifying(false), timeout);
+      }
+      return copied;
     },
     [timeout],
   );
@@ -100,7 +151,7 @@ export function CopyButton({
         className={["tds-copy-icon", className].filter(Boolean).join(" ")}
         onClick={(e) => {
           e.stopPropagation();
-          copy(value);
+          void copy(value);
         }}
         aria-label={ariaLabel}
         title={notifying ? "Copied!" : ariaLabel}
@@ -115,7 +166,7 @@ export function CopyButton({
       <button
         type="button"
         className={["tds-copy-text", className].filter(Boolean).join(" ")}
-        onClick={() => copy(value)}
+        onClick={() => void copy(value)}
       >
         {lbl}
         {iconNode}
@@ -123,7 +174,7 @@ export function CopyButton({
     );
   }
   return (
-    <Button variant={variant} size={size} className={className} onClick={() => copy(value)}>
+    <Button variant={variant} size={size} className={className} onClick={() => void copy(value)}>
       {lbl}
       {iconNode}
     </Button>

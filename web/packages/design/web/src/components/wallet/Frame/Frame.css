@@ -2,6 +2,7 @@
    placed over a dark demo stage (a popup over a dapp). */
 .tds-frame {
   box-sizing: border-box;
+  position: relative;
   display: flex;
   flex-direction: column;
   background: var(--color-surface-higher);
@@ -119,6 +120,29 @@
   outline-offset: 2px;
 }
 
+/* Without a site identity the bar is just controls (back, close): no rule
+   under it, so the screen's own header reads as the top of the sheet. */
+.tds-frame__bar--plain {
+  border-bottom-color: transparent;
+}
+
+/* With neither a site nor a back button the bar holds only the close button.
+   It floats over the top right so the screen's centred header starts right
+   under the top edge instead of under an empty row. */
+.tds-frame__bar--float {
+  position: absolute;
+  top: 0;
+  right: 0;
+  z-index: 1;
+  border-bottom: none;
+}
+
+/* Back button in place of the site identity: a ghost Button nudged so its
+   icon lines up with the content's left edge. */
+.tds-frame__back {
+  margin: -4px 0 -4px calc(-1 * var(--space-2));
+}
+
 .tds-frame__content {
   display: flex;
   flex-direction: column;
@@ -160,6 +184,12 @@
     padding: 0 6px 0 16px;
   }
 
+  /* Keep the floating close where the bar's close sits: under the 4px frame
+     padding and the 4px grabber with its 4px margin. */
+  .tds-frame__bar--float {
+    top: 12px;
+  }
+
   .tds-frame__site {
     font-size: 13px;
   }
@@ -177,6 +207,11 @@
   .tds-frame__chip {
     font-size: 11px;
     padding: 3px 8px;
+  }
+
+  .tds-frame__back {
+    min-width: 44px;
+    min-height: 44px;
   }
 
   .tds-frame__close {

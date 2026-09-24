@@ -1,12 +1,51 @@
 import { Pubkey, deriveProgramAddress } from '@thru/sdk';
-import { encodeAddress } from '@thru/sdk/helpers';
 import type { Account } from '@thru/sdk';
 import { BOOTSTRAP_PROGRAM_ADDRESSES } from '../bootstrap-addresses';
+import { accountData, accountIndex } from '../utils/helpers';
+import {
+  CLIENT_ID_SIZE,
+  EVENT_REMOVE_REASON_EVICTED,
+  EVENT_REMOVE_REASON_EXPIRED,
+  EVENT_REMOVE_REASON_FILLED,
+  EVENT_REMOVE_REASON_USER,
+  EVENT_SIDE_BUY,
+  EVENT_SIDE_SELL,
+  ORDER_FLAG_BUY,
+  ORDER_FLAG_HAS_CLIENT_ID,
+  ORDER_TYPE_ALO,
+  ORDER_TYPE_FOK,
+  ORDER_TYPE_GTC,
+  ORDER_TYPE_IOC,
+  ORDER_TYPE_MTL,
+  STATUS_FLAG_DEPOSITS_FROZEN,
+  STATUS_FLAG_MASK,
+  STATUS_FLAG_PAUSED,
+  STATUS_FLAG_POST_ONLY,
+  STATUS_FLAG_WITHDRAWALS_FROZEN,
+  assertClientId,
+  assertStatusFlags,
+  assertU64,
+  assertU8,
+  buildModifyOrderMetadata,
+  bitField,
+  bytesFromView,
+  cbookLevelFromView,
+  eventSideFromValue,
+  fixedSeed,
+  groupByPrice,
+  optionalAccountIndex,
+  orderFlags,
+  orderTypeFromValue,
+  pubkeyViewToAddress,
+  removalReasonFromValue,
+  type OrderRemovalReason,
+  type OrderSide,
+  type OrderType,
+} from '../utils/orderbook';
 import {
   ArenaHeader,
   CbookAccount,
   CbookHeader,
-  CbookLevel,
   ClobEvent,
   ClobInstructionBuilder,
   CreateOrderEntryInstructionBuilder,
@@ -139,35 +178,33 @@ export const CLOB_EVENT_EXCHANGE_STATUS = 12;
 export const CLOB_EVENT_EXCHANGE_ADMIN = 13;
 export const CLOB_EVENT_MARKET_EXCHANGE_STATUS = 14;
 
-export const CLOB_EVENT_SIDE_BUY = 0;
-export const CLOB_EVENT_SIDE_SELL = 1;
+/* Book, flag and event encodings shared with the perp program (utils/orderbook). */
+export const CLOB_EVENT_SIDE_BUY = EVENT_SIDE_BUY;
+export const CLOB_EVENT_SIDE_SELL = EVENT_SIDE_SELL;
 export const CLOB_EVENT_TOKEN_SIDE_BASE = 0;
 export const CLOB_EVENT_TOKEN_SIDE_QUOTE = 1;
-export const CLOB_EVENT_REMOVE_REASON_FILLED = 0;
-export const CLOB_EVENT_REMOVE_REASON_EXPIRED = 1;
-export const CLOB_EVENT_REMOVE_REASON_EVICTED = 2;
-export const CLOB_EVENT_REMOVE_REASON_USER = 3;
+export const CLOB_EVENT_REMOVE_REASON_FILLED = EVENT_REMOVE_REASON_FILLED;
+export const CLOB_EVENT_REMOVE_REASON_EXPIRED = EVENT_REMOVE_REASON_EXPIRED;
+export const CLOB_EVENT_REMOVE_REASON_EVICTED = EVENT_REMOVE_REASON_EVICTED;
+export const CLOB_EVENT_REMOVE_REASON_USER = EVENT_REMOVE_REASON_USER;
 
-export const CLOB_STATUS_FLAG_PAUSED = 1 << 0;
-export const CLOB_STATUS_FLAG_POST_ONLY = 1 << 1;
-export const CLOB_STATUS_FLAG_WITHDRAWALS_FROZEN = 1 << 2;
-export const CLOB_STATUS_FLAG_DEPOSITS_FROZEN = 1 << 3;
-export const CLOB_STATUS_FLAG_MASK =
-  CLOB_STATUS_FLAG_PAUSED |
-  CLOB_STATUS_FLAG_POST_ONLY |
-  CLOB_STATUS_FLAG_WITHDRAWALS_FROZEN |
-  CLOB_STATUS_FLAG_DEPOSITS_FROZEN;
+export const CLOB_STATUS_FLAG_PAUSED = STATUS_FLAG_PAUSED;
+export const CLOB_STATUS_FLAG_POST_ONLY = STATUS_FLAG_POST_ONLY;
+export const CLOB_STATUS_FLAG_WITHDRAWALS_FROZEN = STATUS_FLAG_WITHDRAWALS_FROZEN;
+export const CLOB_STATUS_FLAG_DEPOSITS_FROZEN = STATUS_FLAG_DEPOSITS_FROZEN;
+export const CLOB_STATUS_FLAG_MASK = STATUS_FLAG_MASK;
+
 
 export const CLOB_PROGRAM_ADDRESS = BOOTSTRAP_PROGRAM_ADDRESSES.clob;
 
-export const CLOB_ORDER_TYPE_GTC = 0;
-export const CLOB_ORDER_TYPE_MTL = 1;
-export const CLOB_ORDER_TYPE_ALO = 2;
-export const CLOB_ORDER_TYPE_IOC = 3;
-export const CLOB_ORDER_TYPE_FOK = 4;
+export const CLOB_ORDER_TYPE_GTC = ORDER_TYPE_GTC;
+export const CLOB_ORDER_TYPE_MTL = ORDER_TYPE_MTL;
+export const CLOB_ORDER_TYPE_ALO = ORDER_TYPE_ALO;
+export const CLOB_ORDER_TYPE_IOC = ORDER_TYPE_IOC;
+export const CLOB_ORDER_TYPE_FOK = ORDER_TYPE_FOK;
 
-export const CLOB_ORDER_FLAG_BUY = 1 << 0;
-export const CLOB_ORDER_FLAG_HAS_CLIENT_ID = 1 << 6;
+export const CLOB_ORDER_FLAG_BUY = ORDER_FLAG_BUY;
+export const CLOB_ORDER_FLAG_HAS_CLIENT_ID = ORDER_FLAG_HAS_CLIENT_ID;
 export const CLOB_MODIFY_FLAG_FAIL_IF_OUT_OF_RANGE = 1 << 0;
 export const CLOB_MODIFY_FLAG_HAS_CLIENT_ID = 1 << 1;
 export const CLOB_MODIFY_FLAG_HAS_ORDER_ID = 1 << 2;
@@ -188,7 +225,7 @@ export const CLOB_CBOOK_LEVEL_SIZE = 8;
 export const CLOB_CBOOK_MAX_SIZE = ((1 << 24) - CLOB_CBOOK_HEADER_SIZE) / CLOB_CBOOK_LEVEL_SIZE;
 export const CLOB_CBOOK_EMPTY_PRICE_IN_TICKS = (1n << 64n) - 1n;
 export const CLOB_CBOOK_MAX_PRICE_IN_TICKS = CLOB_CBOOK_EMPTY_PRICE_IN_TICKS - 2n - BigInt(CLOB_CBOOK_MAX_SIZE);
-export const CLOB_CLIENT_ID_SIZE = 16;
+export const CLOB_CLIENT_ID_SIZE = CLIENT_ID_SIZE;
 export const CLOB_SEATLESS_SEAT_IDX = 1;
 export const CLOB_NULL_INDEX = 0xfffff;
 
@@ -208,8 +245,8 @@ type ClobInstructionVariant =
   | 'exchange_recover_admin'
   | 'market_set_exchange_status';
 
-export type ClobOrderSide = 'buy' | 'sell';
-export type ClobOrderType = 'gtc' | 'mtl' | 'alo' | 'ioc' | 'fok';
+export type ClobOrderSide = OrderSide;
+export type ClobOrderType = OrderType;
 
 export type AccountLookupContext = {
   getAccountIndex: (pubkey: Uint8Array) => number;
@@ -422,7 +459,8 @@ export interface ClobOrderBookSnapshot {
 
 
 export type ClobTokenSide = 'base' | 'quote';
-export type ClobOrderRemovalReason = 'filled' | 'expired' | 'evicted' | 'user';
+export type ClobOrderRemovalReason = OrderRemovalReason;
+
 
 export interface ParsedClobEventBase {
   eventType: bigint;
@@ -1114,20 +1152,6 @@ export function encodeOrderFlags(args: {
   return orderFlags(args);
 }
 
-function buildModifyOrderMetadata(args: ModifyOrderArgs): Uint8Array {
-  const metadata = new Uint8Array((args.clientId ? CLOB_CLIENT_ID_SIZE : 0) + (args.orderId !== undefined ? 8 : 0));
-  let offset = 0;
-  if (args.clientId) {
-    metadata.set(assertClientId(args.clientId), offset);
-    offset += CLOB_CLIENT_ID_SIZE;
-  }
-  if (args.orderId !== undefined) {
-    assertU64(args.orderId, 'orderId');
-    new DataView(metadata.buffer).setBigUint64(offset, args.orderId, true);
-  }
-  return metadata;
-}
-
 function createTokenTransferInstruction(
   variant: 'token_deposit' | 'token_withdraw',
   args: TokenTransferArgs
@@ -1151,31 +1175,6 @@ function buildClobInstruction(variant: ClobInstructionVariant, payload: Uint8Arr
   const builder = new ClobInstructionBuilder();
   builder.payload().select(variant).writePayload(payload).finish();
   return builder.build();
-}
-
-function orderFlags(args: {
-  side: ClobOrderSide;
-  orderType?: ClobOrderType;
-  clientId?: Uint8Array;
-  discardAfterMatch?: boolean;
-  failIfOutsideBook?: boolean;
-}): number {
-  let flags = args.side === 'buy' ? CLOB_ORDER_FLAG_BUY : 0;
-  flags |= orderTypeValue(args.orderType ?? 'gtc') << 1;
-  if (args.discardAfterMatch) flags |= 1 << 4;
-  if (args.failIfOutsideBook) flags |= 1 << 5;
-  if (args.clientId) flags |= CLOB_ORDER_FLAG_HAS_CLIENT_ID;
-  return flags;
-}
-
-function orderTypeValue(orderType: ClobOrderType): number {
-  switch (orderType) {
-    case 'gtc': return CLOB_ORDER_TYPE_GTC;
-    case 'mtl': return CLOB_ORDER_TYPE_MTL;
-    case 'alo': return CLOB_ORDER_TYPE_ALO;
-    case 'ioc': return CLOB_ORDER_TYPE_IOC;
-    case 'fok': return CLOB_ORDER_TYPE_FOK;
-  }
 }
 
 function marketFromView(view: MarketAccountView): ClobMarket {
@@ -1239,14 +1238,6 @@ function orderEntryFromView(view: OrderEntryView, orderEntryIndex: number): Clob
   };
 }
 
-function cbookLevelFromView(view: CbookLevel, levelIndex: number): ClobCbookLevel {
-  return {
-    levelIndex,
-    headOrderEntryIndex: view.get_head_entry_idx(),
-    tailOrderEntryIndex: view.get_tail_entry_idx(),
-  };
-}
-
 function normalizeBookOrder(
   order: ClobOrderBookOrder | ClobOrderEntry,
   side: ClobOrderSide,
@@ -1264,30 +1255,6 @@ function normalizeBookOrder(
     clientId: order.clientId,
     expirationTime: order.expirationTime,
   };
-}
-
-function groupByPrice(orders: ClobOrderBookOrder[], side: ClobOrderSide): ClobOrderBookLevel[] {
-  const levels = new Map<bigint, ClobOrderBookLevel>();
-  for (const order of orders) {
-    if (order.quantityInLots === 0n) continue;
-    const existing = levels.get(order.priceInTicks);
-    if (existing) {
-      existing.quantityInLots += order.quantityInLots;
-      existing.orders.push(order);
-    } else {
-      levels.set(order.priceInTicks, {
-        side,
-        priceInTicks: order.priceInTicks,
-        quantityInLots: order.quantityInLots,
-        orders: [order],
-      });
-    }
-  }
-  return [...levels.values()].sort((a, b) => {
-    if (a.priceInTicks === b.priceInTicks) return 0;
-    const asc = a.priceInTicks < b.priceInTicks ? -1 : 1;
-    return side === 'buy' ? -asc : asc;
-  });
 }
 
 function priceForLevel(
@@ -1327,44 +1294,6 @@ function priceForCbookLevel(levelIndex: number, side: ClobOrderSide, cbook: Clob
   return side === 'buy' ? CLOB_CBOOK_MAX_PRICE_IN_TICKS - cbookPriceInTicks : cbookPriceInTicks;
 }
 
-function accountData(accountOrData: Account | Uint8Array, label: string): Uint8Array {
-  const data = accountOrData instanceof Uint8Array ? accountOrData : accountOrData.data?.data;
-  if (!data) throw new Error(`${label} data is missing`);
-  return data;
-}
-
-function fixedSeed(value: string): Uint8Array {
-  const bytes = new TextEncoder().encode(value);
-  if (bytes.length > 32) throw new Error('seed cannot exceed 32 bytes');
-  const seed = new Uint8Array(32);
-  seed.set(bytes);
-  return seed;
-}
-
-function optionalAccountIndex(context: AccountLookupContext, pubkey?: Uint8Array): number {
-  return pubkey ? accountIndex(context, pubkey) : 0xffff;
-}
-
-function accountIndex(context: AccountLookupContext, pubkey: Uint8Array): number {
-  const index = context.getAccountIndex(pubkey);
-  return assertU16(index, 'account index');
-}
-
-function assertU8(value: number, label: string): number {
-  if (!Number.isInteger(value) || value < 0 || value > 0xff) {
-    throw new Error(`${label} must be an integer between 0 and 255`);
-  }
-  return value;
-}
-
-function assertStatusFlags(value: number): number {
-  const flags = assertU8(value, 'statusFlags');
-  if ((flags & ~CLOB_STATUS_FLAG_MASK) !== 0) {
-    throw new Error("statusFlags may only contain bits in mask 0x" + CLOB_STATUS_FLAG_MASK.toString(16));
-  }
-  return flags;
-}
-
 export function effectiveClobStatusFlags(
   exchangeStatusFlags: number,
   market: Pick<ClobMarket, 'statusFlags' | 'exchangeStatusFlags'>
@@ -1374,13 +1303,6 @@ export function effectiveClobStatusFlags(
     assertStatusFlags(market.exchangeStatusFlags);
 }
 
-function assertU16(value: number, label: string): number {
-  if (!Number.isInteger(value) || value < 0 || value > 0xffff) {
-    throw new Error(`${label} must be an integer between 0 and 65535`);
-  }
-  return value;
-}
-
 export function assertClobActiveSeatIndex(value: number, label = 'seatIndex'): number {
   if (!Number.isSafeInteger(value) || value < 2 || value >= CLOB_NULL_INDEX) {
     throw new Error(`${label} must be an integer between 2 and ${CLOB_NULL_INDEX - 1}`);
@@ -1388,66 +1310,10 @@ export function assertClobActiveSeatIndex(value: number, label = 'seatIndex'): n
   return value;
 }
 
-function assertU64(value: bigint, label: string): void {
-  if (value < 0n || value > 0xffffffffffffffffn) {
-    throw new Error(`${label} must be between 0 and 18446744073709551615`);
-  }
-}
-
-function assertClientId(value: Uint8Array): Uint8Array {
-  if (value.length !== CLOB_CLIENT_ID_SIZE) {
-    throw new Error(`clientId must be ${CLOB_CLIENT_ID_SIZE} bytes`);
-  }
-  return value;
-}
-
-function bitField(value: bigint, begin: bigint, end: bigint): number {
-  const mask = (1n << (end - begin)) - 1n;
-  return Number((value >> begin) & mask);
-}
-
-function eventSideFromValue(value: number): ClobOrderSide {
-  if (value === CLOB_EVENT_SIDE_BUY) return 'buy';
-  if (value === CLOB_EVENT_SIDE_SELL) return 'sell';
-  throw new Error(`unknown CLOB event side: ${value}`);
-}
-
 function tokenSideFromValue(value: number): ClobTokenSide {
   if (value === CLOB_EVENT_TOKEN_SIDE_BASE) return 'base';
   if (value === CLOB_EVENT_TOKEN_SIDE_QUOTE) return 'quote';
   throw new Error(`unknown CLOB token side: ${value}`);
-}
-
-function removalReasonFromValue(value: number): ClobOrderRemovalReason {
-  switch (value) {
-    case CLOB_EVENT_REMOVE_REASON_FILLED: return 'filled';
-    case CLOB_EVENT_REMOVE_REASON_EXPIRED: return 'expired';
-    case CLOB_EVENT_REMOVE_REASON_EVICTED: return 'evicted';
-    case CLOB_EVENT_REMOVE_REASON_USER: return 'user';
-    default: throw new Error(`unknown CLOB removal reason: ${value}`);
-  }
-}
-
-function orderTypeFromValue(value: number): ClobOrderType {
-  switch (value) {
-    case CLOB_ORDER_TYPE_GTC: return 'gtc';
-    case CLOB_ORDER_TYPE_MTL: return 'mtl';
-    case CLOB_ORDER_TYPE_ALO: return 'alo';
-    case CLOB_ORDER_TYPE_IOC: return 'ioc';
-    case CLOB_ORDER_TYPE_FOK: return 'fok';
-    default: throw new Error(`unknown CLOB order type: ${value}`);
-  }
-}
-
-function pubkeyViewToAddress(pubkey: unknown): string {
-  return encodeAddress(bytesFromView(pubkey));
-}
-
-function bytesFromView(value: unknown): Uint8Array {
-  const buffer = (value as { buffer?: Uint8Array }).buffer;
-  if (buffer instanceof Uint8Array) return new Uint8Array(buffer);
-  if (value instanceof Pubkey) return value.toBytes();
-  throw new Error('generated view did not expose a byte buffer');
 }
 
 export * from './exchange';

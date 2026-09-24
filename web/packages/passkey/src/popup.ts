@@ -1,4 +1,7 @@
-import { reportPasskeyCeremony, type PasskeyReportingOptions } from './reporter';
+import {
+  reportPasskeyCeremony,
+  type PasskeyReportingOptions,
+} from './reporter';
 import type {
   PasskeyPopupAction,
   PasskeyPopupRequestPayload,
@@ -23,14 +26,43 @@ export function closePopup(popup: Window | null | undefined): void {
 }
 
 export function openPasskeyPopupWindow(): Window {
-  const popupUrl = new URL(PASSKEY_POPUP_PATH, window.location.origin).toString();
-  const popup = window.open(popupUrl, 'thru_passkey_popup', 'popup=yes,width=440,height=640');
+  const url = new URL(PASSKEY_POPUP_PATH, window.location.origin);
+  const params = new URLSearchParams(window.location.search);
+  for (const key of [
+    'tn_wallet_network',
+    'tn_network_switching',
+    'tn_default_rpc_url',
+    'tn_default_network_name',
+    'tn_transaction_signing_scheme',
+    'tn_parent_origin',
+  ]) {
+    const value = params.get(key);
+    if (value !== null) url.searchParams.set(key, value);
+  }
+  const active = params.get('tn_active_network');
+  if (active) url.searchParams.set('tn_wallet_network', active);
+  url.searchParams.set('tn_network_pinned', '1');
+  const popupUrl = url.toString();
+  const popup = window.open(
+    popupUrl,
+    'thru_passkey_popup',
+    'popup=yes,width=440,height=640',
+  );
 
   if (!popup) {
     throw new Error('Passkey popup was blocked');
   }
 
   return popup;
+}
+
+let popupShowsErrorDetails = false;
+
+/** Let later popup requests from this document show raw error text. The
+ *  hosted wallet enables it in developer mode; production shows only that the
+ *  request failed. */
+export function setPasskeyPopupErrorDetails(show: boolean): void {
+  popupShowsErrorDetails = show;
 }
 
 function createPopupRequestId(): string {
@@ -42,7 +74,7 @@ export async function requestPasskeyPopup<T>(
   action: PasskeyPopupAction,
   payload: PasskeyPopupRequestPayload,
   preopenedPopup?: Window | null,
-  options: PasskeyReportingOptions = {}
+  options: PasskeyReportingOptions = {},
 ): Promise<T> {
   return reportPasskeyCeremony(
     options.ceremonyReporter,
@@ -51,7 +83,13 @@ export async function requestPasskeyPopup<T>(
       mode: 'popup',
       allowCredentials: action === 'get' ? true : undefined,
     },
-    () => requestPasskeyPopupImpl<T>(action, payload, preopenedPopup, options.signal)
+    () =>
+      requestPasskeyPopupImpl<T>(
+        action,
+        payload,
+        preopenedPopup,
+        options.signal,
+      ),
   );
 }
 
@@ -59,7 +97,7 @@ async function requestPasskeyPopupImpl<T>(
   action: PasskeyPopupAction,
   payload: PasskeyPopupRequestPayload,
   preopenedPopup?: Window | null,
-  signal?: AbortSignal
+  signal?: AbortSignal,
 ): Promise<T> {
   if (typeof window === 'undefined') {
     throw new Error('Passkey popup is only available in the browser');
@@ -69,7 +107,9 @@ async function requestPasskeyPopupImpl<T>(
   const targetOrigin = window.location.origin;
   let popup: Window | null = preopenedPopup ?? null;
   const channel =
-    typeof BroadcastChannel !== 'undefined' ? new BroadcastChannel(PASSKEY_POPUP_CHANNEL) : null;
+    typeof BroadcastChannel !== 'undefined'
+      ? new BroadcastChannel(PASSKEY_POPUP_CHANNEL)
+      : null;
 
   return new Promise<T>((resolve, reject) => {
     let timeout: ReturnType<typeof setTimeout> | null = null;
@@ -110,6 +150,7 @@ async function requestPasskeyPopupImpl<T>(
         requestId,
         action,
         payload,
+        ...(popupShowsErrorDetails ? { showErrorDetails: true } : {}),
       };
 
       if (viaChannel) {
@@ -131,7 +172,10 @@ async function requestPasskeyPopupImpl<T>(
       }
 
       if (data.success) {
-        resolve((data as Extract<PasskeyPopupResponse, { success: true }>).result as T);
+        resolve(
+          (data as Extract<PasskeyPopupResponse, { success: true }>)
+            .result as T,
+        );
       } else {
         const err = new Error(data.error?.message || 'Passkey popup failed');
         if (data.error?.name) {
@@ -209,7 +253,13 @@ async function requestPasskeyPopupImpl<T>(
       } catch {
         /* ignore */
       }
-      reject(new Error(requestSent ? 'Passkey popup timed out' : 'Passkey popup did not load'));
+      reject(
+        new Error(
+          requestSent
+            ? 'Passkey popup timed out'
+            : 'Passkey popup did not load',
+        ),
+      );
     }, PASSKEY_POPUP_TIMEOUT_MS);
 
     closePoll = setInterval(() => {

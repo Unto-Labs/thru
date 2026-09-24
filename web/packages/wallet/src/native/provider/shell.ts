@@ -19,7 +19,7 @@ const SHELL_HTML_TEMPLATE = String.raw`<!doctype html>
   <iframe
     id="w"
     data-src="WALLET_URL_PLACEHOLDER"
-    allow="publickey-credentials-get WALLET_ORIGIN_PLACEHOLDER; publickey-credentials-create WALLET_ORIGIN_PLACEHOLDER"
+    allow="publickey-credentials-get WALLET_ORIGIN_PLACEHOLDER; publickey-credentials-create WALLET_ORIGIN_PLACEHOLDER; clipboard-write WALLET_ORIGIN_PLACEHOLDER"
   ></iframe>
   <script>
     (function () {

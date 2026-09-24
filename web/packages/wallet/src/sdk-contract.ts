@@ -1,3 +1,4 @@
+import type { ResolvedWalletNetwork, WalletNetworkSelection } from "./networks";
 import type {
   ConnectResult,
   IThruChain,
@@ -31,6 +32,15 @@ export interface ConnectionApi {
   disconnect(): Promise<void>;
   getState(): WalletAvailability;
   refresh(options?: WalletConnectOptions): Promise<WalletAvailability>;
+  /**
+   * Whether this launch holds a connection the wallet can rebuild (a hint
+   * carrying the wallet's restore record), answered synchronously from the
+   * host's storage before the wallet has been asked. A host can open its
+   * signed-in shell at once instead of a sign-in screen that would be
+   * replaced a moment later. Absent where storage cannot answer
+   * synchronously (native).
+   */
+  hasRememberedConnection?(): boolean;
 }
 
 export interface AccountsApi {
@@ -51,6 +61,10 @@ export interface SigningSessionsApi {
 }
 
 export interface WalletSDK {
+  getNetwork(): ResolvedWalletNetwork | null;
+  switchNetwork(
+    selection: WalletNetworkSelection,
+  ): Promise<ResolvedWalletNetwork>;
   initialize(): Promise<void>;
   readonly connection: ConnectionApi;
   readonly accounts: AccountsApi;
@@ -63,5 +77,7 @@ export interface WalletSDK {
   getThemePreference(): WalletThemePreference;
   /** Restyle the wallet's open and future surfaces in place, without a reload. */
   setTheme(theme: WalletThemePreference): void;
+  /** Turn this app's developer mode on or off, without a wallet reload. */
+  setDeveloperMode(enabled: boolean): void;
   destroy(): void;
 }

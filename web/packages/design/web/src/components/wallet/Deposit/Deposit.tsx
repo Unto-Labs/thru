@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cn } from "../../../utils";
+import { useCopy } from "../CopyButton/CopyButton";
 import "./Deposit.css";
 
 const Copy = (p: React.SVGProps<SVGSVGElement>) => (
@@ -67,20 +68,7 @@ export interface DepositProps {
  */
 export const Deposit = React.forwardRef<HTMLDivElement, DepositProps>(
   function Deposit({ address, label = "Deposit crypto", seed, className }, ref) {
-    const [copied, setCopied] = React.useState(false);
-    const timerRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
-    React.useEffect(
-      () => () => {
-        if (timerRef.current != null) clearTimeout(timerRef.current);
-      },
-      [],
-    );
-    const onCopy = React.useCallback(() => {
-      navigator.clipboard?.writeText(address).catch(() => {});
-      if (timerRef.current != null) clearTimeout(timerRef.current);
-      setCopied(true);
-      timerRef.current = setTimeout(() => setCopied(false), 800);
-    }, [address]);
+    const { copy, notifying: copied } = useCopy(800);
     return (
       <div ref={ref} className={cn("tds-deposit", className)}>
         <QrGlyph seed={seed} />
@@ -88,7 +76,7 @@ export const Deposit = React.forwardRef<HTMLDivElement, DepositProps>(
           <div className="tds-deposit__label">{label}</div>
           <div className="tds-deposit__addr">{address}</div>
         </div>
-        <button type="button" className="tds-deposit__copy" onClick={onCopy} aria-label="Copy address">
+        <button type="button" className="tds-deposit__copy" onClick={() => void copy(address)} aria-label="Copy address">
           {copied ? <Check width={14} height={14} /> : <Copy width={14} height={14} />}
         </button>
       </div>
