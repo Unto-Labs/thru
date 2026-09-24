@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Thru Studio • RISC-V VM Program Playground & RPC Explorer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <!-- Header -->
+  <header class="app-header">
+    <div class="logo-area">
+      <div class="logo-badge">
+        <span class="logo-glow"></span>
+        <svg class="logo-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2">
+          <polyline points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"></polyline>
+        </svg>
+      </div>
+      <div>
+        <h1 class="brand-title">THRU <span class="badge-vm">STUDIO</span></h1>
+        <p class="brand-subtitle">High-Performance RISC-V VM Simulator & Program Playground</p>
+      </div>
+    </div>
+
+    <!-- Live TPS & Height Meter -->
+    <div class="net-meter">
+      <span class="pulse-dot"></span>
+      <span id="header-tps">4,850 TPS</span>
+      <span class="height-tag" id="header-height">Block #149,210</span>
+    </div>
+  </header>
+
+  <!-- Navigation Tabs -->
+  <nav class="nav-tabs">
+    <button class="nav-tab active" data-tab="playground">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"></polyline><polyline points="8 6 2 12 8 18"></polyline></svg>
+      RISC-V Program Playground
+    </button>
+    <button class="nav-tab" data-tab="explorer">
+      <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="2" y1="12" x2="22" y2="12"></line><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path></svg>
+      Network & State Explorer
+    </button>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <!-- Tab 1: Playground -->
+    <section id="tab-playground" class="tab-pane active">
+      <div class="hero-card">
+        <div class="hero-content">
+          <div class="pill-highlight">⚡ RV32IM • High-Performance Execution</div>
+          <h2>Execute C & RISC-V Programs on Thru VM</h2>
+          <p>
+            Deploy atomic C-based smart programs, inspect real-time instruction cycles, and simulate state mutations on the Thru Network.
+          </p>
+        </div>
+      </div>
+
+      <div class="playground-layout mt-4">
+        <!-- Programs Selector & Code Editor -->
+        <div class="card editor-card">
+          <div class="card-header">
+            <div class="form-group-inline">
+              <label>Select Template:</label>
+              <select id="prog-template-select" class="form-input"></select>
+            </div>
+            <button class="btn btn-primary btn-sm" id="btn-deploy-custom">🚀 Deploy Program</button>
+          </div>
+
+          <div class="form-group">
+            <textarea id="prog-code-area" class="code-editor mono" rows="12"></textarea>
+          </div>
+
+          <div class="form-row-2 mt-2">
+            <button class="btn btn-gradient" id="btn-exec-inst-1">⚡ Execute Instruction 1 (Increment / Transfer)</button>
+            <button class="btn btn-secondary" id="btn-exec-inst-2">🔄 Execute Instruction 2 (Decrement)</button>
+          </div>
+
+          <div id="exec-result-box" class="mt-3"></div>
+        </div>
+
+        <!-- VM State & Memory Viewer -->
+        <div class="card state-card">
+          <div class="card-header">
+            <h3>💾 On-Chain State & Cycles</h3>
+          </div>
+          <div class="json-inspector">
+            <div class="inspector-header"><span>Program Storage</span></div>
+            <pre id="state-json-box">{"count": 42}</pre>
+          </div>
+          <div class="mt-3">
+            <h4>Recent VM Executions</h4>
+            <div class="ledger-list mt-2" id="vm-history-list">
+              <div class="empty-state">No instructions executed yet.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Tab 2: Explorer -->
+    <section id="tab-explorer" class="tab-pane">
+      <div class="card">
+        <div class="card-header">
+          <h3>🌐 Thru Network Metrics & Active Validators</h3>
+        </div>
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <div class="lbl">Consensus Finality</div>
+            <div class="val text-emerald">380 ms</div>
+          </div>
+          <div class="metric-card">
+            <div class="lbl">Throughput</div>
+            <div class="val text-cyan">4,850+ TPS</div>
+          </div>
+          <div class="metric-card">
+            <div class="lbl">VM Architecture</div>
+            <div class="val">RISC-V 32-bit</div>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="app-footer">
+    <p>Thru Studio • Unto Labs • High-Performance Blockchain Network</p>
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>
