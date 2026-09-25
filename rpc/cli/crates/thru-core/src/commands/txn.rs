@@ -346,6 +346,7 @@ async fn execute_transaction(
             "signature": transaction_details.signature.as_str(),
             "slot": transaction_details.slot,
             "compute_units_consumed": transaction_details.compute_units_consumed,
+            "memory_units_consumed": transaction_details.memory_units_consumed,
             "state_units_consumed": transaction_details.state_units_consumed,
             "execution_result": transaction_details.execution_result,
             "vm_error": transaction_details.vm_error,
@@ -367,6 +368,10 @@ async fn execute_transaction(
         println!(
             "Compute Units Consumed: {}",
             transaction_details.compute_units_consumed
+        );
+        println!(
+            "Memory Units Consumed: {}",
+            transaction_details.memory_units_consumed
         );
         println!(
             "State Units Consumed: {}",
