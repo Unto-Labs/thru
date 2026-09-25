@@ -46,6 +46,7 @@ impl<'a> ParamExtractor<'a> {
             self.resolver,
             &self.field_params,
             &self.payload_targets,
+            data.len(),
         );
         let mut path = Vec::new();
         walker.process_struct(self.resolved_type, &mut path, data)?;
@@ -599,6 +600,7 @@ mod tests {
 
 struct StructWalker<'a> {
     type_name: &'a str,
+    buffer_len: usize,
     resolver: &'a TypeResolver,
     field_params: &'a BTreeMap<String, Vec<&'a str>>,
     params: ParamMap,
@@ -613,9 +615,11 @@ impl<'a> StructWalker<'a> {
         resolver: &'a TypeResolver,
         field_params: &'a BTreeMap<String, Vec<&'a str>>,
         payload_targets: &'a BTreeMap<&'a str, String>,
+        buffer_len: usize,
     ) -> Self {
         Self {
             type_name,
+            buffer_len,
             resolver,
             field_params,
             params: ParamMap::new(),
@@ -1199,7 +1203,7 @@ impl<'a> StructWalker<'a> {
         ReflectError::BufferTooSmall {
             type_name: self.type_name.to_string(),
             required: required as u128,
-            available: required,
+            available: self.buffer_len as u64,
         }
     }
 }
