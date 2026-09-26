@@ -19,6 +19,8 @@ import { closeIfCloseable, resolveClient } from "../types";
 import { backfillPage, combineFilters, mapAsyncIterable, slotLiteralFilter } from "./helpers";
 
 export interface EventReplayOptions {
+  maxBufferedItems?: number;
+  maxEventBytes?: number;
   /** Client instance for initial connection. Optional if clientFactory provided. */
   client?: EventSource;
   /** Factory to create fresh clients on reconnection. Enables robust reconnection. */
@@ -42,6 +44,9 @@ const DEFAULT_SAFETY_MARGIN = 64n;
 const PAGE_ORDER_ASC = "slot asc";
 
 export function createEventReplay(options: EventReplayOptions): ReplayStream<Event, string> {
+  if (options.maxEventBytes !== undefined && (!Number.isSafeInteger(options.maxEventBytes) || options.maxEventBytes < 0)) {
+    throw new Error('Invalid event replay byte bound');
+  }
   const safetyMargin = options.safetyMargin ?? DEFAULT_SAFETY_MARGIN;
 
   // Resolve initial client - either from options or from factory
@@ -69,6 +74,7 @@ export function createEventReplay(options: EventReplayOptions): ReplayStream<Eve
       }),
     );
 
+    if(options.maxEventBytes!==undefined&&response.events.some(e=>(e.payload?.byteLength??0)>options.maxEventBytes!))throw new Error('Event payload exceeds replay byte bound');
     return backfillPage(response.events, response.page);
   };
 
@@ -83,6 +89,7 @@ export function createEventReplay(options: EventReplayOptions): ReplayStream<Eve
     return mapAsyncIterable(
       client.streamEvents(request),
       (resp: StreamEventsResponse) => {
+        if(options.maxEventBytes!==undefined&&(resp.payload?.byteLength??0)>options.maxEventBytes)throw new Error('Event payload exceeds replay byte bound');
         const event = streamResponseToEvent(resp);
         return shouldEmitLiveEvent(event, startSlot, options.resumeAfter) ? event : null;
       },
@@ -103,6 +110,7 @@ export function createEventReplay(options: EventReplayOptions): ReplayStream<Eve
     : undefined;
 
   return new ReplayStream<Event, string>({
+    maxBufferedItems: options.maxBufferedItems,
     startSlot: options.startSlot,
     safetyMargin,
     fetchBackfill: createFetchBackfill(currentClient),

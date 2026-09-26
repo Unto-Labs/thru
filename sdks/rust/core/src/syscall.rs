@@ -541,8 +541,6 @@ pub enum SyscallCode {
     InvalidSignature = -44,
     AccountUncompressable = -45,
     EventIsZeroSize = -46,
-    StateBytesAddedOverflow = -47,
-    StateBytesRemovedOverflow = -48,
     ProgramInCallStack = -49,
 
     // Fallback
@@ -594,8 +592,6 @@ impl SyscallCode {
             -44 => Self::InvalidSignature,
             -45 => Self::AccountUncompressable,
             -46 => Self::EventIsZeroSize,
-            -47 => Self::StateBytesAddedOverflow,
-            -48 => Self::StateBytesRemovedOverflow,
             -49 => Self::ProgramInCallStack,
             _ => Self::UnknownCode,
         }

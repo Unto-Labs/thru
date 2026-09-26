@@ -12,6 +12,24 @@ use crate::codegen::shared::ir::TypeIr;
 use std::collections::HashSet;
 use std::fmt::Write;
 
+/* Start accessor walks at the last resolved offset. Only the remaining
+variable-size prefix needs runtime arithmetic, and its leading padding is
+already included in the resolved offset. */
+fn emit_field_offset<'a>(
+    output: &mut String,
+    fields: &'a [ResolvedField],
+    field_index: usize,
+    variable: &str,
+) -> &'a [ResolvedField] {
+    let start = fields[..=field_index]
+        .iter()
+        .rposition(|field| field.offset.is_some())
+        .unwrap_or(0);
+    let offset = fields[start].offset.unwrap_or(0);
+    writeln!(output, "        let mut {} = {};", variable, offset).unwrap();
+    &fields[start..field_index]
+}
+
 /* Convert size expression to Rust code that calls getter methods */
 fn size_expression_to_rust_getter_code(expr: &ExprKind, self_name: &str) -> String {
     match expr {
@@ -666,6 +684,9 @@ pub fn emit_opaque_functions(
                 // Calculate required size by summing all field sizes
                 write!(output, "        let mut required_size: usize = 0;\n").unwrap();
                 for field in fields.iter() {
+                    if let Some(offset) = field.offset {
+                        writeln!(output, "        required_size = {};", offset).unwrap();
+                    }
                     match &field.field_type.kind {
                         ResolvedTypeKind::Primitive { prim_type } => {
                             let field_size = primitive_size(prim_type);
@@ -862,6 +883,9 @@ pub fn emit_opaque_functions(
 
                 // Write each field
                 for field in fields.iter() {
+                    if let Some(offset) = field.offset {
+                        writeln!(output, "        offset = {};", offset).unwrap();
+                    }
                     match &field.field_type.kind {
                         ResolvedTypeKind::Primitive { prim_type } => {
                             let size = primitive_size(prim_type);
@@ -1066,8 +1090,9 @@ pub fn emit_opaque_functions(
                             write!(output, "        {}\n", read_expr).unwrap();
                         } else {
                             // Need to calculate offset based on previous fields
-                            write!(output, "        let mut offset = 0;\n").unwrap();
-                            for prev_field in &fields[0..field_idx] {
+                            for prev_field in
+                                emit_field_offset(&mut output, fields, field_idx, "offset")
+                            {
                                 match &prev_field.field_type.kind {
                                     ResolvedTypeKind::Primitive {
                                         prim_type: prev_prim,
@@ -1183,8 +1208,9 @@ pub fn emit_opaque_functions(
                         if field_idx == 0 {
                             write!(output, "        let offset = 0;\n").unwrap();
                         } else {
-                            write!(output, "        let mut offset = 0;\n").unwrap();
-                            for prev_field in &fields[0..field_idx] {
+                            for prev_field in
+                                emit_field_offset(&mut output, fields, field_idx, "offset")
+                            {
                                 match &prev_field.field_type.kind {
                                     ResolvedTypeKind::Primitive {
                                         prim_type: prev_prim,
@@ -1269,8 +1295,9 @@ pub fn emit_opaque_functions(
                         if field_idx == 0 {
                             write!(output, "        let offset = 0;\n").unwrap();
                         } else {
-                            write!(output, "        let mut offset = 0;\n").unwrap();
-                            for prev_field in &fields[0..field_idx] {
+                            for prev_field in
+                                emit_field_offset(&mut output, fields, field_idx, "offset")
+                            {
                                 match &prev_field.field_type.kind {
                                     ResolvedTypeKind::Primitive {
                                         prim_type: prev_prim,
@@ -1396,8 +1423,9 @@ pub fn emit_opaque_functions(
                             if field_idx == 0 {
                                 write!(output, "        let offset = 0;\n").unwrap();
                             } else {
-                                write!(output, "        let mut offset = 0;\n").unwrap();
-                                for prev_field in &fields[0..field_idx] {
+                                for prev_field in
+                                    emit_field_offset(&mut output, fields, field_idx, "offset")
+                                {
                                     match &prev_field.field_type.kind {
                                         ResolvedTypeKind::Primitive {
                                             prim_type: prev_prim,
@@ -1488,8 +1516,9 @@ pub fn emit_opaque_functions(
                                     write!(output, "        &self.data[0..{}]\n", array_size)
                                         .unwrap();
                                 } else {
-                                    write!(output, "        let mut offset = 0;\n").unwrap();
-                                    for prev_field in &fields[0..field_idx] {
+                                    for prev_field in
+                                        emit_field_offset(&mut output, fields, field_idx, "offset")
+                                    {
                                         match &prev_field.field_type.kind {
                                             ResolvedTypeKind::Primitive {
                                                 prim_type: prev_prim,
@@ -1595,9 +1624,12 @@ pub fn emit_opaque_functions(
                                     if field_idx == 0 {
                                         write!(output, "        let base_offset = 0;\n").unwrap();
                                     } else {
-                                        write!(output, "        let mut base_offset = 0;\n")
-                                            .unwrap();
-                                        for prev_field in &fields[0..field_idx] {
+                                        for prev_field in emit_field_offset(
+                                            &mut output,
+                                            fields,
+                                            field_idx,
+                                            "base_offset",
+                                        ) {
                                             match &prev_field.field_type.kind {
                                                 ResolvedTypeKind::Primitive {
                                                     prim_type: prev_prim,
@@ -1676,9 +1708,12 @@ pub fn emit_opaque_functions(
                                             write!(output, "        let base_offset = 0;\n")
                                                 .unwrap();
                                         } else {
-                                            write!(output, "        let mut base_offset = 0;\n")
-                                                .unwrap();
-                                            for prev_field in &fields[0..field_idx] {
+                                            for prev_field in emit_field_offset(
+                                                &mut output,
+                                                fields,
+                                                field_idx,
+                                                "base_offset",
+                                            ) {
                                                 match &prev_field.field_type.kind {
                                                     ResolvedTypeKind::Primitive {
                                                         prim_type: prev_prim,
@@ -1754,9 +1789,12 @@ pub fn emit_opaque_functions(
                                             writeln!(offset_setup, "        let mut offset = 0;")
                                                 .unwrap();
                                         } else {
-                                            writeln!(offset_setup, "        let mut offset = 0;")
-                                                .unwrap();
-                                            for prev_field in &fields[0..field_idx] {
+                                            for prev_field in emit_field_offset(
+                                                &mut offset_setup,
+                                                fields,
+                                                field_idx,
+                                                "offset",
+                                            ) {
                                                 match &prev_field.field_type.kind {
                                                     ResolvedTypeKind::Primitive {
                                                         prim_type: prev_prim,
@@ -1811,12 +1849,18 @@ pub fn emit_opaque_functions(
                                 }
                                 // Helper function to emit offset calculation for this field
                                 let emit_base_offset = |output: &mut String| {
-                                    if field_idx == 0 {
+                                    if let Some(offset) = field.offset {
+                                        writeln!(output, "        let base_offset = {};", offset)
+                                            .unwrap();
+                                    } else if field_idx == 0 {
                                         write!(output, "        let base_offset = 0;\n").unwrap();
                                     } else {
-                                        write!(output, "        let mut base_offset = 0;\n")
-                                            .unwrap();
-                                        for prev_field in &fields[0..field_idx] {
+                                        for prev_field in emit_field_offset(
+                                            output,
+                                            fields,
+                                            field_idx,
+                                            "base_offset",
+                                        ) {
                                             match &prev_field.field_type.kind {
                                                 ResolvedTypeKind::Primitive {
                                                     prim_type: prev_prim,
@@ -2127,8 +2171,9 @@ pub fn emit_opaque_functions(
                                 .unwrap();
                             }
                         } else {
-                            write!(output, "        let mut offset = 0;\n").unwrap();
-                            for prev_field in &fields[0..field_idx] {
+                            for prev_field in
+                                emit_field_offset(&mut output, fields, field_idx, "offset")
+                            {
                                 match &prev_field.field_type.kind {
                                     ResolvedTypeKind::Primitive {
                                         prim_type: prev_prim,
@@ -2299,8 +2344,9 @@ pub fn emit_opaque_functions(
                                 .unwrap();
                             }
                         } else {
-                            write!(output, "        let mut offset = 0;\n").unwrap();
-                            for prev_field in &fields[0..field_idx] {
+                            for prev_field in
+                                emit_field_offset(&mut output, fields, field_idx, "offset")
+                            {
                                 match &prev_field.field_type.kind {
                                     ResolvedTypeKind::Primitive {
                                         prim_type: prev_prim,
@@ -2784,9 +2830,9 @@ pub fn emit_opaque_functions(
                                 .unwrap();
 
                                 /* Calculate offset to this primitive field */
-                                write!(output, "        let mut offset = 0;\n").unwrap();
-                                /* Add size of all fields before the nested struct */
-                                for prev_field in &fields[0..field_idx] {
+                                for prev_field in
+                                    emit_field_offset(&mut output, fields, field_idx, "offset")
+                                {
                                     match &prev_field.field_type.kind {
                                         ResolvedTypeKind::Primitive {
                                             prim_type: prev_prim,
@@ -2922,9 +2968,12 @@ pub fn emit_opaque_functions(
                                         )
                                         .unwrap();
                                         /* Calculate offset to nested struct start, then add array offset */
-                                        write!(output, "        let mut offset = 0;\n").unwrap();
-                                        /* Add size of all fields before the nested struct */
-                                        for prev_field in &fields[0..field_idx] {
+                                        for prev_field in emit_field_offset(
+                                            &mut output,
+                                            fields,
+                                            field_idx,
+                                            "offset",
+                                        ) {
                                             match &prev_field.field_type.kind {
                                                 ResolvedTypeKind::Primitive {
                                                     prim_type: prev_prim,
@@ -3078,8 +3127,9 @@ pub fn emit_opaque_functions(
                         write!(output, "        {}\n", read_expr).unwrap();
                     } else {
                         // Need to calculate offset based on previous fields
-                        write!(output, "        let mut offset = 0;\n").unwrap();
-                        for prev_field in &fields[0..field_idx] {
+                        for prev_field in
+                            emit_field_offset(&mut output, fields, field_idx, "offset")
+                        {
                             match &prev_field.field_type.kind {
                                 ResolvedTypeKind::Primitive {
                                     prim_type: prev_prim,
@@ -3180,8 +3230,9 @@ pub fn emit_opaque_functions(
                                 size_expression_to_rust_getter_code(size_expression, "self");
 
                             let mut offset_setup = String::new();
-                            writeln!(offset_setup, "        let mut offset = 0;").unwrap();
-                            for prev_field in &fields[0..field_idx] {
+                            for prev_field in
+                                emit_field_offset(&mut offset_setup, fields, field_idx, "offset")
+                            {
                                 match &prev_field.field_type.kind {
                                     ResolvedTypeKind::Primitive {
                                         prim_type: prev_prim,
@@ -3335,8 +3386,9 @@ pub fn emit_opaque_functions(
                             let write_expr = emit_write_primitive(prim_type, "0", "value");
                             write!(output, "        {}\n", write_expr).unwrap();
                         } else {
-                            write!(output, "        let mut offset = 0;\n").unwrap();
-                            for prev_field in &fields[0..field_idx] {
+                            for prev_field in
+                                emit_field_offset(&mut output, fields, field_idx, "offset")
+                            {
                                 match &prev_field.field_type.kind {
                                     ResolvedTypeKind::Primitive {
                                         prim_type: prev_prim,
@@ -3439,8 +3491,9 @@ pub fn emit_opaque_functions(
                         if field_idx == 0 {
                             write!(output, "        let offset = 0;\n").unwrap();
                         } else {
-                            write!(output, "        let mut offset = 0;\n").unwrap();
-                            for prev_field in &fields[0..field_idx] {
+                            for prev_field in
+                                emit_field_offset(&mut output, fields, field_idx, "offset")
+                            {
                                 match &prev_field.field_type.kind {
                                     ResolvedTypeKind::Primitive {
                                         prim_type: prev_prim,
@@ -3528,8 +3581,9 @@ pub fn emit_opaque_functions(
                             if field_idx == 0 {
                                 write!(output, "        let offset = 0;\n").unwrap();
                             } else {
-                                write!(output, "        let mut offset = 0;\n").unwrap();
-                                for prev_field in &fields[0..field_idx] {
+                                for prev_field in
+                                    emit_field_offset(&mut output, fields, field_idx, "offset")
+                                {
                                     match &prev_field.field_type.kind {
                                         ResolvedTypeKind::Primitive {
                                             prim_type: prev_prim,
@@ -3672,8 +3726,12 @@ pub fn emit_opaque_functions(
                                     if field_idx == 0 {
                                         write!(output, "        self.data[0..len].copy_from_slice(&value[0..len]);\n").unwrap();
                                     } else {
-                                        write!(output, "        let mut offset = 0;\n").unwrap();
-                                        for prev_field in &fields[0..field_idx] {
+                                        for prev_field in emit_field_offset(
+                                            &mut output,
+                                            fields,
+                                            field_idx,
+                                            "offset",
+                                        ) {
                                             match &prev_field.field_type.kind {
                                                 ResolvedTypeKind::Primitive {
                                                     prim_type: prev_prim,
@@ -3726,9 +3784,12 @@ pub fn emit_opaque_functions(
                                     if field_idx == 0 {
                                         write!(output, "        let base_offset = 0;\n").unwrap();
                                     } else {
-                                        write!(output, "        let mut base_offset = 0;\n")
-                                            .unwrap();
-                                        for prev_field in &fields[0..field_idx] {
+                                        for prev_field in emit_field_offset(
+                                            &mut output,
+                                            fields,
+                                            field_idx,
+                                            "base_offset",
+                                        ) {
                                             match &prev_field.field_type.kind {
                                                 ResolvedTypeKind::Primitive {
                                                     prim_type: prev_prim,
@@ -3793,9 +3854,12 @@ pub fn emit_opaque_functions(
                                     if field_idx == 0 {
                                         write!(output, "        let base_offset = 0;\n").unwrap();
                                     } else {
-                                        write!(output, "        let mut base_offset = 0;\n")
-                                            .unwrap();
-                                        for prev_field in &fields[0..field_idx] {
+                                        for prev_field in emit_field_offset(
+                                            &mut output,
+                                            fields,
+                                            field_idx,
+                                            "base_offset",
+                                        ) {
                                             match &prev_field.field_type.kind {
                                                 ResolvedTypeKind::Primitive {
                                                     prim_type: prev_prim,
@@ -3854,12 +3918,18 @@ pub fn emit_opaque_functions(
                                     size_expr_matches_len_field(size_expression, &field.name);
                                 // Helper to emit offset calculation
                                 let emit_base_offset = |output: &mut String| {
-                                    if field_idx == 0 {
+                                    if let Some(offset) = field.offset {
+                                        writeln!(output, "        let base_offset = {};", offset)
+                                            .unwrap();
+                                    } else if field_idx == 0 {
                                         write!(output, "        let base_offset = 0;\n").unwrap();
                                     } else {
-                                        write!(output, "        let mut base_offset = 0;\n")
-                                            .unwrap();
-                                        for prev_field in &fields[0..field_idx] {
+                                        for prev_field in emit_field_offset(
+                                            output,
+                                            fields,
+                                            field_idx,
+                                            "base_offset",
+                                        ) {
                                             match &prev_field.field_type.kind {
                                                 ResolvedTypeKind::Primitive {
                                                     prim_type: prev_prim,
@@ -4101,8 +4171,9 @@ pub fn emit_opaque_functions(
                             if field_idx == 0 {
                                 write!(output, "        let offset = 0;\n").unwrap();
                             } else {
-                                write!(output, "        let mut offset = 0;\n").unwrap();
-                                for prev_field in &fields[0..field_idx] {
+                                for prev_field in
+                                    emit_field_offset(&mut output, fields, field_idx, "offset")
+                                {
                                     match &prev_field.field_type.kind {
                                         ResolvedTypeKind::Primitive {
                                             prim_type: prev_prim,
@@ -4170,8 +4241,9 @@ pub fn emit_opaque_functions(
                             if field_idx == 0 {
                                 write!(output, "        let offset = 0;\n").unwrap();
                             } else {
-                                write!(output, "        let mut offset = 0;\n").unwrap();
-                                for prev_field in &fields[0..field_idx] {
+                                for prev_field in
+                                    emit_field_offset(&mut output, fields, field_idx, "offset")
+                                {
                                     match &prev_field.field_type.kind {
                                         ResolvedTypeKind::Primitive {
                                             prim_type: prev_prim,
@@ -4226,8 +4298,9 @@ pub fn emit_opaque_functions(
                             if field_idx == 0 {
                                 write!(output, "        let offset = 0;\n").unwrap();
                             } else {
-                                write!(output, "        let mut offset = 0;\n").unwrap();
-                                for prev_field in &fields[0..field_idx] {
+                                for prev_field in
+                                    emit_field_offset(&mut output, fields, field_idx, "offset")
+                                {
                                     match &prev_field.field_type.kind {
                                         ResolvedTypeKind::Primitive {
                                             prim_type: prev_prim,
@@ -4332,9 +4405,12 @@ pub fn emit_opaque_functions(
 
                                         /* Element setter */
                                         write!(output, "    pub fn {}_{}_set(&mut self, index: usize, value: {}) {{\n", field.name, nested_field.name, rust_type).unwrap();
-                                        write!(output, "        let mut offset = 0;\n").unwrap();
-                                        /* Add size of all fields before the nested struct */
-                                        for prev_field in &fields[0..field_idx] {
+                                        for prev_field in emit_field_offset(
+                                            &mut output,
+                                            fields,
+                                            field_idx,
+                                            "offset",
+                                        ) {
                                             match &prev_field.field_type.kind {
                                                 ResolvedTypeKind::Primitive {
                                                     prim_type: prev_prim,
@@ -4439,9 +4515,9 @@ pub fn emit_opaque_functions(
                                 .unwrap();
 
                                 /* Calculate offset to this primitive field */
-                                write!(output, "        let mut offset = 0;\n").unwrap();
-                                /* Add size of all fields before the nested struct */
-                                for prev_field in &fields[0..field_idx] {
+                                for prev_field in
+                                    emit_field_offset(&mut output, fields, field_idx, "offset")
+                                {
                                     match &prev_field.field_type.kind {
                                         ResolvedTypeKind::Primitive {
                                             prim_type: prev_prim,

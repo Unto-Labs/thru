@@ -1,0 +1,7 @@
+test-case:
+  name: "fam_alignment_empty"
+  abi-file: "../../abi_definitions/fam_alignment.abi.yaml"
+  type: "PaddedFam"
+  description: "Empty FAM retains seven bytes of padding after its u8 count"
+  tags: ["arrays", "variable-size", "alignment"]
+  binary-hex: "00 00 00 00 00 00 00 00"

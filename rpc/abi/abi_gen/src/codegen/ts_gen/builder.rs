@@ -1644,16 +1644,19 @@ fn emit_fam_struct_builder(
     let has_trailing_size_fields = fam_infos
         .iter()
         .any(|info| info.size_field_index >= first_fam_index);
-    let prefix_size: u64 = prefix_fields
-        .iter()
-        .map(|field| match field.field_type.size {
-            Size::Const(sz) => sz,
-            _ => panic!(
-                "FAM struct builder requires constant-size prefix field '{}'",
-                field.name
-            ),
-        })
-        .sum();
+    /* Include padding before the first FAM, matching the resolved layout. */
+    let prefix_size = fam_infos[0].field.offset.unwrap_or_else(|| {
+        prefix_fields
+            .iter()
+            .map(|field| match field.field_type.size {
+                Size::Const(sz) => sz,
+                _ => panic!(
+                    "FAM struct builder requires constant-size prefix field '{}'",
+                    field.name
+                ),
+            })
+            .sum()
+    });
     /* Use deduplicated bindings for building param expressions */
     let bindings: Vec<_> = deduplicated_ts_parameter_bindings(type_ir)
         .into_iter()

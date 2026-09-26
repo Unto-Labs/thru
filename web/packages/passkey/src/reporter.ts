@@ -35,6 +35,10 @@ export interface PasskeyReportingOptions {
   allowPopupFallback?: boolean;
   /** Explicit popup mode must be invoked from a user interaction. */
   promptMode?: 'auto' | 'inline' | 'popup';
+  /** Ask the browser to lead with "use a phone or tablet" (the hybrid QR)
+   * instead of this device's passkeys, via the WebAuthn L3 `hints`. Browsers
+   * that don't implement hints (Safari 26) show their usual picker. */
+  preferHybrid?: boolean;
   signal?: AbortSignal;
 }
 

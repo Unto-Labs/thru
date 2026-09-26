@@ -168,11 +168,8 @@ fn decode_index_sentinel(index: u32) -> Option<u32> {
 
 // The feature-gate program is manager-owned/upgradable.  Genesis derives the
 // program account through this manager pubkey and the program meta seed below.
-const FEATURE_GATE_MANAGER_PROGRAM_PUBKEY: [u8; 32] = {
-    let mut pubkey = [0u8; 32];
-    pubkey[31] = 0x04;
-    pubkey
-};
+const FEATURE_GATE_MANAGER_PROGRAM_PUBKEY: [u8; 32] =
+    thru_base::bootstrap_addresses::MANAGER_PROGRAM_BYTES;
 const FEATURE_GATE_PROGRAM_META_SEED: &str = "feature_gate_program";
 const FEATURE_GATE_GLOBAL_ACCOUNT_SEED: &str = "global_feature_gate_account";
 const FEATURE_GATE_SEED_SIZE: usize = 32;

@@ -37,6 +37,7 @@ export async function inspectProgramDeployment(
   const programAddresses = deriveManagedProgramAddresses(
     request.seed,
     ephemeral,
+    request.managerProgramAddress,
   );
   const abiAddresses = deriveProgramABIAddresses(
     programAddresses.programAccountAddress,
@@ -66,8 +67,8 @@ export async function inspectProgramDeployment(
   if (!metadataAccount || !programAccount) {
     program = absentPair(!!metadataAccount, !!programAccount);
   } else {
-    const metadata = parseManagerMeta(metadataAccount);
-    assertManagedProgramAccount(programAccount);
+    const metadata = parseManagerMeta(metadataAccount, request.managerProgramAddress);
+    assertManagedProgramAccount(programAccount, undefined, request.managerProgramAddress);
     const authorityAddress = Pubkey.from(metadata.authority).toThruFmt();
     if (request.authorityAddress !== undefined) {
       let expectedAuthority: Uint8Array;

@@ -19,10 +19,8 @@ const FAUCET_PROGRAM_FEE: u64 = 0;
 /// Withdraw limit per transaction (matches TN_FAUCET_WITHDRAW_LIMIT)
 const FAUCET_WITHDRAW_LIMIT: u64 = 10000;
 
-/// Faucet account pubkey in Thru format from genesis file
-/// Computed from private key "5555..." using Ed25519
-/// This is the fixed pubkey for the faucet account as specified in genesis
-const FAUCET_ACCOUNT_ADDRESS: &str = "taxoImN8fTEOxXYnvgC6JZ0lN0n0qvZERwz_vlOjX3MkIn";
+/// Program-owned vault created and explicitly funded by bootstrap, not genesis.
+const FAUCET_ACCOUNT_ADDRESS: &str = thru_base::bootstrap_addresses::FAUCET_VAULT_ADDRESS;
 
 /// Helper function to resolve fee payer keypair from configuration
 fn resolve_fee_payer_keypair(

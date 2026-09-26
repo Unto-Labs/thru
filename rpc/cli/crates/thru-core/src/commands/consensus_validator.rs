@@ -1789,7 +1789,7 @@ mod tests {
     use super::*;
     use crate::config::KeyManager;
     use thru_base::txn_tools::{
-        ATTESTOR_TABLE, CONSENSUS_VALIDATOR_PROGRAM, TOKEN_PROGRAM, UNCLAIMED_VAULT,
+        ATTESTOR_TABLE, CONSENSUS_VALIDATOR_PROGRAM, CONVERTED_VAULT, TOKEN_PROGRAM, UNCLAIMED_VAULT,
     };
 
     fn write_u64(buf: &mut [u8], offset: usize, value: u64) {
@@ -1987,22 +1987,39 @@ mod tests {
     }
 
     #[test]
-    fn resolves_consensus_accounts_with_overrides() {
+    fn resolves_consensus_accounts_with_defaults() {
         let config = create_test_config();
-        let accounts = resolve_consensus_accounts(
-            &config,
-            Some("0000000000000000000000000000000000000000000000000000000000000c01"),
-            None,
-            Some("00000000000000000000000000000000000000000000000000000000000000aa"),
-            None,
-            Some("0000000000000000000000000000000000000000000000000000000000000c05"),
-        )
-        .expect("override accounts should resolve");
+        let accounts = resolve_consensus_accounts(&config, None, None, None, None, None)
+            .expect("default accounts should resolve");
 
         assert_eq!(accounts.program, CONSENSUS_VALIDATOR_PROGRAM);
         assert_eq!(accounts.attestor_table, ATTESTOR_TABLE);
         assert_eq!(accounts.token_program, TOKEN_PROGRAM);
+        assert_eq!(accounts.converted_vault, CONVERTED_VAULT);
         assert_eq!(accounts.unclaimed_vault, UNCLAIMED_VAULT);
+    }
+
+    #[test]
+    fn resolves_consensus_accounts_with_overrides() {
+        let config = create_test_config();
+        let program = [0x11; 32];
+        let token_program = [0x22; 32];
+        let unclaimed_vault = [0x33; 32];
+        let accounts = resolve_consensus_accounts(
+            &config,
+            Some(&hex::encode(program)),
+            None,
+            Some(&hex::encode(token_program)),
+            None,
+            Some(&hex::encode(unclaimed_vault)),
+        )
+        .expect("override accounts should resolve");
+
+        assert_eq!(accounts.program, program);
+        assert_eq!(accounts.attestor_table, ATTESTOR_TABLE);
+        assert_eq!(accounts.token_program, token_program);
+        assert_eq!(accounts.converted_vault, CONVERTED_VAULT);
+        assert_eq!(accounts.unclaimed_vault, unclaimed_vault);
     }
 
     // ----------------------------------------------------------------------

@@ -1,0 +1,7 @@
+test-case:
+  name: chars_invalid_utf8
+  abi-file: ../../abi_definitions/chars.abi.yaml
+  type: CharRecord
+  description: Round trip scalar and array char bytes, including bytes after NUL
+  tags: [chars, primitives, arrays]
+  binary-hex: "7f 41 ff c3 28 42 00 43 44 80 ff 34 12"

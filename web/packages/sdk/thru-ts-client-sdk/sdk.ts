@@ -1,5 +1,18 @@
 import { TransactionBuilder } from "./domain/transactions";
 
+// Generated fresh-network defaults; explicit network configuration takes precedence.
+export {
+    EOA_PROGRAM_ID,
+    ROOT_MANAGER_PROGRAM_ADDRESS,
+    MANAGER_PROGRAM_ADDRESS,
+    UPLOADER_PROGRAM_ADDRESS,
+    SYSTEM_TEST_PROGRAM_ADDRESS,
+    NOOP_PROGRAM_ADDRESS,
+    ABI_MANAGER_PROGRAM_ADDRESS,
+    TOKEN_PROGRAM_ADDRESS,
+    MULTICALL_PROGRAM_ADDRESS,
+} from "../src/core-program-addresses";
+
 // ============================================================================
 // Namespace Exports (for module functions)
 // ============================================================================

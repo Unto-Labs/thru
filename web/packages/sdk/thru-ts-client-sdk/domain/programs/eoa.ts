@@ -2,7 +2,7 @@
  * EOA (externally-owned account) program instruction and authorization-message
  * builders.
  *
- * The EOA program is a built-in program whose address is all zeros
+ * The EOA program is installed at its canonical managed genesis address
  * ({@link EOA_PROGRAM_ADDRESS}). Creating or deleting an EOA requires an
  * Ed25519 signature by the EOA's *own* key over a canonical, domain-separated
  * authorization message (see {@link buildEOACreateMessage} /
@@ -20,6 +20,8 @@
  */
 
 import { SignatureDomain, signatureDomainDST } from "../transactions/domain-signing";
+import { Pubkey } from "../primitives/Pubkey";
+import { EOA_PROGRAM_ID } from "../../../src/core-program-addresses";
 
 /** Ed25519 public-key width used by the EOA authorization layout. */
 const EOA_PUBKEY_SIZE = 32;
@@ -49,8 +51,8 @@ function validateEOAMessageInputs(
   }
 }
 
-/** EOA program address: all zeros (32 bytes). */
-export const EOA_PROGRAM_ADDRESS: Uint8Array = new Uint8Array(32);
+/** Canonical managed EOA program address (32 bytes). */
+export const EOA_PROGRAM_ADDRESS: Uint8Array = Pubkey.from(EOA_PROGRAM_ID).toBytes();
 
 /** EOA program instruction discriminants (tn_eoa_program.h). */
 export const EOA_INSTRUCTION_CREATE_ACCOUNT = 0;

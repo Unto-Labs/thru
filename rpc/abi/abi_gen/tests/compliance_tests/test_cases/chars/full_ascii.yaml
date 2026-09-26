@@ -1,0 +1,7 @@
+test-case:
+  name: chars_full_ascii
+  abi-file: ../../abi_definitions/chars.abi.yaml
+  type: CharRecord
+  description: Round trip scalar and array char bytes, including bytes after NUL
+  tags: [chars, primitives, arrays]
+  binary-hex: "41 54 68 72 75 20 41 42 49 80 ff 34 12"

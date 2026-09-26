@@ -1,3 +1,4 @@
+import { DEFAULT_STATE_UNITS } from "../../defaults";
 import { signWithDomain, SignatureDomain } from "./domain-signing";
 import * as legacySigning from "./domain-signing-legacy";
 import {
@@ -121,7 +122,7 @@ export class Transaction {
         this.chainId = params.header.chainId ?? 1;
 
         this.requestedComputeUnits = params.header.computeUnits ?? 0;
-        this.requestedStateUnits = params.header.stateUnits ?? 0;
+        this.requestedStateUnits = params.header.stateUnits ?? DEFAULT_STATE_UNITS;
         this.requestedMemoryUnits = params.header.memoryUnits ?? 0;
         this.flags = params.header.flags ?? DEFAULT_FLAGS;
 

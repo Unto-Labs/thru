@@ -10,6 +10,7 @@ pub mod http;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod onchain;
 pub mod path;
+mod bootstrap_address;
 
 use crate::file::ImportSource;
 use std::path::PathBuf;
@@ -162,7 +163,7 @@ impl Default for OnchainFetcherConfig {
             rpc_endpoints,
             default_network: "alphanet".to_string(),
             timeout_seconds: 30,
-            abi_manager_program_id: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACrG7".to_string(),
+            abi_manager_program_id: bootstrap_address::ABI_MANAGER_PROGRAM_ADDRESS.to_string(),
             abi_manager_is_ephemeral: false,
         }
     }

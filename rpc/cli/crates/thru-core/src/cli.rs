@@ -1104,8 +1104,8 @@ pub enum TxnCommands {
         #[arg(long, default_value = "1000000000")]
         compute_units: u32,
 
-        /// State units (optional, defaults to 10000)
-        #[arg(long, default_value = "10000")]
+        /// State units (defaults to 1; increase explicitly for account growth)
+        #[arg(long, default_value = "1")]
         state_units: u16,
 
         /// Memory units (optional, defaults to 10000)
@@ -1145,8 +1145,8 @@ pub enum TxnCommands {
         #[arg(long, default_value = "300000000")]
         compute_units: u32,
 
-        /// State units (optional, defaults to 10000)
-        #[arg(long, default_value = "10000")]
+        /// State units (defaults to 1; increase explicitly for account growth)
+        #[arg(long, default_value = "1")]
         state_units: u16,
 
         /// Memory units (optional, defaults to 10000)

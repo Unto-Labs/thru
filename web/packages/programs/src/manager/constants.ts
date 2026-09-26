@@ -1,7 +1,19 @@
 import { encodeAddress } from '@thru/sdk/helpers';
-import { systemProgramPubkey } from '../utils/helpers';
+import { deriveProgramAddress } from '@thru/sdk';
+import { padSeed, systemProgramPubkey } from '../utils/helpers.js';
 
-export const MANAGER_PROGRAM_PUBKEY = systemProgramPubkey(0x04);
+/** The immutable trust root manages only the upgradeable main Manager. */
+export const ROOT_MANAGER_PROGRAM_PUBKEY = systemProgramPubkey(0x01);
+export const ROOT_MANAGER_PROGRAM_ADDRESS = encodeAddress(ROOT_MANAGER_PROGRAM_PUBKEY);
+export const MANAGER_PROGRAM_SEED = 'thru-main-manager:949457';
+const managerMeta = deriveProgramAddress({
+  programAddress: ROOT_MANAGER_PROGRAM_ADDRESS,
+  seed: padSeed(MANAGER_PROGRAM_SEED),
+});
+export const MANAGER_PROGRAM_PUBKEY = deriveProgramAddress({
+  programAddress: ROOT_MANAGER_PROGRAM_ADDRESS,
+  seed: managerMeta.bytes,
+}).bytes;
 export const MANAGER_PROGRAM_ADDRESS = encodeAddress(MANAGER_PROGRAM_PUBKEY);
 
 export const MANAGER_META_SIZE = 73;

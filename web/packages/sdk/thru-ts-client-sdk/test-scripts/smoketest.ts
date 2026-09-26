@@ -583,7 +583,7 @@ async function main(): Promise<void> {
                 header: {
                     fee: 0n,
                     computeUnits: 1000,
-                    stateUnits: 0,
+                    stateUnits: 1,
                     memoryUnits: 0,
                     expiryAfter: 50,
                 },
@@ -606,7 +606,7 @@ async function main(): Promise<void> {
                 header: {
                     fee: 0n,
                     computeUnits: 1000,
-                    stateUnits: 0,
+                    stateUnits: 1,
                     memoryUnits: 0,
                     expiryAfter: 50,
                 },

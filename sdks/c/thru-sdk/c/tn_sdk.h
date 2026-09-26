@@ -4,6 +4,7 @@
 #include "tn_sdk_base.h"
 #include "tn_sdk_txn.h"
 #include "tn_sdk_types.h"
+#include "tn_sdk_programs.h"
 
 /* TODO: macro for syscall code */
 
@@ -178,4 +179,3 @@ tn_pubkey_t * tsdk_create_program_defined_account_address(
 TSDK_PROTOTYPES_END
 
 #endif /* HEADER_tn_src_thru_programs_sdk_tn_sdk_h */
-

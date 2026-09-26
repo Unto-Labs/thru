@@ -32,6 +32,9 @@ export interface DeployProgressEvent {
 
 export interface DeploymentRequestBase {
   seed: string;
+  /** Parent Manager executable. Use root to upgrade the managed main Manager.
+   * Non-default parents support program binaries, not official ABI publication. */
+  managerProgramAddress?: string;
   signer: DeploymentSigner;
   client?: Thru;
   ephemeral?: boolean;
@@ -124,6 +127,8 @@ export type UpgradeProgramABIResult = ProgramABIMutationResult;
 export interface InspectProgramDeploymentRequest {
   client: Thru;
   seed: string;
+  /** Parent Manager executable used for derivation and ownership checks. */
+  managerProgramAddress?: string;
   ephemeral?: boolean;
   authorityAddress?: string;
   expectedProgramBytes?: Uint8Array;

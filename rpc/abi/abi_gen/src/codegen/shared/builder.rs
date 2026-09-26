@@ -305,7 +305,17 @@ impl<'a> IrBuilder<'a> {
         };
 
         let mut nodes: Vec<IrNode> = Vec::new();
+        let mut prefix_end = 0;
         for field in fields {
+            /* Preserve resolved padding through the first variable-sized field. */
+            if let Some(offset) = field.offset {
+                if offset > prefix_end {
+                    nodes.push(Self::const_or_zero(offset - prefix_end, 1));
+                }
+                if let Size::Const(size) = field.field_type.size {
+                    prefix_end = offset + size;
+                }
+            }
             let mut extend_field_dynamic = true;
             let field_node = match &field.field_type.size {
                 Size::Const(value) => Self::const_or_zero(*value, field.field_type.alignment),

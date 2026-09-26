@@ -221,7 +221,7 @@ describe('passkey manager validate helpers', () => {
 
   it('encodes multicall instructions with the known program address', () => {
     expect(MULTICALL_PROGRAM_ADDRESS).toBe(
-      'tatPH9XJbriBMntQG_GU6r4YWZCcco1wEGgPw2gY3iFaj8'
+      'taMULTIrOL8WpIFr16C1ECsO60qAsuwmwJephZHDOTvSeP'
     );
     expect(MULTICALL_PROGRAM_PUBKEY).toHaveLength(32);
 

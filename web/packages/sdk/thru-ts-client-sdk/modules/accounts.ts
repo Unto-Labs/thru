@@ -25,10 +25,13 @@ import {
 import { mergeTransactionHeader } from "../utils/utils";
 import { generateStateProof } from "./proofs";
 import { getChainId } from "./chain";
+import { NOOP_PROGRAM_ADDRESS } from "../../src/core-program-addresses";
 
 export interface CreateAccountOptions {
     /** The new account's public key (fee payer). */
     publicKey: PubkeyInput;
+    /** Noop override for an explicitly configured existing network. */
+    program?: PubkeyInput;
     /** Optional overrides for the transaction header. */
     header?: Partial<TransactionHeaderInput>;
 }
@@ -125,8 +128,7 @@ export async function createAccount(
     // Use the slot from the proof response for the transaction startSlot
     const startSlot = proofResponse.slot;
 
-    const program = new Uint8Array(32);
-    program[31] = 0x03; /* NOOP program id used by thru account creation */
+    const program = Pubkey.from(options.program ?? NOOP_PROGRAM_ADDRESS).toBytes();
 
     const builder = new TransactionBuilder();
     const headerDefaults: TransactionHeaderInput = {
@@ -137,7 +139,7 @@ export async function createAccount(
         expiryAfter: 100,
         computeUnits: 10_000,
         memoryUnits: 10_000,
-        stateUnits: 10_000,
+        stateUnits: 1,
     };
 
     const header = mergeTransactionHeader(headerDefaults, options.header);

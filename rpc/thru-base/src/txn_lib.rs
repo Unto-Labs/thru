@@ -6,11 +6,11 @@ pub type TnHash = [u8; 32];
 pub type TnSignature = [u8; 64];
 
 use crate::{
-    StateProofType,
     tn_signature::{sign_transaction, verify_transaction},
     tn_state_proof::StateProof,
+    StateProofType,
 };
-use bytemuck::{Pod, Zeroable, bytes_of, pod_read_unaligned};
+use bytemuck::{bytes_of, pod_read_unaligned, Pod, Zeroable};
 
 pub const TN_TXN_FLAG_HAS_FEE_PAYER_PROOF_BIT: u8 = 0; // Bit position (matching C #define TN_TXN_FLAG_HAS_FEE_PAYER_PROOF (0U))
 pub const TN_TXN_FLAG_MAY_COMPRESS_ACCOUNT_BIT: u8 = 1; // Bit position (matching C #define TN_TXN_FLAG_MAY_COMPRESS_ACCOUNT (1U))
@@ -206,7 +206,7 @@ unsafe impl Pod for WireTxnHdrV1 {}
 unsafe impl Zeroable for WireTxnHdrV1 {}
 
 /// Normal Rust struct for transaction construction
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Transaction {
     // Core transaction fields
     pub fee_payer: TnPubkey, // [u8; 32] - who pays the fee
@@ -239,6 +239,15 @@ pub struct Transaction {
     pub fee_payer_account_meta_raw: Option<Vec<u8>>,
 }
 
+impl Default for Transaction {
+    fn default() -> Self {
+        Self {
+            chain_id: 0,
+            ..Self::new([0; 32], [0; 32], 0, 0)
+        }
+    }
+}
+
 impl Transaction {
     /// Create a new unsigned transaction
     pub fn new(fee_payer: TnPubkey, program: TnPubkey, fee: u64, nonce: u64) -> Self {
@@ -250,7 +259,7 @@ impl Transaction {
             instructions: None,
             fee,
             req_compute_units: 0,
-            req_state_units: 0,
+            req_state_units: 1,
             req_memory_units: 0,
             expiry_after: 0,
             start_slot: 0,
@@ -591,7 +600,8 @@ impl Transaction {
             return None;
         }
 
-        let wire: WireTxnHdrV1 = pod_read_unaligned(&bytes[0..core::mem::size_of::<WireTxnHdrV1>()]);
+        let wire: WireTxnHdrV1 =
+            pod_read_unaligned(&bytes[0..core::mem::size_of::<WireTxnHdrV1>()]);
         let mut offset = core::mem::size_of::<WireTxnHdrV1>();
 
         let sig_start = bytes.len() - TN_TXN_SIGNATURE_SZ;
@@ -705,7 +715,8 @@ impl Transaction {
         if bytes.len() < core::mem::size_of::<WireTxnHdrV1>() + TN_TXN_SIGNATURE_SZ {
             return None;
         }
-        let wire: WireTxnHdrV1 = pod_read_unaligned(&bytes[0..core::mem::size_of::<WireTxnHdrV1>()]);
+        let wire: WireTxnHdrV1 =
+            pod_read_unaligned(&bytes[0..core::mem::size_of::<WireTxnHdrV1>()]);
         match field {
             "fee_payer_signature" => {
                 let sig_start = bytes.len() - TN_TXN_SIGNATURE_SZ;
@@ -877,7 +888,10 @@ pub fn validate_account_layout(
         .and_then(|v| v.checked_add(r_accs.len()))
         .ok_or_else(|| RpcError::too_many_accounts(usize::MAX, TN_TXN_MAX_ACCOUNTS))?;
     if total_accounts > TN_TXN_MAX_ACCOUNTS {
-        return Err(RpcError::too_many_accounts(total_accounts, TN_TXN_MAX_ACCOUNTS));
+        return Err(RpcError::too_many_accounts(
+            total_accounts,
+            TN_TXN_MAX_ACCOUNTS,
+        ));
     }
     if fee_payer == program {
         return Err(RpcError::duplicate_account());

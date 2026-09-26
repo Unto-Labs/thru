@@ -17,6 +17,10 @@ export class DedupBuffer<T> {
     this.keyOf = options.keyOf;
   }
 
+  has(item: T): boolean {
+    return this.itemsBySlot.get(this.slotOf(item))?.has(this.keyOf(item)) ?? false;
+  }
+
   insert(item: T): boolean {
     const slot = this.slotOf(item);
     const key = this.keyOf(item);

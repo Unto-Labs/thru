@@ -18,4 +18,4 @@ $(call add-objs,tn_rle,tn_sdk)
 $(call add-asms,entrypoint,tn_sdk)
 
 # Add headers
-$(call add-hdrs,tn_sdk.h tn_sdk_base.h tn_sdk_syscall.h tn_sdk_sha256.h tn_sdk_blake3.h tn_sdk_types.h tn_sdk_txn.h tn_crypto.h tn_rle.h)
+$(call add-hdrs,tn_sdk.h tn_sdk_base.h tn_sdk_syscall.h tn_sdk_sha256.h tn_sdk_blake3.h tn_sdk_programs.h tn_sdk_types.h tn_sdk_txn.h tn_crypto.h tn_rle.h)

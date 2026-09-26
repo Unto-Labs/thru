@@ -43,6 +43,8 @@ export class AsyncQueue<T> implements AsyncIterable<T> {
     }
   }
 
+  get size(): number { return this.values.length; }
+
   get isClosed(): boolean {
     return this.closed;
   }

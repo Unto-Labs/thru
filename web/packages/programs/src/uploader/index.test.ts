@@ -19,8 +19,8 @@ describe("uploader SDK", () => {
 
   it("matches the Rust derivation vector", () => {
     expect(deriveUploadAddresses("nft_program")).toMatchObject({
-      metaAccountAddress: "taQEPklQRpE6rVlJ-XvUglKbjGIka1MTU9NDebMAWK4HBr",
-      bufferAccountAddress: "tavDEeyUOTr1GZKoYzACMI9omCnevh01E7XkXZMIv9pxcM",
+      metaAccountAddress: "taEktoLtrjtZxKPAtIjtzX4nH9adB3KU6nc2nOg6sqjA_W",
+      bufferAccountAddress: "taJVgXjZiK4v8DE0DeHS9EUr42bTF0zpdUyf4YwpcRoA3v",
     });
   });
 

@@ -1,4 +1,5 @@
 #!/usr/bin/env tsx
+import { TOKEN_PROGRAM_ADDRESS } from "@thru/sdk";
 
 /**
  * Test script for streaming all token program accounts using createAccountsByOwnerReplay.
@@ -12,8 +13,8 @@
 import { decodeAddress, encodeAddress } from "@thru/sdk/helpers";
 import { AccountView, ChainClient, createAccountsByOwnerReplay } from "../src";
 
-const BASE_URL = "https://rpc.alphanet.thru.org";
-const TOKEN_PROGRAM = "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKqq";
+const BASE_URL = process.env.GRPC_URL ?? "https://rpc.alphanet.thru.org";
+const TOKEN_PROGRAM = process.env.TOKEN_PROGRAM ?? TOKEN_PROGRAM_ADDRESS;
 
 // Account data sizes from token_program.abi.yaml
 const TOKEN_ACCOUNT_SIZE = 73;

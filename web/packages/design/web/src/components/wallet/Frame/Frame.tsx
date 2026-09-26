@@ -23,6 +23,10 @@ const X = (p: React.SVGProps<SVGSVGElement>) => (
 export interface FrameSite {
   /** Site label, e.g. "app.thru.org". */
   label: string;
+  /** Full origin shown on hover when the label is its host. */
+  labelTitle?: string;
+  /** Keep the entire requester host visible, including long subdomains. */
+  wrapLabel?: boolean;
   /** Site identity mark shown before the label (a `Disc`, an `<img>`, …).
    *  Defaults to the brick Thru circle. */
   icon?: React.ReactNode;
@@ -236,7 +240,11 @@ export const Frame = React.forwardRef<HTMLDivElement, FrameProps>(
           ) : site ? (
             <span className="tds-frame__site">
               {site.icon ?? <span className="tds-frame__logo" aria-hidden />}
-              <span className="tds-frame__label" title={site.label}>
+              <span
+                className={cn("tds-frame__label", site.wrapLabel && "tds-frame__label--wrap")}
+                title={site.labelTitle ?? site.label}
+                dir="ltr"
+              >
                 {site.label}
               </span>
               {site.verified && (

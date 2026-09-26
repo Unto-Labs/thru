@@ -45,8 +45,9 @@ export interface PasskeyClientCapabilities {
 export interface PasskeyPopupContext {
   appId?: string;
   appName?: string;
-  appUrl?: string;
   origin?: string;
+  /** Set by the wallet when the native host declared the request origin. */
+  originIsAppDeclared?: boolean;
   imageUrl?: string;
   preferStoredPasskey?: boolean;
 }
@@ -102,6 +103,8 @@ export interface PasskeyPopupCreateRequestPayload {
 export interface PasskeyPopupGetStoredRequestPayload {
   rpId?: string;
   preferDiscoverable?: boolean;
+  /** Lead the popup's prompt with the hybrid (phone QR) option. */
+  preferHybrid?: boolean;
   challengeBase64Url: string;
   context?: PasskeyPopupContext;
 }

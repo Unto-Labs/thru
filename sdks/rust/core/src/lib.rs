@@ -3,6 +3,7 @@
 pub use heapless;
 pub mod account_safe;
 pub mod mem;
+pub mod programs;
 pub mod syscall;
 pub mod types;
 pub mod vmptr;

@@ -31,7 +31,9 @@ Config is chain-scoped:
 - `polygon.polygonBridgeAddress`: Polygon Bridge contract address.
 - `polygon.signer`: Polygon transaction signer and fee payer.
 - `thru.thruBridgeProgramAddress`: Thru bridge program address.
-- `thru token program`: fixed to `taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKqq`.
+- `thru.tokenProgramAddress`: optional Token deployment override; defaults to the
+  SDK's canonical `taTOKENKRgcl3vO0yVhftATDbXuhgWcfaaxv9xpEEdMdUE` for freshly
+  bootstrapped networks. Set this explicitly for a different deployed network.
 - `thru.signer.feePayerAddress`: Thru fee payer/depositor account (`ta...`).
 - `thru.signer.feePayerPrivateKey`: Thru Ed25519 private key (32-byte hex).
 

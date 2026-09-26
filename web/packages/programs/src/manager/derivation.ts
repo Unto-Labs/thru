@@ -1,11 +1,11 @@
 import { deriveProgramAddress } from '@thru/sdk';
-import { MANAGER_PROGRAM_ADDRESS } from './constants';
+import { MANAGER_PROGRAM_ADDRESS } from './constants.js';
 import {
   padSeed,
   pubkeyBytes,
   type ProgramSeed,
-} from '../utils/helpers';
-import type { ManagedProgramAddresses } from './types';
+} from '../utils/helpers.js';
+import type { ManagedProgramAddresses } from './types.js';
 
 export function deriveManagedProgramAddresses(
   seed: ProgramSeed,

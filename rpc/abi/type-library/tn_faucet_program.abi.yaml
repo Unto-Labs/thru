@@ -1,0 +1,89 @@
+abi:
+  package: thru.program.faucet
+  name: Faucet
+  abi-version: 1
+  package-version: 1.0.0
+  description: >-
+    Permissionless test-native-THRU faucet. The vault is the persistent PDA
+    derived under this program with ASCII vault padded to 32 bytes. It has
+    no account data. Initialize creates it and transfers a positive amount
+    from transaction fee payer index zero atomically; it rejects existing
+    vaults. Deposit is an explicit top-up. Withdraw is capped at 10000 base
+    units per call, not per identity or time interval. Not a production treasury.
+  options:
+    program-metadata:
+      root-types:
+        instruction-root: FaucetInstruction
+        errors: FaucetError
+types:
+  - name: DepositArgs
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: faucet_account_idx
+            field-type: { primitive: u16 }
+          - name: depositor_account_idx
+            field-type: { primitive: u16 }
+          - name: eoa_program_idx
+            field-type: { primitive: u16 }
+          - name: amount
+            field-type: { primitive: u64 }
+  - name: WithdrawArgs
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: faucet_account_idx
+            field-type: { primitive: u16 }
+          - name: recipient_account_idx
+            field-type: { primitive: u16 }
+          - name: amount
+            field-type: { primitive: u64 }
+  - name: InitializeArgs
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: faucet_account_idx
+            field-type: { primitive: u16 }
+          - name: eoa_program_idx
+            field-type: { primitive: u16 }
+          - name: amount
+            field-type: { primitive: u64 }
+          - name: proof_size
+            field-type: { primitive: u64 }
+          - name: proof
+            field-type:
+              array:
+                size: { field-ref: { path: [proof_size] } }
+                element-type: { primitive: u8 }
+  - name: FaucetInstruction
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: tag
+            field-type: { primitive: u32 }
+          - name: payload
+            field-type:
+              enum:
+                packed: true
+                tag-ref: { field-ref: { path: [tag] } }
+                variants:
+                  - name: deposit
+                    tag-value: 0
+                    variant-type: { type-ref: { name: DepositArgs } }
+                  - name: withdraw
+                    tag-value: 1
+                    variant-type: { type-ref: { name: WithdrawArgs } }
+                  - name: initialize
+                    tag-value: 2
+                    variant-type: { type-ref: { name: InitializeArgs } }
+  - name: FaucetError
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: code
+            field-type: { primitive: u64 }

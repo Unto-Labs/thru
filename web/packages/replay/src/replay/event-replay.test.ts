@@ -14,6 +14,10 @@ import type { EventSource } from "../chain-client";
 import { createEventReplay } from "./event-replay";
 
 describe("event replay", () => {
+  test.each([NaN, Infinity, -1, 0.5, Number.MAX_SAFE_INTEGER + 1])('rejects invalid payload limit %s before creating a client', maxEventBytes => {
+    expect(() => createEventReplay({ startSlot: 0n, maxEventBytes, clientFactory: () => { throw new Error('must not start'); } })).toThrow('byte bound');
+  });
+
   test("uses checkpoint event ids to resume after the committed event", async () => {
     const listFilters: string[] = [];
     const streamFilters: string[] = [];

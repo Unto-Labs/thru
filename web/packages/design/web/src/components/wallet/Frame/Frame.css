@@ -67,6 +67,15 @@
   white-space: nowrap;
   text-overflow: ellipsis;
 }
+.tds-frame__label--wrap {
+  overflow: visible;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+.tds-frame__bar:has(.tds-frame__label--wrap) {
+  min-height: 40px;
+  height: auto;
+}
 .tds-frame__logo {
   width: 22px;
   height: 22px;
@@ -85,6 +94,7 @@
   flex: none;
 }
 .tds-frame__chip {
+  flex: none;
   font-family: var(--font-mono);
   font-size: 10px;
   padding: var(--space-1) var(--space-2);
@@ -236,5 +246,13 @@
   .tds-frame {
     max-height: 92vh;
     max-height: 92dvh;
+  }
+}
+
+@media (max-width: 640px) {
+  .tds-frame__bar:has(.tds-frame__label--wrap) {
+    min-height: 52px;
+    padding-top: 8px;
+    padding-bottom: 8px;
   }
 }

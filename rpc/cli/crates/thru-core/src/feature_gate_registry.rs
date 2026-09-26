@@ -9,6 +9,8 @@ use serde::Deserialize;
 use std::collections::HashSet;
 use std::path::Path;
 
+include!("feature_gate_registry_indices.rs");
+
 // The default registry is bundled so installed CLI binaries do not depend on a
 // source-checkout path. --registry remains available for local/dev overrides.
 const DEFAULT_FEATURE_GATE_REGISTRY_TOML: &str =

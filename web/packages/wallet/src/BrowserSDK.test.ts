@@ -546,6 +546,30 @@ describe("BrowserSDK transaction signing scheme", () => {
 });
 
 describe("BrowserSDK connection restoration", () => {
+  it("drops legacy appUrl fields before sending connection metadata", async () => {
+    const metadata = {
+      appId: "legacy-app",
+      appName: "Claimed App",
+      appUrl: "https://trusted.example",
+    };
+    const sdk = new BrowserSDK({
+      iframeUrl: "https://app.tid.sh/embedded",
+      signingSessionStorage: false,
+      metadata,
+    });
+    const provider = providerInstances[0];
+    provider.connect = vi.fn().mockResolvedValue({
+      accounts: [ACCOUNT_B],
+      selectedAccount: ACCOUNT_B,
+      status: "completed",
+    });
+    await sdk.connect({ metadata });
+    expect(provider.connect).toHaveBeenCalledWith(expect.objectContaining({
+      metadata: { appId: "legacy-app", appName: "Claimed App" },
+    }));
+    sdk.destroy();
+  });
+
   it("restores connect-time app metadata when construction metadata is omitted", async () => {
     const storage = new MockStorage();
     const sdk = new BrowserSDK({

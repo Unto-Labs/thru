@@ -39,3 +39,5 @@ url = "2.5"
 
 [dev-dependencies]
 tokio-test = "0.4"
+tokio-stream = { version = "0.1", features = ["net"] }
+tonic-prost = "0.14"

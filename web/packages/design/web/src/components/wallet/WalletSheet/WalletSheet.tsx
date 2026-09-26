@@ -15,6 +15,7 @@ import { TxTree } from "../TxTree/TxTree";
 import { Collapsible } from "@base-ui/react/collapsible";
 import { useWaitStages, WaitHero, WALLET_SHEET_SLOW_MS, WALLET_SHEET_ESCALATE_MS } from "./wait";
 import { DepositScreens } from "./DepositScreens";
+import { PairScreens } from "./PairScreens";
 import "./WalletSheet.css";
 
 /* ── Icons ─────────────────────────────────────────────────────────── */
@@ -55,7 +56,10 @@ export type WalletSheetScreen =
   | "depositContact"
   | "depositVerify"
   | "depositPending"
-  | "depositDone";
+  | "depositDone"
+  | "pairIntro"
+  | "pairCode"
+  | "pairDone";
 
 export type WalletSheetFlow = "signin" | "signup";
 
@@ -674,7 +678,8 @@ function TxDone({
  *
  * Screens: SignIn, Loading, Permissions, Connected, Error, TxApprove,
  * TxPending, TxDone, and the Add funds set — Deposit (chooser), DepositCrypto,
- * DepositCard, DepositVerify, DepositPending, DepositDone. All presentational —
+ * DepositCard, DepositVerify, DepositPending, DepositDone, and the pair-a-new-
+ * device set — PairIntro, PairCode, PairDone. All presentational —
  * the host drives the state machine.
  * Pair with `WalletOverlay` for the top-center island presentation.
  */
@@ -689,5 +694,6 @@ export const WalletSheet = {
   TxPending,
   TxDone,
   ...DepositScreens,
+  ...PairScreens,
   PoweredBy,
 };

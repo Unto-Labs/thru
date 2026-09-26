@@ -243,12 +243,16 @@ async function signWithPasskeyAssertion(
   options: PasskeyReportingOptions
 ): Promise<PasskeySigningResult & { credentialId: string }> {
   const challengeBytes = new Uint8Array(challenge);
-  const getOptions: PublicKeyCredentialRequestOptions = {
+  /* `hints` is WebAuthn L3; this package's DOM lib predates it. */
+  const getOptions: PublicKeyCredentialRequestOptions & { hints?: string[] } = {
     challenge: challengeBytes,
     rpId,
     userVerification: 'required',
     timeout: 60000,
   };
+  if (options.preferHybrid) {
+    getOptions.hints = ['hybrid'];
+  }
 
   if (credentialId) {
     const credentialIdBuffer = base64UrlToArrayBuffer(credentialId);
@@ -340,6 +344,7 @@ async function requestStoredPasskeyPopup(
       challengeBase64Url: bytesToBase64Url(challenge),
       rpId,
       preferDiscoverable,
+      ...(options.preferHybrid ? { preferHybrid: true } : {}),
       context,
     },
     preopenedPopup,

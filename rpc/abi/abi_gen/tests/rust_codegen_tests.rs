@@ -1762,6 +1762,217 @@ fn test_builder_build_into() {
 }
 
 #[test]
+fn test_rust_fam_builder_alignment_roundtrip() {
+    /* Exercise both the gap before an unpacked FAM and layouts without a gap. */
+    for (case, packed, count_type, prefix_end, payload_offset) in [
+        ("padded", false, "u32", 4, 8),
+        ("padded_byte_count", false, "u8", 1, 8),
+        ("packed", true, "u32", 4, 4),
+        ("aligned", false, "u64", 8, 8),
+    ] {
+        let test_name = format!("rust_fam_alignment_{case}");
+        let temp_dir = std::env::temp_dir().join(&test_name);
+        fs::create_dir_all(&temp_dir).expect("Failed to create temp dir");
+        let abi_content = format!(
+            r#"
+abi:
+  package: "test.fam_alignment"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "FAM alignment regression"
+types:
+  - name: "Message"
+    kind:
+      struct:
+        packed: {packed}
+        fields:
+          - name: "count"
+            field-type:
+              primitive: {count_type}
+          - name: "payload"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["count"]
+                element-type:
+                  primitive: u64
+  - name: "MessageWithTrailer"
+    kind:
+      struct:
+        packed: {packed}
+        fields:
+          - name: "count"
+            field-type:
+              primitive: u8
+          - name: "payload"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["count"]
+                element-type:
+                  primitive: u64
+          - name: "marker"
+            field-type:
+              primitive: u8
+          - name: "suffix"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["count"]
+                element-type:
+                  primitive: u8
+"#
+        );
+        let abi_path = temp_dir.join("alignment.abi.yaml");
+        fs::write(&abi_path, abi_content).expect("Failed to write temp ABI file");
+        let resolver =
+            resolve_types_from_abi(abi_path.to_str().unwrap()).expect("Failed to resolve types");
+        let resolved_refs: Vec<&ResolvedType> = resolver
+            .resolution_order
+            .iter()
+            .filter_map(|name| resolver.get_type_info(name))
+            .collect();
+        let rust_gen = RustCodeGenerator::new(
+            &resolver,
+            RustCodeGeneratorOptions {
+                output_dir: temp_dir.to_str().unwrap().to_string(),
+                ..Default::default()
+            },
+        );
+        let types_code = rust_gen.emit_code(&resolved_refs);
+        let mut functions_code = fs::read_to_string(temp_dir.join("functions.rs"))
+            .expect("Failed to read generated functions");
+
+        /* total_size is private, so test it within its generated module. */
+        functions_code.push_str(&format!(
+            r#"
+#[cfg(test)]
+mod alignment_tests {{
+    use super::*;
+
+    #[test]
+    fn total_size_includes_padding() {{
+        assert_eq!(MessageBuilder::new().total_size(), {payload_offset});
+        for count in 0..=2 {{
+            let values = vec![1u64; count];
+            assert_eq!(MessageBuilder::new().set_payload(&values).total_size(),
+                       {payload_offset} + count * 8);
+        }}
+    }}
+}}
+"#
+        ));
+
+        let test_code = r#"
+const PREFIX_END: usize = __PREFIX_END__;
+const PAYLOAD_OFFSET: usize = __PAYLOAD_OFFSET__;
+const TRAILER_PAYLOAD_OFFSET: usize = __TRAILER_PAYLOAD_OFFSET__;
+
+#[test]
+fn accessors_preserve_padding_before_earlier_arrays() {
+    for count in 0..=2 {
+        let trailer_offset = TRAILER_PAYLOAD_OFFSET + count * 8;
+        let mut expected = vec![0u8; trailer_offset];
+        expected[0] = count as u8;
+        for index in 0..count {
+            expected[TRAILER_PAYLOAD_OFFSET + index * 8..TRAILER_PAYLOAD_OFFSET + (index + 1) * 8]
+                .copy_from_slice(&0x0123456789abcdefu64.to_le_bytes());
+        }
+        expected.push(0x5a);
+        expected.extend(vec![0x42; count]);
+
+        let message = MessageWithTrailer::from_slice(&expected).unwrap();
+        assert_eq!(message.marker(), 0x5a);
+        assert_eq!(message.suffix(), &vec![0x42; count]);
+        assert_eq!(message.size(), expected.len());
+
+        let mut actual = vec![0xa5; expected.len()];
+        assert_eq!(MessageWithTrailer::new(&mut actual, count as _).unwrap(), expected.len());
+        let mut view = MessageWithTrailerMut::from_slice_mut(&mut actual).unwrap();
+        for index in 0..count {
+            view.payload_set(index, 0x0123456789abcdef);
+        }
+        view.set_marker(0x5a);
+        assert_eq!(view.marker(), 0x5a);
+        view.set_suffix(&vec![0x42; count]);
+        assert_eq!(actual, expected);
+    }
+}
+
+#[test]
+fn builder_preserves_fam_alignment() {
+    let values = [0x0123456789abcdefu64, 0xfedcba9876543210];
+    for count in 0..=values.len() {
+        let values = &values[..count];
+        let payload: Vec<u8> = values.iter().flat_map(|value| value.to_le_bytes()).collect();
+        let mut expected = vec![0u8; PAYLOAD_OFFSET];
+        expected[..PREFIX_END].copy_from_slice(&(count as u64).to_le_bytes()[..PREFIX_END]);
+        expected.extend_from_slice(&payload);
+
+        let bytes = MessageBuilder::new().set_payload(values).build();
+        assert_eq!(bytes, expected);
+        assert_eq!(MessageBuilder::new().set_payload_bytes(&payload).build(), expected);
+
+        let message = Message::from_slice(&bytes).expect("Built message should parse");
+        assert_eq!(Message::validate(&bytes).unwrap(), expected.len());
+        if bytes.len() > PREFIX_END {
+            assert!(Message::validate(&bytes[..bytes.len() - 1]).is_err());
+        }
+        assert_eq!(message.size(), expected.len());
+        assert_eq!(message.count() as usize, count);
+        assert_eq!(message.payload_len(), count);
+        for (index, value) in values.iter().enumerate() {
+            assert_eq!(message.payload_get(index), *value);
+        }
+
+        let finished = MessageBuilder::new().set_payload(values).finish()
+            .expect("Finished message should validate");
+        assert_eq!(finished.count() as usize, count);
+        assert_eq!(finished.payload_len(), count);
+        for (index, value) in values.iter().enumerate() {
+            assert_eq!(finished.payload_get(index), *value);
+        }
+
+        for extra in [0, 5] {
+            let mut target = vec![0xa5; expected.len() + extra];
+            let written = MessageBuilder::new().set_payload(values).build_into(&mut target)
+                .expect("Sufficient target should succeed");
+            assert_eq!(written, expected.len());
+            assert_eq!(&target[..written], expected.as_slice());
+            assert!(target[written..].iter().all(|byte| *byte == 0xa5));
+            assert!(Message::from_slice(&target[..written]).is_ok());
+        }
+
+        let mut short = vec![0xa5; expected.len() - 1];
+        assert_eq!(MessageBuilder::new().set_payload(values).build_into(&mut short),
+                   Err("target buffer too small"));
+        assert!(short.iter().all(|byte| *byte == 0xa5));
+
+        let mut initialized = vec![0xa5; expected.len()];
+        assert_eq!(Message::new(&mut initialized, count as _).unwrap(), expected.len());
+        let mut view = MessageMut::from_slice_mut(&mut initialized).unwrap();
+        for (index, value) in values.iter().enumerate() {
+            view.payload_set(index, *value);
+        }
+        assert_eq!(initialized, expected);
+    }
+    assert_eq!(MessageBuilder::new().build(), vec![0u8; PAYLOAD_OFFSET]);
+}
+"#
+        .replace("__PREFIX_END__", &prefix_end.to_string())
+        .replace("__PAYLOAD_OFFSET__", &payload_offset.to_string())
+        .replace("__TRAILER_PAYLOAD_OFFSET__", if packed { "1" } else { "8" });
+
+        compile_and_run_rust_tests(&types_code, &functions_code, &test_code, &test_name)
+            .unwrap_or_else(|err| panic!("FAM alignment case {case} failed: {err}"));
+        let _ = fs::remove_dir_all(&temp_dir);
+    }
+}
+
+#[test]
 fn test_rust_size_discriminated_union_compiles() {
     /* Test that size-discriminated union types compile correctly */
     let temp_dir = std::env::temp_dir().join("rust_sdu_test");

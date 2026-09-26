@@ -68,3 +68,4 @@ export type {
   BlockFinished,
 } from "@thru/sdk/proto";
 
+export { readPinnedAccounts } from './pinned-accounts';

@@ -716,8 +716,9 @@ impl Client {
     }
 
     /// Submit a transaction and wait for execution or timeout.
-    /// Uses server-side streaming to wait for confirmation, then fetches
-    /// full transaction details with a single query.
+    /// Uses server-side streaming, then polls for full transaction details.
+    /// If that lookup fails, [`ClientError::TransactionDetailsUnavailable`]
+    /// retains the signature and streamed outcome, including execution failures.
     pub async fn execute_transaction(
         &self,
         transaction: &[u8],
@@ -741,43 +742,38 @@ impl Client {
             Err(err) => return Err(err),
         };
 
-        /* If the stream returned an execution error, propagate it early so
-        callers that only check Result don't miss it. */
-        if let Some(ref exec) = track_resp.execution_result {
-            if exec.execution_result != 0 || exec.vm_error != 0 {
-                /* Still need full details for the caller to inspect */
+        let details = async {
+            let remaining = timeout
+                .saturating_sub(start.elapsed())
+                .saturating_sub(Duration::from_millis(100));
+            let transaction_proto = self
+                .fetch_transaction_details(&signature_bytes, remaining, 3)
+                .await?
+                .ok_or_else(|| {
+                    ClientError::TransactionVerification(
+                        "Transaction not found in query within timeout".to_string(),
+                    )
+                })?;
+            let mut details = self
+                .transaction_proto_to_details(transaction_proto, &signature_bytes)
+                .await?;
+            /* Nonce rejects persist no expected-nonce column in ClickHouse;
+            the streamed value is authoritative (UNTO-2619). */
+            if details.fee_payer_expected_nonce.is_none() {
+                details.fee_payer_expected_nonce = track_resp
+                    .execution_result
+                    .as_ref()
+                    .and_then(|exec| exec.fee_payer_expected_nonce);
             }
+            Ok(details)
         }
+        .await;
 
-        /* Fetch the full Transaction proto (header, body, slot, etc.) */
-        let remaining = timeout
-            .saturating_sub(start.elapsed())
-            .saturating_sub(Duration::from_millis(100));
-        match self
-            .fetch_transaction_details(&signature_bytes, remaining, 3)
-            .await?
-        {
-            Some(transaction_proto) => {
-                let mut details = self
-                    .transaction_proto_to_details(transaction_proto, &signature_bytes)
-                    .await?;
-                /* fee_payer_expected_nonce reaches us only on the streamed
-                   result: a nonce reject persists nothing, so there is no
-                   ClickHouse column behind it and the query reconstruction
-                   above always leaves it None. Carry it over from the stream,
-                   which is authoritative for this field (UNTO-2619). */
-                if details.fee_payer_expected_nonce.is_none() {
-                    details.fee_payer_expected_nonce = track_resp
-                        .execution_result
-                        .as_ref()
-                        .and_then(|exec| exec.fee_payer_expected_nonce);
-                }
-                Ok(details)
-            }
-            None => Err(ClientError::TransactionVerification(
-                "Transaction confirmed via stream but not found in query".to_string(),
-            )),
-        }
+        details.map_err(|source| ClientError::TransactionDetailsUnavailable {
+            signature: tn_signature_to_string(&signature_bytes),
+            outcome: Box::new(track_resp),
+            source: Box::new(source),
+        })
     }
 
     async fn send_and_track_transaction(

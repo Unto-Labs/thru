@@ -253,6 +253,20 @@ pub fn format_error_json(err: &CliError) -> Value {
                 "message": message,
             }
         }),
+        CliError::TransactionDetailsUnavailable {
+            signature,
+            outcome,
+            message,
+        } => json!({
+            "error": {
+                "type": "transaction_details_unavailable",
+                "message": format!("Transaction observed via stream but details unavailable: {message}"),
+                "signature": signature,
+                "consensus_status": outcome.consensus_status,
+                "execution_result": outcome.execution_result.as_ref().map(|exec| exec.execution_result),
+                "vm_error": outcome.execution_result.as_ref().map(|exec| exec.vm_error),
+            }
+        }),
         CliError::ProgramUpload(message) => json!({
             "error": {
                 "type": "program_upload",
@@ -356,5 +370,64 @@ pub fn format_error_json(err: &CliError) -> Value {
                 "kind": format!("{:?}", io_error.kind()),
             }
         }),
+    }
+}
+
+#[cfg(test)]
+mod transaction_outcome_tests {
+    use super::*;
+    use thru_client::proto::{
+        core::v1::TransactionExecutionResult, services::v1::SendAndTrackTxnResponse,
+    };
+
+    fn query_failure(execution_result: Option<TransactionExecutionResult>) -> CliError {
+        thru_client::ClientError::TransactionDetailsUnavailable {
+            signature: "submitted-signature".into(),
+            outcome: Box::new(SendAndTrackTxnResponse {
+                consensus_status: 4,
+                execution_result,
+                ..Default::default()
+            }),
+            source: Box::new(thru_client::ClientError::Rpc("query unavailable".into())),
+        }
+        .into()
+    }
+
+    #[test]
+    fn observed_failure_is_reported_as_failed_not_reconcilable() {
+        let error = query_failure(Some(TransactionExecutionResult {
+            vm_error: -511,
+            user_error_code: 17,
+            ..Default::default()
+        }));
+        let json = format_error_json(&error);
+        assert_eq!(json["error"]["type"], "transaction_failed");
+        assert_eq!(json["error"]["signature"], "submitted-signature");
+        assert_eq!(json["error"]["vm_error"], -511);
+        assert_eq!(json["error"]["user_error_code"], 17);
+        assert!(
+            error
+                .to_string()
+                .contains("TN_RUNTIME_TXN_ERR_NONCE_TOO_LOW")
+        );
+    }
+
+    #[test]
+    fn observed_success_is_not_reported_as_failed_submission() {
+        let error = query_failure(Some(TransactionExecutionResult::default()));
+        let json = format_error_json(&error);
+        assert_eq!(json["error"]["type"], "transaction_details_unavailable");
+        assert_eq!(json["error"]["signature"], "submitted-signature");
+        assert_eq!(json["error"]["execution_result"], 0);
+        assert_eq!(json["error"]["vm_error"], 0);
+    }
+
+    #[test]
+    fn absent_execution_is_not_reported_as_success() {
+        let json = format_error_json(&query_failure(None));
+        assert_eq!(json["error"]["type"], "transaction_details_unavailable");
+        assert_eq!(json["error"]["signature"], "submitted-signature");
+        assert!(json["error"]["execution_result"].is_null());
+        assert!(json["error"]["vm_error"].is_null());
     }
 }

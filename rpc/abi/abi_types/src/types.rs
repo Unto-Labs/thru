@@ -68,7 +68,16 @@ impl Default for ContainerAttributes {
 pub struct EnumVariant {
     pub name: String,
     pub tag_value: u64,
+    /// Omitting the payload type is shorthand for a zero-byte empty struct.
+    #[serde(default = "empty_enum_variant_type")]
     pub variant_type: TypeKind,
+}
+
+fn empty_enum_variant_type() -> TypeKind {
+    TypeKind::Struct(StructType {
+        container_attributes: ContainerAttributes::default(),
+        fields: Vec::new(),
+    })
 }
 
 #[derive(Serialize, Deserialize, Debug, PartialEq, Eq, Clone)]

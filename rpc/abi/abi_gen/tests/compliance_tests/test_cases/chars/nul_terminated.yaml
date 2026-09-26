@@ -1,0 +1,7 @@
+test-case:
+  name: chars_nul_terminated
+  abi-file: ../../abi_definitions/chars.abi.yaml
+  type: CharRecord
+  description: Round trip scalar and array char bytes, including bytes after NUL
+  tags: [chars, primitives, arrays]
+  binary-hex: "ff 41 42 00 5a ff 00 00 00 80 ff 34 12"

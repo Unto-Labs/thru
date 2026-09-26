@@ -19,6 +19,7 @@ import {
   formatRawAmount,
   parseTokenAccountData,
 } from "@thru/programs/token";
+import { BOOTSTRAP_PROGRAM_ADDRESSES } from "@thru/programs/bootstrap-addresses";
 import { base64ToBytes } from "../encoding";
 import type { IThruChain, ThruTransactionReviewPayload } from "../interfaces";
 import {
@@ -74,8 +75,7 @@ export function formatTokenAmountLabel(amount: string, symbol: string): string {
   return `${sign}$${amount.slice(sign.length)}`;
 }
 
-const DEFAULT_TOKEN_PROGRAM_ADDRESS =
-  "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKqq";
+const DEFAULT_TOKEN_PROGRAM_ADDRESS = BOOTSTRAP_PROGRAM_ADDRESSES.token;
 const TOKEN_ACCOUNT_DEFAULT_SEED = new Uint8Array(32);
 const STATE_PROOF_TYPE_CREATING = 1;
 const ACCOUNT_STATE_WAIT_TIMEOUT_MS = 90_000;
@@ -105,6 +105,8 @@ const TOKEN_PROGRAM_ERROR_LABELS: Record<number, string> = {
 
 const VM_ERROR_LABELS: Record<number, string> = {
   0: "Success",
+  [-497]: "Fee payer activation requires a state unit",
+  [-496]: "Block state budget exceeded",
   [-767]: "VM failed",
   [-766]: "Invalid program account",
   [-765]: "Program reverted",

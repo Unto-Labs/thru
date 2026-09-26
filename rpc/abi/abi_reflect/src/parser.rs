@@ -654,7 +654,15 @@ impl<'a> Parser<'a> {
             }
         };
 
-        let total_size = array_size * element_size;
+        /* Byte bounds cannot limit iteration over zero-sized elements. */
+        if element_size == 0 && array_size > 0 {
+            return Err(ParseError::ExpressionEvaluationFailed(
+                "Arrays of zero-sized elements are not supported".to_string(),
+            ));
+        }
+        let total_size = array_size.checked_mul(element_size).ok_or_else(|| {
+            ParseError::ExpressionEvaluationFailed("Array size overflow".to_string())
+        })?;
         if total_size > data.len() {
             return Err(ParseError::InsufficientData {
                 needed: total_size,
@@ -684,7 +692,15 @@ impl<'a> Parser<'a> {
         count: usize,
         element_type: &ResolvedType,
     ) -> Result<(Vec<ReflectedValue>, usize), ParseError> {
-        let mut elements = Vec::with_capacity(count);
+        /* Each accepted jagged element must consume at least one byte.
+         * Check this lower bound before allocating or parsing elements. */
+        if count > data.len() {
+            return Err(ParseError::InsufficientData {
+                needed: count,
+                available: data.len(),
+            });
+        }
+        let mut elements = Vec::new();
         let element_type_info = self.reflected_type(element_type);
         let mut cursor = 0usize;
 

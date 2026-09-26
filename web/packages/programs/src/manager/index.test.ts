@@ -25,13 +25,13 @@ function creationProof(siblingCount = 0): Uint8Array {
 describe('manager SDK', () => {
   it('exports the canonical manager ID and Rust-compatible derivation vectors', () => {
     expect(MANAGER_PROGRAM_ADDRESS).toBe(
-      'taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQE'
+      'taMGRmPoSTkUtF6UlmCIq58K8OYsnXshOMPdobxxHytqmu'
     );
     expect(deriveManagedProgramAddresses('nft')).toMatchObject({
       programMetaAccountAddress:
-        'ta00Efqv-BVcX3MsYbqO9JN2arQVJEMg3xqQF2iy0H1TGV',
+        'taJM9c0C5t2kaaNv_PyeVn6khHuwc-zeN39MUTW_yghOBU',
       programAccountAddress:
-        'taAFaJ4ctkbuhYBl2FX6tmXGJZQgShIXt6TPrMw4-GOsv4',
+        'tak_0Jtlh0y2hPHscfXkS1eXuEpPUB35xh5KqT5A2fR2ZE',
     });
   });
 

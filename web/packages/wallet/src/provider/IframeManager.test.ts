@@ -16,10 +16,10 @@ afterEach(() => {
 
 describe('IframeManager', () => {
   it.each(['https://app.tid.sh', 'https://staging-app.tid.sh'])(
-    'delegates WebAuthn and clipboard writes only to configured origin %s',
+    'delegates WebAuthn, clipboard writes and sharing only to configured origin %s',
     (origin) => {
       expect(walletIframeAllow(`${origin}/embedded?theme=dark`)).toBe(
-        `publickey-credentials-get ${origin}; publickey-credentials-create ${origin}; payment *; clipboard-write ${origin}`
+        `publickey-credentials-get ${origin}; publickey-credentials-create ${origin}; payment *; clipboard-write ${origin}; web-share ${origin}`
       );
     }
   );

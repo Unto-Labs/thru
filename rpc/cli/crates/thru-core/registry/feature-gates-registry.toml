@@ -28,3 +28,39 @@ description = "Reserved consensus-critical runtime parameter encoded as a u64."
 category = "consensus-critical"
 type = "u64"
 tracking = "UNTO-1818"
+
+[[entry]]
+index = 3
+name = "max_state_units_per_block"
+kind = "chain-param"
+description = "Maximum requested 4096-byte state units admitted per block."
+category = "consensus-critical"
+type = "u32"
+tracking = "UNTO-1818"
+
+[[entry]]
+index = 4
+name = "max_active_state_units"
+kind = "chain-param"
+description = "Maximum active state in 4096-byte account-footprint units."
+category = "consensus-critical"
+type = "u64"
+tracking = "UNTO-1818"
+
+[[entry]]
+index = 5
+name = "compress_baseline_units"
+kind = "chain-param"
+description = "Active-state floor and initial age window for non-owner compression."
+category = "consensus-critical"
+type = "u64"
+tracking = "UNTO-1818"
+
+[[entry]]
+index = 6
+name = "compress_halving_step_units"
+kind = "chain-param"
+description = "Active-state increment that halves the non-owner compression age window."
+category = "consensus-critical"
+type = "u64"
+tracking = "UNTO-1818"

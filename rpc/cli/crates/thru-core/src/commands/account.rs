@@ -1,10 +1,9 @@
 //! Account management command implementations
 
 use base64::Engine;
-use thru_base::txn_tools::SYSTEM_PROGRAM;
 use std::time::Duration;
 use thru_base::rpc_types::{MakeStateProofConfig, ProofType};
-use thru_base::tn_account::{TN_ACCOUNT_META_FOOTPRINT, TnAccountMeta};
+use thru_base::tn_account::{TnAccountMeta, TN_ACCOUNT_META_FOOTPRINT};
 use thru_base::{StateProof, TransactionBuilder};
 
 use crate::cli::AccountCommands;
@@ -140,9 +139,10 @@ async fn create_account(
         CliError::TransactionSubmission(format!("Failed to get current slot: {}", e))
     })?;
 
-    let chain_info = client.get_chain_info().await.map_err(|e| {
-        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
-    })?;
+    let chain_info = client
+        .get_chain_info()
+        .await
+        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
 
     let current_slot = block_height.finalized_height;
 
@@ -206,9 +206,7 @@ async fn create_account(
     let transaction_details = client
         .execute_transaction(&transaction_bytes, timeout)
         .await
-        .map_err(|e| {
-            CliError::TransactionSubmission(format!("Failed to submit transaction: {}", e))
-        })?;
+        .map_err(CliError::from)?;
 
     // Check if transaction was successful
     if transaction_details.execution_result != 0 || transaction_details.vm_error != 0 {
@@ -293,9 +291,10 @@ async fn compress_account(
         CliError::TransactionSubmission(format!("Failed to get current block height: {}", e))
     })?;
 
-    let chain_info = client.get_chain_info().await.map_err(|e| {
-        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
-    })?;
+    let chain_info = client
+        .get_chain_info()
+        .await
+        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
 
     let start_slot = block_height.executed_height + 1;
 
@@ -382,7 +381,7 @@ async fn compress_account(
     // Build compression transaction using system program (all zeros)
     let mut transaction = TransactionBuilder::build_compress_account(
         fee_payer_keypair.public_key, // Fee payer
-        SYSTEM_PROGRAM,               // System program
+        config.get_system_test_program_pubkey()?.to_bytes()?,
         target_pubkey.to_bytes()?,    // Target account to compress
         &state_proof_bytes,           // State proof
         1,                            // Fee
@@ -397,7 +396,7 @@ async fn compress_account(
     // Set reasonable resource limits and chain ID
     transaction = transaction
         .with_compute_units(100_300 + account_size * 2)
-        .with_state_units(10_000)
+        .with_state_units(0)
         .with_memory_units(10_000)
         .with_expiry_after(100)
         .with_chain_id(chain_info.chain_id);
@@ -578,9 +577,10 @@ async fn decompress_account(
         CliError::TransactionSubmission(format!("Failed to get current block height: {}", e))
     })?;
 
-    let chain_info = client.get_chain_info().await.map_err(|e| {
-        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
-    })?;
+    let chain_info = client
+        .get_chain_info()
+        .await
+        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
 
     let start_slot = block_height.executed_height + 1;
 
@@ -658,7 +658,7 @@ async fn decompress_direct(
 
     let transaction = TransactionBuilder::build_decompress_account(
         fee_payer_keypair.public_key, // Fee payer
-        SYSTEM_PROGRAM,               // System program
+        config.get_system_test_program_pubkey()?.to_bytes()?,
         target_pubkey.to_bytes()?,    // Target account to decompress
         decomp_data,                  // Account data
         state_proof_bytes,            // State proof
@@ -827,9 +827,10 @@ async fn decompress_with_uploader(
     })?;
     let start_slot = block_height.executed_height + 1;
 
-    let chain_info = client.get_chain_info().await.map_err(|e| {
-        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
-    })?;
+    let chain_info = client
+        .get_chain_info()
+        .await
+        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
     // Get current nonce for fee payer account
     let fee_payer_account_info = client
         .get_account_info(&fee_payer_keypair.address_string, None, None)
@@ -851,7 +852,7 @@ async fn decompress_with_uploader(
 
     let mut transaction = TransactionBuilder::build_decompress2(
         fee_payer_keypair.public_key,
-        SYSTEM_PROGRAM, // System program
+        config.get_system_test_program_pubkey()?.to_bytes()?,
         target_pubkey.to_bytes()?,
         buffer_account.to_bytes()?, // meta_account (same as data_account)
         buffer_account.to_bytes()?, // data_account (same as meta_account)
@@ -1086,9 +1087,10 @@ async fn decompress_with_uploader_huge(
     })?;
     let start_slot = block_height.executed_height + 1;
 
-    let chain_info = client.get_chain_info().await.map_err(|e| {
-        CliError::TransactionSubmission(format!("Failed to get chain info: {}", e))
-    })?;
+    let chain_info = client
+        .get_chain_info()
+        .await
+        .map_err(|e| CliError::TransactionSubmission(format!("Failed to get chain info: {}", e)))?;
     // Get current nonce for fee payer account
     let fee_payer_account_info = client
         .get_account_info(&fee_payer_keypair.address_string, None, None)
@@ -1120,7 +1122,7 @@ async fn decompress_with_uploader_huge(
     // Create DECOMPRESS2 transaction using separate meta and data accounts
     let mut transaction = TransactionBuilder::build_decompress2(
         fee_payer_keypair.public_key,
-        SYSTEM_PROGRAM, // System program
+        config.get_system_test_program_pubkey()?.to_bytes()?,
         target_pubkey.to_bytes()?,
         meta_account.to_bytes()?,   // meta_account
         buffer_account.to_bytes()?, // data_account (buffer_account)
@@ -1134,13 +1136,6 @@ async fn decompress_with_uploader_huge(
     .map_err(|e| {
         CliError::TransactionSubmission(format!("Failed to build DECOMPRESS2 transaction: {}", e))
     })?;
-
-    // Set reasonable resource limits for huge data
-    // transaction = transaction
-    //     .with_compute_units(100_300 + decomp_data.len() as u32 * 2)
-    //     .with_state_units(20_000)  // Increased for huge data
-    //     .with_memory_units(20_000) // Increased for huge data
-    //     .with_expiry_after(100);
 
     // Set chain ID and sign
     transaction = transaction.with_chain_id(chain_info.chain_id);

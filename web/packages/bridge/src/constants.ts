@@ -3,7 +3,7 @@ export const THRU_POLYGON_CHAIN_IDS = {
   polygon: 2,
 } as const;
 
-export const THRU_TOKEN_PROGRAM_ADDRESS = 'taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKqq';
+export { TOKEN_PROGRAM_ADDRESS as THRU_TOKEN_PROGRAM_ADDRESS } from '@thru/sdk';
 
 export const THRU_STATE_PROOF_WIRE_TYPES = {
   existing: 0,

@@ -18,15 +18,19 @@ export class LivePump<T> {
   private minEmitSlot: Slot | null = null;
   private pumpPromise: Promise<void>;
   private closing = false;
+  private readonly maxBufferedItems: number;
 
   constructor(options: {
     source: AsyncIterable<T>;
+    maxBufferedItems?: number;
     slotOf: (item: T) => Slot;
     keyOf?: (item: T) => string;
     logger?: ReplayLogger;
     startInStreamingMode?: boolean;
     initialEmitFloor?: Slot;
   }) {
+    this.maxBufferedItems = options.maxBufferedItems ?? Infinity;
+    if (this.maxBufferedItems !== Infinity && (!Number.isSafeInteger(this.maxBufferedItems) || this.maxBufferedItems < 1)) throw new Error('Invalid replay buffer bound');
     this.sourceIterator = options.source[Symbol.asyncIterator]();
     this.slotOf = options.slotOf;
     this.keyOf = options.keyOf ?? ((item) => options.slotOf(item).toString());
@@ -97,9 +101,13 @@ export class LivePump<T> {
         const slot = this.slotOf(item);
         if (this.minSlotSeen === null || slot < this.minSlotSeen) this.minSlotSeen = slot;
         if (this.maxSlotSeen === null || slot > this.maxSlotSeen) this.maxSlotSeen = slot;
-        if (this.mode === "buffering") this.buffer.insert(item);
-        else {
+        if (this.mode === "buffering") {
+          if (this.buffer.has(item)) continue;
+          if (this.buffer.size >= this.maxBufferedItems) throw new Error('Replay buffer capacity exceeded; reconnect/replay required');
+          this.buffer.insert(item);
+        } else {
           if (this.minEmitSlot !== null && slot < this.minEmitSlot) continue;
+          if (this.queue.size >= this.maxBufferedItems) throw new Error('Replay buffer capacity exceeded; reconnect/replay required');
           this.queue.push(item);
         }
       }

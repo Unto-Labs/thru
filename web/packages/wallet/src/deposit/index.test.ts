@@ -17,9 +17,11 @@ import {
   waitForDepositForWallet,
 } from "./index";
 
-vi.mock("@thru/sdk/helpers", () => ({
-  decodeAddress: vi.fn((address: string) => new Uint8Array([address.length])),
-}));
+vi.mock("@thru/sdk/helpers", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@thru/sdk/helpers")>();
+  return { ...actual, decodeAddress: vi.fn((address: string) => address.startsWith("ta_")
+    ? new Uint8Array([address.length]) : actual.decodeAddress(address)) };
+});
 
 describe("deposit API", () => {
   it("preserves the receiver for stateful delegates", async () => {
@@ -193,6 +195,16 @@ function createThru(
 }
 
 describe("wallet deposit account helpers", () => {
+  it("uses the canonical Token only when a network has no explicit override", () => {
+    const configured = JSON.parse(RUNTIME_CONFIG.networkConfigJson!);
+    expect(createDepositConfig(RUNTIME_CONFIG).getTarget("devnet", "credits").tokenProgramAddress)
+      .toBe("ta_token_program");
+    delete configured.devnet.targets.credits.token_program_address;
+    expect(createDepositConfig({ ...RUNTIME_CONFIG, networkConfigJson: JSON.stringify(configured) })
+      .getTarget("devnet", "credits").tokenProgramAddress)
+      .toBe("taTOKENKRgcl3vO0yVhftATDbXuhgWcfaaxv9xpEEdMdUE");
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
   });

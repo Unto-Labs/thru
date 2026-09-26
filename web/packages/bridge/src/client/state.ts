@@ -77,7 +77,7 @@ function buildThruState(config: NonNullable<BridgeClientConfig['thru']>): ThruCo
   return {
     client: createThruClient({ baseUrl: config.signer.baseUrl }),
     bridgeProgramAddress,
-    tokenProgramAddress: THRU_TOKEN_PROGRAM_ADDRESS,
+    tokenProgramAddress: validateThruAddress(config.tokenProgramAddress ?? THRU_TOKEN_PROGRAM_ADDRESS, 'thru.tokenProgramAddress'),
     feePayerAddress,
     feePayerPrivateKey,
   };

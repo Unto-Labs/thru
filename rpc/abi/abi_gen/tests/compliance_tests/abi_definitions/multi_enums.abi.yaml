@@ -52,10 +52,6 @@ types:
                 variants:
                   - name: "Empty"
                     tag-value: 0
-                    variant-type:
-                      struct:
-                        packed: true
-                        fields: []
                   - name: "Pair"
                     tag-value: 1
                     variant-type:

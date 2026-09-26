@@ -25,9 +25,9 @@ describe('ABI-manager SDK', () => {
       'taAFaJ4ctkbuhYBl2FX6tmXGJZQgShIXt6TPrMw4-GOsv4';
     expect(deriveOfficialABIAddresses(programAddress)).toMatchObject({
       abiMetaAccountAddress:
-        'taTRXKKLkeKvK_XMkdqbMzcqR0cUY20PBwaluN8UKvkkGF',
+        'taOLU1zaR-KPEa8cBkG3u5U7iovhmP-NuOwpGT6bKROhF_',
       abiAccountAddress:
-        'takDA1V6UYKs86PsY7tQjlGOeFkQhmaVCehzy1TylM0ufs',
+        'taoEDtoyUlGvNW-sJdhH0VjmnRG35Oh0FS_oalfGbHUHCn',
     });
     const seed = hashExternalABISeed('publisher-seed');
     const external = deriveExternalABIAddresses(

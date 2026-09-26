@@ -17,7 +17,7 @@ const feePayerAddress = 'taZigmmhU81aF8uitpcLXRkzcXLpbbL7AepFlgZDihVVKT'
 const feePayerPrivateKeyHex = '20c3ac368e5a6d3134d844c9d70823bf545d84aae090cdada859d3f3b8666f8d'
 
 const DEFAULT_COMPUTE_UNITS = 30_000;
-const DEFAULT_STATE_UNITS = 10_000;
+const DEFAULT_STATE_UNITS = 1;
 const DEFAULT_MEMORY_UNITS = 10_000;
 const DEFAULT_EXPIRY_AFTER = 100;
 

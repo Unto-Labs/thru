@@ -65,6 +65,16 @@ pub enum CliError {
     #[error("Transaction verification error: {0}")]
     TransactionVerification(String),
 
+    /// Submission reached the stream, but full details could not be queried.
+    #[error(
+        "Transaction observed via stream but details unavailable (signature: {signature}): {message}"
+    )]
+    TransactionDetailsUnavailable {
+        signature: String,
+        outcome: Box<thru_client::proto::services::v1::SendAndTrackTxnResponse>,
+        message: String,
+    },
+
     /// Resume validation errors
     #[error("Resume validation error: {0}")]
     ResumeValidation(String),
@@ -155,9 +165,40 @@ impl From<thru_client::ClientError> for CliError {
             thru_client::ClientError::TransactionVerification(msg) => {
                 CliError::TransactionVerification(msg)
             }
+            thru_client::ClientError::TransactionDetailsUnavailable {
+                signature,
+                outcome,
+                source,
+            } => {
+                if let Some(exec) = outcome
+                    .execution_result
+                    .as_ref()
+                    .filter(|exec| exec.execution_result != 0 || exec.vm_error != 0)
+                {
+                    let vm_error_label = crate::utils::format_vm_error(exec.vm_error);
+                    let user_error_label = format!("0x{:X}", exec.user_error_code);
+                    return CliError::TransactionFailed {
+                        message: format!(
+                            "Transaction failed with execution result: {} (VM error: {}, User error: {})",
+                            exec.execution_result, vm_error_label, user_error_label
+                        ),
+                        execution_result: exec.execution_result,
+                        vm_error: exec.vm_error,
+                        vm_error_label,
+                        user_error_code: exec.user_error_code,
+                        user_error_label,
+                        signature,
+                    };
+                }
+                CliError::TransactionDetailsUnavailable {
+                    signature,
+                    outcome,
+                    message: source.to_string(),
+                }
+            }
             /* A dropped subscription is an RPC failure to the CLI, but say why:
-               the server disconnects a subscriber that falls behind rather than
-               skipping messages, so whatever was being followed now has a gap. */
+            the server disconnects a subscriber that falls behind rather than
+            skipping messages, so whatever was being followed now has a gap. */
             thru_client::ClientError::StreamLagged(msg) => {
                 CliError::Rpc(format!("stream dropped for falling behind: {}", msg))
             }

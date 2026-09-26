@@ -83,7 +83,7 @@ export async function submitTransaction(
       header: {
         fee: 0n,
         computeUnits: transaction.computeUnits ?? 500_000_000,
-        stateUnits: transaction.stateUnits ?? 5_000,
+        stateUnits: transaction.stateUnits ?? 1,
         memoryUnits: transaction.memoryUnits ?? 5_000,
         expiryAfter: transaction.expiryAfter ?? 10_000,
       },

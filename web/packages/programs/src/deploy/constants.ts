@@ -1,4 +1,4 @@
-import { GENESIS_MULTICALL_PROGRAM_ADDRESS } from "../multicall";
+import { MULTICALL_PROGRAM_ADDRESS } from "../multicall";
 
 export {
   MANAGER_META_SIZE,
@@ -13,10 +13,9 @@ export {
   ABI_STATE_FINALIZED,
   ABI_STATE_OPEN,
 } from "../abi-manager";
-/** Genesis Multicall remains a deployment dependency because managed
- * Multicall cannot be used to deploy itself. */
+/** Bootstrap installs this binary through Manager without an ABI first. */
 export const DEPLOYMENT_MULTICALL_PROGRAM_ADDRESS =
-  GENESIS_MULTICALL_PROGRAM_ADDRESS;
+  MULTICALL_PROGRAM_ADDRESS;
 export {
   UPLOADER_DEFAULT_CHUNK_SIZE as DEFAULT_CHUNK_SIZE,
   UPLOADER_MAX_CHUNK_SIZE as MAX_CHUNK_SIZE,

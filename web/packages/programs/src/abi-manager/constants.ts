@@ -1,7 +1,8 @@
 import { Pubkey } from '@thru/sdk';
+import { BOOTSTRAP_PROGRAM_ADDRESSES } from '../bootstrap-addresses/index';
 
 export const ABI_MANAGER_PROGRAM_ADDRESS =
-  'taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACrG7';
+  BOOTSTRAP_PROGRAM_ADDRESSES.abi_manager;
 export const ABI_MANAGER_PROGRAM_PUBKEY = Pubkey.from(
   ABI_MANAGER_PROGRAM_ADDRESS
 ).toBytes();

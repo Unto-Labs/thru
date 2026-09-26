@@ -1,0 +1,34 @@
+abi:
+  package: compliance.chars
+  abi-version: 1
+  package-version: "1.0.0"
+  description: Raw byte chars and fixed char arrays
+
+types:
+  - name: CharRecord
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: code
+            field-type:
+              primitive: char
+          - name: text
+            field-type:
+              array:
+                size:
+                  literal:
+                    u32: 8
+                element-type:
+                  primitive: char
+          - name: bytes
+            field-type:
+              array:
+                size:
+                  literal:
+                    u32: 2
+                element-type:
+                  primitive: u8
+          - name: trailer
+            field-type:
+              primitive: u16

@@ -17,7 +17,8 @@ import {
 import { DeployError } from "./errors";
 import type { DeploymentTransaction } from "./chain";
 import type { PreparedUpload } from "./uploader";
-import { deployProgram, upgradeProgram } from "./workflows";
+import { deployProgram, deployProgramABI, upgradeProgram, upgradeProgramABI } from "./workflows";
+import { inspectProgramDeployment } from "./inspection";
 
 const mocks = vi.hoisted(() => ({
   submitTransaction: vi.fn(),
@@ -113,6 +114,7 @@ interface Harness {
     submitMode: "success" | "failure" | "unknown";
     wrongProgramReadback: boolean;
     duplicateTarget: boolean;
+    ownerOverride?: string;
     encoded?: Uint8Array;
     transaction?: DeploymentTransaction;
   };
@@ -148,12 +150,15 @@ function instructionContext(
   };
 }
 
-async function makeHarness(upgrade = false): Promise<Harness> {
+async function makeHarness(
+  upgrade = false,
+  managerProgramAddress = MANAGER_PROGRAM_ADDRESS,
+): Promise<Harness> {
   const privateKey = new Uint8Array(32).fill(0x19);
   const localClient = createThruClient();
   const publicKey = await localClient.keys.fromPrivateKey(privateKey);
   const signer = { address: Pubkey.from(publicKey).toThruFmt(), privateKey };
-  const program = deriveManagedProgramAddresses("workflow");
+  const program = deriveManagedProgramAddresses("workflow", false, managerProgramAddress);
   const abi = deriveProgramABIAddresses(program.programAccountAddress);
   const state: Harness["state"] = {
     committed: false,
@@ -195,7 +200,7 @@ async function makeHarness(upgrade = false): Promise<Harness> {
         program.programMetaAccountAddress,
         storedAccount(
           program.programMetaAccountAddress,
-          MANAGER_PROGRAM_ADDRESS,
+          state.ownerOverride ?? managerProgramAddress,
           managerData,
         ),
       ],
@@ -203,7 +208,7 @@ async function makeHarness(upgrade = false): Promise<Harness> {
         program.programAccountAddress,
         storedAccount(
           program.programAccountAddress,
-          MANAGER_PROGRAM_ADDRESS,
+          state.ownerOverride ?? managerProgramAddress,
           programBytes,
           true,
         ),
@@ -297,6 +302,70 @@ describe("deployment workflows", () => {
       },
     );
   });
+
+  const rootManager = Pubkey.from(Uint8Array.from([...new Uint8Array(31), 1])).toThruFmt();
+
+  it.each([false, true])("supports root-managed binary operations (upgrade=%s)", async (upgrade) => {
+    const harness = await makeHarness(upgrade, rootManager);
+    const operation = upgrade ? upgradeProgram : deployProgram;
+    const result = await operation({
+      seed: "workflow", managerProgramAddress: rootManager,
+      signer: harness.signer, client: harness.client, program: image(0x33),
+    });
+    expect(result.programAccountAddress).toBe(harness.program.programAccountAddress);
+    expect(result.programMetaAccountAddress).toBe(harness.program.programMetaAccountAddress);
+    expect(result.programVersion).toBe(upgrade ? 6n : 0n);
+    expect(mocks.submitTransaction).toHaveBeenCalledOnce();
+    expect(harness.state.transaction?.program).toBe(rootManager);
+    expect(harness.state.encoded?.[0]).toBe(upgrade ? 2 : 0);
+    await expect(inspectProgramDeployment({
+      client: harness.client, seed: "workflow", managerProgramAddress: rootManager,
+      authorityAddress: harness.signer.address, expectedProgramBytes: image(0x33),
+    })).resolves.toMatchObject({
+      programAccountAddress: harness.program.programAccountAddress,
+      program: { status: "present", bytesMatch: true, version: upgrade ? 6n : 0n },
+    });
+  });
+
+  it("rejects another Manager's ownership even with the expected authority", async () => {
+    const harness = await makeHarness(true, rootManager);
+    harness.state.ownerOverride = MANAGER_PROGRAM_ADDRESS;
+    const request = {
+      seed: "workflow", managerProgramAddress: rootManager,
+      signer: harness.signer, client: harness.client, program: image(0x33),
+    };
+    await expect(upgradeProgram(request)).rejects.toMatchObject({ code: "VERIFICATION_FAILED" });
+    await expect(inspectProgramDeployment(request)).rejects.toMatchObject({ code: "VERIFICATION_FAILED" });
+    expect(mocks.uploadArtifact).not.toHaveBeenCalled();
+    expect(mocks.submitTransaction).not.toHaveBeenCalled();
+  });
+
+  it.each([deployProgram, upgradeProgram, deployProgramABI, upgradeProgramABI])(
+    "rejects unsupported official ABI operations under root before uploading",
+    async (operation) => {
+      const harness = await makeHarness(true, rootManager);
+      await expect(operation({
+        seed: "workflow", managerProgramAddress: rootManager,
+        signer: harness.signer, client: harness.client,
+        program: image(0x33), abi: ABI_BYTES,
+      })).rejects.toMatchObject({ code: "INVALID_INPUT" });
+      expect(mocks.uploadArtifact).not.toHaveBeenCalled();
+      expect(mocks.submitTransaction).not.toHaveBeenCalled();
+    },
+  );
+
+  it.each(["not-an-address", Pubkey.from(new Uint8Array(32)).toThruFmt()])(
+    "rejects an invalid parent before resolving the signer",
+    async (managerProgramAddress) => {
+      const harness = await makeHarness();
+      await expect(deployProgram({
+        seed: "workflow", managerProgramAddress,
+        signer: harness.signer, client: harness.client, program: image(0x33),
+      })).rejects.toMatchObject({ code: "INVALID_INPUT" });
+      expect(harness.client.keys.fromPrivateKey).not.toHaveBeenCalled();
+      expect(mocks.uploadArtifact).not.toHaveBeenCalled();
+    },
+  );
 
   it("commits a program plus ABI in one ordered multicall and reports cleanup warnings", async () => {
     const harness = await makeHarness();

@@ -1,0 +1,53 @@
+/* Thru Mobile colour tokens as CSS variables — a 1:1 mirror of
+   `lightColors` / `darkColors` in ./theme.tsx (plus `hair`, the hairline the
+   mobile kit draws with bgMuted in light and border in dark), for web pages
+   that wear the wallet-app look without react-native (app.tid.sh/pair).
+   Scope with data-m-theme="light" | "dark"; keep in step with theme.tsx
+   (web/wallet/frontend/site/tests/mobile-tokens-css.test.ts checks it). */
+:root,
+[data-m-theme="light"] {
+  --m-bg: #F9FBFB;
+  --m-bg-muted: #EAF2F2;
+  --m-bg-inset: #D1E1E1;
+  --m-bg-inverse: #181B1B;
+  --m-fg: #181B1B;
+  --m-fg-muted: #436465;
+  --m-fg-subtle: #81A7A7;
+  --m-fg-inverse: #F9FBFB;
+  --m-fg-press: #000000;
+  --m-border: #D1E1E1;
+  --m-border-strong: #B6CECE;
+  --m-hair: #EAF2F2;
+  --m-accent: #D33C43;
+  --m-accent-soft: #FADFE1;
+  --m-forest: #0A766F;
+  --m-forest-soft: #D9F2F1;
+  --m-saffron: #8A5A00;
+  --m-saffron-soft: #FEF4E7;
+  --m-ocean: #0279B1;
+  --m-ocean-soft: #DDF4FD;
+  --m-error: #FF4750;
+}
+[data-m-theme="dark"] {
+  --m-bg: #181B1B;
+  --m-bg-muted: #334747;
+  --m-bg-inset: #436465;
+  --m-bg-inverse: #F9FBFB;
+  --m-fg: #F9FBFB;
+  --m-fg-muted: #B6CECE;
+  --m-fg-subtle: #729D9D;
+  --m-fg-inverse: #181B1B;
+  --m-fg-press: #EAF2F2;
+  --m-border: #334747;
+  --m-border-strong: #436465;
+  --m-hair: #334747;
+  --m-accent: #ED787E;
+  --m-accent-soft: #334747;
+  --m-forest: #75D1CC;
+  --m-forest-soft: #0A766F;
+  --m-saffron: #FFC377;
+  --m-saffron-soft: #4A3A1E;
+  --m-ocean: #8CD4F2;
+  --m-ocean-soft: #0279B1;
+  --m-error: #FF4750;
+}

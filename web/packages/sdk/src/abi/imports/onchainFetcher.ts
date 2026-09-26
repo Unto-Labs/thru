@@ -5,6 +5,7 @@
  */
 
 import type { AbiAccountData, RpcEndpoints, RevisionSpec, OnchainTarget } from "./types";
+import { ABI_MANAGER_PROGRAM_ADDRESS as DEFAULT_ABI_MANAGER_PROGRAM_ID } from "../../core-program-addresses";
 import {
   ABI_ACCOUNT_HEADER_SIZE,
   ABI_STATE_OPEN,
@@ -36,9 +37,6 @@ const ABI_META_ACCOUNT_SIZE = ABI_META_HEADER_SIZE + ABI_META_BODY_SIZE;
 const ABI_META_VERSION = 1;
 const ABI_META_KIND_OFFICIAL = 0;
 const ABI_META_KIND_EXTERNAL = 1;
-
-const DEFAULT_ABI_MANAGER_PROGRAM_ID =
-  "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACrG7";
 
 async function sha256Bytes(data: Uint8Array): Promise<Uint8Array> {
   const hashBuffer = await crypto.subtle.digest("SHA-256", data as BufferSource);

@@ -30,7 +30,8 @@ import { defineEventStream, t } from "@thru/indexer";
 import { FilterSchema, FilterParamValueSchema, type Event } from "@thru/replay";
 import { TokenEvent } from "../abi/token";
 
-const TOKEN_PROGRAM = "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKqq";
+// Fresh bootstrap default; use the configured deployment for another network.
+const TOKEN_PROGRAM = process.env.TOKEN_PROGRAM ?? "taTOKENKRgcl3vO0yVhftATDbXuhgWcfaaxv9xpEEdMdUE";
 
 const transfers = defineEventStream({
   name: "transfers",
@@ -95,7 +96,8 @@ import { decodeAddress, encodeAddress } from "@thru/sdk/helpers";
 import { defineAccountStream, t } from "@thru/indexer";
 import { TokenAccount } from "../abi/token";
 
-const TOKEN_PROGRAM = "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKqq";
+// Fresh bootstrap default; use the configured deployment for another network.
+const TOKEN_PROGRAM = process.env.TOKEN_PROGRAM ?? "taTOKENKRgcl3vO0yVhftATDbXuhgWcfaaxv9xpEEdMdUE";
 
 const tokenAccounts = defineAccountStream({
   name: "token-accounts",

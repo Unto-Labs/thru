@@ -115,6 +115,26 @@ describe('passkey signing', () => {
     expect(result.passkey.credentialId).toBe('AQID');
   });
 
+  it('asks for the phone QR first only when the caller prefers hybrid', async () => {
+    const credentialsGet = vi
+      .fn()
+      .mockResolvedValueOnce(createAssertion())
+      .mockResolvedValueOnce(createAssertion());
+    const { signWithStoredPasskey } = await loadFramedSigner(credentialsGet, vi.fn());
+
+    await signWithStoredPasskey(new Uint8Array(32), 'wallet.example', null, [], undefined, {
+      preferDiscoverable: true,
+      preferHybrid: true,
+    });
+    await signWithStoredPasskey(new Uint8Array(32), 'wallet.example', null, []);
+
+    const [hybrid, plain] = credentialsGet.mock.calls.map(
+      ([request]) => (request as { publicKey: { hints?: string[] } }).publicKey
+    );
+    expect(hybrid.hints).toEqual(['hybrid']);
+    expect(plain.hints).toBeUndefined();
+  });
+
   it('pins the stored credential when the picker is not forced', async () => {
     const credentialsGet = vi.fn().mockResolvedValueOnce(createAssertion());
     const open = vi.fn();

@@ -24,6 +24,8 @@ export interface BridgeClientConfig {
   thru?: {
     signer: ThruSignerConfig;
     thruBridgeProgramAddress: string;
+    /** Token deployment used by this bridge; defaults to the fresh-network program. */
+    tokenProgramAddress?: string;
   };
 }
 

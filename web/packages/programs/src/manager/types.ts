@@ -2,7 +2,7 @@ import type {
   AccountLookupContext,
   InstructionData,
   ProgramSeed,
-} from '../utils/helpers';
+} from '../utils/helpers.js';
 
 export type { AccountLookupContext, InstructionData, ProgramSeed };
 

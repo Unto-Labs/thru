@@ -10,19 +10,19 @@ use crate::config::Config;
 use crate::crypto;
 use crate::error::CliError;
 use crate::feature_gate_account::{
+    decode_feature_gate_account, feature_gate_global_account_pubkey, feature_gate_program_pubkey,
     DecodedFeatureGateAccount, DecodedFeatureGateEntry, FEATURE_GATE_ARMED_SLOT_SENTINEL,
-    FEATURE_GATE_VALUE_SIZE, decode_feature_gate_account, feature_gate_global_account_pubkey,
-    feature_gate_program_pubkey,
+    FEATURE_GATE_VALUE_SIZE,
 };
 use crate::feature_gate_registry::{
-    FeatureGateRegistry, FeatureGateRegistryCategory, FeatureGateRegistryEntry,
-    FeatureGateRegistryKind, FeatureGateRegistryStatus, FeatureGateRegistryType,
-    load_feature_gate_registry,
+    load_feature_gate_registry, FeatureGateRegistry, FeatureGateRegistryCategory,
+    FeatureGateRegistryEntry, FeatureGateRegistryKind, FeatureGateRegistryStatus,
+    FeatureGateRegistryType,
 };
 use crate::output;
 use crate::utils::{format_vm_error, validate_address_or_hex};
 use base64::Engine;
-use serde_json::{Value, json};
+use serde_json::{json, Value};
 use std::path::Path;
 use std::time::Duration;
 use thru_base::tn_tools::{KeyPair, Pubkey};
@@ -48,7 +48,7 @@ const FEATURE_GATE_ROLE_CONFIG: u8 = 2;
 const FEATURE_GATE_TX_FEE: u64 = 1;
 const FEATURE_GATE_TX_EXPIRY_AFTER: u32 = 100;
 const FEATURE_GATE_TX_COMPUTE_UNITS: u32 = 100_000;
-const FEATURE_GATE_TX_STATE_UNITS: u16 = 10_000;
+const FEATURE_GATE_TX_STATE_UNITS: u16 = 1;
 const FEATURE_GATE_TX_MEMORY_UNITS: u16 = 10_000;
 
 // Fee payer and program are transaction header accounts. The global account is

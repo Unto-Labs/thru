@@ -573,14 +573,15 @@ describe("NativeSDK", () => {
     sdk.on("connect", onConnect);
 
     const frameId = frameIdFor(sdk);
+    const legacyMetadata = {
+      appId: "token_dummy_app",
+      appName: "Token Dummy App",
+      appUrl: "https://trusted.example",
+    };
     const promise = sdk.createAccount({
       accountName: "JCoin Account",
       passkeyName: "Jerry iPhone",
-      metadata: {
-        appId: "token_dummy_app",
-        appName: "Token Dummy App",
-        appUrl: "thru-mobile://token-dummy",
-      },
+      metadata: legacyMetadata,
     });
 
     sdk.onMessage(readyMessage(frameId));
@@ -595,7 +596,6 @@ describe("NativeSDK", () => {
       metadata: {
         appId: "token_dummy_app",
         appName: "Token Dummy App",
-        appUrl: "thru-mobile://token-dummy",
       },
     });
 
@@ -668,7 +668,6 @@ describe("NativeSDK", () => {
       metadata: {
         appId: "token_dummy_app",
         appName: "Token Dummy App",
-        appUrl: "thru-mobile://token-dummy",
       },
       createSigningSession: { expiresAt: nowSeconds + 120 },
     });
@@ -685,7 +684,6 @@ describe("NativeSDK", () => {
       metadata: {
         appId: "token_dummy_app",
         appName: "Token Dummy App",
-        appUrl: "thru-mobile://token-dummy",
       },
       createSigningSession: {
         expiresAt: String(nowSeconds + 120),
@@ -993,7 +991,6 @@ describe("NativeSDK", () => {
     const promise = sdk.signIn({
       app_id: "token_dummy_app",
       app_display_name: "Token Dummy App",
-      app_url: "https://token-dummy.thru.org",
       image_url: "https://token-dummy.thru.org/icon.png",
     });
 
@@ -1008,7 +1005,6 @@ describe("NativeSDK", () => {
       metadata: {
         appId: "token_dummy_app",
         appName: "Token Dummy App",
-        appUrl: "https://token-dummy.thru.org",
         imageUrl: "https://token-dummy.thru.org/icon.png",
       },
     });

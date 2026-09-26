@@ -9,6 +9,7 @@ use base64::Engine as _;
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
 use std::time::Duration;
+use super::bootstrap_address::ABI_MANAGER_PROGRAM_ADDRESS as DEFAULT_ABI_MANAGER_PROGRAM_ID;
 
 /* ABI account header size in bytes */
 const ABI_ACCOUNT_HEADER_SIZE: usize = 45;
@@ -25,7 +26,6 @@ const ABI_META_VERSION: u8 = 1;
 const ABI_META_KIND_OFFICIAL: u8 = 0x00;
 const ABI_META_KIND_EXTERNAL: u8 = 0x01;
 const ABI_ACCOUNT_SUFFIX: &[u8] = b"_abi_account";
-const DEFAULT_ABI_MANAGER_PROGRAM_ID: &str = "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACrG7";
 
 #[derive(Deserialize)]
 struct RawAccountResponse {
@@ -497,6 +497,19 @@ impl ImportFetcher for OnchainFetcher {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn canonical_manager_default_and_explicit_override() {
+        let mut config = OnchainFetcherConfig::default();
+        assert_eq!(config.abi_manager_program_id, "taABII8WXcPaPIt47cXjOBbyoBUGBDXznAMHorVMeok3mw");
+        let expected = OnchainFetcher::new(&config).abi_manager_program_id().unwrap();
+        config.abi_manager_program_id.clear();
+        assert_eq!(OnchainFetcher::new(&config).abi_manager_program_id().unwrap(), expected);
+        config.abi_manager_program_id = "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACrG7".to_string();
+        let legacy = OnchainFetcher::new(&config).abi_manager_program_id().unwrap();
+        assert_ne!(legacy, expected);
+        assert_eq!(&legacy[30..], &[0x0a, 0xb1]);
+    }
 
     #[test]
     fn test_onchain_fetcher_handles() {

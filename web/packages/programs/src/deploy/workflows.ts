@@ -1,6 +1,7 @@
 import { Pubkey, createThruClient, type InstructionContext } from "@thru/sdk";
 import type { Thru } from "@thru/sdk/client";
 import {
+  ABI_ACCOUNT_HEADER_SIZE,
   createOfficialABIInstruction,
   createOfficialABIMetaInstruction,
   createUpgradeOfficialABIInstruction,
@@ -76,6 +77,7 @@ interface Context {
   client: Thru;
   signer: ResolvedSigner;
   seed: string;
+  managerProgramAddress: string;
   ephemeral: boolean;
   chunkSize: number;
   program: ManagedProgramAddresses;
@@ -85,6 +87,7 @@ interface Context {
 
 interface ProgramState {
   meta: ParsedManagerMeta;
+  dataSize: number;
 }
 
 interface ABIState {
@@ -201,6 +204,14 @@ async function createContext(
   request: DeploymentRequestBase,
   programAddressAssertion?: string,
 ): Promise<Context> {
+  let managerProgramAddress: string;
+  try {
+    const manager = Pubkey.from(request.managerProgramAddress ?? MANAGER_PROGRAM_ADDRESS);
+    if (manager.toBytes().every((byte) => byte === 0)) throw new Error("zero parent");
+    managerProgramAddress = manager.toThruFmt();
+  } catch (error) {
+    throw asDeployError(error, "INVALID_INPUT", "managerProgramAddress must be a nonzero Thru address");
+  }
   const client = request.client ?? createThruClient();
   const chunkSize = validateSeedAndChunkSize(request.seed, request.chunkSize);
   const signer = await resolveSigner(
@@ -209,7 +220,7 @@ async function createContext(
     request.signer.privateKey,
   );
   const ephemeral = request.ephemeral ?? false;
-  const program = deriveManagedProgramAddresses(request.seed, ephemeral);
+  const program = deriveManagedProgramAddresses(request.seed, ephemeral, managerProgramAddress);
 
   if (programAddressAssertion) {
     let supplied: Pubkey;
@@ -239,12 +250,21 @@ async function createContext(
     client,
     signer,
     seed: request.seed,
+    managerProgramAddress,
     ephemeral,
     chunkSize,
     program,
     abi,
     onProgress: request.onProgress,
   };
+}
+
+function assertOfficialABIParent(context: Context): void {
+  // The on-chain ABI Manager authenticates canonical main-Manager metadata.
+  // Root-owned main-Manager upgrades must remain binary-only.
+  if (context.managerProgramAddress !== MANAGER_PROGRAM_ADDRESS) {
+    throw new DeployError("INVALID_INPUT", "official ABI publication requires the canonical main Manager parent");
+  }
 }
 
 function addressDetails(context: Context): Record<string, string> {
@@ -298,7 +318,7 @@ async function requireProgram(context: Context): Promise<ProgramState> {
       },
     );
   }
-  const meta = parseManagerMeta(metaAccount);
+  const meta = parseManagerMeta(metaAccount, context.managerProgramAddress);
   assertManagerOpen(meta);
   if (!bytesEqual(meta.authority, context.signer.publicKey)) {
     throw new DeployError(
@@ -311,8 +331,8 @@ async function requireProgram(context: Context): Promise<ProgramState> {
       },
     );
   }
-  assertManagedProgramAccount(programAccount);
-  return { meta };
+  assertManagedProgramAccount(programAccount, undefined, context.managerProgramAddress);
+  return { meta, dataSize: requireAccountData(programAccount, "managed program account").length };
 }
 
 async function requireABI(context: Context): Promise<ABIState> {
@@ -365,7 +385,7 @@ async function verifyProgram(
       "managed program readback is missing",
     );
   }
-  const meta = parseManagerMeta(metaAccount);
+  const meta = parseManagerMeta(metaAccount, context.managerProgramAddress);
   assertManagerOpen(meta);
   assertPubkeyBytes(
     meta.authority,
@@ -378,7 +398,7 @@ async function verifyProgram(
       `program version mismatch: expected ${expectedVersion}, got ${meta.version}`,
     );
   }
-  assertManagedProgramAccount(programAccount);
+  assertManagedProgramAccount(programAccount, undefined, context.managerProgramAddress);
   if (
     expectedBytes &&
     !bytesEqual(
@@ -632,7 +652,10 @@ export async function deployProgram(
     request.abi === undefined ? undefined : normalizeBytes(request.abi, "abi");
   validateProgramImage(programBytes);
   const context = await createContext(operation, request);
-  if (abiBytes) await validateABI(abiBytes, context.client);
+  if (abiBytes) {
+    assertOfficialABIParent(context);
+    await validateABI(abiBytes, context.client);
+  }
   progress(context, "validation", "succeeded");
   progress(context, "preflight", "started");
   const absent: Array<[string, string]> = [
@@ -697,7 +720,8 @@ export async function deployProgram(
     let transaction: DeploymentTransaction;
     if (!abiBytes || !abiUpload) {
       transaction = {
-        program: MANAGER_PROGRAM_ADDRESS,
+        program: context.managerProgramAddress,
+        stateUnits: 1 + Math.ceil((64 + programBytes.length) / 4096),
         readWrite: [
           context.program.programMetaAccountAddress,
           context.program.programAccountAddress,
@@ -726,7 +750,8 @@ export async function deployProgram(
       ]);
       transaction = {
         program: DEPLOYMENT_MULTICALL_PROGRAM_ADDRESS,
-        stateUnits: 10_000,
+        stateUnits: 2 + Math.ceil((64 + programBytes.length) / 4096)
+          + Math.ceil((64 + ABI_ACCOUNT_HEADER_SIZE + abiBytes.length) / 4096),
         memoryUnits: 10_000,
         readWrite: [
           context.program.programMetaAccountAddress,
@@ -735,7 +760,7 @@ export async function deployProgram(
           context.abi.abiAccountAddress,
         ],
         readOnly: [
-          MANAGER_PROGRAM_ADDRESS,
+          context.managerProgramAddress,
           ABI_MANAGER_PROGRAM_ADDRESS,
           programUpload.result.bufferAccountAddress,
           abiUpload.result.bufferAccountAddress,
@@ -743,7 +768,7 @@ export async function deployProgram(
         instructionData: (tx) =>
           multicall(tx, [
             {
-              program: MANAGER_PROGRAM_ADDRESS,
+              program: context.managerProgramAddress,
               instructionData: createProgramInstruction(
                 context,
                 programUpload,
@@ -798,6 +823,7 @@ export async function deployProgramABI(
     request,
     request.programAddress,
   );
+  assertOfficialABIParent(context);
   await validateABI(abiBytes, context.client);
   progress(context, "validation", "succeeded");
   progress(context, "preflight", "started");
@@ -839,7 +865,7 @@ export async function deployProgramABI(
       ]);
       const transaction: DeploymentTransaction = {
         program: DEPLOYMENT_MULTICALL_PROGRAM_ADDRESS,
-        stateUnits: 10_000,
+        stateUnits: 1 + Math.ceil((64 + ABI_ACCOUNT_HEADER_SIZE + abiBytes.length) / 4096),
         memoryUnits: 10_000,
         readWrite: [
           context.abi.abiMetaAccountAddress,
@@ -901,7 +927,10 @@ export async function upgradeProgram(
     request,
     request.programAddress,
   );
-  if (abiBytes) await validateABI(abiBytes, context.client);
+  if (abiBytes) {
+    assertOfficialABIParent(context);
+    await validateABI(abiBytes, context.client);
+  }
   progress(context, "validation", "succeeded");
   progress(context, "preflight", "started");
   const programState = await requireProgram(context);
@@ -947,7 +976,11 @@ export async function upgradeProgram(
       abiBytes && abiUpload
         ? {
             program: DEPLOYMENT_MULTICALL_PROGRAM_ADDRESS,
-            stateUnits: 10_000,
+            stateUnits: Math.max(0,
+              Math.ceil((64 + programBytes.length) / 4096)
+              - Math.ceil((64 + programState.dataSize) / 4096)
+              + Math.ceil((64 + ABI_ACCOUNT_HEADER_SIZE + abiBytes.length) / 4096)
+              - Math.ceil((64 + ABI_ACCOUNT_HEADER_SIZE + abiState!.abi.content.length) / 4096)),
             memoryUnits: 10_000,
             readWrite: [
               context.program.programMetaAccountAddress,
@@ -955,7 +988,7 @@ export async function upgradeProgram(
               context.abi.abiAccountAddress,
             ],
             readOnly: [
-              MANAGER_PROGRAM_ADDRESS,
+              context.managerProgramAddress,
               ABI_MANAGER_PROGRAM_ADDRESS,
               context.abi.abiMetaAccountAddress,
               programUpload.result.bufferAccountAddress,
@@ -964,7 +997,7 @@ export async function upgradeProgram(
             instructionData: (tx) =>
               multicall(tx, [
                 {
-                  program: MANAGER_PROGRAM_ADDRESS,
+                  program: context.managerProgramAddress,
                   instructionData: upgradeProgramInstruction(
                     context,
                     programUpload,
@@ -982,7 +1015,9 @@ export async function upgradeProgram(
               ]),
           }
         : {
-            program: MANAGER_PROGRAM_ADDRESS,
+            program: context.managerProgramAddress,
+            stateUnits: Math.max(0, Math.ceil((64 + programBytes.length) / 4096)
+              - Math.ceil((64 + programState.dataSize) / 4096)),
             readWrite: [
               context.program.programMetaAccountAddress,
               context.program.programAccountAddress,
@@ -1027,6 +1062,7 @@ export async function upgradeProgramABI(
     request,
     request.programAddress,
   );
+  assertOfficialABIParent(context);
   await validateABI(abiBytes, context.client);
   progress(context, "validation", "succeeded");
   progress(context, "preflight", "started");
@@ -1054,6 +1090,8 @@ export async function upgradeProgramABI(
       );
       const transaction: DeploymentTransaction = {
         program: ABI_MANAGER_PROGRAM_ADDRESS,
+        stateUnits: Math.max(0, Math.ceil((64 + ABI_ACCOUNT_HEADER_SIZE + abiBytes.length) / 4096)
+          - Math.ceil((64 + ABI_ACCOUNT_HEADER_SIZE + abiState.abi.content.length) / 4096)),
         readWrite: [context.abi.abiAccountAddress],
         readOnly: [
           context.abi.abiMetaAccountAddress,

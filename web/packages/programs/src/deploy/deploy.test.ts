@@ -3,6 +3,7 @@ import { encodeAddress } from "@thru/sdk/helpers";
 import { describe, expect, it, vi } from "vitest";
 import { deriveProgramABIAddresses } from "../abi-manager";
 import { deriveManagedProgramAddresses } from "../manager";
+import { BOOTSTRAP_PROGRAM_ADDRESSES } from "../bootstrap-addresses";
 import { deriveUploadAddresses } from "../uploader";
 import {
   parseABIAccount,
@@ -53,18 +54,18 @@ describe("deployment address derivation", () => {
     const program = deriveManagedProgramAddresses("nft");
     expect(program).toMatchObject({
       programMetaAccountAddress:
-        "ta00Efqv-BVcX3MsYbqO9JN2arQVJEMg3xqQF2iy0H1TGV",
-      programAccountAddress: "taAFaJ4ctkbuhYBl2FX6tmXGJZQgShIXt6TPrMw4-GOsv4",
+        "taJM9c0C5t2kaaNv_PyeVn6khHuwc-zeN39MUTW_yghOBU",
+      programAccountAddress: "tak_0Jtlh0y2hPHscfXkS1eXuEpPUB35xh5KqT5A2fR2ZE",
     });
     expect(
       deriveProgramABIAddresses(program.programAccountAddress),
     ).toMatchObject({
-      abiMetaAccountAddress: "taTRXKKLkeKvK_XMkdqbMzcqR0cUY20PBwaluN8UKvkkGF",
-      abiAccountAddress: "takDA1V6UYKs86PsY7tQjlGOeFkQhmaVCehzy1TylM0ufs",
+      abiMetaAccountAddress: "taUkpVSe_kjePfi1VuPEtdsOz8kZZy2tI6DABDju_W4arS",
+      abiAccountAddress: "taeecO6WARCvCL_fJz9WnGNlrQ1r-96I79A6m-en4krTNe",
     });
     expect(deriveUploadAddresses("nft_temporary")).toMatchObject({
-      metaAccountAddress: "taF70vdExq-vx8VUoZBCcNayNbAsNktsrFd34CrRRa-U4_",
-      bufferAccountAddress: "ta3qmTeqrBsvHKCX60S7ZZqfuOi-X59-FTeZ1UXCK3GtdX",
+      metaAccountAddress: "ta1WUSEixlsGSJ6qBFdur6lzwO_xOF0x1y70CiI_ju7Ifc",
+      bufferAccountAddress: "taIx7ja7eblEGbwJOrS4a1kikDTuQg_nYvu-2kKfC6aCIx",
     });
   });
 
@@ -80,11 +81,11 @@ describe("deployment address derivation", () => {
   });
 
   it("uses canonical built-in addresses", () => {
-    expect(UPLOADER_PROGRAM_ADDRESS).toBe(address(2));
-    expect(MANAGER_PROGRAM_ADDRESS).toBe(address(4));
-    expect(DEPLOYMENT_MULTICALL_PROGRAM_ADDRESS).toBe(address(9));
+    expect(UPLOADER_PROGRAM_ADDRESS).toBe("taUPLMH5QYOAT4ktwQeO7DXAEKtqBhYehalNGf5BJFQDYq");
+    expect(MANAGER_PROGRAM_ADDRESS).toBe("taMGRmPoSTkUtF6UlmCIq58K8OYsnXshOMPdobxxHytqmu");
+    expect(DEPLOYMENT_MULTICALL_PROGRAM_ADDRESS).toBe(BOOTSTRAP_PROGRAM_ADDRESSES.multicall);
     expect(ABI_MANAGER_PROGRAM_ADDRESS).toBe(
-      "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACrG7",
+      BOOTSTRAP_PROGRAM_ADDRESSES.abi_manager,
     );
   });
 });

@@ -1,4 +1,5 @@
 #!/usr/bin/env tsx
+import { TOKEN_PROGRAM_ADDRESS } from "@thru/sdk";
 
 /**
  * Test script mirroring the SDK token events tests but using native gRPC transport.
@@ -10,9 +11,8 @@ import { Filter, FilterParamValue, PageRequest } from "@thru/sdk/proto";
 import { ListEventsRequest, StreamEventsRequest } from "@thru/sdk/proto";
 import { ChainClient } from "../src";
 
-const BASE_URL = "https://rpc.alphanet.thru.org";
-// const BASE_URL = 'http://34.186.178.127:8080'
-const TOKEN_PROGRAM = "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKqq";
+const BASE_URL = process.env.GRPC_URL ?? "https://rpc.alphanet.thru.org";
+const TOKEN_PROGRAM = process.env.TOKEN_PROGRAM ?? TOKEN_PROGRAM_ADDRESS;
 
 async function main(): Promise<void> {
   console.log("=== Token Events Test (Replay with native gRPC, proto Filter) ===");

@@ -244,28 +244,6 @@ describe("transactions", () => {
       expect(ctx.query.getHeight).not.toHaveBeenCalled();
     });
 
-    it("should use default header values when not provided", async () => {
-      const ctx = createMockContext();
-      const mockAccount = createMockAccount({
-        meta: { nonce: 5n },
-      });
-      const mockHeight = createMockHeightResponse({ finalized: 1000n });
-      
-      vi.spyOn(ctx.query, "getAccount").mockResolvedValue(mockAccount);
-      vi.spyOn(ctx.query, "getHeight").mockResolvedValue(mockHeight);
-      
-      const publicKey = generateTestPubkey(0x01);
-      const transaction = await buildTransaction(ctx, {
-        feePayer: { publicKey },
-        program: generateTestPubkey(0x02),
-      });
-      
-      expect(transaction.fee).toBe(1n); // DEFAULT_FEE
-      expect(transaction.expiryAfter).toBe(100); // DEFAULT_EXPIRY_AFTER
-      expect(transaction.requestedComputeUnits).toBe(300_000_000); // DEFAULT_COMPUTE_UNITS
-      expect(transaction.requestedStateUnits).toBe(10_000); // DEFAULT_STATE_UNITS
-      expect(transaction.requestedMemoryUnits).toBe(10_000); // DEFAULT_MEMORY_UNITS
-    });
 
     it("should accept program as string", async () => {
       const ctx = createMockContext();

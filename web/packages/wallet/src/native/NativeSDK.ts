@@ -166,7 +166,6 @@ export interface NativeSDKConfig {
 export interface SignInOptions {
   app_id: string;
   app_display_name: string;
-  app_url?: string;
   image_url?: string;
   intent?: ConnectOptions["intent"];
 }
@@ -214,14 +213,15 @@ const DEFAULT_TRANSPARENT_WALLET_URL =
 
 function completeAppMetadata(
   metadata: ConnectMetadataInput | AppMetadata | null | undefined,
+  origin: string,
 ): AppMetadata | undefined {
-  if (!metadata?.appId || !metadata.appName || !metadata.appUrl) {
+  if (!metadata?.appId || !metadata.appName) {
     return undefined;
   }
   return {
     appId: metadata.appId,
     appName: metadata.appName,
-    appUrl: metadata.appUrl,
+    appUrl: origin,
     ...(metadata.imageUrl ? { imageUrl: metadata.imageUrl } : {}),
   };
 }
@@ -794,7 +794,7 @@ export class NativeSDK implements WalletSDK {
         accounts: activeResult.accounts,
         selectedAccount: activeResult.selectedAccount,
         status: "completed",
-        metadata: completeAppMetadata(metadata),
+        metadata: completeAppMetadata(metadata, this.origin),
       };
       this.lastConnectResult = completedResult;
       await this.persistSelectedAccountAddress(
@@ -1278,7 +1278,6 @@ export class NativeSDK implements WalletSDK {
     const metadata: ConnectMetadataInput = {
       appId: effectiveInput.appId ?? this.origin,
     };
-    if (effectiveInput.appUrl) metadata.appUrl = effectiveInput.appUrl;
     if (effectiveInput.appName) metadata.appName = effectiveInput.appName;
     if (effectiveInput.imageUrl) metadata.imageUrl = effectiveInput.imageUrl;
     return metadata;
@@ -1289,7 +1288,6 @@ export class NativeSDK implements WalletSDK {
       appId: options.app_id,
       appName: options.app_display_name,
     };
-    if (options.app_url) metadata.appUrl = options.app_url;
     if (options.image_url) metadata.imageUrl = options.image_url;
     return metadata;
   }

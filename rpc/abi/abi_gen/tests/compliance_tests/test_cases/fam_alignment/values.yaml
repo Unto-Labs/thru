@@ -1,0 +1,7 @@
+test-case:
+  name: "fam_alignment_values"
+  abi-file: "../../abi_definitions/fam_alignment.abi.yaml"
+  type: "PaddedFam"
+  description: "Two u64 elements begin at offset eight after a u8 count"
+  tags: ["arrays", "variable-size", "alignment"]
+  binary-hex: "02 00 00 00 00 00 00 00 ef cd ab 89 67 45 23 01 10 32 54 76 98 ba dc fe"

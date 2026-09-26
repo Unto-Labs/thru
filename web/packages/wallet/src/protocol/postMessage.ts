@@ -551,7 +551,8 @@ export const ErrorCode = {
 
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
 
-export type ConnectMetadataInput = Partial<AppMetadata>;
+/** App branding only. The wallet derives appUrl from the request origin. */
+export type ConnectMetadataInput = Partial<Omit<AppMetadata, 'appUrl'>>;
 
 export type ConnectIntent = "default" | "switch-account";
 

@@ -1,4 +1,4 @@
-libprotoc 3.21.12
+libprotoc 35.0
 proto/thru/common/v1/errors.proto 7kYrjAcWkyj4lW6HHSuG0QpRKoEmQ0DqBBxg8sA4f7g=
 web/packages/proto-toolchain/package.json YzDLTH4AVsA+JhVcxDSHyK1euWy6ZEVNRu2yywY1P2Q=
 web/packages/sdk/buf.yaml SNRjMoMqNnzqEDMgSvyHDHxiAmkhAqb1hs2HzSbDNs8=

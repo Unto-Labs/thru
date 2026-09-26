@@ -178,7 +178,12 @@ fn format_struct_with_options(
                 /* Field has known offset - use it and update running offset */
                 let abs_offset = base_offset + rel_off;
                 /* Update running offset to after this field */
-                if let Some(size) = field_sizes.get(name.as_str()).copied().flatten() {
+                if let Some(size) = field_sizes
+                    .get(name.as_str())
+                    .copied()
+                    .flatten()
+                    .or_else(|| reflected_runtime_size(value))
+                {
                     running_offset = rel_off + size;
                 }
                 abs_offset

@@ -1,81 +1,30 @@
 use crate::{
-    StateProof,
     tn_public_address::tn_pubkey_to_address_string,
     txn_lib::{TnPubkey, Transaction},
+    StateProof,
 };
-use anyhow::{Result, bail};
+use anyhow::{bail, Result};
 use hex;
 use std::collections::HashMap;
 
-/// No-op program identifier (32-byte array with 0x03 in the last byte)
-pub const NOOP_PROGRAM: [u8; 32] = {
-    let mut arr = [0u8; 32];
-    arr[31] = 0x03;
-    arr
-};
-pub const SYSTEM_PROGRAM: [u8; 32] = {
-    let mut arr = [0u8; 32];
-    arr[31] = 0x01;
-    arr
-};
-pub const EOA_PROGRAM: [u8; 32] = {
-    let arr = [0u8; 32];
-    arr
-};
-
-pub const UPLOADER_PROGRAM: [u8; 32] = {
-    let mut arr = [0u8; 32];
-    arr[31] = 0x02;
-    arr
-};
-pub const FAUCET_PROGRAM: [u8; 32] = {
-    let mut arr = [0u8; 32];
-    arr[31] = 0xFA;
-    arr
-};
-
-/// Consensus validator program at 0x0C01
-pub const CONSENSUS_VALIDATOR_PROGRAM: [u8; 32] = {
-    let mut arr = [0u8; 32];
-    arr[30] = 0x0C;
-    arr[31] = 0x01;
-    arr
-};
-
-/// Token program at 0xAA
-pub const TOKEN_PROGRAM: [u8; 32] = {
-    let mut arr = [0u8; 32];
-    arr[31] = 0xAA;
-    arr
-};
-
-/// Attestor table at 0x0C02
-pub const ATTESTOR_TABLE: [u8; 32] = {
-    let mut arr = [0u8; 32];
-    arr[30] = 0x0C;
-    arr[31] = 0x02;
-    arr
-};
-
-/// Converted vault at 0x0C04
-pub const CONVERTED_VAULT: [u8; 32] = {
-    let mut arr = [0u8; 32];
-    arr[30] = 0x0C;
-    arr[31] = 0x04;
-    arr
-};
-
-/// Unclaimed vault at 0x0C05
-pub const UNCLAIMED_VAULT: [u8; 32] = {
-    let mut arr = [0u8; 32];
-    arr[30] = 0x0C;
-    arr[31] = 0x05;
-    arr
+/// Canonical managed programs/state for freshly bootstrapped networks.
+pub use crate::bootstrap_addresses::{
+    EOA_PROGRAM_BYTES as EOA_PROGRAM,
+    ATTESTOR_TABLE_BYTES as ATTESTOR_TABLE,
+    CONSENSUS_VALIDATOR_PROGRAM_BYTES as CONSENSUS_VALIDATOR_PROGRAM,
+    CONVERTED_VAULT_BYTES as CONVERTED_VAULT,
+    FAUCET_PROGRAM_BYTES as FAUCET_PROGRAM,
+    NOOP_PROGRAM_BYTES as NOOP_PROGRAM,
+    TOKEN_PROGRAM_BYTES as TOKEN_PROGRAM,
+    UNCLAIMED_VAULT_BYTES as UNCLAIMED_VAULT,
+    UPLOADER_PROGRAM_BYTES as UPLOADER_PROGRAM,
+    // Test harnesses must upload this fixture; production networks do not install it.
+    SYSTEM_TEST_PROGRAM_BYTES as SYSTEM_TEST_PROGRAM,
 };
 
 const CONSENSUS_VALIDATOR_DEFAULT_EXPIRY_AFTER: u32 = 100;
 const CONSENSUS_VALIDATOR_DEFAULT_COMPUTE_UNITS: u32 = 500_000_000;
-const CONSENSUS_VALIDATOR_DEFAULT_STATE_UNITS: u16 = 50_000;
+const CONSENSUS_VALIDATOR_DEFAULT_STATE_UNITS: u16 = 1;
 const CONSENSUS_VALIDATOR_DEFAULT_MEMORY_UNITS: u16 = 50_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -115,8 +64,7 @@ fn build_consensus_validator_tx(
 }
 
 /// Base transaction for BP bond mutating ops (deposit/withdraw/update/sweep/
-/// set-authority/delete).  Generous budget within the (very large) block
-/// limits; each op does at most one token-program CPI plus small bond writes.
+/// set-authority/delete), which only update existing accounts.
 fn bp_base_tx(
     fee_payer: TnPubkey,
     bp_program: TnPubkey,
@@ -128,7 +76,7 @@ fn bp_base_tx(
         .with_start_slot(start_slot)
         .with_expiry_after(100)
         .with_compute_units(50_000_000)
-        .with_state_units(50_000)
+        .with_state_units(1)
         .with_memory_units(50_000)
 }
 
@@ -136,6 +84,18 @@ fn bp_base_tx(
 pub struct UploaderWriteOptions {
     pub skip_elf_check: bool,
 }
+
+/// Account footprint reservation, including the runtime's 64-byte metadata.
+/// Builders without the prior account size reserve the full resulting footprint.
+pub fn account_state_units(data_size: u64) -> Result<u16> {
+    let footprint = data_size
+        .checked_add(64)
+        .ok_or_else(|| anyhow::anyhow!("account footprint overflows"))?;
+    Ok(u16::try_from(footprint.div_ceil(4096))?)
+}
+
+// Packed abi_account_t payload header: pubkey, revision, state, content size.
+const ABI_ACCOUNT_HEADER_SIZE: u64 = 32 + 8 + 1 + 4;
 
 #[derive(Debug, Clone)]
 pub struct TransactionBuilder {
@@ -158,7 +118,7 @@ impl TransactionBuilder {
             .with_expiry_after(100)
             .with_compute_units(10_000)
             .with_memory_units(10_000)
-            .with_state_units(10_000);
+            .with_state_units(1);
         Ok(tx)
     }
 
@@ -169,7 +129,7 @@ impl TransactionBuilder {
     ///
     /// # Arguments
     /// * `fee_payer` - The account paying the transaction fee (also the from_account for the transfer)
-    /// * `program` - The EOA program pubkey (typically EOA_PROGRAM constant = all zeros)
+    /// * `program` - The EOA program pubkey (typically the canonical EOA_PROGRAM)
     /// * `to_account` - The destination account receiving the transfer
     /// * `amount` - The amount to transfer
     /// * `fee` - Transaction fee
@@ -198,7 +158,7 @@ impl TransactionBuilder {
             .with_expiry_after(100)
             .with_compute_units(10000)
             .with_memory_units(10000)
-            .with_state_units(10000);
+            .with_state_units(1);
 
         Ok(tx)
     }
@@ -237,7 +197,7 @@ impl TransactionBuilder {
             .with_expiry_after(100)
             .with_compute_units(10_000)
             .with_memory_units(10_000)
-            .with_state_units(10_000);
+            .with_state_units(1);
 
         Ok(tx)
     }
@@ -265,7 +225,7 @@ impl TransactionBuilder {
             .with_expiry_after(100)
             .with_compute_units(10_000)
             .with_memory_units(10_000)
-            .with_state_units(10_000);
+            .with_state_units(1);
 
         Ok(tx)
     }
@@ -291,7 +251,7 @@ impl TransactionBuilder {
             .with_expiry_after(100)
             .with_compute_units(50_000)
             .with_memory_units(10_000)
-            .with_state_units(10_000);
+            .with_state_units(1);
         Ok(tx)
     }
 
@@ -313,14 +273,13 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(100032)
-            .with_state_units(1 + new_size.checked_div(4096).unwrap() as u16)
             .with_memory_units(10000)
             .add_rw_account(target_account)
             .with_instructions(instruction_data)
             .with_expiry_after(100)
             .with_compute_units(10_000 + 2 * new_size as u32)
             .with_memory_units(10_000)
-            .with_state_units(10_000);
+            .with_state_units(account_state_units(new_size)?.saturating_sub(1));
 
         Ok(tx)
     }
@@ -348,7 +307,7 @@ impl TransactionBuilder {
             .with_expiry_after(100)
             .with_compute_units(100_300 + account_size * 2)
             .with_memory_units(10000)
-            .with_state_units(10000);
+            .with_state_units(0);
 
         Ok(tx)
     }
@@ -374,7 +333,7 @@ impl TransactionBuilder {
             .add_rw_account(target_account)
             .with_instructions(instruction_data)
             .with_compute_units(100_300 + account_data.len() as u32 * 2)
-            .with_state_units(10_000)
+            .with_state_units(account_state_units(account_data.len() as u64)?)
             .with_memory_units(10_000)
             .with_expiry_after(100);
         Ok(tx)
@@ -399,7 +358,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(100045)
-            .with_state_units(10000)
+            .with_state_units(1)
             .with_memory_units(10000)
             .add_rw_account(target_account)
             .with_instructions(instruction_data);
@@ -716,6 +675,17 @@ pub fn generate_derived_address(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn account_footprint_reservations_include_metadata() {
+        assert_eq!(account_state_units(0).unwrap(), 1);
+        assert_eq!(account_state_units(4032).unwrap(), 1);
+        assert_eq!(account_state_units(4033).unwrap(), 2);
+        assert_eq!(account_state_units(4096).unwrap(), 2);
+        assert_eq!(account_state_units(16 * 1024 * 1024).unwrap(), 4097);
+        assert!(account_state_units(u64::MAX).is_err());
+        assert!(account_state_units(u16::MAX as u64 * 4096).is_err());
+    }
 
     #[test]
     fn test_ephemeral_address_generation() {
@@ -1297,11 +1267,11 @@ mod tests {
     /// Cross-language guard: the Rust bond/TA derivation must byte-match the C
     /// contract in tn_block_producer_derivation.h.  The expected vectors below
     /// were computed directly from that contract (signer=0x11*32,
-    /// bp_program=0x0D01, token_program=0xAA, wthru_mint = TN_WTHRU_MINT_ADDR_BYTES).
+    /// legacy bp_program=0x0D01, token_program=0xAA, and the legacy WTHRU mint).
     /// If this drifts, the CLI would derive a different bond PDA than the program
     /// re-derives and every create would revert with BOND_ADDR_MISMATCH.
     #[test]
-    fn test_bp_bond_derivation_matches_c() {
+    fn test_bp_bond_legacy_derivation_matches_c() {
         let signer = [0x11u8; 32];
         let mut bp_program = [0u8; 32];
         bp_program[30] = 0x0D;
@@ -1332,17 +1302,15 @@ mod tests {
         );
     }
 
-    /// The canonical WTHRU mint derivation (wthru_program 0x07, token_program
-    /// 0xAA, seed "wthru") must equal TN_WTHRU_MINT_ADDR_BYTES from
+    /// The canonical WTHRU mint derivation must equal TN_WTHRU_MINT_ADDR_BYTES from
     /// programs/c/examples/tn_wthru_mint.h, since the bond TA derivation depends
     /// on the mint bytes.
     #[test]
     fn test_wthru_canonical_mint_matches_c() {
         use sha2::{Digest, Sha256};
-        let mut wthru_program = [0u8; 32];
-        wthru_program[31] = 0x07;
-        let mut token_program = [0u8; 32];
-        token_program[31] = 0xAA;
+        use crate::bootstrap_addresses::{TOKEN_PROGRAM_BYTES, WTHRU_MINT_BYTES, WTHRU_PROGRAM_BYTES};
+        let wthru_program = WTHRU_PROGRAM_BYTES;
+        let token_program = TOKEN_PROGRAM_BYTES;
         let mut mint_seed = [0u8; 32];
         mint_seed[..5].copy_from_slice(b"wthru");
 
@@ -1360,12 +1328,7 @@ mod tests {
             false,
             &inner,
         );
-        let expected: [u8; 32] = [
-            0x71, 0xD8, 0x13, 0x50, 0x6B, 0x9D, 0xF0, 0xE8, 0x33, 0x37, 0x91, 0xE7, 0x55, 0x5B,
-            0xF8, 0xBB, 0x7C, 0x7C, 0xD9, 0x40, 0x5E, 0xF1, 0xC8, 0x99, 0x02, 0xD8, 0xCE, 0x2C,
-            0x96, 0x44, 0xFD, 0x23,
-        ];
-        assert_eq!(mint, expected);
+        assert_eq!(mint, WTHRU_MINT_BYTES);
     }
 
     #[test]
@@ -1528,16 +1491,12 @@ mod tests {
         // Binding: a different fee payer or chain id yields a different message.
         let other_payer_msg = build_eoa_create_message(chain_id, &[0u8; 32], &signer);
         let other_chain_msg = build_eoa_create_message(2, &fee_payer, &signer);
-        assert!(
-            verifying_key
+        assert!(verifying_key
                 .verify_strict(&other_payer_msg, &signature)
-                .is_err()
-        );
-        assert!(
-            verifying_key
+            .is_err());
+        assert!(verifying_key
                 .verify_strict(&other_chain_msg, &signature)
-                .is_err()
-        );
+            .is_err());
     }
 }
 
@@ -1838,7 +1797,7 @@ impl TransactionBuilder {
             .with_expiry_after(10)
             .with_compute_units(50_000 + 2 * buffer_size as u32)
             .with_memory_units(10_000)
-            .with_state_units(10_000);
+            .with_state_units(account_state_units(buffer_size as u64 + 4096)?); // Buffer + one-unit uploader metadata.
 
         let mut meta_account_idx = 2u16;
         let mut buffer_account_idx = 3u16;
@@ -1919,7 +1878,7 @@ impl TransactionBuilder {
             .with_expiry_after(10000)
             .with_compute_units(500_000_000)
             .with_memory_units(5000)
-            .with_state_units(5000);
+            .with_state_units(1);
 
         let mut meta_account_idx = 2u16;
         let mut buffer_account_idx = 3u16;
@@ -1960,7 +1919,7 @@ impl TransactionBuilder {
             .with_expiry_after(10000)
             .with_compute_units(50_000 + 200 * buffer_size as u32)
             .with_memory_units(5000)
-            .with_state_units(5000);
+            .with_state_units(1);
 
         // Account layout: [0: fee_payer, 1: uploader_program, 2: meta_account, 3: buffer_account]
         let mut meta_account_idx = 2u16;
@@ -2003,7 +1962,7 @@ impl TransactionBuilder {
             .with_expiry_after(10000)
             .with_compute_units(50000)
             .with_memory_units(5000)
-            .with_state_units(5000);
+            .with_state_units(1);
 
         // Account layout: [0: fee_payer, 1: uploader_program, 2: meta_account, 3: buffer_account]
         let mut meta_account_idx = 2u16;
@@ -2050,7 +2009,7 @@ impl TransactionBuilder {
             .with_expiry_after(10000)
             .with_compute_units(500_000_000)
             .with_memory_units(5000)
-            .with_state_units(5000);
+            .with_state_units(account_state_units(srcbuf_size as u64 + 4096)?); // Program + one-unit manager metadata.
 
         // Check if authority_account is the same as fee_payer
         let authority_is_fee_payer = authority_account == fee_payer;
@@ -2157,7 +2116,7 @@ impl TransactionBuilder {
             .with_expiry_after(10000)
             .with_compute_units(500_000_000)
             .with_memory_units(5000)
-            .with_state_units(5000);
+            .with_state_units(1);
 
         let authority_is_fee_payer = authority_account == fee_payer;
 
@@ -2240,7 +2199,7 @@ impl TransactionBuilder {
             .with_expiry_after(10000)
             .with_compute_units(500_000_000)
             .with_memory_units(5000)
-            .with_state_units(5000);
+            .with_state_units(1);
 
         let authority_is_fee_payer = authority_account == fee_payer;
 
@@ -2323,7 +2282,9 @@ impl TransactionBuilder {
             .with_expiry_after(10000)
             .with_compute_units(500_000_000)
             .with_memory_units(5000)
-            .with_state_units(5000);
+            .with_state_units(account_state_units(
+                srcbuf_size as u64 + ABI_ACCOUNT_HEADER_SIZE,
+            )?);
 
         let authority_is_fee_payer = authority_account == fee_payer;
 
@@ -2427,7 +2388,9 @@ impl TransactionBuilder {
             .with_expiry_after(10000)
             .with_compute_units(500_000_000)
             .with_memory_units(5000)
-            .with_state_units(5000);
+            .with_state_units(account_state_units(
+                srcbuf_size as u64 + ABI_ACCOUNT_HEADER_SIZE,
+            )?);
 
         let authority_is_fee_payer = authority_account == fee_payer;
 
@@ -2520,7 +2483,10 @@ impl TransactionBuilder {
             .with_expiry_after(10000)
             .with_compute_units(500_000_000)
             .with_memory_units(5000)
-            .with_state_units(5000);
+            .with_state_units(
+                account_state_units(srcbuf_size as u64 + ABI_ACCOUNT_HEADER_SIZE)?
+                    .saturating_sub(1),
+            );
 
         let authority_is_fee_payer = authority_account == fee_payer;
 
@@ -2614,7 +2580,10 @@ impl TransactionBuilder {
             .with_expiry_after(10000)
             .with_compute_units(500_000_000)
             .with_memory_units(5000)
-            .with_state_units(5000);
+            .with_state_units(
+                account_state_units(srcbuf_size as u64 + ABI_ACCOUNT_HEADER_SIZE)?
+                    .saturating_sub(1),
+            );
 
         let authority_is_fee_payer = authority_account == fee_payer;
 
@@ -2695,7 +2664,7 @@ impl TransactionBuilder {
             .with_expiry_after(10000)
             .with_compute_units(500_000_000)
             .with_memory_units(5000)
-            .with_state_units(5000);
+            .with_state_units(1);
 
         let authority_is_fee_payer = authority_account == fee_payer;
 
@@ -2776,7 +2745,7 @@ impl TransactionBuilder {
             .with_expiry_after(10000)
             .with_compute_units(500_000_000)
             .with_memory_units(5000)
-            .with_state_units(5000);
+            .with_state_units(1);
 
         let authority_is_fee_payer = authority_account == fee_payer;
 
@@ -2849,7 +2818,7 @@ impl TransactionBuilder {
             .with_expiry_after(10000)
             .with_compute_units(500_000_000)
             .with_memory_units(5000)
-            .with_state_units(5000);
+            .with_state_units(1);
 
         let authority_is_fee_payer = authority_account == fee_payer;
 
@@ -2930,7 +2899,7 @@ impl TransactionBuilder {
             .with_expiry_after(10000)
             .with_compute_units(500_000_000)
             .with_memory_units(5000)
-            .with_state_units(5000);
+            .with_state_units(1);
 
         let authority_is_fee_payer = authority_account == fee_payer;
 
@@ -3004,7 +2973,7 @@ impl TransactionBuilder {
             .with_expiry_after(10000)
             .with_compute_units(500_000_000)
             .with_memory_units(5000)
-            .with_state_units(5000);
+            .with_state_units(account_state_units(srcbuf_size as u64)?.saturating_sub(1));
 
         // Separate accounts by access type and sort each group by pubkey
         let mut rw_accounts = vec![(meta_account, "meta"), (program_account, "program")];
@@ -3072,7 +3041,7 @@ impl TransactionBuilder {
             .with_expiry_after(10000)
             .with_compute_units(100_000_000)
             .with_memory_units(5000)
-            .with_state_units(5000);
+            .with_state_units(1);
 
         // Add accounts in sorted order
         let mut accounts = vec![(meta_account, "meta"), (program_account, "program")];
@@ -3119,7 +3088,7 @@ impl TransactionBuilder {
             .with_expiry_after(10000)
             .with_compute_units(100_000_000)
             .with_memory_units(5000)
-            .with_state_units(5000);
+            .with_state_units(1);
 
         // Add accounts in sorted order
         let mut accounts = vec![(meta_account, "meta"), (program_account, "program")];
@@ -3169,7 +3138,7 @@ impl TransactionBuilder {
             .with_expiry_after(10000)
             .with_compute_units(100_000_000)
             .with_memory_units(5000)
-            .with_state_units(5000);
+            .with_state_units(1);
 
         // Add accounts in sorted order
         let mut accounts = vec![(meta_account, "meta"), (program_account, "program")];
@@ -3224,7 +3193,7 @@ impl TransactionBuilder {
             .with_expiry_after(100)
             .with_compute_units(100_000 + account_sz)
             .with_memory_units(10_000)
-            .with_state_units(10_000)
+            .with_state_units(account_state_units(account_sz as u64)?)
             .add_rw_account(target_account);
 
         let instruction_data = build_test_uploader_create_instruction(
@@ -3258,7 +3227,7 @@ impl TransactionBuilder {
             .with_expiry_after(10_000)
             .with_compute_units(100_000 + 18 * data.len() as u32)
             .with_memory_units(10_000)
-            .with_state_units(10_000)
+            .with_state_units(1)
             .add_rw_account(target_account);
 
         let instruction_data =
@@ -3288,7 +3257,7 @@ impl TransactionBuilder {
             .with_expiry_after(100)
             .with_compute_units(10_000 + 2 * data_sz)
             .with_memory_units(10_000)
-            .with_state_units(10);
+            .with_state_units(account_state_units(data_sz as u64)?);
 
         // Add target account (read-write)
         let target_account_idx = 2u16;
@@ -4177,8 +4146,8 @@ fn add_sorted_accounts(tx: Transaction, accounts: &[(TnPubkey, bool)]) -> (Trans
         .collect();
 
     // Sort each group by pubkey
-    rw_accounts.sort_by(|a, b| a.1.0.cmp(&b.1.0));
-    ro_accounts.sort_by(|a, b| a.1.0.cmp(&b.1.0));
+    rw_accounts.sort_by(|a, b| a.1 .0.cmp(&b.1 .0));
+    ro_accounts.sort_by(|a, b| a.1 .0.cmp(&b.1 .0));
 
     let mut updated_tx = tx;
     let mut indices = vec![0u16; accounts.len()];
@@ -4299,7 +4268,7 @@ impl TransactionBuilder {
             .with_instructions(instruction_data)
             .with_expiry_after(100)
             .with_compute_units(300_000)
-            .with_state_units(10_000)
+            .with_state_units(1)
             .with_memory_units(10_000);
 
         Ok(tx)
@@ -4366,7 +4335,7 @@ impl TransactionBuilder {
             .with_instructions(instruction_data)
             .with_expiry_after(100)
             .with_compute_units(300_000)
-            .with_state_units(10_000)
+            .with_state_units(1)
             .with_memory_units(10_000);
 
         Ok(tx)
@@ -4388,7 +4357,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(300_000)
-            .with_state_units(10_000)
+            .with_state_units(1)
             .with_memory_units(10_000);
 
         let is_self_transfer = source_account == dest_account;
@@ -4429,7 +4398,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(300_000)
-            .with_state_units(10_000)
+            .with_state_units(1)
             .with_memory_units(10_000);
 
         let (tx_after_rw, rw_indices) =
@@ -4473,7 +4442,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(300_000)
-            .with_state_units(10_000)
+            .with_state_units(1)
             .with_memory_units(10_000);
 
         let (tx_after_rw, rw_indices) =
@@ -4516,7 +4485,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(300_000)
-            .with_state_units(10_000)
+            .with_state_units(1)
             .with_memory_units(10_000);
 
         let (tx_after_rw, rw_indices) =
@@ -4558,7 +4527,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(300_000)
-            .with_state_units(10_000)
+            .with_state_units(1)
             .with_memory_units(10_000);
 
         let (tx_after_rw, rw_indices) =
@@ -4600,7 +4569,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(300_000)
-            .with_state_units(10_000)
+            .with_state_units(1)
             .with_memory_units(10_000);
 
         let mut rw_accounts = vec![token_account];
@@ -4655,7 +4624,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(500_000)
-            .with_state_units(10_000)
+            .with_state_units(2) // New mint and vault.
             .with_memory_units(10_000);
 
         let accounts = [
@@ -4707,7 +4676,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(400_000)
-            .with_state_units(10_000)
+            .with_state_units(1)
             .with_memory_units(10_000);
 
         let accounts = [
@@ -4753,7 +4722,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(400_000)
-            .with_state_units(10_000)
+            .with_state_units(1)
             .with_memory_units(10_000);
 
         let accounts = [
@@ -4825,7 +4794,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(50_000_000)
-            .with_state_units(50_000)
+            .with_state_units(2 + u16::from(create_signer_eoa)) // Bond, token account, optional EOA.
             .with_memory_units(50_000);
 
         let mut accounts: Vec<(TnPubkey, bool)> = vec![
@@ -5066,7 +5035,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(300_000)
-            .with_state_units(10_000)
+            .with_state_units(1)
             .with_memory_units(10_000);
 
         let (tx, depositor_account_idx) = Self::ensure_rw_account(tx, depositor_account);
@@ -5147,7 +5116,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(300_000)
-            .with_state_units(10_000)
+            .with_state_units(1)
             .with_memory_units(10_000);
 
         // Determine account indices, handling duplicates with fee_payer and between accounts
@@ -5507,7 +5476,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(500_000)
-            .with_state_units(10_000)
+            .with_state_units(1)
             .with_memory_units(10_000);
 
         let accounts = [(registrar_account, true), (authority_account, false)];
@@ -5545,7 +5514,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(500_000)
-            .with_state_units(10_000)
+            .with_state_units(1)
             .with_memory_units(10_000);
 
         let accounts = [
@@ -5590,7 +5559,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(250_000)
-            .with_state_units(10_000)
+            .with_state_units(1)
             .with_memory_units(10_000);
 
         let accounts = [(domain_account, true), (owner_account, false)];
@@ -5625,7 +5594,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(200_000)
-            .with_state_units(10_000)
+            .with_state_units(1)
             .with_memory_units(10_000);
 
         let accounts = [(domain_account, true), (owner_account, false)];
@@ -5658,7 +5627,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(200_000)
-            .with_state_units(10_000)
+            .with_state_units(1)
             .with_memory_units(10_000);
 
         let accounts = [(domain_account, true), (owner_account, false)];
@@ -5698,7 +5667,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(500_000)
-            .with_state_units(10_000)
+            .with_state_units(2) // New configuration and root.
             .with_memory_units(10_000);
 
         // Add accounts in sorted order (read-write first, then read-only)
@@ -5791,7 +5760,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(500_000)
-            .with_state_units(10_000)
+            .with_state_units(2) // New lease and domain.
             .with_memory_units(10_000);
 
         // Add accounts in sorted order
@@ -5898,7 +5867,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(300_000)
-            .with_state_units(10_000)
+            .with_state_units(1)
             .with_memory_units(10_000);
 
         // Add accounts in sorted order
@@ -5975,7 +5944,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(300_000)
-            .with_state_units(10_000)
+            .with_state_units(1)
             .with_memory_units(10_000);
 
         // Add accounts in sorted order

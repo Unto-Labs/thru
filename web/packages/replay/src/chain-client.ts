@@ -85,7 +85,7 @@ export interface EventSource {
 }
 
 export interface AccountSource {
-  getAccount(request: Partial<GetAccountRequest>): Promise<Account>;
+  getAccount(request: Partial<GetAccountRequest>, options?: Pick<CallOptions, "signal">): Promise<Account>;
   listAccounts(request: Partial<ListAccountsRequest>): Promise<ListAccountsResponse>;
   streamAccountUpdates(
     request: Partial<StreamAccountUpdatesRequest>,
@@ -135,8 +135,12 @@ export class ChainClient implements ReplayDataSource {
     this.sessionManager?.abort();
   }
 
-  getAccount(request: Partial<GetAccountRequest>): Promise<Account> {
-    return this.query.getAccount(create(GetAccountRequestSchema, request), this.callOptions);
+  getAccount(request: Partial<GetAccountRequest>, options?: Pick<CallOptions, "signal">): Promise<Account> {
+    const defaultSignal = this.callOptions?.signal;
+    const signal = defaultSignal && options?.signal
+      ? AbortSignal.any([defaultSignal, options.signal])
+      : options?.signal ?? defaultSignal;
+    return this.query.getAccount(create(GetAccountRequestSchema, request), { ...this.callOptions, signal });
   }
 
   listAccounts(request: Partial<ListAccountsRequest>): Promise<ListAccountsResponse> {

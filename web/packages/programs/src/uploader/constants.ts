@@ -1,8 +1,9 @@
-import { encodeAddress } from "@thru/sdk/helpers";
-import { systemProgramPubkey } from "../utils/helpers";
+import { deriveManagedProgramAddresses } from "../manager/derivation.js";
 
-export const UPLOADER_PROGRAM_PUBKEY = systemProgramPubkey(0x02);
-export const UPLOADER_PROGRAM_ADDRESS = encodeAddress(UPLOADER_PROGRAM_PUBKEY);
+export const UPLOADER_PROGRAM_SEED = "thru-program:1073768";
+const uploader = deriveManagedProgramAddresses(UPLOADER_PROGRAM_SEED);
+export const UPLOADER_PROGRAM_PUBKEY = uploader.programAccountBytes;
+export const UPLOADER_PROGRAM_ADDRESS = uploader.programAccountAddress;
 
 export const UPLOADER_META_SIZE = 65;
 export const UPLOADER_STATE_OPEN = 0x01;

@@ -55,9 +55,11 @@ const MANAGED_HIDE_MAX_EXIT_MS = 1000;
 const MANAGED_HIDE_FALLBACK_MS = 4000;
 const PARENT_ORIGIN_SEARCH_PARAM = 'tn_parent_origin';
 const THEME_SEARCH_PARAM = 'tn_theme';
+/* web-share lets the wallet's "Send link" (pairing a new device) open the
+   system share sheet; without it the wallet falls back to copying. */
 export function walletIframeAllow(walletUrl: string): string {
   const origin = new URL(walletUrl).origin;
-  return `publickey-credentials-get ${origin}; publickey-credentials-create ${origin}; payment *; clipboard-write ${origin}`;
+  return `publickey-credentials-get ${origin}; publickey-credentials-create ${origin}; payment *; clipboard-write ${origin}; web-share ${origin}`;
 }
 
 /** @deprecated Use walletIframeAllow with the configured wallet URL. */

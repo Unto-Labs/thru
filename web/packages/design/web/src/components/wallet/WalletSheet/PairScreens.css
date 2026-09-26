@@ -1,0 +1,442 @@
+/* Pair a new device — the new-device side of the pairing flow
+   (Pair Device Sheet.dc.html). Body padding 16, column gap 16. */
+
+.tds-pair .tds-screen__body {
+  gap: var(--space-4);
+}
+/* All call-to-action labels are mono semibold 15. */
+.tds-pair .tds-btn--lg {
+  font-family: var(--font-mono);
+  font-size: 15px;
+}
+
+/* Hero: 48px disc, 20/600 title, 15 tertiary sub. */
+.tds-pair__hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+  text-align: center;
+}
+.tds-pair__heading {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  text-align: center;
+}
+.tds-pair__disc {
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-primary);
+  color: var(--color-text-tertiary);
+  display: grid;
+  place-items: center;
+  flex: none;
+}
+.tds-pair__disc--ok {
+  background: var(--color-surface-grass);
+  color: var(--color-text-primary-inverse);
+}
+.tds-pair__title {
+  font-size: 20px;
+  font-weight: var(--fw-semibold);
+  letter-spacing: -0.3px;
+  line-height: 1.2;
+  color: var(--color-text-primary);
+}
+.tds-pair__sub {
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--color-text-tertiary);
+  text-wrap: pretty;
+}
+.tds-pair__sub--sm {
+  font-size: 14px;
+}
+
+/* "This device" card */
+.tds-pair__field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.tds-pair__label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-text-tertiary);
+}
+.tds-pair__device {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  min-height: 56px;
+  padding: 0 6px 0 14px;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface-higher);
+}
+.tds-pair__device-glyph {
+  display: grid;
+  color: var(--color-text-secondary);
+  flex: none;
+}
+.tds-pair__device-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: var(--space-2) 0;
+}
+.tds-pair__device-name,
+.tds-pair__device-input {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  color: var(--color-text-primary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tds-pair__device-input {
+  box-sizing: border-box;
+  width: 100%;
+  margin: 0;
+  padding: 0 0 1px;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--color-border-brand);
+  border-radius: 0;
+  outline: none;
+}
+.tds-pair__device-meta {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tds-pair__icon-btn {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-tertiary);
+  flex: none;
+}
+.tds-pair__icon-btn:hover {
+  color: var(--color-text-primary);
+}
+
+.tds-pair__actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+.tds-pair__text-btn {
+  align-self: center;
+  height: 40px;
+  padding: 0 var(--space-2);
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-text-secondary);
+}
+.tds-pair__text-btn:hover,
+.tds-pair__text-btn:active {
+  color: var(--color-text-primary);
+}
+.tds-pair__icon-btn:focus-visible,
+.tds-pair__text-btn:focus-visible,
+.tds-pair__refresh:focus-visible,
+.tds-pair__small-btn:focus-visible,
+.tds-pair__callout-btn:focus-visible,
+.tds-pair__details:focus-visible,
+.tds-pair__details-copy:focus-visible {
+  outline: 2px solid var(--color-border-brand);
+  outline-offset: 2px;
+}
+
+/* Code screen: 180px QR, 10px padding, knocked-out 30px Thru disc. */
+.tds-pair__code {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-3);
+}
+.tds-pair__qr {
+  box-sizing: border-box;
+  position: relative;
+  display: grid;
+  place-items: center;
+  flex: none;
+  padding: 10px;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface-higher);
+}
+.tds-pair__qr-svg {
+  display: block;
+  fill: var(--color-text-primary);
+  transition: opacity var(--duration-fast) var(--ease-standard);
+}
+.tds-pair__qr-svg--dim {
+  opacity: 0.12;
+}
+.tds-pair__qr-mark {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+}
+.tds-pair__qr-mark > svg {
+  display: block;
+  background: var(--color-surface-higher);
+  padding: 3px;
+  box-sizing: content-box;
+}
+.tds-pair__qr-over {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+}
+.tds-pair__qr-over--veil {
+  background: color-mix(in srgb, var(--color-surface-higher) 84%, transparent);
+}
+.tds-pair__qr-over--error {
+  color: var(--brick-400);
+}
+.tds-pair__qr-note {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.tds-pair__small-btn {
+  height: 36px;
+  padding: 0 14px;
+  border: 1px solid var(--color-border-strong);
+  background: var(--color-surface-higher);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: var(--fw-semibold);
+  color: var(--color-text-primary);
+}
+.tds-pair__small-btn:active {
+  background: var(--color-surface-primary);
+}
+.tds-pair__expiry {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.tds-pair__refresh {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--color-text-tertiary);
+}
+.tds-pair__refresh:hover,
+.tds-pair__refresh:active {
+  color: var(--color-text-primary);
+}
+.tds-pair__link-btn {
+  gap: var(--space-2);
+}
+
+/* Error callout: one plain line + Try again; raw text only behind Details. */
+.tds-pair__callout {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-3) 14px;
+  background: var(--brick-100);
+}
+.tds-pair__callout-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.tds-pair__callout-icon {
+  color: var(--brick-400);
+  flex: none;
+}
+.tds-pair__callout-text {
+  flex: 1;
+  font-size: 13px;
+  font-weight: var(--fw-semibold);
+  color: var(--color-text-primary);
+}
+.tds-pair__callout-btn {
+  height: 32px;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: var(--fw-semibold);
+  color: var(--color-text-primary);
+}
+.tds-pair__details {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+  height: 28px;
+  margin-left: 26px;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-secondary);
+}
+.tds-pair__details-chev {
+  transition: transform var(--duration-fast) var(--ease-standard);
+}
+.tds-pair__details[aria-expanded="true"] .tds-pair__details-chev {
+  transform: rotate(180deg);
+}
+.tds-pair__details-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-left: 26px;
+}
+.tds-pair__details-msg {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--color-text-secondary);
+  word-break: break-word;
+}
+.tds-pair__details-copy {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-brand);
+}
+/* --brick-100 is a light tint in both palettes; on the dark surface the
+   callout keeps the same brick cast by mixing into the surface instead. */
+[data-theme="dark"] .tds-pair__callout {
+  background: color-mix(in srgb, var(--brick-400) 16%, var(--color-surface-higher));
+}
+
+/* Status line (aria-live). */
+.tds-pair__status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 24px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  text-align: center;
+}
+.tds-pair__status--ok {
+  color: var(--grass-400);
+}
+.tds-pair__spin {
+  box-sizing: border-box;
+  width: 22px;
+  height: 22px;
+  border: 2px solid var(--brick-200);
+  border-top-color: var(--brick-400);
+  border-radius: var(--radius-pill);
+  animation: tds-pair-spin 0.7s linear infinite;
+  flex: none;
+}
+.tds-pair__spin--sm {
+  width: 12px;
+  height: 12px;
+  border-width: 1.5px;
+  border-color: var(--color-border-secondary);
+  border-top-color: var(--color-text-tertiary);
+}
+@keyframes tds-pair-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Done: 64px account row. */
+.tds-pair__account {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  height: 64px;
+  padding: 0 14px;
+  border: 1px solid var(--color-border-tertiary);
+  background: var(--color-surface-higher);
+}
+.tds-pair__account-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.tds-pair__account-addr {
+  font-size: 15px;
+  color: var(--color-text-primary);
+}
+.tds-pair__account-sub {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.tds-pair__account-bal {
+  font-family: var(--font-mono);
+  font-size: 15px;
+  color: var(--color-text-primary);
+  flex: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tds-pair__spin {
+    animation: none;
+  }
+  .tds-pair__qr-svg,
+  .tds-pair__details-chev {
+    transition: none;
+  }
+}

@@ -25,6 +25,19 @@ pub enum ClientError {
     #[error("Transaction verification error: {0}")]
     TransactionVerification(String),
 
+    /// The stream observed execution or confirmation, but the detail query
+    /// failed. Query this signature again; do not infer that submission failed.
+    /// `outcome` may contain an execution failure and must be inspected.
+    #[error(
+        "Transaction observed via stream but details unavailable (signature: {signature}): {source}"
+    )]
+    TransactionDetailsUnavailable {
+        signature: String,
+        outcome: Box<thru_grpc_client::thru::services::v1::SendAndTrackTxnResponse>,
+        #[source]
+        source: Box<ClientError>,
+    },
+
     /// A server-side stream dropped this subscriber for falling behind.
     ///
     /// The server disconnects a slow subscriber rather than silently skipping

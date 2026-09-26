@@ -526,6 +526,14 @@ impl TypeResolver {
                             }
                         }
                         Size::Variable(field_refs) => {
+                            /* The first variable-sized field still has a known start. */
+                            let offset = if variable_prefix {
+                                None
+                            } else if struct_type.container_attributes.packed {
+                                Some(current_offset)
+                            } else {
+                                Some(align_up(current_offset, field_alignment))
+                            };
                             // Field has variable size - struct size will be variable too
                             all_sizes_known = false;
                             variable_prefix = true;
@@ -590,7 +598,7 @@ impl TypeResolver {
                             let resolved_field = ResolvedField {
                                 name: field.name.clone(),
                                 field_type,
-                                offset: None,
+                                offset,
                             };
 
                             fields.push(resolved_field.clone());

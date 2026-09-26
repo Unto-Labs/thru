@@ -150,6 +150,11 @@
 .tds-ppopup__cell-sub--sm {
   font-size: 11px;
 }
+.tds-ppopup__cell-host {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
 .tds-ppopup__ellipsis {
   min-width: 0;
   overflow: hidden;

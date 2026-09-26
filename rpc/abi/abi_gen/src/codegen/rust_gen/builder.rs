@@ -588,9 +588,11 @@ fn emit_fam_struct_builder(
 
     let prefix_fields = &fields[..first_fam_index];
 
-    /* Calculate prefix size accounting for alignment padding.
-    Uses offset + size of last field instead of summing sizes. */
-    let prefix_size: u64 = calculate_fields_layout_size(prefix_fields);
+    /* Include the alignment gap between the fixed prefix and the first FAM. */
+    let prefix_size = fam_infos[0]
+        .field
+        .offset
+        .unwrap_or_else(|| calculate_fields_layout_size(prefix_fields));
 
     let mut out = String::new();
 

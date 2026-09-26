@@ -26,7 +26,8 @@
     "./mobile": {
       "types": "./mobile/src/index.ts",
       "import": "./mobile/src/index.ts"
-    }
+    },
+    "./mobile/tokens.css": "./mobile/src/tokens.css"
   },
   "files": [
     "tokens/src",

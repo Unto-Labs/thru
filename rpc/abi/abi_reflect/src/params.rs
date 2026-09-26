@@ -747,11 +747,26 @@ impl<'a> StructWalker<'a> {
         };
 
         let count = self.eval_expr(size_expression)? as usize;
-        if element_type.size == Size::Const(0) || count == 0 {
+        if count == 0 {
             return Ok(0);
+        }
+        if element_type.size == Size::Const(0) {
+            return Err(ReflectError::UnsupportedDynamicParam {
+                type_name: self.type_name.to_string(),
+                parameter: path_key(path),
+                reason: "arrays of zero-sized elements are not supported".into(),
+            });
         }
 
         if jagged && matches!(element_type.size, Size::Variable(_)) {
+            /* As in the parser, every jagged element must consume bytes. */
+            if count > data.len() {
+                return Err(ReflectError::BufferTooSmall {
+                    type_name: self.type_name.to_string(),
+                    required: count as u128,
+                    available: data.len() as u64,
+                });
+            }
             let mut cursor = 0usize;
             for i in 0..count {
                 if cursor > data.len() {
@@ -760,6 +775,13 @@ impl<'a> StructWalker<'a> {
                 path.push(i.to_string());
                 let consumed = self.process_field(element_type, path, &data[cursor..], false)?;
                 path.pop();
+                if consumed == 0 {
+                    return Err(ReflectError::UnsupportedDynamicParam {
+                        type_name: self.type_name.to_string(),
+                        parameter: path_key(path),
+                        reason: format!("jagged array element {i} consumed zero bytes"),
+                    });
+                }
                 cursor = cursor.checked_add(consumed).ok_or_else(|| {
                     ReflectError::UnsupportedDynamicParam {
                         type_name: self.type_name.to_string(),

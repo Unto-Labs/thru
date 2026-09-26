@@ -136,9 +136,8 @@ async fn resolve_token_program_for_account(
 
     let (onchain_owner, fallback_reason) = match lookup {
         Ok(Some(info)) if !info.is_deleted => match info.owner.to_bytes() {
-            // A zero owner is the system program: a plain account, not a mint
-            // or token account.
-            Ok(owner) if owner == [0u8; 32] => (
+            // An EOA or unowned account is not a mint or token account.
+            Ok(owner) if owner == thru_base::txn_tools::EOA_PROGRAM || owner == [0u8; 32] => (
                 None,
                 Some("it is a plain account, not owned by a token program".to_string()),
             ),

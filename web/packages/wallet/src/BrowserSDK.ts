@@ -1209,33 +1209,14 @@ export class BrowserSDK implements WalletSDK {
     }
 
     const appId = input?.appId || defaultOrigin;
-    const appUrl = this.resolveAppUrl(defaultOrigin, input?.appUrl);
-    const appName = input?.appName || this.deriveAppName(appUrl ?? appId);
+    const appName = input?.appName || this.deriveAppName(defaultOrigin ?? appId);
 
     const metadata: ConnectMetadataInput = {};
     if (appId) metadata.appId = appId;
-    if (appUrl) metadata.appUrl = appUrl;
     if (appName) metadata.appName = appName;
     if (input?.imageUrl) metadata.imageUrl = input.imageUrl;
 
     return metadata;
-  }
-
-  private resolveAppUrl(
-    defaultOrigin?: string,
-    providedUrl?: string,
-  ): string | undefined {
-    const candidate = providedUrl || defaultOrigin;
-    if (!candidate) {
-      return undefined;
-    }
-
-    try {
-      const url = new URL(candidate, defaultOrigin);
-      return url.toString();
-    } catch {
-      return defaultOrigin;
-    }
   }
 
   private deriveAppName(source?: string): string | undefined {

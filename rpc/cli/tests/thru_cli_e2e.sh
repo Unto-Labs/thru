@@ -33,6 +33,8 @@
 #                  (the default fallback). The ClaimFees scenario `die`s if no seed
 #                  source is resolvable — it never silently skips.
 #
+# Packaging: install this script and account_create_helpers.sh in the same directory.
+#
 # Dependencies: bash (>= 5), cargo, jq, thru node running locally with pre-funded accounts
 #               (created via mksnap --fund-accounts), built program binary at
 #               build/thruvm/bin/tn_event_emission_program_c.bin, and (for the
@@ -71,6 +73,8 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(git -C "$SCRIPT_DIR" rev-parse --show-toplevel 2>/dev/null || (cd "$SCRIPT_DIR/../../.." && pwd))"
 readonly SCRIPT_DIR REPO_ROOT
 
+source "$SCRIPT_DIR/account_create_helpers.sh"
+
 CLI_TMP_HOME="$(mktemp -d)"
 readonly CLI_TMP_HOME
 trap 'rm -rf "$CLI_TMP_HOME"' EXIT
@@ -84,7 +88,7 @@ THRU_CLI_BIN="${THRU_CLI_BIN:-$THRU_CLI_BIN_DEFAULT}"
 readonly THRU_CLI_BIN_DEFAULT THRU_CLI_BIN
 
 EVENT_PROGRAM_BIN="$REPO_ROOT/build/thruvm/bin/tn_event_emission_program_c.bin"
-EVENT_PROGRAM_MANAGER="taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQE"
+EVENT_PROGRAM_MANAGER="taMGRmPoSTkUtF6UlmCIq58K8OYsnXshOMPdobxxHytqmu"
 readonly EVENT_PROGRAM_BIN
 readonly EVENT_PROGRAM_MANAGER
 
@@ -112,11 +116,11 @@ declare BOND_B_P=0
 declare BOND_B_ACCEPTED=""
 declare GENESIS_EVENT_PROGRAM_HEX="00000000000000000000000000000000000000000000000000000000000000EE"
 
-# Canonical WTHRU mint + the genesis token program (0xAA), pinned in
+# Canonical WTHRU mint + the bootstrap-managed Token program, pinned in
 # programs/c/examples/tn_wthru_mint.h. The bond program denominates bonds in
 # this mint; the operator wraps native THRU into a WTHRU token account here.
-readonly WTHRU_MINT="tacdgTUGud8OgzN5HnVVv4u3x82UBe8ciZAtjOLJZE_SNg"
-readonly WTHRU_TOKEN_PROGRAM="taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKqq"
+readonly WTHRU_MINT="taaoXQw03WlYWdo1jhfFi2Nqfqsf4RqYySn_89mchjCiLb"
+readonly WTHRU_TOKEN_PROGRAM="taTOKENKRgcl3vO0yVhftATDbXuhgWcfaaxv9xpEEdMdUE"
 # §B (attestor_payment debit + ClaimFees) drives the fullnode block-builder BTP
 # endpoint (UDP) via send-block. §B ALWAYS runs — it never skips; if send-block
 # cannot be resolved the test fails.
@@ -699,18 +703,19 @@ keys:
   acc_1: "0100000000000000000000000000000000000000000000000000000000000000"
   acc_2: "0200000000000000000000000000000000000000000000000000000000000000"
   acc_3: "0300000000000000000000000000000000000000000000000000000000000000"
-uploader_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIC"
-manager_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQE"
-abi_manager_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACrG7"
-token_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKqq"
-consensus_validator_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAEN"
-consensus_attestor_table_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAIO"
-consensus_converted_vault_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAQQ"
-consensus_unclaimed_vault_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAUR"
-wthru_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcH"
-bp_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADQEO"
-name_service_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUF"
-thru_registrar_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYG"
+uploader_program_public_key: "taUPLMH5QYOAT4ktwQeO7DXAEKtqBhYehalNGf5BJFQDYq"
+manager_program_public_key: "taMGRmPoSTkUtF6UlmCIq58K8OYsnXshOMPdobxxHytqmu"
+system_test_program_public_key: "tar71GzddPShylAkcr4uvCDLRtdovGCI64b54CYtqCWSVA"
+abi_manager_program_public_key: "taABII8WXcPaPIt47cXjOBbyoBUGBDXznAMHorVMeok3mw"
+token_program_public_key: "taTOKENKRgcl3vO0yVhftATDbXuhgWcfaaxv9xpEEdMdUE"
+consensus_validator_program_public_key: "taCONStGMCE1RJ9ttceyt0FZhYapGJ7zzBuCE5qqYdLhaF"
+consensus_attestor_table_public_key: "ta1hwl1IPgsgFwWPQMmru6Wy55X-5F79RedCGZK6FLu81a"
+consensus_converted_vault_public_key: "taR_oF_dyYHoV1-lz_Dqg63XXSNEKu1dSsRqGFo8nc5mey"
+consensus_unclaimed_vault_public_key: "tanMgIvVjQKG5C23bpXQba6gnvQhwo09ZUOH73AuXRHI0T"
+wthru_program_public_key: "taWTHRUBelpONhTRjYc7n4OovodUsUtZKTIuREWAi9G9lm"
+bp_program_public_key: "taBPUH9m3CXZcBQyCrTmclHtltipiPelIHzdAf8QdIDvnt"
+name_service_program_public_key: "taNAMEqRNEDeMWp0cDYmMVdZyTZiF5NyGDR9zTwH42rWQG"
+thru_registrar_program_public_key: "taREGMtyyVIMr27zDpvN0aRiSS2aOVffM9cZCsc0Xomaxw"
 timeout_seconds: 300
 max_retries: 5
 auth_token:
@@ -787,75 +792,55 @@ scenario_accounts() {
   GENERATED_ACCOUNT_KEY="test-acct-${key_suffix}"
   run_cli_json "keys add $GENERATED_ACCOUNT_KEY" keys add --overwrite "$GENERATED_ACCOUNT_KEY" "$new_key_hex" >/dev/null
 
-  local existing_info current_nonce
-  if existing_info=$(with_cli_env "$THRU_CLI_BIN" --json getaccountinfo "$GENERATED_ACCOUNT_KEY" 2>/dev/null); then
-    GENERATED_ACCOUNT_PUBKEY=$(printf '%s' "$existing_info" | jq -er '.account_info.pubkey')
-    current_nonce=$(printf '%s' "$existing_info" | jq -er '.account_info.nonce')
-    ACCOUNT_CREATE_SIGNATURE=""
-    log "Account $GENERATED_ACCOUNT_KEY already exists (nonce=${current_nonce}); reusing existing account."
-  else
-    log "Account $GENERATED_ACCOUNT_KEY not found; creating."
-    local attempt create_status create_output
-    local created=false
-    for (( attempt = 1; attempt <= RETRY_ATTEMPTS; attempt++ )); do
-      log "CLI: account create (attempt $attempt/$RETRY_ATTEMPTS) -> thru-cli --json account create $GENERATED_ACCOUNT_KEY"
-      if create_output=$(with_cli_env "$THRU_CLI_BIN" --json account create "$GENERATED_ACCOUNT_KEY" 2>&1); then
-        ACCOUNT_CREATE_SIGNATURE=$(printf '%s' "$create_output" | jq -er '.account_create.signature')
-        GENERATED_ACCOUNT_PUBKEY=$(printf '%s' "$create_output" | jq -er '.account_create.public_key')
-        created=true
-        break
-      fi
-      create_status=$?
-
-      if grep -q "bintrie: key already exists" <<<"$create_output"; then
-        log "Account already present according to state proof response; fetching existing account info."
-        existing_info=$(with_cli_env "$THRU_CLI_BIN" --json getaccountinfo "$GENERATED_ACCOUNT_KEY" 2>/dev/null) || die "Unable to load existing account info after bintrie error"
-        GENERATED_ACCOUNT_PUBKEY=$(printf '%s' "$existing_info" | jq -er '.account_info.pubkey')
-        current_nonce=$(printf '%s' "$existing_info" | jq -er '.account_info.nonce')
-        ACCOUNT_CREATE_SIGNATURE=""
-        log "Reusing existing account $GENERATED_ACCOUNT_PUBKEY (nonce=${current_nonce})."
-        created=true
-        break
-      fi
-
-      log "Account creation failed (exit $create_status): $create_output"
-      if (( attempt < RETRY_ATTEMPTS )); then
-        log "Retrying account create in ${RETRY_DELAY_SECS}s..."
-        sleep "$RETRY_DELAY_SECS"
-      fi
-    done
-
-    if [[ "$created" != true ]]; then
-      die "Failed to create account $GENERATED_ACCOUNT_KEY after ${RETRY_ATTEMPTS} attempts"
-    fi
-  fi
+  local expected_pubkey
+  expected_pubkey=$(run_cli_raw "derive $GENERATED_ACCOUNT_KEY address" util derive "$new_key_hex" --format thrufmt)
+  create_or_reuse_account "$GENERATED_ACCOUNT_KEY" "$expected_pubkey" \
+    || die "Failed to create or reconcile account $GENERATED_ACCOUNT_KEY"
 
   run_cli_json "account info" account info "$GENERATED_ACCOUNT_KEY" >/dev/null
 
   run_cli_json "account transactions default" account transactions "$GENERATED_ACCOUNT_KEY" >/dev/null
   run_cli_json "account transactions paginated" account transactions "$GENERATED_ACCOUNT_KEY" --page-size 5 --page-token "" >/dev/null
 
-  # Compression requires global_activated_state_counter > 32 GiB (TN_STATE_COUNTER_BASELINE_BYTES).
-  # With pre-funded accounts from mksnap, the state counter is based on actual account data,
-  # which is typically far below the 32 GiB threshold. Skip compression tests in this case.
-  # To re-enable, use a genesis JSON with high global_activated_state_counter (e.g., 934359738368).
-  log "Skipping compression/decompression tests (requires genesis with high state counter)"
+  # The system program is not the owner of this EOA, so non-owner compression
+  # requires settled load above the live chain baseline. A freshly created
+  # account is not guaranteed to have enough state-clock age until the age
+  # window reaches zero or the eleven-step bypass opens. Advancing slots with
+  # transfers clears proof/cooldown delays, but does not manufacture state age.
+  local params_json metrics_json slot baseline step activated deactivated load halvings window
+  params_json=$(run_cli_json "compression chain parameters" feature-gates list --kind chain-param)
+  baseline=$(printf '%s' "$params_json" | jq -er '.feature_gates.entries[] | select(.name == "compress_baseline_units") | .current_value | tonumber')
+  step=$(printf '%s' "$params_json" | jq -er '.feature_gates.entries[] | select(.name == "compress_halving_step_units") | .current_value | tonumber')
+  (( step > 0 )) || die "Invalid compression halving-step chain parameter: $step"
+  slot=$(get_finalized_slot)
+  metrics_json=$(run_cli_json_retry "compression settled load at slot $slot" getslotmetrics "$slot")
+  activated=$(printf '%s' "$metrics_json" | jq -er '.getslotmetrics.global_activated_state_counter')
+  deactivated=$(printf '%s' "$metrics_json" | jq -er '.getslotmetrics.global_deactivated_state_counter')
+  load=$((activated > deactivated ? activated - deactivated : 0))
+  if (( load <= baseline )); then
+    log "Skipping non-owner compression/decompression: settled load ${load} units <= chain baseline ${baseline} units."
+    return 0
+  fi
+  halvings=$(((load - baseline) / step))
+  if (( halvings < 11 )); then
+    window=$((baseline >> halvings))
+    if (( window > 0 )); then
+      log "Skipping fresh-account compression/decompression: chain age window is ${window} state-clock units (load=${load}, baseline=${baseline}, step=${step}); slot-only transfers do not age state."
+      return 0
+    fi
+  fi
 
-  # ensure_slot_ready_for_compression
-  #
-  # local compress_json
-  # compress_json=$(run_cli_json "account compress" account compress "$GENERATED_ACCOUNT_KEY")
-  # assert_jq_eq "$compress_json" '.account_compress.status' 'success'
-  #
-  # emit_slot_advancement_transfers "Cooldown before decompression"
-  #
-  # run_cli_json "account prepare-decompression (pre)" account prepare-decompression "$GENERATED_ACCOUNT_PUBKEY" >/dev/null
-  #
-  # local decompress_json
-  # decompress_json=$(run_cli_json "account decompress" account decompress "$GENERATED_ACCOUNT_KEY")
-  # assert_jq_eq "$decompress_json" '.account_decompress.status' 'success'
-  #
-  # run_cli_json "account prepare-decompression (post)" account prepare-decompression "$GENERATED_ACCOUNT_PUBKEY" >/dev/null
+  ensure_slot_ready_for_compression
+  local compress_json
+  compress_json=$(run_cli_json "account compress" account compress "$GENERATED_ACCOUNT_KEY")
+  assert_jq_eq "$compress_json" '.account_compress.status' 'success'
+
+  emit_slot_advancement_transfers "Cooldown before decompression"
+  run_cli_json "account prepare-decompression (pre)" account prepare-decompression "$GENERATED_ACCOUNT_PUBKEY" >/dev/null
+
+  local decompress_json
+  decompress_json=$(run_cli_json "account decompress" account decompress "$GENERATED_ACCOUNT_KEY")
+  assert_jq_eq "$decompress_json" '.account_decompress.status' 'success'
 }
 
 scenario_transfers() {

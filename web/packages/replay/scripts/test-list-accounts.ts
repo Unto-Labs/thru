@@ -1,4 +1,5 @@
 #!/usr/bin/env tsx
+import { TOKEN_PROGRAM_ADDRESS } from "@thru/sdk";
 
 /**
  * Test script to verify ListAccounts behavior with different AccountView options.
@@ -19,7 +20,7 @@ import { create } from "@bufbuild/protobuf";
 import { ChainClient } from "../src";
 
 const BASE_URL = process.env.GRPC_URL || "https://rpc.alphanet.thru.org";
-const TOKEN_PROGRAM = "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKqq";
+const TOKEN_PROGRAM = process.env.TOKEN_PROGRAM ?? TOKEN_PROGRAM_ADDRESS;
 
 // Account data sizes from token_program.abi.yaml
 const TOKEN_ACCOUNT_SIZE = 73;

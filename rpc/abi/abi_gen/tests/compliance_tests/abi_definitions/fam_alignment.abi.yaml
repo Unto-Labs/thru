@@ -1,0 +1,23 @@
+abi:
+  package: "compliance.fam_alignment"
+  abi-version: 1
+  package-version: "1.0.0"
+  description: "Alignment padding before a flexible array"
+
+types:
+  - name: "PaddedFam"
+    kind:
+      struct:
+        packed: false
+        fields:
+          - name: "count"
+            field-type:
+              primitive: u8
+          - name: "values"
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: ["count"]
+                element-type:
+                  primitive: u64

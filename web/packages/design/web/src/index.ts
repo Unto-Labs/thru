@@ -214,6 +214,23 @@ export type {
   WalletSheetTxPendingProps,
   WalletSheetTxDoneProps,
 } from "./components/wallet/WalletSheet/WalletSheet";
+export { PairApprove } from "./components/wallet/PairApprove/PairApprove";
+export type {
+  PairApproveProps,
+  PairApproveState,
+  PairApproveAccount,
+  PairApproveStep,
+} from "./components/wallet/PairApprove/PairApprove";
+export { PairQr, sharePairLink } from "./components/wallet/WalletSheet/PairScreens";
+export type {
+  PairQrProps,
+  PairDeviceKind,
+  PairLayout,
+  PairCodeStatus,
+  WalletSheetPairIntroProps,
+  WalletSheetPairCodeProps,
+  WalletSheetPairDoneProps,
+} from "./components/wallet/WalletSheet/PairScreens";
 export {
   DepositQr,
   CoinbaseFrame,

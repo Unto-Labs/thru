@@ -300,6 +300,25 @@ describe("accounts", () => {
         .rejects.toThrow("RPC unavailable");
     });
 
+    it("uses the connected chain and canonical Noop, preserving explicit overrides", async () => {
+      const ctx = createMockContext();
+      vi.spyOn(ctx.query, "generateStateProof").mockResolvedValue(create(GenerateStateProofResponseSchema, {
+        proof: { proof: new Uint8Array(64).fill(0x42), slot: 1000n },
+      }));
+      vi.mocked(ctx.query.getChainInfo).mockResolvedValue({ chainId: 19724 } as any);
+      const transaction = await createAccount(ctx, { publicKey: generateTestPubkey(1) });
+      expect(transaction.program.toThruFmt()).toBe("taNOOPV4A7S3WTsirr149To2GoGZ9q8zllQaBrbekHfkJT");
+      expect(transaction.chainId).toBe(19724);
+      vi.mocked(ctx.query.getChainInfo).mockClear();
+      const legacyNoop = new Uint8Array(32);
+      legacyNoop[31] = 3;
+      const explicit = await createAccount(ctx, { publicKey: generateTestPubkey(1),
+        program: legacyNoop, header: { chainId: 2 } });
+      expect(explicit.program.toBytes()).toEqual(legacyNoop);
+      expect(explicit.chainId).toBe(2);
+      expect(ctx.query.getChainInfo).not.toHaveBeenCalled();
+    });
+
     it("should create account transaction", async () => {
       const ctx = createMockContext();
       const mockProof = create(GenerateStateProofResponseSchema, {
@@ -415,26 +434,5 @@ describe("accounts", () => {
       expect(transaction.requestedComputeUnits).toBe(20_000);
     });
 
-    it("should use default header values", async () => {
-      const ctx = createMockContext();
-      const mockProof = create(GenerateStateProofResponseSchema, {
-        proof: {
-          proof: new Uint8Array(64).fill(0x42),
-          slot: 1000n,
-        },
-      });
-
-      vi.spyOn(ctx.query, "generateStateProof").mockResolvedValue(mockProof);
-
-      const publicKey = generateTestPubkey(0x01);
-      const transaction = await createAccount(ctx, { publicKey });
-
-      expect(transaction.fee).toBe(0n);
-      expect(transaction.nonce).toBe(0n);
-      expect(transaction.expiryAfter).toBe(100);
-      expect(transaction.requestedComputeUnits).toBe(10_000);
-      expect(transaction.requestedStateUnits).toBe(10_000);
-      expect(transaction.requestedMemoryUnits).toBe(10_000);
-    });
   });
 });

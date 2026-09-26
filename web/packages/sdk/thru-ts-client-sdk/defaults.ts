@@ -24,6 +24,6 @@ export const DEFAULT_VERSION_CONTEXT = create(VersionContextSchema, {
 
 export const DEFAULT_FEE = 1n;
 export const DEFAULT_COMPUTE_UNITS = 300_000_000;
-export const DEFAULT_STATE_UNITS = 10_000;
+export const DEFAULT_STATE_UNITS = 1;
 export const DEFAULT_MEMORY_UNITS = 10_000;
 export const DEFAULT_EXPIRY_AFTER = 100;

@@ -81,6 +81,8 @@ export interface ReconnectSources<T, Cursor = unknown> {
 }
 
 export interface ReplayConfig<T, Cursor = unknown> {
+  /** Bounded live capture during backfill and consumer stalls. Overflow requires replay. */
+  maxBufferedItems?: number;
   startSlot: Slot;
   safetyMargin: bigint;
   fetchBackfill: BackfillFetcher<T, Cursor>;

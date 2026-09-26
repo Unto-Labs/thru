@@ -1,0 +1,287 @@
+[
+  {
+    "name": "nul_terminated",
+    "reflection": {
+      "typeName": "CharRecord",
+      "kind": "struct",
+      "value": {
+        "code": "255",
+        "text": "AB",
+        "bytes": "0x80ff",
+        "trailer": 4660,
+        "typeName": "CharRecord"
+      }
+    },
+    "withOffsets": {
+      "typeName": "CharRecord",
+      "kind": "struct",
+      "value": {
+        "code": {
+          "value": "255",
+          "_byteRange": {
+            "offset": 0,
+            "size": 1
+          }
+        },
+        "text": {
+          "string": "AB",
+          "_byteRange": {
+            "offset": 1,
+            "size": 8
+          }
+        },
+        "bytes": {
+          "hex": "0x80ff",
+          "_byteRange": {
+            "offset": 9,
+            "size": 2
+          }
+        },
+        "trailer": {
+          "value": 4660,
+          "_byteRange": {
+            "offset": 11,
+            "size": 2
+          }
+        },
+        "typeName": "CharRecord",
+        "_byteRange": {
+          "offset": 0,
+          "size": 13
+        }
+      },
+      "byteRange": {
+        "offset": 0,
+        "size": 13
+      }
+    }
+  },
+  {
+    "name": "full_ascii",
+    "reflection": {
+      "typeName": "CharRecord",
+      "kind": "struct",
+      "value": {
+        "code": "65",
+        "text": "Thru ABI",
+        "bytes": "0x80ff",
+        "trailer": 4660,
+        "typeName": "CharRecord"
+      }
+    },
+    "withOffsets": {
+      "typeName": "CharRecord",
+      "kind": "struct",
+      "value": {
+        "code": {
+          "value": "65",
+          "_byteRange": {
+            "offset": 0,
+            "size": 1
+          }
+        },
+        "text": {
+          "string": "Thru ABI",
+          "_byteRange": {
+            "offset": 1,
+            "size": 8
+          }
+        },
+        "bytes": {
+          "hex": "0x80ff",
+          "_byteRange": {
+            "offset": 9,
+            "size": 2
+          }
+        },
+        "trailer": {
+          "value": 4660,
+          "_byteRange": {
+            "offset": 11,
+            "size": 2
+          }
+        },
+        "typeName": "CharRecord",
+        "_byteRange": {
+          "offset": 0,
+          "size": 13
+        }
+      },
+      "byteRange": {
+        "offset": 0,
+        "size": 13
+      }
+    }
+  },
+  {
+    "name": "nul_first",
+    "reflection": {
+      "typeName": "CharRecord",
+      "kind": "struct",
+      "value": {
+        "code": "0",
+        "text": "",
+        "bytes": "0x80ff",
+        "trailer": 4660,
+        "typeName": "CharRecord"
+      }
+    },
+    "withOffsets": {
+      "typeName": "CharRecord",
+      "kind": "struct",
+      "value": {
+        "code": {
+          "value": "0",
+          "_byteRange": {
+            "offset": 0,
+            "size": 1
+          }
+        },
+        "text": {
+          "string": "",
+          "_byteRange": {
+            "offset": 1,
+            "size": 8
+          }
+        },
+        "bytes": {
+          "hex": "0x80ff",
+          "_byteRange": {
+            "offset": 9,
+            "size": 2
+          }
+        },
+        "trailer": {
+          "value": 4660,
+          "_byteRange": {
+            "offset": 11,
+            "size": 2
+          }
+        },
+        "typeName": "CharRecord",
+        "_byteRange": {
+          "offset": 0,
+          "size": 13
+        }
+      },
+      "byteRange": {
+        "offset": 0,
+        "size": 13
+      }
+    }
+  },
+  {
+    "name": "utf8",
+    "reflection": {
+      "typeName": "CharRecord",
+      "kind": "struct",
+      "value": {
+        "code": "128",
+        "text": "é😀!!",
+        "bytes": "0x80ff",
+        "trailer": 4660,
+        "typeName": "CharRecord"
+      }
+    },
+    "withOffsets": {
+      "typeName": "CharRecord",
+      "kind": "struct",
+      "value": {
+        "code": {
+          "value": "128",
+          "_byteRange": {
+            "offset": 0,
+            "size": 1
+          }
+        },
+        "text": {
+          "string": "é😀!!",
+          "_byteRange": {
+            "offset": 1,
+            "size": 8
+          }
+        },
+        "bytes": {
+          "hex": "0x80ff",
+          "_byteRange": {
+            "offset": 9,
+            "size": 2
+          }
+        },
+        "trailer": {
+          "value": 4660,
+          "_byteRange": {
+            "offset": 11,
+            "size": 2
+          }
+        },
+        "typeName": "CharRecord",
+        "_byteRange": {
+          "offset": 0,
+          "size": 13
+        }
+      },
+      "byteRange": {
+        "offset": 0,
+        "size": 13
+      }
+    }
+  },
+  {
+    "name": "invalid_utf8",
+    "reflection": {
+      "typeName": "CharRecord",
+      "kind": "struct",
+      "value": {
+        "code": "127",
+        "text": "A��(B",
+        "bytes": "0x80ff",
+        "trailer": 4660,
+        "typeName": "CharRecord"
+      }
+    },
+    "withOffsets": {
+      "typeName": "CharRecord",
+      "kind": "struct",
+      "value": {
+        "code": {
+          "value": "127",
+          "_byteRange": {
+            "offset": 0,
+            "size": 1
+          }
+        },
+        "text": {
+          "string": "A��(B",
+          "_byteRange": {
+            "offset": 1,
+            "size": 8
+          }
+        },
+        "bytes": {
+          "hex": "0x80ff",
+          "_byteRange": {
+            "offset": 9,
+            "size": 2
+          }
+        },
+        "trailer": {
+          "value": 4660,
+          "_byteRange": {
+            "offset": 11,
+            "size": 2
+          }
+        },
+        "typeName": "CharRecord",
+        "_byteRange": {
+          "offset": 0,
+          "size": 13
+        }
+      },
+      "byteRange": {
+        "offset": 0,
+        "size": 13
+      }
+    }
+  }
+]

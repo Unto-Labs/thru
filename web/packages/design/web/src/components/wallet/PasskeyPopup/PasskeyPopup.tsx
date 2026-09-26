@@ -42,12 +42,16 @@ export interface PasskeyPopupSite {
   name: string;
   /** Host shown under the name, e.g. "meridian.xyz". */
   host: string;
+  /** Optional provenance label for a host declared by a native app. */
+  hostLabel?: string;
   /** Identity mark; defaults to an inverse disc with the name's initial. */
   icon?: React.ReactNode;
-  /** Show the verified mark. Only for a site the wallet actually verified. */
+  /** Show the verified mark beside the host, never beside app-supplied branding. */
   verified?: boolean;
   /** Optional network chip, e.g. "mainnet". */
   tag?: string;
+  /** Explanation of the status chip. */
+  tagTitle?: string;
 }
 
 export interface PasskeyPopupAccount {
@@ -178,7 +182,15 @@ function SiteCell({ site }: { site?: PasskeyPopupSite | null }) {
       {site.icon ?? <Disc size={28} color="var(--color-surface-lower-inverse)" glyph={glyph} />}
       <span className="tds-ppopup__cell-main">
         <span className="tds-ppopup__cell-name">
-          <span className="tds-ppopup__ellipsis">{site.name}</span>
+          <span className="tds-ppopup__ellipsis" dir="auto">
+            {site.name}
+          </span>
+        </span>
+        <span className="tds-ppopup__cell-sub tds-ppopup__cell-host" dir="ltr">
+          <span style={{ minWidth: 0, overflowWrap: "anywhere" }}>
+            {site.hostLabel && <span>{site.hostLabel}: </span>}
+            {site.host}
+          </span>
           {site.verified && (
             <span className="tds-ppopup__verified" title="Verified site">
               <Check width={9} height={9} />
@@ -186,11 +198,12 @@ function SiteCell({ site }: { site?: PasskeyPopupSite | null }) {
             </span>
           )}
         </span>
-        <span className="tds-ppopup__cell-sub tds-ppopup__ellipsis" title={site.host}>
-          {site.host}
-        </span>
       </span>
-      {site.tag && <span className="tds-ppopup__chip">{site.tag}</span>}
+      {site.tag && (
+        <span className="tds-ppopup__chip" title={site.tagTitle} aria-label={site.tagTitle}>
+          {site.tag}
+        </span>
+      )}
     </div>
   );
 }
@@ -300,7 +313,7 @@ function Signing({
       <Steps
         className="tds-ppopup__steps"
         items={[
-          { label: <>Request from {site?.host ?? app} verified</>, status: "done" },
+          { label: <>Request received from {site?.host ?? app}</>, status: "done" },
           { label: copy.activeStep, status: "active" },
           { label: <>Returning to {app}</>, status: "pending" },
         ]}

@@ -67,6 +67,15 @@ require open accounts controlled by the signer.
 relationship, and optional byte checks without submitting a transaction. It
 reports program and ABI account pairs as `missing`, `partial`, or `present`.
 
+Program deployment, upgrade and inspection accept `managerProgramAddress` to
+select the parent Manager executable for both PDA derivation and ownership
+checks. It defaults to the canonical main Manager. To upgrade the main Manager
+itself, provide the root Manager address, the main Manager's seed and its upgrade
+authority signer. Non-default parents support binary-only operations: official
+ABI publication authenticates metadata owned by the canonical main Manager and
+is rejected before uploading when another parent is selected. The immutable
+root has no managed metadata and cannot be upgraded through this workflow.
+
 Results include the authority, derived program and ABI addresses, program
 version or ABI revision, artifact sizes, the final signature, warnings, and an
 `UploadArtifactResult` for each upload. Upload details include temporary

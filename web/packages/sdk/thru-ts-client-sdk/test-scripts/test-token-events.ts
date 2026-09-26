@@ -11,6 +11,7 @@ import { DEFAULT_HOST } from "../defaults";
 import { Filter, FilterParamValue } from "../domain/filters";
 import { PageRequest } from "../domain/pagination";
 import { Pubkey } from "../domain/primitives";
+import { TOKEN_PROGRAM_ADDRESS } from "../../src/core-program-addresses";
 
 interface MaybeNodeProcess {
     env?: Record<string, string | undefined>;
@@ -20,7 +21,7 @@ interface MaybeNodeProcess {
 const nodeProcess: MaybeNodeProcess | undefined = (globalThis as { process?: MaybeNodeProcess }).process;
 
 const BASE_URL = nodeProcess?.env?.THRU_BASE_URL ?? DEFAULT_HOST;
-const TOKEN_PROGRAM = nodeProcess?.env?.TOKEN_PROGRAM ?? "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKqq";
+const TOKEN_PROGRAM = nodeProcess?.env?.TOKEN_PROGRAM ?? TOKEN_PROGRAM_ADDRESS;
 
 const sdk = createThruClient({ baseUrl: BASE_URL });
 

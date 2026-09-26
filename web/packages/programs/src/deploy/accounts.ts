@@ -79,15 +79,19 @@ function assertOwner(account: Account, owner: string, label: string): void {
 export function assertManagedProgramAccount(
   account: Account,
   label = "managed program account",
+  managerProgramAddress = MANAGER_PROGRAM_ADDRESS,
 ): void {
-  assertOwner(account, MANAGER_PROGRAM_ADDRESS, label);
+  assertOwner(account, managerProgramAddress, label);
   if (!account.meta?.flags.isProgram) {
     throw new DeployError("VERIFICATION_FAILED", `${label} is not executable`);
   }
 }
 
-export function parseManagerMeta(account: Account): ParsedManagerMeta {
-  assertOwner(account, MANAGER_PROGRAM_ADDRESS, "program metadata account");
+export function parseManagerMeta(
+  account: Account,
+  managerProgramAddress = MANAGER_PROGRAM_ADDRESS,
+): ParsedManagerMeta {
+  assertOwner(account, managerProgramAddress, "program metadata account");
   try {
     const parsed = parseManagerProgramMeta(account);
     return {

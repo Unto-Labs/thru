@@ -93,6 +93,7 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
 
     const createLivePump = (slot: Slot, startStreaming = false, emitFloor?: Slot) =>
       new LivePump<T>({
+      maxBufferedItems: this.config.maxBufferedItems,
         source: currentSubscribeLive(slot),
         slotOf: extractSlot,
         keyOf,

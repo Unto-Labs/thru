@@ -14,6 +14,7 @@ export interface WalletAccount {
 export interface AppMetadata {
   appId: string;
   appName: string;
+  /** Wallet-derived request origin. Never accepted as connection input. */
   appUrl: string;
   imageUrl?: string;
 }

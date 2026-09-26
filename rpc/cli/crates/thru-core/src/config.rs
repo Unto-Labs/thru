@@ -7,6 +7,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::PathBuf;
 use thru_base::tn_tools::Pubkey;
+use thru_base::bootstrap_addresses as programs;
 use url::Url;
 
 use crate::error::{CliError, ConfigError};
@@ -170,9 +171,9 @@ impl KeyManager {
     }
 }
 
-/// Default block-producer bond program address (genesis 0x0D01).
+/// Canonical block-producer bond program for a freshly bootstrapped network.
 fn default_bp_program_public_key() -> String {
-    "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADQEO".to_string()
+    programs::BLOCK_PRODUCER_PROGRAM_ADDRESS.to_string()
 }
 
 /// Named network profile
@@ -197,6 +198,11 @@ pub struct Config {
     /// Manager program public key
     pub manager_program_public_key: String,
 
+    /// Optional, explicitly uploaded test fixture for compression debug commands.
+    /// No System program is installed by production genesis or bootstrap.
+    #[serde(default)]
+    pub system_test_program_public_key: Option<String>,
+
     /// ABI manager program public key
     pub abi_manager_program_public_key: String,
 
@@ -218,7 +224,7 @@ pub struct Config {
     /// WTHRU program public key
     pub wthru_program_public_key: String,
 
-    /// Block-producer (BP) bond program public key (genesis 0x0D01)
+    /// Block-producer (BP) bond program public key
     #[serde(default = "default_bp_program_public_key")]
     pub bp_program_public_key: String,
 
@@ -277,27 +283,20 @@ impl Default for Config {
         Self {
             rpc_base_url: "https://rpc.alphanet.thru.org".to_string(),
             keys: KeyManager::new(),
-            uploader_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAIC"
-                .to_string(),
-            manager_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAQE"
-                .to_string(),
-            abi_manager_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAACrG7"
-                .to_string(),
-            token_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKqq".to_string(),
+            uploader_program_public_key: programs::UPLOADER_PROGRAM_ADDRESS.to_string(),
+            manager_program_public_key: programs::MANAGER_PROGRAM_ADDRESS.to_string(),
+            system_test_program_public_key: None,
+            abi_manager_program_public_key: programs::ABI_MANAGER_PROGRAM_ADDRESS.to_string(),
+            token_program_public_key: programs::TOKEN_PROGRAM_ADDRESS.to_string(),
             consensus_validator_program_public_key:
-                "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAEN".to_string(),
-            consensus_attestor_table_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAIO"
-                .to_string(),
-            consensus_converted_vault_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAQQ"
-                .to_string(),
-            consensus_unclaimed_vault_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADAUR"
-                .to_string(),
-            wthru_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAcH".to_string(),
+                programs::CONSENSUS_VALIDATOR_PROGRAM_ADDRESS.to_string(),
+            consensus_attestor_table_public_key: programs::ATTESTOR_TABLE_ADDRESS.to_string(),
+            consensus_converted_vault_public_key: programs::CONVERTED_VAULT_ADDRESS.to_string(),
+            consensus_unclaimed_vault_public_key: programs::UNCLAIMED_VAULT_ADDRESS.to_string(),
+            wthru_program_public_key: programs::WTHRU_PROGRAM_ADDRESS.to_string(),
             bp_program_public_key: default_bp_program_public_key(),
-            name_service_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAUF"
-                .to_string(),
-            thru_registrar_program_public_key: "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAYG"
-                .to_string(),
+            name_service_program_public_key: programs::NAME_SERVICE_PROGRAM_ADDRESS.to_string(),
+            thru_registrar_program_public_key: programs::THRU_REGISTRAR_PROGRAM_ADDRESS.to_string(),
             timeout_seconds: 30,
             max_retries: 3,
             auth_token: None,
@@ -515,7 +514,7 @@ impl Config {
             .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()).into())
     }
 
-    /// Resolve the configured block-producer bond program public key (0x0D01)
+    /// Resolve the configured block-producer bond program public key
     pub fn get_bp_program_pubkey(&self) -> Result<Pubkey, CliError> {
         let key = if self.bp_program_public_key.trim().is_empty() {
             default_bp_program_public_key()
@@ -665,6 +664,14 @@ impl Config {
             .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()).into())
     }
 
+    pub fn get_system_test_program_pubkey(&self) -> Result<Pubkey, CliError> {
+        let address = self.system_test_program_public_key.as_ref().ok_or_else(|| {
+            CliError::Validation("This debug command requires an explicitly uploaded System test program; set system_test_program_public_key in the CLI config. Production bootstrap does not install it.".into())
+        })?;
+        Pubkey::new(address.clone())
+            .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()).into())
+    }
+
     /// Get the ABI manager program public key
     pub fn get_abi_manager_pubkey(&self) -> Result<Pubkey, CliError> {
         Pubkey::new(self.abi_manager_program_public_key.clone())
@@ -688,6 +695,35 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn system_test_program_requires_explicit_configuration() {
+        let mut config = Config::default();
+        assert!(config.get_system_test_program_pubkey().is_err());
+        config.system_test_program_public_key = Some(programs::SYSTEM_TEST_PROGRAM_ADDRESS.into());
+        assert_eq!(config.get_system_test_program_pubkey().unwrap().to_bytes().unwrap(),
+                   programs::SYSTEM_TEST_PROGRAM_BYTES);
+        config.system_test_program_public_key = Some("invalid".into());
+        assert!(config.get_system_test_program_pubkey().is_err());
+    }
+
+    #[test]
+    fn canonical_defaults_preserve_explicit_network_addresses() {
+        let config = Config::default();
+        assert_eq!(config.token_program_public_key, programs::TOKEN_PROGRAM_ADDRESS);
+        assert_eq!(config.abi_manager_program_public_key, programs::ABI_MANAGER_PROGRAM_ADDRESS);
+        assert_eq!(config.wthru_program_public_key, programs::WTHRU_PROGRAM_ADDRESS);
+        assert_eq!(config.bp_program_public_key, programs::BLOCK_PRODUCER_PROGRAM_ADDRESS);
+        assert_eq!(config.consensus_attestor_table_public_key, programs::ATTESTOR_TABLE_ADDRESS);
+
+        let mut saved = serde_yaml::to_value(&config).unwrap();
+        saved["token_program_public_key"] = "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKqq".into();
+        saved["bp_program_public_key"] = "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADQEO".into();
+        let loaded: Config = serde_yaml::from_value(saved).unwrap();
+        assert_eq!(loaded.token_program_public_key, "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKqq");
+        assert_eq!(loaded.bp_program_public_key, "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADQEO");
+        assert_eq!(loaded.rpc_base_url, config.rpc_base_url);
+    }
 
     #[test]
     fn test_default_config_validation() {
