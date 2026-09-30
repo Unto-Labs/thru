@@ -362,3 +362,15 @@ export function IconPlusSquare({ size = 21, color }: IconProps) {
     </Svg>
   );
 }
+
+/* Receiving: the scan brackets on Home's Receive action. */
+
+export function IconScan({ size = 18, color }: IconProps) {
+  const c = useIconColor(color);
+  return (
+    <Svg {...base(size)}>
+      <Path d="M4 9V4h5M15 4h5v5M20 15v5h-5M9 20H4v-5" {...stroke(c)} />
+      <Path d="M8 12h8" {...stroke(c)} />
+    </Svg>
+  );
+}

@@ -1,3 +1,4 @@
+pub mod compression;
 pub mod bintrie;
 pub mod bintrie_error;
 pub mod bintrie_proof;

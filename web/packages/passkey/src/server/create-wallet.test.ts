@@ -85,6 +85,7 @@ describe('createPasskeyWallet', () => {
       walletExists: false,
       lookupExists: false,
       walletTrackCount: 0,
+      walletVisibilityReads: 0,
       lookupTrackCount: 0,
     };
 
@@ -95,6 +96,7 @@ describe('createPasskeyWallet', () => {
         get: vi.fn(async (address: string) => {
           if (address === 'wallet-address') {
             if (!state.walletExists) throw new Error('missing wallet');
+            if (++state.walletVisibilityReads === 1) throw new Error('not indexed yet');
             return { data: { data: new Uint8Array() } };
           }
 
@@ -197,7 +199,7 @@ describe('createPasskeyWallet', () => {
     });
 
     const accountChecks = vi.mocked(client.accounts.get).mock.calls.map(([address]) => address);
-    expect(accountChecks.filter((address) => address === 'wallet-address')).toHaveLength(2);
-    expect(accountChecks.filter((address) => address === 'lookup-address')).toHaveLength(2);
+    expect(accountChecks.filter((address) => address === 'wallet-address')).toHaveLength(4);
+    expect(accountChecks.filter((address) => address === 'lookup-address')).toHaveLength(3);
   });
 });

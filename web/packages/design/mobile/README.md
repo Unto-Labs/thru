@@ -47,6 +47,12 @@ step.
 - **`SummaryRows` / `Callout`** — review rows (72pt mono label, value, edit
   glyph; locked while busy) and the square status block, neutral with a
   spinner or error on the soft accent
+- **`PresetChips` / `QuoteLine`** — the 4-column quick-amount grid (48pt
+  cells, inverse when the typed amount matches), and the one line under an
+  amount in subtle / muted / loading / error tones, a polite live region with
+  an optional Retry
+- **`Snackbar`** — the inverse-surface confirmation: tone bar, glyph disc,
+  mono caps title, dismiss, and a 2pt bar that runs out over 4.2s
 - **`Icons`** — stroke icon set (`react-native-svg`)
 - **`BrandMark`** — the Thru dove as a single vector path, tinted from the
   theme; `outline` strokes it instead of filling, and `BRAND_MARK_PATH` is
@@ -147,7 +153,8 @@ implements. Treat it as the design source of truth when extending the kit.
 `demos/` holds review screens for parts of the kit that are hard to judge from
 one static state: `LoadingLabScreen` cycles through the loading directions on
 a loop, and `BrandCheckScreen` shows every brand mark at several sizes in both
-themes. They are not exported from `@thru/design/mobile` and not in the
+themes, and `DepositKitScreen` shows every state of the Deposit parts in
+either theme. They are not exported from `@thru/design/mobile` and not in the
 package's `files`, so no app bundles them, and nothing renders them yet - the
 design gallery (`web/gallery`) covers only `@thru/design/web`. The mobile
 typecheck includes them, so they keep compiling as the components change.

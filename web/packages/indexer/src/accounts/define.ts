@@ -87,7 +87,12 @@ export function defineAccountStream<TSchema extends SchemaDefinition>(
   const tableName = definition.name.replace(/-/g, "_");
 
   // Build Drizzle table from schema
-  const table = buildDrizzleTable(tableName, definition.schema, definition.indexes);
+  const table = buildDrizzleTable(
+    tableName,
+    definition.schema,
+    definition.indexes,
+    definition.extraConfig
+  );
 
   // Lazy ownerProgram resolution (cached after first call)
   let cachedOwnerProgram: Uint8Array | null = definition.ownerProgram ?? null;

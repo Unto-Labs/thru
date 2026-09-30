@@ -85,7 +85,12 @@ export function defineEventStream<TSchema extends SchemaDefinition>(
     definition.tableName ?? `${definition.name.replace(/s$/, "")}_events`;
 
   // Build Drizzle table from schema
-  const table = buildDrizzleTable(tableName, definition.schema, definition.indexes);
+  const table = buildDrizzleTable(
+    tableName,
+    definition.schema,
+    definition.indexes,
+    definition.extraConfig
+  );
 
   // Lazy filter resolution (cached after first call)
   let cachedFilter: Filter | null = definition.filter ?? null;

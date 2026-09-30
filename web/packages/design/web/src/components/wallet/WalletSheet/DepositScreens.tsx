@@ -6,6 +6,7 @@ import { cn } from "../../../utils";
 import { Button } from "../../Button/Button";
 import { Input } from "../../Input/Input";
 import { Spinner } from "../../Spinner/Spinner";
+import { Stepper } from "../../Stepper/Stepper";
 import { ToggleGroup } from "../../Toggle/Toggle";
 import { Screen } from "../Screen/Screen";
 import { Steps, type StepItem } from "../Steps/Steps";
@@ -127,6 +128,31 @@ function RailHeader({ title, description }: { title: React.ReactNode; descriptio
     <div className="tds-dep__rail-head">
       <div className="tds-dep__rail-title">{title}</div>
       {description != null && <div className="tds-dep__rail-sub">{description}</div>}
+    </div>
+  );
+}
+
+/** Where a stepped flow is: the step being shown of how many. */
+export interface DepositStepProgress {
+  count: number;
+  /** Zero-based. */
+  active: number;
+}
+
+/** The rail header with the stepper over it (nothing below two steps). */
+function StepHeader({
+  title,
+  description,
+  step,
+}: {
+  title: React.ReactNode;
+  description?: React.ReactNode;
+  step?: DepositStepProgress;
+}) {
+  return (
+    <div className="tds-dep__step-head">
+      {step && <Stepper count={step.count} active={step.active} label="Deposit progress" />}
+      <RailHeader title={title} description={description} />
     </div>
   );
 }
@@ -296,7 +322,7 @@ export function CoinbaseFrame({
 }
 
 /**
- * The card rail's pay action ("Buy with Apple Pay"), shown until an order
+ * The card rail's pay action ("Continue with Apple Pay"), shown until an order
  * exists and Coinbase's own button takes over: the design system's primary
  * Button, with a Spinner while the order is being created.
  */
@@ -420,8 +446,8 @@ function DepositScreen({
   cryptoTitle = "Deposit crypto",
   cryptoDescription = "Any chain, any token · from a wallet or exchange",
   cryptoChainIds = [1, 501, 8453],
-  cardTitle = "Buy with card",
-  cardDescription = "Apple Pay · Google Pay · debit · US",
+  cardTitle = "Apple Pay or Google Pay",
+  cardDescription = "Debit card via Coinbase · US only",
   faucetTitle = "Test faucet",
   faucetDescription = "Test tokens with no real value · developer mode",
   destination,
@@ -604,7 +630,7 @@ function DepositCrypto({
   );
 }
 
-/* ── Buy with card ─────────────────────────────────────────────────── */
+/* ── Card (Apple Pay / Google Pay via Coinbase) ────────────────────── */
 export const COINBASE_GUEST_CHECKOUT_TERMS_HREF = "https://www.coinbase.com/legal/guest-checkout/us";
 export const COINBASE_USER_AGREEMENT_HREF = "https://www.coinbase.com/legal/user_agreement";
 export const COINBASE_PRIVACY_POLICY_HREF = "https://www.coinbase.com/legal/privacy";
@@ -654,8 +680,9 @@ export interface WalletSheetDepositCardProps {
   fee?: React.ReactNode;
   /** Replace Coinbase's disclosure (keep the wording when you do). */
   terms?: React.ReactNode;
-  /** What sits inside the Coinbase frame: a pay button or Coinbase's iframe. */
-  frame: React.ReactNode;
+  /** What sits inside the Coinbase frame: a pay button or Coinbase's iframe.
+      Omitted on the amount step of a stepped flow, which ends in Continue. */
+  frame?: React.ReactNode;
   frameHost?: React.ReactNode;
   frameHostedBy?: React.ReactNode;
   /** Draw the "hosted by Coinbase" box around `frame`; off when Coinbase's
@@ -671,6 +698,12 @@ export interface WalletSheetDepositCardProps {
   /** Ask for Coinbase's guest-checkout contact right here, above the pay
    *  button, instead of on a separate step. */
   contact?: DepositCardContactProps;
+  /** The amount step of a stepped flow: a Continue button sits under the
+   *  amount instead of the contact, terms and pay button. */
+  onContinue?: () => void;
+  continueLabel?: React.ReactNode;
+  continueDisabled?: boolean;
+  step?: DepositStepProgress;
 }
 
 export interface DepositCardContactProps {
@@ -753,8 +786,8 @@ function AmountField({
 }
 
 function DepositCard({
-  title = "Buy $",
-  description = "Pay with Apple Pay or Google Pay · US only.",
+  title = "Add $",
+  description = "Apple Pay or Google Pay · US only",
   payLabel = "Pay with",
   payMethods = DEFAULT_DEPOSIT_PAY_METHODS,
   payMethod,
@@ -775,7 +808,12 @@ function DepositCard({
   backLabel = "Other ways to add funds",
   embedded = false,
   contact,
+  onContinue,
+  continueLabel = "Continue",
+  continueDisabled,
+  step,
 }: WalletSheetDepositCardProps) {
+  const stepped = onContinue !== undefined;
   const fields = (
     <>
       <DepositSelect
@@ -804,7 +842,12 @@ function DepositCard({
           </div>
         )}
       </div>
-      {contact && (
+      {stepped && (
+        <Button variant="primary" className="tds-wsheet__cta" onClick={onContinue} disabled={continueDisabled}>
+          {continueLabel}
+        </Button>
+      )}
+      {!stepped && contact && (
         <div className="tds-dep__contact-form tds-dep__card-contact">
           <div className="tds-dep__rail-sub">
             {contact.note ??
@@ -819,14 +862,15 @@ function DepositCard({
           />
         </div>
       )}
-      {terms ?? <CoinbaseTerms />}
-      {frameChrome ? (
-        <CoinbaseFrame host={frameHost} hostedBy={frameHostedBy}>
-          {frame}
-        </CoinbaseFrame>
-      ) : (
-        <div className="tds-dep__cb-bare">{frame}</div>
-      )}
+      {!stepped && (terms ?? <CoinbaseTerms />)}
+      {!stepped &&
+        (frameChrome ? (
+          <CoinbaseFrame host={frameHost} hostedBy={frameHostedBy}>
+            {frame}
+          </CoinbaseFrame>
+        ) : (
+          <div className="tds-dep__cb-bare">{frame}</div>
+        ))}
     </>
   );
   if (embedded) {
@@ -839,7 +883,7 @@ function DepositCard({
   }
   return (
     <Screen scroll className="tds-dep__card">
-      <RailHeader title={title} description={description} />
+      <StepHeader title={title} description={description} step={step} />
       {fields}
       {onBack && <BackLink onClick={onBack}>{backLabel}</BackLink>}
     </Screen>
@@ -848,6 +892,9 @@ function DepositCard({
 
 /* ── Test faucet (developer mode) ──────────────────────────────────── */
 const DEFAULT_FAUCET_PRESETS = [10, 100, 1000];
+
+/** The test faucet's drop, for a faucet option in a Pay with select. */
+export const DepositFaucetIcon = DropIcon;
 
 export interface WalletSheetDepositFaucetProps {
   title?: React.ReactNode;
@@ -864,6 +911,12 @@ export interface WalletSheetDepositFaucetProps {
   submittingLabel?: React.ReactNode;
   /** The button can't be used yet (e.g. no amount, or the account isn't ready). */
   disabled?: boolean;
+  /** A Pay with select above the button, when the faucet is one of several
+   *  ways to pay (developer mode on the card sheet). */
+  payLabel?: React.ReactNode;
+  payMethods?: DepositPayMethodOption[];
+  payMethod?: string;
+  onPayMethodChange?: (id: string) => void;
   onBack?: () => void;
   backLabel?: React.ReactNode;
   /** Render only the fields — no header, screen padding or back link — for
@@ -883,6 +936,10 @@ function DepositFaucet({
   submitting = false,
   submittingLabel = "Funding…",
   disabled = false,
+  payLabel = "Pay with",
+  payMethods,
+  payMethod,
+  onPayMethodChange,
   onBack,
   backLabel = "Other ways to add funds",
   embedded = false,
@@ -896,6 +953,19 @@ function DepositFaucet({
         onAmountChange={onAmountChange}
         disabled={submitting}
       />
+      {payMethods && payMethods.length > 0 && (
+        <DepositSelect
+          label={payLabel}
+          items={payMethods.map((m) => ({
+            value: m.id,
+            label: m.label,
+            icon: m.icon ?? <PhoneWaves width={16} height={16} />,
+          }))}
+          value={payMethod ?? payMethods[0].id}
+          onValueChange={onPayMethodChange}
+          disabled={submitting}
+        />
+      )}
       <Button
         variant="primary"
         className="tds-wsheet__cta"
@@ -954,6 +1024,81 @@ export interface WalletSheetDepositContactProps {
   backLabel?: React.ReactNode;
 }
 
+/** The US mobile field: the country code is a fixed readout, the field takes
+ *  the national digits. */
+function PhoneField({
+  phone,
+  label = "Mobile number",
+  disabled,
+  autoFocus,
+}: {
+  phone: DepositContactFieldProps;
+  label?: React.ReactNode;
+  disabled?: boolean;
+  autoFocus?: boolean;
+}) {
+  return (
+    <div className="tds-dep__contact-field">
+      <div className="tds-dep__contact-phone">
+        <span className="tds-dep__contact-cc" aria-hidden="true">
+          🇺🇸 +1
+        </span>
+        <Input
+          label={typeof label === "string" ? label : undefined}
+          aria-label={typeof label === "string" ? label : "Mobile number"}
+          type="tel"
+          inputMode="tel"
+          autoComplete="tel-national"
+          placeholder="415 555 0121"
+          size="lg"
+          text="ui"
+          value={phone.value}
+          onChange={(event) => phone.onChange(event.target.value)}
+          error={phone.error != null}
+          disabled={disabled}
+          autoFocus={autoFocus}
+          wrapperClassName="tds-dep__contact-input"
+        />
+      </div>
+      {phone.error != null && <span className="tds-dep__contact-error">{phone.error}</span>}
+    </div>
+  );
+}
+
+function EmailField({
+  email,
+  label = "Email",
+  disabled,
+  autoFocus,
+}: {
+  email: DepositContactFieldProps;
+  label?: React.ReactNode;
+  disabled?: boolean;
+  autoFocus?: boolean;
+}) {
+  return (
+    <div className="tds-dep__contact-field">
+      <Input
+        label={typeof label === "string" ? label : undefined}
+        aria-label={typeof label === "string" ? label : "Email"}
+        type="email"
+        inputMode="email"
+        autoComplete="email"
+        placeholder="you@example.com"
+        size="lg"
+        text="body"
+        value={email.value}
+        onChange={(event) => email.onChange(event.target.value)}
+        error={email.error != null}
+        disabled={disabled}
+        autoFocus={autoFocus}
+        wrapperClassName="tds-dep__contact-input"
+      />
+      {email.error != null && <span className="tds-dep__contact-error">{email.error}</span>}
+    </div>
+  );
+}
+
 /** The US mobile + email pair, with our own inline messages. Shared by the
  *  contact step and the card form's inline contact block. */
 function ContactFields({
@@ -971,47 +1116,8 @@ function ContactFields({
 }) {
   return (
     <>
-      <div className="tds-dep__contact-field">
-        <div className="tds-dep__contact-phone">
-          <span className="tds-dep__contact-cc" aria-hidden="true">
-            🇺🇸 +1
-          </span>
-          <Input
-            label={typeof phoneLabel === "string" ? phoneLabel : undefined}
-            aria-label={typeof phoneLabel === "string" ? phoneLabel : "Mobile number"}
-            type="tel"
-            inputMode="tel"
-            autoComplete="tel-national"
-            placeholder="415 555 0121"
-            size="lg"
-            text="ui"
-            value={phone.value}
-            onChange={(event) => phone.onChange(event.target.value)}
-            error={phone.error != null}
-            disabled={disabled}
-            wrapperClassName="tds-dep__contact-input"
-          />
-        </div>
-        {phone.error != null && <span className="tds-dep__contact-error">{phone.error}</span>}
-      </div>
-      <div className="tds-dep__contact-field">
-        <Input
-          label={typeof emailLabel === "string" ? emailLabel : undefined}
-          aria-label={typeof emailLabel === "string" ? emailLabel : "Email"}
-          type="email"
-          inputMode="email"
-          autoComplete="email"
-          placeholder="you@example.com"
-          size="lg"
-          text="body"
-          value={email.value}
-          onChange={(event) => email.onChange(event.target.value)}
-          error={email.error != null}
-          disabled={disabled}
-          wrapperClassName="tds-dep__contact-input"
-        />
-        {email.error != null && <span className="tds-dep__contact-error">{email.error}</span>}
-      </div>
+      <PhoneField phone={phone} label={phoneLabel} disabled={disabled} />
+      <EmailField email={email} label={emailLabel} disabled={disabled} />
     </>
   );
 }
@@ -1055,6 +1161,191 @@ function DepositContact({
         </Button>
       </form>
       {onBack && <BackLink onClick={onBack}>{backLabel}</BackLink>}
+    </Screen>
+  );
+}
+
+/* ── Stepped card rail: phone, email, confirm ──────────────────────── */
+
+interface StepFormProps {
+  title: React.ReactNode;
+  description?: React.ReactNode;
+  step?: DepositStepProgress;
+  onContinue: () => void;
+  continueLabel?: React.ReactNode;
+  /** The step can't go on yet (the field isn't valid). */
+  disabled?: boolean;
+  children: React.ReactNode;
+}
+
+/** One question and a Continue button; Enter continues too. */
+function StepForm({ title, description, step, onContinue, continueLabel = "Continue", disabled, children }: StepFormProps) {
+  return (
+    <Screen className="tds-dep__contact">
+      <StepHeader title={title} description={description} step={step} />
+      <form
+        className="tds-dep__contact-form"
+        /* Our own inline messages, not the browser's validation bubble. */
+        noValidate
+        onSubmit={(event) => {
+          event.preventDefault();
+          if (!disabled) onContinue();
+        }}
+      >
+        {children}
+        <Button type="submit" variant="primary" className="tds-wsheet__cta" disabled={disabled}>
+          {continueLabel}
+        </Button>
+      </form>
+    </Screen>
+  );
+}
+
+export interface WalletSheetDepositPhoneProps {
+  title?: React.ReactNode;
+  description?: React.ReactNode;
+  step?: DepositStepProgress;
+  phone: DepositContactFieldProps;
+  phoneLabel?: React.ReactNode;
+  onContinue: () => void;
+  continueLabel?: React.ReactNode;
+  disabled?: boolean;
+}
+
+/** Coinbase's guest checkout needs a US mobile number; it texts a code the
+ *  first time. */
+function DepositPhone({
+  title = "Your phone number",
+  description = "Enter your 10-digit US phone number to continue.",
+  step,
+  phone,
+  phoneLabel = "Mobile number",
+  onContinue,
+  continueLabel,
+  disabled,
+}: WalletSheetDepositPhoneProps) {
+  return (
+    <StepForm
+      title={title}
+      description={description}
+      step={step}
+      onContinue={onContinue}
+      continueLabel={continueLabel}
+      disabled={disabled}
+    >
+      <PhoneField phone={phone} label={phoneLabel} autoFocus />
+    </StepForm>
+  );
+}
+
+export interface WalletSheetDepositEmailProps {
+  title?: React.ReactNode;
+  description?: React.ReactNode;
+  step?: DepositStepProgress;
+  email: DepositContactFieldProps;
+  emailLabel?: React.ReactNode;
+  onContinue: () => void;
+  continueLabel?: React.ReactNode;
+  disabled?: boolean;
+}
+
+/** Coinbase's receipt goes to this email. */
+function DepositEmail({
+  title = "Add your email",
+  description = "Enter your email to continue.",
+  step,
+  email,
+  emailLabel = "Email",
+  onContinue,
+  continueLabel,
+  disabled,
+}: WalletSheetDepositEmailProps) {
+  return (
+    <StepForm
+      title={title}
+      description={description}
+      step={step}
+      onContinue={onContinue}
+      continueLabel={continueLabel}
+      disabled={disabled}
+    >
+      <EmailField email={email} label={emailLabel} autoFocus />
+    </StepForm>
+  );
+}
+
+export interface WalletSheetDepositReviewProps {
+  title?: React.ReactNode;
+  description?: React.ReactNode;
+  step?: DepositStepProgress;
+  /** The order: You pay, Fee, You receive. */
+  rows: WalletSheetDepositDoneRow[];
+  payLabel?: React.ReactNode;
+  payMethods?: DepositPayMethodOption[];
+  payMethod: string;
+  onPayMethodChange?: (id: string) => void;
+  /** Where Coinbase's receipt goes, with an Edit that reopens the contact steps. */
+  receipt?: { value: React.ReactNode; onEdit?: () => void; label?: React.ReactNode; editLabel?: React.ReactNode };
+  /** Replace Coinbase's disclosure (keep the wording when you do). */
+  terms?: React.ReactNode;
+  /** The pay button, or where the order stands once it exists. */
+  frame: React.ReactNode;
+  /** Freeze the choices (an order is in flight). */
+  disabled?: boolean;
+}
+
+/** The last step: the order as Coinbase will run it, then the pay button. */
+function DepositReview({
+  title = "Confirm order",
+  description,
+  step,
+  rows,
+  payLabel = "Pay with",
+  payMethods = DEFAULT_DEPOSIT_PAY_METHODS,
+  payMethod,
+  onPayMethodChange,
+  receipt,
+  terms,
+  frame,
+  disabled,
+}: WalletSheetDepositReviewProps) {
+  return (
+    <Screen scroll className="tds-dep__card">
+      <StepHeader title={title} description={description} step={step} />
+      <div className="tds-dep__rows">
+        {rows.map((row, i) => (
+          <div key={i} className="tds-dep__row">
+            <span className="tds-dep__row-label">{row.label}</span>
+            <span className={cn("tds-dep__row-value", row.strong && "tds-dep__row-value--strong")}>{row.value}</span>
+          </div>
+        ))}
+      </div>
+      <DepositSelect
+        label={payLabel}
+        items={payMethods.map((m) => ({
+          value: m.id,
+          label: m.label,
+          icon: m.icon ?? <PhoneWaves width={16} height={16} />,
+        }))}
+        value={payMethod}
+        onValueChange={onPayMethodChange}
+        disabled={disabled}
+      />
+      {receipt && (
+        <div className="tds-dep__receipt">
+          <div className="tds-dep__receipt-copy">
+            <span className="tds-dep__receipt-label">{receipt.label ?? "Sending receipts to"}</span>
+            <span className="tds-dep__receipt-value">{receipt.value}</span>
+          </div>
+          {receipt.onEdit && (
+            <Button variant="ghost" size="sm" onClick={receipt.onEdit} disabled={disabled}>
+              {receipt.editLabel ?? "Edit"}
+            </Button>
+          )}
+        </div>
+      )}
+      {terms ?? <CoinbaseTerms />}
+      <div className="tds-dep__cb-bare">{frame}</div>
     </Screen>
   );
 }
@@ -1196,6 +1487,9 @@ export const DepositScreens = {
   DepositCard,
   DepositFaucet,
   DepositContact,
+  DepositPhone,
+  DepositEmail,
+  DepositReview,
   DepositVerify,
   DepositPending,
   DepositDone,

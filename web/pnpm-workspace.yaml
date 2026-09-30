@@ -19,6 +19,7 @@ packages:
   - 'wallet-auth-manager'
   - 'wallet-keypair-manager'
   - 'chain-indexer'
+  - 'compression-service'
   - 'wallet-app'
   - 'wallet'
   - 'wallet/admin'

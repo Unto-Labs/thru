@@ -1,3 +1,4 @@
+import { createCompressionModule, type CompressionModule } from '../modules/compression';
 import type { ThruClientContext } from "./client";
 
 import { Pubkey, Signature, type PubkeyInput, type SignatureInput } from "../domain/primitives";
@@ -84,6 +85,7 @@ interface BoundEvents {
 
 interface BoundProofs {
     generate: BoundFunction<typeof proofsModule.generateStateProof>;
+    generateBatch: BoundFunction<typeof proofsModule.generateStateProofs>;
     getStateRoots: BoundFunction<typeof proofsModule.getStateRoots>;
 }
 
@@ -133,6 +135,7 @@ interface Helpers {
 
 export interface Thru {
     ctx: ThruClientContext;
+    compression: CompressionModule;
     blocks: BoundBlocks;
     accounts: BoundAccounts;
     transactions: BoundTransactions;
@@ -151,6 +154,7 @@ export interface Thru {
 export function createBoundThruClient(ctx: ThruClientContext): Thru {
     return {
         ctx,
+        compression: createCompressionModule(ctx),
         blocks: {
             get: bind(ctx, blocksModule.getBlock),
             getRaw: bind(ctx, blocksModule.getRawBlock),
@@ -207,6 +211,7 @@ export function createBoundThruClient(ctx: ThruClientContext): Thru {
         },
         proofs: {
             generate: bind(ctx, proofsModule.generateStateProof),
+            generateBatch: bind(ctx, proofsModule.generateStateProofs),
             getStateRoots: bind(ctx, proofsModule.getStateRoots),
         },
         node: {

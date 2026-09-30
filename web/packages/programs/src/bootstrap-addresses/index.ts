@@ -19,14 +19,17 @@ export const BOOTSTRAP_PROGRAM_SEEDS = Object.freeze({
   nft: 'thru-program:1654635',
   block_producer: 'thru-program:8222',
   consensus_validator: 'thru-program:35555736',
+  eoa: 'thru-program:207434',
+  uploader: 'thru-program:1073768',
+  compression: 'thru-compression:v1',
 } as const);
 
 function managedProgramAddress(seed: string): string {
   return deriveManagedProgramAddresses(seed).programAccountAddress;
 }
 
-/** EOA is installed by genesis, not uploaded by application bootstrap. */
-export const GENESIS_EOA_PROGRAM_SEED = 'thru-program:207434';
+/** EOA is installed by genesis; bootstrap only publishes its ABI. */
+export const GENESIS_EOA_PROGRAM_SEED = BOOTSTRAP_PROGRAM_SEEDS.eoa;
 export const GENESIS_EOA_PROGRAM_ADDRESS = managedProgramAddress(GENESIS_EOA_PROGRAM_SEED);
 
 /** Canonical application-facing addresses for bootstrap-managed programs. */
@@ -50,6 +53,9 @@ export const BOOTSTRAP_PROGRAM_ADDRESSES = Object.freeze({
   consensus_validator: managedProgramAddress(
     BOOTSTRAP_PROGRAM_SEEDS.consensus_validator,
   ),
+  eoa: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.eoa),
+  uploader: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.uploader),
+  compression: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.compression),
 } as const);
 
 function stateAddress(program: string, label: string): string {

@@ -37,6 +37,10 @@ mod uploader_tests {
         )
         .unwrap();
 
+        assert_eq!(create_tx.req_compute_units, 50_000 + 2 * 1024);
+        assert_eq!(create_tx.req_state_units, 2);
+        assert_eq!(create_tx.req_memory_units, 10_000);
+
         // Verify transaction has instruction data
         assert!(
             create_tx.instructions.is_some(),

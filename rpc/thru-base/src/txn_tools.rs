@@ -23,9 +23,9 @@ pub use crate::bootstrap_addresses::{
 };
 
 const CONSENSUS_VALIDATOR_DEFAULT_EXPIRY_AFTER: u32 = 100;
-const CONSENSUS_VALIDATOR_DEFAULT_COMPUTE_UNITS: u32 = 500_000_000;
-const CONSENSUS_VALIDATOR_DEFAULT_STATE_UNITS: u16 = 1;
-const CONSENSUS_VALIDATOR_DEFAULT_MEMORY_UNITS: u16 = 50_000;
+const CONSENSUS_VALIDATOR_COMPUTE_UNITS: u32 = 500_000_000;
+const CONSENSUS_VALIDATOR_STATE_UNITS: u16 = 0;
+const CONSENSUS_VALIDATOR_MEMORY_UNITS: u16 = 50_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ConsensusValidatorAccounts {
@@ -58,9 +58,9 @@ fn build_consensus_validator_tx(
     Transaction::new(fee_payer, program, fee, nonce)
         .with_start_slot(start_slot)
         .with_expiry_after(CONSENSUS_VALIDATOR_DEFAULT_EXPIRY_AFTER)
-        .with_compute_units(CONSENSUS_VALIDATOR_DEFAULT_COMPUTE_UNITS)
-        .with_state_units(CONSENSUS_VALIDATOR_DEFAULT_STATE_UNITS)
-        .with_memory_units(CONSENSUS_VALIDATOR_DEFAULT_MEMORY_UNITS)
+        .with_compute_units(CONSENSUS_VALIDATOR_COMPUTE_UNITS)
+        .with_state_units(CONSENSUS_VALIDATOR_STATE_UNITS)
+        .with_memory_units(CONSENSUS_VALIDATOR_MEMORY_UNITS)
 }
 
 /// Base transaction for BP bond mutating ops (deposit/withdraw/update/sweep/
@@ -76,7 +76,7 @@ fn bp_base_tx(
         .with_start_slot(start_slot)
         .with_expiry_after(100)
         .with_compute_units(50_000_000)
-        .with_state_units(1)
+        .with_state_units(0)
         .with_memory_units(50_000)
 }
 
@@ -158,7 +158,7 @@ impl TransactionBuilder {
             .with_expiry_after(100)
             .with_compute_units(10000)
             .with_memory_units(10000)
-            .with_state_units(1);
+            .with_state_units(0);
 
         Ok(tx)
     }
@@ -197,7 +197,7 @@ impl TransactionBuilder {
             .with_expiry_after(100)
             .with_compute_units(10_000)
             .with_memory_units(10_000)
-            .with_state_units(1);
+            .with_state_units(0);
 
         Ok(tx)
     }
@@ -312,7 +312,8 @@ impl TransactionBuilder {
         Ok(tx)
     }
 
-    /// Build account decompression transaction
+    /// Build a legacy system-test decompression transaction.
+    /// For the current managed compression program use `build_compression_decompress`.
     pub fn build_decompress_account(
         fee_payer: TnPubkey,
         program: TnPubkey,
@@ -358,7 +359,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(100045)
-            .with_state_units(1)
+            .with_state_units(0)
             .with_memory_units(10000)
             .add_rw_account(target_account)
             .with_instructions(instruction_data);
@@ -1498,6 +1499,411 @@ mod tests {
                 .verify_strict(&other_chain_msg, &signature)
             .is_err());
     }
+
+    fn key(byte: u8) -> TnPubkey {
+        [byte; 32]
+    }
+
+    /// A request above zero is rejected whenever the chain has no active-state
+    /// headroom, so builders that neither create nor grow accounts request none.
+    #[test]
+    fn non_growing_builders_request_no_state_units() {
+        let (fp, prog, a, b, c, d) = (key(1), key(2), key(3), key(4), key(5), key(6));
+        let (e, f) = (key(7), key(8));
+        let cases: Vec<(&str, Transaction)> = vec![
+            ("bp_base_tx", bp_base_tx(fp, prog, 1, 0, 0)),
+            (
+                "build_consensus_validator_tx",
+                build_consensus_validator_tx(fp, prog, 1, 0, 0),
+            ),
+            (
+                "build_transfer",
+                TransactionBuilder::build_transfer(fp, prog, a, 5, 1, 0, 0).unwrap(),
+            ),
+            (
+                "build_delete_account",
+                TransactionBuilder::build_delete_account(fp, prog, a, &[0u8; 64], 1, 1, 0, 0)
+                    .unwrap(),
+            ),
+            (
+                "build_write_data",
+                TransactionBuilder::build_write_data(fp, prog, a, 0, &[1, 2, 3], 1, 0, 0).unwrap(),
+            ),
+            (
+                "build_uploader_write",
+                TransactionBuilder::build_uploader_write(fp, prog, a, b, &[1, 2, 3], 0, 1, 0, 0)
+                    .unwrap(),
+            ),
+            (
+                "build_uploader_finalize",
+                TransactionBuilder::build_uploader_finalize(fp, prog, a, b, 3, [0u8; 32], 1, 0, 0)
+                    .unwrap(),
+            ),
+            (
+                "build_uploader_destroy",
+                TransactionBuilder::build_uploader_destroy(fp, prog, a, b, 1, 0, 0).unwrap(),
+            ),
+            (
+                "build_abi_manager_finalize_abi_official",
+                TransactionBuilder::build_abi_manager_finalize_abi_official(
+                    fp, prog, a, b, c, fp, 1, 0, 0,
+                )
+                .unwrap(),
+            ),
+            (
+                "build_abi_manager_finalize_abi_external",
+                TransactionBuilder::build_abi_manager_finalize_abi_external(
+                    fp, prog, a, b, fp, 1, 0, 0,
+                )
+                .unwrap(),
+            ),
+            (
+                "build_abi_manager_close_abi_official",
+                TransactionBuilder::build_abi_manager_close_abi_official(
+                    fp, prog, a, b, c, fp, 1, 0, 0,
+                )
+                .unwrap(),
+            ),
+            (
+                "build_abi_manager_close_abi_external",
+                TransactionBuilder::build_abi_manager_close_abi_external(
+                    fp, prog, a, b, fp, 1, 0, 0,
+                )
+                .unwrap(),
+            ),
+            (
+                "build_manager_set_pause",
+                TransactionBuilder::build_manager_set_pause(fp, prog, a, b, true, 1, 0, 0).unwrap(),
+            ),
+            (
+                "build_manager_simple",
+                TransactionBuilder::build_manager_simple(
+                    fp,
+                    prog,
+                    a,
+                    b,
+                    MANAGER_INSTRUCTION_FINALIZE,
+                    1,
+                    0,
+                    0,
+                )
+                .unwrap(),
+            ),
+            (
+                "build_manager_set_authority",
+                TransactionBuilder::build_manager_set_authority(fp, prog, a, b, c, 1, 0, 0)
+                    .unwrap(),
+            ),
+            (
+                "build_test_uploader_write",
+                TransactionBuilder::build_test_uploader_write(fp, prog, a, 0, &[1, 2, 3], 1, 0, 0)
+                    .unwrap(),
+            ),
+            (
+                "build_token_transfer",
+                TransactionBuilder::build_token_transfer(fp, prog, a, b, fp, 5, 1, 0, 0).unwrap(),
+            ),
+            (
+                "build_token_mint_to",
+                TransactionBuilder::build_token_mint_to(fp, prog, a, b, fp, 5, 1, 0, 0).unwrap(),
+            ),
+            (
+                "build_token_burn",
+                TransactionBuilder::build_token_burn(fp, prog, a, b, fp, 5, 1, 0, 0).unwrap(),
+            ),
+            (
+                "build_token_freeze_account",
+                TransactionBuilder::build_token_freeze_account(fp, prog, a, b, fp, 1, 0, 0)
+                    .unwrap(),
+            ),
+            (
+                "build_token_thaw_account",
+                TransactionBuilder::build_token_thaw_account(fp, prog, a, b, fp, 1, 0, 0).unwrap(),
+            ),
+            (
+                "build_token_close_account",
+                TransactionBuilder::build_token_close_account(fp, prog, a, b, fp, 1, 0, 0).unwrap(),
+            ),
+            (
+                "build_wthru_deposit",
+                TransactionBuilder::build_wthru_deposit(fp, prog, a, b, c, d, 1, 0, 0).unwrap(),
+            ),
+            (
+                "build_wthru_withdraw",
+                TransactionBuilder::build_wthru_withdraw(fp, prog, a, b, c, d, e, 5, 1, 0, 0)
+                    .unwrap(),
+            ),
+            (
+                "build_faucet_deposit",
+                TransactionBuilder::build_faucet_deposit(fp, prog, a, b, c, 5, 1, 0, 0).unwrap(),
+            ),
+            (
+                "build_faucet_withdraw",
+                TransactionBuilder::build_faucet_withdraw(fp, prog, a, b, 5, 1, 0, 0).unwrap(),
+            ),
+            (
+                "build_name_service_delete_record",
+                TransactionBuilder::build_name_service_delete_record(
+                    fp, prog, a, fp, b"key", 1, 0, 0,
+                )
+                .unwrap(),
+            ),
+            (
+                "build_name_service_unregister_subdomain",
+                TransactionBuilder::build_name_service_unregister_subdomain(
+                    fp, prog, a, fp, 1, 0, 0,
+                )
+                .unwrap(),
+            ),
+            (
+                "build_thru_registrar_renew_lease",
+                TransactionBuilder::build_thru_registrar_renew_lease(
+                    fp, prog, a, b, c, d, e, f, 1, 1, 0, 0,
+                )
+                .unwrap(),
+            ),
+            (
+                "build_thru_registrar_claim_expired_domain",
+                TransactionBuilder::build_thru_registrar_claim_expired_domain(
+                    fp, prog, a, b, c, d, e, f, 1, 1, 0, 0,
+                )
+                .unwrap(),
+            ),
+            (
+                "build_bp_deposit",
+                TransactionBuilder::build_bp_deposit(fp, prog, a, b, c, d, 5, 1, 0, 0).unwrap(),
+            ),
+        ];
+        for (name, tx) in cases {
+            assert_eq!(tx.req_state_units, 0, "{name}");
+        }
+    }
+
+    /// Builders that create accounts request one unit per new account footprint.
+    #[test]
+    fn creating_builders_request_their_account_state_units() {
+        let (fp, prog, a, b, c, d) = (key(1), key(2), key(3), key(4), key(5), key(6));
+        let (e, f, g, h) = (key(7), key(8), key(9), key(10));
+        let proof = vec![0u8; 64];
+        let fee_payer_proof = StateProof::creation(100, [0u8; 32], [7u8; 32], [8u8; 32], vec![]);
+        let cases: Vec<(&str, Transaction, u16)> = vec![
+            (
+                "build_create_with_fee_payer_proof",
+                TransactionBuilder::build_create_with_fee_payer_proof(fp, 0, &fee_payer_proof)
+                    .unwrap(),
+                1,
+            ),
+            (
+                "build_create_account",
+                TransactionBuilder::build_create_account(
+                    fp,
+                    prog,
+                    a,
+                    "5eed",
+                    Some(&proof),
+                    1,
+                    0,
+                    0,
+                )
+                .unwrap(),
+                1,
+            ),
+            (
+                "build_create_ephemeral_account",
+                TransactionBuilder::build_create_ephemeral_account(
+                    fp, prog, a, &[1u8; 32], 1, 0, 0,
+                )
+                .unwrap(),
+                1,
+            ),
+            (
+                "build_token_initialize_mint",
+                TransactionBuilder::build_token_initialize_mint(
+                    fp,
+                    prog,
+                    a,
+                    fp,
+                    fp,
+                    None,
+                    6,
+                    "TKN",
+                    [1u8; 32],
+                    proof.clone(),
+                    1,
+                    0,
+                    0,
+                )
+                .unwrap(),
+                1,
+            ),
+            (
+                "build_token_initialize_account",
+                TransactionBuilder::build_token_initialize_account(
+                    fp,
+                    prog,
+                    a,
+                    b,
+                    fp,
+                    [1u8; 32],
+                    proof.clone(),
+                    1,
+                    0,
+                    0,
+                )
+                .unwrap(),
+                1,
+            ),
+            (
+                "build_wthru_initialize_mint",
+                TransactionBuilder::build_wthru_initialize_mint(
+                    fp,
+                    prog,
+                    a,
+                    b,
+                    c,
+                    9,
+                    [1u8; 32],
+                    proof.clone(),
+                    proof.clone(),
+                    1,
+                    0,
+                    0,
+                )
+                .unwrap(),
+                2,
+            ),
+            (
+                "build_name_service_initialize_root",
+                TransactionBuilder::build_name_service_initialize_root(
+                    fp,
+                    prog,
+                    a,
+                    fp,
+                    "thru",
+                    proof.clone(),
+                    1,
+                    0,
+                    0,
+                )
+                .unwrap(),
+                1,
+            ),
+            (
+                "build_name_service_register_subdomain",
+                TransactionBuilder::build_name_service_register_subdomain(
+                    fp,
+                    prog,
+                    a,
+                    b,
+                    fp,
+                    fp,
+                    "name",
+                    proof.clone(),
+                    1,
+                    0,
+                    0,
+                )
+                .unwrap(),
+                1,
+            ),
+            (
+                "build_thru_registrar_initialize_registry",
+                TransactionBuilder::build_thru_registrar_initialize_registry(
+                    fp,
+                    prog,
+                    a,
+                    b,
+                    c,
+                    d,
+                    e,
+                    f,
+                    "thru",
+                    1,
+                    proof.clone(),
+                    proof.clone(),
+                    1,
+                    0,
+                    0,
+                )
+                .unwrap(),
+                2,
+            ),
+            (
+                "build_thru_registrar_purchase_domain",
+                TransactionBuilder::build_thru_registrar_purchase_domain(
+                    fp,
+                    prog,
+                    a,
+                    b,
+                    c,
+                    d,
+                    e,
+                    f,
+                    g,
+                    h,
+                    key(11),
+                    "name",
+                    1,
+                    proof.clone(),
+                    proof.clone(),
+                    1,
+                    0,
+                    0,
+                )
+                .unwrap(),
+                2,
+            ),
+            (
+                "build_bp_create_account",
+                TransactionBuilder::build_bp_create_account(
+                    fp,
+                    prog,
+                    a,
+                    b,
+                    c,
+                    d,
+                    e,
+                    fp,
+                    false,
+                    [0u8; 64],
+                    proof.clone(),
+                    proof.clone(),
+                    vec![],
+                    1,
+                    0,
+                    0,
+                )
+                .unwrap(),
+                2,
+            ),
+            (
+                "build_bp_create_account with signer EOA",
+                TransactionBuilder::build_bp_create_account(
+                    fp,
+                    prog,
+                    a,
+                    b,
+                    c,
+                    d,
+                    e,
+                    fp,
+                    true,
+                    [0u8; 64],
+                    proof.clone(),
+                    proof.clone(),
+                    proof.clone(),
+                    1,
+                    0,
+                    0,
+                )
+                .unwrap(),
+                3,
+            ),
+        ];
+        for (name, tx, expected) in cases {
+            assert_eq!(tx.req_state_units, expected, "{name}");
+        }
+    }
 }
 
 /// Uploader program instruction discriminants
@@ -1878,7 +2284,7 @@ impl TransactionBuilder {
             .with_expiry_after(10000)
             .with_compute_units(500_000_000)
             .with_memory_units(5000)
-            .with_state_units(1);
+            .with_state_units(0);
 
         let mut meta_account_idx = 2u16;
         let mut buffer_account_idx = 3u16;
@@ -1919,7 +2325,7 @@ impl TransactionBuilder {
             .with_expiry_after(10000)
             .with_compute_units(50_000 + 200 * buffer_size as u32)
             .with_memory_units(5000)
-            .with_state_units(1);
+            .with_state_units(0);
 
         // Account layout: [0: fee_payer, 1: uploader_program, 2: meta_account, 3: buffer_account]
         let mut meta_account_idx = 2u16;
@@ -1962,7 +2368,7 @@ impl TransactionBuilder {
             .with_expiry_after(10000)
             .with_compute_units(50000)
             .with_memory_units(5000)
-            .with_state_units(1);
+            .with_state_units(0);
 
         // Account layout: [0: fee_payer, 1: uploader_program, 2: meta_account, 3: buffer_account]
         let mut meta_account_idx = 2u16;
@@ -2664,7 +3070,7 @@ impl TransactionBuilder {
             .with_expiry_after(10000)
             .with_compute_units(500_000_000)
             .with_memory_units(5000)
-            .with_state_units(1);
+            .with_state_units(0);
 
         let authority_is_fee_payer = authority_account == fee_payer;
 
@@ -2745,7 +3151,7 @@ impl TransactionBuilder {
             .with_expiry_after(10000)
             .with_compute_units(500_000_000)
             .with_memory_units(5000)
-            .with_state_units(1);
+            .with_state_units(0);
 
         let authority_is_fee_payer = authority_account == fee_payer;
 
@@ -2818,7 +3224,7 @@ impl TransactionBuilder {
             .with_expiry_after(10000)
             .with_compute_units(500_000_000)
             .with_memory_units(5000)
-            .with_state_units(1);
+            .with_state_units(0);
 
         let authority_is_fee_payer = authority_account == fee_payer;
 
@@ -2899,7 +3305,7 @@ impl TransactionBuilder {
             .with_expiry_after(10000)
             .with_compute_units(500_000_000)
             .with_memory_units(5000)
-            .with_state_units(1);
+            .with_state_units(0);
 
         let authority_is_fee_payer = authority_account == fee_payer;
 
@@ -3041,7 +3447,7 @@ impl TransactionBuilder {
             .with_expiry_after(10000)
             .with_compute_units(100_000_000)
             .with_memory_units(5000)
-            .with_state_units(1);
+            .with_state_units(0);
 
         // Add accounts in sorted order
         let mut accounts = vec![(meta_account, "meta"), (program_account, "program")];
@@ -3088,7 +3494,7 @@ impl TransactionBuilder {
             .with_expiry_after(10000)
             .with_compute_units(100_000_000)
             .with_memory_units(5000)
-            .with_state_units(1);
+            .with_state_units(0);
 
         // Add accounts in sorted order
         let mut accounts = vec![(meta_account, "meta"), (program_account, "program")];
@@ -3138,7 +3544,7 @@ impl TransactionBuilder {
             .with_expiry_after(10000)
             .with_compute_units(100_000_000)
             .with_memory_units(5000)
-            .with_state_units(1);
+            .with_state_units(0);
 
         // Add accounts in sorted order
         let mut accounts = vec![(meta_account, "meta"), (program_account, "program")];
@@ -3227,7 +3633,7 @@ impl TransactionBuilder {
             .with_expiry_after(10_000)
             .with_compute_units(100_000 + 18 * data.len() as u32)
             .with_memory_units(10_000)
-            .with_state_units(1)
+            .with_state_units(0)
             .add_rw_account(target_account);
 
         let instruction_data =
@@ -3237,7 +3643,8 @@ impl TransactionBuilder {
         Ok(tx)
     }
 
-    /// Build account decompression transaction using DECOMPRESS2 (separate meta and data accounts)
+    /// Build legacy system-test DECOMPRESS2 (separate metadata/data accounts).
+    /// This instruction format is not compatible with the managed compression program.
     pub fn build_decompress2(
         fee_payer: TnPubkey,
         program: TnPubkey,
@@ -4357,7 +4764,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(300_000)
-            .with_state_units(1)
+            .with_state_units(0)
             .with_memory_units(10_000);
 
         let is_self_transfer = source_account == dest_account;
@@ -4398,7 +4805,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(300_000)
-            .with_state_units(1)
+            .with_state_units(0)
             .with_memory_units(10_000);
 
         let (tx_after_rw, rw_indices) =
@@ -4442,7 +4849,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(300_000)
-            .with_state_units(1)
+            .with_state_units(0)
             .with_memory_units(10_000);
 
         let (tx_after_rw, rw_indices) =
@@ -4485,7 +4892,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(300_000)
-            .with_state_units(1)
+            .with_state_units(0)
             .with_memory_units(10_000);
 
         let (tx_after_rw, rw_indices) =
@@ -4527,7 +4934,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(300_000)
-            .with_state_units(1)
+            .with_state_units(0)
             .with_memory_units(10_000);
 
         let (tx_after_rw, rw_indices) =
@@ -4569,7 +4976,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(300_000)
-            .with_state_units(1)
+            .with_state_units(0)
             .with_memory_units(10_000);
 
         let mut rw_accounts = vec![token_account];
@@ -4676,7 +5083,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(400_000)
-            .with_state_units(1)
+            .with_state_units(0)
             .with_memory_units(10_000);
 
         let accounts = [
@@ -4722,7 +5129,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(400_000)
-            .with_state_units(1)
+            .with_state_units(0)
             .with_memory_units(10_000);
 
         let accounts = [
@@ -5035,7 +5442,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(300_000)
-            .with_state_units(1)
+            .with_state_units(0)
             .with_memory_units(10_000);
 
         let (tx, depositor_account_idx) = Self::ensure_rw_account(tx, depositor_account);
@@ -5116,7 +5523,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(300_000)
-            .with_state_units(1)
+            .with_state_units(0)
             .with_memory_units(10_000);
 
         // Determine account indices, handling duplicates with fee_payer and between accounts
@@ -5594,7 +6001,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(200_000)
-            .with_state_units(1)
+            .with_state_units(0)
             .with_memory_units(10_000);
 
         let accounts = [(domain_account, true), (owner_account, false)];
@@ -5627,7 +6034,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(200_000)
-            .with_state_units(1)
+            .with_state_units(0)
             .with_memory_units(10_000);
 
         let accounts = [(domain_account, true), (owner_account, false)];
@@ -5867,7 +6274,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(300_000)
-            .with_state_units(1)
+            .with_state_units(0)
             .with_memory_units(10_000);
 
         // Add accounts in sorted order
@@ -5944,7 +6351,7 @@ impl TransactionBuilder {
             .with_start_slot(start_slot)
             .with_expiry_after(100)
             .with_compute_units(300_000)
-            .with_state_units(1)
+            .with_state_units(0)
             .with_memory_units(10_000);
 
         // Add accounts in sorted order

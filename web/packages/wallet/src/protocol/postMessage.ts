@@ -600,6 +600,8 @@ export interface SignMessageResult {
  * is treated as untrusted display-only data.
  */
 export interface SignTransactionPayload {
+  /** Maximum state growth in 4 KiB units, rounded per account. Defaults to 1. */
+  stateUnits?: number;
   walletAddress?: string;
   programAddress: string;
   instructionData: string;

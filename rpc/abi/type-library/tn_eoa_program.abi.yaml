@@ -1,0 +1,98 @@
+abi:
+  package: thru.program.eoa
+  name: EOA
+  abi-version: 1
+  package-version: 1.0.0
+  description: >-
+    Externally owned account program. CreateAccount creates an EOA from its
+    Ed25519 signature and a creation state proof, Transfer moves native
+    balance from an authorized signer, and DeleteAccount deletes an EOA with
+    its keyholder's signature. EOA accounts carry no program data.
+  imports:
+    # thru_primitives
+    - type: onchain
+      address: ta1blxgaYR0dei5aldWJe1vbUtt-LkVEBOzNJtSRhHQcTG
+      target: abi
+      network: mainnet
+      revision: latest
+  options:
+    program-metadata:
+      root-types:
+        instruction-root: EoaInstruction
+        errors: EoaError
+types:
+  - name: CreateAccountArgs
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: proof_size
+            field-type: { primitive: u64 }
+          - name: eoa_account_idx
+            field-type: { primitive: u16 }
+          - name: signature
+            field-type:
+              type-ref:
+                name: Signature
+                package: "thru.common.primitives"
+          - name: proof
+            field-type:
+              array:
+                size: { field-ref: { path: [proof_size] } }
+                element-type: { primitive: u8 }
+  - name: TransferArgs
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: amount
+            field-type: { primitive: u64 }
+          - name: from_account_idx
+            field-type: { primitive: u16 }
+          - name: to_account_idx
+            field-type: { primitive: u16 }
+  - name: DeleteAccountArgs
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: eoa_account_idx
+            field-type: { primitive: u16 }
+          - name: signature
+            field-type:
+              type-ref:
+                name: Signature
+                package: "thru.common.primitives"
+  - name: EoaInstruction
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: tag
+            field-type: { primitive: u32 }
+          - name: payload
+            field-type:
+              enum:
+                packed: true
+                tag-ref: { field-ref: { path: [tag] } }
+                variants:
+                  - name: create_account
+                    tag-value: 0
+                    variant-type: { type-ref: { name: CreateAccountArgs } }
+                  - name: transfer
+                    tag-value: 1
+                    variant-type: { type-ref: { name: TransferArgs } }
+                  - name: delete_account
+                    tag-value: 2
+                    variant-type: { type-ref: { name: DeleteAccountArgs } }
+  - name: EoaError
+    kind:
+      struct:
+        packed: true
+        comment: >-
+          1 invalid instruction data size, 2 invalid instruction, 3 invalid
+          account index, 4 unauthorized operation, 5 account create failed.
+          Transfer and DeleteAccount return runtime syscall errors unchanged.
+        fields:
+          - name: code
+            field-type: { primitive: u64 }

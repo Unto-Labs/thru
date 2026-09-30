@@ -1,3 +1,4 @@
+import { programResources } from '@thru/programs/resources';
 import {
   PASSKEY_MANAGER_PROGRAM_ADDRESS,
   base64UrlToBytes,
@@ -17,6 +18,20 @@ import {
   withSerializedFeePayer,
 } from "./utils";
 import type { ThruClient } from "./types";
+
+/** Execution streaming can precede query visibility. Wait before building the
+ * next transaction so its fee-payer nonce and proofs see the committed state. */
+async function waitForCreatedAccount(client: ThruClient, address: string): Promise<void> {
+  for (let attempt = 0; attempt < 120; attempt++) {
+    try {
+      await client.accounts.get(address);
+      return;
+    } catch (error) {
+      if (attempt === 119) throw error;
+      await new Promise((resolve) => setTimeout(resolve, 250));
+    }
+  }
+}
 
 export async function createPasskeyWallet(opts: {
   client: ThruClient;
@@ -75,7 +90,7 @@ export async function createPasskeyWallet(opts: {
         readWrite: accountCtx.readWriteAddresses,
         readOnly: accountCtx.readOnlyAddresses,
       },
-      header: { fee: 0n },
+      header: { ...programResources({ stateUnits: 1 }), fee: 0n },
     });
 
     await transaction.sign(opts.adminPrivateKey);
@@ -93,6 +108,7 @@ export async function createPasskeyWallet(opts: {
         }`,
       );
     }
+    await waitForCreatedAccount(opts.client, walletAddress);
   });
 
   let credentialLookupAddress: string | undefined;
@@ -143,7 +159,7 @@ export async function createPasskeyWallet(opts: {
             readWrite: accountCtx.readWriteAddresses,
             readOnly: accountCtx.readOnlyAddresses,
           },
-          header: { fee: 0n },
+          header: { ...programResources({ stateUnits: 1 }), fee: 0n },
         });
 
         await transaction.sign(opts.adminPrivateKey);
@@ -161,6 +177,7 @@ export async function createPasskeyWallet(opts: {
             }`,
           );
         }
+        await waitForCreatedAccount(opts.client, lookupAddress);
       });
     } catch (error) {
       console.warn("Credential registration failed (non-fatal):", error);

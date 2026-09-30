@@ -23,6 +23,11 @@
 //! ```
 
 pub mod error;
+mod compression;
+pub use compression::{
+    AccountState, AccountDecompressionPreparation, PreparedAccountDecompression,
+    ACCOUNT_COMPRESSION_COOLDOWN,
+};
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -498,6 +503,31 @@ impl Client {
         match transaction_proto {
             Some(proto) => Self::parse_transaction_proto(proto, signature),
             None => Ok(None),
+        }
+    }
+
+    /// Read the actual execution result, without treating a missing result as success.
+    /// NotFound returns None; transport and server errors remain errors.
+    pub async fn get_transaction_execution(
+        &self,
+        signature: &Signature,
+    ) -> Result<Option<corev1::TransactionExecutionResult>> {
+        let mut client = QueryServiceClient::new(self.channel.clone())
+            .max_decoding_message_size(128 * 1024 * 1024);
+        let bytes = signature.to_bytes()
+            .map_err(|e| ClientError::Validation(e.to_string()))?;
+        let mut request = Request::new(servicesv1::GetTransactionRequest {
+            signature: Some(commonv1::Signature { value: bytes.to_vec() }),
+            view: Some(corev1::TransactionView::Full as i32),
+            version_context: Some(current_version_context()),
+            min_consensus: Some(commonv1::ConsensusStatus::Included as i32),
+        });
+        self.apply_metadata(&mut request);
+        request.set_timeout(self.timeout);
+        match client.get_transaction(request).await {
+            Ok(response) => Ok(response.into_inner().execution_result),
+            Err(status) if status.code() == tonic::Code::NotFound => Ok(None),
+            Err(status) => Err(status.into()),
         }
     }
 
@@ -1437,7 +1467,13 @@ impl Client {
         self.apply_metadata(&mut grpc_request);
         grpc_request.set_timeout(self.timeout);
 
-        let response = client.get_raw_account(grpc_request).await?;
+        let response = client.get_raw_account(grpc_request).await.map_err(|status| {
+            if status.code() == tonic::Code::NotFound {
+                ClientError::AccountNotFound(pubkey.to_string())
+            } else {
+                ClientError::from(status)
+            }
+        })?;
         Ok(response.into_inner())
     }
 }

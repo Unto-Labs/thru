@@ -137,9 +137,9 @@ export async function createAccount(
         startSlot,
         chainId: options.header?.chainId ?? (await getChainId(ctx)),
         expiryAfter: 100,
-        computeUnits: 10_000,
-        memoryUnits: 10_000,
-        stateUnits: 1,
+        computeUnits: 0,
+        memoryUnits: 0,
+        stateUnits: 0,
     };
 
     const header = mergeTransactionHeader(headerDefaults, options.header);

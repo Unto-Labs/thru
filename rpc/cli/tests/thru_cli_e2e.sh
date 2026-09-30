@@ -192,7 +192,8 @@ with_cli_env() {
 run_cli_raw() {
   local desc="$1"
   shift
-  log "CLI: $desc -> thru-cli $*"
+  # Descriptions identify the check without exposing imported private keys.
+  log "CLI: $desc"
   local output
   if output=$(with_cli_env "$THRU_CLI_BIN" "$@" 2>&1); then
     printf '%s' "$output"
@@ -924,14 +925,14 @@ scenario_programs() {
 
   local event_instruction_hex="03000000000000000100000000000000546f2062652c206f72206e6f7420746f2062653f0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
   local event_tx_json
-  event_tx_json=$(run_cli_json "txn execute event emission" txn execute "$PROGRAM_ACCOUNT_ID" "$event_instruction_hex" --fee-payer acc_0 --timeout 60)
+  event_tx_json=$(run_cli_json "txn execute event emission" txn execute "$PROGRAM_ACCOUNT_ID" "$event_instruction_hex" --fee-payer acc_0 --compute-units 300000000 --state-units 1 --memory-units 10000 --timeout 60)
   EVENT_SIGNATURE=$(printf '%s' "$event_tx_json" | jq -er '.transaction_execute.signature')
   local event_payload
   event_payload=$(printf '%s' "$event_tx_json" | jq -er '.transaction_execute.events[0].data.value // empty')
   [[ "$event_payload" == "$EVENT_TEXT_EXPECTATION" ]] || die "Unexpected event payload: '$event_payload'"
 
   local sign_json
-  sign_json=$(run_cli_json "txn sign event instruction" txn sign "$PROGRAM_ACCOUNT_ID" "$event_instruction_hex" --fee-payer acc_0)
+  sign_json=$(run_cli_json "txn sign event instruction" txn sign "$PROGRAM_ACCOUNT_ID" "$event_instruction_hex" --fee-payer acc_0 --compute-units 300000000 --state-units 1 --memory-units 10000)
   assert_jq_eq "$sign_json" '.transaction_sign.status' 'success'
 
   local setpause_json
@@ -1018,7 +1019,7 @@ scenario_program_upgrade() {
 
   local event_instruction_hex="03000000000000000100000000000000546f2062652c206f72206e6f7420746f2062653f0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
   local event_tx_json
-  event_tx_json=$(run_cli_json "txn execute initial program" txn execute "$upgrade_program_account" "$event_instruction_hex" --fee-payer acc_0 --timeout 120)
+  event_tx_json=$(run_cli_json "txn execute initial program" txn execute "$upgrade_program_account" "$event_instruction_hex" --fee-payer acc_0 --compute-units 300000000 --state-units 1 --memory-units 10000 --timeout 120)
   assert_jq_eq "$event_tx_json" '.transaction_execute.status' 'success'
 
   local upgrade_json
@@ -1026,7 +1027,7 @@ scenario_program_upgrade() {
   assert_jq_eq "$upgrade_json" '.program_upgrade.status' 'success'
 
   local post_upgrade_output
-  if post_upgrade_output=$(with_cli_env "$THRU_CLI_BIN" --json txn execute "$upgrade_program_account" "$event_instruction_hex" --fee-payer acc_0 --timeout 60 2>&1); then
+  if post_upgrade_output=$(with_cli_env "$THRU_CLI_BIN" --json txn execute "$upgrade_program_account" "$event_instruction_hex" --fee-payer acc_0 --compute-units 300000000 --state-units 1 --memory-units 10000 --timeout 60 2>&1); then
     die "Expected txn execute after upgrade to fail"
   fi
   assert_contains "$post_upgrade_output" "Transaction failed"
@@ -1058,7 +1059,7 @@ scenario_event() {
 
   local event_instruction_hex="03000000000000000100000000000000546f2062652c206f72206e6f7420746f2062653f0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
   local event_tx_json
-  event_tx_json=$(run_cli_json "txn execute builtin event emission" txn execute "$builtin_program_addr" "$event_instruction_hex" --fee-payer acc_0 --timeout 60)
+  event_tx_json=$(run_cli_json "txn execute builtin event emission" txn execute "$builtin_program_addr" "$event_instruction_hex" --fee-payer acc_0 --compute-units 300000000 --state-units 1 --memory-units 10000 --timeout 60)
   local event_count events_len events_size
   event_count=$(printf '%s' "$event_tx_json" | jq -er '.transaction_execute.events_count')
   events_len=$(printf '%s' "$event_tx_json" | jq -er '.transaction_execute.events | length')
@@ -1471,6 +1472,8 @@ scenario_bond() {
 # validator identity so the injected block finalizes.
 scenario_claimfees() {
   should_run "bond" || return 0
+  # Section B needs an unused node bond and covers the live-producer fee path.
+  [[ "$RUN_BOND_SECTION_B" != "1" ]] || return 0
   log_section "Scenario: post-block native fee distribution (burn vs claim) (UNTO-1293)"
 
   # Post-block fee distribution (UNTO-1293): after a block executes, the runtime
@@ -1830,7 +1833,7 @@ scenario_debug() {
   # Execute an event emission transaction to get a confirmed signature
   local event_instruction_hex="03000000000000000100000000000000546f2062652c206f72206e6f7420746f2062653f0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
   local tx_json test_sig
-  tx_json=$(run_cli_json "execute event for debug test" txn execute "$builtin_program_addr" "$event_instruction_hex" --fee-payer acc_0 --timeout 60)
+  tx_json=$(run_cli_json "execute event for debug test" txn execute "$builtin_program_addr" "$event_instruction_hex" --fee-payer acc_0 --compute-units 300000000 --state-units 1 --memory-units 10000 --timeout 60)
   assert_jq_eq "$tx_json" '.transaction_execute.status' 'success'
   test_sig=$(printf '%s' "$tx_json" | jq -er '.transaction_execute.signature')
   log "Test transaction: $test_sig"
@@ -1995,7 +1998,7 @@ scenario_debug() {
   # --- Phase 6: Execute second transaction for capture verification ---
   log "Phase 6: Second transaction for capture verification"
   local tx2_json test_sig2
-  tx2_json=$(run_cli_json "execute second event for debug" txn execute "$builtin_program_addr" "$event_instruction_hex" --fee-payer acc_0 --timeout 60)
+  tx2_json=$(run_cli_json "execute second event for debug" txn execute "$builtin_program_addr" "$event_instruction_hex" --fee-payer acc_0 --compute-units 300000000 --state-units 1 --memory-units 10000 --timeout 60)
   assert_jq_eq "$tx2_json" '.transaction_execute.status' 'success'
   test_sig2=$(printf '%s' "$tx2_json" | jq -er '.transaction_execute.signature')
 

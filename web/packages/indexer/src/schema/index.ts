@@ -18,7 +18,11 @@ export type {
 export { t, columnBuilder, type ColumnBuilder } from "./builder";
 
 // Table builder
-export { buildDrizzleTable, type TableIndexDefinition } from "./table";
+export {
+  buildDrizzleTable,
+  type TableExtraConfig,
+  type TableIndexDefinition,
+} from "./table";
 
 // Validation
 export { generateZodSchema, validateParsedData } from "./validation";

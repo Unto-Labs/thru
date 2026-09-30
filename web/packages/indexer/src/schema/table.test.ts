@@ -3,8 +3,8 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { getTableColumns, getTableName } from "drizzle-orm";
-import { getTableConfig } from "drizzle-orm/pg-core";
+import { getTableColumns, getTableName, SQL, sql } from "drizzle-orm";
+import { check, getTableConfig, index } from "drizzle-orm/pg-core";
 import { buildDrizzleTable } from "./table";
 import { t } from "./builder";
 
@@ -198,6 +198,52 @@ describe("buildDrizzleTable", () => {
       expect(() => {
         (col as any)._columnType = "invalid";
       }).toThrow();
+    });
+  });
+
+  describe("extra config", () => {
+    const schema = {
+      address: t.text().primaryKey(),
+      ticker: t.text().notNull().index(),
+      decimals: t.integer().notNull(),
+      kind: t.text().notNull(),
+      slot: t.bigint().notNull(),
+    };
+
+    it("appends checks and expression, descending and partial indexes", () => {
+      const table = buildDrizzleTable("mints", schema, [], (columns) => [
+        check("mints_decimals_check", sql`${columns.decimals} BETWEEN 0 AND 255`),
+        index("mints_ticker_search_idx").on(sql`lower(${columns.ticker})`, columns.address),
+        index("mints_slot_desc_idx").on(columns.slot.desc(), columns.address.desc()),
+        index("mints_initial_idx").on(columns.address).where(sql`${columns.kind} = 'initial'`),
+      ]);
+      const config = getTableConfig(table);
+
+      expect(config.checks.map((c) => c.name)).toEqual(["mints_decimals_check"]);
+      expect(config.indexes.map((i) => i.config.name)).toEqual([
+        "mints_ticker_idx",
+        "mints_ticker_search_idx",
+        "mints_slot_desc_idx",
+        "mints_initial_idx",
+      ]);
+
+      const [, search, slotDesc, initial] = config.indexes;
+      expect(search!.config.columns[0]).toBeInstanceOf(SQL);
+      expect((slotDesc!.config.columns[0] as any).indexConfig.order).toBe("desc");
+      expect(initial!.config.where).toBeInstanceOf(SQL);
+    });
+
+    it("builds extra config on a table without schema indexes", () => {
+      const table = buildDrizzleTable(
+        "plain",
+        { id: t.integer().primaryKey() },
+        [],
+        (columns) => [check("plain_singleton_check", sql`${columns.id} = 1`)]
+      );
+      const config = getTableConfig(table);
+
+      expect(config.checks.map((c) => c.name)).toEqual(["plain_singleton_check"]);
+      expect(config.indexes).toHaveLength(0);
     });
   });
 

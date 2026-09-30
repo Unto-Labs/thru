@@ -1,0 +1,144 @@
+abi:
+  package: thru.program.compression
+  name: Compression
+  abi-version: 1
+  package-version: 0.1.0
+  description: Instruction ABI for tn_compression_program.c. Pointer fields are
+    Thru VM addresses, not host pointers.
+  imports:
+    - type: path
+      path: ../../../../../rpc/abi/type-library/state_proof_flat.abi.yaml
+  options:
+    program-metadata:
+      root-types:
+        instruction-root: CompressionInstruction
+        errors: CompressionError
+types:
+  - name: CompressArgs
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: account_idx
+            field-type:
+              primitive: u16
+          - name: proof
+            field-type:
+              type-ref:
+                name: StateProof
+                package: thru.blockchain.state_proof
+  - name: DecompressArgs
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: account_idx
+            field-type:
+              primitive: u16
+          - name: account_data_sz
+            field-type:
+              primitive: u64
+          - name: account_meta
+            field-type:
+              array:
+                size:
+                  literal:
+                    u64: 64
+                element-type:
+                  primitive: u8
+          - name: account_data
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path:
+                      - account_data_sz
+                element-type:
+                  primitive: u8
+          - name: proof
+            field-type:
+              type-ref:
+                name: StateProof
+                package: thru.blockchain.state_proof
+  - name: CompressFromPointerArgs
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: account_idx
+            field-type:
+              primitive: u16
+          - name: proof_address
+            field-type:
+              primitive: u64
+          - name: proof_sz
+            field-type:
+              primitive: u64
+  - name: DecompressFromPointerArgs
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: account_idx
+            field-type:
+              primitive: u16
+          - name: account_data_sz
+            field-type:
+              primitive: u64
+          - name: account_meta_address
+            field-type:
+              primitive: u64
+          - name: account_data_address
+            field-type:
+              primitive: u64
+          - name: proof_address
+            field-type:
+              primitive: u64
+          - name: proof_sz
+            field-type:
+              primitive: u64
+  - name: CompressionError
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: code
+            field-type:
+              primitive: u64
+  - name: CompressionInstruction
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: discriminant
+            field-type:
+              primitive: u32
+          - name: payload
+            field-type:
+              enum:
+                packed: true
+                tag-ref:
+                  field-ref:
+                    path:
+                      - discriminant
+                variants:
+                  - name: compress
+                    tag-value: 1
+                    variant-type:
+                      type-ref:
+                        name: CompressArgs
+                  - name: decompress
+                    tag-value: 2
+                    variant-type:
+                      type-ref:
+                        name: DecompressArgs
+                  - name: compress_from_pointer
+                    tag-value: 3
+                    variant-type:
+                      type-ref:
+                        name: CompressFromPointerArgs
+                  - name: decompress_from_pointer
+                    tag-value: 4
+                    variant-type:
+                      type-ref:
+                        name: DecompressFromPointerArgs

@@ -44,6 +44,10 @@ describe("TransactionBuilder", () => {
       expect(transaction.fee).toBe(params.header.fee);
       expect(transaction.nonce).toBe(params.header.nonce);
       expect(transaction.startSlot).toBe(params.header.startSlot);
+      expect(transaction.requestedComputeUnits).toBe(0);
+      expect(transaction.requestedStateUnits).toBe(0);
+      expect(transaction.requestedMemoryUnits).toBe(0);
+      expect(Array.from(transaction.toWire().slice(8, 16))).toEqual(Array(8).fill(0));
     });
 
     it("should build transaction with all header fields", () => {

@@ -86,6 +86,8 @@ export interface AddDeviceParams {
 }
 
 export interface TxExecutorParams {
+  /** One unit for authority growth, plus one when creating a credential lookup. */
+  stateUnits: number;
   thru: AnyThruClient;
   walletSigner: WalletSigner;
   instructionData: Uint8Array;
@@ -261,6 +263,7 @@ export async function addAuthorityToAccount(
 
   status("Sending transaction...");
   const result = await params.executor({
+    stateUnits: params.credentialId ? 2 : 1,
     thru: params.thru,
     walletSigner: params.walletSigner,
     instructionData: validateInstruction,

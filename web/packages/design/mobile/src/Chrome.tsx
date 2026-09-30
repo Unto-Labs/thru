@@ -4,6 +4,7 @@
  */
 import type { ComponentType, ReactNode } from "react";
 import { Platform, Pressable, SafeAreaView, ScrollView, Text, View } from "react-native";
+import { TapHaptic } from "./TapHaptic";
 import { font, text, touch } from "./tokens";
 import { makeStyles, useThemeColors } from "./theme";
 
@@ -86,10 +87,13 @@ export function TabBar<K extends string>({
   items,
   active,
   onChange,
+  tapHaptic,
 }: {
   items: readonly TabItem<K>[];
   active: K;
   onChange: (t: K) => void;
+  /** Which tabs tick on iOS web when pressed (see TapHaptic). */
+  tapHaptic?: (key: K) => boolean;
 }) {
   const styles = useStyles();
   const colors = useThemeColors();
@@ -112,6 +116,7 @@ export function TabBar<K extends string>({
             <Text style={[styles.tabLabel, isActive ? styles.tabLabelActive : null, { color: tint }]}>
               {label}
             </Text>
+            {tapHaptic?.(key) ? <TapHaptic /> : null}
           </Pressable>
         );
       })}

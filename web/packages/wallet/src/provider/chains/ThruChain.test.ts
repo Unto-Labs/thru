@@ -62,6 +62,7 @@ describe("EmbeddedThruChain signing-session refresh", () => {
       retainedSession!.signTransaction({
         programAddress: "thru_program",
         instructionData: "AQID",
+        stateUnits: 2,
       }),
     ).resolves.toBe("passkey_signed_transaction");
 
@@ -73,6 +74,7 @@ describe("EmbeddedThruChain signing-session refresh", () => {
         payload: expect.objectContaining({
           walletAddress: "thru_test_address",
           signingSessionId: "session_expiring",
+          stateUnits: 2,
         }),
       }),
     );

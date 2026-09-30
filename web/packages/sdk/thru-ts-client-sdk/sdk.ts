@@ -11,6 +11,8 @@ export {
     ABI_MANAGER_PROGRAM_ADDRESS,
     TOKEN_PROGRAM_ADDRESS,
     MULTICALL_PROGRAM_ADDRESS,
+    COMPRESSION_PROGRAM_ADDRESS,
+    PASSKEY_MANAGER_PROGRAM_ADDRESS,
 } from "../src/core-program-addresses";
 
 // ============================================================================
@@ -211,4 +213,8 @@ export type {
 // Type Exports - Proofs Module
 // ============================================================================
 export type { GenerateStateProofOptions } from "./types/types";
-export type { GetStateRootsOptions } from "./modules/proofs";
+export type { GetStateRootsOptions, GenerateStateProofsOptions, StateProofOutcome } from "./modules/proofs";
+
+export * from "./domain/transactions/intent";
+export { CompressionError } from "./modules/compression";
+export type { CompressionModule, CompressionOptions, KeypairCompressionOptions, WalletCompressionOptions, DecompressionOptions, CompressionResult, CompressionErrorCode, AccountOutcome, AccountCompressionStatus, UploadCleanup, CompressionJournal, PendingCompressionTransaction } from "./modules/compression";

@@ -204,6 +204,10 @@ describe("transactions", () => {
       expect(transaction.feePayer.toBytes()).toEqual(publicKey);
       expect(transaction.nonce).toBe(5n);
       expect(transaction.startSlot).toBe(1000n);
+      expect(transaction.requestedComputeUnits).toBe(0);
+      expect(transaction.requestedStateUnits).toBe(0);
+      expect(transaction.requestedMemoryUnits).toBe(0);
+      expect(Array.from(transaction.toWire().slice(8, 16))).toEqual(Array(8).fill(0));
     });
 
     it("should use provided nonce instead of fetching", async () => {

@@ -6,6 +6,20 @@ use std::process::Command;
 
 const TEST_OUTPUT_DIR: &str = "target/ts_test_output";
 
+#[test]
+fn test_ts_hybrid_fam_u64_length_compiles() {
+    let test_dir = setup_test_dir("hybrid_u64_length");
+    generate_ts_code(
+        "tests/compliance_data/hybrid_u64_length.abi.yaml",
+        &test_dir,
+    )
+    .expect("Code generation failed");
+    let ts_file = test_dir.join("compliance/hybrid_u64_length/types.ts");
+    let content = fs::read_to_string(&ts_file).expect("Generated TypeScript missing");
+    assert!(content.contains("this.set_size(__tnToBigInt(elementCount))"));
+    check_typescript_compilation(&ts_file).expect("Hybrid u64 length builder must compile");
+}
+
 fn setup_test_dir(test_name: &str) -> PathBuf {
     let dir = PathBuf::from(TEST_OUTPUT_DIR).join(test_name);
     if dir.exists() {

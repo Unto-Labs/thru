@@ -11,8 +11,8 @@ use crate::crypto;
 use crate::error::CliError;
 use crate::feature_gate_account::{
     decode_feature_gate_account, feature_gate_global_account_pubkey, feature_gate_program_pubkey,
-    DecodedFeatureGateAccount, DecodedFeatureGateEntry, FEATURE_GATE_ARMED_SLOT_SENTINEL,
-    FEATURE_GATE_VALUE_SIZE,
+    DecodedFeatureGateAccount, DecodedFeatureGateEntry, FEATURE_GATE_ACCOUNT_HEADER_SIZE,
+    FEATURE_GATE_ARMED_SLOT_SENTINEL, FEATURE_GATE_ENTRY_SIZE, FEATURE_GATE_VALUE_SIZE,
 };
 use crate::feature_gate_registry::{
     load_feature_gate_registry, FeatureGateRegistry, FeatureGateRegistryCategory,
@@ -48,7 +48,9 @@ const FEATURE_GATE_ROLE_CONFIG: u8 = 2;
 const FEATURE_GATE_TX_FEE: u64 = 1;
 const FEATURE_GATE_TX_EXPIRY_AFTER: u32 = 100;
 const FEATURE_GATE_TX_COMPUTE_UNITS: u32 = 100_000;
-const FEATURE_GATE_TX_STATE_UNITS: u16 = 1;
+// Every instruction except create-entry updates the global account in place and
+// needs no state units; create-entry requests its growth (create_gate_state_units).
+const FEATURE_GATE_TX_STATE_UNITS: u16 = 0;
 const FEATURE_GATE_TX_MEMORY_UNITS: u16 = 10_000;
 
 // Fee payer and program are transaction header accounts. The global account is
@@ -324,7 +326,10 @@ async fn create_entry(
 
     let initial_value = encode_registry_value(entry, value)?;
     let instruction = encode_create_gate_instruction(&initial_value, next_change_lead_slots);
-    let details = submit_feature_gate_instruction(config, client, instruction, fee_payer).await?;
+    let state_units = create_gate_state_units(live_account.entries.len())?;
+    let details =
+        submit_feature_gate_instruction(config, client, instruction, state_units, fee_payer)
+            .await?;
     print_write_result(
         "create-entry",
         json!({
@@ -373,7 +378,14 @@ async fn arm_entry(
     }
 
     let instruction = encode_arm_instruction(entry.index, slot, &armed_value);
-    let details = submit_feature_gate_instruction(config, client, instruction, fee_payer).await?;
+    let details = submit_feature_gate_instruction(
+        config,
+        client,
+        instruction,
+        FEATURE_GATE_TX_STATE_UNITS,
+        fee_payer,
+    )
+    .await?;
     print_write_result(
         "arm",
         json!({
@@ -398,7 +410,14 @@ async fn disarm_entry(
 ) -> Result<(), CliError> {
     let entry = validate_disarm_target(registry, live_account, target)?;
     let instruction = encode_disarm_instruction(entry.index);
-    let details = submit_feature_gate_instruction(config, client, instruction, fee_payer).await?;
+    let details = submit_feature_gate_instruction(
+        config,
+        client,
+        instruction,
+        FEATURE_GATE_TX_STATE_UNITS,
+        fee_payer,
+    )
+    .await?;
     print_write_result(
         "disarm",
         json!({
@@ -426,7 +445,14 @@ async fn update_timing_knobs(
         min_dwell_slots,
         no_disarm_window_slots,
     );
-    let details = submit_feature_gate_instruction(config, client, instruction, fee_payer).await?;
+    let details = submit_feature_gate_instruction(
+        config,
+        client,
+        instruction,
+        FEATURE_GATE_TX_STATE_UNITS,
+        fee_payer,
+    )
+    .await?;
     print_write_result(
         "update-timing-knobs",
         json!({
@@ -450,7 +476,14 @@ async fn propose_admin(
 ) -> Result<(), CliError> {
     let new_admin_pubkey = validate_address_or_hex(new_admin)?;
     let instruction = encode_propose_admin_instruction(role_discriminant(role), &new_admin_pubkey);
-    let details = submit_feature_gate_instruction(config, client, instruction, fee_payer).await?;
+    let details = submit_feature_gate_instruction(
+        config,
+        client,
+        instruction,
+        FEATURE_GATE_TX_STATE_UNITS,
+        fee_payer,
+    )
+    .await?;
     print_write_result(
         "propose-admin",
         json!({
@@ -470,7 +503,14 @@ async fn accept_admin(
     json_format: bool,
 ) -> Result<(), CliError> {
     let instruction = encode_accept_admin_instruction(role_discriminant(role));
-    let details = submit_feature_gate_instruction(config, client, instruction, fee_payer).await?;
+    let details = submit_feature_gate_instruction(
+        config,
+        client,
+        instruction,
+        FEATURE_GATE_TX_STATE_UNITS,
+        fee_payer,
+    )
+    .await?;
     print_write_result(
         "accept-admin",
         json!({
@@ -485,6 +525,7 @@ async fn submit_feature_gate_instruction(
     config: &Config,
     client: &Client,
     instruction: Vec<u8>,
+    state_units: u16,
     fee_payer: Option<&str>,
 ) -> Result<TransactionDetails, CliError> {
     let fee_payer_keypair = resolve_fee_payer_keypair(config, fee_payer)?;
@@ -514,6 +555,7 @@ async fn submit_feature_gate_instruction(
         block_height.finalized_height,
         chain_info.chain_id,
         instruction,
+        state_units,
     )?;
 
     transaction
@@ -539,6 +581,26 @@ async fn submit_feature_gate_instruction(
     Ok(details)
 }
 
+// create-entry resizes the global account from `entry_count` to `entry_count + 1`
+// entries; it needs a state unit only when that crosses a 4096-byte unit of the
+// account footprint (tn_feature_gate_account_footprint plus 64 bytes of meta).
+fn create_gate_state_units(entry_count: usize) -> Result<u16, CliError> {
+    let units = |entries: usize| -> Result<u16, CliError> {
+        let data_size = entries
+            .checked_mul(FEATURE_GATE_ENTRY_SIZE)
+            .and_then(|size| size.checked_add(FEATURE_GATE_ACCOUNT_HEADER_SIZE))
+            .ok_or_else(|| {
+                CliError::Validation("global feature-gate account size overflow".to_string())
+            })?;
+        thru_base::txn_tools::account_state_units(data_size as u64)
+            .map_err(|err| CliError::Validation(err.to_string()))
+    };
+    let new_entry_count = entry_count.checked_add(1).ok_or_else(|| {
+        CliError::Validation("global feature-gate entry count overflow".to_string())
+    })?;
+    Ok(units(new_entry_count)? - units(entry_count)?)
+}
+
 // Account indices are encoded in the instruction data so the program does not
 // depend on sorted transaction account insertion order. The CLI's single-signer
 // flow uses the fee payer as the admin authority at account index 0.
@@ -548,6 +610,7 @@ fn build_feature_gate_transaction(
     start_slot: u64,
     chain_id: u16,
     instruction: Vec<u8>,
+    state_units: u16,
 ) -> Result<Transaction, CliError> {
     let program_pubkey = feature_gate_program_pubkey().to_bytes().map_err(|err| {
         CliError::Crypto(format!(
@@ -570,7 +633,7 @@ fn build_feature_gate_transaction(
             .with_chain_id(chain_id)
             .with_expiry_after(FEATURE_GATE_TX_EXPIRY_AFTER)
             .with_compute_units(FEATURE_GATE_TX_COMPUTE_UNITS)
-            .with_state_units(FEATURE_GATE_TX_STATE_UNITS)
+            .with_state_units(state_units)
             .with_memory_units(FEATURE_GATE_TX_MEMORY_UNITS)
             .add_rw_account(global_pubkey)
             .with_instructions(instruction),
@@ -1583,6 +1646,18 @@ tracking = "UNTO-1818"
     }
 
     #[test]
+    fn create_gate_requests_state_units_only_when_growth_crosses_a_unit() {
+        // Footprint = 64 B meta + 240 B header + 152 B per entry; 24 entries
+        // occupy 3952 B (one unit) and 25 entries 4104 B (two units).
+        assert_eq!(create_gate_state_units(0).unwrap(), 0);
+        assert_eq!(create_gate_state_units(7).unwrap(), 0);
+        assert_eq!(create_gate_state_units(24).unwrap(), 1);
+        assert_eq!(create_gate_state_units(25).unwrap(), 0);
+        assert_eq!(create_gate_state_units(51).unwrap(), 1);
+        assert!(create_gate_state_units(usize::MAX).is_err());
+    }
+
+    #[test]
     fn builds_feature_gate_transaction_with_expected_account_layout() {
         let keypair = crypto::keypair_from_hex(
             "0101010101010101010101010101010101010101010101010101010101010101",
@@ -1590,8 +1665,15 @@ tracking = "UNTO-1818"
         .expect("test keypair parses");
         let fee_payer = keypair.public_key;
         let instruction = encode_disarm_instruction(5);
-        let mut tx = build_feature_gate_transaction(fee_payer, 11, 22, 33, instruction.clone())
-            .expect("transaction builds");
+        let mut tx = build_feature_gate_transaction(
+            fee_payer,
+            11,
+            22,
+            33,
+            instruction.clone(),
+            FEATURE_GATE_TX_STATE_UNITS,
+        )
+        .expect("transaction builds");
 
         assert_eq!(tx.fee_payer, fee_payer);
         assert_eq!(
@@ -1602,6 +1684,7 @@ tracking = "UNTO-1818"
         assert_eq!(tx.nonce, 11);
         assert_eq!(tx.start_slot, 22);
         assert_eq!(tx.chain_id, 33);
+        assert_eq!(tx.req_state_units, 0);
         assert_eq!(tx.instructions.as_deref(), Some(instruction.as_slice()));
 
         let rw_accounts = tx.rw_accs.as_ref().expect("rw accounts are present");

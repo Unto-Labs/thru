@@ -277,7 +277,7 @@ async function main(): Promise<void> {
         });
 
         const creationTransaction = await runStep("Build account creation transaction", async () => {
-            const transaction = await sdk.accounts.create({ publicKey: demoKeyPair.publicKey });
+            const transaction = await sdk.accounts.create({ publicKey: demoKeyPair.publicKey, header: { stateUnits: 1 } });
             logTransactionSummary(transaction);
             return transaction;
         });

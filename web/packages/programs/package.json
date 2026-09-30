@@ -86,6 +86,16 @@
       "types": "./dist/perp/index.d.ts",
       "import": "./dist/perp/index.js",
       "require": "./dist/perp/index.cjs"
+    },
+    "./compression": {
+      "types": "./dist/compression/index.d.ts",
+      "import": "./dist/compression/index.js",
+      "require": "./dist/compression/index.cjs"
+    },
+    "./resources": {
+      "types": "./dist/resources.d.ts",
+      "import": "./dist/resources.js",
+      "require": "./dist/resources.cjs"
     }
   },
   "scripts": {

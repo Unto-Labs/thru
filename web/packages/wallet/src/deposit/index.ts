@@ -267,6 +267,7 @@ export function createDepositsApi(delegate: DepositsApiDelegate): DepositsApi {
 
 export type SignDepositTransactionPayload = {
   trailingInstructionData: string;
+  stateUnits?: number;
   walletAddress: string;
   readWriteAddresses: string[];
   readOnlyAddresses: string[];
@@ -298,6 +299,7 @@ export async function signDepositTransactionWithActiveSession(
     walletAddress: payload.walletAddress,
     programAddress: payload.programAddress,
     instructionData: payload.trailingInstructionData,
+    stateUnits: payload.stateUnits,
     readWriteAddresses: payload.readWriteAddresses,
     readOnlyAddresses: payload.readOnlyAddresses,
     review: payload.review,

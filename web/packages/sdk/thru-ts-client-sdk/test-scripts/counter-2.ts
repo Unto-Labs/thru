@@ -18,9 +18,9 @@ const NUM_FEEPAYERS = 30;
 // Generate 10 different feepayer accounts
 const feepayerAccounts: Array<{ address: string; publicKey: Uint8Array; privateKey: Uint8Array }> = [];
 
-const DEFAULT_COMPUTE_UNITS = 10_000;
-const DEFAULT_STATE_UNITS = 1;
-const DEFAULT_MEMORY_UNITS = 2;
+const COUNTER_COMPUTE_UNITS = 10_000;
+const COUNTER_STATE_UNITS = 1;
+const COUNTER_MEMORY_UNITS = 2;
 const DEFAULT_EXPIRY_AFTER = 100;
 
 async function sendAndTrackRawTransaction(
@@ -115,9 +115,9 @@ const incrementCounterAccountInstructionWithString = async (
         program: counterProgramAddress,
         header: {
             fee: 0n,
-            computeUnits: DEFAULT_COMPUTE_UNITS,
-            stateUnits: DEFAULT_STATE_UNITS,
-            memoryUnits: DEFAULT_MEMORY_UNITS,
+            computeUnits: COUNTER_COMPUTE_UNITS,
+            stateUnits: COUNTER_STATE_UNITS,
+            memoryUnits: COUNTER_MEMORY_UNITS,
             expiryAfter: DEFAULT_EXPIRY_AFTER,
         },
         accounts: {
@@ -187,9 +187,9 @@ const incrementCounterAccountInstructionWithFunction = async () => {
         program: counterProgramAddress,
         header: {
             fee: 0n,
-            computeUnits: DEFAULT_COMPUTE_UNITS,
-            stateUnits: DEFAULT_STATE_UNITS,
-            memoryUnits: DEFAULT_MEMORY_UNITS,
+            computeUnits: COUNTER_COMPUTE_UNITS,
+            stateUnits: COUNTER_STATE_UNITS,
+            memoryUnits: COUNTER_MEMORY_UNITS,
             expiryAfter: DEFAULT_EXPIRY_AFTER,
         },
         accounts: {
@@ -274,7 +274,7 @@ async function main() {
         } catch (error: any) {
             if (error?.code === 5 || error?.rawMessage?.includes("not found")) {
                 console.log(`Creating account for feepayer 1: ${createAccountKeypair.address}`);
-                const createTx = await sdk.accounts.create({ publicKey: feePayerPublicKey });
+                const createTx = await sdk.accounts.create({ publicKey: feePayerPublicKey, header: { stateUnits: 1 } });
                 await createTx.sign(feePayerPrivateKey);
                 await sdk.transactions.send(createTx.toWire());
                 await new Promise(resolve => setTimeout(resolve, 2000));
@@ -317,7 +317,7 @@ async function main() {
         } catch (error: any) {
             if (error?.code === 5 || error?.rawMessage?.includes("not found")) {
                 console.log(`Creating account for feepayer ${index + 1}: ${account.address}`);
-                const createTx = await sdk.accounts.create({ publicKey: account.publicKey });
+                const createTx = await sdk.accounts.create({ publicKey: account.publicKey, header: { stateUnits: 1 } });
                 await createTx.sign(account.privateKey);
                 await sdk.transactions.send(createTx.toWire());
             }
@@ -446,9 +446,9 @@ const createCounterAccountWithFunction = async (): Promise<string> => {
         program: counterProgramAddress,
         header: {
             fee: 0n,
-            computeUnits: DEFAULT_COMPUTE_UNITS,
-            stateUnits: DEFAULT_STATE_UNITS,
-            memoryUnits: DEFAULT_MEMORY_UNITS,
+            computeUnits: COUNTER_COMPUTE_UNITS,
+            stateUnits: COUNTER_STATE_UNITS,
+            memoryUnits: COUNTER_MEMORY_UNITS,
             expiryAfter: DEFAULT_EXPIRY_AFTER,
         },
         accounts: {
@@ -503,9 +503,9 @@ const createCounterAccountWithString = async (): Promise<string> => {
         program: counterProgramAddress,
         header: {
             fee: 0n,
-            computeUnits: DEFAULT_COMPUTE_UNITS,
-            stateUnits: DEFAULT_STATE_UNITS,
-            memoryUnits: DEFAULT_MEMORY_UNITS,
+            computeUnits: COUNTER_COMPUTE_UNITS,
+            stateUnits: COUNTER_STATE_UNITS,
+            memoryUnits: COUNTER_MEMORY_UNITS,
             expiryAfter: DEFAULT_EXPIRY_AFTER,
         },
         accounts: {

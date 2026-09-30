@@ -1,3 +1,5 @@
+import type { ThruTransactionIntent, ThruTransactionReviewPayload } from "@thru/sdk";
+export type { ThruTransactionIntent, ThruTransactionReviewSimulation, ThruTransactionReviewAbiReflection, ThruTransactionReviewPayload } from "@thru/sdk";
 import type { ResolvedWalletNetwork } from "../networks";
 export const AddressType = {
   THRU: "thru",
@@ -46,30 +48,6 @@ export interface ThruSigningContext {
   outputEncoding: typeof ThruTransactionEncoding.RAW_TRANSACTION_BASE64;
 }
 
-export interface ThruTransactionReviewSimulation {
-  before?: string;
-  after?: string;
-}
-
-export interface ThruTransactionReviewAbiReflection {
-  label?: string;
-  kind?: string | null;
-  typeName?: string;
-  value?: unknown;
-  rawHex?: string;
-  source?: string;
-  error?: string;
-}
-
-export interface ThruTransactionReviewPayload {
-  appName?: string;
-  programAddress?: string;
-  abiName?: string;
-  instruction?: string;
-  simulation?: ThruTransactionReviewSimulation;
-  abiReflection?: ThruTransactionReviewAbiReflection;
-}
-
 export type ThruSigningSessionTimestamp = Date | number | bigint | string;
 
 export interface ThruSigningSessionCreateOptions {
@@ -99,17 +77,6 @@ export interface ThruSigningSession extends ThruSigningSessionDescriptor {
   signTransaction(transaction: ThruTransactionIntent): Promise<string>;
   revoke(): Promise<void>;
   toJSON(): ThruSigningSessionDescriptor;
-}
-
-export interface ThruTransactionIntent {
-  walletAddress?: string;
-  programAddress: string;
-  instructionData: string;
-  readWriteAddresses?: string[];
-  readOnlyAddresses?: string[];
-  review?: ThruTransactionReviewPayload;
-  /** @internal Used by ThruSigningSession handles. */
-  signingSessionId?: string;
 }
 
 export interface ThruPasskeyChallengeIntent {

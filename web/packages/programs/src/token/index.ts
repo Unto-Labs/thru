@@ -34,13 +34,22 @@ export { formatRawAmount, bytesToHex, hexToBytes } from './format';
 // ABI builders/types
 export { Pubkey } from './abi/thru/common/primitives/types';
 export {
+  BurnEventData,
+  CloseAccountEventData,
+  FreezeAccountEventData,
+  InitializeAccountEventData,
+  InitializeMintEventData,
   InitializeAccountInstructionBuilder,
   InitializeMintInstructionBuilder,
+  MintToEventData,
   MintToInstructionBuilder,
+  ThawAccountEventData,
   TickerField,
   TickerFieldBuilder,
   TokenAccount,
+  TokenEvent,
   TokenMintAccount,
+  TransferEventData,
   TransferInstruction,
   TransferInstructionBuilder,
 } from './abi/thru/program/token/types';

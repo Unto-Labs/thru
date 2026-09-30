@@ -760,6 +760,33 @@ jobs:
             npm publish "$pkg_dir" --access public
           done
 
+      # A successful publish can mean npm accepted the package for processing,
+      # not that installs can resolve it yet. Optional dependencies silently
+      # disappear from installs if the wrapper becomes visible first.
+      - name: Wait for thru platform packages on npm
+        run: |
+          set -euo pipefail
+
+          for attempt in $(seq 1 20); do
+            pending=()
+            for pkg_dir in web/packages/cli/npm/*/; do
+              name=$(jq -r '.name' "${pkg_dir}package.json")
+              version=$(jq -r '.version' "${pkg_dir}package.json")
+              if ! npm view "${name}@${version}" version --prefer-online >/dev/null 2>&1; then
+                pending+=("${name}@${version}")
+              fi
+            done
+            if [ "${#pending[@]}" -eq 0 ]; then
+              break
+            fi
+            if [ "$attempt" -eq 20 ]; then
+              echo "Platform packages are not visible on the registry: ${pending[*]}" >&2
+              exit 1
+            fi
+            echo "Waiting for ${pending[*]} on the registry (attempt ${attempt}/20)"
+            sleep 30
+          done
+
       - name: Publish thru to npm
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

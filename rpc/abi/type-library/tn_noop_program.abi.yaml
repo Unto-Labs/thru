@@ -1,0 +1,18 @@
+abi:
+  package: thru.program.noop
+  name: Noop
+  abi-version: 1
+  package-version: 1.0.0
+  description: >-
+    Program that returns success without reading its instruction data or
+    accounts. Clients send an empty instruction; any bytes supplied are ignored.
+  options:
+    program-metadata:
+      root-types:
+        instruction-root: NoopInstruction
+types:
+  - name: NoopInstruction
+    kind:
+      struct:
+        packed: true
+        fields: []

@@ -32,6 +32,7 @@ export function createMockContext(overrides: Partial<ThruClientContext> = {}): T
       listTransactionsForAccount: vi.fn(),
       getEvent: vi.fn(),
       generateStateProof: vi.fn(),
+      batchGenerateStateProofs: vi.fn(),
       getVersion: vi.fn(),
       getChainInfo: vi.fn().mockResolvedValue({ chainId: 1 }),
       ...overrides.query,

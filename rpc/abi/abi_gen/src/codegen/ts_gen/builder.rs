@@ -2141,7 +2141,13 @@ fn emit_fam_tail_typeref_struct_builder(
                 writeln!(out, "        this.{} = bytes;", storage_ident).unwrap();
                 writeln!(out, "        this.{} = elementCount;", count_ident).unwrap();
                 if info.size_field_index < plan.first_dynamic_index {
-                    writeln!(out, "        this.set_{}(elementCount);", size_field_name).unwrap();
+                    if let ResolvedTypeKind::Primitive { prim_type } =
+                        &info.size_field.field_type.kind
+                    {
+                        let count_arg = primitive_setter_value_expr(prim_type, "elementCount");
+                        writeln!(out, "        this.set_{}({});", size_field_name, count_arg)
+                            .unwrap();
+                    }
                 }
                 writeln!(out, "        this.__tnInvalidate();").unwrap();
                 writeln!(out, "      }});").unwrap();

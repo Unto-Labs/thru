@@ -1,0 +1,263 @@
+abi:
+  package: thru.program.block_producer
+  name: Block Producer
+  abi-version: 1
+  package-version: 1.0.0
+  description: >-
+    Block-producer bond program. Producers bond WTHRU in a bond account that
+    is a PDA keyed by their block-signing identity. PayOutBlock is callable
+    only by the consensus validator program and moves the attestor payment
+    from the bond token account into the consensus escrow.
+  imports:
+    # thru_primitives
+    - type: onchain
+      address: ta1blxgaYR0dei5aldWJe1vbUtt-LkVEBOzNJtSRhHQcTG
+      target: abi
+      network: mainnet
+      revision: latest
+  options:
+    program-metadata:
+      root-types:
+        instruction-root: BlockProducerInstruction
+        account-root: BondAccount
+        errors: BlockProducerError
+types:
+  - name: CreateAccountArgs
+    kind:
+      struct:
+        packed: true
+        comment: >-
+          create_signer_eoa 0 requires signer_pubkey to be the fee payer and
+          eoa_proof_size 0. create_signer_eoa 1 creates the signer EOA at
+          signer_eoa_idx using signer_eoa_signature and eoa_proof.
+        fields:
+          - name: token_program_idx
+            field-type: { primitive: u16 }
+          - name: bond_account_idx
+            field-type: { primitive: u16 }
+          - name: bond_ta_idx
+            field-type: { primitive: u16 }
+          - name: mint_account_idx
+            field-type: { primitive: u16 }
+          - name: signer_eoa_idx
+            field-type: { primitive: u16 }
+          - name: create_signer_eoa
+            field-type: { primitive: u8 }
+          - name: reserved
+            field-type: { primitive: u8 }
+          - name: signer_pubkey
+            field-type:
+              type-ref:
+                name: Pubkey
+                package: "thru.common.primitives"
+          - name: bond_authority
+            field-type:
+              type-ref:
+                name: Pubkey
+                package: "thru.common.primitives"
+          - name: signer_eoa_signature
+            field-type:
+              type-ref:
+                name: Signature
+                package: "thru.common.primitives"
+          - name: bond_proof_size
+            field-type: { primitive: u64 }
+          - name: ta_proof_size
+            field-type: { primitive: u64 }
+          - name: eoa_proof_size
+            field-type: { primitive: u64 }
+          - name: bond_proof
+            field-type:
+              array:
+                size: { field-ref: { path: [bond_proof_size] } }
+                element-type: { primitive: u8 }
+          - name: ta_proof
+            field-type:
+              array:
+                size: { field-ref: { path: [ta_proof_size] } }
+                element-type: { primitive: u8 }
+          - name: eoa_proof
+            field-type:
+              array:
+                size: { field-ref: { path: [eoa_proof_size] } }
+                element-type: { primitive: u8 }
+  - name: SetBondAuthorityArgs
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: bond_account_idx
+            field-type: { primitive: u16 }
+          - name: new_bond_authority
+            field-type:
+              type-ref:
+                name: Pubkey
+                package: "thru.common.primitives"
+  - name: DepositArgs
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: token_program_idx
+            field-type: { primitive: u16 }
+          - name: bond_account_idx
+            field-type: { primitive: u16 }
+          - name: bond_ta_idx
+            field-type: { primitive: u16 }
+          - name: source_ta_idx
+            field-type: { primitive: u16 }
+          - name: amount
+            field-type: { primitive: u64 }
+  - name: WithdrawalArgs
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: token_program_idx
+            field-type: { primitive: u16 }
+          - name: bond_account_idx
+            field-type: { primitive: u16 }
+          - name: bond_ta_idx
+            field-type: { primitive: u16 }
+          - name: dest_ta_idx
+            field-type: { primitive: u16 }
+          - name: attestor_table_idx
+            field-type: { primitive: u16 }
+          - name: from_active
+            field-type: { primitive: u8 }
+          - name: amount
+            field-type: { primitive: u64 }
+  - name: UpdateBondArgs
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: bond_account_idx
+            field-type: { primitive: u16 }
+          - name: attestor_table_idx
+            field-type: { primitive: u16 }
+          - name: new_unlock_slot
+            field-type: { primitive: u64 }
+          - name: new_active
+            field-type: { primitive: u64 }
+  - name: DeleteAccountArgs
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: bond_account_idx
+            field-type: { primitive: u16 }
+          - name: dest_idx
+            field-type: { primitive: u16 }
+  - name: SweepArgs
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: token_program_idx
+            field-type: { primitive: u16 }
+          - name: bond_account_idx
+            field-type: { primitive: u16 }
+          - name: bond_ta_idx
+            field-type: { primitive: u16 }
+          - name: dest_ta_idx
+            field-type: { primitive: u16 }
+  - name: PayOutBlockArgs
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: token_program_idx
+            field-type: { primitive: u16 }
+          - name: bond_account_idx
+            field-type: { primitive: u16 }
+          - name: bond_ta_idx
+            field-type: { primitive: u16 }
+          - name: escrow_ta_idx
+            field-type: { primitive: u16 }
+          - name: amount
+            field-type: { primitive: u64 }
+  - name: BlockProducerInstruction
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: tag
+            field-type: { primitive: u32 }
+          - name: payload
+            field-type:
+              enum:
+                packed: true
+                tag-ref: { field-ref: { path: [tag] } }
+                variants:
+                  - name: create_account
+                    tag-value: 0
+                    variant-type: { type-ref: { name: CreateAccountArgs } }
+                  - name: set_bond_authority
+                    tag-value: 1
+                    variant-type: { type-ref: { name: SetBondAuthorityArgs } }
+                  - name: deposit
+                    tag-value: 2
+                    variant-type: { type-ref: { name: DepositArgs } }
+                  - name: withdrawal
+                    tag-value: 3
+                    variant-type: { type-ref: { name: WithdrawalArgs } }
+                  - name: update_bond
+                    tag-value: 4
+                    variant-type: { type-ref: { name: UpdateBondArgs } }
+                  - name: delete_account
+                    tag-value: 5
+                    variant-type: { type-ref: { name: DeleteAccountArgs } }
+                  - name: sweep
+                    tag-value: 6
+                    variant-type: { type-ref: { name: SweepArgs } }
+                  - name: pay_out_block
+                    tag-value: 7
+                    variant-type: { type-ref: { name: PayOutBlockArgs } }
+  - name: BondAccount
+    kind:
+      struct:
+        packed: true
+        comment: magic is 0xF17EDA2CB04D0001 while the bond is live and 0 after deletion.
+        fields:
+          - name: magic
+            field-type: { primitive: u64 }
+          - name: signer_pubkey
+            field-type:
+              type-ref:
+                name: Pubkey
+                package: "thru.common.primitives"
+          - name: bond_authority
+            field-type:
+              type-ref:
+                name: Pubkey
+                package: "thru.common.primitives"
+          - name: wthru_token_account
+            field-type:
+              type-ref:
+                name: Pubkey
+                package: "thru.common.primitives"
+          - name: active_bond
+            field-type: { primitive: u64 }
+          - name: staged_amount
+            field-type: { primitive: u64 }
+          - name: unlock_slot
+            field-type: { primitive: u64 }
+          - name: last_change_slot
+            field-type: { primitive: u64 }
+  - name: BlockProducerError
+    kind:
+      struct:
+        packed: true
+        comment: >-
+          1 invalid instruction data size, 2 invalid discriminant, 3 invalid
+          account index, 4 unauthorized, 5 invalid bond account, 6 bond token
+          account mismatch, 7 change window, 8 unlock slot, 9 insufficient
+          staged, 10 insufficient active, 11 active bond nonzero, 12 nonzero
+          funds, 13 token program call failed, 14 account create failed, 15
+          not consensus caller, 16 bond address mismatch, 17 invalid amount,
+          18 overflow, 19 nothing to sweep, 20 account resize failed, 21 not
+          implemented, 22 wrong mint, 23 signer address mismatch.
+        fields:
+          - name: code
+            field-type: { primitive: u64 }

@@ -1100,16 +1100,16 @@ pub enum TxnCommands {
         #[arg(long, default_value = "1")]
         fee: u64,
 
-        /// Compute units (optional, defaults to 1000000000)
-        #[arg(long, default_value = "1000000000")]
+        /// Compute units (defaults to 0)
+        #[arg(long, default_value = "0")]
         compute_units: u32,
 
-        /// State units (defaults to 1; increase explicitly for account growth)
-        #[arg(long, default_value = "1")]
+        /// State units (defaults to 0)
+        #[arg(long, default_value = "0")]
         state_units: u16,
 
-        /// Memory units (optional, defaults to 10000)
-        #[arg(long, default_value = "10000")]
+        /// Memory units (defaults to 0)
+        #[arg(long, default_value = "0")]
         memory_units: u16,
 
         /// Expiry after (optional, defaults to 100)
@@ -1141,16 +1141,16 @@ pub enum TxnCommands {
         #[arg(long, default_value = "1")]
         fee: u64,
 
-        /// Compute units (optional, defaults to 1000000000)
-        #[arg(long, default_value = "300000000")]
+        /// Compute units (defaults to 0)
+        #[arg(long, default_value = "0")]
         compute_units: u32,
 
-        /// State units (defaults to 1; increase explicitly for account growth)
-        #[arg(long, default_value = "1")]
+        /// State units (defaults to 0)
+        #[arg(long, default_value = "0")]
         state_units: u16,
 
-        /// Memory units (optional, defaults to 10000)
-        #[arg(long, default_value = "10000")]
+        /// Memory units (defaults to 0)
+        #[arg(long, default_value = "0")]
         memory_units: u16,
 
         /// Expiry after (optional, defaults to 100)
@@ -2684,6 +2684,49 @@ pub enum DebugCommands {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn transaction_resource_defaults_are_zero_and_overridable() {
+        for command in ["sign", "execute"] {
+            for explicit in [false, true] {
+                let mut args = vec!["thru", "txn", command, "program", "00"];
+                if explicit {
+                    args.extend([
+                        "--compute-units",
+                        "123",
+                        "--state-units",
+                        "4",
+                        "--memory-units",
+                        "5",
+                    ]);
+                }
+                let cli = Cli::try_parse_from(args).unwrap();
+                match cli.command {
+                    Commands::Txn {
+                        subcommand:
+                            TxnCommands::Sign {
+                                compute_units,
+                                state_units,
+                                memory_units,
+                                ..
+                            }
+                            | TxnCommands::Execute {
+                                compute_units,
+                                state_units,
+                                memory_units,
+                                ..
+                            },
+                    } => {
+                        assert_eq!(
+                            (compute_units, state_units, memory_units),
+                            if explicit { (123, 4, 5) } else { (0, 0, 0) }
+                        );
+                    }
+                    _ => panic!("unexpected command"),
+                }
+            }
+        }
+    }
 
     #[test]
     fn parses_uploader_upload_skip_elf_check_flag() {

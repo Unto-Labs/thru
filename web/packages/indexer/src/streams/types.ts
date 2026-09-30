@@ -5,7 +5,7 @@
 import type { Event, Filter } from "@thru/replay";
 import type { PgTableWithColumns } from "drizzle-orm/pg-core";
 import type { SchemaDefinition, InferRow, Columns } from "../schema/types";
-import type { TableIndexDefinition } from "../schema/table";
+import type { TableExtraConfig, TableIndexDefinition } from "../schema/table";
 import type { ApiConfig, StreamBatch, HookContext } from "../types";
 
 /**
@@ -39,6 +39,9 @@ export interface EventStreamDefinition<TSchema extends SchemaDefinition> {
 
   /** Composite database indexes for multi-column lookup paths. */
   indexes?: readonly TableIndexDefinition<TSchema>[];
+
+  /** Checks and expression, descending or partial indexes; see TableExtraConfig. */
+  extraConfig?: TableExtraConfig<TSchema>;
 
   /**
    * CEL filter for @thru/replay.

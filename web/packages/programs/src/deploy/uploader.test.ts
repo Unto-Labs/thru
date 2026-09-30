@@ -225,6 +225,9 @@ describe("resumable uploader", () => {
       transactionSignature: "sig-5",
     });
     expect(accounts.size).toBe(0);
+    // Only allocation grows state; writes, finalization and cleanup work at cap.
+    expect(mocks.submitTransaction.mock.calls.map((call) => call[4].stateUnits))
+      .toEqual([2, 0, 0, 0, 0]);
   });
 
   it("resumes matching chunks and writes only missing data", async () => {

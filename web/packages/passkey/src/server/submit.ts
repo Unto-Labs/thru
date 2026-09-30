@@ -1,3 +1,4 @@
+import { programResources } from '@thru/programs/resources';
 import {
   PASSKEY_MANAGER_PROGRAM_ADDRESS,
   decodeAddress,
@@ -80,6 +81,7 @@ export async function buildPasskeyTransaction(opts: {
     header: {
       fee: 0n,
       ...opts.header,
+      ...programResources(opts.header),
     },
   });
 

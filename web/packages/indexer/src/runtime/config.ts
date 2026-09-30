@@ -18,10 +18,10 @@ export interface IndexerConfig {
   clientFactory: ChainClientFactory;
 
   /** Event streams to run */
-  eventStreams?: EventStream[];
+  eventStreams?: EventStream<any>[];
 
   /** Account streams to run */
-  accountStreams?: AccountStream[];
+  accountStreams?: AccountStream<any>[];
 
   /** Default start slot if no checkpoint exists (default: 0n) */
   defaultStartSlot?: bigint;

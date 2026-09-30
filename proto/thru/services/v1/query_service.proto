@@ -1255,9 +1255,63 @@ message StateProofResult {
   optional string error_message = 3 [(google.api.field_behavior) = OPTIONAL];
 }
 
+// GetCompressionConfigRequest requests the current durable compression inputs.
+message GetCompressionConfigRequest {}
+
+// CompressionConfig contains inputs from one durable finalized slot.
+message CompressionConfig {
+  // Finalized slot shared by the account metadata, activity, and policy inputs.
+  uint64 slot = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
+  // Settled net-growth counter in state units, not wall-clock time.
+  uint64 state_clock = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
+  // Active state-unit load used by the compression eligibility policy.
+  uint64 active_state_units = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
+  // Maximum state units a block may consume.
+  uint64 max_state_units_per_block = 4 [(google.api.field_behavior) = OUTPUT_ONLY];
+  // Maximum active state units configured for the chain.
+  uint64 max_active_state_units = 5 [(google.api.field_behavior) = OUTPUT_ONLY];
+  // Active-load baseline, in state units, below which compression is disabled.
+  uint64 compress_baseline_units = 6 [(google.api.field_behavior) = OUTPUT_ONLY];
+  // Additional load, in state units, for each halving of the inactivity window.
+  uint64 compress_halving_step_units = 7 [(google.api.field_behavior) = OUTPUT_ONLY];
+}
+
+// CanCompressRequest identifies the active account to evaluate.
+message CanCompressRequest {
+  // Address of the account whose activity and metadata are checked.
+  thru.common.v1.Pubkey address = 1 [(google.api.field_behavior) = REQUIRED];
+}
+
+// CanCompressResponse returns eligibility and its consistent durable inputs.
+message CanCompressResponse {
+  // Non-owner inactivity-policy eligibility, also respecting UNCOMPRESSABLE.
+  // This is a prediction at config.slot, not transaction admission: proofs,
+  // startup warmup, cooldown, write locks and call-stack checks still apply.
+  bool can_compress = 1 [(google.api.field_behavior) = OUTPUT_ONLY];
+  // Account's last activity stamp in state-clock units; zero if absent.
+  uint64 last_used = 2 [(google.api.field_behavior) = OUTPUT_ONLY];
+  // Policy inputs from the same finalized slot as the account's activity.
+  CompressionConfig config = 3 [(google.api.field_behavior) = OUTPUT_ONLY];
+}
+
 // QueryService defines unary RPCs for accessing blockchain data.
 service QueryService {
   option (google.api.default_host) = "api.thru.network";
+
+  // Returns typed chain parameters and the state clock in one durable view.
+  rpc GetCompressionConfig(GetCompressionConfigRequest) returns (CompressionConfig) {
+    option (google.api.http) = {
+      get: "/v1/compression-config"
+    };
+  }
+
+  // Reads account metadata, activity and config from the same durable snapshot.
+  rpc CanCompress(CanCompressRequest) returns (CanCompressResponse) {
+    option (google.api.http) = {
+      get: "/v1/accounts/{address.value}:canCompress"
+    };
+    option (google.api.method_signature) = "address";
+  }
 
   // Get block heights
   rpc GetHeight(GetHeightRequest) returns (GetHeightResponse) {

@@ -1,0 +1,316 @@
+abi:
+  package: thru.program.consensus_validator
+  name: Consensus Validator
+  abi-version: 1
+  package-version: 1.0.0
+  description: >-
+    Consensus validator program. It owns the attestor table, stakes attestor
+    tokens into the converted vault, verifies BLS-aggregated block
+    certificates, and pays attestor rewards from the WTHRU unclaimed vault.
+  imports:
+    # thru_primitives
+    - type: onchain
+      address: ta1blxgaYR0dei5aldWJe1vbUtt-LkVEBOzNJtSRhHQcTG
+      target: abi
+      network: mainnet
+      revision: latest
+  options:
+    program-metadata:
+      root-types:
+        instruction-root: ConsensusValidatorInstruction
+        errors: ConsensusValidatorError
+types:
+  - name: BlsPubkey
+    kind:
+      struct:
+        packed: true
+        comment: In-memory blst_p1_affine point (x and y, 48 bytes each).
+        fields:
+          - name: bytes
+            field-type:
+              array:
+                size: { literal: { u64: 96 } }
+                element-type: { primitive: u8 }
+  - name: BlsSignature
+    kind:
+      struct:
+        packed: true
+        comment: In-memory blst_p2_affine point (x and y, 96 bytes each).
+        fields:
+          - name: bytes
+            field-type:
+              array:
+                size: { literal: { u64: 192 } }
+                element-type: { primitive: u8 }
+  - name: InitArgs
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: token_program_idx
+            field-type: { primitive: u16 }
+          - name: attestor_mint_idx
+            field-type: { primitive: u16 }
+          - name: converted_vault_idx
+            field-type: { primitive: u16 }
+          - name: unclaimed_vault_idx
+            field-type: { primitive: u16 }
+          - name: attestor_table_idx
+            field-type: { primitive: u64 }
+          - name: admin_idx
+            field-type: { primitive: u16 }
+          - name: wthru_mint_idx
+            field-type: { primitive: u16 }
+          - name: initial_entry_count
+            field-type: { primitive: u64 }
+          - name: max_validators
+            field-type: { primitive: u64 }
+          - name: delta1
+            field-type: { primitive: u64 }
+          - name: delta2
+            field-type: { primitive: u64 }
+          - name: converted_vault_proof_size
+            field-type: { primitive: u64 }
+          - name: unclaimed_vault_proof_size
+            field-type: { primitive: u64 }
+          - name: table_proof_size
+            field-type: { primitive: u64 }
+          - name: converted_vault_proof
+            field-type:
+              array:
+                size: { field-ref: { path: [converted_vault_proof_size] } }
+                element-type: { primitive: u8 }
+          - name: unclaimed_vault_proof
+            field-type:
+              array:
+                size: { field-ref: { path: [unclaimed_vault_proof_size] } }
+                element-type: { primitive: u8 }
+          - name: table_proof
+            field-type:
+              array:
+                size: { field-ref: { path: [table_proof_size] } }
+                element-type: { primitive: u8 }
+  - name: ActivateArgs
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: attestor_table_idx
+            field-type: { primitive: u64 }
+          - name: token_program_idx
+            field-type: { primitive: u16 }
+          - name: source_token_account_idx
+            field-type: { primitive: u16 }
+          - name: converted_vault_idx
+            field-type: { primitive: u16 }
+          - name: identity_idx
+            field-type: { primitive: u16 }
+          - name: bls_pk
+            field-type: { type-ref: { name: BlsPubkey } }
+          - name: claim_authority
+            field-type:
+              type-ref:
+                name: Pubkey
+                package: "thru.common.primitives"
+          - name: token_amount
+            field-type: { primitive: u64 }
+  - name: DeactivateArgs
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: attestor_table_idx
+            field-type: { primitive: u64 }
+          - name: token_program_idx
+            field-type: { primitive: u16 }
+          - name: unclaimed_vault_idx
+            field-type: { primitive: u16 }
+          - name: dest_token_account_idx
+            field-type: { primitive: u16 }
+          - name: identity_idx
+            field-type: { primitive: u16 }
+  - name: ConvertTokensArgs
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: attestor_table_idx
+            field-type: { primitive: u64 }
+          - name: token_program_idx
+            field-type: { primitive: u16 }
+          - name: source_token_account_idx
+            field-type: { primitive: u16 }
+          - name: converted_vault_idx
+            field-type: { primitive: u16 }
+          - name: identity_idx
+            field-type: { primitive: u16 }
+          - name: token_amount
+            field-type: { primitive: u64 }
+  - name: ClaimArgs
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: attestor_table_idx
+            field-type: { primitive: u64 }
+          - name: token_program_idx
+            field-type: { primitive: u16 }
+          - name: unclaimed_vault_idx
+            field-type: { primitive: u16 }
+          - name: dest_token_account_idx
+            field-type: { primitive: u16 }
+          - name: claim_authority_idx
+            field-type: { primitive: u16 }
+          - name: subject_attestor
+            field-type:
+              type-ref:
+                name: Pubkey
+                package: "thru.common.primitives"
+  - name: SetClaimAuthorityArgs
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: attestor_table_idx
+            field-type: { primitive: u64 }
+          - name: current_claim_auth_idx
+            field-type: { primitive: u16 }
+          - name: subject_attestor
+            field-type:
+              type-ref:
+                name: Pubkey
+                package: "thru.common.primitives"
+          - name: new_claim_authority
+            field-type:
+              type-ref:
+                name: Pubkey
+                package: "thru.common.primitives"
+  - name: BlockCommitment
+    kind:
+      struct:
+        packed: true
+        comment: >-
+          The certified block hash is blake3("tn-block-commitment" || commitment).
+          header_body and footer_body are the verbatim serialized block bodies.
+        fields:
+          - name: header_body
+            field-type:
+              array:
+                size: { literal: { u64: 104 } }
+                element-type: { primitive: u8 }
+          - name: txn_data_sz
+            field-type: { primitive: u64 }
+          - name: txn_data_hash
+            field-type:
+              type-ref:
+                name: Hash
+                package: "thru.common.primitives"
+          - name: footer_body
+            field-type:
+              array:
+                size: { literal: { u64: 8 } }
+                element-type: { primitive: u8 }
+  - name: CertificatePayload
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: round
+            field-type: { primitive: u32 }
+          - name: vote
+            field-type: { primitive: u8 }
+          - name: padding
+            field-type:
+              array:
+                size: { literal: { u64: 3 } }
+                element-type: { primitive: u8 }
+          - name: block_hash
+            field-type:
+              type-ref:
+                name: Hash
+                package: "thru.common.primitives"
+  - name: Certificate
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: payload
+            field-type: { type-ref: { name: CertificatePayload } }
+          - name: bet_time
+            field-type: { primitive: u64 }
+          - name: weight_slot
+            field-type: { primitive: u64 }
+          - name: aggregate_signature
+            field-type: { type-ref: { name: BlsSignature } }
+          - name: aggregate_pubkey
+            field-type: { type-ref: { name: BlsPubkey } }
+          - name: count
+            field-type: { primitive: u32 }
+  - name: PostCertificateArgs
+    kind:
+      struct:
+        packed: true
+        comment: >-
+          The instruction is followed by the certificate signer bitset,
+          (max_validators + 63) / 64 little-endian u64 words, where
+          max_validators is read from the attestor table rather than from
+          instruction data. The bitset is therefore not described here.
+        fields:
+          - name: attestor_table_idx
+            field-type: { primitive: u64 }
+          - name: bond_account_idx
+            field-type: { primitive: u16 }
+          - name: bond_ta_idx
+            field-type: { primitive: u16 }
+          - name: escrow_idx
+            field-type: { primitive: u16 }
+          - name: bp_program_idx
+            field-type: { primitive: u16 }
+          - name: token_program_idx
+            field-type: { primitive: u16 }
+          - name: block_commitment
+            field-type: { type-ref: { name: BlockCommitment } }
+          - name: certificate
+            field-type: { type-ref: { name: Certificate } }
+  - name: ConsensusValidatorInstruction
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: tag
+            field-type: { primitive: u32 }
+          - name: payload
+            field-type:
+              enum:
+                packed: true
+                tag-ref: { field-ref: { path: [tag] } }
+                variants:
+                  - name: init
+                    tag-value: 0
+                    variant-type: { type-ref: { name: InitArgs } }
+                  - name: activate
+                    tag-value: 1
+                    variant-type: { type-ref: { name: ActivateArgs } }
+                  - name: deactivate
+                    tag-value: 2
+                    variant-type: { type-ref: { name: DeactivateArgs } }
+                  - name: convert_tokens
+                    tag-value: 3
+                    variant-type: { type-ref: { name: ConvertTokensArgs } }
+                  - name: claim
+                    tag-value: 4
+                    variant-type: { type-ref: { name: ClaimArgs } }
+                  - name: set_claim_authority
+                    tag-value: 5
+                    variant-type: { type-ref: { name: SetClaimAuthorityArgs } }
+                  - name: post_certificate
+                    tag-value: 6
+                    variant-type: { type-ref: { name: PostCertificateArgs } }
+  - name: ConsensusValidatorError
+    kind:
+      struct:
+        packed: true
+        comment: Error codes are the TN_CONSENSUS_VALIDATOR_ERR_* values (0x01-0x4A).
+        fields:
+          - name: code
+            field-type: { primitive: u64 }

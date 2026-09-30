@@ -1,0 +1,33 @@
+abi:
+  package: compliance.hybrid_u64_length
+  name: HybridU64Length
+  description: A u64-sized byte array followed by a dynamic type reference.
+  abi-version: 1
+  package-version: 1.0.0
+types:
+  - name: Tail
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: size
+            field-type: { primitive: u8 }
+          - name: bytes
+            field-type:
+              array:
+                size: { field-ref: { path: [size] } }
+                element-type: { primitive: u8 }
+  - name: Image
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: size
+            field-type: { primitive: u64 }
+          - name: bytes
+            field-type:
+              array:
+                size: { field-ref: { path: [size] } }
+                element-type: { primitive: u8 }
+          - name: tail
+            field-type: { type-ref: { name: Tail } }

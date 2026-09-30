@@ -107,7 +107,7 @@ export async function runAccountStreamProcessor(
     startSlot: minUpdatedSlot,
     checkpointSlot: checkpoint?.slot ?? null,
   });
-  if (minUpdatedSlot) {
+  if (minUpdatedSlot !== undefined) {
     log("info", `Resuming from checkpoint: slot ${minUpdatedSlot}`);
   }
 
@@ -118,6 +118,21 @@ export async function runAccountStreamProcessor(
 
   // Track highest slot seen for checkpoint persistence
   let lastProcessedSlot = minUpdatedSlot ?? 0n;
+  let handledAnyAccount = false;
+  // Backfill visits accounts in address order, not slot order, while live
+  // updates interleave with it. A checkpoint written before it drains could
+  // sit above accounts it has not reached yet, and a restart resuming from
+  // that slot would never load them. Nothing is checkpointed until it drains.
+  let backfillDrained = false;
+  // Write started when the backfill drains; later writes wait for it so a
+  // slower backfill write can never land after (and regress) a newer one.
+  let backfillCheckpoint: Promise<void> | null = null;
+  const settleBackfillCheckpoint = async () => {
+    if (!backfillCheckpoint) return;
+    const pending = backfillCheckpoint;
+    backfillCheckpoint = null;
+    await pending;
+  };
 
   try {
     // Use createAccountsByOwnerReplay for hybrid backfill + streaming
@@ -134,6 +149,25 @@ export async function runAccountStreamProcessor(
           "info",
           `Backfill complete. Highest slot: ${highestSlot}, accounts processed: ${stats.accountsProcessed}`
         );
+        backfillDrained = true;
+        // Every account the backfill handled is committed by now. Persist that
+        // progress instead of waiting for the next live update: a quiet stream
+        // may not see one for a long time, and readers take the checkpoint as
+        // the sign that the backfill finished. Like every other checkpoint it
+        // is the last handled account slot, never the high-water mark.
+        if (handledAnyAccount) {
+          const slot = lastProcessedSlot;
+          backfillCheckpoint = updateCheckpoint(db, checkpointName, slot, null).then(
+            () => {
+              observer?.onCheckpoint?.({ slot });
+              log("info", `Backfill checkpoint saved: slot ${slot}`);
+            },
+            (err) => {
+              /* Not fatal: the next block boundary writes it again. */
+              log("warn", `Failed to save backfill checkpoint at slot ${slot}: ${err}`);
+            }
+          );
+        }
       },
     });
 
@@ -171,7 +205,8 @@ export async function runAccountStreamProcessor(
           try {
             await db.delete(stream.table).where(eq(table[idField], idValue));
             stats.accountsDeleted++;
-            observer?.onCheckpoint?.({ slot: account.slot });
+            handledAnyAccount = true;
+            if (backfillDrained) observer?.onCheckpoint?.({ slot: account.slot });
             log("info", `Deleted row for account ${account.addressHex}`);
             if (account.slot > lastProcessedSlot) {
               lastProcessedSlot = account.slot;
@@ -245,8 +280,11 @@ export async function runAccountStreamProcessor(
         }
 
         // Track highest slot for checkpoint
-        if (upserted && account.slot > lastProcessedSlot) {
-          lastProcessedSlot = account.slot;
+        if (upserted) {
+          handledAnyAccount = true;
+          if (account.slot > lastProcessedSlot) {
+            lastProcessedSlot = account.slot;
+          }
         }
         // Progress logging
         if (stats.accountsProcessed % 100 === 0) {
@@ -259,7 +297,10 @@ export async function runAccountStreamProcessor(
         // Persist at block boundaries, but do not advance the checkpoint to
         // the block slot unless an account update was actually handled.
         const slot = event.block.slot;
-        if (lastProcessedSlot > 0n) {
+        if (!backfillDrained) {
+          log("debug", `Block finished: slot ${slot}, backfill still running; no checkpoint`);
+        } else if (handledAnyAccount) {
+          await settleBackfillCheckpoint();
           await updateCheckpoint(db, checkpointName, lastProcessedSlot, null);
           observer?.onCheckpoint?.({ slot: lastProcessedSlot });
           log(
@@ -276,12 +317,14 @@ export async function runAccountStreamProcessor(
     }
 
     // Final checkpoint save
-    if (lastProcessedSlot > 0n) {
+    await settleBackfillCheckpoint();
+    if (backfillDrained && handledAnyAccount) {
       await updateCheckpoint(db, checkpointName, lastProcessedSlot, null);
       observer?.onCheckpoint?.({ slot: lastProcessedSlot });
       log("info", `Final checkpoint saved: slot ${lastProcessedSlot}`);
     }
   } catch (err) {
+    await settleBackfillCheckpoint();
     if (abortSignal?.aborted) {
       log("info", "Stream aborted");
     } else {

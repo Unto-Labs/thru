@@ -63,6 +63,7 @@ describe("NativeThruChain signing-session fallback", () => {
       retainedSession!.signTransaction({
         programAddress: "thru_program",
         instructionData: "AQID",
+        stateUnits: 2,
       }),
     ).resolves.toBe("passkey_signed_transaction");
 
@@ -74,6 +75,7 @@ describe("NativeThruChain signing-session fallback", () => {
         payload: expect.objectContaining({
           walletAddress: "thru_test_address",
           signingSessionId: "session_expiring",
+          stateUnits: 2,
         }),
       }),
     );

@@ -1,3 +1,4 @@
+import { programResources } from '@thru/programs/resources';
 import { decodeAddress, encodeAddress } from '@thru/sdk/helpers';
 import { StateProofType } from '@thru/sdk/proto';
 import { AccountView } from '@thru/sdk';
@@ -264,6 +265,7 @@ async function buildAndSignThruToPolygonDeposit(
     },
     program: thru.bridgeProgramAddress,
     header: {
+      ...programResources({ stateUnits: 1 }),
       chainId: THRU_POLYGON_CHAIN_IDS.thru,
     },
     accounts: {

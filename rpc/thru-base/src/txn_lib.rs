@@ -259,7 +259,7 @@ impl Transaction {
             instructions: None,
             fee,
             req_compute_units: 0,
-            req_state_units: 1,
+            req_state_units: 0,
             req_memory_units: 0,
             expiry_after: 0,
             start_slot: 0,
@@ -319,11 +319,20 @@ impl Transaction {
         self
     }
 
-    /// Builder method: set fee payer state proof
+    /// Builder method: set fee payer state proof.
+    ///
+    /// A fee payer proof activates the fee payer, and the runtime rejects
+    /// such a transaction before execution when it requests no state units
+    /// (TN_RUNTIME_TXN_ERR_FEE_PAYER_ACTIVATION_REQUIRES_STATE_UNIT), so the
+    /// request is raised to at least one. A later `with_state_units` call
+    /// still sets the request explicitly. This minimum does not include any
+    /// additional accounts created or grown by the program; callers must
+    /// budget for the transaction's total net growth.
     pub fn with_fee_payer_state_proof(mut self, state_proof: &StateProof) -> Self {
         self.fee_payer_state_proof = Some(state_proof.clone());
         // Set the flag bit to indicate presence of state proof
         self.flags |= 1 << TN_TXN_FLAG_HAS_FEE_PAYER_PROOF_BIT;
+        self.req_state_units = self.req_state_units.max(1);
         self
     }
 
@@ -1107,6 +1116,17 @@ mod tests {
     use super::*;
     use ed25519_dalek::SigningKey;
 
+    #[test]
+    fn transaction_resource_defaults_are_zero_and_overridable() {
+        let tx = Transaction::new([1; 32], [2; 32], 1, 0);
+        assert_eq!(&tx.to_wire()[8..16], &[0; 8]);
+        let tx = tx
+            .with_compute_units(123)
+            .with_state_units(4)
+            .with_memory_units(5);
+        assert_eq!(&tx.to_wire()[8..16], &[123, 0, 0, 0, 4, 0, 5, 0]);
+    }
+
     fn make_valid_txn_bytes_with_flags(flags: u8) -> Vec<u8> {
         let signing_key = SigningKey::from(&[1u8; 32]);
         let verifying_key = signing_key.verifying_key();
@@ -1130,6 +1150,34 @@ mod tests {
 
         // The calculated size should match the actual bytes length
         assert_eq!(calculated_size, bytes.len());
+    }
+
+    #[test]
+    fn test_state_units_default_and_fee_payer_proof_minimum() {
+        use crate::tn_state_proof::StateProof;
+
+        let state_proof = StateProof::creation(100, [0u8; 32], [7u8; 32], [8u8; 32], vec![]);
+
+        // Only transactions that create or grow state need state units.
+        let tx = Transaction::new([1u8; 32], [2u8; 32], 100, 42);
+        assert_eq!(tx.req_state_units, 0);
+
+        // A fee payer proof activates the fee payer, which needs one unit.
+        let tx = Transaction::new([1u8; 32], [2u8; 32], 100, 42)
+            .with_fee_payer_state_proof(&state_proof);
+        assert_eq!(tx.req_state_units, 1);
+
+        // A larger request is kept.
+        let tx = Transaction::new([1u8; 32], [2u8; 32], 100, 42)
+            .with_state_units(3)
+            .with_fee_payer_state_proof(&state_proof);
+        assert_eq!(tx.req_state_units, 3);
+
+        // An explicit request after the proof still wins.
+        let tx = Transaction::new([1u8; 32], [2u8; 32], 100, 42)
+            .with_fee_payer_state_proof(&state_proof)
+            .with_state_units(0);
+        assert_eq!(tx.req_state_units, 0);
     }
 
     #[test]

@@ -94,6 +94,9 @@ describe('passkey submit', () => {
       header: {
         fee: 0n,
         nonce: 42n,
+        computeUnits: 300_000_000,
+        stateUnits: 0,
+        memoryUnits: 10_000,
       },
       instructionData: new Uint8Array([1, 2]),
     }));

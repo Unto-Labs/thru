@@ -63,6 +63,7 @@ This guide covers the structure of the TS emitter (`rpc/abi/abi_gen/src/codegen/
 - Before emitting builder code for a new shape, ensure `supports_*` helpers in `builder.rs` cover it. They perform structural checks (single trailing FAM, primitive-only prefixes, etc.).
 - Builders typically allocate via `Type.footprint(params)` and then stream writes through `DataView` helpers.
 - Primitive builder setters use `bigint` for `u64`/`i64` fields, matching generated readers and view setters so 64-bit sentinels cannot be truncated through JavaScript `number`.
+- FAM writers convert computed element counts through `primitive_setter_value_expr`, including hybrid layouts with a dynamic type reference after the array. This keeps inferred `u64`/`i64` length fields compatible with their setters.
 - Always call `Type.validate(buffer, params)` before returning from `finish()` to guarantee runtime parity with readers.
 
 ## Field Context & Cross-Package Type Resolution

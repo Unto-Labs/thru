@@ -367,6 +367,7 @@ describe("wallet deposit account helpers", () => {
     };
     const payload = {
       trailingInstructionData: "AQID",
+      stateUnits: 2,
       walletAddress: "ta_wallet",
       readWriteAddresses: ["ta_token_account"],
       readOnlyAddresses: ["ta_token_program", "ta_mint"],
@@ -384,6 +385,7 @@ describe("wallet deposit account helpers", () => {
       walletAddress: payload.walletAddress,
       programAddress: payload.programAddress,
       instructionData: payload.trailingInstructionData,
+      stateUnits: payload.stateUnits,
       readWriteAddresses: payload.readWriteAddresses,
       readOnlyAddresses: payload.readOnlyAddresses,
       review: payload.review,

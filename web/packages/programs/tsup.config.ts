@@ -2,6 +2,8 @@ import { defineConfig } from "tsup";
 
 export default defineConfig({
   entry: {
+    "compression/index": "src/compression/index.ts",
+    resources: "src/resources.ts",
     "bootstrap-addresses/index": "src/bootstrap-addresses/index.ts",
     "token/index": "src/token/index.ts",
     "passkey-manager/index": "src/passkey-manager/index.ts",

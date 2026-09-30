@@ -45,7 +45,8 @@
   },
   "dependencies": {
     "@thru/sdk": "workspace:*",
-    "ethers": "^6.16.0"
+    "ethers": "^6.16.0",
+    "@thru/programs": "workspace:*"
   },
   "devDependencies": {
     "tsup": "^8.5.1",

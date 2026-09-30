@@ -29,6 +29,9 @@ const EXPECTED_ADDRESSES = {
   nft: 'taNFTjOaeDBSPHNf0LVRWAkF4raUFQgrz0EQIgJd60ENb5',
   block_producer: 'taBPUH9m3CXZcBQyCrTmclHtltipiPelIHzdAf8QdIDvnt',
   consensus_validator: 'taCONStGMCE1RJ9ttceyt0FZhYapGJ7zzBuCE5qqYdLhaF',
+  eoa: 'taEOAD2uLK1SLzPgtabFLUAx22yDlBs9DE9nZFTOESIGRr',
+  uploader: 'taUPLMH5QYOAT4ktwQeO7DXAEKtqBhYehalNGf5BJFQDYq',
+  compression: 'taRB54_92jNbBdcmt2jus88F-xrOSne1GR9mmyOh4RidAK',
 } as const;
 
 describe('bootstrap-managed program addresses', () => {
@@ -40,7 +43,7 @@ describe('bootstrap-managed program addresses', () => {
     expect(deriveManagedProgramAddresses(UPLOADER_PROGRAM_SEED).programAccountAddress).toBe(UPLOADER_PROGRAM_ADDRESS);
     expect(UPLOADER_PROGRAM_ADDRESS).toBe('taUPLMH5QYOAT4ktwQeO7DXAEKtqBhYehalNGf5BJFQDYq');
   });
-  it('matches all fifteen approved fresh-network vanity addresses', () => {
+  it('matches the canonical fresh-network addresses', () => {
     expect(BOOTSTRAP_PROGRAM_ADDRESSES).toEqual(EXPECTED_ADDRESSES);
   });
 

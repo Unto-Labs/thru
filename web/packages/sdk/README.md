@@ -373,3 +373,92 @@ const firstEvent = await firstStreamValue(thru.streaming.streamEvents());
 ```
 
 `collectStream` gathers values (optionally respecting `AbortSignal`s), `firstStreamValue` returns the first item, and `forEachStreamValue` lets you run async handlers for each streamed update.
+
+## Explicit account compression and restoration
+
+Compression is built into the normal client. No separate compression package,
+transport adapter, or program factory is needed. Canonical compression,
+multicall and uploader addresses are defaults; `programAddresses` provides
+optional overrides for private deployments.
+
+```ts
+import { createThruClient, CompressionError } from '@thru/sdk';
+
+const sdk = createThruClient({ baseUrl });
+const statuses = await sdk.compression.getAccountStatuses({ accounts });
+
+try {
+  const result = await sdk.compression.decompressAccounts({
+    accounts,
+    feePayer: { publicKey, privateKey }, // Same convention as buildAndSign.
+    fee: 0n,
+  });
+  // Build and sign the application transaction AFTER restoration succeeds.
+  // Prerequisite transactions may have advanced this payer's nonce.
+} catch (error) {
+  if (error instanceof CompressionError) {
+    // NOT_READY includes details.retrySlot when known.
+    // Preserve details.result (partial progress, signatures, upload handles).
+    // TRANSACTION_UNCERTAIN must be reconciled before further submissions.
+  }
+  throw error; // Do not continue with the application transaction on failure.
+}
+```
+
+Wallet callers use the existing transaction-intent signing flow. The wallet
+receives base64 instruction data and account addresses, and returns base64 signed
+transaction bytes. It never receives an SDK `Transaction` or exposes private keys:
+
+```ts
+const context = await wallet.getSigningContext();
+await sdk.compression.decompressAccounts({
+  accounts,
+  feePayer: { publicKey: context.feePayerPublicKey },
+  walletAddress,
+  signTransaction: intent => wallet.signTransaction(intent),
+});
+// Now prepare and sign the application intent as usual.
+```
+
+For an existing signing session, use `feePayer: { publicKey: session.publicKey }`,
+`walletAddress: session.walletAddress`, and
+`signTransaction: intent => session.signTransaction(intent)` instead. The selected
+wallet address is not the managed fee payer. If wallet/session fallback changes
+the payer, the helper rejects before submitting: refresh the signing context and
+retry explicitly. The helper validates the signed passkey wrapper and nested
+instruction. Wallet intents currently use fee 0; keypair calls retain the SDK
+fee default unless overridden. Upload authority is the wallet account for wallet
+calls and the payer for keypair calls. Large wallet restores stage their proof in
+an upload account so variable passkey envelopes cannot invalidate proof pointers.
+
+Small restorations batch through multicall; large images use temporary uploads.
+Successful earlier steps remain committed if later steps fail. Cooldown returns
+`NOT_READY` promptly. `cleanupUploads({ uploads, feePayer, ... })` can retry cleanup
+from `error.details.result.uploads`; wallet cleanup also takes the wallet address
+and intent callback. Handles retain their uploader address across configuration
+changes. Unresolved submissions block cleanup that might destroy staging still
+needed by a pending restoration.
+
+Each SDK client serializes compression operations per fee payer and remembers
+uncertain submissions across calls. Supply a stable `journal` with async `load()`
+and `save(pending | undefined)` to survive process/page restarts; store the pending
+signature, nonce and validity slot durably before sending. Scope the journal to
+one network and payer, and reuse it on subsequent calls or a new client. It must
+not contain private keys. `sdk.compression.reconcilePending({ feePayer: { publicKey },
+journal })` only reads chain/journal state and never signs. Do not discard a
+pending record to bypass uncertainty, or share the payer with concurrent
+application submissions. An advanced nonce with a missing execution result
+remains unresolved, even after expiry.
+
+The compression service uses `sdk.compression.compressAccount({ account,
+feePayer: { publicKey, privateKey }, fee: 0n, journal })`. It handles eligibility,
+rate limits and scan checkpoints; the SDK handles the actual transaction and its
+reconciliation. Decompression is explicit and caller-funded. Existing
+build/sign/send APIs never automatically restore or retry application transactions.
+
+Shared instruction codecs live in `thru-ts-client-sdk/domain/programs` and are
+re-exported by `@thru/programs`, so the SDK does not depend on that package.
+Regenerate them with `node scripts/generate-compression-codecs.mjs` (set
+`THRU_ABI_BIN` if the ABI CLI is not at its repository default path), and verify
+reproducibility with `--check`. The script reads the canonical ABI sources; the
+re-export shims in `@thru/programs` should not receive duplicate generated code.

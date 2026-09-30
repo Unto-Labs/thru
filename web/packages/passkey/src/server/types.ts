@@ -29,7 +29,7 @@ export interface ThruClient {
     generate: (params: {
       address: string;
       proofType: number;
-      targetSlot: bigint;
+      targetSlot?: bigint;
     }) => Promise<{ proof?: Uint8Array }>;
   };
   transactions: {

@@ -63,6 +63,16 @@
       "types": "./dist/abi/index.d.ts",
       "import": "./dist/abi/index.js",
       "require": "./dist/abi/index.cjs"
+    },
+    "./compression": {
+      "types": "./dist/compression.d.ts",
+      "import": "./dist/compression.js",
+      "require": "./dist/compression.cjs"
+    },
+    "./programs/*": {
+      "types": "./dist/programs/*.d.ts",
+      "import": "./dist/programs/*.js",
+      "require": "./dist/programs/*.cjs"
     }
   },
   "scripts": {

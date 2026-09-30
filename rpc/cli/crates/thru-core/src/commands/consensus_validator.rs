@@ -16,7 +16,8 @@ use thru_client::{Client, ClientBuilder, TransactionDetails};
 const CONSENSUS_VALIDATOR_FEE: u64 = 0;
 const CONSENSUS_VALIDATOR_STATE_HEADER_SIZE: usize = 216;
 const CONSENSUS_STATE_BASE_HEADER_SIZE: usize = 248;
-const CONSENSUS_ATTESTOR_SEAT_SIZE: usize = 152;
+// Identity, BLS key, and four u64 update indexes/timestamps.
+const CONSENSUS_ATTESTOR_SEAT_SIZE: usize = 32 + 96 + 4 * 8;
 const CONSENSUS_VALIDATOR_METADATA_SIZE: usize = 40;
 const CONSENSUS_WEIGHT_UPDATE_SIZE: usize = 32;
 const BLS_PUBKEY_SIZE: usize = 96;
@@ -823,6 +824,15 @@ fn turnover_window_state(table: &ValidatorTable) -> TurnoverVerdict {
 /// activation never touches `turnover_sum_removed` (deactivation does), matching
 /// the existing activate pre-check. NOT a full turnover check.
 fn turnover_accepts_activation(table: &ValidatorTable, added_weight: u64) -> bool {
+    if table.blocks_per_faulty_turnover == 0 {
+        return true;
+    }
+    // The program expires old ring entries before checking turnover. A stale
+    // snapshot's aggregate cannot predict that check; let the node validate it.
+    let oldest_valid_slot = table.current_slot.saturating_sub(table.blocks_per_faulty_turnover - 1);
+    if table.turnover_ring_head_slot < oldest_valid_slot {
+        return true;
+    }
     match table.turnover_limit {
         None => true,
         Some(limit) => table.turnover_sum_added.saturating_add(added_weight) <= limit,
@@ -2381,6 +2391,16 @@ mod tests {
         // Unknown limit never blocks client-side.
         let unknown = table_with_turnover(100, None, 72, 0, 50);
         assert!(turnover_accepts_activation(&unknown, u64::MAX));
+    }
+
+    #[test]
+    fn activation_preflight_defers_when_turnover_entries_expire() {
+        let current = table_with_turnover(256, Some(199999), 1000000, 0, 255);
+        assert!(!turnover_accepts_activation(&current, 100));
+        let expired = table_with_turnover(256, Some(199999), 1000000, 0, 256);
+        assert!(turnover_accepts_activation(&expired, 100));
+        let disabled = table_with_turnover(0, Some(0), 1000000, 0, 0);
+        assert!(turnover_accepts_activation(&disabled, 100));
     }
 
     #[test]

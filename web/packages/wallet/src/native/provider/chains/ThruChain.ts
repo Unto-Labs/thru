@@ -342,6 +342,7 @@ export class NativeThruChain implements IThruChain {
         walletAddress,
         programAddress: transaction.programAddress,
         instructionData: transaction.instructionData,
+        stateUnits: transaction.stateUnits,
         readWriteAddresses: transaction.readWriteAddresses,
         readOnlyAddresses: transaction.readOnlyAddresses,
         review: transaction.review,

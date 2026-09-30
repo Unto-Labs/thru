@@ -47,6 +47,7 @@ async function run(): Promise<void> {
 
     const transaction = await sdk.accounts.create({
         publicKey: feePayerPublicKey,
+        header: { stateUnits: 1 },
     })
 
     await transaction.sign(feePayerPrivateKey);

@@ -217,7 +217,9 @@ export async function uploadArtifact(
           // One metadata account plus the meta-inclusive buffer footprint.
           stateUnits: 1 + Math.ceil((64 + upload.bytes.length) / 4096),
           memoryUnits: 10_000,
-          expiryAfter: 10,
+          // Match the remaining upload stages: ten slots can expire while
+          // certificate transactions occupy the execution queue.
+          expiryAfter: 10_000,
         },
       );
     } catch (error) {
@@ -315,7 +317,7 @@ export async function uploadArtifact(
               offset,
             }),
             computeUnits: 500_000_000,
-            stateUnits: 1,
+            stateUnits: 0,
             memoryUnits: 5_000,
             expiryAfter: 10_000,
           },
@@ -415,7 +417,7 @@ export async function uploadArtifact(
           expectedHash: upload.hash,
         }),
         computeUnits: 50_000 + upload.bytes.length * 200,
-        stateUnits: 1,
+        stateUnits: 0,
         memoryUnits: 5_000,
         expiryAfter: 10_000,
       },
@@ -498,7 +500,7 @@ export async function cleanupUpload(
           metaAccount: upload.addresses.metaAccountBytes,
         }),
         computeUnits: 50_000,
-        stateUnits: 1,
+        stateUnits: 0,
         memoryUnits: 5_000,
         expiryAfter: 10_000,
       },

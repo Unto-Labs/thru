@@ -365,6 +365,40 @@
 .tds-dep__preset {
   flex: 1;
 }
+/* A stepped rail's header: the stepper over the title. */
+.tds-dep__step-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+/* Square, like everything else in the wallet sheet. */
+.tds-dep__step-head .tds-stepper__dot {
+  border-radius: var(--radius-none);
+}
+
+/* Confirm order: where Coinbase's receipt goes, with Edit. */
+.tds-dep__receipt {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+.tds-dep__receipt-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.tds-dep__receipt-label {
+  font-size: 12px;
+  color: var(--color-text-tertiary);
+}
+.tds-dep__receipt-value {
+  font-size: 13px;
+  color: var(--color-text-primary);
+  overflow-wrap: anywhere;
+}
+
 /* Contact asked for inline on the card form. */
 .tds-dep__card-contact {
   gap: 10px;

@@ -16,9 +16,9 @@ const derivedAddress = derived.address
 const feePayerAddress = 'taZigmmhU81aF8uitpcLXRkzcXLpbbL7AepFlgZDihVVKT'
 const feePayerPrivateKeyHex = '20c3ac368e5a6d3134d844c9d70823bf545d84aae090cdada859d3f3b8666f8d'
 
-const DEFAULT_COMPUTE_UNITS = 30_000;
-const DEFAULT_STATE_UNITS = 1;
-const DEFAULT_MEMORY_UNITS = 10_000;
+const COUNTER_COMPUTE_UNITS = 30_000;
+const COUNTER_STATE_UNITS = 1;
+const COUNTER_MEMORY_UNITS = 10_000;
 const DEFAULT_EXPIRY_AFTER = 100;
 
 async function sendAndTrackRawTransaction(
@@ -112,9 +112,9 @@ const incrementCounterAccountInstructionWithString = async () => {
         program: counterProgramAddress,
         header: {
             fee: 0n,
-            computeUnits: DEFAULT_COMPUTE_UNITS,
-            stateUnits: DEFAULT_STATE_UNITS,
-            memoryUnits: DEFAULT_MEMORY_UNITS,
+            computeUnits: COUNTER_COMPUTE_UNITS,
+            stateUnits: COUNTER_STATE_UNITS,
+            memoryUnits: COUNTER_MEMORY_UNITS,
             expiryAfter: DEFAULT_EXPIRY_AFTER,
         },
         accounts: {
@@ -180,9 +180,9 @@ const incrementCounterAccountInstructionWithFunction = async () => {
         program: counterProgramAddress,
         header: {
             fee: 0n,
-            computeUnits: DEFAULT_COMPUTE_UNITS,
-            stateUnits: DEFAULT_STATE_UNITS,
-            memoryUnits: DEFAULT_MEMORY_UNITS,
+            computeUnits: COUNTER_COMPUTE_UNITS,
+            stateUnits: COUNTER_STATE_UNITS,
+            memoryUnits: COUNTER_MEMORY_UNITS,
             expiryAfter: DEFAULT_EXPIRY_AFTER,
         },
         accounts: {
@@ -375,9 +375,9 @@ const createCounterAccountWithFunction = async (): Promise<string> => {
         program: counterProgramAddress,
         header: {
             fee: 0n,
-            computeUnits: DEFAULT_COMPUTE_UNITS,
-            stateUnits: DEFAULT_STATE_UNITS,
-            memoryUnits: DEFAULT_MEMORY_UNITS,
+            computeUnits: COUNTER_COMPUTE_UNITS,
+            stateUnits: COUNTER_STATE_UNITS,
+            memoryUnits: COUNTER_MEMORY_UNITS,
             expiryAfter: DEFAULT_EXPIRY_AFTER,
         },
         accounts: {
@@ -428,9 +428,9 @@ const createCounterAccountWithString = async (): Promise<string> => {
         program: counterProgramAddress,
         header: {
             fee: 0n,
-            computeUnits: DEFAULT_COMPUTE_UNITS,
-            stateUnits: DEFAULT_STATE_UNITS,
-            memoryUnits: DEFAULT_MEMORY_UNITS,
+            computeUnits: COUNTER_COMPUTE_UNITS,
+            stateUnits: COUNTER_STATE_UNITS,
+            memoryUnits: COUNTER_MEMORY_UNITS,
             expiryAfter: DEFAULT_EXPIRY_AFTER,
         },
         accounts: {

@@ -5,6 +5,7 @@
  * brick text), ghost. Colors follow the active theme.
  */
 import { ActivityIndicator, Pressable, Text, type ViewStyle } from "react-native";
+import { TapHaptic } from "./TapHaptic";
 import { font, text, touch } from "./tokens";
 import { makeStyles, useThemeColors, type ThemeColors } from "./theme";
 
@@ -19,6 +20,9 @@ export interface ButtonProps {
   disabled?: boolean;
   loading?: boolean;
   style?: ViewStyle;
+  /** Tick on iOS web when pressed (see TapHaptic). Pass it only when a press
+      should buzz; a busy button never does. */
+  tapHaptic?: boolean;
 }
 
 const HEIGHTS: Record<ButtonSize, number> = { lg: touch.controlLg, md: touch.controlMd, sm: touch.controlSm };
@@ -53,7 +57,7 @@ function variants(c: ThemeColors): Record<ButtonVariant, VariantStyle> {
   return built;
 }
 
-export function Button({ label, onPress, variant = "primary", size = "md", disabled, loading, style }: ButtonProps) {
+export function Button({ label, onPress, variant = "primary", size = "md", disabled, loading, style, tapHaptic }: ButtonProps) {
   const styles = useStyles();
   const v = variants(useThemeColors())[variant];
   const busy = Boolean(disabled || loading);
@@ -84,6 +88,7 @@ export function Button({ label, onPress, variant = "primary", size = "md", disab
       >
         {label}
       </Text>
+      {tapHaptic && !busy ? <TapHaptic /> : null}
     </Pressable>
   );
 }
