@@ -61,9 +61,9 @@ pub fn tn_signature_decode(out: &mut [u8; 64], input: &[u8]) -> Result<(), i32> 
     let mut out_idx = 0;
 
     // Inverse lookup table for base64-url
-    let mut invlut = [0xFFu8; 256];
+    let mut invlut = [-1i8; 256];
     for (i, &b) in BASE64_URL_ALPHABET.iter().enumerate() {
-        invlut[b as usize] = i as u8;
+        invlut[b as usize] = i as i8;
     }
 
     while in_sz >= 4 {
@@ -152,5 +152,25 @@ mod tests {
         };
         let res = tn_signature_decode(&mut decoded_signature, encoded_slice);
         assert_eq!(res, Err(-5), "corrupt checksum should fail with -5");
+    }
+
+    #[test]
+    fn rejects_invalid_base64url_characters() {
+        let mut rng = rand::rng();
+        let mut signature = [0u8; 64];
+        rng.fill_bytes(&mut signature);
+        let mut encoded = [0u8; 128];
+        tn_signature_encode(&mut encoded, &signature);
+
+        // Body characters live at indices 2..=85; '!' is not in the base64url alphabet.
+        let mut bad = encoded;
+        bad[5] = b'!';
+        let mut decoded = [0u8; 64];
+        assert_eq!(tn_signature_decode(&mut decoded, &bad[..90]), Err(-3));
+
+        // Final-group characters live at indices 86..=89; reject with -4.
+        let mut bad2 = encoded;
+        bad2[88] = b'!';
+        assert_eq!(tn_signature_decode(&mut decoded, &bad2[..90]), Err(-4));
     }
 }
