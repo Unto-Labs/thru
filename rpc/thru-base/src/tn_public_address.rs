@@ -67,9 +67,9 @@ pub fn tn_public_address_decode(out: &mut [u8; 32], input: &[u8]) -> Result<(), 
     let mut out_idx = 0;
 
     // Inverse lookup table for base64-url
-    let mut invlut = [0xFFu8; 256];
+    let mut invlut = [-1i8; 256];
     for (i, &b) in BASE64_URL_ALPHABET.iter().enumerate() {
-        invlut[b as usize] = i as u8;
+        invlut[b as usize] = i as i8;
     }
 
     while in_sz >= 4 {
@@ -221,6 +221,26 @@ mod tests {
         };
         let res = tn_public_address_decode(&mut decoded_pub_key, encoded_slice);
         assert_eq!(res, Err(-5), "corrupt checksum should fail with -5");
+    }
+
+    #[test]
+    fn rejects_invalid_base64url_characters() {
+        let mut rng = rand::rng();
+        let mut pub_key = [0u8; 32];
+        rng.fill_bytes(&mut pub_key);
+        let mut encoded = [0u8; 64];
+        tn_public_address_encode(&mut encoded, &pub_key);
+
+        // Body characters live at indices 2..=41; '!' is not in the base64url alphabet.
+        let mut bad = encoded;
+        bad[5] = b'!';
+        let mut decoded = [0u8; 32];
+        assert_eq!(tn_public_address_decode(&mut decoded, &bad[..46]), Err(-3));
+
+        // Final-group characters live at indices 42..=45; reject with -4.
+        let mut bad2 = encoded;
+        bad2[44] = b'!';
+        assert_eq!(tn_public_address_decode(&mut decoded, &bad2[..46]), Err(-4));
     }
 
     #[test]
