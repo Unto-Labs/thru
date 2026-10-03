@@ -51,10 +51,16 @@ tn_rle_encode( tn_rle_t *    rle,
 
     if( bit == current_bit ) {
       if( run_length == 65535 ) {
-        if( rle->run_count >= max_runs ) {
+        /* A run longer than a ushort can hold is split across several entries.
+           Every decoder and the iterator flip the bit value after each run, so a
+           zero-length run has to sit between the pieces to flip it straight back.
+           Without it the continuation decodes as the opposite value: 70000 ones
+           encode to [65535, 4465] and decode as 65535 ones then 4465 zeros. */
+        if( (ulong)rle->run_count + 2UL > (ulong)max_runs ) {
           return TN_RLE_ERR_RUNS_TOO_SMALL;
         }
         rle->runs[ rle->run_count++ ] = 65535;
+        rle->runs[ rle->run_count++ ] = 0;
         run_length                    = 0;
       }
       run_length++;
