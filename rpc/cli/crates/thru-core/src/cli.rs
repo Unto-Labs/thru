@@ -1100,7 +1100,7 @@ pub enum TxnCommands {
         #[arg(long, default_value = "1")]
         fee: u64,
 
-        /// Compute units (defaults to 0)
+        /// Compute units to request
         #[arg(long, default_value = "0")]
         compute_units: u32,
 
@@ -1141,7 +1141,7 @@ pub enum TxnCommands {
         #[arg(long, default_value = "1")]
         fee: u64,
 
-        /// Compute units (defaults to 0)
+        /// Compute units to request
         #[arg(long, default_value = "0")]
         compute_units: u32,
 
@@ -2725,6 +2725,42 @@ mod tests {
                     _ => panic!("unexpected command"),
                 }
             }
+        }
+    }
+
+    #[test]
+    fn compute_units_help_does_not_embed_stale_default() {
+        use clap::CommandFactory;
+        use std::io::Write;
+
+        for sub in ["sign", "execute"] {
+            let mut cmd = Cli::command();
+            let txn = cmd
+                .find_subcommand_mut("txn")
+                .expect("txn subcommand");
+            let target = txn
+                .find_subcommand_mut(sub)
+                .unwrap_or_else(|| panic!("txn {sub} subcommand"));
+
+            let mut buf = Vec::new();
+            target.write_long_help(&mut buf).expect("render help");
+            let help = String::from_utf8(buf).expect("utf8 help");
+
+            // Pre-0.4.1 prose claimed 1000000000 while clap defaulted to
+            // 300000000. Keep the number out of the doc comment so clap's
+            // [default: ...] annotation stays the single source of truth.
+            assert!(
+                !help.contains("defaults to 1000000000"),
+                "stale 1e9 prose returned in txn {sub} --help:\n{help}"
+            );
+            assert!(
+                !help.contains("defaults to 300000000"),
+                "stale 3e8 prose returned in txn {sub} --help:\n{help}"
+            );
+            assert!(
+                help.contains("[default: 0]"),
+                "expected clap default annotation in txn {sub} --help:\n{help}"
+            );
         }
     }
 
