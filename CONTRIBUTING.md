@@ -17,6 +17,11 @@ regenerated automatically from every tagged release of the internal repository:
 Because the tree is rebuilt from the manifest on every release, commits pushed directly to
 this repository do not survive the next release.
 
+## Security vulnerabilities
+
+Do not open a public issue for security vulnerabilities. Report them privately
+through GitHub Security Advisories — see [SECURITY.md](./SECURITY.md).
+
 ## Filing issues
 
 Open an issue on this repository for bugs, unclear documentation, or feature requests in

@@ -75,6 +75,7 @@ One sentence per package, identical on npm or crates.io, in the package README, 
 
 - Follow [@thru_xyz](https://x.com/thru_xyz) on X.
 - File issues and proposals here; see [CONTRIBUTING](./CONTRIBUTING.md).
+- Report vulnerabilities privately; see [SECURITY](./SECURITY.md).
 
 ## License
 
