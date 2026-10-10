@@ -134,6 +134,26 @@ async fn create_account(
     // Create RPC client
     let client = create_rpc_client(config)?;
 
+    // Pre-flight: reject when the account already has committed state.
+    // Re-running `account create` against an existing account can fail with
+    // NONCE_TOO_LOW (-511), which looks like a nonce bug rather than "already
+    // exists" (issue #13). Match the ensure_account_absent pattern used by
+    // bond/wthru: only `!is_new` means committed state.
+    if let Some(existing) = client
+        .get_account_info(account_pubkey, None, None)
+        .await
+        .map_err(|e| {
+            CliError::TransactionSubmission(format!("Failed to get account info: {}", e))
+        })?
+    {
+        if !existing.is_new {
+            return Err(CliError::Validation(format!(
+                "Account {} already exists",
+                account_pubkey
+            )));
+        }
+    }
+
     // Get current finalized slot
     let block_height = client.get_block_height().await.map_err(|e| {
         CliError::TransactionSubmission(format!("Failed to get current slot: {}", e))
@@ -210,12 +230,24 @@ async fn create_account(
 
     // Check if transaction was successful
     if transaction_details.execution_result != 0 || transaction_details.vm_error != 0 {
-        let (vm_error_msg, _) = vm_error_strings(transaction_details.vm_error);
+        /* TN_RUNTIME_TXN_ERR_NONCE_TOO_LOW — see txn execute retry path. */
+        const TN_ERR_NONCE_TOO_LOW: i32 = -511;
+        let already_exists = (transaction_details.vm_error == TN_ERR_NONCE_TOO_LOW
+            || transaction_details.execution_result as i32 == TN_ERR_NONCE_TOO_LOW)
+            && matches!(
+                client.get_account_info(account_pubkey, None, None).await,
+                Ok(Some(existing)) if !existing.is_new
+            );
 
-        let error_msg = format!(
-            "Transaction failed with execution result: {}{}",
-            transaction_details.execution_result as i64, vm_error_msg
-        );
+        let error_msg = if already_exists {
+            format!("Account {} already exists", account_pubkey)
+        } else {
+            let (vm_error_msg, _) = vm_error_strings(transaction_details.vm_error);
+            format!(
+                "Transaction failed with execution result: {}{}",
+                transaction_details.execution_result as i64, vm_error_msg
+            )
+        };
 
         let response = output::create_account_create_response(
             key_name,
@@ -225,7 +257,11 @@ async fn create_account(
         );
         output::print_output(response, json_format);
 
-        return Err(CliError::TransactionSubmission(error_msg));
+        return Err(if already_exists {
+            CliError::Validation(error_msg)
+        } else {
+            CliError::TransactionSubmission(error_msg)
+        });
     }
 
     // Create response
