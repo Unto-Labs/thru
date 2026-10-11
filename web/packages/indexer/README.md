@@ -14,7 +14,7 @@ Open-source TypeScript framework for indexing Thru chain data into Postgres: eve
 ## Installation
 
 ```bash
-pnpm add @thru/indexer @thru/replay @thru/sdk/helpers postgres drizzle-orm hono @hono/zod-openapi
+pnpm add @thru/indexer @thru/replay @thru/sdk postgres drizzle-orm hono @hono/zod-openapi
 pnpm add -D drizzle-kit tsx typescript
 ```
 
