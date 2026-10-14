@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { EmbeddedProvider } from './EmbeddedProvider';
 import { IframeManager } from './IframeManager';
+import type { BridgeNetworkState } from '../bridge-network-state';
 import {
   DepositTarget,
   POST_MESSAGE_REQUEST_TYPES,
@@ -72,6 +73,93 @@ describe('deposit protocol round-trip', () => {
       network: ThruNetwork.Alphanet,
     });
     expect(result).toEqual(DESTINATION);
+  });
+
+  it('tags each deposit with the active network across Alphanet -> Betanet -> Alphanet switches', async () => {
+    const captured: PostMessageRequest[] = [];
+    let generation = 1;
+    function report(provider: EmbeddedProvider, id: string, generation: number) {
+      const network = {
+        id,
+        name: id,
+        scope: `preset:${id}`,
+        rpcUrl: `https://rpc.${id}.thru.org`,
+        chainId: 1,
+        custom: false,
+        depositConfigured: true,
+      };
+      const manager = provider.getIframeManager() as unknown as {
+        networkState: BridgeNetworkState;
+      };
+      manager.networkState.readReady({
+        network,
+        networkGeneration: generation,
+        capabilities: { networkSwitching: true },
+      });
+      return network;
+    }
+    const provider = new EmbeddedProvider({
+      iframeUrl: WALLET_URL,
+      network: ThruNetwork.Alphanet,
+    });
+    vi.spyOn(IframeManager.prototype, 'showModal').mockImplementation(() => {});
+    vi.spyOn(IframeManager.prototype, 'hide').mockImplementation(async () => {});
+    vi.spyOn(IframeManager.prototype, 'sendMessage').mockImplementation(
+      async (request: PostMessageRequest) => {
+        captured.push(request);
+        const result =
+          request.type === POST_MESSAGE_REQUEST_TYPES.SWITCH_NETWORK
+            ? report(provider, request.payload as string, ++generation)
+            : request.type === POST_MESSAGE_REQUEST_TYPES.PREPARE_DEPOSIT
+              ? DESTINATION
+              : { status: 'cancelled' };
+        return { id: request.id, success: true, result } as never;
+      }
+    );
+    report(provider, 'alphanet', generation);
+
+    await provider.deposit({ enabledProviders: [] });
+    await provider.switchNetwork('betanet');
+    await provider.prepareDeposit(DepositTarget.THRUSD);
+    await provider.deposit({ enabledProviders: [] });
+    await provider.switchNetwork('alphanet');
+    await provider.deposit({ enabledProviders: [] });
+
+    expect(
+      captured
+        .filter((request) => request.type === POST_MESSAGE_REQUEST_TYPES.DEPOSIT)
+        .map((request) => request.payload.network)
+    ).toEqual(['alphanet', 'betanet', 'alphanet']);
+    expect(captured.find((request) =>
+      request.type === POST_MESSAGE_REQUEST_TYPES.PREPARE_DEPOSIT
+    )?.payload).toEqual({
+      depositTarget: DepositTarget.THRUSD,
+      network: 'betanet',
+    });
+  });
+
+  it('falls back to the constructor network before the bridge reports a network', async () => {
+    let captured: PostMessageRequest | null = null;
+    vi.spyOn(IframeManager.prototype, 'sendMessage').mockImplementation(
+      async (request: PostMessageRequest) => {
+        captured = request;
+        return {
+          id: request.id,
+          success: true,
+          result: { status: 'cancelled' },
+        } as never;
+      }
+    );
+    vi.spyOn(IframeManager.prototype, 'showModal').mockImplementation(() => {});
+    vi.spyOn(IframeManager.prototype, 'hide').mockImplementation(async () => {});
+    const provider = new EmbeddedProvider({
+      iframeUrl: WALLET_URL,
+      network: ThruNetwork.Alphanet,
+    });
+
+    await provider.deposit({});
+
+    expect(captured!.payload).toEqual({ network: 'alphanet' });
   });
 
   it('sends a DEPOSIT request with the prepared destination and resolves the result', async () => {

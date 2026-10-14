@@ -6,6 +6,7 @@
  * helpers are kept for the embedded wallet app, where the selected wallet
  * account is already known inside the iframe. */
 
+import { readWalletAccount, isAccountNotFound, type ArchivedAccountState } from '../internal/accounts';
 import { decodeAddress } from "@thru/sdk/helpers";
 import type { Thru } from "@thru/sdk/client";
 import {
@@ -143,6 +144,8 @@ export interface DepositProviderConfig {
 export interface DepositNetworkConfig {
   chainId?: number;
   network: string;
+  /** Offer test funding without requiring developer mode on this network. */
+  faucetOnly?: boolean;
   unifoldProject?: DepositUnifoldProjectConfig;
   defaultDepositTarget: string;
   depositTargets: Map<string, DepositTargetConfig>;
@@ -150,6 +153,7 @@ export interface DepositNetworkConfig {
 }
 
 export interface DepositAccountState {
+  compression?: ArchivedAccountState;
   destination: DepositDestination;
   balanceRaw: bigint;
   balanceLabel: string;
@@ -549,6 +553,7 @@ function parseDepositNetworkConfigs(
         network,
         {
           network,
+          faucetOnly: value.faucet_only === true,
           chainId:
             value.chain_id === undefined ? undefined : Number(value.chain_id),
           ...(unifoldProject ? { unifoldProject } : {}),
@@ -870,7 +875,7 @@ export async function waitForDepositForWallet(params: {
         accounts,
       );
       throwIfAborted(params.signal);
-      if (latestState.balanceRaw >= params.minimumBalanceRaw) {
+      if (!latestState.compression && latestState.balanceRaw >= params.minimumBalanceRaw) {
         return latestState;
       }
     } catch (err) {
@@ -956,6 +961,8 @@ async function initializeDepositAccount(
 
   const signedBase64 = await signTransaction({
     trailingInstructionData: bytesToBase64(tokenInstruction),
+    /* Creates one token account. */
+    stateUnits: 1,
     walletAddress: accounts.walletAddress,
     readWriteAddresses: context.readWriteAddresses,
     readOnlyAddresses: context.readOnlyAddresses,
@@ -1000,7 +1007,7 @@ async function getStateProof(thru: Thru, address: string): Promise<Uint8Array> {
 
 async function accountExists(thru: Thru, address: string): Promise<boolean> {
   try {
-    await thru.accounts.get(address);
+    await readWalletAccount(thru, address);
     return true;
   } catch (err) {
     if (isNotFoundError(err)) return false;
@@ -1040,7 +1047,7 @@ async function readExistingDepositAccountState(
   thru: Thru,
   accounts: DepositAccounts,
 ): Promise<DepositAccountState> {
-  const account = await thru.accounts.get(accounts.tokenAccountAddress);
+  const { account, compression } = await readWalletAccount(thru, accounts.tokenAccountAddress);
   const tokenInfo = parseTokenAccountData(account);
   if (tokenInfo.mint !== accounts.mintAddress) {
     throw new Error(
@@ -1055,6 +1062,7 @@ async function readExistingDepositAccountState(
 
   return {
     destination: accounts.destination,
+    ...(compression ? { compression } : {}),
     balanceRaw: tokenInfo.amount,
     balanceLabel: formatDepositAmount(
       tokenInfo.amount,
@@ -1112,22 +1120,7 @@ function formatExecutionError(
 }
 
 function isNotFoundError(err: unknown): boolean {
-  const errObj =
-    err && typeof err === "object"
-      ? (err as { code?: unknown; rawMessage?: unknown; status?: unknown })
-      : null;
-  const maybeCode = errObj?.code ?? errObj?.status;
-  if (maybeCode === 5) return true;
-  if (
-    typeof maybeCode === "string" &&
-    maybeCode.toLowerCase().includes("not_found")
-  ) {
-    return true;
-  }
-
-  const fallbackMessage = err instanceof Error ? err.message : String(err);
-  const message = String(errObj?.rawMessage ?? fallbackMessage).toLowerCase();
-  return message.includes("not_found") || message.includes("not found");
+  return isAccountNotFound(err);
 }
 
 function normalizeNetwork(network: string): ThruNetwork {

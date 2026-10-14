@@ -1,8 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
-import { TransactionVmError } from '@thru/sdk/proto';
+import { AccountView, TransactionVmError } from '@thru/sdk/proto';
 import { Code, ConnectError } from '@connectrpc/connect';
 import { fixture, address, missing } from './__tests__/fixture';
-import { CompressionError } from './types';
+import { CompressionError, type UploadCleanup } from './types';
 import { Transaction } from '../../domain/transactions/Transaction';
 import { createThruClient } from '../../client';
 import { ValidateArgs } from '../../domain/programs/passkey-manager/abi/thru/program/passkey_manager/types';
@@ -21,7 +21,54 @@ describe('integrated sdk.compression', () => {
     const statuses = await f.sdk.compression.getAccountStatuses({ accounts: [a, b, address(13), address(12), b] });
     expect(statuses.map(s => s.status)).toEqual(['ACTIVE', 'COMPRESSED', 'DOES_NOT_EXIST', 'DOES_NOT_EXIST', 'COMPRESSED']);
     expect(statuses[1]?.retrySlot).toBe(484n);
+    expect(f.getRawAccount.mock.calls.every(([req]) => req.view === AccountView.META_ONLY)).toBe(true);
     expect(f.sendTransaction).not.toHaveBeenCalled();
+  });
+  it('reads status without account bytes while restoration still reads the full image', async () => {
+    const f = await fixture();
+    expect(await f.sdk.compression.getAccountStatuses({ accounts: [a] })).toEqual([
+      { address: a, status: 'COMPRESSED', compressionSlot: 100n, retrySlot: 484n },
+    ]);
+    expect(f.getRawAccount.mock.calls.map(([req]) => [req.versionContext.version.case, req.view])).toEqual([
+      ['current', AccountView.META_ONLY],
+      ['currentOrHistorical', AccountView.META_ONLY],
+      ['current', AccountView.META_ONLY],
+    ]);
+    expect(f.sendTransaction).not.toHaveBeenCalled();
+    f.getRawAccount.mockClear();
+    const result = await f.sdk.compression.decompressAccounts({ ...f.options, accounts: [a] });
+    expect(result.accounts[0]?.status).toBe('restored');
+    const archiveReads = f.getRawAccount.mock.calls.filter(([req]) => req.versionContext.version.case === 'currentOrHistorical');
+    expect(archiveReads.length).toBeGreaterThan(0);
+    expect(archiveReads.every(([req]) => req.view === AccountView.FULL)).toBe(true);
+  });
+  it('classifies metadata even when the archived account pages are unavailable', async () => {
+    const f = await fixture(); const read = f.getRawAccount.getMockImplementation()!;
+    f.getRawAccount.mockImplementation(async req => {
+      if (req.versionContext.version.case === 'currentOrHistorical' && req.view === AccountView.FULL)
+        throw new ConnectError('archived pages unavailable', Code.Unavailable);
+      return read(req);
+    });
+    expect((await f.sdk.compression.getAccountStatuses({ accounts: [a] }))[0]?.status).toBe('COMPRESSED');
+    expect(f.sendTransaction).not.toHaveBeenCalled();
+  });
+  it('rechecks current state after the historical metadata read', async () => {
+    const f = await fixture(); const read = f.getRawAccount.getMockImplementation()!;
+    f.getRawAccount.mockImplementation(async req => {
+      const value = await read(req);
+      if (req.versionContext.version.case === 'currentOrHistorical') f.active.add(a);
+      return value;
+    });
+    expect(await f.sdk.compression.getAccountStatuses({ accounts: [a] })).toEqual([{ address: a, status: 'ACTIVE' }]);
+    expect(f.getRawAccount).toHaveBeenCalledTimes(3);
+  });
+  it('propagates historical metadata outages', async () => {
+    const f = await fixture(); const read = f.getRawAccount.getMockImplementation()!;
+    f.getRawAccount.mockImplementation(async req => {
+      if (req.versionContext.version.case === 'currentOrHistorical') throw new ConnectError('offline', Code.Unavailable);
+      return read(req);
+    });
+    await expect(f.sdk.compression.getAccountStatuses({ accounts: [a] })).rejects.toMatchObject({ code: Code.Unavailable });
   });
   it('does not interpret an RPC outage as absence', async () => {
     const f = await fixture(); f.getRawAccount.mockRejectedValue(new ConnectError('offline', Code.Unavailable));
@@ -72,6 +119,73 @@ describe('integrated sdk.compression', () => {
     expect(f.sent[4]?.requestedStateUnits).toBe(19);
     expect(result.uploads.every(u => u.status === 'cleaned')).toBe(true);
     expect(f.sent.every(tx => tx.toWire().length <= 32768)).toBe(true);
+  });
+  it('awaits durable upload handles before creating staging accounts', async () => {
+    const f = await fixture({ [a]: 80000 });
+    let release: () => void = () => {};
+    const durable = new Promise<void>(resolve => { release = resolve; });
+    const saveUpload = vi.fn(async (_pair: UploadCleanup) => { await durable; });
+    const pending = f.sdk.compression.decompressAccounts({ ...f.options, accounts: [a],
+      journal: { ...f.journal, saveUpload } });
+    await vi.waitFor(() => expect(saveUpload).toHaveBeenCalledOnce());
+    expect(f.sent).toHaveLength(0);
+    const pair = saveUpload.mock.calls[0]![0];
+    expect(pair).toMatchObject({ status: 'pending', uploader: f.programs.uploader });
+    release();
+    const result = await pending;
+    expect(result.uploads[0]).toMatchObject({ meta: pair.meta, buffer: pair.buffer, status: 'cleaned' });
+    expect(f.active.has(pair.meta)).toBe(false);
+    expect(f.active.has(pair.buffer)).toBe(false);
+  });
+  it('submits nothing when persisting upload handles fails', async () => {
+    const f = await fixture({ [a]: 80000 });
+    await expect(f.sdk.compression.decompressAccounts({ ...f.options, accounts: [a],
+      journal: { ...f.journal, saveUpload: async () => { throw new Error('disk full'); } } }))
+      .rejects.toThrow('disk full');
+    expect(f.sent).toHaveLength(0);
+  });
+  it('marks journaled uploads cleaned when creation was never submitted', async () => {
+    const f = await fixture();
+    const result = await f.sdk.compression.cleanupUploads({ ...f.options,
+      uploads: [{ meta: address(30), buffer: address(31), status: 'pending' }] });
+    expect(result.uploads[0]?.status).toBe('cleaned');
+    expect(f.sent).toHaveLength(0);
+  });
+  it('cleans uploaded state after cancellation before restoration submission', async () => {
+    const f = await fixture({ [a]: 65536 }); const abort = new AbortController();
+    const save = f.journal.save.getMockImplementation()!;
+    f.journal.save.mockImplementation(async pending => {
+      await save(pending);
+      // Cancel after all upload writes confirmed, while journaling the not-yet-sent restore.
+      if (pending && f.actions.filter(action => action === 'write').length === 3) abort.abort();
+    });
+    let error: CompressionError | undefined;
+    try { await f.sdk.compression.decompressAccounts({ ...f.options, accounts: [a], signal: abort.signal }); }
+    catch (e) { error = e as CompressionError; }
+    expect(error).toBeInstanceOf(CompressionError); expect(error?.code).toBe('CANCELLED');
+    const uploads = error!.details.result!.uploads;
+    expect(uploads).toHaveLength(1);
+    expect(uploads.every(pair => pair.status === 'cleaned')).toBe(true);
+    for (const pair of uploads) {
+      expect(f.active.has(pair.meta)).toBe(false); expect(f.active.has(pair.buffer)).toBe(false);
+    }
+    expect(f.actions).toEqual(['create', 'write', 'write', 'write', 'destroy']);
+    expect(f.sent.map(tx => tx.nonce)).toEqual([0n, 1n, 2n, 3n, 4n]);
+    expect(f.saved()).toBeUndefined(); expect(f.active.has(a)).toBe(false);
+  });
+  it('preserves uploaded state when cancellation leaves restoration uncertain', async () => {
+    const f = await fixture({ [a]: 65536 }); const abort = new AbortController();
+    f.onExecute(kind => { if (kind === 'restore-upload') abort.abort(); });
+    let error: CompressionError | undefined;
+    try { await f.sdk.compression.decompressAccounts({ ...f.options, accounts: [a], signal: abort.signal }); }
+    catch (e) { error = e as CompressionError; }
+    expect(error?.code).toBe('TRANSACTION_UNCERTAIN');
+    expect(error!.details.result!.uploads).toHaveLength(1);
+    for (const pair of error!.details.result!.uploads) {
+      expect(pair.status).toBe('pending');
+      expect(f.active.has(pair.meta)).toBe(true); expect(f.active.has(pair.buffer)).toBe(true);
+    }
+    expect(f.actions).not.toContain('destroy'); expect(f.saved()).toBeDefined();
   });
   it('uses separate metadata/data buffers for a maximum account', async () => {
     // Runner pauses must not expire confirmations in this success-path test.

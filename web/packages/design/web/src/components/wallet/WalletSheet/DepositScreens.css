@@ -144,6 +144,7 @@
   gap: var(--space-3);
 }
 @media (prefers-reduced-motion: reduce) {
+  .tds-dep__method-chev,
   .tds-dep__panel {
     transition: none;
   }
@@ -171,6 +172,12 @@
   height: 10px;
   border-radius: var(--radius-pill);
   flex: none;
+}
+/* Ending the sheet over the network status (Frame.css): the status moves up
+   by this row's half-leading, so it sits as far under the text as under a
+   button. The row is 11px on the host's 1.5 line. */
+.tds-frame--network:has(.tds-screen:not([hidden] *) > .tds-screen__body:last-child > .tds-dep__lands:last-child):not(:has(.tds-powered)) .tds-frame__network {
+  margin-top: calc(-0.25 * 11px);
 }
 
 /* Field + label */
@@ -248,6 +255,11 @@
 }
 .tds-dep__select[data-popup-open] .tds-dep__select-chev {
   transform: rotate(180deg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .tds-dep__select-chev {
+    transition: none;
+  }
 }
 /* Above the WalletOverlay island (z 61): the select lives inside the sheet. */
 .tds-dep__positioner {

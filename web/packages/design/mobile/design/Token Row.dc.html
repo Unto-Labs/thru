@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="thru-mobile-tokens.css">
+<style>
+body{margin:0;-webkit-font-smoothing:antialiased;}
+a{color:var(--m-accent);text-decoration:none;}
+a:hover{text-decoration:underline;text-underline-offset:3px;}
+@keyframes tm-shimmer{0%,100%{opacity:1;}50%{opacity:0.55;}}
+</style>
+</helmet>
+<div role="button" tabindex="0" aria-label="{{ aria }}" aria-busy="{{ isSkeleton }}" style="position:relative;display:flex;align-items:center;gap:12px;height:64px;padding:0 16px;box-sizing:border-box;background:{{ rowBg }};color:var(--m-fg);font-family:'Inter Tight',system-ui,sans-serif;cursor:pointer;outline:none" style-active="background:var(--m-bg-muted)" style-focus="box-shadow:inset 0 0 0 2px var(--m-accent)">
+  <sc-if value="{{ selected }}" hint-placeholder-val="{{ false }}"><span aria-hidden="true" style="position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--m-accent)"></span></sc-if>
+  <sc-if value="{{ isSkeleton }}" hint-placeholder-val="{{ false }}">
+    <span aria-hidden="true" style="display:contents;animation:tm-shimmer 1.4s ease-in-out infinite">
+      <span style="width:28px;height:28px;border-radius:50%;background:var(--m-bg-inset);flex:none"></span>
+      <span style="flex:1;display:flex;flex-direction:column;gap:7px"><span style="display:block;width:72px;height:12px;background:var(--m-bg-inset)"></span><span style="display:block;width:96px;height:9px;background:var(--m-bg-inset)"></span></span>
+      <span style="display:block;width:64px;height:12px;background:var(--m-bg-inset)"></span>
+    </span>
+  </sc-if>
+  <sc-if value="{{ notSkeleton }}" hint-placeholder-val="{{ true }}">
+    <sc-if value="{{ isThrusd }}" hint-placeholder-val="{{ true }}"><img src="assets/thrusd/00-current.svg" alt="" aria-hidden="true" style="width:28px;height:28px;display:block;flex:none;border-radius:50%"></sc-if>
+    <sc-if value="{{ isMark }}" hint-placeholder-val="{{ false }}"><span aria-hidden="true" style="width:28px;height:28px;border-radius:50%;background:var(--m-fg);color:var(--m-bg);display:grid;place-items:center;flex:none;font-family:{{ glyphFont }};font-size:{{ glyphSize }};font-weight:600;letter-spacing:0">{{ glyph }}</span></sc-if>
+    <span aria-hidden="true" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+      <span style="display:flex;align-items:center;gap:8px;min-width:0"><span style="font-size:15px;font-weight:500;line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ ticker }}</span><sc-if value="{{ hasBadge }}" hint-placeholder-val="{{ false }}"><span style="flex:none;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;font-weight:500;letter-spacing:0.5px;text-transform:uppercase;line-height:1;padding:4px 8px;background:var(--m-bg-muted);color:var(--m-fg-muted)">{{ badge }}</span></sc-if></span>
+      <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;line-height:14px;letter-spacing:0.04em;color:var(--m-fg-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ sub }}</span>
+    </span>
+    <span aria-hidden="true" style="flex:none;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:14px;line-height:20px;color:var(--m-fg);text-align:right">{{ amount }}</span>
+  </sc-if>
+  <span aria-hidden="true" style="position:absolute;left:16px;right:16px;bottom:0;height:1px;background:var(--m-hair)"></span>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:64},&quot;kind&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;token&quot;,&quot;options&quot;:[&quot;thrusd&quot;,&quot;token&quot;,&quot;skeleton&quot;],&quot;tsType&quot;:&quot;'thrusd' | 'token' | 'skeleton'&quot;},&quot;ticker&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;COOL&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;mint&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;taZt…9Kq2&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;amount&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;1,250.5&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;units&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;badge&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;&quot;,&quot;options&quot;:[&quot;&quot;,&quot;Frozen&quot;,&quot;Unsupported&quot;],&quot;tsType&quot;:&quot;'' | 'Frozen' | 'Unsupported'&quot;},&quot;dup&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;selected&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props;
+    const kind = p.kind ?? 'token';
+    const ticker = p.ticker ?? 'COOL', mint = p.mint ?? 'taZt\u20269Kq2', amount = p.amount ?? '0';
+    const unknown = ticker === 'Unknown token';
+    const glyph = unknown ? '?' : ticker.slice(0, 2).toUpperCase();
+    const badge = p.badge || '';
+    const units = p.units ?? '';
+    const sub = kind === 'thrusd' ? (units || amount.replace(/^\$/, '')) + ' THRUSD' : mint;
+    const aria = kind === 'skeleton' ? 'Loading token' : [ticker, amount, kind !== 'thrusd' && (p.dup || unknown) ? mint : null, badge ? badge.toLowerCase() : null, 'open'].filter(Boolean).join(', ');
+    return {
+      isSkeleton: kind === 'skeleton', notSkeleton: kind !== 'skeleton', isThrusd: kind === 'thrusd', isMark: kind === 'token',
+      glyph, glyphSize: glyph.length === 1 ? '14px' : '10px', glyphFont: glyph.length === 1 ? "'Inter Tight',system-ui,sans-serif" : "'JetBrains Mono',ui-monospace,monospace",
+      ticker, sub, amount, hasBadge: !!badge, badge, aria,
+      selected: !!p.selected, rowBg: p.selected ? 'var(--m-bg-muted)' : 'transparent',
+    };
+  }
+}
+</script>
+</body>
+</html>

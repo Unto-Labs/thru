@@ -1,9 +1,20 @@
 /**
- * Screen chrome: Screen wrapper, NavBar (52pt, 44/1fr/44 grid, hairline),
+ * Screen chrome: Screen wrapper, NavBar (52pt, 44/1fr/44 grid, hairline; on
+ * web it starts lower under an overlaid status bar, see NAV_TOP_GAP),
  * TabBar (56pt items, icon + 10pt mono label, brick indicator when active).
  */
-import type { ComponentType, ReactNode } from "react";
-import { Platform, Pressable, SafeAreaView, ScrollView, Text, View } from "react-native";
+import { useEffect, useRef, type ComponentType, type ReactNode } from "react";
+import {
+  AccessibilityInfo,
+  Animated,
+  Easing,
+  Platform,
+  Pressable,
+  SafeAreaView,
+  ScrollView,
+  Text,
+  View,
+} from "react-native";
 import { TapHaptic } from "./TapHaptic";
 import { font, text, touch } from "./tokens";
 import { makeStyles, useThemeColors } from "./theme";
@@ -35,14 +46,66 @@ export function Screen({
   );
 }
 
-export function NavBar({ title, left, right }: { title: string; left?: ReactNode; right?: ReactNode }) {
+export interface NavBarProps {
+  title: string;
+  left?: ReactNode;
+  right?: ReactNode;
+  /** The large-title variant's compact bar. Put LargeTitle (28/700) at the
+      top of the scroll content and this bar over it, as a sibling of the
+      ScrollView: it stays hidden while the large title shows, and fades in
+      (150ms, instant under reduce motion) once `collapsed` says the title
+      has scrolled under it. */
+  large?: { collapsed: boolean };
+}
+
+export function NavBar({ title, left, right, large }: NavBarProps) {
   const styles = useStyles();
-  return (
+  const bar = (
     <View style={styles.nav}>
       <View style={styles.navSide}>{left}</View>
-      <Text style={styles.navTitle}>{title}</Text>
+      <Text accessibilityRole="header" style={styles.navTitle} numberOfLines={1}>
+        {title}
+      </Text>
       <View style={styles.navSide}>{right}</View>
     </View>
+  );
+  return large ? <CollapsingBar collapsed={large.collapsed}>{bar}</CollapsingBar> : bar;
+}
+
+function CollapsingBar({ collapsed, children }: { collapsed: boolean; children: ReactNode }) {
+  const styles = useStyles();
+  const opacity = useRef(new Animated.Value(collapsed ? 1 : 0)).current;
+  const reduceMotion = useRef(false);
+  useEffect(() => {
+    void AccessibilityInfo.isReduceMotionEnabled()
+      .then((reduce) => {
+        reduceMotion.current = reduce;
+      })
+      .catch(() => {});
+  }, []);
+  useEffect(() => {
+    if (reduceMotion.current) {
+      opacity.setValue(collapsed ? 1 : 0);
+      return;
+    }
+    const animation = Animated.timing(opacity, {
+      toValue: collapsed ? 1 : 0,
+      duration: 150,
+      easing: Easing.out(Easing.cubic),
+      useNativeDriver: true,
+    });
+    animation.start();
+    return () => animation.stop();
+  }, [collapsed, opacity]);
+  return (
+    <Animated.View
+      aria-hidden={!collapsed}
+      accessibilityElementsHidden={!collapsed}
+      importantForAccessibility={collapsed ? "auto" : "no-hide-descendants"}
+      style={[styles.navOverlay, { opacity, pointerEvents: collapsed ? "box-none" : "none" }]}
+    >
+      {children}
+    </Animated.View>
   );
 }
 
@@ -61,6 +124,21 @@ export interface TabItem<K extends string = string> {
 const IS_WEB = Platform.OS === "web";
 /* RN style types want a number; react-native-web passes a string through. */
 const SAFE_AREA_BOTTOM = "env(safe-area-inset-bottom)" as unknown as number;
+/* iOS 27 blurs a band below the status bar of an installed web app, about
+   40pt deep, and whatever is drawn there comes out soft: a bar right under
+   the status bar, its title included. On web the bar starts this much lower:
+   24pt where the page runs under the status bar (an installed iPhone app in
+   portrait), nothing where the top inset is 0 (a browser tab, desktop,
+   Android, landscape). */
+const NAV_TOP_GAP = "min(24px, env(safe-area-inset-top))";
+
+/** The NavBar's height, the gap above it included: what content that sticks
+    under the bar offsets by. On web a CSS expression typed as a number, like
+    safeAreaBottomInset's, so a style value only. */
+export const navBarHeight: number = IS_WEB
+  ? (`calc(${touch.navH}px + ${NAV_TOP_GAP})` as unknown as number)
+  : touch.navH;
+
 function withSafeAreaBottom(base: number): number {
   return IS_WEB
     ? (`calc(${base}px + env(safe-area-inset-bottom))` as unknown as number)
@@ -133,7 +211,8 @@ const useStyles = makeStyles((c) => ({
   scroll: { flex: 1 },
   scrollContentWithTabBar: { paddingBottom: withSafeAreaBottom(touch.tabH + 24) },
   nav: {
-    height: touch.navH,
+    height: navBarHeight,
+    ...(IS_WEB ? { paddingTop: NAV_TOP_GAP as unknown as number } : null),
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 6,
@@ -142,6 +221,7 @@ const useStyles = makeStyles((c) => ({
     backgroundColor: c.bg,
   },
   navSide: { width: 44, alignItems: "center", justifyContent: "center" },
+  navOverlay: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 3 },
   navTitle: {
     flex: 1,
     textAlign: "center",

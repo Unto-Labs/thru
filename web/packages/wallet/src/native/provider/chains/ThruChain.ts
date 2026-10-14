@@ -89,7 +89,7 @@ export class NativeThruChain implements IThruChain {
   }
 
   async getSigningContext(): Promise<ThruSigningContext> {
-    if (!this.provider.isConnected() && !this.provider.isTransparent()) {
+    if (!this.provider.isConnected()) {
       throw new Error("Wallet not connected");
     }
     const response = await this.bridge.sendMessage({
@@ -112,19 +112,14 @@ export class NativeThruChain implements IThruChain {
       session = await this.signingSessions.getActive(walletAddress);
       signingSessionId = session?.id;
     }
-    if (
-      !signingSessionId &&
-      !this.provider.isConnected() &&
-      !this.provider.isTransparent()
-    ) {
+    if (!signingSessionId && !this.provider.isConnected()) {
       throw new Error("Wallet not connected");
     }
 
     const shouldShowWallet = !signingSessionId || !session;
-    let walletShown = shouldShowWallet;
-    if (shouldShowWallet) {
-      await this.provider.requestShow("sign-transaction-open");
-    }
+    let surface = shouldShowWallet
+      ? await this.provider.requestShow("sign-transaction-open")
+      : undefined;
     try {
       try {
         return await this.requestSignedTransaction(
@@ -136,9 +131,12 @@ export class NativeThruChain implements IThruChain {
         if (!signingSessionId || !isSigningSessionUnavailable(error))
           throw error;
         await this.signingSessions?.remove(signingSessionId);
+        if (!this.provider.isConnected())
+          throw new Error("Wallet not connected");
         if (!shouldShowWallet) {
-          await this.provider.requestShow("sign-transaction-session-fallback");
-          walletShown = true;
+          surface = await this.provider.requestShow(
+            "sign-transaction-session-fallback",
+          );
         }
         return await this.requestSignedTransaction(
           transaction,
@@ -147,8 +145,8 @@ export class NativeThruChain implements IThruChain {
         );
       }
     } finally {
-      if (walletShown) {
-        this.provider.requestHide("sign-transaction-settled");
+      if (surface !== undefined) {
+        this.provider.requestHide("sign-transaction-settled", surface);
       }
     }
   }
@@ -156,10 +154,12 @@ export class NativeThruChain implements IThruChain {
   async signPasskeyChallenge(
     challenge: ThruPasskeyChallengeIntent,
   ): Promise<ThruPasskeyChallengeSignature> {
-    if (!this.provider.isConnected() && !this.provider.isTransparent()) {
+    if (!this.provider.isConnected()) {
       throw new Error("Wallet not connected");
     }
-    await this.provider.requestShow("sign-passkey-challenge-open");
+    const surface = await this.provider.requestShow(
+      "sign-passkey-challenge-open",
+    );
     try {
       const response = await this.bridge.sendMessage({
         id: createRequestId(),
@@ -172,14 +172,14 @@ export class NativeThruChain implements IThruChain {
       });
       return response.result;
     } finally {
-      this.provider.requestHide("sign-passkey-challenge-settled");
+      this.provider.requestHide("sign-passkey-challenge-settled", surface);
     }
   }
 
   async createSigningSession(
     options: ThruSigningSessionCreateOptions,
   ): Promise<ThruSigningSession> {
-    if (!this.provider.isConnected() && !this.provider.isTransparent()) {
+    if (!this.provider.isConnected()) {
       throw new Error("Wallet not connected");
     }
     if (!this.signingSessions) {
@@ -187,7 +187,9 @@ export class NativeThruChain implements IThruChain {
     }
 
     const expiresAt = resolveSessionExpirySeconds(options);
-    await this.provider.requestShow("create-signing-session-open");
+    const surface = await this.provider.requestShow(
+      "create-signing-session-open",
+    );
     try {
       const response = await this.bridge.sendMessage({
         id: createRequestId(),
@@ -203,7 +205,7 @@ export class NativeThruChain implements IThruChain {
       await this.signingSessions.saveReplacingWalletSessions(descriptor);
       return this.toSigningSession(descriptor);
     } finally {
-      this.provider.requestHide("create-signing-session-settled");
+      this.provider.requestHide("create-signing-session-settled", surface);
     }
   }
 
@@ -218,10 +220,14 @@ export class NativeThruChain implements IThruChain {
         throw new Error("NativeSDKStorage is required for signing sessions");
       }
       if (!this.broadcastTransaction) {
-        throw new Error("Signing session transaction broadcast is not available");
+        throw new Error(
+          "Signing session transaction broadcast is not available",
+        );
       }
 
-      const current = await this.signingSessions.getActive(options.walletAddress);
+      const current = await this.signingSessions.getActive(
+        options.walletAddress,
+      );
       if (!current) {
         throw new Error("An active signing session is required for renewal");
       }

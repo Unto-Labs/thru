@@ -138,7 +138,8 @@ describe("streaming", () => {
     it("should yield ChainEvent instances", async () => {
       const ctx = createMockContext();
       const proto = create(StreamEventsResponseSchema, {
-        eventId: "evsig:10:2:0:extra",
+        eventId: "evsig:10:7:2:1",
+        blockOffset: 7,
         signature: { value: generateTestSignature() },
         program: { value: generateTestSignature(0x33).slice(0, 32) },
         payload: new Uint8Array([1, 2, 3]),
@@ -160,7 +161,7 @@ describe("streaming", () => {
 
       expect(results).toHaveLength(1);
       expect(results[0]).toBeInstanceOf(ChainEvent);
-      expect(results[0].id).toBe("evsig:10:2:0");
+      expect(results[0].id).toBe("evsig:10:7:2:1");
       expect(results[0].slot).toBe(10n);
       expect(results[0].timestampNs).toBe(1_000_000_005n);
     });

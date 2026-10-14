@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="thru-mobile-tokens.css">
+<style>
+body{margin:0;-webkit-font-smoothing:antialiased;}
+a{color:var(--m-accent);text-decoration:none;}
+a:hover{text-decoration:underline;text-underline-offset:3px;}
+@keyframes tm-toastbar{from{transform:scaleX(1);}to{transform:scaleX(0);}}
+@keyframes tm-toast-in{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+</style>
+</helmet>
+<div data-screen-label="Wallet home" style="position:absolute;top:0;left:0;right:0;bottom:0;background:var(--m-bg);color:var(--m-fg);font-family:'Inter Tight',system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden;isolation:isolate">
+  <sc-if value="{{ isIos }}" hint-placeholder-val="{{ true }}"><div style="height:62px;flex:none"></div></sc-if>
+  <sc-if value="{{ isWeb }}" hint-placeholder-val="{{ false }}"><div style="height:16px;flex:none"></div></sc-if>
+  <div style="display:flex;align-items:center;gap:10px;padding:8px 16px;flex:none">
+    <span style="width:32px;height:32px;border-radius:50%;background:var(--m-bg-inset);display:grid;place-items:center;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--m-fg-muted);flex:none">TA</span>
+    <span style="display:inline-flex;align-items:center;gap:6px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;background:var(--m-bg-muted);color:var(--m-fg-muted);padding:5px 8px">ta1kqV…9fq2<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><rect x="9" y="9" width="11" height="11"></rect><path d="M5 15V5h10"></path></svg></span>
+    <span style="flex:1"></span>
+    <span aria-hidden="true" style="width:44px;height:44px;display:grid;place-items:center;color:var(--m-fg)"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square"><path d="M3 8V3h5M16 3h5v5M21 16v5h-5M8 21H3v-5"></path><path d="M7 12h10"></path></svg></span>
+  </div>
+  <div style="padding:20px 16px 0;flex:none">
+    <div style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-subtle);margin-bottom:6px">Total balance</div>
+    <div style="font-size:44px;font-weight:700;letter-spacing:-1px;line-height:1.05">{{ balance }}</div>
+  </div>
+  <div style="display:flex;gap:12px;padding:20px 16px 0;flex:none">
+    <button type="button" onClick="{{ onDeposit }}" style="flex:1;height:48px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:none;cursor:pointer;background:var(--m-bg-inverse);color:var(--m-fg-inverse);font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:600;font-size:15px" style-active="background:var(--m-fg-press)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M12 3v13M6 11l6 6 6-6"></path></svg>Deposit</button>
+    <button type="button" onClick="{{ onReceive }}" style="flex:1;height:48px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--m-border-strong);cursor:pointer;background:transparent;color:var(--m-fg);font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:600;font-size:15px;box-sizing:border-box" style-active="background:var(--m-bg-muted)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"></path><rect x="9" y="9" width="6" height="6"></rect></svg>Receive</button>
+    <button type="button" onClick="{{ onSend }}" style="flex:1;height:48px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--m-border-strong);cursor:pointer;background:transparent;color:var(--m-fg);font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:600;font-size:15px;box-sizing:border-box" style-active="background:var(--m-bg-muted)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"></path></svg>Send</button>
+  </div>
+  <div style="display:flex;align-items:baseline;padding:28px 16px 8px;flex:none"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-subtle)">Balances</span></div>
+  <div style="border-top:1px solid var(--m-border);border-bottom:1px solid var(--m-border);flex:none">
+    <div style="display:flex;align-items:center;gap:12px;height:64px;padding:0 16px">
+      <span aria-hidden="true" style="width:28px;height:28px;border-radius:50%;background:var(--m-fg);color:var(--m-bg);display:grid;place-items:center;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:14px;font-weight:600;flex:none">$</span>
+      <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:1px"><span style="font-size:15px;font-weight:500">$</span><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:0.06em;color:var(--m-fg-subtle)">ON THRU-ALPHANET</span></span>
+      <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:14px">{{ balance }}</span>
+    </div>
+  </div>
+  <div style="display:flex;align-items:baseline;padding:24px 16px 8px;flex:none"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-subtle)">Recent activity</span><span style="flex:1"></span><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--m-accent)">VIEW ALL →</span></div>
+  <div style="border-top:1px solid var(--m-border);flex:none">
+    <sc-for list="{{ activity }}" as="a" hint-placeholder-count="3">
+      <div role="button" tabindex="0" aria-label="{{ a.aria }}" style="position:relative;display:flex;align-items:center;gap:12px;height:56px;padding:0 16px;cursor:pointer" style-active="background:var(--m-bg-muted)">
+        <span aria-hidden="true" style="width:32px;height:32px;flex:none;display:grid;place-items:center;background:{{ a.tileBg }};color:{{ a.tileFg }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter"><path d="{{ a.glyph }}"></path></svg></span>
+        <span aria-hidden="true" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px"><span style="display:flex;align-items:center;gap:8px;min-width:0"><span style="font-size:15px;font-weight:500;line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.title }}</span><sc-if value="{{ a.pending }}" hint-placeholder-val="{{ false }}"><span style="flex:none;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;font-weight:500;letter-spacing:0.5px;text-transform:uppercase;line-height:1;padding:4px 8px;background:var(--m-saffron-soft);color:var(--m-saffron)">Pending</span></sc-if></span><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;line-height:14px;color:var(--m-fg-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ a.sub }}</span></span>
+        <span aria-hidden="true" style="flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:2px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:14px;font-weight:500;line-height:20px;color:{{ a.color }}">{{ a.amount }}</span><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;line-height:14px;color:var(--m-fg-muted)">{{ a.time }}</span></span>
+        <span aria-hidden="true" style="position:absolute;left:16px;right:16px;bottom:0;height:1px;background:var(--m-hair)"></span>
+      </div>
+    </sc-for>
+  </div>
+  <div style="margin-top:auto;flex:none;background:var(--m-bg)">
+    <div style="display:flex;border-top:1px solid var(--m-border)">
+      <span style="position:relative;flex:1;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--m-accent)"><span style="position:absolute;top:-1px;left:14px;right:14px;height:2px;background:var(--m-accent)"></span><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M3 11 12 3l9 8"></path><path d="M5 9.5V21h14V9.5"></path></svg><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;font-weight:600">Home</span></span>
+      <span style="flex:1;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--m-fg-subtle)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M7 4v13M3 8l4-4 4 4M17 20V7M13 16l4 4 4-4"></path></svg><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase">Trade</span></span>
+      <span style="flex:1;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--m-fg-subtle)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 3"></path></svg><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase">Activity</span></span>
+      <span style="flex:1;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--m-fg-subtle)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"></path></svg><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase">Settings</span></span>
+    </div>
+    <sc-if value="{{ isIos }}" hint-placeholder-val="{{ true }}"><div style="height:34px"></div></sc-if>
+  </div>
+  <sc-if value="{{ notice }}" hint-placeholder-val="{{ false }}">
+    <div role="status" style="position:absolute;left:12px;right:12px;bottom:102px;display:flex;gap:12px;align-items:flex-start;background:var(--m-bg-inverse);color:var(--m-fg-inverse);border-left:3px solid var(--m-forest);padding:12px 40px 13px 14px;box-shadow:0 20px 48px var(--m-sheet-shadow);overflow:hidden;animation:tm-toast-in 200ms cubic-bezier(0,0,0.2,1) both">
+      <span style="flex:none;width:22px;height:22px;border-radius:50%;display:grid;place-items:center;background:var(--m-forest);color:var(--m-bg-inverse)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="square" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg></span>
+      <span style="flex:1;min-width:0"><span style="display:block;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;letter-spacing:0.04em;text-transform:uppercase">{{ noticeTitle }}</span><span style="display:block;font-size:13px;color:var(--m-toast-body);margin-top:2px">{{ noticeText }}</span></span>
+      <button type="button" aria-label="Dismiss" onClick="{{ onDismiss }}" style="position:absolute;top:4px;right:4px;width:32px;height:32px;display:grid;place-items:center;border:none;background:none;cursor:pointer;color:var(--m-toast-body)"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+      <span style="position:absolute;left:0;bottom:0;height:2px;width:100%;background:var(--m-forest);transform-origin:left;animation:tm-toastbar 4.2s linear forwards"></span>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:402,&quot;height&quot;:874},&quot;platform&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;ios&quot;,&quot;options&quot;:[&quot;ios&quot;,&quot;web&quot;],&quot;tsType&quot;:&quot;'ios' | 'web'&quot;},&quot;notice&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;justSent&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;noticeAmount&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;$1.00&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;balance&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;$56.00&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;noticeKind&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;sent&quot;,&quot;options&quot;:[&quot;sent&quot;,&quot;added&quot;],&quot;tsType&quot;:&quot;'sent' | 'added'&quot;},&quot;noticeVia&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;Apple Pay&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;justAdded&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;onSend&quot;:{&quot;editor&quot;:null,&quot;default&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;},&quot;onDeposit&quot;:{&quot;editor&quot;:null,&quot;default&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;},&quot;onReceive&quot;:{&quot;editor&quot;:null,&quot;default&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;},&quot;onDismiss&quot;:{&quot;editor&quot;:null,&quot;default&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props;
+    const web = (p.platform ?? 'ios') === 'web';
+    const sent = !!p.justSent, added = !!p.justAdded;
+    const kind = p.noticeKind ?? (added ? 'added' : 'sent');
+    const via = p.noticeVia ?? 'Apple Pay';
+    const noop = () => {};
+    const amountStr = p.noticeAmount ?? (kind === 'added' ? '$49.00' : '$1.00');
+    const amt = Number(String(amountStr).replace(/[^0-9.]/g, '')) || 0;
+    const fix2 = (n) => '$' + n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const G = { sent: 'M7 17 17 7M8 7h9v9', received: 'M17 7 7 17M16 17H7V8', deposit: 'M12 3v12M7 10l5 5 5-5M4 20h16' };
+    const row = (kind, title, sub, amount, time, status) => {
+      const incoming = kind !== 'sent', pending = status === 'pending';
+      return { title, sub, amount, time, glyph: G[kind], pending,
+        tileBg: pending ? 'var(--m-saffron-soft)' : incoming ? 'var(--m-forest-soft)' : 'var(--m-bg-muted)',
+        tileFg: pending ? 'var(--m-saffron)' : incoming ? 'var(--m-forest)' : 'var(--m-fg)',
+        color: pending ? 'var(--m-fg-muted)' : incoming ? 'var(--m-forest)' : 'var(--m-fg)',
+        aria: title + ' ' + amount.replace(/^[+−]/, '') + ' ' + sub + (pending ? ', pending' : '') + ', ' + time };
+    };
+    const now = new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+    const rows = [
+      row('sent', 'Sent', 'to taB3…9kDe', '−$10.00', '2:16 PM', 'pending'),
+      row('received', 'Received', 'from ta7Q…x2Lp', '+$25.00', '2:14 PM', 'done'),
+      row('deposit', 'Deposit', 'Card', '+$50.00', '9:41 AM', 'done'),
+    ];
+    if (sent) rows.unshift(row('sent', 'Sent', 'to taUWaF…H8j5', '−' + amountStr, now, 'done'));
+    if (added) rows.unshift(row('deposit', 'Deposit', via, '+' + amountStr, now, 'done'));
+    return {
+      isIos: !web, isWeb: web,
+      balance: p.balance ?? (added ? fix2(56 + amt) : sent ? fix2(56 - amt) : '$56.00'),
+      activity: rows.slice(0, 3),
+      notice: !!p.notice,
+      noticeTitle: kind === 'added' ? 'Added' : 'Sent',
+      noticeText: kind === 'added' ? amountStr + ' via ' + via + '.' : amountStr + ' to taUWaF…H8j5.',
+      onSend: p.onSend ?? noop, onDeposit: p.onDeposit ?? noop, onReceive: p.onReceive ?? noop, onDismiss: p.onDismiss ?? noop,
+    };
+  }
+}
+</script>
+</body>
+</html>

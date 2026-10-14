@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<title>Thru Wallet — Tokens, token screen, receive</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="thru-mobile-tokens.css">
+<style>
+body{margin:0;font-family:'Inter Tight',system-ui,sans-serif;background:#F9FBFB;color:#181B1B;-webkit-font-smoothing:antialiased;}
+a{color:#D33C43;text-decoration:none;}
+a:hover{text-decoration:underline;text-underline-offset:3px;}
+</style>
+</helmet>
+<div data-m-theme="light" style="min-height:100vh;display:inline-flex;flex-direction:column;min-width:100%;background:var(--m-bg);color:var(--m-fg);font-family:'Inter Tight',system-ui,sans-serif">
+
+  <header data-screen-label="Top bar" style="display:flex;align-items:center;gap:18px;padding:13px 24px;background:#181B1B;color:#F9FBFB;border-bottom:1px solid #334747;white-space:nowrap">
+    <span style="display:inline-flex;align-items:center;gap:10px"><img src="assets/thru-disc.svg" alt="" style="width:26px;height:26px;display:block"><span style="font-weight:700;letter-spacing:-0.4px;font-size:20px">thru<span style="color:#729D9D;font-weight:500;margin:0 8px">/</span><span style="color:#B6CECE;font-weight:500;font-size:15px">mobile · tokens</span></span></span>
+    <nav style="display:flex;align-items:center;gap:14px;margin-left:auto">
+      <a href="#t1" style="color:#B6CECE;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase" style-hover="color:#F9FBFB">Home</a>
+      <a href="#t2" style="color:#B6CECE;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase" style-hover="color:#F9FBFB">Tokens</a>
+      <a href="#t3" style="color:#B6CECE;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase" style-hover="color:#F9FBFB">Token screen</a>
+      <a href="#t4" style="color:#B6CECE;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase" style-hover="color:#F9FBFB">Receive</a>
+      <a href="#t5" style="color:#B6CECE;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase" style-hover="color:#F9FBFB">Wide</a>
+      <a href="#t6" style="color:#B6CECE;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase" style-hover="color:#F9FBFB">Handoff</a>
+    </nav>
+  </header>
+
+  <section data-screen-label="Intro" style="padding:40px 40px 32px;border-bottom:1px solid var(--m-border);max-width:1400px">
+    <div style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;color:var(--m-fg-muted);margin-bottom:14px">Thru Wallet · PWA · Tokens list, token screen, receive</div>
+    <h1 style="margin:0 0 14px;font-size:40px;line-height:1.05;letter-spacing:-0.9px;font-weight:700">Every token the wallet holds, <em style="color:var(--m-accent);font-style:normal">one row each.</em></h1>
+    <p style="margin:0;font-size:16px;line-height:1.5;color:var(--m-fg-muted);max-width:72ch;text-wrap:pretty">Home keeps today's row — the ThruUSD mark, "56 THRUSD" under the title, the dollar figure on the right — and shows THRUSD plus the next three tokens by ticker under a Tokens label with VIEW ALL →, so Home fits one screen. The Tokens screen holds the full list. No prices anywhere: the dollar figure is THRUSD's alone; other rows show amounts. Receive splits by token: THRUSD, ETH and BTC hand off to the Deposit sheet; everything else gets a Receive on Thru sheet with the address as a QR. Built from @thru/design/mobile; parts the kit lacks are marked <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;background:var(--m-bg-muted);padding:2px 6px">NEW KIT PART</span>.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:18px">
+      <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;background:var(--m-bg-muted);padding:4px 8px;letter-spacing:0.02em">PHONE 390×844 · LIGHT + DARK · HOME FITS WITHOUT SCROLL</span>
+      <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;background:var(--m-bg-muted);padding:4px 8px;letter-spacing:0.02em">≥ 640 DIALOG 480 · ≥ 1024 TWO COLUMNS</span>
+      <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;background:var(--m-bg-muted);padding:4px 8px;letter-spacing:0.02em">ROWS 64 · HIT ≥ 44 · WHOLE ROW TAPS</span>
+      <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;background:var(--m-bg-muted);padding:4px 8px;letter-spacing:0.02em">NO PRICES · MINTS 4…4 MONO, NEVER UPPERCASED</span>
+    </div>
+  </section>
+
+  <div style="padding:0 0 80px;display:flex;flex-direction:column;align-items:flex-start">
+
+    <section id="t1" data-screen-label="01 Home" style="padding:40px 40px 48px;border-bottom:1px solid var(--m-border);display:flex;flex-direction:column;gap:18px;align-self:stretch">
+      <div style="display:flex;align-items:baseline;gap:14px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;color:var(--m-accent);letter-spacing:0.04em">01</span><h2 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.4px">Home · Tokens</h2><span style="font-size:14px;color:var(--m-fg-muted)">THRUSD + the next three by ticker · VIEW ALL → when more exist · Settings top right · nothing below the fold</span></div>
+      <sc-for list="{{ themes }}" as="th" hint-placeholder-count="2">
+        <div data-m-theme="{{ th.theme }}" style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;padding:24px;background:{{ th.panelBg }};max-width:1760px">
+          <sc-for list="{{ homes }}" as="f" hint-placeholder-count="5">
+            <figure style="margin:0;border:1px solid var(--m-border);background:var(--m-bg);display:flex;flex-direction:column;flex:none;width:392px;box-sizing:border-box">
+              <div style="position:relative;width:390px;height:844px;overflow:hidden"><dc-import name="Wallet Home Tokens" state="{{ f.state }}" style="position:absolute;top:0;left:0;right:0;bottom:0" hint-size="390px,844px"></dc-import></div>
+              <figcaption style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.04em;line-height:1.5;color:var(--m-fg-muted);padding:7px 12px;border-top:1px solid var(--m-border);background:var(--m-bg-muted)">{{ f.label }}{{ th.suffix }} — {{ f.cap }}</figcaption>
+            </figure>
+          </sc-for>
+        </div>
+      </sc-for>
+    </section>
+
+    <section id="t2" data-screen-label="02 Tokens screen" style="padding:40px 40px 48px;border-bottom:1px solid var(--m-border);display:flex;flex-direction:column;gap:18px;align-self:stretch">
+      <div style="display:flex;align-items:baseline;gap:14px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;color:var(--m-accent);letter-spacing:0.04em">02</span><h2 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.4px">Tokens screen · VIEW ALL</h2><span style="font-size:14px;color:var(--m-fg-muted)">pushed from Home · the full list, same rows · count in the label row · the edge cases live here</span></div>
+      <sc-for list="{{ themes }}" as="th" hint-placeholder-count="2">
+        <div data-m-theme="{{ th.theme }}" style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;padding:24px;background:{{ th.panelBg }};max-width:1760px">
+          <sc-for list="{{ lists }}" as="f" hint-placeholder-count="3">
+            <figure style="margin:0;border:1px solid var(--m-border);background:var(--m-bg);display:flex;flex-direction:column;flex:none;width:392px;box-sizing:border-box">
+              <div style="position:relative;width:390px;height:844px;overflow:hidden"><dc-import name="Tokens Screen" state="{{ f.state }}" scroll-y="{{ f.scrollY }}" style="position:absolute;top:0;left:0;right:0;bottom:0" hint-size="390px,844px"></dc-import></div>
+              <figcaption style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.04em;line-height:1.5;color:var(--m-fg-muted);padding:7px 12px;border-top:1px solid var(--m-border);background:var(--m-bg-muted)">{{ f.label }}{{ th.suffix }} — {{ f.cap }}</figcaption>
+            </figure>
+          </sc-for>
+        </div>
+      </sc-for>
+    </section>
+
+    <section id="t3" data-screen-label="03 Token screen" style="padding:40px 40px 48px;border-bottom:1px solid var(--m-border);display:flex;flex-direction:column;gap:18px;align-self:stretch">
+      <div style="display:flex;align-items:baseline;gap:14px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;color:var(--m-accent);letter-spacing:0.04em">03</span><h2 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.4px">Token screen</h2><span style="font-size:14px;color:var(--m-fg-muted)">pushed from a row · back returns · Send hands off to the Send flow with the token pre-selected · the explainer is live</span></div>
+      <sc-for list="{{ themes }}" as="th" hint-placeholder-count="2">
+        <div data-m-theme="{{ th.theme }}" style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;padding:24px;background:{{ th.panelBg }};max-width:1760px">
+          <sc-for list="{{ screens }}" as="f" hint-placeholder-count="7">
+            <figure style="margin:0;border:1px solid var(--m-border);background:var(--m-bg);display:flex;flex-direction:column;flex:none;width:392px;box-sizing:border-box">
+              <div style="position:relative;width:390px;height:844px;overflow:hidden"><dc-import name="Token Screen" token="{{ f.token }}" explainer-open="{{ f.explainerOpen }}" style="position:absolute;top:0;left:0;right:0;bottom:0" hint-size="390px,844px"></dc-import></div>
+              <figcaption style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.04em;line-height:1.5;color:var(--m-fg-muted);padding:7px 12px;border-top:1px solid var(--m-border);background:var(--m-bg-muted)">{{ f.label }}{{ th.suffix }} — {{ f.cap }}</figcaption>
+            </figure>
+          </sc-for>
+        </div>
+      </sc-for>
+    </section>
+
+    <section id="t4" data-screen-label="04 Receive" style="padding:40px 40px 48px;border-bottom:1px solid var(--m-border);display:flex;flex-direction:column;gap:18px;align-self:stretch">
+      <div style="display:flex;align-items:baseline;gap:14px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;color:var(--m-accent);letter-spacing:0.04em">04</span><h2 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.4px">Receive — two paths, decided by the token</h2><span style="font-size:14px;color:var(--m-fg-muted)">THRUSD · ETH · BTC → the Deposit sheet (Unifold) with the source pre-selected · any other token → Receive on Thru</span></div>
+      <sc-for list="{{ themes }}" as="th" hint-placeholder-count="2">
+        <div data-m-theme="{{ th.theme }}" style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;padding:24px;background:{{ th.panelBg }};max-width:1760px">
+          <sc-for list="{{ handoffs }}" as="f" hint-placeholder-count="2">
+            <figure style="margin:0;border:1px solid var(--m-border);background:var(--m-bg);display:flex;flex-direction:column;flex:none;width:392px;box-sizing:border-box">
+              <div style="position:relative;width:390px;height:844px;overflow:hidden"><dc-import name="Token Screen" token="{{ f.token }}" style="position:absolute;top:0;left:0;right:0;bottom:0" hint-size="390px,844px"></dc-import></div>
+              <figcaption style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.04em;line-height:1.5;color:var(--m-fg-muted);padding:7px 12px;border-top:1px solid var(--m-border);background:var(--m-bg-muted)">{{ f.label }}{{ th.suffix }} — {{ f.cap }}</figcaption>
+            </figure>
+          </sc-for>
+          <sc-for list="{{ receives }}" as="f" hint-placeholder-count="2">
+            <figure style="margin:0;border:1px solid var(--m-border);background:var(--m-bg);display:flex;flex-direction:column;flex:none;width:392px;box-sizing:border-box">
+              <div style="position:relative;width:390px;height:844px;overflow:hidden">
+                <dc-import name="Token Screen" token="cool" style="position:absolute;top:0;left:0;right:0;bottom:0" hint-size="390px,844px"></dc-import>
+                <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:var(--m-scrim)"></div>
+                <div style="position:absolute;left:0;right:0;bottom:0"><dc-import name="Receive Thru Sheet" ticker="COOL" copied="{{ f.copied }}" hint-size="390px,620px"></dc-import></div>
+              </div>
+              <figcaption style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.04em;line-height:1.5;color:var(--m-fg-muted);padding:7px 12px;border-top:1px solid var(--m-border);background:var(--m-bg-muted)">{{ f.label }}{{ th.suffix }} — {{ f.cap }}</figcaption>
+            </figure>
+          </sc-for>
+          <figure style="margin:0;display:flex;flex-direction:column;flex:none;width:760px">
+            <x-import component-from-global-scope="ChromeWindow" from="./browser-window.jsx" width="{{ 760 }}" height="{{ 820 }}" url="wallet.tid.sh/token/taZt…9Kq2/receive" tabs="{{ browserTabs }}" hint-size="760px,820px">
+              <div style="position:relative;width:760px;height:736px;background:var(--m-bg-muted);overflow:hidden">
+                <div style="position:absolute;left:50%;top:0;bottom:0;width:480px;transform:translateX(-50%);border-left:1px solid var(--m-border);border-right:1px solid var(--m-border);background:var(--m-bg)"><dc-import name="Token Screen" token="cool" layout="column" style="position:absolute;top:0;left:0;right:0;bottom:0" hint-size="480px,736px"></dc-import></div>
+                <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:var(--m-scrim)"></div>
+                <div style="position:absolute;left:50%;top:50%;width:480px;transform:translate(-50%,-50%)"><dc-import name="Receive Thru Sheet" ticker="COOL" layout="dialog" hint-size="480px,600px"></dc-import></div>
+              </div>
+            </x-import>
+            <figcaption style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.04em;line-height:1.5;color:var(--m-fg-muted);padding:7px 12px;border:1px solid var(--m-border);border-top:none;background:var(--m-bg-muted)">Receive on Thru · ≥ 640 dialog{{ th.suffix }} — the kit Sheet becomes a centred 480 dialog, radius 12, 64 % scrim · same content, 24 below instead of the home-indicator spacer · Escape and Close dismiss</figcaption>
+          </figure>
+        </div>
+      </sc-for>
+    </section>
+
+    <section id="t5" data-screen-label="05 Wide" style="padding:40px 40px 48px;border-bottom:1px solid var(--m-border);display:flex;flex-direction:column;gap:18px;align-self:stretch">
+      <div style="display:flex;align-items:baseline;gap:14px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;color:var(--m-accent);letter-spacing:0.04em">05</span><h2 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.4px">≥ 1024 · two columns</h2><span style="font-size:14px;color:var(--m-fg-muted)">DesktopShell sidebar 240 · Tokens column 440 (full list, selected row) · the token's screen beside it, capped at 640 · 640–1023 keeps the phone stack with sheets as dialogs</span></div>
+      <div style="display:flex;flex-direction:column;gap:32px">
+        <sc-for list="{{ wide }}" as="d" hint-placeholder-count="2">
+          <figure data-m-theme="{{ d.theme }}" style="margin:0;display:flex;flex-direction:column;flex:none;width:1440px">
+            <x-import component-from-global-scope="ChromeWindow" from="./browser-window.jsx" width="{{ 1440 }}" height="{{ 900 }}" url="wallet.tid.sh/token/taZt…9Kq2" tabs="{{ browserTabs }}" hint-size="1440px,900px">
+              <div style="display:flex;width:1440px;height:816px;background:var(--m-bg);color:var(--m-fg);font-family:'Inter Tight',system-ui,sans-serif;overflow:hidden">
+                <aside style="width:240px;flex:none;border-right:1px solid var(--m-border);display:flex;flex-direction:column;background:var(--m-bg);box-sizing:border-box">
+                  <div style="display:flex;align-items:center;gap:10px;height:64px;padding:0 20px;border-bottom:1px solid var(--m-hair);flex:none"><img src="assets/thru-disc.svg" alt="" style="width:24px;height:24px;display:block"><span aria-label="thru" style="display:inline-block;width:44px;height:16px;background:var(--m-fg);-webkit-mask:url(assets/thru-wordmark.svg) center / contain no-repeat;mask:url(assets/thru-wordmark.svg) center / contain no-repeat"></span><span style="margin-left:auto;display:inline-flex;align-items:center;gap:6px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)"><span style="width:6px;height:6px;border-radius:50%;background:var(--m-forest)"></span>Alphanet</span></div>
+                  <nav aria-label="Main" style="display:flex;flex-direction:column;padding:12px 0">
+                    <a href="#" aria-current="page" style="position:relative;display:flex;align-items:center;gap:12px;height:44px;padding:0 20px;color:var(--m-fg);background:var(--m-bg-muted);font-size:15px;font-weight:500" style-hover="text-decoration:none"><span style="position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--m-accent)"></span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M3 11 12 3l9 8"></path><path d="M5 9.5V21h14V9.5"></path></svg>Home</a>
+                    <a href="#" style="display:flex;align-items:center;gap:12px;height:44px;padding:0 20px;color:var(--m-fg-muted);font-size:15px;font-weight:500" style-hover="background:var(--m-bg-muted);color:var(--m-fg);text-decoration:none"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 3"></path></svg>Activity</a>
+                    <a href="#" style="display:flex;align-items:center;gap:12px;height:44px;padding:0 20px;color:var(--m-fg-muted);font-size:15px;font-weight:500" style-hover="background:var(--m-bg-muted);color:var(--m-fg);text-decoration:none"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"></path></svg>Settings</a>
+                  </nav>
+                  <div style="margin-top:auto;display:flex;align-items:center;gap:10px;height:64px;padding:0 20px;border-top:1px solid var(--m-hair);flex:none"><span style="width:32px;height:32px;border-radius:50%;background:var(--m-bg-inset);display:grid;place-items:center;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--m-fg-muted);flex:none">TA</span><span style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-size:13px;font-weight:500">Main</span><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--m-fg-muted)">ta1kqV…9fq2</span></span></div>
+                </aside>
+                <main style="flex:1;min-width:0;display:flex;overflow:hidden">
+                  <div style="width:440px;flex:none;border-right:1px solid var(--m-border);display:flex;flex-direction:column;overflow:hidden">
+                    <div style="padding:36px 16px 0"><div style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted);margin-bottom:6px">Balance</div><div style="font-size:34px;font-weight:700;letter-spacing:-0.75px;line-height:40px">$56.00</div></div>
+                    <dc-import name="Token List" state="{{ d.listState }}" selected="{{ d.selected }}" hint-size="440px,500px"></dc-import>
+                  </div>
+                  <div style="flex:1;min-width:0;display:flex;justify-content:center;overflow:hidden;padding:0 40px">
+                    <div style="width:640px;max-width:100%"><dc-import name="Token Screen" token="{{ d.token }}" layout="column" explainer-open="{{ d.explainerOpen }}" hint-size="640px,700px"></dc-import></div>
+                  </div>
+                </main>
+              </div>
+            </x-import>
+            <figcaption style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.04em;line-height:1.5;color:var(--m-fg-muted);padding:7px 12px;border:1px solid var(--m-border);border-top:none;background:var(--m-bg-muted)">{{ d.label }} — {{ d.cap }}</figcaption>
+          </figure>
+        </sc-for>
+      </div>
+    </section>
+
+    <section id="t6" data-screen-label="06 Handoff" style="padding:40px 40px 48px;display:flex;flex-direction:column;gap:18px;align-self:stretch">
+      <div style="display:flex;align-items:baseline;gap:14px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;color:var(--m-accent);letter-spacing:0.04em">06</span><h2 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.4px">Handoff note</h2><span style="font-size:14px;color:var(--m-fg-muted)">every element → a kit component, or a proposed new kit part · rules · open questions</span></div>
+      <div style="display:grid;grid-template-columns:220px 280px minmax(0,1fr);max-width:1180px;border:1px solid var(--m-border);background:var(--m-bg);font-size:13px;line-height:1.5">
+        <div style="padding:10px 14px;border-bottom:1px solid var(--m-border);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">Element</div>
+        <div style="padding:10px 14px;border-bottom:1px solid var(--m-border);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">Kit component</div>
+        <div style="padding:10px 14px;border-bottom:1px solid var(--m-border);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">Spec</div>
+        <sc-for list="{{ components }}" as="c" hint-placeholder-count="18">
+          <div style="padding:9px 14px;border-bottom:1px solid var(--m-hair);font-weight:500">{{ c.el }}</div>
+          <div style="padding:9px 14px;border-bottom:1px solid var(--m-hair);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;color:{{ c.mapColor }}">{{ c.map }}</div>
+          <div style="padding:9px 14px;border-bottom:1px solid var(--m-hair);color:var(--m-fg-muted);text-wrap:pretty">{{ c.spec }}</div>
+        </sc-for>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(2,minmax(0,580px));gap:20px;max-width:1180px">
+        <div style="border:1px solid var(--m-border);background:var(--m-bg);padding:20px;display:flex;flex-direction:column;gap:10px;font-size:13px;line-height:1.55;color:var(--m-fg-muted);text-wrap:pretty">
+          <div style="font-size:15px;font-weight:600;color:var(--m-fg)">Rules the implementation enforces</div>
+          <div><span style="color:var(--m-fg);font-weight:600">Home shows four rows:</span> THRUSD, then the next three by ticker A→Z; VIEW ALL → appears only when more exist and opens the Tokens screen. Home never scrolls at 844 — Recent activity drops to two rows when the list is full.</div>
+          <div><span style="color:var(--m-fg);font-weight:600">Order:</span> THRUSD first, then by ticker; duplicates keep mint order; "Unknown token" last.</div>
+          <div><span style="color:var(--m-fg);font-weight:600">No prices:</span> the THRUSD row shows "56 THRUSD" under the title and $56.00 on the right — the only dollar figure. Other rows show the mint under the title and the exact amount on the right, in the token's own decimals (up to 9), thousands separators, no trailing zeros.</div>
+          <div><span style="color:var(--m-fg);font-weight:600">Amounts never truncate.</span> The title ellipsises first; at Dynamic Type XL a row whose amount exceeds 60 % of its width grows and stacks the amount under the title.</div>
+          <div><span style="color:var(--m-fg);font-weight:600">Duplicate tickers</span> are told apart by the mint subtitle (taZt…9Kq2 vs taQm…7xRw); the accessible name includes the mint; no ticker is renamed.</div>
+          <div><span style="color:var(--m-fg);font-weight:600">Frozen and unsupported tokens</span> keep a live row (neutral Badge) and open their screen; only Send is disabled, with the reason under the button pair. Unknown decimals show the raw integer with "units".</div>
+          <div><span style="color:var(--m-fg);font-weight:600">Accessible names:</span> rows read "THRUSD, $56.00, open" (duplicates and unknowns add the mint; badges add "frozen" / "unsupported"); VIEW ALL → is "View all tokens"; the explainer is a button with aria-expanded; a disabled Send is aria-disabled and described by its reason.</div>
+          <div><span style="color:var(--m-fg);font-weight:600">QR is dark on light in both themes:</span> #181B1B modules on #F9FBFB, 1 px #B6CECE border, EC level H, Thru mark 32 knocked out on a 3 px pad.</div>
+        </div>
+        <div style="border:1px solid var(--m-border);background:var(--m-bg-muted);padding:20px;display:flex;flex-direction:column;gap:10px;font-size:13px;line-height:1.55;color:var(--m-fg-muted);text-wrap:pretty">
+          <div style="font-size:15px;font-weight:600;color:var(--m-fg)">Open questions</div>
+          <div><span style="color:var(--m-fg);font-weight:600">No chevron on the rows,</span> as in today's Balances design — the whole row presses (bgMuted) and VIEW ALL → signals the list goes on. Add the kit Cell chevron if testing shows people don't tap rows.</div>
+          <div><span style="color:var(--m-fg);font-weight:600">"Spendable" vs "Balance"</span> on the token screen: Spendable is honest when other accounts hold more; if that case is rare, "Balance" reads simpler.</div>
+          <div><span style="color:var(--m-fg);font-weight:600">Network badge in the header</span> (Alphanet / Betanet, forest dot) follows the Settings Network row. Drop if the existing header label already covers it.</div>
+          <div><span style="color:var(--m-fg);font-weight:600">Receive for THRUSD</span> opens the Deposit sheet with USDC on Solana pre-selected. Confirm that over card as the default.</div>
+        </div>
+      </div>
+    </section>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const THEMES = [
+  { theme: 'light', panelBg: 'var(--m-bg-muted)', suffix: '' },
+  { theme: 'dark', panelBg: 'var(--m-bg)', suffix: ' \u00b7 dark' },
+];
+const HOMES = [
+  { label: 'Normal \u00b7 5 tokens', state: 'ready', cap: 'header: account chip \u00b7 Badge neutral ALPHANET (forest dot) \u00b7 Settings 44 top right \u00b7 BalanceHero "Balance" 44/700 = THRUSD \u00b7 SectionLabel Tokens (24 above) + VIEW ALL \u2192 mono 11 brick \u00b7 4 rows = Cell h64: TokenMark 28 \u00b7 ticker 15/500 \u00b7 sub mono 11 fgMuted ("56 THRUSD" / mint) \u00b7 amount mono 14 right \u00b7 hairlines inset 16 \u00b7 Recent activity, two rows \u00b7 tab bar 56 + 34 \u2014 fits 844' },
+  { label: 'Loading', state: 'loading', cap: 'THRUSD comes from the chain and shows at once \u00b7 three Skeleton rows for the indexer: disc 28 \u00b7 72\u00d712 / 96\u00d79 \u00b7 64\u00d712 \u00b7 bgInset, 1.4 s pulse \u00b7 label right reads LOADING\u2026 (no VIEW ALL until the count is known)' },
+  { label: 'Indexer unavailable', state: 'error', cap: 'THRUSD still shows \u00b7 InlineError h44 inside the list: alert 16 + "Couldn\u2019t load other tokens" 13 brick + RETRY mono 11 caps in a 44 hit \u00b7 never drawn as empty \u00b7 Recent activity gets its third row back' },
+  { label: 'Empty \u00b7 only THRUSD', state: 'empty', cap: 'one row \u00b7 13 fgMuted line under it: "Other tokens you receive on Thru will show here." \u00b7 only after a load that succeeded \u00b7 label right = 1 TOKEN' },
+  { label: 'Duplicate tickers', state: 'edge', cap: 'COOL \u00d7 2 told apart by mint (taZt\u20269Kq2 / taQm\u20267xRw) \u00b7 BONK 1,234,567,890.123456789 never truncated \u00b7 the rest of the 9 are behind VIEW ALL \u2192' },
+];
+const LISTS = [
+  { label: 'Tokens \u00b7 18', state: 'many', scrollY: 0, cap: 'NavBar 52 back / Tokens \u00b7 same Token List uncapped, label 20 above \u00b7 count mono 11 caps right \u00b7 rows by ticker after THRUSD' },
+  { label: 'Tokens \u00b7 18 \u00b7 scrolled', state: 'many', scrollY: 420, cap: 'ICE with Badge FROZEN \u00b7 LONGTICKERNAME16 fits at 15/500 \u00b7 Unknown token last with "?" mark and Badge UNSUPPORTED, raw 12,000,000 \u00b7 every row still opens' },
+  { label: 'Tokens \u00b7 edge cases', state: 'edge', scrollY: 0, cap: 'the full edge list in one screen: 9 decimals, duplicates, frozen, long ticker, unknown' },
+];
+const SCREENS = [
+  { label: 'THRUSD', token: 'thrusd', explainerOpen: false, cap: 'NavBar 52 back/title/44 \u00b7 TokenMark 48 (ThruUsdLogo) + THRUSD 20/600 + "Dollars on Thru" 13 fgMuted \u00b7 AddressRow: full 46-char mint mono 12/18 wrapping, Copy 44 \u00b7 BalanceHero Spendable $56.00 34/700 \u00b7 Send primary + Receive outline 48, gutter 12 \u00b7 Details MetaTable: Decimals \u00b7 Network \u00b7 Receive via' },
+  { label: 'COOL \u00b7 + in other accounts', token: 'cool', explainerOpen: false, cap: 'amount 34/700 + ticker mono 15 fgMuted \u00b7 secondary line mono 13 fgMuted "+ 120.5 in other accounts" with info 14, a 44 pt button \u00b7 Receive \u2192 Receive on Thru sheet' },
+  { label: 'COOL \u00b7 explainer open', token: 'cool', explainerOpen: true, cap: 'Callout bgMuted 13/19: "Send spends from this account only. 120.5 COOL sits in other token accounts you own on Thru. Move it into this account to send it." \u00b7 toggles; aria-expanded' },
+  { label: 'Send disabled \u00b7 Nothing to send', token: 'zero', explainerOpen: false, cap: 'spendable 0 \u00b7 Send at 40 % opacity, aria-disabled, described by the reason line: info 14 + "Nothing to send" 13 fgMuted, 10 under the pair \u00b7 Receive stays live' },
+  { label: 'Send disabled \u00b7 Frozen', token: 'frozen', explainerOpen: false, cap: '"This token is frozen" \u00b7 the row carries Badge FROZEN; the screen still opens and Receive works' },
+  { label: 'Send disabled \u00b7 Unsupported', token: 'unsupported', explainerOpen: false, cap: 'ticker missing \u2192 "Unknown token", "?" mark, shortened mint as the name line \u00b7 raw 12,000,000 units \u00b7 "Unsupported token" \u00b7 Decimals row reads Unknown' },
+  { label: 'Not found', token: 'notfound', explainerOpen: false, cap: 'bad link or token not held: NavBar "Token" \u00b7 EmptyState: "?" disc 48 \u00b7 17/600 title \u00b7 14 fgMuted body \u00b7 Button outline "Back to Home"' },
+];
+const HANDOFFS = [
+  { label: 'Receive handoff \u00b7 ETH', token: 'eth', cap: 'Receive \u2192 Deposit sheet (Unifold), ETH on Ethereum pre-selected \u00b7 Callout bgMuted before the handoff: tray glyph + "Arrives in your wallet as THRUSD" 13/600 + "ETH you deposit is converted on the way in and lands as dollars." \u00b7 Details \u00b7 Receive via names the source' },
+  { label: 'Receive handoff \u00b7 BTC', token: 'btc', cap: 'same note for BTC on Bitcoin \u00b7 THRUSD\u2019s path is plain: no note, Receive \u2192 Deposit with USDC on Solana pre-selected' },
+];
+const RECEIVES = [
+  { label: 'Receive on Thru \u00b7 COOL', copied: false, cap: 'kit Sheet, content height, leading title "Receive COOL" + Close 44 \u00b7 QRCard 200 dark-on-light in both themes, Thru mark 32 \u00b7 copy line 15/500 "Send COOL to this address on Thru Alphanet" \u00b7 AddressCard: full address mono 13/1.5 in a 1 px borderStrong box + attached Copy address | Share 44 \u00b7 Callout warn saffronSoft: "Only Thru Alphanet transfers arrive here." + body \u00b7 58 below = 24 + home indicator' },
+  { label: 'Receive on Thru \u00b7 copied', copied: true, cap: 'Copy address \u2192 "Copied" with a check in forest for 1.2 s, aria-live \u00b7 Share = Web Share with the address, copy fallback' },
+];
+const WIDE = [
+  { theme: 'light', listState: 'many', selected: 'cool', token: 'cool', explainerOpen: false, label: 'Two columns \u00b7 light', cap: 'sidebar 240 (lockup + Alphanet badge, nav 44, account) \u00b7 Tokens column 440: Balance 34/700 + the full Token List, the open token highlighted bgMuted + 2 px brick \u00b7 token screen column capped at 640, 40 side padding, "Details" instead of a NavBar \u00b7 Receive on Thru opens as the 480 dialog' },
+  { theme: 'dark', listState: 'many', selected: 'cool', token: 'cool', explainerOpen: true, label: 'Two columns \u00b7 dark \u00b7 explainer open', cap: 'dark tokens: bg #181B1B, hairlines #334747 \u00b7 the ThruUSD mark keeps brick; letter marks invert (fg disc, bg glyph) \u00b7 QR stays dark-on-light' },
+];
+const COMPONENTS = [
+  ['Tokens list (Home)', 'SectionLabel + Cell \u00d7 4 + link', 'label "Tokens" mono 11 caps fgMuted, 24 above / 8 below (Recent activity label 20 above) \u2014 stack 619 \u2264 631 at 844, no scroll \u00b7 VIEW ALL \u2192 mono 11 brick, 44 hit \u00b7 capped at THRUSD + 3 \u00b7 hairlines above and below the group', false],
+  ['Token row', 'Cell (subtitle variant, h64)', 'icon TokenMark 28 \u00b7 title ticker 15/500 \u00b7 subtitle mono 11 fgMuted: "56 THRUSD" for THRUSD, shortened mint for others \u00b7 right amount mono 14 \u00b7 no chevron \u00b7 press bgMuted \u00b7 onPress \u2192 token screen \u00b7 accessibilityLabel "THRUSD, $56.00, open"', false],
+  ['Token mark', 'TokenMark', 'ThruUsdLogo for THRUSD; fg disc with the ticker\u2019s first two letters (mono 10/600) for others; "?" (sans 14/600) when the ticker is unknown \u00b7 28 in rows, 48 on the token screen', false],
+  ['Frozen / Unsupported', 'Badge \u00b7 neutral', 'mono 11/500 caps, 4/8 padding, bgMuted/fgMuted \u00b7 after the ticker, 8 gap', false],
+  ['Loading rows', 'Skeleton', 'TokenRowSkeleton composition: disc 28 \u00b7 72\u00d712 / 96\u00d79 \u00b7 64\u00d712 \u00b7 bgInset, 1.4 s pulse, none under reduce-motion', false],
+  ['Indexer error line', 'InlineError (from Activity)', 'h44 inside the list under THRUSD: alert 16 brick + 13 text + RETRY mono 11 caps in a 44 hit \u00b7 role=alert', false],
+  ['Empty hint', 'Text 13 fgMuted', '"Other tokens you receive on Thru will show here." \u00b7 14/16 padding \u00b7 only after a successful load', false],
+  ['Tokens screen', 'NavBar + Token List', 'pushed from VIEW ALL \u2192 \u00b7 NavBar 52 back / "Tokens" \u00b7 the same list uncapped, count mono 11 caps right \u00b7 pull-to-refresh', false],
+  ['Network badge', 'Badge \u00b7 neutral + dot', 'header: forest dot 6 + ALPHANET / BETANET mono 10 caps \u00b7 replaces nothing else in the header; Settings 44 at the right', false],
+  ['Token screen header', 'NavBar + TokenMark 48 + Text', 'back 44 / ticker 17/600 / 44 \u00b7 below: TokenMark 48, ticker 20/600, name 13 fgMuted', false],
+  ['Full mint address', 'AddressRow \u00b7 NEW KIT PART', '1 px border, 12 left pad \u00b7 mono 12/18 wrapping (46 chars = 2 lines at 390) \u00b7 Copy 44 attached at the right behind a hairline \u00b7 AddressField is an input; this is read-only, so a new part', true],
+  ['Spendable balance', 'BalanceHero', 'label mono 11 caps "Spendable" \u00b7 34/700 amount + ticker mono 15 fgMuted \u00b7 secondary line mono 13 fgMuted with info 14 as a 44 pt button \u00b7 explainer = Callout bgMuted', false],
+  ['Send / Receive', 'Button primary + secondary', 'h48, gutter 12, 50/50 \u00b7 Send disabled: 40 % opacity, aria-disabled, aria-describedby the reason line (info 14 + 13 fgMuted, 10 below)', false],
+  ['Arrives as THRUSD note', 'Callout', 'bgMuted, tray glyph 16, 13/600 title + 13 fgMuted body \u00b7 ETH and BTC only, before the Deposit handoff', false],
+  ['Details', 'MetaTable', 'rows 52: Decimals \u00b7 Network \u00b7 Receive via \u00b7 label mono 11 caps 96, value mono 13 right', false],
+  ['Not found', 'EmptyState (from Activity)', '"?" disc 48 bgMuted \u00b7 17/600 \u00b7 14 fgMuted \u00b7 Button secondary "Back to Home"', false],
+  ['Receive on Thru sheet', 'Sheet \u00b7 content height / dialog 480', 'leading title "Receive COOL" + Close \u00b7 24 top \u00b7 58 bottom on phones (24 in the dialog)', false],
+  ['QR', 'QRCard \u00b7 NEW KIT PART', '200 box, 1 px #B6CECE, 10 pad, modules #181B1B on #F9FBFB in both themes, EC H, Thru mark 32 on a 3 px #F9FBFB pad \u00b7 encodes the bare address', true],
+  ['Address + Copy + Share', 'AddressCard \u00b7 NEW KIT PART', 'full address mono 13/1.5 centred in a 1 px borderStrong box \u00b7 attached 44 row below: Copy address | Share, hairline between \u00b7 Copied state forest 1.2 s, aria-live', true],
+  ['Network warning', 'Callout \u00b7 warn', 'saffronSoft, triangle 16 saffron, 13/600 "Only Thru Alphanet transfers arrive here." + 13 fgMuted body', false],
+  ['Two-column shell (\u2265 1024)', 'DesktopShell (from Activity)', 'sidebar 240 \u00b7 list column 440 with selected row (bgMuted + 2 px brick) \u00b7 detail column \u2264 640', false],
+];
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      themes: THEMES, homes: HOMES, lists: LISTS, screens: SCREENS, handoffs: HANDOFFS, receives: RECEIVES, wide: WIDE,
+      browserTabs: [{ title: 'Thru Wallet' }],
+      components: COMPONENTS.map(([el, map, spec, isNew]) => ({ el, map, spec, mapColor: isNew ? 'var(--m-accent)' : 'var(--m-fg)' })),
+    };
+  }
+}
+</script>
+</body>
+</html>

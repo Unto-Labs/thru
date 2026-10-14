@@ -8,6 +8,7 @@ import {
   accountData,
   accountIndex,
   assertU16,
+  assertU32,
   type AccountLookupContext,
   type InstructionData,
 } from '../utils/helpers';
@@ -59,10 +60,13 @@ import {
   ExchangeMetaAccount,
   ExchangeSetAdminInstructionBuilder,
   ExchangeSetStatusInstructionBuilder,
+  FundingUpdateInstructionBuilder,
   LiquidateInstructionBuilder,
   MarketAccount as MarketAccountView,
   MarketCreateInstructionBuilder,
   MarketRecordInstructionBuilder,
+  MarketSetFundingInstructionBuilder,
+  SettleFundingInstructionBuilder,
   MarketSetOracleInstructionBuilder,
   MarketSetStatusInstructionBuilder,
   ModifyOrderEntryInstructionBuilder,
@@ -101,7 +105,13 @@ export * from './abi/thru/program/perp/types';
      liquidatable    = has a position and equity < mm_position
 
    Realized PnL settles into quantity_quote on every fill; a seat that loses
-   more than its collateral leaves market.bad_debt. The demo deployment on
+   more than its collateral leaves market.bad_debt.
+
+   Funding (Lighter's model) moves quote between longs and shorts every hour
+   through a cumulative index per lot; seats settle lazily, and the program
+   settles a seat before it reads its equity.  The margin functions below take
+   a settled seat: pass a seat through perpSettleFunding first (a no-op on a
+   market without funding). The demo deployment on
    Alphanet is not a bootstrap program: it is managed by the deployer's key
    under PERP_PROGRAM_SEED. */
 
@@ -125,6 +135,9 @@ export const PERP_INSTRUCTION_EXCHANGE_RECOVER_ADMIN = 14;
 export const PERP_INSTRUCTION_MARKET_SET_EXCHANGE_STATUS = 15;
 export const PERP_INSTRUCTION_LIQUIDATE = 0x10;
 export const PERP_INSTRUCTION_MARKET_SET_ORACLE = 0x11;
+export const PERP_INSTRUCTION_FUNDING_UPDATE = 0x12;
+export const PERP_INSTRUCTION_MARKET_SET_FUNDING = 0x13;
+export const PERP_INSTRUCTION_SETTLE_FUNDING = 0x14;
 /** Market record slot the demo tooling uses for its single market per transaction. */
 export const PERP_DEFAULT_MARKET_RECORD_INDEX = 1;
 
@@ -143,6 +156,10 @@ export const PERP_ERR_ORACLE_STALE = -213n;
 export const PERP_ERR_INVALID_MARGIN_PARAMS = -214n;
 export const PERP_ERR_NOT_LIQUIDATABLE = -215n;
 export const PERP_ERR_SELF_LIQUIDATION = -216n;
+export const PERP_ERR_FUNDING_DISABLED = -217n;
+export const PERP_ERR_INVALID_FUNDING_PARAMS = -218n;
+/** funding_update shared its transaction with an instruction that could move the book. */
+export const PERP_ERR_FUNDING_UPDATE_NOT_ALONE = -219n;
 export const PERP_ERR_INSUFFICIENT_COLLATERAL = -403n;
 export const PERP_ERR_INSUFFICIENT_FUNDS_QUOTE = -401n;
 
@@ -161,6 +178,7 @@ export const PERP_EVENT_EXCHANGE_STATUS = 12;
 export const PERP_EVENT_EXCHANGE_ADMIN = 13;
 export const PERP_EVENT_MARKET_EXCHANGE_STATUS = 14;
 export const PERP_EVENT_LIQUIDATION = 15;
+export const PERP_EVENT_FUNDING_ROUND = 16;
 
 export const PERP_BPS_DENOMINATOR = 10_000n;
 
@@ -191,7 +209,17 @@ export const PERP_MODIFY_FLAG_HAS_CLIENT_ID = 1 << 1;
 export const PERP_MODIFY_FLAG_HAS_ORDER_ID = 1 << 2;
 
 export const PERP_MARKET_MAGIC = 0x79;
-export const PERP_MARKET_ACCOUNT_SIZE = 320;
+export const PERP_MARKET_ACCOUNT_SIZE = 448;
+
+/* Funding: mirrors thru-perps/tn_perp_program/utils/funding.h.  Rates are integer ticks of 1e-6. */
+export const PERP_FUNDING_RATE_TICK = 1_000_000n;
+export const PERP_FUNDING_SAMPLE_NS = 60_000_000_000n;
+export const PERP_FUNDING_ROUND_NS = 3_600_000_000_000n;
+export const PERP_FUNDING_PREMIUM_DIVISOR = 60n;
+export const PERP_FUNDING_HOURS_PER_RATE = 8n;
+export const PERP_FUNDING_PARAM_MAX = 1_000_000;
+export const PERP_FUNDING_MULTIPLIER_ONE = 100;
+export const PERP_FUNDING_PREMIUM_MAX = 1_000_000n;
 /** The seat arena's header entry starts here; seat index 1 follows it. */
 export const PERP_SEAT_MANAGER_RESERVED_SIZE = 512;
 export const PERP_EXCHANGE_META_ACCOUNT_SIZE = 96;
@@ -232,7 +260,10 @@ type PerpInstructionVariant =
   | 'exchange_recover_admin'
   | 'market_set_exchange_status'
   | 'liquidate'
-  | 'market_set_oracle';
+  | 'market_set_oracle'
+  | 'funding_update'
+  | 'market_set_funding'
+  | 'settle_funding';
 
 export type PerpOrderSide = OrderSide;
 export type PerpOrderType = OrderType;
@@ -372,6 +403,46 @@ export interface PerpMarketSetOracleArgs extends PerpOracleParams {
   oracleFeedAccountBytes: Uint8Array;
 }
 
+export interface PerpFundingUpdateArgs {
+  marketRecordIndex: number;
+}
+
+export interface PerpSettleFundingArgs {
+  marketRecordIndex: number;
+  /** The seat to settle (any seat: settle_funding is permissionless). */
+  targetSeatIndex: number;
+}
+
+/** Rates in ticks of 1e-6 per 8 hours (Lighter's units: 100 = 0.01%). */
+export interface PerpFundingParams {
+  interestRate: number;
+  clampSmall: number;
+  clampBig: number;
+  /** 0 disables funding; 1..100 scales the premium (100 = 1x). */
+  premiumMultiplier: number;
+  /** Quote atoms walked into each side of the book for the impact prices. */
+  impactNotional: bigint;
+}
+
+export interface PerpMarketSetFundingArgs extends PerpFundingParams {
+  marketRecordIndex: number;
+}
+
+/** A market's funding state. */
+export interface PerpFunding extends PerpFundingParams {
+  /** Cumulative funding per lot, quote atoms * PERP_FUNDING_RATE_TICK (signed). */
+  index: bigint;
+  /** Net quote atoms the market collected from settlements. */
+  balance: bigint;
+  lastRoundNs: bigint;
+  lastSampleNs: bigint;
+  /** Premium samples of the current hour, ticks. */
+  premiumSum: bigint;
+  sampleCount: number;
+  /** Hourly rate of the last round, ticks; positive: longs pay. */
+  rate: bigint;
+}
+
 export interface PerpMarket {
   magic: number;
   statusFlags: number;
@@ -397,6 +468,8 @@ export interface PerpMarket {
   liquidationFeeBps: number;
   oracleExponent: number;
   maxMarkAgeNs: bigint;
+  /** Optional so callers can build markets without funding (funding off). */
+  funding?: PerpFunding;
 }
 
 export interface PerpExchangeMeta {
@@ -440,6 +513,10 @@ export interface PerpSeatEntry {
   /** Sum of lots * lotSize * price over resting bids / asks. */
   openBidNotional: bigint;
   openAskNotional: bigint;
+  /** The market's funding index at the seat's last settlement. */
+  fundingSnapshot?: bigint;
+  /** Sub-atom funding credit carried to the next settlement, [0, 1e6). */
+  fundingCarry?: number;
 }
 
 export interface PerpOrderEntry {
@@ -621,6 +698,18 @@ export type ParsedPerpEvent =
       liquidatorQuoteAfter: bigint;
       /** Side of the target's position before the transfer. */
       targetSide: 'long' | 'short';
+    })
+  | (ParsedPerpEventBase & {
+      variant: 'funding_round';
+      market: string;
+      /** Hourly rate, ticks of 1e-6; positive: longs pay. */
+      rate: bigint;
+      premiumSum: bigint;
+      sampleCount: number;
+      /** Oracle index the round priced at, quote atoms per base atom. */
+      indexPrice: bigint;
+      fundingIndex: bigint;
+      roundNs: bigint;
     })
   | (ParsedPerpEventBase & {
       variant:
@@ -872,6 +961,128 @@ export function perpMaxSellLots(market: PerpMarginMarket, seat: PerpMarginSeat, 
   return seat.longLots + minBig(capacity, affordableLots(market, seat, price, mark));
 }
 
+/* Funding (bigint exact): mirrors thru-perps/tn_perp_program/utils/funding.h */
+
+export type PerpFundingSeat = PerpMarginSeat & Pick<PerpSeatEntry, 'fundingSnapshot' | 'fundingCarry'>;
+
+export function perpFundingEnabled(market: Pick<PerpMarket, 'funding'>): boolean {
+  return (market.funding?.premiumMultiplier ?? 0) !== 0;
+}
+
+/** The hourly rate (ticks) a round turns premiumSum into. */
+export function perpFundingHourlyRate(
+  premiumSum: bigint,
+  params: Pick<PerpFundingParams, 'interestRate' | 'clampSmall' | 'clampBig' | 'premiumMultiplier'>,
+): bigint {
+  const one = BigInt(PERP_FUNDING_MULTIPLIER_ONE);
+  const multiplier = BigInt(params.premiumMultiplier);
+  const avg = ((premiumSum / PERP_FUNDING_PREMIUM_DIVISOR) * multiplier) / one;
+  const small = (BigInt(params.clampSmall) * multiplier) / one;
+  const big = BigInt(params.clampBig);
+  const r8 = clampBig(avg + clampBig(BigInt(params.interestRate) - avg, -small, small), -big, big);
+  return r8 / PERP_FUNDING_HOURS_PER_RATE;
+}
+
+/** One premium sample (ticks); a zero impact price counts as the index.
+    Mirrors thru-perps/tn_perp_program/utils/funding.h. */
+export function perpFundingPremiumSample(index: bigint, impactBid: bigint, impactAsk: bigint): bigint {
+  if (index <= 0n) return 0n;
+  const bid = impactBid > 0n ? impactBid : index;
+  const ask = impactAsk > 0n ? impactAsk : index;
+  const above = bid > index ? bid - index : 0n;
+  const below = ask < index ? index - ask : 0n;
+  return clampBig(((above - below) * PERP_FUNDING_RATE_TICK) / index, -PERP_FUNDING_PREMIUM_MAX, PERP_FUNDING_PREMIUM_MAX);
+}
+
+/** Why market_set_funding would reject params, or null. */
+export function perpFundingParamsProblem(
+  market: Pick<PerpMarket, 'initialMarginBps' | 'maintenanceMarginBps'>,
+  params: PerpFundingParams,
+): string | null {
+  const { interestRate, clampSmall, clampBig: big, premiumMultiplier, impactNotional } = params;
+  if (!Number.isInteger(premiumMultiplier) || premiumMultiplier < 0 || premiumMultiplier > PERP_FUNDING_MULTIPLIER_ONE) {
+    return `premiumMultiplier must be 0 (off) or 1..${PERP_FUNDING_MULTIPLIER_ONE}`;
+  }
+  if (premiumMultiplier === 0) return null;
+  if (impactNotional <= 0n) return 'impactNotional must be positive';
+  for (const [label, value] of [['interestRate', interestRate], ['clampSmall', clampSmall], ['clampBig', big]] as const) {
+    if (!Number.isInteger(value) || value < 0 || value > PERP_FUNDING_PARAM_MAX) return `${label} must be 0..${PERP_FUNDING_PARAM_MAX}`;
+  }
+  const gapTicks = (market.initialMarginBps - market.maintenanceMarginBps) * 100;
+  const hourlyCap = Math.floor(big / Number(PERP_FUNDING_HOURS_PER_RATE));
+  if (hourlyCap > gapTicks) {
+    return `clampBig / ${PERP_FUNDING_HOURS_PER_RATE} (${hourlyCap} ticks per hour) exceeds the initial - maintenance margin gap (${gapTicks} ticks)`;
+  }
+  return null;
+}
+
+/** The largest clampBig the market's margins allow: one hour at the cap
+    moves a seat by at most the initial - maintenance margin gap. */
+export function perpFundingMaxClampBig(market: Pick<PerpMarket, 'initialMarginBps' | 'maintenanceMarginBps'>): number {
+  const gapTicks = Math.max(market.initialMarginBps - market.maintenanceMarginBps, 0) * 100;
+  return Math.min(gapTicks * Number(PERP_FUNDING_HOURS_PER_RATE), PERP_FUNDING_PARAM_MAX);
+}
+
+/** Block time (ns) of the next hour boundary: the earliest the next round runs. */
+export function perpNextFundingRoundNs(funding: Pick<PerpFunding, 'lastRoundNs'>): bigint {
+  return (funding.lastRoundNs / PERP_FUNDING_ROUND_NS + 1n) * PERP_FUNDING_ROUND_NS;
+}
+
+export function perpFundingRoundDue(funding: Pick<PerpFunding, 'lastRoundNs'>, nowNs: bigint): boolean {
+  return nowNs / PERP_FUNDING_ROUND_NS > funding.lastRoundNs / PERP_FUNDING_ROUND_NS;
+}
+
+export function perpFundingSampleDue(funding: Pick<PerpFunding, 'lastSampleNs'>, nowNs: bigint): boolean {
+  return nowNs / PERP_FUNDING_SAMPLE_NS > funding.lastSampleNs / PERP_FUNDING_SAMPLE_NS;
+}
+
+/** Unsettled funding credit plus carry, quote atoms * 1e6 (positive: receives). */
+export function perpSeatFundingCredit(market: Pick<PerpMarket, 'funding'>, seat: PerpFundingSeat): bigint {
+  const index = market.funding?.index ?? 0n;
+  const net = seat.longLots - seat.shortLots;
+  return BigInt(seat.fundingCarry ?? 0) - net * (index - (seat.fundingSnapshot ?? 0n));
+}
+
+export interface PerpFundingSettlement<T> {
+  /** The seat as the program sees it after settling. */
+  seat: T;
+  /** Atoms paid to the seat (negative: charged). */
+  paid: bigint;
+  /** Part of a charge that neither the collateral nor the position (a
+      short's entry proceeds) could cover, written off as bad debt. */
+  badDebt: bigint;
+}
+
+/** Settles the seat's funding exactly as the program does before it reads a
+    seat's equity.  Pure: returns a settled copy. */
+export function perpSettleFunding<T extends PerpFundingSeat>(
+  market: Pick<PerpMarket, 'funding'>,
+  seat: T,
+): PerpFundingSettlement<T & Required<Pick<PerpSeatEntry, 'fundingSnapshot' | 'fundingCarry'>>> {
+  const index = market.funding?.index ?? 0n;
+  const credit = perpSeatFundingCredit(market, seat);
+  const paid = floorDiv(credit, PERP_FUNDING_RATE_TICK);
+  const carry = credit - paid * PERP_FUNDING_RATE_TICK;
+  let quantityQuote = seat.quantityQuote + paid;
+  let entryNotional = seat.entryNotional;
+  let badDebt = 0n;
+  if (quantityQuote < 0n) {
+    /* The shortfall comes out of the open position: a long's cost basis
+       rises, a short's entry proceeds fall; only what a short's entry
+       cannot absorb is written off. */
+    const shortfall = -quantityQuote;
+    quantityQuote = 0n;
+    if (seat.longLots > 0n) {
+      entryNotional += shortfall;
+    } else {
+      const absorbed = seat.shortLots > 0n ? minBig(shortfall, entryNotional) : 0n;
+      entryNotional -= absorbed;
+      badDebt = shortfall - absorbed;
+    }
+  }
+  return { seat: { ...seat, quantityQuote, entryNotional, fundingSnapshot: index, fundingCarry: Number(carry) }, paid, badDebt };
+}
+
 function affordableLots(market: PerpMarginMarket, seat: PerpMarginSeat, price: bigint, mark: bigint): bigint {
   const perLot = perpLotInitialMargin(market, price);
   const free = maxBig(perpFreeCollateral(market, seat, mark), 0n);
@@ -1066,6 +1277,13 @@ export function createPerpMarketRecordInstruction(args: PerpMarketRecordArgs): I
   };
 }
 
+/** State units a market_create transaction must request. The runtime charges
+    ceil((64 + data_sz) / 4096) per new account, and market_create creates five:
+    the seat arena (128640 bytes: 32), the order arena (64072 bytes: 16), the
+    bids and asks cbooks (96 bytes: 1 each) and the quote vault token account
+    (73 bytes: 1). Requesting fewer fails with SU_EXHAUSTED. */
+export const PERP_MARKET_CREATE_STATE_UNITS = 51;
+
 /** The named market authority must authorize the transaction. */
 export function createPerpMarketCreateInstruction(args: PerpMarketCreateArgs): InstructionData {
   return async (context) => {
@@ -1219,6 +1437,56 @@ export function createPerpMarketSetOracleInstruction(args: PerpMarketSetOracleAr
       .set_reserved0(0n)
       .build();
     return buildPerpInstruction('market_set_oracle', payload);
+  };
+}
+
+/** Permissionless funding crank: runs a due hourly round and a due premium
+    sample of the record's market (the record needs the oracle feed, not a
+    seat).  A call with nothing due changes nothing. */
+export function createPerpFundingUpdateInstruction(args: PerpFundingUpdateArgs): InstructionData {
+  return async () => {
+    const payload = new FundingUpdateInstructionBuilder()
+      .set_market_record_idx(assertU8(args.marketRecordIndex, 'marketRecordIndex'))
+      .set_reserved0(0)
+      .set_reserved1(0)
+      .build();
+    return buildPerpInstruction('funding_update', payload);
+  };
+}
+
+/** Permissionless: settles one seat's funding, so a seat that never trades
+    still pays what it owes.  Several may follow one market record, and they
+    may share a transaction with funding_update (no book instruction may). */
+export function createPerpSettleFundingInstruction(args: PerpSettleFundingArgs): InstructionData {
+  const targetSeatIndex = assertPerpSeatIndex(args.targetSeatIndex, 'targetSeatIndex');
+  return async () => {
+    const payload = new SettleFundingInstructionBuilder()
+      .set_market_record_idx(assertU8(args.marketRecordIndex, 'marketRecordIndex'))
+      .set_reserved0(0)
+      .set_target_seat_idx(targetSeatIndex)
+      .build();
+    return buildPerpInstruction('settle_funding', payload);
+  };
+}
+
+/** Market authority only: sets the funding parameters (premiumMultiplier 0
+    disables funding).  Validated as the program does: see
+    perpFundingParamsProblem. */
+export function createPerpMarketSetFundingInstruction(args: PerpMarketSetFundingArgs): InstructionData {
+  for (const label of ['interestRate', 'clampSmall', 'clampBig', 'premiumMultiplier'] as const) assertU32(args[label], label);
+  assertU64(args.impactNotional, 'impactNotional');
+  return async () => {
+    const payload = new MarketSetFundingInstructionBuilder()
+      .set_market_record_idx(assertU8(args.marketRecordIndex, 'marketRecordIndex'))
+      .set_reserved0(0)
+      .set_interest_rate(args.interestRate)
+      .set_clamp_small(args.clampSmall)
+      .set_clamp_big(args.clampBig)
+      .set_premium_multiplier(args.premiumMultiplier)
+      .set_reserved1(0)
+      .set_impact_notional(args.impactNotional)
+      .build();
+    return buildPerpInstruction('market_set_funding', payload);
   };
 }
 
@@ -1553,6 +1821,21 @@ export function parsePerpEvent(data: Uint8Array): ParsedPerpEvent {
         targetSide: liquidationSideFromValue(event.get_side()),
       };
     }
+    case 'funding_round': {
+      const event = payload.asFundingRound();
+      if (!event) throw new Error('perp funding_round event payload is malformed');
+      return {
+        ...base,
+        variant: 'funding_round',
+        market: pubkeyViewToAddress(event.get_market()),
+        rate: event.get_rate(),
+        premiumSum: event.get_premium_sum(),
+        sampleCount: event.get_sample_cnt(),
+        indexPrice: event.get_index_price(),
+        fundingIndex: joinI128(event.get_funding_index_lo(), event.get_funding_index_hi()),
+        roundNs: event.get_round_ns(),
+      };
+    }
     case 'market_status':
     case 'exchange_initialized':
     case 'exchange_status':
@@ -1633,7 +1916,26 @@ function marketFromView(view: MarketAccountView): PerpMarket {
     liquidationFeeBps: view.get_liquidation_fee_bps(),
     oracleExponent: view.get_oracle_exponent(),
     maxMarkAgeNs: view.get_max_mark_age_ns(),
+    funding: {
+      index: joinI128(view.get_funding_index_lo(), view.get_funding_index_hi()),
+      balance: view.get_funding_balance(),
+      lastRoundNs: view.get_funding_last_round_ns(),
+      lastSampleNs: view.get_funding_last_sample_ns(),
+      premiumSum: view.get_funding_premium_sum(),
+      sampleCount: view.get_funding_sample_cnt(),
+      rate: view.get_funding_rate(),
+      interestRate: view.get_funding_interest_rate(),
+      clampSmall: view.get_funding_clamp_small(),
+      clampBig: view.get_funding_clamp_big(),
+      premiumMultiplier: view.get_funding_premium_multiplier(),
+      impactNotional: view.get_funding_impact_notional(),
+    },
   });
+}
+
+/** A signed 128-bit value stored as two little-endian u64 words. */
+function joinI128(lo: bigint, hi: bigint): bigint {
+  return BigInt.asIntN(128, (hi << 64n) | lo);
 }
 
 /** 1 <= maintenance < initial <= 10000, liquidationFeeBps <= 10000, markNum and markDen > 0. */
@@ -1672,6 +1974,8 @@ function seatEntryFromView(view: SeatEntryView, seatIndex: number): PerpSeatEntr
     entryNotional: view.get_entry_notional(),
     openBidNotional: view.get_open_bid_notional(),
     openAskNotional: view.get_open_ask_notional(),
+    fundingSnapshot: joinI128(view.get_funding_snapshot_lo(), view.get_funding_snapshot_hi()),
+    fundingCarry: view.get_funding_carry(),
   };
 }
 
@@ -1785,6 +2089,15 @@ async function sha256(...parts: Uint8Array[]): Promise<Uint8Array> {
   }
   const digest = await globalThis.crypto.subtle.digest('SHA-256', joined);
   return new Uint8Array(digest);
+}
+
+function floorDiv(numerator: bigint, denominator: bigint): bigint {
+  const quotient = numerator / denominator;
+  return numerator % denominator !== 0n && numerator < 0n !== denominator < 0n ? quotient - 1n : quotient;
+}
+
+function clampBig(value: bigint, low: bigint, high: bigint): bigint {
+  return value < low ? low : value > high ? high : value;
 }
 
 function minBig(a: bigint, b: bigint): bigint {

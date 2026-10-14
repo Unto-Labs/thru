@@ -228,3 +228,9 @@
 .tds-connect-menu__toggle[data-checked] .tds-connect-menu__switch-thumb {
   transform: translateX(12px);
 }
+/* Reduced motion: the thumb jumps; the track's colour change is kept. */
+@media (prefers-reduced-motion: reduce) {
+  .tds-connect-menu__switch-thumb {
+    transition: none;
+  }
+}

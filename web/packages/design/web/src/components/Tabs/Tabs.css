@@ -58,6 +58,12 @@
     transform var(--duration-med) var(--ease-standard),
     width var(--duration-med) var(--ease-standard);
 }
+/* Reduced motion: the indicator jumps to the active tab instead of sliding. */
+@media (prefers-reduced-motion: reduce) {
+  .tds-tabs__indicator {
+    transition: none;
+  }
+}
 
 .tds-tabs__panel {
   padding: var(--space-4) var(--space-1);

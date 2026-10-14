@@ -41,6 +41,15 @@
   animation: tds-island-out 480ms var(--ease-standard) both;
   pointer-events: none;
 }
+/* Reduced motion: no pill-to-sheet growth, only a short fade either way. */
+@media (prefers-reduced-motion: reduce) {
+  .tds-frame--in {
+    animation: tds-island-fade-in var(--duration-fast) var(--ease-standard) both;
+  }
+  .tds-frame--out {
+    animation: tds-island-fade-out var(--duration-fast) var(--ease-standard) both;
+  }
+}
 
 .tds-frame__bar {
   display: flex;
@@ -254,5 +263,90 @@
     min-height: 52px;
     padding-top: 8px;
     padding-bottom: 8px;
+  }
+}
+
+/* ── Network status ─────────────────────────────────────────────────────────
+   The active network, centred under the screens in a band of its own: the
+   same space above and below it (--space-3), on every screen. So the block
+   that ends the sheet gives its own trailing space up - the last band of the
+   last Screen (body or action row), or PoweredBy - and the space above is
+   measured from what is drawn there: a button's edge, or a label. A
+   borderless last control (ghost button, bottom row) keeps its whole box; the
+   status line moves up by the control's padding instead. PoweredBy and the
+   status are one two-line caption footer, so they share its --space-2. The
+   status line sits outside the content, so a body that scrolls never runs
+   into it, and lets taps through to a control it overlaps. */
+
+.tds-frame__network {
+  --tds-network-space: var(--space-3);
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0;
+  padding: var(--tds-network-space) var(--space-4);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 16px;
+  color: var(--color-text-tertiary);
+  pointer-events: none;
+}
+.tds-frame__network-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: var(--radius-pill);
+  background: var(--color-surface-grass);
+  box-shadow: 0 0 6px var(--color-surface-grass);
+}
+/* Read before the name ("Network: Alphanet"), never shown. */
+.tds-frame__network-hint {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+.tds-frame__network-name {
+  min-width: 0;
+  word-break: break-all;
+  text-align: center;
+}
+
+.tds-frame--network .tds-screen:not(:has(~ .tds-powered)) > :last-child:not(.tds-screen__bottom),
+.tds-frame--network .tds-powered:last-child {
+  padding-bottom: 0;
+}
+/* Which control ends the sheet is read off the last band of a Screen that
+   is not under [hidden] (a screen kept mounted while another one shows).
+   `:has()` can't nest, so "no PoweredBy after it" is "no PoweredBy in the
+   frame" here; PoweredBy only ever ends a sheet. */
+/* The bottom row: its padding (--space-3), down to its label's line. The
+   row fills its whole box on hover, so the label's leading stays and keeps
+   that fill clear of the status. */
+.tds-frame--network:has(.tds-screen:not([hidden] *) > .tds-screen__bottom:last-child):not(:has(.tds-powered)) .tds-frame__network {
+  margin-top: calc(-1 * var(--space-3));
+}
+/* A ghost button: its padding (--space-2) and 1px border. */
+.tds-frame--network:has(.tds-screen:not([hidden] *) > .tds-screen__body:last-child > .tds-btn--ghost:last-child):not(:has(.tds-powered)) .tds-frame__network {
+  margin-top: calc(-1 * (var(--space-2) + 1px));
+}
+/* PoweredBy: the status is the footer's second line, on its --space-2. */
+.tds-frame--network:has(.tds-powered:last-child) .tds-frame__network {
+  --tds-network-space: var(--space-2);
+}
+
+/* The home indicator's room goes under the band. */
+@media (max-width: 640px) {
+  .tds-frame--network .tds-frame__content {
+    padding-bottom: 0;
+  }
+  .tds-frame__network {
+    padding-bottom: calc(var(--tds-network-space) + max(16px, env(safe-area-inset-bottom)));
   }
 }

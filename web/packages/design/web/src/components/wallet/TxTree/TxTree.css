@@ -94,6 +94,13 @@
 .tds-txtree__panel[data-ending-style] {
   height: 0;
 }
+/* Reduced motion: sections open and close at once, the chevron snaps. */
+@media (prefers-reduced-motion: reduce) {
+  .tds-txtree__chev,
+  .tds-txtree__panel {
+    transition: none;
+  }
+}
 
 .tds-txtree__body {
   display: flex;

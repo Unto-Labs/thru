@@ -16,6 +16,7 @@
  * sign-in button is `bgInverse`, so it passes `fgInverse` and the wordmark
  * flips with the button rather than with the screen.
  */
+import { View } from "react-native";
 import Svg, { Path, Rect } from "react-native-svg";
 import { palette } from "./tokens";
 import { useThemeColors } from "./theme";
@@ -63,5 +64,34 @@ export function BrandWordmark({ size = 40, color, discColor, markColor }: BrandW
       <Path d={DOVE_PATH} fill={markColor ?? palette.stone[0]} />
       <Path d={BRAND_WORDMARK_PATH} fill={color ?? colors.fgMuted} />
     </Svg>
+  );
+}
+
+/** The disc and the wordmark side by side, sized independently: the Desktop
+    shell's 64pt lockup is a 24 disc, a 10 gap and the wordmark contained in
+    44 x 16 (design/History.dc.html, section 06). The wordmark takes the
+    foreground, as the shell sets it. */
+export function BrandLockup({
+  disc = 24,
+  wordmark = { width: 44, height: 16 },
+  gap = 10,
+  color,
+}: {
+  disc?: number;
+  wordmark?: { width: number; height: number };
+  gap?: number;
+  color?: string;
+}) {
+  const colors = useThemeColors();
+  return (
+    <View style={{ flexDirection: "row", alignItems: "center", gap }}>
+      <Svg width={disc} height={disc} viewBox="0 0.67 117.972 117.972" fill="none">
+        <Rect y={0.67041} width={117.972} height={117.972} rx={58.9862} fill={palette.brick[400]} />
+        <Path d={DOVE_PATH} fill={palette.stone[0]} />
+      </Svg>
+      <Svg width={wordmark.width} height={wordmark.height} viewBox="146 11 256 99" fill="none">
+        <Path d={BRAND_WORDMARK_PATH} fill={color ?? colors.fg} />
+      </Svg>
+    </View>
   );
 }

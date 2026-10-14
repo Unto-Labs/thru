@@ -3,12 +3,12 @@ import { DecompressFromPointerArgs } from '../../../domain/programs/compression/
 import { validateCompressionProof } from '../../../domain/programs/compression/instructions';
 import { createRouterTransport, Code, ConnectError } from '@connectrpc/connect';
 import { expect, vi } from 'vitest';
-import { QueryService, CommandService, TransactionVmError } from '@thru/sdk/proto';
+import { QueryService, CommandService, TransactionVmError, AccountView } from '@thru/sdk/proto';
 import { createThruClient } from '../../../client';
 import { Pubkey, Signature } from '../../../domain/primitives';
 import { Transaction } from '../../../domain/transactions/Transaction';
 import { fromPrivateKey } from '../../keys';
-import { COMPRESSION_PROGRAM_ADDRESS, MULTICALL_PROGRAM_ADDRESS, UPLOADER_PROGRAM_ADDRESS, PASSKEY_MANAGER_PROGRAM_ADDRESS } from '../../../../src/core-program-addresses';
+import { COMPRESSION_PROGRAM_ADDRESS, MULTICALL_PROGRAM_ADDRESS, UPLOADER_PROGRAM_ADDRESS, PASSKEY_MANAGER_PROGRAM_ADDRESS, NOOP_PROGRAM_ADDRESS } from '../../../../src/core-program-addresses';
 import { MulticallArgs } from '../../../domain/programs/multicall/abi/thru/program/multicall/types';
 import { ValidateArgs, ValidateArgsBuilder, PasskeyInstructionBuilder } from '../../../domain/programs/passkey-manager/abi/thru/program/passkey_manager/types';
 import { InstructionDataBuilder } from '../../../domain/programs/passkey-manager/abi/thru/common/primitives/types';
@@ -45,6 +45,13 @@ export async function fixture(sizes: Record<string, number> = { [address(10)]: 1
   };
   function execute(program: string, bytes: Uint8Array, tx: Transaction): void {
     const keys = [tx.feePayer, tx.program, ...tx.readWriteAccounts, ...tx.readOnlyAccounts].map(key => key.toThruFmt());
+    if (program === NOOP_PROGRAM_ADDRESS) {
+      actions.push('restore-payer'); beforeExecution?.('restore-payer', tx);
+      expect(tx.feePayerStateProof).toBeDefined();
+      expect(tx.feePayerAccountMetaRaw).toEqual(images.get(publicKey)!.rawMeta);
+      active.add(publicKey);
+      return;
+    }
     if (program === PASSKEY_MANAGER_PROGRAM_ADDRESS) {
       const target = ValidateArgs.from_array(bytes.subarray(1))!.get_target_instruction();
       execute(keys[target.get_program_idx()]!, Uint8Array.from(target.get_data()), tx); return;
@@ -105,7 +112,8 @@ export async function fixture(sizes: Record<string, number> = { [address(10)]: 1
     if (req.versionContext?.version.case === 'current' && !active.has(key)) throw missing();
     const image = images.get(key);
     if (!image && !active.has(key)) throw missing();
-    return image ?? { rawMeta: new Uint8Array(64), rawData: new Uint8Array() };
+    const value = image ?? { rawMeta: new Uint8Array(64), rawData: new Uint8Array() };
+    return req.view === AccountView.META_ONLY ? { ...value, rawData: undefined } : value;
   });
   const getAccount = vi.fn(async (req: any) => ({ address: req.address, meta: { nonce: chain.nonce, balance: 10000n } }));
   const generateStateProof = vi.fn(async (req: any) => ({ proof: proof(req.request.proofType) }));

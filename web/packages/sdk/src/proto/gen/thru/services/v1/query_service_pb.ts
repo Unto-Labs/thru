@@ -473,6 +473,9 @@ export const ListAccountsResponseSchema: GenMessage<ListAccountsResponse> = /*@_
  *
  * Returns blocks ordered from latest slot to earliest (slot DESC) by default.
  * Supports filtering on block header and footer fields using CEL expressions.
+ * The whole filter is evaluated by the database. A filter it cannot evaluate, such as a field compared
+ * with timestamp(...), arithmetic or the ternary operator, is rejected with INVALID_ARGUMENT
+ * (reason "not_translatable").
  *
  * Available fields for filtering:
  *
@@ -487,7 +490,6 @@ export const ListAccountsResponseSchema: GenMessage<ListAccountsResponse> = /*@_
  *   - block.header.max_compute_units (uint64): Maximum compute units allowed
  *   - block.header.max_state_units (uint32): Maximum state units allowed
  *   - block.header.bond_amount_lock_up (uint64): Bond amount lock-up for block production
- *   - block.header.price (uint64): Block production price
  *   - block.header.block_hash.value (bytes): Block hash
  *   - block.header.header_signature.value (bytes): Header signature
  *   - block.header.block_time (google.protobuf.Timestamp): Block timestamp
@@ -505,10 +507,10 @@ export const ListAccountsResponseSchema: GenMessage<ListAccountsResponse> = /*@_
  * Available CEL functions:
  *   - has(field): Check if optional field exists
  *   - uint(value): Convert to uint type
- *   - int(value): Convert to int type
+ *   - int(value): Convert to int type; int() of a timestamp is whole Unix seconds
  *   - bytes(value): Convert to bytes type
- *   - timestamp(value): Convert to timestamp type
- *   - duration(value): Convert to duration type
+ *   - timestamp(value), duration(value): accepted by CEL but not evaluable by the database; filters
+ *     using them are rejected
  *
  * Available filter parameters (accessible via params.* in expressions):
  *   - params.slot (uint64): Slot number for filtering
@@ -541,9 +543,9 @@ export const ListAccountsResponseSchema: GenMessage<ListAccountsResponse> = /*@_
  * 7. Filter by max state units:
  *      filter.expression = "block.header.max_state_units > uint(0)"
  *
- * 8. Filter by price:
- *      filter.expression = "block.header.price >= uint(0)"
- *      filter.expression = "block.header.price > uint(1000)"
+ * 8. Filter by bond amount:
+ *      filter.expression = "block.header.bond_amount_lock_up >= uint(0)"
+ *      filter.expression = "block.header.bond_amount_lock_up > uint(1000)"
  *
  * 9. Filter by start_slot:
  *      filter.expression = "block.header.start_slot <= uint(5000)"
@@ -605,7 +607,7 @@ export const ListAccountsResponseSchema: GenMessage<ListAccountsResponse> = /*@_
  * 27. Use inequality operators:
  *      filter.expression = "block.header.max_compute_units < uint(10000000)"
  *      filter.expression = "block.header.max_compute_units <= uint(10000000)"
- *      filter.expression = "block.header.price >= uint(100)"
+ *      filter.expression = "block.header.bond_amount_lock_up >= uint(100)"
  *      filter.expression = "block.footer.consumed_compute_units != uint(0)"
  *
  * 28. Combine has() with value checks:
@@ -615,11 +617,13 @@ export const ListAccountsResponseSchema: GenMessage<ListAccountsResponse> = /*@_
  * 29. Filter by multiple resource limits:
  *      filter.expression = "block.header.max_compute_units > uint(1000000) && block.header.max_state_units > uint(1000) && block.header.max_block_size > uint(1000000)"
  *
- * 30. Filter blocks with high resource consumption:
- *      filter.expression = "block.footer.consumed_compute_units > uint(block.header.max_compute_units / 2)"
+ * 30. Filter by block time:
+ *      filter.expression = "int(block.header.block_time) >= 1767225600"
  *
- * Note: All filters are pushed down to SQL for optimal performance where possible.
- * When SQL pushdown is not possible, filters are evaluated in-memory on fetched results.
+ * Note: blocks are stored in slot order. One call reads a bounded number of blocks (about 100,000). When
+ * a filter needs more to fill the page, the call returns the matches found so far, possibly none, with a
+ * next_page_token to continue from: a short or empty page with a token is not the end of the results.
+ * Bound a rare match with block.header.slot to need fewer calls.
  *
  * @generated from message thru.services.v1.ListBlocksRequest
  */
@@ -691,7 +695,7 @@ export const ListBlocksResponseSchema: GenMessage<ListBlocksResponse> = /*@__PUR
  * - `transaction.block_offset` (uint32): Position within block
  * - `transaction.signature.value` (bytes): Transaction signature
  *
- * Header fields (in-memory evaluation only, not SQL pushdown):
+ * Header fields (a transaction whose header is not stored reads them as zero or empty):
  * - `transaction.header.version` (uint32): Transaction format version
  * - `transaction.header.fee` (uint64): Transaction fee
  * - `transaction.header.nonce` (uint64): Sender account nonce
@@ -822,11 +826,16 @@ export const ListBlocksResponseSchema: GenMessage<ListBlocksResponse> = /*@__PUR
  * - `params.u64` (uint64): Generic uint64 parameter
  * - `params.pubkey` (Pubkey): Public key parameter for filtering
  *
+ * The whole filter is evaluated by the database. A filter it cannot evaluate,
+ * such as arithmetic, the ternary operator or `string()` of a field, is
+ * rejected with INVALID_ARGUMENT (reason "not_translatable").
+ *
  * ## Performance Notes
  *
- * Filters on `transaction.slot`, `transaction.block_offset`, and
- * `transaction.execution_result.*` fields are optimized with SQL pushdown
- * for better performance. Complex expressions may fall back to in-memory evaluation.
+ * One call reads a bounded number of the account's transactions (about
+ * 4,096). When a filter needs more to fill the page, the call returns the
+ * matches found so far, possibly none, with a next_page_token to continue
+ * from: a short or empty page with a token is not the end of the results.
  *
  * @generated from message thru.services.v1.ListTransactionsForAccountRequest
  */
@@ -1013,23 +1022,28 @@ export const EventSchema: GenMessage<Event> = /*@__PURE__*/
  *
  * Returns events ordered from most recent to older (slot DESC, block_offset DESC, call_idx DESC).
  * Supports filtering on event metadata and payload using CEL expressions with specialized byte functions.
+ * The whole filter is evaluated by the database. A filter it cannot evaluate, such as event_id.startsWith,
+ * event.timestamp compared with timestamp(...), arithmetic or the ternary operator, is rejected with
+ * INVALID_ARGUMENT (reason "not_translatable").
  *
  * Available fields for filtering:
- *   - event.event_id (string): Unique event identifier (format: "ts{slot}_{block_offset}_{call_idx}")
+ *   - event.event_id (string): Event identifier "{signature}:{slot}:{block_offset}:{call_idx}:{event_idx}";
+ *     == and != only. A value that is not an identifier ListEvents returns matches nothing.
  *   - event.transaction_signature.value (bytes): Transaction signature that emitted the event
  *   - event.slot (uint64): Block slot number where event was emitted
  *   - event.call_idx (uint32): Instruction call index within transaction
  *   - event.block_offset (uint32): Transaction's position within the block
- *   - event.timestamp (google.protobuf.Timestamp): Event emission timestamp
- *   - event.program.value (bytes): Program public key that emitted the event
+ *   - event.timestamp (google.protobuf.Timestamp): Block time; has() and int(event.timestamp) (Unix seconds) only
+ *   - event.program (Pubkey): has() only; compare event.program.value
+ *   - event.program.value (bytes): Program public key that emitted the event; empty when unset
  *   - event.program_idx (uint32): Program index within transaction
  *   - event.payload (bytes): Event payload data
  *   - event.payload_size (uint32): Size of event payload in bytes
- *   - event.fee_payer.value (bytes): Fee payer's public key for the transaction
+ *   - event.fee_payer (Pubkey): has() only; compare event.fee_payer.value
+ *   - event.fee_payer.value (bytes): Fee payer's public key for the transaction; empty when unset
  *
  * Available CEL functions:
  *   - has(field): Check if optional field exists
- *   - startsWith(string, prefix): Check if string starts with prefix (string fields only)
  *   - first1Byte(bytes): Extract first byte as uint8
  *   - first4Bytes(bytes): Extract first 4 bytes as uint32 (little-endian)
  *   - first8Bytes(bytes): Extract first 8 bytes as uint64 (little-endian)
@@ -1039,8 +1053,8 @@ export const EventSchema: GenMessage<Event> = /*@__PURE__*/
  *   - string(value): Convert to string type
  *   - bytes(value): Convert to bytes type
  *   - double(value): Convert to double type
- *   - timestamp(value): Convert to timestamp type
- *   - duration(value): Convert to duration type
+ *   - timestamp(value), duration(value), startsWith(string, prefix): accepted by CEL but not evaluable by
+ *     the database; filters using them on event fields are rejected
  *
  * Available filter parameters (accessible via params.* in expressions):
  *   - params.slot (uint64): Slot number for filtering
@@ -1050,7 +1064,7 @@ export const EventSchema: GenMessage<Event> = /*@__PURE__*/
  *   - params.address (Pubkey): Program address for filtering
  *   - params.address.value (bytes): Program address bytes for filtering
  *   - params.prefix (bytes): Byte prefix for payload filtering
- *   - params.timestamp (Timestamp): Timestamp parameter for filtering
+ *   - params.timestamp (int64): Unix seconds, compared with int(event.timestamp)
  *
  * Filter examples:
  *
@@ -1078,9 +1092,8 @@ export const EventSchema: GenMessage<Event> = /*@__PURE__*/
  *      filter.expression = "has(event.program) && event.program.value == params.address"
  *      filter.params["address"].pubkey_value.value = <32-byte program pubkey>
  *
- * 7. Filter by event ID prefix using startsWith:
- *      filter.expression = "event.event_id.startsWith(\"ts\")"
- *      filter.expression = "event.event_id.startsWith(\"ts1000_\")"
+ * 7. Filter by event ID:
+ *      filter.expression = "event.event_id == \"{signature}:{slot}:{block_offset}:{call_idx}:{event_idx}\""
  *
  * 8. Check for payload existence:
  *      filter.expression = "has(event.payload)"
@@ -1158,8 +1171,9 @@ export const EventSchema: GenMessage<Event> = /*@__PURE__*/
  * 28. Filter by timestamp (if available):
  *      filter.expression = "has(event.timestamp)"
  *
- * 29. Match specific event ID pattern:
- *      filter.expression = "event.event_id.startsWith(\"ts1234_0_\")"
+ * 29. Filter by block time:
+ *      filter.expression = "int(event.timestamp) >= params.timestamp"
+ *      filter.params["timestamp"].int_value = 1767225600
  *
  * 30. Complex payload and metadata filter:
  *      filter.expression = "event.slot >= params.slot && has(event.payload) && first8Bytes(event.payload) == params.u64 && event.program.value == params.address"
@@ -1167,9 +1181,11 @@ export const EventSchema: GenMessage<Event> = /*@__PURE__*/
  *      filter.params["u64"].int_value = 6
  *      filter.params["address"].pubkey_value.value = <32-byte program pubkey>
  *
- * Note: Filters on slot, call_idx, block_offset, transaction_signature, and program are pushed down to SQL
- * for optimal performance. Payload filters (first1Byte, first4Bytes, first8Bytes, bytesPrefix) are evaluated
- * in-memory on fetched results.
+ * Note: Only slot, block_offset and call_idx are in the table's sort key, and event_id equality selects by
+ * them too. One call reads a bounded number of rows (about 100,000). When a filter needs more to fill the
+ * page, the call returns the matches found so far, possibly none, with a next_page_token to continue from:
+ * a short or empty page with a token is not the end of the results. Bound a rare match with event.slot to
+ * need fewer calls.
  *
  * @generated from message thru.services.v1.ListEventsRequest
  */
@@ -1233,13 +1249,15 @@ export const ListEventsResponseSchema: GenMessage<ListEventsResponse> = /*@__PUR
  *
  * Returns transactions ordered from most recent to older (slot DESC, block_offset DESC).
  * Supports filtering on transaction metadata and execution results using CEL expressions.
+ * The whole filter is evaluated by the database. A filter it cannot evaluate, such as arithmetic, the
+ * ternary operator or string() of a field, is rejected with INVALID_ARGUMENT (reason "not_translatable").
  *
  * Available fields for filtering:
  *   - transaction.slot (uint64): Block slot number where transaction was executed
  *   - transaction.block_offset (uint32): Transaction's position within the block
  *   - transaction.signature.value (bytes): Transaction signature
  *
- * Header fields (in-memory evaluation only, not SQL pushdown):
+ * Header fields (a transaction whose header is not stored reads them as zero or empty):
  *   - transaction.header.version (uint32): Transaction format version
  *   - transaction.header.fee (uint64): Transaction fee
  *   - transaction.header.nonce (uint64): Sender account nonce
@@ -1342,7 +1360,11 @@ export const ListEventsResponseSchema: GenMessage<ListEventsResponse> = /*@__PUR
  *   - return_events = false (default): Only event counts/sizes are returned, not actual event data
  *   - return_events = true: Full event data is included in execution results
  *
- * Note: All filters are pushed down to SQL for optimal performance where possible.
+ * Note: transactions are stored by signature, not in slot order. A call whose filter would read more than
+ * about 100,000 rows reads one 100,000-slot range instead. When a filter needs more to fill the page, the
+ * call returns the matches found so far, possibly none, with a next_page_token to continue from: a short or
+ * empty page with a token is not the end of the results. Bound a rare match with transaction.slot to need
+ * fewer calls.
  *
  * @generated from message thru.services.v1.ListTransactionsRequest
  */

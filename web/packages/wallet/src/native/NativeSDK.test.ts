@@ -151,8 +151,9 @@ describe("NativeSDK", () => {
     expect(sdk.accounts.manage).toBeTypeOf("function");
     expect(sdk.sessions.getActive).toBeTypeOf("function");
     expect(sdk.sessions.renewSession).toBeTypeOf("function");
-    expect(sdk.nativeOnboarding.signIn).toBeTypeOf("function");
-    expect(sdk.nativeOnboarding.createAccount).toBeTypeOf("function");
+    expect(sdk).not.toHaveProperty("nativeOnboarding");
+    expect(sdk).not.toHaveProperty("signIn");
+    expect(sdk).not.toHaveProperty("createAccount");
     expect(sdk.deposits.prepare).toBeTypeOf("function");
     expect(sdk.deposits.ensureAccount).toBeTypeOf("function");
     expect(sdk.deposits.open).toBeTypeOf("function");
@@ -266,19 +267,35 @@ describe("NativeSDK", () => {
   it("prepares a faucet-only destination but rejects paid deposits and other networks", async () => {
     const internals = sdk as unknown as {
       initialized: boolean;
-      activeNetwork: { id: string; depositConfigured: boolean; depositProviders: string[] };
+      activeNetwork: {
+        id: string;
+        depositConfigured: boolean;
+        depositProviders: string[];
+      };
       provider: { prepareDeposit: (payload: unknown) => Promise<never> };
     };
     internals.initialized = true;
-    internals.activeNetwork = { id: "betanet", depositConfigured: true, depositProviders: [] };
-    const prepare = vi.spyOn(internals.provider, "prepareDeposit").mockResolvedValue({ network: "betanet" } as never);
-    await expect(sdk.deposits.prepare({ network: "betanet" as never })).resolves.toMatchObject({ network: "betanet" });
+    internals.activeNetwork = {
+      id: "betanet",
+      depositConfigured: true,
+      depositProviders: [],
+    };
+    const prepare = vi
+      .spyOn(internals.provider, "prepareDeposit")
+      .mockResolvedValue({ network: "betanet" } as never);
+    await expect(
+      sdk.deposits.prepare({ network: "betanet" as never }),
+    ).resolves.toMatchObject({ network: "betanet" });
     expect(prepare).toHaveBeenCalledOnce();
     expect(await sdk.deposits.getProviders()).toEqual([]);
     await expect(sdk.deposits.open({})).rejects.toThrow();
-    await expect(sdk.deposits.prepare({ network: "alphanet" as never })).rejects.toThrow("Add funds unavailable");
+    await expect(
+      sdk.deposits.prepare({ network: "alphanet" as never }),
+    ).rejects.toThrow("Add funds unavailable");
     internals.activeNetwork.depositConfigured = false;
-    await expect(sdk.deposits.prepare({ network: "betanet" as never })).rejects.toThrow("Add funds unavailable");
+    await expect(
+      sdk.deposits.prepare({ network: "betanet" as never }),
+    ).rejects.toThrow("Add funds unavailable");
   });
 
   it("returns only the dapp-configured deposit provider IDs", async () => {
@@ -389,17 +406,16 @@ describe("NativeSDK", () => {
     directSdk.destroy();
   });
 
-  it("defaults transparent wallet experience to the transparent native route", () => {
-    const transparentSdk = new NativeSDK({
-      walletExperience: "transparent",
+  it("defaults to the standard native route", () => {
+    const nativeSdk = new NativeSDK({
       origin: "thru-mobile://token-dummy",
     });
-    const iframeUrl = new URL(transparentSdk.getIframeSrc());
+    const iframeUrl = new URL(nativeSdk.getIframeSrc());
 
     expect(iframeUrl.origin).toBe("https://app.tid.sh");
-    expect(iframeUrl.pathname).toBe("/embedded/native/transparent");
+    expect(iframeUrl.pathname).toBe("/embedded/native");
 
-    transparentSdk.destroy();
+    nativeSdk.destroy();
   });
 
   it("propagates an explicit legacy signing scheme to the wallet URL", () => {
@@ -418,11 +434,10 @@ describe("NativeSDK", () => {
     legacySdk.destroy();
   });
 
-  it("requests a transparent focus surface for transparent connect", async () => {
+  it("opens and closes the standard sheet for connect", async () => {
     sdk.destroy();
     sdk = new NativeSDK({
-      walletUrl: "http://localhost:3000/embedded/native/transparent",
-      walletExperience: "transparent",
+      walletUrl: "http://localhost:3000/embedded/native",
       origin: "thru-mobile://token-dummy",
     });
     webView = new MockWebView();
@@ -432,9 +447,8 @@ describe("NativeSDK", () => {
     sdk.setUiHandlers({ onShowRequested, onHideRequested });
 
     const frameId = frameIdFor(sdk);
-    const promise = sdk.signIn({
-      app_id: "token_dummy_app",
-      app_display_name: "Token Dummy App",
+    const promise = sdk.connect({
+      metadata: { appId: "token_dummy_app", appName: "Token Dummy App" },
     });
 
     sdk.onMessage(readyMessage(frameId));
@@ -469,11 +483,10 @@ describe("NativeSDK", () => {
     expect(onHideRequested).toHaveBeenCalledTimes(1);
   });
 
-  it("reports visible transparent wallet content separately from focus preloading", async () => {
+  it("does not acquire another surface lease for UI_SHOW", async () => {
     sdk.destroy();
     sdk = new NativeSDK({
-      walletUrl: "http://localhost:3000/embedded/native/transparent",
-      walletExperience: "transparent",
+      walletUrl: "http://localhost:3000/embedded/native",
       origin: "thru-mobile://token-dummy",
     });
     webView = new MockWebView();
@@ -482,7 +495,7 @@ describe("NativeSDK", () => {
     sdk.setUiHandlers({ onShowRequested });
 
     const frameId = frameIdFor(sdk);
-    const promise = sdk.createAccount({ accountName: "JCoin Account" });
+    const promise = sdk.connect();
     sdk.onMessage(readyMessage(frameId));
     await flush();
     const request = parseInjectedRequest(await waitForInjectedRequest(webView));
@@ -493,8 +506,8 @@ describe("NativeSDK", () => {
       }),
     );
 
-    expect(onShowRequested).toHaveBeenCalledTimes(2);
-    expect(onShowRequested).toHaveBeenLastCalledWith("wallet-content:deposit");
+    expect(onShowRequested).toHaveBeenCalledTimes(1);
+    expect(onShowRequested).toHaveBeenLastCalledWith("connect-open");
 
     const account = {
       accountType: "thru",
@@ -511,11 +524,10 @@ describe("NativeSDK", () => {
     await promise;
   });
 
-  it("ignores transparent UI_SHOW events outside an active wallet request", () => {
+  it("ignores UI_SHOW events outside an active wallet request", () => {
     sdk.destroy();
     sdk = new NativeSDK({
-      walletUrl: "http://localhost:3000/embedded/native/transparent",
-      walletExperience: "transparent",
+      walletUrl: "http://localhost:3000/embedded/native",
       origin: "thru-mobile://token-dummy",
     });
     const onShowRequested = vi.fn();
@@ -557,255 +569,7 @@ describe("NativeSDK", () => {
     );
   });
 
-  it("sends transparent createAccount requests through the wallet WebView", async () => {
-    sdk.destroy();
-    sdk = new NativeSDK({
-      walletUrl: "http://localhost:3000/embedded/native/transparent",
-      walletExperience: "transparent",
-      origin: "thru-mobile://token-dummy",
-    });
-    webView = new MockWebView();
-    sdk.attachWebView(webView);
-    const onShowRequested = vi.fn();
-    const onHideRequested = vi.fn();
-    const onConnect = vi.fn();
-    sdk.setUiHandlers({ onShowRequested, onHideRequested });
-    sdk.on("connect", onConnect);
-
-    const frameId = frameIdFor(sdk);
-    const legacyMetadata = {
-      appId: "token_dummy_app",
-      appName: "Token Dummy App",
-      appUrl: "https://trusted.example",
-    };
-    const promise = sdk.createAccount({
-      accountName: "JCoin Account",
-      passkeyName: "Jerry iPhone",
-      metadata: legacyMetadata,
-    });
-
-    sdk.onMessage(readyMessage(frameId));
-    await flush();
-
-    expect(onShowRequested).toHaveBeenCalledTimes(1);
-    const request = parseInjectedRequest(await waitForInjectedRequest(webView));
-    expect(request.type).toBe(POST_MESSAGE_REQUEST_TYPES.CREATE_ACCOUNT);
-    expect(request.payload).toEqual({
-      accountName: "JCoin Account",
-      passkeyName: "Jerry iPhone",
-      metadata: {
-        appId: "token_dummy_app",
-        appName: "Token Dummy App",
-      },
-    });
-
-    const result = {
-      account: {
-        accountType: "thru",
-        address: "thru_created_address",
-        label: "JCoin Account",
-      },
-      accounts: [
-        {
-          accountType: "thru",
-          address: "thru_created_address",
-          label: "JCoin Account",
-        },
-      ],
-      selectedAccount: {
-        accountType: "thru",
-        address: "thru_created_address",
-        label: "JCoin Account",
-      },
-      signature: "thru_signature",
-      vmError: "0",
-      userErrorCode: "0",
-      executionResult: "0",
-    };
-    sdk.onMessage(responseMessage(frameId, request.id, result));
-
-    await expect(promise).resolves.toEqual(result);
-    expect(onHideRequested).toHaveBeenCalledTimes(1);
-    expect(onConnect).toHaveBeenLastCalledWith({
-      accounts: result.accounts,
-      selectedAccount: result.selectedAccount,
-      status: "completed",
-      metadata: {
-        appId: "token_dummy_app",
-        appName: "Token Dummy App",
-        appUrl: "thru-mobile://token-dummy",
-      },
-    });
-  });
-
-  it.each([false, true])(
-    "persists a bundled createAccount session or reports a completed wallet operation (storage failure=%s)",
-    async (failStorage) => {
-    sdk.destroy();
-    const storage = new MockStorage();
-    const cause = new Error("Device storage unavailable");
-    if (failStorage) {
-      vi.spyOn(console, "warn").mockImplementation(() => {});
-      const write = storage.setItem.bind(storage);
-      vi.spyOn(storage, "setItem").mockImplementation((key, value) => {
-        if (key.startsWith("thru.wallet.signing-sessions.")) throw cause;
-        write(key, value);
-      });
-    }
-    sdk = new NativeSDK({
-      walletUrl: "http://localhost:3000/embedded/native/transparent",
-      walletExperience: "transparent",
-      origin: "thru-mobile://token-dummy",
-      storage,
-    });
-    webView = new MockWebView();
-    sdk.attachWebView(webView);
-    const nowSeconds = 1_800_000_000;
-
-    const frameId = frameIdFor(sdk);
-    const promise = sdk.createAccount({
-      accountName: "JCoin Account",
-      metadata: {
-        appId: "token_dummy_app",
-        appName: "Token Dummy App",
-      },
-      createSigningSession: { expiresAt: nowSeconds + 120 },
-    });
-
-    sdk.onMessage(readyMessage(frameId));
-    await flush();
-
-      const request = parseInjectedRequest(
-        await waitForInjectedRequest(webView),
-      );
-    expect(request.type).toBe(POST_MESSAGE_REQUEST_TYPES.CREATE_ACCOUNT);
-    expect(request.payload).toEqual({
-      accountName: "JCoin Account",
-      metadata: {
-        appId: "token_dummy_app",
-        appName: "Token Dummy App",
-      },
-      createSigningSession: {
-        expiresAt: String(nowSeconds + 120),
-      },
-    });
-
-    const result = {
-      account: {
-        accountType: "thru",
-        address: "thru_created_address",
-        label: "JCoin Account",
-      },
-      accounts: [
-        {
-          accountType: "thru",
-          address: "thru_created_address",
-          label: "JCoin Account",
-        },
-      ],
-      selectedAccount: {
-        accountType: "thru",
-        address: "thru_created_address",
-        label: "JCoin Account",
-      },
-      signature: "thru_signature",
-      vmError: "0",
-      userErrorCode: "0",
-      executionResult: "0",
-      signingSession: {
-        id: "session_1",
-        walletAddress: "thru_created_address",
-        publicKey: "thru_session_address",
-        authIdx: 1,
-        expiresAt: String(nowSeconds + 120),
-        createdAt: String(nowSeconds),
-      },
-    };
-    sdk.onMessage(responseMessage(frameId, request.id, result));
-
-    if (failStorage) {
-      await expect(promise).rejects.toMatchObject({
-          code: "SDK_STORAGE_ERROR",
-          operation: "setItem",
-          category: "signing-sessions",
-          walletOperationCompleted: true,
-          cause,
-      });
-      return;
-    }
-    await expect(promise).resolves.toEqual(result);
-    await expect(sdk.thru.getSigningSessions()).resolves.toEqual([
-      expect.objectContaining({
-        id: "session_1",
-        walletAddress: "thru_created_address",
-        publicKey: "thru_session_address",
-        authIdx: 1,
-        expiresAt: nowSeconds + 120,
-        createdAt: nowSeconds,
-      }),
-    ]);
-    },
-  );
-
-  it("creates a signing session while transparently disconnected", async () => {
-    sdk.destroy();
-    const storage = new MockStorage();
-    sdk = new NativeSDK({
-      walletUrl: "http://localhost:3000/embedded/native/transparent",
-      walletExperience: "transparent",
-      origin: "thru-mobile://token-dummy",
-      storage,
-    });
-    webView = new MockWebView();
-    sdk.attachWebView(webView);
-    const onShowRequested = vi.fn();
-    const onHideRequested = vi.fn();
-    sdk.setUiHandlers({ onShowRequested, onHideRequested });
-    const expiresAt = 1_900_000_000;
-
-    const frameId = frameIdFor(sdk);
-    const promise = sdk.thru.createSigningSession({
-      walletAddress: "thru_test_address",
-      expiresAt,
-    });
-
-    expect(sdk.isConnected()).toBe(false);
-    sdk.onMessage(readyMessage(frameId));
-    const request = parseInjectedRequest(await waitForInjectedRequest(webView));
-    expect(request.type).toBe(
-      POST_MESSAGE_REQUEST_TYPES.CREATE_SIGNING_SESSION,
-    );
-    expect(request.payload).toEqual({
-      walletAddress: "thru_test_address",
-      expiresAt: String(expiresAt),
-    });
-    expect(onShowRequested).toHaveBeenCalledTimes(1);
-
-    sdk.onMessage(
-      responseMessage(frameId, request.id, {
-        session: {
-          id: "session_replacement",
-          walletAddress: "thru_test_address",
-          publicKey: "thru_session_address",
-          authIdx: 1,
-          expiresAt: String(expiresAt),
-          createdAt: String(expiresAt - 120),
-        },
-      }),
-    );
-
-    await expect(promise).resolves.toEqual(
-      expect.objectContaining({
-        id: "session_replacement",
-        walletAddress: "thru_test_address",
-        expiresAt,
-      }),
-    );
-    expect(onHideRequested).toHaveBeenCalledTimes(1);
-    expect(sdk.isConnected()).toBe(false);
-  });
-
-  it("still requires a connection to create a non-transparent signing session", async () => {
+  it("still requires a connection to create a signing session", async () => {
     const promise = sdk.thru.createSigningSession({
       walletAddress: "thru_test_address",
       expiresAt: 1_900_000_000,
@@ -815,12 +579,11 @@ describe("NativeSDK", () => {
     expect(webView.injected).toEqual([]);
   });
 
-  it("renews and broadcasts a signing session while transparently disconnected", async () => {
+  it("renews and broadcasts a signing session while disconnected with an authorized session", async () => {
     sdk.destroy();
     const storage = new MockStorage();
     sdk = new NativeSDK({
-      walletUrl: "http://localhost:3000/embedded/native/transparent",
-      walletExperience: "transparent",
+      walletUrl: "http://localhost:3000/embedded/native",
       origin: "thru-mobile://token-dummy",
       storage,
     });
@@ -830,16 +593,16 @@ describe("NativeSDK", () => {
     const walletAddress = encodeAddress(new Uint8Array(32).fill(10));
     await (
       sdk as unknown as {
-      signingSessions: {
-        save(descriptor: {
-          id: string;
-          walletAddress: string;
-          publicKey: string;
-          authIdx: number;
-          expiresAt: number;
-          createdAt: number;
-        }): Promise<void>;
-      };
+        signingSessions: {
+          save(descriptor: {
+            id: string;
+            walletAddress: string;
+            publicKey: string;
+            authIdx: number;
+            expiresAt: number;
+            createdAt: number;
+          }): Promise<void>;
+        };
       }
     ).signingSessions.save({
       id: "session_current",
@@ -852,7 +615,7 @@ describe("NativeSDK", () => {
     const broadcastTransaction = vi.fn(async () => "signature");
     (
       sdk.thru as unknown as {
-      broadcastTransaction: (signedTransaction: string) => Promise<unknown>;
+        broadcastTransaction: (signedTransaction: string) => Promise<unknown>;
       }
     ).broadcastTransaction = broadcastTransaction;
 
@@ -942,11 +705,10 @@ describe("NativeSDK", () => {
     expect(sdk.isConnected()).toBe(false);
   });
 
-  it("sends transparent passkey challenge signing requests through the wallet WebView", async () => {
+  it("sends connected passkey challenge signing requests through the wallet WebView", async () => {
     sdk.destroy();
     sdk = new NativeSDK({
-      walletUrl: "http://localhost:3000/embedded/native/transparent",
-      walletExperience: "transparent",
+      walletUrl: "http://localhost:3000/embedded/native",
       origin: "thru-mobile://token-dummy",
     });
     webView = new MockWebView();
@@ -956,6 +718,27 @@ describe("NativeSDK", () => {
     sdk.setUiHandlers({ onShowRequested, onHideRequested });
 
     const frameId = frameIdFor(sdk);
+    const connecting = sdk.connect();
+    sdk.onMessage(readyMessage(frameId));
+    const connectRequest = parseInjectedRequest(
+      await waitForInjectedRequest(webView),
+    );
+    const account = {
+      accountType: "thru",
+      address: "thru_test_address",
+      label: "Account",
+    };
+    sdk.onMessage(
+      responseMessage(frameId, connectRequest.id, {
+        accounts: [account],
+        selectedAccount: account,
+        status: "completed",
+      }),
+    );
+    await connecting;
+    webView.injected.length = 0;
+    onShowRequested.mockClear();
+    onHideRequested.mockClear();
     const promise = sdk.thru.signPasskeyChallenge({
       challenge: "challenge_base64url",
       walletAddress: "thru_test_address",
@@ -986,12 +769,14 @@ describe("NativeSDK", () => {
     expect(onHideRequested).toHaveBeenCalledTimes(1);
   });
 
-  it("maps signIn snake-case app metadata to wallet connect metadata", async () => {
+  it("passes app metadata through connect", async () => {
     const frameId = frameIdFor(sdk);
-    const promise = sdk.signIn({
-      app_id: "token_dummy_app",
-      app_display_name: "Token Dummy App",
-      image_url: "https://token-dummy.thru.org/icon.png",
+    const promise = sdk.connect({
+      metadata: {
+        appId: "token_dummy_app",
+        appName: "Token Dummy App",
+        imageUrl: "https://token-dummy.thru.org/icon.png",
+      },
     });
 
     sdk.onMessage(readyMessage(frameId));
@@ -1067,9 +852,8 @@ describe("NativeSDK", () => {
     sdk.attachWebView(webView);
 
     const frameId = frameIdFor(sdk);
-    const connectPromise = sdk.signIn({
-      app_id: "token_dummy_app",
-      app_display_name: "Token Dummy App",
+    const connectPromise = sdk.connect({
+      metadata: { appId: "token_dummy_app", appName: "Token Dummy App" },
     });
 
     sdk.onMessage(readyMessage(frameId));
@@ -1085,9 +869,8 @@ describe("NativeSDK", () => {
     );
     await connectPromise;
 
-    const switchPromise = sdk.signIn({
-      app_id: "token_dummy_app",
-      app_display_name: "Token Dummy App",
+    const switchPromise = sdk.connect({
+      metadata: { appId: "token_dummy_app", appName: "Token Dummy App" },
       intent: "switch-account",
     });
     await flush();
@@ -1134,9 +917,8 @@ describe("NativeSDK", () => {
     sdk.attachWebView(webView);
 
     const frameId = frameIdFor(sdk);
-    const promise = sdk.signIn({
-      app_id: "token_dummy_app",
-      app_display_name: "Token Dummy App",
+    const promise = sdk.connect({
+      metadata: { appId: "token_dummy_app", appName: "Token Dummy App" },
     });
 
     sdk.onMessage(readyMessage(frameId));
@@ -1204,13 +986,13 @@ describe("NativeSDK", () => {
     });
     restored.onMessage(
       responseMessage(restoredFrameId, restoreRequest.id, {
-      isAuthorized: true,
-      isConnected: true,
-      hasPasskey: true,
-      hasWalletAccount: true,
-      accounts: [initialAccount, selectedAccount],
-      selectedAccount,
-      metadata: result.metadata,
+        isAuthorized: true,
+        isConnected: true,
+        hasPasskey: true,
+        hasWalletAccount: true,
+        accounts: [initialAccount, selectedAccount],
+        selectedAccount,
+        metadata: result.metadata,
       }),
     );
     await expect(restorePromise).resolves.toMatchObject({
@@ -1224,9 +1006,8 @@ describe("NativeSDK", () => {
 
   it("opens account settings through the wallet WebView", async () => {
     const frameId = frameIdFor(sdk);
-    const connectPromise = sdk.signIn({
-      app_id: "token_dummy_app",
-      app_display_name: "Token Dummy App",
+    const connectPromise = sdk.connect({
+      metadata: { appId: "token_dummy_app", appName: "Token Dummy App" },
     });
 
     sdk.onMessage(readyMessage(frameId));
@@ -1283,9 +1064,8 @@ describe("NativeSDK", () => {
     sdk.attachWebView(webView);
 
     const frameId = frameIdFor(sdk);
-    const connectPromise = sdk.signIn({
-      app_id: "token_dummy_app",
-      app_display_name: "Token Dummy App",
+    const connectPromise = sdk.connect({
+      metadata: { appId: "token_dummy_app", appName: "Token Dummy App" },
     });
 
     sdk.onMessage(readyMessage(frameId));
@@ -1368,9 +1148,8 @@ describe("NativeSDK", () => {
     sdk.attachWebView(webView);
 
     const frameId = frameIdFor(sdk);
-    const connectPromise = sdk.signIn({
-      app_id: "token_dummy_app",
-      app_display_name: "Token Dummy App",
+    const connectPromise = sdk.connect({
+      metadata: { appId: "token_dummy_app", appName: "Token Dummy App" },
     });
 
     sdk.onMessage(readyMessage(frameId));
@@ -1687,9 +1466,8 @@ describe("NativeSDK", () => {
     expect(storage.values.has(storageKey)).toBe(false);
 
     const frameId = frameIdFor(sdk);
-    const promise = sdk.signIn({
-      app_id: "token_dummy_app",
-      app_display_name: "Token Dummy App",
+    const promise = sdk.connect({
+      metadata: { appId: "token_dummy_app", appName: "Token Dummy App" },
     });
 
     sdk.onMessage(readyMessage(frameId));

@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="thru-mobile-tokens.css">
+<style>
+body{margin:0;-webkit-font-smoothing:antialiased;}
+a{color:var(--m-accent);text-decoration:none;}
+a:hover{text-decoration:underline;text-underline-offset:3px;}
+</style>
+</helmet>
+<div role="button" tabindex="0" aria-label="{{ aria }}" style="position:relative;display:flex;align-items:center;gap:12px;height:56px;padding:0 16px;box-sizing:border-box;background:{{ rowBg }};color:var(--m-fg);font-family:'Inter Tight',system-ui,sans-serif;cursor:pointer;outline:none" style-active="background:var(--m-bg-muted)" style-focus="box-shadow:inset 0 0 0 2px var(--m-accent)">
+  <sc-if value="{{ selected }}" hint-placeholder-val="{{ false }}"><span aria-hidden="true" style="position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--m-accent)"></span></sc-if>
+  <sc-if value="{{ showTile }}" hint-placeholder-val="{{ true }}"><span aria-hidden="true" style="width:32px;height:32px;flex:none;display:grid;place-items:center;background:{{ tileBg }};color:{{ tileFg }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter"><path d="{{ glyph }}"></path></svg></span></sc-if>
+  <sc-if value="{{ showMarker }}" hint-placeholder-val="{{ false }}"><span aria-hidden="true" style="width:8px;height:8px;flex:none;margin:0 12px;background:{{ marker }}"></span></sc-if>
+  <span aria-hidden="true" style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+    <span style="display:flex;align-items:center;gap:8px;min-width:0">
+      <span style="font-size:15px;font-weight:500;line-height:20px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ title }}</span>
+      <sc-if value="{{ isPending }}" hint-placeholder-val="{{ false }}"><span style="flex:none;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;font-weight:500;letter-spacing:0.5px;text-transform:uppercase;line-height:1;padding:4px 8px;background:var(--m-saffron-soft);color:var(--m-saffron)">Pending</span></sc-if>
+      <sc-if value="{{ isFailed }}" hint-placeholder-val="{{ false }}"><span style="flex:none;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;font-weight:500;letter-spacing:0.5px;text-transform:uppercase;line-height:1;padding:4px 8px;background:var(--m-accent);color:var(--m-bg)">Failed</span></sc-if>
+    </span>
+    <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;line-height:14px;color:var(--m-fg-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ sub }}</span>
+  </span>
+  <span aria-hidden="true" style="flex:none;display:flex;flex-direction:column;align-items:flex-end;gap:2px">
+    <sc-if value="{{ hasAmount }}" hint-placeholder-val="{{ true }}"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:14px;font-weight:500;line-height:20px;color:{{ amountColor }}">{{ amount }}</span></sc-if>
+    <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;line-height:14px;color:var(--m-fg-muted)">{{ time }}</span>
+  </span>
+  <span aria-hidden="true" style="position:absolute;left:16px;right:16px;bottom:0;height:1px;background:var(--m-hair)"></span>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:56},&quot;kind&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;received&quot;,&quot;options&quot;:[&quot;sent&quot;,&quot;received&quot;,&quot;deposit&quot;,&quot;account_created&quot;,&quot;signed_in&quot;,&quot;session_created&quot;,&quot;session_ended&quot;,&quot;passkey_added&quot;,&quot;passkey_removed&quot;,&quot;other&quot;],&quot;tsType&quot;:&quot;ActivityKind&quot;},&quot;status&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;done&quot;,&quot;options&quot;:[&quot;done&quot;,&quot;pending&quot;,&quot;failed&quot;],&quot;tsType&quot;:&quot;'done' | 'pending' | 'failed'&quot;},&quot;title&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;sub&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;from ta7Q…x2Lp&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;amount&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;+$25.00&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;time&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;2:14 PM&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;marker&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Variant&quot;},&quot;selected&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Variant&quot;}}">
+const CLOCK = 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0zM12 7v5l3 3';
+const KEY = 'M11 12a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0zM11 12h10M18 12v3M15 12v2';
+const KINDS = {
+  sent: { title: 'Sent', glyph: 'M7 17 17 7M8 7h9v9', dir: 'out' },
+  received: { title: 'Received', glyph: 'M17 7 7 17M16 17H7V8', dir: 'in' },
+  deposit: { title: 'Deposit', glyph: 'M12 3v12M7 10l5 5 5-5M4 20h16', dir: 'in' },
+  account_created: { title: 'Account created', glyph: 'M3 7h18v12H3zM3 7V5h14v2M15 13h3' },
+  signed_in: { title: 'Signed in', glyph: 'M14 4h6v16h-6M3 12h11M10 8l4 4-4 4' },
+  session_created: { title: 'Signing session created', glyph: CLOCK },
+  session_ended: { title: 'Signing session ended', glyph: CLOCK },
+  passkey_added: { title: 'Passkey added', glyph: KEY },
+  passkey_removed: { title: 'Passkey removed', glyph: KEY },
+  other: { title: 'Unknown program', glyph: 'M8 8 4 12l4 4M16 8l4 4-4 4' },
+};
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props;
+    const k = KINDS[p.kind] || KINDS.other;
+    const status = p.status || 'done';
+    const title = p.title ?? k.title, sub = p.sub ?? '', amount = p.amount ?? '', time = p.time ?? '';
+    const pending = status === 'pending', failed = status === 'failed', incoming = k.dir === 'in';
+    let tileBg = 'var(--m-bg-muted)', tileFg = 'var(--m-fg)', marker = 'var(--m-fg-subtle)';
+    if (failed) { tileBg = 'var(--m-accent-soft)'; tileFg = 'var(--m-accent)'; marker = 'var(--m-accent)'; }
+    else if (pending) { tileBg = 'var(--m-saffron-soft)'; tileFg = 'var(--m-saffron)'; marker = 'var(--m-saffron)'; }
+    else if (incoming) { tileBg = 'var(--m-forest-soft)'; tileFg = 'var(--m-forest)'; marker = 'var(--m-forest)'; }
+    const amountColor = failed || pending ? 'var(--m-fg-muted)' : incoming ? 'var(--m-forest)' : 'var(--m-fg)';
+    const spoken = amount ? ' ' + amount.replace(/^[+\u2212-]/, '') : '';
+    const aria = title + spoken + (sub ? ' ' + sub : '') + (pending ? ', pending' : failed ? ', failed' : '') + (time ? ', ' + time : '');
+    return { title, sub, amount, time, hasAmount: !!amount, glyph: k.glyph, tileBg, tileFg, marker, amountColor, isPending: pending, isFailed: failed, showTile: !p.marker, showMarker: !!p.marker, aria, selected: !!p.selected, rowBg: p.selected ? 'var(--m-bg-muted)' : 'var(--m-bg)' };
+  }
+}
+</script>
+</body>
+</html>

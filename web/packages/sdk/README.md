@@ -381,6 +381,14 @@ transport adapter, or program factory is needed. Canonical compression,
 multicall and uploader addresses are defaults; `programAddresses` provides
 optional overrides for private deployments.
 
+Include a compressed keypair fee payer in `accounts` to restore it first using
+its own signature. This supports canonical EOA accounts with zero data. The
+helper submits a proof-bearing NOOP, confirms it, then restores the remaining
+accounts with the updated nonce. Deleted accounts cannot be restored, and the
+384-slot compression cooldown still applies. Set `fee: 0n` on networks that
+allow zero-fee transactions when the payer has no native balance. Wallet intent
+callers still require an active fee payer.
+
 ```ts
 import { createThruClient, CompressionError } from '@thru/sdk';
 

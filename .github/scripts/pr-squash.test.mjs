@@ -57,14 +57,22 @@ function fixture(t, { count = 2, branch = 'feature' } = {}) {
   let reads = 0;
   const state = { children: [], protected: false, onRead: () => {} };
   const github = {
+    graphql: async () => {
+      const snapshot = structuredClone(pr);
+      const baseSha = git('--git-dir', remote, 'rev-parse', `refs/heads/${pr.base.ref}`);
+      state.onRead(++reads, snapshot);
+      return { repository: { pullRequest: {
+        number: snapshot.number, state: snapshot.state.toUpperCase(),
+        title: snapshot.title, body: snapshot.body,
+        headRefName: snapshot.head.ref, headRefOid: snapshot.head.sha,
+        headRepository: { nameWithOwner: snapshot.head.repo.full_name },
+        baseRefName: snapshot.base.ref, baseRefOid: snapshot.base.sha,
+        baseRef: { target: { oid: baseSha } },
+      } } };
+    },
     rest: {
       users: { getByUsername: async () => ({ data: { id: 123 } }) },
       pulls: {
-        get: async () => {
-          const snapshot = structuredClone(pr);
-          state.onRead(++reads, snapshot);
-          return { data: snapshot };
-        },
         list: async () => {},
       },
       repos: { getBranch: async () => ({ data: { protected: state.protected } }) },
@@ -118,6 +126,152 @@ test('amends one commit without rebasing, then treats another command as a no-op
   f.pr.head.sha = head;
   assert.match(await f.run(), /Already finalized/);
   assert.equal(f.remoteHead(), head);
+});
+
+test('finalizes rebased PRs with persistently stale base metadata', async t => {
+  for (const count of [1, 2]) {
+    await t.test(`${count} commits`, async t => {
+      const f = fixture(t, { count });
+      const base = f.pr.base.sha;
+      f.git('switch', 'feature');
+      f.git('rebase', 'main');
+      f.pr.head.sha = f.git('rev-parse', 'HEAD');
+      const tree = f.git('rev-parse', 'HEAD^{tree}');
+      f.git('push', '--force', f.remote, 'feature');
+      f.pr.base.sha = f.parent;
+
+      await f.run();
+      const head = f.importHead();
+      assert.equal(f.git('rev-parse', `${head}^`), base);
+      assert.equal(f.git('rev-parse', `${head}^{tree}`), tree);
+      assert.equal(f.git('show', '-s', '--format=%B', head), expectedCommitMessage(f.pr));
+    });
+  }
+});
+
+test('squashes when stale base metadata refreshes during finalization', async t => {
+  const f = fixture(t);
+  f.state.onRead = (reads, snapshot) => {
+    if (reads === 1) snapshot.base.sha = f.parent;
+  };
+
+  await f.run();
+  const head = f.importHead();
+  assert.equal(f.git('rev-parse', `${head}^`), f.parent);
+  assert.equal(f.git('rev-parse', `${head}^{tree}`), f.tree);
+  assert.equal(f.git('show', '-s', '--format=%B', head), expectedCommitMessage(f.pr));
+  const merged = f.git('merge-tree', '--write-tree', f.pr.base.sha, head);
+  assert.equal(f.git('show', `${merged}:upstream`), 'unrelated upstream change');
+});
+
+test('preserves upstream changes when the base advances after fetch', async t => {
+  const f = fixture(t);
+  f.state.onRead = (reads, snapshot) => {
+    if (reads === 2) {
+      writeFileSync(join(f.git('rev-parse', '--show-toplevel'), 'upstream'), 'newer upstream change\n');
+      f.git('add', '.');
+      f.git('commit', '-m', 'advance base during finalization');
+      f.git('push', f.remote, 'main');
+      f.pr.base.sha = f.git('rev-parse', 'HEAD');
+    }
+    snapshot.base.sha = f.pr.base.sha;
+  };
+
+  await f.run();
+  const head = f.importHead();
+  assert.equal(f.git('rev-parse', `${head}^`), f.parent);
+  assert.equal(f.git('rev-parse', `${head}^{tree}`), f.tree);
+  assert.equal(f.git('show', '-s', '--format=%B', head), expectedCommitMessage(f.pr));
+  const merged = f.git('merge-tree', '--write-tree', f.pr.base.sha, head);
+  assert.equal(f.git('show', `${merged}:upstream`), 'newer upstream change');
+});
+
+test('refuses rewritten live base history despite an older PR base OID', async t => {
+  for (const rewrite of ['rewind', 'diverge', 'unrelated']) {
+    await t.test(rewrite, async t => {
+      const f = fixture(t, { count: 1 });
+      const retainedBase = f.pr.base.sha;
+      writeFileSync(join(f.git('rev-parse', '--show-toplevel'), 'upstream'), 'removed upstream change\n');
+      f.git('add', '.');
+      f.git('commit', '-m', 'upstream later removed');
+      f.git('push', f.remote, 'main');
+      f.git('switch', 'feature');
+      f.git('rebase', 'main');
+      f.pr.head.sha = f.git('rev-parse', 'HEAD');
+      f.git('push', '--force', f.remote, 'feature');
+      f.pr.base.sha = f.parent;
+      let rewrittenBase = retainedBase;
+      if (rewrite !== 'rewind') {
+        rewrittenBase = f.git(
+          'commit-tree', `${retainedBase}^{tree}`,
+          ...(rewrite === 'diverge' ? ['-p', retainedBase] : []),
+          '-m', 'replace upstream history',
+        );
+      }
+      f.state.onRead = reads => {
+        if (reads === 1) {
+          f.git('push', '--force', f.remote, `${rewrittenBase}:refs/heads/main`);
+        }
+      };
+
+      await assert.rejects(f.run(), /base branch history (was rewritten|cannot be verified)/);
+      assert.equal(f.remoteHead(), f.pr.head.sha);
+      assert.equal(f.git('--git-dir', f.remote, 'rev-parse', 'refs/heads/main'), rewrittenBase);
+    });
+  }
+});
+
+test('keeps the snapshotted boundary when upstream absorbs a PR commit before fetch', async t => {
+  const f = fixture(t);
+  const base = f.pr.base.sha;
+  f.git('switch', 'feature');
+  f.git('rebase', 'main');
+  f.pr.head.sha = f.git('rev-parse', 'HEAD');
+  const tree = f.git('rev-parse', 'HEAD^{tree}');
+  const firstCommit = f.git('rev-parse', 'HEAD^');
+  f.git('push', '--force', f.remote, 'feature');
+  f.pr.base.sha = f.parent;
+  f.state.onRead = reads => {
+    if (reads === 1) f.git('push', f.remote, `${firstCommit}:refs/heads/main`);
+  };
+
+  await f.run();
+  const head = f.importHead();
+  assert.equal(f.git('rev-parse', `${head}^`), base);
+  assert.equal(f.git('rev-parse', `${head}^{tree}`), tree);
+  assert.equal(f.git('show', '-s', '--format=%B', head), expectedCommitMessage(f.pr));
+  assert.equal(f.git('--git-dir', f.remote, 'rev-parse', 'refs/heads/main'), firstCommit);
+});
+
+test('does not absorb upstream history into the squash when the base rewinds after fetch', async t => {
+  const f = fixture(t);
+  const base = f.pr.base.sha;
+  f.git('switch', 'feature');
+  f.git('rebase', 'main');
+  f.pr.head.sha = f.git('rev-parse', 'HEAD');
+  const tree = f.git('rev-parse', 'HEAD^{tree}');
+  f.git('push', '--force', f.remote, 'feature');
+  f.pr.base.sha = f.parent;
+  f.state.onRead = reads => {
+    if (reads === 2) f.git('push', '--force', f.remote, `${f.parent}:refs/heads/main`);
+  };
+
+  await f.run();
+  const head = f.importHead();
+  assert.equal(f.git('rev-parse', `${head}^`), base);
+  assert.equal(f.git('rev-parse', `${head}^{tree}`), tree);
+  assert.equal(f.git('show', '-s', '--format=%B', head), expectedCommitMessage(f.pr));
+  assert.equal(f.git('rev-list', '--count', `${base}..${head}`), '1');
+  assert.equal(f.git('--git-dir', f.remote, 'rev-parse', 'refs/heads/main'), f.parent);
+});
+
+test('refuses head movement between the API snapshot and fetch', async t => {
+  const f = fixture(t);
+  f.state.onRead = reads => {
+    if (reads === 1) f.git('push', '--force', f.remote, `${f.parent}:refs/heads/feature`);
+  };
+  await assert.rejects(f.run(), /PR moved before it was fetched/);
+  assert.equal(f.remoteHead(), f.parent);
 });
 
 test('never overwrites a contributor push made after the final API snapshot', async t => {
@@ -178,7 +332,6 @@ test('detects head movement, retargeting, and title edits before a push', () => 
   for (const change of [
     { head: { ...before.head, sha: 'moved' } },
     { base: { ...before.base, ref: 'other' } },
-    { base: { ...before.base, sha: 'moved' } },
     { title: 'edited title' },
   ]) {
     assert.throws(() => assertUnchanged(before, { ...before, ...change }), /PR changed/);

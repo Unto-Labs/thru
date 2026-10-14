@@ -24,10 +24,32 @@ export async function authorizeCommand({ github, context }) {
 }
 
 async function getPullRequest(github, context) {
-  const { data } = await github.rest.pulls.get({
-    ...context.repo, pull_number: context.payload.issue.number,
-  });
-  return data;
+  const data = await github.graphql(
+    `query($owner: String!, $repo: String!, $number: Int!) {
+      repository(owner: $owner, name: $repo) {
+        pullRequest(number: $number) {
+          number state title body headRefName headRefOid baseRefName
+          headRepository { nameWithOwner }
+          baseRef { target { oid } }
+        }
+      }
+    }`,
+    { ...context.repo, number: context.payload.issue.number },
+  );
+  const pr = data.repository?.pullRequest;
+  if (!pr?.baseRef?.target?.oid) {
+    throw new Error('Cannot read the live PR base branch. Nothing was pushed.');
+  }
+  // baseRefOid (like REST base.sha) is historical PR metadata. The Ref's
+  // target is the live upstream boundary captured with this PR snapshot.
+  return {
+    number: pr.number, state: pr.state.toLowerCase(), title: pr.title, body: pr.body,
+    head: {
+      sha: pr.headRefOid, ref: pr.headRefName,
+      repo: { full_name: pr.headRepository?.nameWithOwner },
+    },
+    base: { sha: pr.baseRef.target.oid, ref: pr.baseRefName },
+  };
 }
 
 export function assertUnchanged(before, after) {
@@ -35,7 +57,7 @@ export function assertUnchanged(before, after) {
     after.state !== 'open' ||
     after.head.sha !== before.head.sha || after.head.ref !== before.head.ref ||
     after.head.repo?.full_name !== before.head.repo?.full_name ||
-    after.base.sha !== before.base.sha || after.base.ref !== before.base.ref ||
+    after.base.ref !== before.base.ref ||
     after.title !== before.title || (after.body || '') !== (before.body || '')
   ) {
     throw new Error('The PR changed during finalization. Nothing was pushed; post the command again.');
@@ -132,10 +154,22 @@ export async function finalizePullRequest({ github, context, token, appSlug }) {
       `+refs/heads/${pr.base.ref}:refs/bot/base`,
       `+refs/heads/${pr.head.ref}:refs/bot/head`,
     ]);
-    if (git(['rev-parse', 'refs/bot/head']).trim() !== pr.head.sha ||
-        git(['rev-parse', 'refs/bot/base']).trim() !== pr.base.sha) {
+    if (git(['rev-parse', 'refs/bot/head']).trim() !== pr.head.sha) {
       throw new Error('The PR moved before it was fetched. Post the command again.');
     }
+    const fetchedBaseSha = git(['rev-parse', 'refs/bot/base']).trim();
+    let ancestor;
+    try {
+      ancestor = git(['merge-base', '--all', pr.base.sha, fetchedBaseSha]).trim();
+    } catch (error) {
+      throw new Error('The base branch history cannot be verified. Finalize this PR manually; nothing was pushed.', {
+        cause: error,
+      });
+    }
+    if (ancestor !== pr.base.sha) {
+      throw new Error('The base branch history was rewritten. Finalize this PR manually; nothing was pushed.');
+    }
+    // Never let later base movement redefine which commits belong to the PR.
     const result = prepareCommit(git, pr);
     assertUnchanged(pr, await getPullRequest(github, context));
     if (result.action === 'unchanged') return 'Already finalized: the single commit has the correct message. No push needed.';
@@ -158,7 +192,7 @@ export async function finalizePullRequest({ github, context, token, appSlug }) {
   }
 }
 
-export async function reportResult({ github, context, success, message }) {
+export async function reportResult({ github, context, success, message, eyesReactionId }) {
   await github.rest.reactions.createForIssueComment({
     ...context.repo, comment_id: context.payload.comment.id,
     content: success ? '+1' : '-1',
@@ -168,4 +202,14 @@ export async function reportResult({ github, context, success, message }) {
     body: `${success ? '### PR finalized' : '### PR finalization failed'}\n\n${message}\n\n` +
       `[Workflow run](${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`,
   });
+  if (eyesReactionId) {
+    try {
+      await github.rest.reactions.deleteForIssueComment({
+        ...context.repo, comment_id: context.payload.comment.id, reaction_id: eyesReactionId,
+      });
+    } catch (error) {
+      // A collaborator may already have removed the acknowledgement.
+      if (error.status !== 404) throw error;
+    }
+  }
 }

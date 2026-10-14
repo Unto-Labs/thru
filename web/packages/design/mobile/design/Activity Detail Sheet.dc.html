@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="thru-mobile-tokens.css">
+<style>
+body{margin:0;-webkit-font-smoothing:antialiased;}
+a{color:var(--m-fg);text-decoration:none;}
+a:hover{text-decoration:underline;text-underline-offset:3px;}
+@keyframes tm-shimmer{0%,100%{opacity:1;}50%{opacity:0.55;}}
+</style>
+</helmet>
+<div data-screen-label="Activity detail sheet" role="dialog" aria-modal="true" aria-label="{{ dialogLabel }}" style="position:relative;width:100%;height:100%;box-sizing:border-box;display:flex;flex-direction:column;background:var(--m-bg);color:var(--m-fg);font-family:'Inter Tight',system-ui,sans-serif;border-radius:{{ radius }};box-shadow:{{ shadow }};border-left:{{ borderLeft }};overflow:hidden">
+  <sc-if value="{{ isPhone }}" hint-placeholder-val="{{ true }}"><div aria-hidden="true" style="height:16px;display:grid;place-items:center;flex:none"><span style="width:36px;height:4px;border-radius:999px;background:var(--m-border-strong)"></span></div></sc-if>
+
+  <sc-if value="{{ headerMain }}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex;align-items:center;gap:12px;height:52px;padding:0 4px 0 16px;border-bottom:1px solid var(--m-border);flex:none">
+      <sc-if value="{{ isLoading }}" hint-placeholder-val="{{ false }}"><span aria-hidden="true" style="width:32px;height:32px;flex:none;background:var(--m-bg-inset);animation:tm-shimmer 1.4s ease-in-out infinite"></span><span aria-hidden="true" style="flex:1;display:flex"><span style="width:120px;height:14px;background:var(--m-bg-inset);animation:tm-shimmer 1.4s ease-in-out infinite"></span></span></sc-if>
+      <sc-if value="{{ notLoading }}" hint-placeholder-val="{{ true }}">
+        <sc-if value="{{ showTile }}" hint-placeholder-val="{{ true }}"><span aria-hidden="true" style="width:32px;height:32px;flex:none;display:grid;place-items:center;background:{{ tileBg }};color:{{ tileFg }}"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter"><path d="{{ glyph }}"></path></svg></span></sc-if>
+        <h2 style="flex:1;min-width:0;margin:0;font-size:17px;font-weight:600;letter-spacing:-0.25px;line-height:22px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ title }}</h2>
+      </sc-if>
+      <span style="display:inline-flex;align-items:center;gap:{{ iconBtnGap }};flex:none">
+        <sc-if value="{{ showShareIcon }}" hint-placeholder-val="{{ true }}"><span style="width:44px;height:44px;display:grid;place-items:center;flex:none"><button type="button" aria-label="Share" onClick="{{ onShare }}" style="display:grid;place-items:center;background:none;padding:0;cursor:pointer;box-sizing:border-box;{{ iconBtnStyle }}" style-active="background:var(--m-bg-muted)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M12 3v13M7 8l5-5 5 5"></path><path d="M5 12v8h14v-8"></path></svg></button></span></sc-if>
+        <span style="width:44px;height:44px;display:grid;place-items:center;flex:none"><button type="button" aria-label="Close" onClick="{{ onClose }}" style="display:grid;place-items:center;background:none;padding:0;cursor:pointer;box-sizing:border-box;{{ iconBtnStyle }}" style-active="background:var(--m-bg-muted)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button></span>
+      </span>
+    </div>
+  </sc-if>
+  <sc-if value="{{ headerPage }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;align-items:center;height:52px;padding:0 4px;border-bottom:1px solid var(--m-border);flex:none">
+      <button type="button" aria-label="Back" onClick="{{ closePage }}" style="width:44px;height:44px;flex:none;display:grid;place-items:center;border:none;background:none;padding:0;cursor:pointer;color:var(--m-fg)" style-active="background:var(--m-bg-muted)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M15 18 9 12l6-6"></path></svg></button>
+      <span style="flex:1;text-align:center;font-size:17px;font-weight:600;letter-spacing:-0.25px">Transaction details</span>
+      <button type="button" aria-label="Close" onClick="{{ onClose }}" style="width:44px;height:44px;flex:none;display:grid;place-items:center;border:none;background:none;padding:0;cursor:pointer;color:var(--m-fg-muted)" style-active="background:var(--m-bg-muted)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+    </div>
+  </sc-if>
+
+  <div style="flex:1;min-height:0;overflow:{{ bodyOverflow }}">
+    <sc-if value="{{ isLoading }}" hint-placeholder-val="{{ false }}">
+      <div aria-busy="true" aria-label="Loading transaction" style="animation:tm-shimmer 1.4s ease-in-out infinite">
+        <div style="padding:20px 16px 16px;display:flex;flex-direction:column;gap:10px"><span style="display:block;width:160px;height:30px;background:var(--m-bg-inset)"></span><span style="display:block;width:96px;height:12px;background:var(--m-bg-inset)"></span></div>
+        <div style="border-top:1px solid var(--m-hair)">
+          <sc-for list="{{ skel }}" as="k" hint-placeholder-count="4">
+            <div style="display:flex;align-items:center;justify-content:space-between;height:52px;padding:0 16px;border-bottom:1px solid var(--m-hair)"><span style="display:block;width:64px;height:9px;background:var(--m-bg-inset)"></span><span style="display:block;width:128px;height:11px;background:var(--m-bg-inset)"></span></div>
+          </sc-for>
+        </div>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isFailedLoad }}" hint-placeholder-val="{{ false }}">
+      <div role="alert" style="display:flex;align-items:center;gap:10px;min-height:44px;padding:6px 4px 6px 16px;border-bottom:1px solid var(--m-hair)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true" style="flex:none;color:var(--m-accent)"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5v6M12 16v.5"></path></svg>
+        <span style="flex:1;min-width:0;font-size:13px;line-height:18px;color:var(--m-accent)">Couldn’t load this transaction.</span>
+        <button type="button" style="height:44px;padding:0 12px;border:none;background:none;cursor:pointer;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg)" style-active="background:var(--m-bg-muted)">Try again</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;min-height:52px;padding:0 4px 0 16px;border-bottom:1px solid var(--m-hair)">
+        <span style="width:96px;flex:none;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">Signature</span>
+        <span style="flex:1;min-width:0;text-align:right;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;line-height:18px;color:var(--m-fg)">{{ signature }}</span>
+        <button type="button" aria-label="Copy signature" style="width:44px;height:44px;flex:none;display:grid;place-items:center;border:none;background:none;padding:0;cursor:pointer;color:var(--m-fg-muted)" style-active="background:var(--m-bg-muted)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><rect x="9" y="9" width="11" height="11"></rect><path d="M5 15V5h10"></path></svg></button>
+      </div>
+    </sc-if>
+
+    <sc-if value="{{ isReady }}" hint-placeholder-val="{{ true }}">
+      <sc-if value="{{ showMain }}" hint-placeholder-val="{{ true }}">
+        <sc-if value="{{ showHero }}" hint-placeholder-val="{{ true }}">
+          <div style="padding:{{ heroPad }};display:flex;flex-direction:column;gap:6px">
+            <sc-if value="{{ hasAmount }}" hint-placeholder-val="{{ true }}"><div style="font-size:34px;font-weight:700;letter-spacing:-0.75px;line-height:40px;color:{{ amountColor }}">{{ amount }}</div></sc-if>
+            <div style="display:flex;align-items:center;gap:6px;font-size:14px;font-weight:500;line-height:20px;color:{{ statusColor }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true" style="flex:none"><path d="{{ statusGlyph }}"></path></svg><span>{{ statusWord }}</span></div>
+            <sc-if value="{{ hasReason }}" hint-placeholder-val="{{ false }}"><div style="font-size:14px;line-height:20px;color:var(--m-fg-muted);text-wrap:pretty">{{ reason }}</div></sc-if>
+          </div>
+        </sc-if>
+        <div style="border-top:1px solid var(--m-hair)">
+          <sc-for list="{{ rows }}" as="r" hint-placeholder-count="5">
+            <div style="display:flex;align-items:center;gap:12px;min-height:52px;padding:0 {{ r.padRight }} 0 16px;border-bottom:1px solid var(--m-hair)">
+              <span style="width:96px;flex:none;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">{{ r.label }}</span>
+              <span style="flex:1;min-width:0;text-align:right;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;line-height:18px;color:{{ r.color }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.value }}</span>
+              <sc-if value="{{ r.copy }}" hint-placeholder-val="{{ false }}"><button type="button" aria-label="{{ r.copyLabel }}" style="width:44px;height:44px;flex:none;display:grid;place-items:center;border:none;background:none;padding:0;cursor:pointer;color:var(--m-fg-muted)" style-active="background:var(--m-bg-muted)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><rect x="9" y="9" width="11" height="11"></rect><path d="M5 15V5h10"></path></svg></button></sc-if>
+            </div>
+          </sc-for>
+        </div>
+        <sc-if value="{{ actionsInline }}" hint-placeholder-val="{{ false }}">
+          <div style="display:flex;gap:12px;padding:16px">
+            <a href="#" style="flex:1;height:48px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--m-border-strong);background:transparent;color:var(--m-fg);font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:600;font-size:15px;box-sizing:border-box;white-space:nowrap" style-hover="background:var(--m-bg-muted);text-decoration:none">View on ThruScan<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"></path></svg></a>
+            <button type="button" style="flex:1;height:48px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--m-border-strong);background:transparent;color:var(--m-fg);font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:600;font-size:15px;cursor:pointer;box-sizing:border-box" style-active="background:var(--m-bg-muted)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M12 3v13M7 8l5-5 5 5"></path><path d="M5 12v8h14v-8"></path></svg>Share</button>
+          </div>
+        </sc-if>
+        <sc-if value="{{ isDisclosure }}" hint-placeholder-val="{{ true }}">
+          <div style="border-top:1px solid var(--m-border)">
+            <button type="button" aria-expanded="{{ techOpen }}" onClick="{{ toggleTech }}" style="width:100%;height:56px;display:flex;align-items:center;gap:12px;padding:0 16px;border:none;background:none;cursor:pointer;text-align:left;color:var(--m-fg);font-family:'Inter Tight',system-ui,sans-serif;font-size:15px;font-weight:500" style-active="background:var(--m-bg-muted)"><span style="flex:1">Transaction details</span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true" style="color:var(--m-fg-muted);transform:rotate({{ chevRot }});transition:transform 200ms cubic-bezier(0.2,0.8,0.2,1)"><path d="m6 9 6 6 6-6"></path></svg></button>
+          </div>
+        </sc-if>
+        <sc-if value="{{ isPageRow }}" hint-placeholder-val="{{ false }}">
+          <div style="border-top:1px solid var(--m-border)">
+            <button type="button" onClick="{{ openPage }}" style="width:100%;height:56px;display:flex;align-items:center;gap:12px;padding:0 16px;border:none;background:none;cursor:pointer;text-align:left;color:var(--m-fg);font-family:'Inter Tight',system-ui,sans-serif;font-size:15px;font-weight:500" style-active="background:var(--m-bg-muted)"><span style="flex:1">Transaction details</span><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true" style="color:var(--m-fg-muted)"><path d="m9 6 6 6-6 6"></path></svg></button>
+          </div>
+        </sc-if>
+        <sc-if value="{{ isInline }}" hint-placeholder-val="{{ false }}">
+          <div style="border-top:1px solid var(--m-border);padding:20px 16px 8px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">Transaction details</div>
+        </sc-if>
+      </sc-if>
+
+      <sc-if value="{{ showTech }}" hint-placeholder-val="{{ false }}">
+        <div style="border-top:1px solid var(--m-hair)">
+          <sc-for list="{{ techRows }}" as="t" hint-placeholder-count="4">
+            <div style="display:flex;align-items:center;gap:12px;min-height:52px;padding:0 16px;border-bottom:1px solid var(--m-hair)">
+              <span style="width:96px;flex:none;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">{{ t.label }}</span>
+              <span style="flex:1;min-width:0;text-align:right;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;line-height:18px;color:{{ t.color }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.value }}</span>
+            </div>
+          </sc-for>
+        </div>
+        <div style="padding:16px 16px 0;display:flex;flex-direction:column;gap:8px">
+          <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">Decoded data</span>
+          <sc-for list="{{ cards }}" as="c" hint-placeholder-count="2">
+            <div style="border:1px solid var(--m-border)">
+              <button type="button" aria-expanded="{{ c.open }}" onClick="{{ c.toggle }}" style="width:100%;height:44px;display:flex;align-items:center;gap:8px;padding:0 12px;border:none;background:var(--m-bg-muted);cursor:pointer;text-align:left;color:var(--m-fg)" style-active="background:var(--m-bg-inset)">
+                <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;font-weight:500">{{ c.name }}</span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--m-fg-muted)">{{ c.meta }}</span>
+                <span style="flex:1"></span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true" style="color:var(--m-fg-muted);transform:rotate({{ c.rot }});transition:transform 200ms cubic-bezier(0.2,0.8,0.2,1)"><path d="m6 9 6 6 6-6"></path></svg>
+              </button>
+              <sc-if value="{{ c.open }}" hint-placeholder-val="{{ false }}">
+                <div style="padding:12px 14px;display:grid;grid-template-columns:max-content minmax(0,1fr);column-gap:16px;row-gap:6px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;line-height:18px">
+                  <sc-for list="{{ c.rows }}" as="d" hint-placeholder-count="4"><span style="color:var(--m-fg-muted)">{{ d.k }}</span><span style="color:var(--m-fg);min-width:0;overflow-wrap:anywhere">{{ d.v }}</span></sc-for>
+                </div>
+              </sc-if>
+            </div>
+          </sc-for>
+          <div style="border:1px solid var(--m-border)">
+            <div style="display:flex;align-items:center;height:44px;background:var(--m-bg-muted)">
+              <button type="button" aria-expanded="{{ rawOpen }}" onClick="{{ toggleRaw }}" style="flex:1;min-width:0;height:44px;display:flex;align-items:center;gap:8px;padding:0 12px;border:none;background:none;cursor:pointer;text-align:left;color:var(--m-fg)" style-active="background:var(--m-bg-inset)">
+                <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;font-weight:500">Raw instruction bytes</span>
+                <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--m-fg-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ rawSummary }}</span>
+                <span style="flex:1"></span>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true" style="color:var(--m-fg-muted);transform:rotate({{ rawRot }});transition:transform 200ms cubic-bezier(0.2,0.8,0.2,1)"><path d="m6 9 6 6 6-6"></path></svg>
+              </button>
+              <button type="button" aria-label="Copy raw instruction bytes" style="height:44px;padding:0 12px;flex:none;border:none;border-left:1px solid var(--m-border);background:none;cursor:pointer;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg)" style-active="background:var(--m-bg-inset)">Copy</button>
+            </div>
+            <sc-if value="{{ rawOpen }}" hint-placeholder-val="{{ false }}"><div style="padding:12px 14px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;line-height:18px;color:var(--m-fg);overflow-wrap:anywhere">{{ rawHex }}</div></sc-if>
+          </div>
+        </div>
+        <div style="height:24px"></div>
+      </sc-if>
+    </sc-if>
+  </div>
+
+  <sc-if value="{{ showFooter }}" hint-placeholder-val="{{ true }}">
+    <div style="flex:none;border-top:1px solid var(--m-border);padding:12px 16px 0;background:var(--m-bg)">
+      <a href="#" style="width:100%;height:48px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--m-border-strong);background:transparent;color:var(--m-fg);font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:600;font-size:15px;box-sizing:border-box" style-hover="background:var(--m-bg-muted);text-decoration:none" style-active="background:var(--m-bg-muted)">View on ThruScan<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"></path></svg></a>
+      <div style="height:{{ footerBottom }}"></div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:440},&quot;event&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;received&quot;,&quot;options&quot;:[&quot;received&quot;,&quot;sentPending&quot;,&quot;sentFailed&quot;,&quot;session&quot;,&quot;passkey&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;detent&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;half&quot;,&quot;options&quot;:[&quot;half&quot;,&quot;full&quot;],&quot;tsType&quot;:&quot;'half' | 'full'&quot;},&quot;techOpen&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;cardOpen&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;state&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;ready&quot;,&quot;options&quot;:[&quot;ready&quot;,&quot;loading&quot;,&quot;failed&quot;],&quot;tsType&quot;:&quot;'ready' | 'loading' | 'failed'&quot;},&quot;layout&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;phone&quot;,&quot;options&quot;:[&quot;phone&quot;,&quot;panel&quot;,&quot;dialog&quot;],&quot;tsType&quot;:&quot;'phone' | 'panel' | 'dialog'&quot;},&quot;iconButtons&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;plain&quot;,&quot;options&quot;:[&quot;plain&quot;,&quot;outlined&quot;],&quot;tsType&quot;:&quot;'plain' | 'outlined'&quot;,&quot;section&quot;:&quot;Options under review&quot;},&quot;detailsMode&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;disclosure&quot;,&quot;options&quot;:[&quot;disclosure&quot;,&quot;page&quot;,&quot;inline&quot;],&quot;tsType&quot;:&quot;'disclosure' | 'page' | 'inline'&quot;,&quot;section&quot;:&quot;Options under review&quot;},&quot;pageOpen&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Options under review&quot;},&quot;statusAsRows&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Options under review&quot;},&quot;actionsInline&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Options under review&quot;},&quot;onClose&quot;:{&quot;editor&quot;:null,&quot;default&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;},&quot;onShare&quot;:{&quot;editor&quot;:null,&quot;default&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;},&quot;onExpand&quot;:{&quot;editor&quot;:null,&quot;default&quot;:null,&quot;tsType&quot;:&quot;() =&gt; void&quot;}}">
+const CLOCK = 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0zM12 7v5l3 3';
+const GLYPH = {
+  sent: 'M7 17 17 7M8 7h9v9', received: 'M17 7 7 17M16 17H7V8', deposit: 'M12 3v12M7 10l5 5 5-5M4 20h16',
+  session_created: CLOCK, signed_in: 'M14 4h6v16h-6M3 12h11M10 8l4 4-4 4',
+  passkey_added: 'M11 12a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0zM11 12h10M18 12v3M15 12v2',
+  receipt: 'M5 3h14v18l-2-1.5L15 21l-2-1.5L11 21l-2-1.5L7 21l-2-1.5zM8 8h8M8 12h8M8 16h5',
+};
+const STATUS = {
+  done: { word: 'Completed', color: 'var(--m-forest)', glyph: 'M20 6 9 17l-5-5' },
+  pending: { word: 'Pending', color: 'var(--m-saffron)', glyph: CLOCK },
+  failed: { word: 'Failed', color: 'var(--m-accent)', glyph: 'M18 6 6 18M6 6l12 12' },
+};
+const C = true, BRICK = 'var(--m-accent)';
+const TRANSFER_CARDS = (src, dst, amt) => [
+  { name: 'transfer', meta: 'instruction 0', rows: [['amount', amt], ['decimals', '6'], ['source', src], ['destination', dst]] },
+  { name: 'TransferEvent', meta: 'event 0', rows: [['from', src], ['to', dst], ['amount', amt]] },
+];
+const EVENTS = {
+  received: { kind: 'received', dir: 'in', status: 'done', title: 'Received', amount: '+$25.00',
+    rows: [['Date & time', 'Oct 2, 2026 \u00b7 2:14:05 PM'], ['From', 'ta7Q\u2026x2Lp', C], ['To', 'You'], ['Network', 'thru-alphanet'], ['Signature', '3nVq\u20268Hd2', C]],
+    tech: [['Program', 'Transfer \u00b7 taPR\u2026q7Lm'], ['Fee payer', 'ta7Q\u2026x2Lp'], ['Slot', '1,234,567'], ['Instruction', 'transfer']],
+    cards: TRANSFER_CARDS('ta7Q\u2026x2Lp', 'ta1k\u20269fq2', '25000000'), raw: '1 instruction \u00b7 164 bytes', sig: '3nVq\u20268Hd2' },
+  sentPending: { kind: 'sent', dir: 'out', status: 'pending', title: 'Sent', amount: '\u2212$10.00', reason: 'Waiting for the network to confirm. Usually under a minute.',
+    rows: [['Date & time', 'Oct 2, 2026 \u00b7 2:16:40 PM'], ['From', 'You'], ['To', 'taB3\u20269kDe', C], ['Network', 'thru-alphanet'], ['Signature', '5KjR\u20269pQw', C]],
+    tech: [['Program', 'Transfer \u00b7 taPR\u2026q7Lm'], ['Fee payer', 'You'], ['Slot', '\u2014'], ['Instruction', 'transfer']],
+    cards: TRANSFER_CARDS('ta1k\u20269fq2', 'taB3\u20269kDe', '10000000'), raw: '1 instruction \u00b7 164 bytes', sig: '5KjR\u20269pQw' },
+  sentFailed: { kind: 'sent', dir: 'out', status: 'failed', title: 'Sent', amount: '\u2212$5.00', reason: 'Not enough $ in your account when it ran. Nothing left your account.',
+    rows: [['Date & time', 'Oct 1, 2026 \u00b7 8:02:17 AM'], ['From', 'You'], ['To', 'taB3\u20269kDe', C], ['Network', 'thru-alphanet'], ['Signature', '7Lp2\u2026kQ4c', C]],
+    tech: [['Program', 'Transfer \u00b7 taPR\u2026q7Lm'], ['Fee payer', 'You'], ['Slot', '1,231,902'], ['Instruction', 'transfer'], ['Error', 'InsufficientFunds (4)', BRICK]],
+    cards: TRANSFER_CARDS('ta1k\u20269fq2', 'taB3\u20269kDe', '5000000'), raw: '1 instruction \u00b7 164 bytes', sig: '7Lp2\u2026kQ4c' },
+  session: { kind: 'session_created', status: 'done', title: 'Signing session created', amount: '',
+    rows: [['Date & time', 'Oct 1, 2026 \u00b7 9:40:12 AM'], ['Expires', 'Oct 6, 2026 \u00b7 9:41 AM'], ['Device', 'Safari on iPhone'], ['Network', 'thru-alphanet'], ['Signature', '9Rt5\u2026mW1a', C]],
+    tech: [['Program', 'Session \u00b7 taSE\u2026k2Vw'], ['Fee payer', 'You'], ['Slot', '1,232,410'], ['Instruction', 'create_session']],
+    cards: [{ name: 'create_session', meta: 'instruction 0', rows: [['session_key', 'taSK\u2026p8Nd'], ['expires_slot', '1,296,000'], ['scope', 'sign']] }], raw: '1 instruction \u00b7 96 bytes', sig: '9Rt5\u2026mW1a' },
+  passkey: { kind: 'passkey_added', status: 'done', title: 'Passkey added', amount: '',
+    rows: [['Date & time', 'Sep 28, 2026 \u00b7 11:08:03 AM'], ['Device', 'iPhone 17 Pro'], ['Network', 'thru-alphanet'], ['Signature', '2Hq8\u2026vL3s', C]],
+    tech: [['Program', 'Account \u00b7 taAC\u2026w9Rz'], ['Fee payer', 'You'], ['Slot', '1,198,004'], ['Instruction', 'add_passkey']],
+    cards: [{ name: 'add_passkey', meta: 'instruction 0', rows: [['credential_id', 'Qm3k\u2026xT7a'], ['transports', 'internal, hybrid'], ['aaguid', 'fbfc\u2026e0f1']] }], raw: '1 instruction \u00b7 212 bytes', sig: '2Hq8\u2026vL3s' },
+};
+const RAW_HEX = '01 00 02 05 3a 1f 9c 44 d2 07 e1 5b 88 90 0c 3f 6a b4 21 7e 55 c9 0d 12 8f 4e a7 33 b1 06 d9 72 e8 1c 47 95 2b 60 fa 83 19 c4 5d 0e b7 2a 61 f3 48 9d 20 56 cb 7f 04 e2 39 a8 11 6d c0 85 2e 73 \u2026';
+
+class Component extends DCLogic {
+  state = { techOpen: null, pageOpen: null, cards: {}, rawOpen: false };
+  renderVals() {
+    const p = this.props, s = this.state;
+    const ev = EVENTS[p.event] || EVENTS.received;
+    const st = STATUS[ev.status];
+    const layout = p.layout ?? 'phone';
+    const detent = p.detent ?? 'half';
+    const load = p.state ?? 'ready';
+    const mode = p.detailsMode ?? 'disclosure';
+    const statusAsRows = !!p.statusAsRows, actionsInline = !!p.actionsInline;
+    const techOpen = s.techOpen ?? !!p.techOpen;
+    const pageOpen = s.pageOpen ?? !!p.pageOpen;
+    const isPhone = layout === 'phone';
+    const failed = ev.status === 'failed', pending = ev.status === 'pending', incoming = ev.dir === 'in';
+    let tileBg = 'var(--m-bg-muted)', tileFg = 'var(--m-fg)';
+    if (load === 'failed') { tileBg = 'var(--m-bg-muted)'; tileFg = 'var(--m-fg-muted)'; }
+    else if (failed) { tileBg = 'var(--m-accent-soft)'; tileFg = 'var(--m-accent)'; }
+    else if (pending) { tileBg = 'var(--m-saffron-soft)'; tileFg = 'var(--m-saffron)'; }
+    else if (incoming) { tileBg = 'var(--m-forest-soft)'; tileFg = 'var(--m-forest)'; }
+    const amountColor = failed || pending ? 'var(--m-fg-muted)' : incoming ? 'var(--m-forest)' : 'var(--m-fg)';
+    const pageMode = mode === 'page' && pageOpen;
+    const mkRow = ([label, value, copy, color]) => ({ label, value, copy: !!copy, color: color || 'var(--m-fg)', copyLabel: 'Copy ' + label.toLowerCase(), padRight: copy ? '4px' : '16px' });
+    const lead = statusAsRows ? [['Status', st.word, false, st.color], ['Type', ev.title]].concat(ev.amount ? [['Amount', ev.amount, false, amountColor]] : []) : [];
+    const cards = ev.cards.map((c, i) => {
+      const open = s.cards[i] ?? (i === 0 && !!p.cardOpen);
+      return { name: c.name, meta: c.meta, open, rot: open ? '180deg' : '0deg', rows: c.rows.map(([k, v]) => ({ k, v })), toggle: () => this.setState((st2) => ({ cards: { ...st2.cards, [i]: !open } })) };
+    });
+    const title = load === 'failed' || statusAsRows ? 'Details' : ev.title;
+    const noop = () => {};
+    return {
+      dialogLabel: load === 'ready' ? [ev.title, ev.amount, st.word].filter(Boolean).join(', ') : load === 'loading' ? 'Loading transaction' : 'Transaction details',
+      radius: isPhone ? '12px 12px 0 0' : layout === 'dialog' ? '12px' : '0',
+      shadow: isPhone ? '0 -20px 48px var(--m-sheet-shadow)' : layout === 'dialog' ? '0 24px 64px var(--m-sheet-shadow)' : 'none',
+      borderLeft: layout === 'panel' ? '1px solid var(--m-border)' : '0 none',
+      isPhone, headerMain: !pageMode, headerPage: pageMode,
+      isLoading: load === 'loading', notLoading: load !== 'loading', isFailedLoad: load === 'failed', isReady: load === 'ready',
+      showTile: !statusAsRows, title, glyph: load === 'failed' ? GLYPH.receipt : GLYPH[ev.kind], tileBg, tileFg,
+      showShareIcon: !actionsInline, onShare: p.onShare ?? noop, onClose: p.onClose ?? noop,
+      iconBtnStyle: (p.iconButtons ?? 'plain') === 'outlined' ? 'width:36px;height:36px;margin:4px;border:1px solid var(--m-border-strong);color:var(--m-fg)' : 'width:44px;height:44px;margin:0;border:none;color:var(--m-fg-muted)',
+      iconBtnGap: (p.iconButtons ?? 'plain') === 'outlined' ? '4px' : '0',
+      bodyOverflow: detent === 'full' || !isPhone ? 'auto' : 'hidden',
+      showMain: !pageMode, showHero: !statusAsRows, heroPad: ev.amount ? '20px 16px 16px' : '16px',
+      hasAmount: !!ev.amount, amount: ev.amount, amountColor,
+      statusWord: st.word, statusColor: st.color, statusGlyph: st.glyph, hasReason: !!ev.reason, reason: ev.reason || '',
+      rows: lead.concat(ev.rows).map(mkRow), actionsInline,
+      isDisclosure: mode === 'disclosure', isPageRow: mode === 'page' && !pageOpen, isInline: mode === 'inline',
+      techOpen, chevRot: techOpen ? '180deg' : '0deg',
+      toggleTech: () => { this.setState({ techOpen: !techOpen }); if (!techOpen && detent === 'half' && typeof p.onExpand === 'function') p.onExpand(); },
+      openPage: () => this.setState({ pageOpen: true }), closePage: () => this.setState({ pageOpen: false }),
+      showTech: (mode === 'disclosure' && techOpen) || mode === 'inline' || pageMode,
+      techRows: ev.tech.map(([l, v, color]) => mkRow([l, v, false, color])), cards,
+      rawOpen: s.rawOpen, rawRot: s.rawOpen ? '180deg' : '0deg', toggleRaw: () => this.setState({ rawOpen: !s.rawOpen }), rawSummary: ev.raw, rawHex: RAW_HEX,
+      signature: ev.sig,
+      showFooter: !actionsInline, footerBottom: isPhone ? '34px' : '16px',
+      skel: [1, 2, 3, 4],
+    };
+  }
+}
+</script>
+</body>
+</html>

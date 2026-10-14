@@ -38,11 +38,10 @@ describe.each(["browser", "native"] as const)(
       const sendMessage = vi
         .fn()
         .mockResolvedValue({ result: { signedTransaction: "signed" } });
-      const show = vi.fn();
+      const show = vi.fn(async () => Symbol("surface"));
       const hide = vi.fn();
       const provider = {
         isConnected: () => true,
-        isTransparent: () => false,
         getSelectedAccount: () => ({ address: "wallet-a" }),
         requestShow: show,
         requestHide: hide,

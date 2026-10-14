@@ -127,6 +127,11 @@ export function createEventReplay(options: EventReplayOptions): ReplayStream<Eve
   });
 }
 
+/* A live event carries the same metadata ListEvents returns for it. Its
+   timestamp is the block time, as in backfilled events: the stream's own
+   timestamp is when the node published it, and an indexer storing that would
+   disagree with every backfilled row. A node too old to send block_timestamp
+   leaves the timestamp unset rather than substituting publish time. */
 function streamResponseToEvent(resp: StreamEventsResponse): Event {
   return create(EventSchema, {
     eventId: resp.eventId,
@@ -135,7 +140,10 @@ function streamResponseToEvent(resp: StreamEventsResponse): Event {
     payload: resp.payload,
     slot: resp.slot,
     callIdx: resp.callIdx,
-    timestamp: resp.timestamp,
+    programIdx: resp.programIdx,
+    blockOffset: resp.blockOffset,
+    feePayer: resp.feePayer,
+    timestamp: resp.blockTimestamp,
   });
 }
 

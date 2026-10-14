@@ -14,6 +14,7 @@ import Svg, { Path } from "react-native-svg";
 import { font, palette, space, text } from "./tokens";
 import { makeStyles, useTheme } from "./theme";
 import { IconClose } from "./Icons";
+import { REDUCED_MOTION_MS, useReduceMotion } from "./reduceMotion";
 
 export type SnackbarTone = "success" | "error" | "info" | "warn";
 
@@ -53,13 +54,16 @@ export function Snackbar({
   const toneColor = isDark ? TONES[tone].onLight : TONES[tone].onDark;
   const fade = useRef(new Animated.Value(0)).current;
   const remaining = useRef(new Animated.Value(1)).current;
+  /* Under reduced motion it fades in quicker and its bar fades out over the
+     time left instead of shrinking. */
+  const reduceMotion = useReduceMotion();
   const dismissRef = useRef(onDismiss);
   dismissRef.current = onDismiss;
 
   useEffect(() => {
     Animated.timing(fade, {
       toValue: 1,
-      duration: 200,
+      duration: reduceMotion ? REDUCED_MOTION_MS : 200,
       easing: Easing.bezier(0, 0, 0.2, 1),
       useNativeDriver: true,
     }).start();
@@ -73,7 +77,7 @@ export function Snackbar({
       if (finished) dismissRef.current();
     });
     return () => run.stop();
-  }, [durationMs, fade, remaining]);
+  }, [durationMs, fade, reduceMotion, remaining]);
 
   return (
     <Animated.View
@@ -106,7 +110,8 @@ export function Snackbar({
       <Animated.View
         style={[
           styles.bar,
-          { backgroundColor: toneColor, transform: [{ scaleX: remaining }] },
+          { backgroundColor: toneColor },
+          reduceMotion ? { opacity: remaining } : { transform: [{ scaleX: remaining }] },
         ]}
       />
     </Animated.View>

@@ -7,6 +7,7 @@ pub mod bond;
 pub mod consensus_validator;
 pub mod debug;
 pub mod dev;
+pub mod developers;
 pub mod faucet;
 pub mod feature_gates;
 pub mod keys;

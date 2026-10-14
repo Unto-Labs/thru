@@ -107,3 +107,18 @@
 @keyframes tds-deposit-spin {
   to { transform: rotate(360deg); }
 }
+/* Reduced motion: no rotation; the ring pulses instead. */
+@keyframes tds-deposit-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tds-deposit-btn__spin {
+    animation: tds-deposit-pulse 1.6s ease-in-out infinite;
+  }
+}

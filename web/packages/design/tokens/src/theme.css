@@ -195,3 +195,17 @@
 .animate-bounce-slow {
   animation: bounce-slow 3s ease-in-out infinite;
 }
+
+/* Reduced motion: the gauge rests at its final angle; the nudge and bounce
+   loops stop. */
+@media (prefers-reduced-motion: reduce) {
+  .pressure-gauge {
+    animation: none;
+    transform: rotate(312deg);
+  }
+  .animate-slide,
+  .group:hover .group-hover\:animate-slide,
+  .animate-bounce-slow {
+    animation: none;
+  }
+}

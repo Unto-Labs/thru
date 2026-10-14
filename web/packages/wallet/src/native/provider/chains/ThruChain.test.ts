@@ -39,7 +39,7 @@ describe("NativeThruChain signing-session fallback", () => {
       expiresAt: nowSeconds + 60,
       createdAt: nowSeconds,
     });
-    const requestShow = vi.fn(async () => {});
+    const requestShow = vi.fn(async () => Symbol("surface"));
     const requestHide = vi.fn();
     const sendMessage = vi.fn(async () => ({
       result: { signedTransaction: "passkey_signed_transaction" },
@@ -47,8 +47,7 @@ describe("NativeThruChain signing-session fallback", () => {
     const chain = new NativeThruChain(
       { sendMessage, getNetworkGeneration: () => 0 } as never,
       {
-        isConnected: () => false,
-        isTransparent: () => true,
+        isConnected: () => true,
         requestShow,
         requestHide,
       } as never,
@@ -68,7 +67,10 @@ describe("NativeThruChain signing-session fallback", () => {
     ).resolves.toBe("passkey_signed_transaction");
 
     expect(requestShow).toHaveBeenCalledWith("sign-transaction-open");
-    expect(requestHide).toHaveBeenCalledWith("sign-transaction-settled");
+    expect(requestHide).toHaveBeenCalledWith(
+      "sign-transaction-settled",
+      expect.any(Symbol),
+    );
     expect(sendMessage).toHaveBeenCalledWith(
       expect.objectContaining({
         type: POST_MESSAGE_REQUEST_TYPES.SIGN_TRANSACTION,
@@ -94,13 +96,13 @@ describe("NativeThruChain signing-session fallback", () => {
       expiresAt: Math.floor(Date.now() / 1000) + 600,
       createdAt: Math.floor(Date.now() / 1000),
     });
-    const requestShow = vi.fn(async () => {});
+    const requestShow = vi.fn(async () => Symbol("surface"));
     const requestHide = vi.fn();
     const sendMessage = vi
       .fn()
       .mockRejectedValueOnce(
         Object.assign(new Error("Signing session key missing"), {
-        code: "SIGNING_SESSION_UNAVAILABLE",
+          code: "SIGNING_SESSION_UNAVAILABLE",
         }),
       )
       .mockResolvedValueOnce({
@@ -110,7 +112,6 @@ describe("NativeThruChain signing-session fallback", () => {
       { sendMessage, getNetworkGeneration: () => 0 } as never,
       {
         isConnected: () => true,
-        isTransparent: () => false,
         getSelectedAccount: () => ({ address: "wallet-a" }),
         requestShow,
         requestHide,
@@ -121,8 +122,8 @@ describe("NativeThruChain signing-session fallback", () => {
 
     await expect(
       chain.signTransaction({
-      programAddress: "program",
-      instructionData: "AQID",
+        programAddress: "program",
+        instructionData: "AQID",
       }),
     ).resolves.toBe("passkey-signed");
 
@@ -145,7 +146,45 @@ describe("NativeThruChain signing-session fallback", () => {
     expect(requestShow).toHaveBeenCalledWith(
       "sign-transaction-session-fallback",
     );
-    expect(requestHide).toHaveBeenCalledWith("sign-transaction-settled");
+    expect(requestHide).toHaveBeenCalledWith(
+      "sign-transaction-settled",
+      expect.any(Symbol),
+    );
     await expect(chain.getSigningSession("session-active")).resolves.toBeNull();
+  });
+  it("rejects a revoked session fallback while disconnected instead of signing with a passkey", async () => {
+    const sendMessage = vi.fn().mockRejectedValue(
+      Object.assign(new Error("revoked"), {
+        code: "SIGNING_SESSION_UNAVAILABLE",
+      }),
+    );
+    const requestShow = vi.fn(async () => Symbol("surface"));
+    const requestHide = vi.fn();
+    const chain = new NativeThruChain(
+      { sendMessage, getNetworkGeneration: () => 0 } as never,
+      {
+        isConnected: () => false,
+        getSelectedAccount: () => null,
+        requestShow,
+        requestHide,
+      } as never,
+      "thru-mobile://app",
+    );
+    await expect(
+      chain.signTransaction({
+        programAddress: "program",
+        instructionData: "AQID",
+        walletAddress: "wallet-a",
+        signingSessionId: "revoked",
+      }),
+    ).rejects.toThrow("Wallet not connected");
+    expect(sendMessage).toHaveBeenCalledOnce();
+    expect(sendMessage.mock.calls[0][0].payload.signingSessionId).toBe(
+      "revoked",
+    );
+    expect(requestHide).toHaveBeenCalledWith(
+      "sign-transaction-settled",
+      expect.any(Symbol),
+    );
   });
 });

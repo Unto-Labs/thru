@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="thru-mobile-tokens.css">
+<style>
+body{margin:0;-webkit-font-smoothing:antialiased;}
+a{color:var(--m-accent);text-decoration:none;}
+a:hover{text-decoration:underline;text-underline-offset:3px;}
+</style>
+</helmet>
+<div data-screen-label="Token screen" style="position:relative;width:100%;min-height:100%;box-sizing:border-box;display:flex;flex-direction:column;background:var(--m-bg);color:var(--m-fg);font-family:'Inter Tight',system-ui,sans-serif">
+  <sc-if value="{{ isPhone }}" hint-placeholder-val="{{ true }}">
+    <div aria-hidden="true" style="height:54px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 26px 10px 32px;flex:none">
+      <span style="font-size:15px;font-weight:600;letter-spacing:-0.2px">9:41</span>
+      <span style="display:inline-flex;align-items:center;gap:6px;color:var(--m-fg)"><svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="8" width="3" height="4"></rect><rect x="5" y="5.5" width="3" height="6.5"></rect><rect x="10" y="3" width="3" height="9"></rect><rect x="15" y="0" width="3" height="12"></rect></svg><svg width="16" height="12" viewBox="0 0 16 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M1.5 4.5a9.5 9.5 0 0 1 13 0M4 7.2a6 6 0 0 1 8 0M6.5 9.9a2.4 2.4 0 0 1 3 0"></path></svg><svg width="26" height="12" viewBox="0 0 26 12" fill="none"><rect x="0.5" y="0.5" width="22" height="11" stroke="currentColor"></rect><rect x="2" y="2" width="19" height="8" fill="currentColor"></rect><rect x="24" y="4" width="2" height="4" fill="currentColor"></rect></svg></span>
+    </div>
+    <div style="display:flex;align-items:center;height:52px;padding:0 6px;border-bottom:1px solid var(--m-border);flex:none">
+      <button type="button" aria-label="Back to Home" style="width:44px;height:44px;display:grid;place-items:center;border:none;background:none;padding:0;cursor:pointer;color:var(--m-fg)" style-active="background:var(--m-bg-muted)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M15 18 9 12l6-6"></path></svg></button>
+      <span style="flex:1;text-align:center;font-size:17px;font-weight:600;letter-spacing:-0.25px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 8px">{{ navTitle }}</span>
+      <span style="width:44px;height:44px"></span>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isFound }}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex;align-items:center;gap:14px;padding:{{ headPad }};flex:none">
+      <sc-if value="{{ isThrusd }}" hint-placeholder-val="{{ true }}"><img src="assets/thrusd/00-current.svg" alt="" aria-hidden="true" style="width:48px;height:48px;display:block;flex:none;border-radius:50%"></sc-if>
+      <sc-if value="{{ isMark }}" hint-placeholder-val="{{ false }}"><span aria-hidden="true" style="width:48px;height:48px;border-radius:50%;background:var(--m-fg);color:var(--m-bg);display:grid;place-items:center;flex:none;font-family:{{ glyphFont }};font-size:{{ glyphSize }};font-weight:600">{{ glyph }}</span></sc-if>
+      <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px">
+        <h1 style="margin:0;font-size:20px;font-weight:600;letter-spacing:-0.3px;line-height:26px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ ticker }}</h1>
+        <span style="font-size:13px;line-height:18px;color:var(--m-fg-muted)">{{ name }}</span>
+      </span>
+    </div>
+    <div style="display:flex;align-items:center;gap:8px;margin:14px 16px 0;padding:0 0 0 12px;border:1px solid var(--m-border);flex:none">
+      <span aria-label="Mint address" style="flex:1;min-width:0;padding:10px 0;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;line-height:18px;color:var(--m-fg);overflow-wrap:anywhere">{{ mint }}</span>
+      <button type="button" aria-label="Copy mint address" style="width:44px;height:44px;flex:none;display:grid;place-items:center;border:none;border-left:1px solid var(--m-border);background:none;padding:0;cursor:pointer;color:var(--m-fg-muted);align-self:stretch;height:auto" style-active="background:var(--m-bg-muted)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><rect x="9" y="9" width="11" height="11"></rect><path d="M5 15V5h10"></path></svg></button>
+    </div>
+
+    <div style="padding:28px 16px 0;flex:none">
+      <div style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted);margin-bottom:6px">Spendable</div>
+      <div style="display:flex;align-items:baseline;gap:8px;flex-wrap:wrap"><span style="font-size:34px;font-weight:700;letter-spacing:-0.75px;line-height:40px;overflow-wrap:anywhere">{{ spendable }}</span><sc-if value="{{ hasUnit }}" hint-placeholder-val="{{ false }}"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:15px;color:var(--m-fg-muted)">{{ unit }}</span></sc-if></div>
+      <sc-if value="{{ hasOther }}" hint-placeholder-val="{{ false }}">
+        <button type="button" aria-expanded="{{ explainerOpen }}" onClick="{{ toggleExplainer }}" style="display:inline-flex;align-items:center;gap:6px;min-height:44px;margin:0 0 -8px -4px;padding:0 4px;border:none;background:none;cursor:pointer;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;color:var(--m-fg-muted);text-align:left" style-active="color:var(--m-fg)"><span>{{ other }}</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true" style="flex:none"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5M12 8v.5"></path></svg></button>
+        <sc-if value="{{ explainerOpen }}" hint-placeholder-val="{{ false }}">
+          <div role="note" style="margin-top:14px;padding:12px 14px;background:var(--m-bg-muted);font-size:13px;line-height:19px;color:var(--m-fg-muted);text-wrap:pretty"><span style="color:var(--m-fg);font-weight:600">Send spends from this account only.</span> {{ otherBody }}</div>
+        </sc-if>
+      </sc-if>
+    </div>
+
+    <div style="display:flex;gap:12px;padding:24px 16px 0;flex:none">
+      <button type="button" aria-disabled="{{ sendDisabled }}" aria-describedby="send-reason" style="flex:1;height:48px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:none;cursor:{{ sendCursor }};background:var(--m-bg-inverse);color:var(--m-fg-inverse);font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:600;font-size:15px;opacity:{{ sendOpacity }}" style-active="background:var(--m-fg-press)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"></path></svg>Send</button>
+      <button type="button" style="flex:1;height:48px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--m-border-strong);cursor:pointer;background:transparent;color:var(--m-fg);font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:600;font-size:15px;box-sizing:border-box" style-active="background:var(--m-bg-muted)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"></path><rect x="9" y="9" width="6" height="6"></rect></svg>Receive</button>
+    </div>
+    <sc-if value="{{ sendDisabled }}" hint-placeholder-val="{{ false }}">
+      <div id="send-reason" role="status" style="display:flex;align-items:center;gap:8px;padding:10px 16px 0;font-size:13px;line-height:18px;color:var(--m-fg-muted);flex:none"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true" style="flex:none"><circle cx="12" cy="12" r="9"></circle><path d="M12 11v5M12 8v.5"></path></svg><span>{{ sendReason }}</span></div>
+    </sc-if>
+    <sc-if value="{{ hasNote }}" hint-placeholder-val="{{ false }}">
+      <div role="note" style="margin:16px 16px 0;display:flex;gap:12px;align-items:flex-start;padding:12px 14px;background:var(--m-bg-muted);flex:none">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true" style="flex:none;margin-top:2px;color:var(--m-fg)"><path d="M12 3v13M7 11l5 5 5-5M4 20h16"></path></svg>
+        <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;font-size:13px;line-height:19px;text-wrap:pretty"><span style="font-weight:600;color:var(--m-fg)">Arrives in your wallet as THRUSD</span><span style="color:var(--m-fg-muted)">{{ noteBody }}</span></span>
+      </div>
+    </sc-if>
+
+    <div style="display:flex;align-items:baseline;padding:32px 16px 8px;flex:none"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">Details</span></div>
+    <div style="border-top:1px solid var(--m-hair);flex:none">
+      <sc-for list="{{ details }}" as="d" hint-placeholder-count="2">
+        <div style="display:flex;align-items:center;gap:12px;min-height:52px;padding:0 16px;border-bottom:1px solid var(--m-hair)">
+          <span style="width:96px;flex:none;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">{{ d.label }}</span>
+          <span style="flex:1;min-width:0;text-align:right;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;line-height:18px;color:var(--m-fg)">{{ d.value }}</span>
+        </div>
+      </sc-for>
+    </div>
+  </sc-if>
+
+  <sc-if value="{{ isNotFound }}" hint-placeholder-val="{{ false }}">
+    <div role="status" style="flex:1;min-height:420px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:0 32px 64px;text-align:center">
+      <span aria-hidden="true" style="width:48px;height:48px;border-radius:50%;background:var(--m-bg-muted);color:var(--m-fg-muted);display:grid;place-items:center;margin-bottom:8px;font-family:'Inter Tight',system-ui,sans-serif;font-size:22px;font-weight:600">?</span>
+      <div style="font-size:17px;font-weight:600;line-height:22px">This token isn’t in your wallet</div>
+      <div style="font-size:14px;line-height:20px;color:var(--m-fg-muted);text-wrap:pretty;max-width:280px">It may sit in another account, or the link is out of date.</div>
+      <button type="button" style="margin-top:12px;height:48px;padding:0 24px;border:1px solid var(--m-border-strong);background:transparent;color:var(--m-fg);font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:600;font-size:15px;cursor:pointer" style-active="background:var(--m-bg-muted)">Back to Home</button>
+    </div>
+  </sc-if>
+  <sc-if value="{{ isPhone }}" hint-placeholder-val="{{ true }}"><div style="height:34px;flex:none"></div></sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:844},&quot;token&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;cool&quot;,&quot;options&quot;:[&quot;thrusd&quot;,&quot;cool&quot;,&quot;zero&quot;,&quot;frozen&quot;,&quot;unsupported&quot;,&quot;eth&quot;,&quot;btc&quot;,&quot;notfound&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;explainerOpen&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;layout&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;phone&quot;,&quot;options&quot;:[&quot;phone&quot;,&quot;column&quot;],&quot;tsType&quot;:&quot;'phone' | 'column'&quot;},&quot;network&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;Alphanet&quot;,&quot;options&quot;:[&quot;Alphanet&quot;,&quot;Betanet&quot;],&quot;tsType&quot;:&quot;'Alphanet' | 'Betanet'&quot;}}">
+const FILL = 'k8mN4pQ7rT1vW9xZ3bC6eF0hJ5kL2nP8qR4tV7';
+const MINT = (a, b) => a + FILL.slice(0, 46 - a.length - b.length) + b;
+const TOKENS = {
+  thrusd: { ticker: 'THRUSD', name: 'Dollars on Thru', mint: 'ta2uSdK8mN4pQ7rT1vW9xZ3bC6eF0hJ5kL2nP84tV7sD91', spendable: '$56.00', unit: '', decimals: '6', receive: 'deposit' },
+  cool: { ticker: 'COOL', name: 'Token on Thru', mint: MINT('taZt', '9Kq2'), spendable: '1,250.5', unit: 'COOL', other: '+ 120.5 in other accounts', otherBody: '120.5 COOL sits in other token accounts you own on Thru. Move it into this account to send it.', decimals: '9', receive: 'thru' },
+  zero: { ticker: 'WBTC', name: 'Token on Thru', mint: MINT('taBt', 'c4Hn'), spendable: '0', unit: 'WBTC', decimals: '8', receive: 'thru', sendReason: 'Nothing to send' },
+  frozen: { ticker: 'ICE', name: 'Token on Thru', mint: MINT('taIc', 'e3Fz'), spendable: '42', unit: 'ICE', decimals: '9', receive: 'thru', sendReason: 'This token is frozen' },
+  unsupported: { ticker: 'Unknown token', name: MINT('taXk', '0qPz').slice(0, 4) + '\u2026' + '0qPz', mint: MINT('taXk', '0qPz'), spendable: '12,000,000', unit: 'units', decimals: 'Unknown', receive: 'thru', sendReason: 'Unsupported token' },
+  eth: { ticker: 'ETH', name: 'Ether on Thru', mint: MINT('taEt', 'h2Vd'), spendable: '0.4821', unit: 'ETH', decimals: '9', receive: 'deposit', note: 'ETH you deposit is converted on the way in and lands as dollars.' },
+  btc: { ticker: 'BTC', name: 'Bitcoin on Thru', mint: MINT('taBc', 'n7Qs'), spendable: '0.015', unit: 'BTC', decimals: '8', receive: 'deposit', note: 'BTC you deposit is converted on the way in and lands as dollars.' },
+};
+class Component extends DCLogic {
+  state = { explainerOpen: null };
+  renderVals() {
+    const p = this.props;
+    const key = p.token ?? 'cool';
+    const notFound = key === 'notfound';
+    const t = TOKENS[key] || TOKENS.cool;
+    const layout = p.layout ?? 'phone';
+    const isThrusd = key === 'thrusd';
+    const glyph = t.ticker === 'Unknown token' ? '?' : t.ticker.slice(0, 2).toUpperCase();
+    const explainerOpen = this.state.explainerOpen ?? !!p.explainerOpen;
+    const disabled = !!t.sendReason;
+    const network = p.network ?? 'Alphanet';
+    return {
+      isPhone: layout === 'phone', headPad: layout === 'phone' ? '20px 16px 0' : '32px 16px 0',
+      navTitle: notFound ? 'Token' : t.ticker,
+      isFound: !notFound, isNotFound: notFound,
+      isThrusd, isMark: !isThrusd, glyph, glyphSize: glyph.length === 1 ? '22px' : '16px', glyphFont: glyph.length === 1 ? "'Inter Tight',system-ui,sans-serif" : "'JetBrains Mono',ui-monospace,monospace",
+      ticker: t.ticker, name: t.name, mint: t.mint,
+      spendable: t.spendable, hasUnit: !!t.unit, unit: t.unit,
+      hasOther: !!t.other, other: t.other || '', otherBody: t.otherBody || '',
+      explainerOpen, toggleExplainer: () => this.setState({ explainerOpen: !explainerOpen }),
+      sendDisabled: disabled, sendReason: t.sendReason || '', sendOpacity: disabled ? 0.4 : 1, sendCursor: disabled ? 'not-allowed' : 'pointer',
+      hasNote: !!t.note, noteBody: t.note || '',
+      details: [{ label: 'Decimals', value: t.decimals }, { label: 'Network', value: 'thru-' + network.toLowerCase() }, { label: 'Receive via', value: t.receive === 'deposit' ? (isThrusd ? 'Deposit \u00b7 USDC on Solana' : 'Deposit \u00b7 ' + t.ticker + ' on ' + (t.ticker === 'ETH' ? 'Ethereum' : 'Bitcoin')) : 'Thru ' + network }],
+    };
+  }
+}
+</script>
+</body>
+</html>

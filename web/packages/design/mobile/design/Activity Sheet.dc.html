@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<title>Thru Wallet — Activity detail as a sheet</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="thru-mobile-tokens.css">
+<style>
+body{margin:0;font-family:'Inter Tight',system-ui,sans-serif;background:#F9FBFB;color:#181B1B;-webkit-font-smoothing:antialiased;}
+a{color:#D33C43;text-decoration:none;}
+a:hover{text-decoration:underline;text-underline-offset:3px;}
+</style>
+</helmet>
+<div data-m-theme="light" style="min-height:100vh;display:inline-flex;flex-direction:column;min-width:100%;background:var(--m-bg);color:var(--m-fg);font-family:'Inter Tight',system-ui,sans-serif">
+
+  <header data-screen-label="Top bar" style="display:flex;align-items:center;gap:18px;padding:13px 24px;background:#181B1B;color:#F9FBFB;border-bottom:1px solid #334747;white-space:nowrap">
+    <span style="display:inline-flex;align-items:center;gap:10px"><img src="assets/thru-disc.svg" alt="" style="width:26px;height:26px;display:block"><span style="font-weight:700;letter-spacing:-0.4px;font-size:20px">thru<span style="color:#729D9D;font-weight:500;margin:0 8px">/</span><span style="color:#B6CECE;font-weight:500;font-size:15px">mobile · activity detail sheet</span></span></span>
+    <nav style="display:flex;align-items:center;gap:14px;margin-left:auto">
+      <a href="#d0" style="color:#B6CECE;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase" style-hover="color:#F9FBFB">Decisions</a>
+      <a href="#d1" style="color:#B6CECE;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase" style-hover="color:#F9FBFB">Phone</a>
+      <a href="#d2" style="color:#B6CECE;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase" style-hover="color:#F9FBFB">Desktop</a>
+      <a href="#d3" style="color:#B6CECE;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase" style-hover="color:#F9FBFB">Motion</a>
+      <a href="#d4" style="color:#B6CECE;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase" style-hover="color:#F9FBFB">Components</a>
+      <a href="History.dc.html" style="color:#729D9D;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase" style-hover="color:#F9FBFB">← Activity feed</a>
+    </nav>
+  </header>
+
+  <section data-screen-label="Intro" style="padding:40px 40px 32px;border-bottom:1px solid var(--m-border);max-width:1400px">
+    <div style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;color:var(--m-fg-muted);margin-bottom:14px">Thru Wallet · PWA · Activity → item detail</div>
+    <h1 style="margin:0 0 14px;font-size:40px;line-height:1.05;letter-spacing:-0.9px;font-weight:700">A detail you <em style="color:var(--m-accent);font-style:normal">glance at</em>, not a page you visit.</h1>
+    <p style="margin:0;font-size:16px;line-height:1.5;color:var(--m-fg-muted);max-width:72ch;text-wrap:pretty">Tapping a row opens a sheet over the feed at half height: the kind, the amount, the status, then the date and the addresses. Drag or tap to open Transaction details — every field today's screen has, nothing raw above the fold. View on ThruScan stays pinned at the bottom. The feed never moves. Built from this project's Activity work and @thru/design/mobile; anything the kit lacks is marked <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;background:var(--m-bg-muted);padding:2px 6px">NEW PRIMITIVE</span>.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:18px">
+      <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;background:var(--m-bg-muted);padding:4px 8px;letter-spacing:0.02em">PHONE 390×844 + SE 375×667 · LIGHT + DARK</span>
+      <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;background:var(--m-bg-muted);padding:4px 8px;letter-spacing:0.02em">DESKTOP 1440 · RIGHT PANEL 440</span>
+      <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;background:var(--m-bg-muted);padding:4px 8px;letter-spacing:0.02em">DETENTS HALF 52 % · FULL TOP 70</span>
+      <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;background:var(--m-bg-muted);padding:4px 8px;letter-spacing:0.02em">URL /activity/&lt;signature&gt; KEPT</span>
+    </div>
+  </section>
+
+  <div style="padding:0 0 80px;display:flex;flex-direction:column;align-items:flex-start">
+
+    <section id="d0" data-screen-label="00 Decisions" style="padding:40px 40px 48px;border-bottom:1px solid var(--m-border);display:flex;flex-direction:column;gap:18px;align-self:stretch">
+      <div style="display:flex;align-items:baseline;gap:14px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;color:var(--m-accent);letter-spacing:0.04em">00</span><h2 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.4px">Decisions</h2><span style="font-size:14px;color:var(--m-fg-muted)">options side by side · the recommendation is applied on every artboard below</span></div>
+      <div style="display:grid;grid-template-columns:repeat(2,700px);gap:20px">
+        <sc-for list="{{ decisions }}" as="dc" hint-placeholder-count="6">
+          <div style="border:1px solid var(--m-border);background:var(--m-bg);padding:20px;display:flex;flex-direction:column;gap:14px">
+            <div style="display:flex;flex-direction:column;gap:4px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">{{ dc.n }}</span><span style="font-size:17px;font-weight:600">{{ dc.title }}</span></div>
+            <div style="display:flex;gap:16px;align-items:flex-start;flex-wrap:wrap">
+              <sc-for list="{{ dc.options }}" as="o" hint-placeholder-count="3">
+                <div style="display:flex;flex-direction:column;gap:8px;flex:none;max-width:{{ o.colW }}">
+                  <div style="display:flex;align-items:center;gap:8px;min-height:20px;flex-wrap:wrap"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:var(--m-fg-muted)">{{ o.label }}</span><sc-if value="{{ o.rec }}" hint-placeholder-val="{{ false }}"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:3px 6px;background:var(--m-accent);color:var(--m-bg)">Recommended</span></sc-if></div>
+                  <sc-if value="{{ o.isPhone }}" hint-placeholder-val="{{ true }}">
+                    <div style="width:164px;height:354px;overflow:hidden;border:1px solid var(--m-border)">
+                      <div style="width:390px;height:844px;transform:scale(0.42);transform-origin:0 0;position:relative;background:var(--m-bg)">
+                        <dc-import name="History Feed" filter="all" style="position:absolute;top:0;left:0;right:0;bottom:0" hint-size="390px,844px"></dc-import>
+                        <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(24,27,27,{{ o.scrim }})"></div>
+                        <div style="position:absolute;left:0;right:0;bottom:0;height:{{ o.sheetH }}">
+                          <dc-import name="Activity Detail Sheet" event="{{ o.event }}" detent="{{ o.detent }}" tech-open="{{ o.techOpen }}" card-open="{{ o.cardOpen }}" details-mode="{{ o.detailsMode }}" page-open="{{ o.pageOpen }}" style="position:absolute;top:0;left:0;right:0;bottom:0" hint-size="390px,440px"></dc-import>
+                        </div>
+                      </div>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ o.isPage }}" hint-placeholder-val="{{ false }}">
+                    <div style="width:164px;height:354px;overflow:hidden;border:1px solid var(--m-border)"><div style="width:390px;height:844px;transform:scale(0.42);transform-origin:0 0;position:relative;background:var(--m-bg);overflow:hidden"><dc-import name="History Detail" event="received" style="position:absolute;top:0;left:0;right:0;bottom:0" hint-size="390px,844px"></dc-import></div></div>
+                  </sc-if>
+                  <sc-if value="{{ o.isCrop }}" hint-placeholder-val="{{ false }}">
+                    <div style="width:{{ o.boxW }};height:{{ o.boxH }};overflow:hidden;border:1px solid var(--m-border)"><div style="width:390px;height:{{ o.innerH }};transform:{{ o.scaleT }};transform-origin:0 0;position:relative"><dc-import name="Activity Detail Sheet" event="{{ o.event }}" detent="full" status-as-rows="{{ o.statusAsRows }}" actions-inline="{{ o.actionsInline }}" icon-buttons="{{ o.iconButtons }}" style="position:absolute;top:0;left:0;right:0;bottom:0" hint-size="390px,440px"></dc-import></div></div>
+                  </sc-if>
+                  <sc-if value="{{ o.isSchem }}" hint-placeholder-val="{{ false }}">
+                    <div aria-hidden="true" style="position:relative;width:200px;height:125px;border:1px solid var(--m-border);background:var(--m-bg);display:flex;overflow:hidden">
+                      <span style="width:34px;flex:none;border-right:1px solid var(--m-border);background:var(--m-bg-muted);display:flex;flex-direction:column;gap:5px;padding:10px 6px"><span style="height:4px;background:var(--m-fg-subtle)"></span><span style="height:4px;background:var(--m-accent)"></span><span style="height:4px;background:var(--m-fg-subtle)"></span></span>
+                      <sc-if value="{{ o.schemPanel }}" hint-placeholder-val="{{ true }}"><span style="flex:1;display:flex;flex-direction:column;gap:9px;padding:14px 10px"><span style="height:5px;width:40px;background:var(--m-fg)"></span><span style="height:1px;background:var(--m-border)"></span><span style="height:1px;background:var(--m-border)"></span><span style="height:1px;background:var(--m-accent)"></span><span style="height:1px;background:var(--m-border)"></span><span style="height:1px;background:var(--m-border)"></span></span><span style="width:64px;flex:none;border-left:1px solid var(--m-border);display:flex;flex-direction:column;gap:6px;padding:10px 8px"><span style="height:4px;width:28px;background:var(--m-fg)"></span><span style="height:8px;width:36px;background:var(--m-forest)"></span><span style="height:1px;background:var(--m-border)"></span><span style="height:1px;background:var(--m-border)"></span><span style="height:1px;background:var(--m-border)"></span><span style="margin-top:auto;height:8px;border:1px solid var(--m-border-strong)"></span></span></sc-if>
+                      <sc-if value="{{ o.schemDialog }}" hint-placeholder-val="{{ false }}"><span style="flex:1;display:flex;flex-direction:column;gap:9px;padding:14px 10px"><span style="height:5px;width:40px;background:var(--m-fg)"></span><span style="height:1px;background:var(--m-border)"></span><span style="height:1px;background:var(--m-border)"></span><span style="height:1px;background:var(--m-border)"></span><span style="height:1px;background:var(--m-border)"></span><span style="height:1px;background:var(--m-border)"></span></span><span style="position:absolute;left:34px;top:0;right:0;bottom:0;background:rgba(24,27,27,0.64)"></span><span style="position:absolute;left:84px;top:22px;width:72px;height:80px;background:var(--m-bg);border-radius:3px;display:flex;flex-direction:column;gap:6px;padding:8px"><span style="height:4px;width:28px;background:var(--m-fg)"></span><span style="height:8px;width:36px;background:var(--m-forest)"></span><span style="height:1px;background:var(--m-border)"></span><span style="height:1px;background:var(--m-border)"></span><span style="margin-top:auto;height:8px;border:1px solid var(--m-border-strong)"></span></span></sc-if>
+                      <sc-if value="{{ o.schemPage }}" hint-placeholder-val="{{ false }}"><span style="flex:1;display:flex;justify-content:center;padding:14px 10px"><span style="width:110px;display:flex;flex-direction:column;gap:7px"><span style="height:3px;width:24px;background:var(--m-fg-muted)"></span><span style="height:5px;width:36px;background:var(--m-fg)"></span><span style="height:10px;width:48px;background:var(--m-forest)"></span><span style="height:1px;background:var(--m-border)"></span><span style="height:1px;background:var(--m-border)"></span><span style="height:1px;background:var(--m-border)"></span><span style="display:flex;gap:4px"><span style="flex:1;height:8px;border:1px solid var(--m-border-strong)"></span><span style="flex:1;height:8px;border:1px solid var(--m-border-strong)"></span></span></span></span></sc-if>
+                    </div>
+                  </sc-if>
+                  <sc-if value="{{ o.hasNote }}" hint-placeholder-val="{{ false }}"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;line-height:1.5;color:var(--m-fg-muted)">{{ o.note }}</span></sc-if>
+                </div>
+              </sc-for>
+            </div>
+            <div style="font-size:13px;line-height:1.5;color:var(--m-fg-muted);text-wrap:pretty"><span style="color:var(--m-fg);font-weight:600">{{ dc.whyLead }}</span> {{ dc.why }}</div>
+          </div>
+        </sc-for>
+
+        <div style="border:1px solid var(--m-border);background:var(--m-bg-muted);padding:20px;display:flex;flex-direction:column;gap:10px;font-size:13px;line-height:1.5;color:var(--m-fg-muted);text-wrap:pretty">
+          <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">Accessibility and contrast, both themes</span>
+          <div><span style="color:var(--m-fg);font-weight:600">A modal dialog.</span> role=dialog, aria-modal; the label is one sentence — "Sent, −$10.00, Completed". Focus moves to the sheet on open (the title, then Share, Close) and returns to the row on close. Close is always present at 44 pt; the VoiceOver escape gesture, Escape on the web and a scrim tap all dismiss.</div>
+          <div><span style="color:var(--m-fg);font-weight:600">Nothing needs the drag.</span> The Transaction details row is the non-drag path to full height — it announces "Transaction details, collapsed" and, when activated at half height, both expands the sheet and opens the section. Dragging is a shortcut to the same two states.</div>
+          <div><span style="color:var(--m-fg);font-weight:600">Reduce motion:</span> open and close are a 200 ms fade, no slide; detent changes jump with a 120 ms opacity dip; no skeleton pulse.</div>
+          <div><span style="color:var(--m-fg);font-weight:600">Contrast as in the Activity handoff:</span> secondary text fgMuted (7.6:1 light / 9.9:1 dark), failed in brick (4.9 / 7.0), FAILED solid, IconTile soft fills ≥ 3:1. The 40 % scrim only dims the feed; the sheet's own surface is unaffected.</div>
+          <div><span style="color:var(--m-fg);font-weight:600">Copy:</span> addresses 4…4 in mono, never uppercased; − is U+2212; "View on ThruScan" replaces "View in explorer" and opens scan.thru.org/tx/&lt;signature&gt;?network=alphanet.</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="d1" data-screen-label="01 Phone" style="padding:40px 40px 48px;border-bottom:1px solid var(--m-border);display:flex;flex-direction:column;gap:18px;align-self:stretch">
+      <div style="display:flex;align-items:baseline;gap:14px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;color:var(--m-accent);letter-spacing:0.04em">01</span><h2 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.4px">Phone · 390×844 and SE 375×667</h2><span style="font-size:14px;color:var(--m-fg-muted)">the sheet over the feed · Transaction details and the decoded cards are live in the expanded frame</span></div>
+      <sc-for list="{{ themes }}" as="th" hint-placeholder-count="2">
+        <div data-m-theme="{{ th.theme }}" style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;padding:24px;background:{{ th.panelBg }};max-width:1760px">
+          <sc-for list="{{ phones }}" as="f" hint-placeholder-count="9">
+            <figure style="margin:0;border:1px solid var(--m-border);background:var(--m-bg);display:flex;flex-direction:column;flex:none;width:{{ f.figW }};box-sizing:border-box">
+              <div style="position:relative;width:{{ f.wPx }};height:{{ f.hPx }};overflow:hidden;background:var(--m-bg)">
+                <sc-if value="{{ f.isFeed }}" hint-placeholder-val="{{ true }}"><dc-import name="History Feed" filter="all" state="{{ f.feedState }}" selected-row="{{ f.selectedRow }}" style="position:absolute;top:0;left:0;right:0;bottom:0" hint-size="390px,844px"></dc-import></sc-if>
+                <sc-if value="{{ f.isHome }}" hint-placeholder-val="{{ false }}"><dc-import name="Wallet Home" style="position:absolute;top:0;left:0;right:0;bottom:0" hint-size="390px,844px"></dc-import></sc-if>
+                <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(24,27,27,{{ f.scrim }})"></div>
+                <div style="position:absolute;left:0;right:0;bottom:0;height:{{ f.sheetH }}">
+                  <dc-import name="Activity Detail Sheet" event="{{ f.event }}" detent="{{ f.detent }}" tech-open="{{ f.techOpen }}" card-open="{{ f.cardOpen }}" state="{{ f.state }}" style="position:absolute;top:0;left:0;right:0;bottom:0" hint-size="390px,440px"></dc-import>
+                </div>
+              </div>
+              <figcaption style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.04em;line-height:1.5;color:var(--m-fg-muted);padding:7px 12px;border-top:1px solid var(--m-border);background:var(--m-bg-muted)">{{ f.label }}{{ th.suffix }} — {{ f.cap }}</figcaption>
+            </figure>
+          </sc-for>
+        </div>
+      </sc-for>
+    </section>
+
+    <section id="d2" data-screen-label="02 Desktop" style="padding:40px 40px 48px;border-bottom:1px solid var(--m-border);display:flex;flex-direction:column;gap:18px;align-self:stretch">
+      <div style="display:flex;align-items:baseline;gap:14px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;color:var(--m-accent);letter-spacing:0.04em">02</span><h2 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.4px">Desktop · 1440 — right-hand panel</h2><span style="font-size:14px;color:var(--m-fg-muted)">DetailPanel NEW PRIMITIVE (web ≥ 1024): 440 wide beside the feed · 840–1023 falls back to the kit's centred 480 dialog with the same content</span></div>
+      <div style="display:flex;flex-direction:column;gap:32px">
+        <sc-for list="{{ desktop }}" as="d" hint-placeholder-count="4">
+          <figure data-m-theme="{{ d.theme }}" style="margin:0;display:flex;flex-direction:column;flex:none;width:1440px">
+            <x-import component-from-global-scope="ChromeWindow" from="./browser-window.jsx" width="{{ 1440 }}" height="{{ 900 }}" url="{{ d.url }}" tabs="{{ browserTabs }}" hint-size="1440px,900px">
+              <div style="display:flex;width:1440px;height:816px;background:var(--m-bg);color:var(--m-fg);font-family:'Inter Tight',system-ui,sans-serif;overflow:hidden">
+                <aside style="width:240px;flex:none;border-right:1px solid var(--m-border);display:flex;flex-direction:column;background:var(--m-bg);box-sizing:border-box">
+                  <div style="display:flex;align-items:center;gap:10px;height:64px;padding:0 20px;border-bottom:1px solid var(--m-hair);flex:none"><img src="assets/thru-disc.svg" alt="" style="width:24px;height:24px;display:block"><span aria-label="thru" style="display:inline-block;width:44px;height:16px;background:var(--m-fg);-webkit-mask:url(assets/thru-wordmark.svg) center / contain no-repeat;mask:url(assets/thru-wordmark.svg) center / contain no-repeat"></span></div>
+                  <nav aria-label="Main" style="display:flex;flex-direction:column;padding:12px 0">
+                    <a href="#" style="display:flex;align-items:center;gap:12px;height:44px;padding:0 20px;color:var(--m-fg-muted);font-size:15px;font-weight:500" style-hover="background:var(--m-bg-muted);color:var(--m-fg);text-decoration:none"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M3 11 12 3l9 8"></path><path d="M5 9.5V21h14V9.5"></path></svg>Home</a>
+                    <a href="#" aria-current="page" style="position:relative;display:flex;align-items:center;gap:12px;height:44px;padding:0 20px;color:var(--m-fg);background:var(--m-bg-muted);font-size:15px;font-weight:500" style-hover="text-decoration:none"><span style="position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--m-accent)"></span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 3"></path></svg>Activity</a>
+                    <a href="#" style="display:flex;align-items:center;gap:12px;height:44px;padding:0 20px;color:var(--m-fg-muted);font-size:15px;font-weight:500" style-hover="background:var(--m-bg-muted);color:var(--m-fg);text-decoration:none"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"></path></svg>Settings</a>
+                  </nav>
+                  <div style="margin-top:auto;display:flex;align-items:center;gap:10px;height:64px;padding:0 20px;border-top:1px solid var(--m-hair);flex:none"><span style="width:32px;height:32px;border-radius:50%;background:var(--m-bg-inset);display:grid;place-items:center;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--m-fg-muted);flex:none">TA</span><span style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-size:13px;font-weight:500">Main</span><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--m-fg-muted)">ta1kqV…9fq2</span></span></div>
+                </aside>
+                <main style="flex:1;min-width:0;display:flex;justify-content:center;gap:24px;overflow:hidden;padding:0 0 0 40px;box-sizing:border-box">
+                  <div style="flex:1;min-width:0;max-width:880px;height:816px"><dc-import name="History Feed" layout="desktop" filter="all" selected-row="{{ d.selectedRow }}" style="display:block;height:100%" hint-size="656px,816px"></dc-import></div>
+                  <div style="width:440px;flex:none;height:816px;position:relative"><dc-import name="Activity Detail Sheet" layout="panel" detent="full" event="{{ d.event }}" tech-open="{{ d.techOpen }}" card-open="{{ d.cardOpen }}" style="position:absolute;top:0;left:0;right:0;bottom:0" hint-size="440px,816px"></dc-import></div>
+                </main>
+              </div>
+            </x-import>
+            <figcaption style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.04em;line-height:1.5;color:var(--m-fg-muted);padding:7px 12px;border:1px solid var(--m-border);border-top:none;background:var(--m-bg-muted)">{{ d.label }} — {{ d.cap }}</figcaption>
+          </figure>
+        </sc-for>
+      </div>
+    </section>
+
+    <section id="d3" data-screen-label="03 Motion" style="padding:40px 40px 48px;border-bottom:1px solid var(--m-border);display:flex;flex-direction:column;gap:18px;align-self:stretch">
+      <div style="display:flex;align-items:baseline;gap:14px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;color:var(--m-accent);letter-spacing:0.04em">03</span><h2 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.4px">Motion</h2><span style="font-size:14px;color:var(--m-fg-muted)">one curve — cubic-bezier(0.2, 0.8, 0.2, 1) — no springs, as the kit sheet</span></div>
+      <div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap">
+        <div style="display:flex;gap:24px;align-items:flex-start;padding:24px;background:var(--m-bg-muted);flex:none">
+          <sc-for list="{{ motion }}" as="m" hint-placeholder-count="3">
+            <figure style="margin:0;border:1px solid var(--m-border);background:var(--m-bg);display:flex;flex-direction:column;flex:none;width:392px;box-sizing:border-box">
+              <div style="position:relative;width:390px;height:844px;overflow:hidden;background:var(--m-bg)">
+                <dc-import name="History Feed" filter="all" selected-row="{{ 1 }}" style="position:absolute;top:0;left:0;right:0;bottom:0" hint-size="390px,844px"></dc-import>
+                <div style="position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(24,27,27,{{ m.scrim }})"></div>
+                <div style="position:absolute;left:0;right:0;bottom:0;height:{{ m.sheetH }};transform:translateY({{ m.ty }})">
+                  <dc-import name="Activity Detail Sheet" event="received" detent="{{ m.detent }}" tech-open="{{ m.techOpen }}" card-open="{{ m.cardOpen }}" style="position:absolute;top:0;left:0;right:0;bottom:0" hint-size="390px,440px"></dc-import>
+                </div>
+              </div>
+              <figcaption style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.04em;line-height:1.5;color:var(--m-fg-muted);padding:7px 12px;border-top:1px solid var(--m-border);background:var(--m-bg-muted)">{{ m.label }} — {{ m.cap }}</figcaption>
+            </figure>
+          </sc-for>
+        </div>
+        <div style="display:grid;grid-template-columns:150px minmax(0,1fr);width:560px;border:1px solid var(--m-border);background:var(--m-bg);font-size:13px;line-height:1.5">
+          <sc-for list="{{ motionRows }}" as="mr" hint-placeholder-count="8">
+            <div style="padding:10px 14px;border-bottom:1px solid var(--m-hair);font-weight:600">{{ mr.name }}</div>
+            <div style="padding:10px 14px;border-bottom:1px solid var(--m-hair);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;line-height:1.6;color:var(--m-fg-muted);text-wrap:pretty">{{ mr.spec }}</div>
+          </sc-for>
+        </div>
+      </div>
+    </section>
+
+    <section id="d4" data-screen-label="04 Components" style="padding:40px 40px 48px;display:flex;flex-direction:column;gap:18px;align-self:stretch">
+      <div style="display:flex;align-items:baseline;gap:14px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;color:var(--m-accent);letter-spacing:0.04em">04</span><h2 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.4px">Component map</h2><span style="font-size:14px;color:var(--m-fg-muted)">every element → a kit component, or a labelled new primitive</span></div>
+      <div style="display:grid;grid-template-columns:220px 280px minmax(0,1fr);max-width:1180px;border:1px solid var(--m-border);background:var(--m-bg);font-size:13px;line-height:1.5">
+        <div style="padding:10px 14px;border-bottom:1px solid var(--m-border);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">Element</div>
+        <div style="padding:10px 14px;border-bottom:1px solid var(--m-border);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">Maps to</div>
+        <div style="padding:10px 14px;border-bottom:1px solid var(--m-border);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">Spec</div>
+        <sc-for list="{{ components }}" as="c" hint-placeholder-count="16">
+          <div style="padding:9px 14px;border-bottom:1px solid var(--m-hair);font-weight:500">{{ c.el }}</div>
+          <div style="padding:9px 14px;border-bottom:1px solid var(--m-hair);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;color:{{ c.mapColor }}">{{ c.map }}</div>
+          <div style="padding:9px 14px;border-bottom:1px solid var(--m-hair);color:var(--m-fg-muted);text-wrap:pretty">{{ c.spec }}</div>
+        </sc-for>
+      </div>
+    </section>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const THEMES = [
+  { theme: 'light', panelBg: 'var(--m-bg-muted)', suffix: '' },
+  { theme: 'dark', panelBg: 'var(--m-bg)', suffix: ' · dark' },
+];
+const OPT = (o) => {
+  const scale = o.scale || 1, cropH = o.cropH || 440;
+  return {
+    event: 'received', detent: 'half', techOpen: false, cardOpen: false, scrim: 0.4, sheetH: '440px', detailsMode: 'disclosure', pageOpen: false, statusAsRows: false, actionsInline: false, iconButtons: 'plain', rec: false, note: '', ...o,
+    isPhone: o.kind === 'phone', isPage: o.kind === 'page', isCrop: o.kind === 'crop', isSchem: o.kind === 'schem',
+    schemPanel: o.schem === 'panel', schemDialog: o.schem === 'dialog', schemPage: o.schem === 'page',
+    boxW: Math.round(390 * scale) + 'px', boxH: Math.round(cropH * scale) + 'px', innerH: cropH + 'px', scaleT: 'scale(' + scale + ')',
+    colW: o.kind === 'crop' ? Math.round(390 * scale) + 'px' : o.kind === 'schem' ? '200px' : '164px',
+    hasNote: !!o.note,
+  };
+};
+const DECISIONS = [
+  { n: '1 · Phone detail', title: 'Half-height sheet, today\u2019s full screen, or a full-height sheet like Send', whyLead: 'Why A:', why: 'most taps are a glance \u2014 half height answers did it go through, how much, with whom and when without leaving the feed. The page and the full-height sheet both cost a dismissal and your scroll position for the same four facts.',
+    options: [
+      OPT({ label: 'A \u00b7 Half-height sheet', rec: true, kind: 'phone' }),
+      OPT({ label: 'B \u00b7 Today\u2019s full screen', kind: 'page' }),
+      OPT({ label: 'C \u00b7 Full-height sheet, as Send', kind: 'phone', scrim: 0.64, sheetH: '774px', detent: 'full' }),
+    ] },
+  { n: '2 \u00b7 Where transaction details live', title: 'Expand the sheet in place, a second page inside it, or drag-up only', whyLead: 'Why A:', why: 'one surface and no back button \u2014 the amount and status stay above as context, and tapping the row is the non-drag path the drag needs anyway. A second page hides the glance answer behind a back button; drag-only has no accessible equivalent.',
+    options: [
+      OPT({ label: 'A \u00b7 Expand in place', rec: true, kind: 'phone', scrim: 0.64, sheetH: '774px', detent: 'full', techOpen: true, cardOpen: true }),
+      OPT({ label: 'B \u00b7 Second page in the sheet', kind: 'phone', scrim: 0.64, sheetH: '774px', detent: 'full', detailsMode: 'page', pageOpen: true, cardOpen: true }),
+      OPT({ label: 'C \u00b7 Drag-up only', kind: 'phone', scrim: 0.64, sheetH: '774px', detent: 'full', detailsMode: 'inline', cardOpen: true }),
+    ] },
+  { n: '3 \u00b7 Status and type', title: 'In the header, as DetailHero does, or as their own label/value rows', whyLead: 'Why A:', why: 'the glance answer in the largest type, in the order people ask it \u2014 how much, then did it go through. The kind moves up into the sheet header beside its tile, so the hero is just amount and status. As rows, $25.00 is mono 13 beside Network.',
+    options: [
+      OPT({ label: 'A \u00b7 Hero: kind in the header, amount + status', rec: true, kind: 'crop', scale: 0.7, cropH: 430 }),
+      OPT({ label: 'B \u00b7 Status \u00b7 Type \u00b7 Amount rows', kind: 'crop', scale: 0.7, cropH: 430, statusAsRows: true }),
+    ] },
+  { n: '4 \u00b7 ThruScan and Share', title: 'ThruScan pinned at the bottom or inline under the rows; Share beside it or in the header', whyLead: 'Why A:', why: 'ThruScan is the one action a detail needs, and it leaves the app \u2014 so outline, not primary, and pinned so it is one tap from any scroll position. Share as a header icon keeps the footer to a single full-width control, which is what still fits on the SE.',
+    options: [
+      OPT({ label: 'A \u00b7 Pinned outline + Share in the header', rec: true, kind: 'crop', scale: 0.6, cropH: 580 }),
+      OPT({ label: 'B \u00b7 Inline pair under the rows', kind: 'crop', scale: 0.6, cropH: 580, actionsInline: true }),
+    ] },
+  { n: '5 \u00b7 Desktop', title: 'Right-hand panel beside the feed, the kit\u2019s centred dialog, or today\u2019s page', whyLead: 'Why A:', why: 'the same reason as the sheet \u2014 the feed stays in view and your place is kept; the panel reuses the sheet\u2019s content with no detents. The 480 dialog is the fallback from 840 to 1023, where there is no room beside the feed.',
+    options: [
+      OPT({ label: 'A \u00b7 Right-hand panel 440', rec: true, kind: 'schem', schem: 'panel', note: 'sidebar 240 \u00b7 feed shrinks 880 \u2192 656 \u00b7 panel 440, hairline left' }),
+      OPT({ label: 'B \u00b7 Centred dialog 480', kind: 'schem', schem: 'dialog', note: 'kit dialog over a 64 % scrim \u00b7 the feed is dimmed, not kept' }),
+      OPT({ label: 'C \u00b7 Today\u2019s page', kind: 'schem', schem: 'page', note: '800 column \u00b7 \u2190 Activity link \u00b7 loses the feed' }),
+    ] },
+  { n: '7 \u00b7 Share and Close', title: 'Plain icon buttons, or outlined 36 pt squares', whyLead: 'Why A:', why: 'the kit\u2019s NavBar and every sheet header already use plain 44 pt icon buttons \u2014 the two outlined squares read as a second pair of actions competing with the title and the pinned ThruScan button. Outlined wins only if the sheet ever drops its hairline header.',
+    options: [
+      OPT({ label: 'A \u00b7 Plain (kit sheet header)', rec: true, kind: 'crop', scale: 0.7, cropH: 190 }),
+      OPT({ label: 'B \u00b7 Outlined 36 in a 44 hit', kind: 'crop', scale: 0.7, cropH: 190, iconButtons: 'outlined' }),
+      OPT({ label: 'B \u00b7 Outlined \u00b7 failed Sent', kind: 'crop', scale: 0.7, cropH: 190, iconButtons: 'outlined', event: 'sentFailed' }),
+    ] },
+  { n: '6 \u00b7 Scrim at half height', title: 'The kit\u2019s 64 % or lighter', whyLead: 'Why B:', why: 'at half height the list behind is the point \u2014 it is how you keep your place. 40 % keeps the rows legible; the grabber and the shadow still say modal; and a tap on the list dismisses, which is what tapping a row behind means. The scrim returns to 64 % as the sheet is dragged to full.',
+    options: [
+      OPT({ label: 'A \u00b7 64 % (kit)', kind: 'phone', scrim: 0.64 }),
+      OPT({ label: 'B \u00b7 40 % at half \u2192 64 % at full', rec: true, kind: 'phone', scrim: 0.4 }),
+    ] },
+];
+const PH = (label, o) => {
+  const w = o.w || 390, h = o.h || 844;
+  return { label, behind: 'feed', feedState: 'ready', event: 'received', detent: 'half', techOpen: false, cardOpen: false, state: 'ready', scrim: 0.4, sheetH: '440px', selectedRow: 1, ...o, w, h, wPx: w + 'px', hPx: h + 'px', figW: (w + 2) + 'px', isFeed: (o.behind || 'feed') === 'feed', isHome: o.behind === 'home' };
+};
+const PHONES = [
+  PH('Received \u00b7 half height', { cap: 'half detent = 52 % of the screen (440 of 844), min 360 \u00b7 grabber 36\u00d74 borderStrong in a 16 zone \u00b7 header 52: IconTile 32 + title 17/600, Share 44, Close 44, hairline \u00b7 hero 20/16/16: amount 34/700 + StatusText 14/500 with a 16 glyph \u00b7 MetaTable rows 52, copy in a 44 hit \u00b7 SheetFooter: hairline, 12 above, View on ThruScan outline md 48, safe 34 \u00b7 scrim 40 % \u2014 the list reads behind, the open row highlighted' }),
+  PH('Received \u00b7 expanded', { detent: 'full', techOpen: true, cardOpen: true, scrim: 0.64, sheetH: '774px', cap: 'full detent = top 70 (status bar + 16), as Send \u00b7 body scrolls, footer pinned \u00b7 Transaction details open: MetaTable Program \u00b7 Fee payer \u00b7 Slot \u00b7 Instruction, then Decoded data as DataCards \u2014 44 header (name mono 13/500 + meta mono 11) with chevron, first open: key/value grid mono 12/18 \u00b7 Raw instruction bytes collapsed, Copy in its header \u00b7 scrim 64 %' }),
+  PH('Sent \u00b7 failed \u00b7 half', { event: 'sentFailed', selectedRow: 5, cap: 'IconTile brickSoft/brick \u00b7 amount \u2212$5.00 in fgMuted, no strikethrough \u00b7 status Failed in brick + the reason 14 fgMuted: \u201cNot enough $ in your account when it ran. Nothing left your account.\u201d \u00b7 the Error row \u2014 InsufficientFunds (4) \u2014 waits in Transaction details' }),
+  PH('Sent \u00b7 pending \u00b7 half', { event: 'sentPending', selectedRow: 0, cap: 'IconTile saffronSoft/saffron \u00b7 Pending + \u201cWaiting for the network to confirm. Usually under a minute.\u201d \u00b7 turns Completed or Failed in place while open: tile tone, status glyph and text, amount colour cross-fade 200 ms; the row behind updates with it' }),
+  PH('Signing session created \u00b7 half', { event: 'session', selectedRow: 3, cap: 'account event: no amount \u2014 the hero is the status line alone (padding 16) \u00b7 rows add Expires and Device \u00b7 the 17/600 title has 238 pt beside the tile and two 44 buttons; longer titles ellipsise' }),
+  PH('Loading \u00b7 opened from a link', { state: 'loading', feedState: 'loading', selectedRow: -1, cap: 'cold start: the feed skeleton behind, the sheet skeleton in its own shape \u2014 tile 32, title 120\u00d714, amount 160\u00d730, status 96\u00d712, four rows 64\u00d79 / 128\u00d711 \u00b7 bgInset, pulse 1.4 s \u00b7 View on ThruScan already live: the signature is in the URL' }),
+  PH('Couldn\u2019t load \u00b7 opened from a link', { state: 'failed', selectedRow: -1, cap: 'InlineError h44: alert 16 + \u201cCouldn\u2019t load this transaction.\u201d 13 brick + TRY AGAIN mono 11 caps in a 44 hit \u00b7 the Signature row with copy stays \u00b7 View on ThruScan still works \u00b7 header falls back to \u201cDetails\u201d with a neutral tile' }),
+  PH('From Home \u00b7 Recent activity', { behind: 'home', cap: 'opens over Home \u2014 no tab change \u00b7 same sheet, same URL /activity/\u2039signature\u203a \u00b7 dismiss returns to Home where it was' }),
+  PH('iPhone SE \u00b7 375\u00d7667 \u00b7 half', { w: 375, h: 667, sheetH: '360px', cap: 'half detent = max(52 %, 360) \u2192 360 \u00b7 fits header, hero, Date & time and From; To begins under the footer and reads as the cue to drag \u00b7 View on ThruScan stays visible' }),
+];
+const DESKTOP = [
+  { theme: 'light', event: 'received', selectedRow: 1, techOpen: false, cardOpen: false, label: 'Received \u00b7 light', url: 'wallet.tid.sh/activity/3nVq\u20268Hd2', cap: 'DetailPanel NEW PRIMITIVE: 440 wide, hairline left, the content area\u2019s full height, no grabber, no detents \u00b7 the feed column narrows from 880 to 656 and keeps its header \u00b7 the open row is highlighted bgMuted + 2 px brick \u00b7 Close returns the column to 880 in 320 ms \u00b7 840\u20131023 (no sidebar): the kit\u2019s centred 480 dialog, same content' },
+  { theme: 'light', event: 'sentFailed', selectedRow: 5, techOpen: true, cardOpen: true, label: 'Sent \u00b7 failed \u00b7 light \u00b7 Transaction details open', url: 'wallet.tid.sh/activity/7Lp2\u2026kQ4c', cap: 'the Disclosure opens in place; the panel body scrolls, footer pinned \u00b7 Error row InsufficientFunds (4) in brick \u00b7 DataCards and raw bytes exactly as on the phone' },
+  { theme: 'dark', event: 'received', selectedRow: 1, techOpen: false, cardOpen: false, label: 'Received \u00b7 dark', url: 'wallet.tid.sh/activity/3nVq\u20268Hd2', cap: 'dark tokens: bg #181B1B \u00b7 hairlines #334747 \u00b7 forest #75D1CC \u00b7 panel hairline reads against the feed without a shadow' },
+  { theme: 'dark', event: 'sentFailed', selectedRow: 5, techOpen: true, cardOpen: true, label: 'Sent \u00b7 failed \u00b7 dark', url: 'wallet.tid.sh/activity/7Lp2\u2026kQ4c', cap: 'brick #ED787E 7.0:1 on #181B1B for Failed and the Error row \u00b7 FAILED badge in the feed stays solid' },
+];
+const MOTION = [
+  { label: 'open \u00b7 180 of 360 ms', scrim: 0.2, sheetH: '440px', ty: '50%', detent: 'half', techOpen: false, cardOpen: false, cap: 'translateY 100 % \u2192 0 over 360 ms, cubic-bezier(0.2, 0.8, 0.2, 1) \u00b7 scrim 0 \u2192 40 % over the first 200 ms \u00b7 the feed does not move or dim beyond the scrim' },
+  { label: 'drag \u00b7 between detents', scrim: 0.52, sheetH: '600px', ty: '0', detent: 'half', techOpen: false, cardOpen: false, cap: 'follows the finger 1:1 \u00b7 scrim interpolates 40 \u2192 64 % with the sheet top \u00b7 body stays clipped until the full detent lands \u00b7 past full: resistance 0.3\u00d7' },
+  { label: 'expanded \u00b7 320 ms after the tap', scrim: 0.64, sheetH: '774px', ty: '0', detent: 'full', techOpen: true, cardOpen: true, cap: 'Transaction details tapped at half: the sheet rises to the full detent and the section opens in the same 320 ms \u00b7 body switches to scroll \u00b7 the row\u2019s chevron rotates 180\u00b0 over 200 ms' },
+];
+const MOTION_ROWS = [
+  ['Open', '360 ms \u00b7 cubic-bezier(0.2, 0.8, 0.2, 1) \u00b7 translateY 100 % \u2192 half detent \u00b7 scrim 0 \u2192 40 % in 200 ms \u00b7 focus moves to the sheet when it lands'],
+  ['Drag', 'finger 1:1 between the half and full detents \u00b7 overdrag past full resists at 0.3\u00d7 \u00b7 scrim tracks the sheet top, 40 \u2192 64 % \u00b7 at half the body is clipped, so a scroll gesture on the content drags the sheet'],
+  ['Release', 'snaps to the nearest detent in 320 ms, same curve, no overshoot (the kit has no springs) \u00b7 below 60 % of the half height, or downward faster than 0.5 px/ms \u2192 dismiss'],
+  ['Expand by tap', 'the Transaction details row at half height: sheet \u2192 full in 320 ms, the section opens in the same frame, the body becomes scrollable \u00b7 the same control serves assistive tech'],
+  ['Collapse', 'dragging down from full snaps to half in 320 ms \u00b7 the section stays open, the body clips again \u00b7 scroll position inside is kept'],
+  ['Dismiss', 'swipe down, scrim tap, Close, VoiceOver escape, Escape on the web \u00b7 360 ms slide out, scrim fades with it \u00b7 the feed is exactly where it was; focus returns to the row'],
+  ['Status change', 'pending \u2192 completed or failed in place: tile tone, status glyph and text, amount colour cross-fade 200 ms \u00b7 no layout shift; the reason line fades out with it'],
+  ['Reduce motion', 'open and close: 200 ms fade, no translate \u00b7 detent changes jump with a 120 ms opacity dip \u00b7 chevrons rotate instantly \u00b7 no skeleton pulse'],
+];
+const COMPONENTS = [
+  ['Sheet with detents', 'Sheet \u00b7 NEW VARIANT detents', 'half = max(52 % of the screen, 360) \u00b7 full = top 70 \u00b7 12 pt top radius, kit shadow \u00b7 drag, snap and dismiss rules in \u00a703 \u00b7 role=dialog, aria-modal, label \u201cSent, \u2212$10.00, Completed\u201d', true],
+  ['Grabber', 'SheetGrabber \u00b7 NEW PRIMITIVE', '36\u00d74 pill, borderStrong, centred in a 16 pt zone above the header \u00b7 decorative; the header row is the drag surface too', true],
+  ['Header', 'Sheet header \u00b7 leading title', 'h52, hairline \u00b7 IconTile 32 (glyph 18) + title 17/600 ellipsised \u00b7 IconButton 44 Share, IconButton 44 Close \u00b7 padding 0 4 0 16', false],
+  ['Hero', 'DetailHero \u00b7 compact variant', 'the kind lives in the header, so the hero is amount 34/700 (\u22120.75 px, line 40) + StatusText 14/500 with a 16 glyph + reason 14 fgMuted \u00b7 padding 20 16 16; account events: status only, padding 16', false],
+  ['Label / value rows', 'MetaTable + copy', 'rows 52, hairlines \u00b7 label mono 11 caps 96 \u00b7 value mono 13 right, ellipsis \u00b7 IconCopy 16 in a 44 hit on addresses and the signature \u00b7 own address reads You \u00b7 sessions add Expires, passkeys add Device', false],
+  ['Transaction details', 'Disclosure', 'h56 header 15/500 + chevron 18, 180\u00b0 in 200 ms \u00b7 aria-expanded \u00b7 collapsed by default \u00b7 at half height, activating it also expands the sheet (onExpand)', false],
+  ['Program \u00b7 Fee payer \u00b7 Slot \u00b7 Instruction \u00b7 Error', 'MetaTable', 'same rows as the data table \u00b7 Error value in brick, by name: InsufficientFunds (4)', false],
+  ['Decoded data', 'DataCard \u00b7 NEW PRIMITIVE', '1 px border \u00b7 44 header on bgMuted: name mono 13/500 + meta mono 11 fgMuted + chevron 16 \u00b7 body: key/value grid mono 12/18, key fgMuted, values wrap anywhere \u00b7 one card per instruction and event, each expands on its own', true],
+  ['Raw instruction bytes', 'DataCard + Copy', 'collapsed by default \u00b7 header summary \u201c1 instruction \u00b7 164 bytes\u201d \u00b7 Copy as mono 11 caps in a 44 hit, separated by a hairline \u00b7 body mono 12/18, wraps \u00b7 the only place hex appears', true],
+  ['Footer', 'SheetFooter \u00b7 NEW PRIMITIVE', 'pinned below the scrolling body \u00b7 hairline, 12 above, 16 insets \u00b7 safe area 34 on phones, 16 in the panel \u00b7 visible at every detent and scroll position', true],
+  ['View on ThruScan', 'Button \u00b7 outline md', 'h48 full width \u00b7 \u2197 16 \u00b7 opens scan.thru.org/tx/\u2039signature\u203a?network=alphanet in a new tab \u00b7 live even while loading or after a failed load', false],
+  ['Share', 'IconButton 44 (header)', 'Web Share with the ThruScan link; copies the link where Share is unavailable \u00b7 hidden in the inline-actions option only', false],
+  ['Scrim', 'Scrim \u00b7 NEW VARIANT', '40 % at the half detent, 64 % at full, interpolated with the drag \u00b7 tap dismisses \u00b7 the kit\u2019s 64 % stays for Send and Deposit', true],
+  ['Loading', 'Skeleton \u00b7 DetailSkeleton', 'tile 32 \u00b7 title 120\u00d714 \u00b7 amount 160\u00d730 \u00b7 status 96\u00d712 \u00b7 four rows 64\u00d79 / 128\u00d711 \u00b7 bgInset, 1.4 s pulse, none under reduce-motion', false],
+  ['Couldn\u2019t load', 'InlineError + Signature row', 'h44: alert 16 + 13 brick + TRY AGAIN mono 11 caps in a 44 hit \u00b7 Signature row with copy from the URL \u00b7 header \u201cDetails\u201d with a neutral tile', false],
+  ['Desktop panel', 'DetailPanel \u00b7 NEW PRIMITIVE (web)', '440 wide, hairline left, full height \u00b7 same header, body, footer \u00b7 no grabber, no detents, Disclosure in place \u00b7 \u2265 1024; 840\u20131023 uses the kit\u2019s 480 dialog', true],
+  ['Open row in the feed', 'ActivityRow \u00b7 selected', 'bgMuted + 2 px brick bar at left while its detail is open (desktop and the half-height sheet)', false],
+];
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      themes: THEMES,
+      decisions: DECISIONS,
+      phones: PHONES,
+      desktop: DESKTOP,
+      browserTabs: [{ title: 'Thru Wallet' }],
+      motion: MOTION,
+      motionRows: MOTION_ROWS.map(([name, spec]) => ({ name, spec })),
+      components: COMPONENTS.map(([el, map, spec, isNew]) => ({ el, map, spec, mapColor: isNew ? 'var(--m-accent)' : 'var(--m-fg)' })),
+    };
+  }
+}
+</script>
+</body>
+</html>

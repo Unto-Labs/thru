@@ -9,14 +9,16 @@ import type {
   ThruSigningContext,
   WalletAccount,
 } from "../interfaces";
-import type { WalletRestoreEnvelope, WalletRestoreRecord } from "./connectionRestore";
+import type {
+  WalletRestoreEnvelope,
+  WalletRestoreRecord,
+} from "./connectionRestore";
 
 export const POST_MESSAGE_REQUEST_TYPES = {
   GET_NETWORK: "getNetwork",
   SWITCH_NETWORK: "switchNetwork",
   NETWORK_OPERATION: "networkOperation",
   CONNECT: "connect",
-  CREATE_ACCOUNT: "createAccount",
   DISCONNECT: "disconnect",
   SIGN_MESSAGE: "signMessage",
   SIGN_TRANSACTION: "signTransaction",
@@ -188,7 +190,8 @@ export function isWalletThemeMessage(
  * `tn_developer_mode` URL param. The wallet turns developer mode on when the
  * host or its own account-menu switch asks for it.
  */
-export const WALLET_DEVELOPER_MODE_MESSAGE_TYPE = "wallet:developer-mode" as const;
+export const WALLET_DEVELOPER_MODE_MESSAGE_TYPE =
+  "wallet:developer-mode" as const;
 
 /** Frame URL param for the load-time developer mode: `1` when on, absent when off. */
 export const WALLET_DEVELOPER_MODE_SEARCH_PARAM = "tn_developer_mode" as const;
@@ -237,11 +240,6 @@ export interface ConnectRequestMessage extends BaseRequest {
 export interface DisconnectRequestMessage extends BaseRequest {
   type: typeof POST_MESSAGE_REQUEST_TYPES.DISCONNECT;
   payload?: undefined;
-}
-
-export interface CreateAccountRequestMessage extends BaseRequest {
-  type: typeof POST_MESSAGE_REQUEST_TYPES.CREATE_ACCOUNT;
-  payload: CreateAccountPayload;
 }
 
 export interface SignMessageRequestMessage extends BaseRequest {
@@ -369,7 +367,6 @@ export type PostMessageRequest =
   | SwitchNetworkRequestMessage
   | NetworkOperationRequestMessage
   | ConnectRequestMessage
-  | CreateAccountRequestMessage
   | DisconnectRequestMessage
   | SignMessageRequestMessage
   | SignTransactionRequestMessage
@@ -389,27 +386,6 @@ export type PostMessageRequest =
 
 export interface DisconnectResult {
   // Empty object keeps compatibility with existing consumers expecting a success payload
-}
-
-export interface CreateAccountPayload {
-  accountName?: string;
-  /** App-provided name for the passkey created for this account. */
-  passkeyName?: string;
-  metadata?: ConnectMetadataInput;
-  createSigningSession?: {
-    expiresAt: string;
-  };
-}
-
-export interface CreateAccountResult {
-  account: WalletAccount;
-  accounts: WalletAccount[];
-  selectedAccount: WalletAccount;
-  signature: string | null;
-  vmError: string | null;
-  userErrorCode: string | null;
-  executionResult: string | null;
-  signingSession?: SigningSessionDescriptorPayload;
 }
 
 export interface GetAccountsResult {
@@ -473,7 +449,6 @@ type RequestResultMap = {
   switchNetwork: ResolvedWalletNetwork;
   networkOperation: { acknowledged: true };
   [POST_MESSAGE_REQUEST_TYPES.CONNECT]: ConnectResult & WalletRestoreEnvelope;
-  [POST_MESSAGE_REQUEST_TYPES.CREATE_ACCOUNT]: CreateAccountResult;
   [POST_MESSAGE_REQUEST_TYPES.DISCONNECT]: DisconnectResult;
   [POST_MESSAGE_REQUEST_TYPES.SIGN_MESSAGE]: SignMessageResult;
   [POST_MESSAGE_REQUEST_TYPES.SIGN_TRANSACTION]: SignTransactionResult;
@@ -552,7 +527,7 @@ export const ErrorCode = {
 export type ErrorCode = (typeof ErrorCode)[keyof typeof ErrorCode];
 
 /** App branding only. The wallet derives appUrl from the request origin. */
-export type ConnectMetadataInput = Partial<Omit<AppMetadata, 'appUrl'>>;
+export type ConnectMetadataInput = Partial<Omit<AppMetadata, "appUrl">>;
 
 export type ConnectIntent = "default" | "switch-account";
 
@@ -600,7 +575,10 @@ export interface SignMessageResult {
  * is treated as untrusted display-only data.
  */
 export interface SignTransactionPayload {
-  /** Maximum state growth in 4 KiB units, rounded per account. Defaults to 1. */
+  /**
+   * Maximum state growth in 4 KiB units, rounded per account. Defaults to 0:
+   * set it for any transaction that creates or grows an account.
+   */
   stateUnits?: number;
   walletAddress?: string;
   programAddress: string;
@@ -618,7 +596,7 @@ export interface SignTransactionResult {
 export interface SignPasskeyChallengePayload {
   /** base64url-encoded challenge bytes from a backend passkey-manager flow. */
   challenge: string;
-  /** Optional expected wallet address for the selected transparent account. */
+  /** Optional expected wallet address for the selected wallet account. */
   walletAddress?: string;
 }
 
@@ -855,6 +833,24 @@ export interface DepositContactPrefill {
   phoneNumber?: string;
 }
 
+/**
+ * Source asset the crypto rail should open on, for example USDC on Solana
+ * (`{ chainType: "solana", chainId: "mainnet", symbol: "USDC" }`) or BTC on
+ * Bitcoin (`{ chainType: "bitcoin", chainId: "mainnet", symbol: "BTC" }`).
+ *
+ * A hint only: the wallet opens on its own default when it doesn't offer this
+ * asset, and the user can still switch. Every source settles as the deposit
+ * token (THRUSD).
+ */
+export interface DepositSource {
+  /** Source chain family, e.g. "ethereum", "solana", "bitcoin". */
+  chainType: string;
+  /** Chain id within the family, e.g. "1", "8453", "mainnet". */
+  chainId: string;
+  /** Source token symbol, e.g. "USDC", "ETH", "BTC". */
+  symbol: string;
+}
+
 /** Funding surface to open for a deposit (`card` is the Coinbase rail). */
 export type DepositFundingMethod = "crypto" | "stripe_link" | "card";
 
@@ -887,6 +883,8 @@ export interface DepositRequestPayload {
   paymentAmount?: string;
   /** Prefills the onramp screen; the user can still edit every value. */
   contact?: DepositContactPrefill;
+  /** Source asset the crypto rail opens on; ignored by the card rail. */
+  source?: DepositSource;
   customer?: CoinbaseDepositCustomerInput;
 }
 

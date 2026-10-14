@@ -304,9 +304,10 @@
   }
 }
 
+/* Reduced motion: the skeleton holds still. The Spinner and Steps rings
+   keep their own reduced-motion pulse (Spinner.css, Steps.css) instead of
+   rotating, so the pending state still reads as working. */
 @media (prefers-reduced-motion: reduce) {
-  .tds-ppopup .tds-spinner,
-  .tds-ppopup .tds-steps__spin,
   .tds-ppopup__skel {
     animation: none;
   }

@@ -5,13 +5,7 @@ import {
   useState,
   type ComponentProps,
 } from "react";
-import {
-  Platform,
-  Pressable,
-  StyleSheet,
-  Text,
-  View,
-} from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View } from "react-native";
 import {
   WebView,
   type WebViewMessageEvent,
@@ -90,7 +84,7 @@ export function ApplePayWidget({
   const [progress, setProgress] = useState<CoinbasePaymentProgress>("pending");
   const [lastSignalAt, setLastSignalAt] = useState(() => Date.now());
 
-  /* The transparent surface swallows every touch while this widget is mounted,
+  /* The payment overlay captures touches while this widget is mounted,
      so a provider that goes quiet would otherwise leave the user on a blank,
      unresponsive screen. Bound the silence, measured from the last sign of life
      from Coinbase. */
@@ -170,12 +164,7 @@ export function ApplePayWidget({
 
       onCoinbaseMessage(event);
     },
-    [
-      hideApplePayButton,
-      onCancel,
-      onCoinbaseMessage,
-      sandboxUi,
-    ],
+    [hideApplePayButton, onCancel, onCoinbaseMessage, sandboxUi],
   );
 
   const handleShouldStartLoad = useCallback(

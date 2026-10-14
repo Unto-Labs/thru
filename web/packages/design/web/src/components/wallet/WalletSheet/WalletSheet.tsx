@@ -213,6 +213,10 @@ export interface WalletSheetPermissionsProps {
   details?: WalletSheetDetail[];
   detailsLabel?: React.ReactNode;
   detailsOpenLabel?: React.ReactNode;
+  /** A failed request's error (an `ErrorBox`, a `Screen.Box`), last in the
+   *  body above the action row. Rendered after the Screen it would sit
+   *  outside the body's gutter, flush under the buttons. */
+  notice?: React.ReactNode;
   onCancel?: () => void;
   onConnect?: () => void;
   cancelLabel?: React.ReactNode;
@@ -226,6 +230,7 @@ function Permissions({
   details,
   detailsLabel = "Show details",
   detailsOpenLabel = "Hide details",
+  notice,
   onCancel,
   onConnect,
   cancelLabel = "Cancel",
@@ -257,6 +262,7 @@ function Permissions({
           ))}
         </Details>
       )}
+      {notice}
     </Screen>
   );
 }
@@ -401,6 +407,10 @@ export interface WalletSheetTxApproveProps {
   programName?: React.ReactNode;
   /** Extra label / value rows under the account + program. */
   summary?: WalletSheetDetail[];
+  /** A notice under the summary (a `Screen.Box`, e.g. no account selected).
+   *  It is in the body, inside its gutter, above Advanced, so an open tree
+   *  never pushes it down. */
+  notice?: React.ReactNode;
   /** Transaction-level parameters (nonce, version, network, …). */
   parameters?: WalletSheetTxField[];
   /** Fee rows (fee payer, fee, compute / state / memory units, expiry) —
@@ -442,6 +452,7 @@ function TxApprove({
   program,
   programName,
   summary,
+  notice,
   parameters,
   fees,
   feesLabel = "Fees",
@@ -506,6 +517,7 @@ function TxApprove({
           </div>
         ))}
       </Screen.Box>
+      {notice}
       {hasAdvanced && (
         <Collapsible.Root
           className="tds-wsheet__advanced"

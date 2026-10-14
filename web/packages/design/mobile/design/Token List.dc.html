@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="thru-mobile-tokens.css">
+<style>
+body{margin:0;-webkit-font-smoothing:antialiased;}
+a{color:var(--m-accent);text-decoration:none;}
+a:hover{text-decoration:underline;text-underline-offset:3px;}
+</style>
+</helmet>
+<div data-screen-label="Token list" style="display:flex;flex-direction:column;background:var(--m-bg);color:var(--m-fg);font-family:'Inter Tight',system-ui,sans-serif">
+  <sc-if value="{{ showLabel }}" hint-placeholder-val="{{ true }}">
+    <div style="display:flex;align-items:baseline;padding:{{ labelPad }}"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">Tokens</span><span style="flex:1"></span>
+      <sc-if value="{{ viewAll }}" hint-placeholder-val="{{ true }}"><a href="#" aria-label="View all tokens" style="display:inline-flex;align-items:center;min-height:24px;margin:-6px 0;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--m-accent)">VIEW ALL →</a></sc-if>
+      <sc-if value="{{ showCount }}" hint-placeholder-val="{{ false }}"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">{{ countLabel }}</span></sc-if>
+    </div>
+  </sc-if>
+  <div style="border-top:1px solid var(--m-border);border-bottom:1px solid var(--m-border)">
+    <sc-for list="{{ rows }}" as="r" hint-placeholder-count="4">
+      <dc-import name="Token Row" kind="{{ r.kind }}" ticker="{{ r.ticker }}" mint="{{ r.mint }}" amount="{{ r.amount }}" units="{{ r.units }}" badge="{{ r.badge }}" dup="{{ r.dup }}" selected="{{ r.selected }}" hint-size="100%,64px"></dc-import>
+    </sc-for>
+    <sc-if value="{{ isError }}" hint-placeholder-val="{{ false }}">
+      <div role="alert" style="display:flex;align-items:center;gap:10px;min-height:44px;padding:0 4px 0 16px">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true" style="flex:none;color:var(--m-accent)"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5v6M12 16v.5"></path></svg>
+        <span style="flex:1;min-width:0;font-size:13px;line-height:18px;color:var(--m-accent)">Couldn’t load other tokens</span>
+        <button type="button" style="height:44px;padding:0 12px;border:none;background:none;cursor:pointer;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg)" style-active="background:var(--m-bg-muted)">Retry</button>
+      </div>
+    </sc-if>
+    <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+      <div style="padding:14px 16px;font-size:13px;line-height:18px;color:var(--m-fg-muted);text-wrap:pretty">Other tokens you receive on Thru will show here.</div>
+    </sc-if>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:420},&quot;state&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;ready&quot;,&quot;options&quot;:[&quot;ready&quot;,&quot;loading&quot;,&quot;error&quot;,&quot;empty&quot;,&quot;edge&quot;,&quot;many&quot;],&quot;tsType&quot;:&quot;'ready' | 'loading' | 'error' | 'empty' | 'edge' | 'many'&quot;},&quot;cap&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:0,&quot;tsType&quot;:&quot;number&quot;,&quot;min&quot;:0,&quot;max&quot;:8},&quot;selected&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;showLabel&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
+const T = (key, ticker, mint, amount, extra) => ({ key, kind: 'token', ticker, mint, amount, units: '', badge: '', dup: false, ...(extra || {}) });
+const THRUSD = { key: 'thrusd', kind: 'thrusd', ticker: 'THRUSD', mint: 'ta2u\u2026sD91', amount: '$56.00', units: '56', badge: '', dup: false };
+const SK = (i) => ({ key: 'sk' + i, kind: 'skeleton', ticker: '', mint: '', amount: '', units: '', badge: '', dup: false });
+const BONK = T('bonk', 'BONK', 'taBo\u2026nK77', '1,234,567,890.123456789');
+const COOL = T('cool', 'COOL', 'taZt\u20269Kq2', '1,250.5');
+const COOL2 = T('cool2', 'COOL', 'taQm\u20267xRw', '0.000000001', { dup: true });
+const ETH = T('eth', 'ETH', 'taEt\u2026h2Vd', '0.4821');
+const ICE = T('ice', 'ICE', 'taIc\u2026e3Fz', '42', { badge: 'Frozen' });
+const LONG = T('long', 'LONGTICKERNAME16', 'taLn\u2026g8Tk', '7.25');
+const WBTC = T('wbtc', 'WBTC', 'taBt\u2026c4Hn', '0.015');
+const UNK = T('unk', 'Unknown token', 'taXk\u20260qPz', '12,000,000', { badge: 'Unsupported' });
+const LISTS = {
+  ready: [THRUSD, BONK, COOL, ETH, WBTC],
+  loading: [THRUSD, SK(1), SK(2), SK(3)],
+  error: [THRUSD],
+  empty: [THRUSD],
+  edge: [THRUSD, BONK, { ...COOL, dup: true }, COOL2, ETH, ICE, LONG, WBTC, UNK],
+  many: [THRUSD, T('aero', 'AERO', 'taAe\u2026r0Qd', '310.4'), BONK, { ...COOL, dup: true }, COOL2, T('drift', 'DRIFT', 'taDr\u2026f5Mw', '88'), ETH, T('hnt', 'HNT', 'taHn\u2026t9Cz', '12.308'), ICE, T('jup', 'JUP', 'taJu\u2026p2Ls', '540.25'), T('kmno', 'KMNO', 'taKm\u2026n6Xp', '2,000'), LONG, T('mnde', 'MNDE', 'taMn\u2026d1Rk', '75.5'), T('orca', 'ORCA', 'taOr\u2026c7Vb', '9.99'), T('pyth', 'PYTH', 'taPy\u2026h4Wn', '1,100'), T('ray', 'RAY', 'taRa\u2026y8Jm', '33.3'), WBTC, UNK],
+};
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props;
+    const state = p.state ?? 'ready';
+    const cap = Number(p.cap ?? 0);
+    const sel = p.selected ?? '';
+    const full = LISTS[state] || LISTS.ready;
+    const list = cap > 0 ? full.slice(0, cap) : full;
+    const real = full.filter((r) => r.kind !== 'skeleton').length;
+    const loading = state === 'loading';
+    const viewAll = cap > 0 && !loading && full.length > cap;
+    return {
+      showLabel: p.showLabel ?? true, labelPad: cap > 0 ? '24px 16px 8px' : '20px 16px 8px',
+      rows: list.map((r) => ({ ...r, selected: r.key === sel })),
+      isError: state === 'error', isEmpty: state === 'empty',
+      viewAll, showCount: !viewAll,
+      countLabel: loading ? 'Loading\u2026' : real + (real === 1 ? ' token' : ' tokens'),
+    };
+  }
+}
+</script>
+</body>
+</html>

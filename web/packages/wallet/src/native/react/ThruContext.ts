@@ -3,11 +3,10 @@ import type {
   WalletNetworkSelection,
 } from "../../networks";
 import { createContext } from "react";
-import type { CreateAccountOptions, NativeSDK } from "../NativeSDK";
+import type { NativeSDK } from "../NativeSDK";
 import type { WalletAvailability } from "../../connection-state";
 import type { WalletAccount } from "../../interfaces";
 import type {
-  CreateAccountResult,
   DepositDestination,
   DepositRequestPayload,
   DepositResult,
@@ -40,9 +39,6 @@ export interface ThruContextValue {
   walletAvailability: WalletAvailability;
   error: Error | null;
   selectAccount: (account: WalletAccount) => Promise<void>;
-  createAccount: (
-    options?: CreateAccountOptions,
-  ) => Promise<CreateAccountResult>;
   manageAccounts: () => Promise<ManageAccountsResult>;
   prepareDeposit: (
     depositTargetOrPayload?:

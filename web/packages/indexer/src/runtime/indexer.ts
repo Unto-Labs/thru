@@ -277,13 +277,14 @@ Then run: pnpm drizzle-kit push (or generate + migrate)
     const streams = Array.from(this.streamStatuses.values()).map((status) => {
       const stream = cloneStreamStatus(status);
       stream.stale = this.isStreamStale(stream, now);
+      stream.stalled = this.isStreamStalled(stream, now);
       return stream;
     });
     const healthy =
       this.running &&
       !this.shutdownRequested &&
       streams.length > 0 &&
-      streams.every((stream) => stream.state === "running");
+      streams.every((stream) => stream.state === "running" && !stream.stalled);
     this.emitHealthTransitions(streams, now);
 
     return {
@@ -316,6 +317,10 @@ Then run: pnpm drizzle-kit push (or generate + migrate)
       lastProcessedSlot: null,
       lastEventAt: null,
       stale: false,
+      activePhase: null,
+      activePhaseSince: null,
+      activeBatchSlot: null,
+      stalled: false,
       restartCount: 0,
       lastStartedAt: null,
       lastErrorAt: null,
@@ -377,6 +382,10 @@ Then run: pnpm drizzle-kit push (or generate + migrate)
       kind: stream.kind,
       state: stream.state,
       stale: stream.stale,
+      stalled: stream.stalled,
+      active_phase: stream.activePhase,
+      active_phase_since: stream.activePhaseSince,
+      active_batch_slot: stream.activeBatchSlot,
       checkpoint_slot: stream.checkpointSlot,
       last_processed_slot: stream.lastProcessedSlot,
       last_event_at: stream.lastEventAt,
@@ -393,7 +402,7 @@ Then run: pnpm drizzle-kit push (or generate + migrate)
 
     for (const stream of streams) {
       const key = this.statusKey(stream.kind, stream.name);
-      const unhealthy = stream.state !== "running";
+      const unhealthy = stream.state !== "running" || stream.stalled;
       const previous = this.streamHealthStates.get(key);
       const initialStarting =
         !previous &&
@@ -416,7 +425,7 @@ Then run: pnpm drizzle-kit push (or generate + migrate)
         });
         this.logger.warn("Indexer stream unhealthy", {
           event: "indexer.stream.unhealthy",
-          reason: stream.stale ? "state_while_stale" : "state",
+          reason: stream.stalled ? "stalled" : stream.stale ? "state_while_stale" : "state",
           ...this.streamLogFields(stream),
         });
         continue;
@@ -487,6 +496,11 @@ Then run: pnpm drizzle-kit push (or generate + migrate)
       onCheckpoint: (info) => {
         status.checkpointSlot = info.slot.toString();
         status.lastProcessedSlot = info.slot.toString();
+      },
+      onPhase: (info) => {
+        status.activePhase = info.phase;
+        status.activePhaseSince = info.phase === null ? null : new Date().toISOString();
+        status.activeBatchSlot = info.phase === null || info.slot === undefined ? null : info.slot.toString();
       },
       onError: (phase, error) => {
         if (phase === "commit") status.counters.commitErrors++;
@@ -624,6 +638,16 @@ Then run: pnpm drizzle-kit push (or generate + migrate)
 
     const activityMs = Date.parse(activityAt);
     return !Number.isFinite(activityMs) || nowMs - activityMs > staleMs;
+  }
+
+  private isStreamStalled(stream: IndexerStreamStatus, nowMs: number): boolean {
+    const stallMs = this.config.streamPhaseStallMs;
+    if (stallMs === undefined || stallMs <= 0 || stream.activePhaseSince === null) {
+      return false;
+    }
+
+    const sinceMs = Date.parse(stream.activePhaseSince);
+    return !Number.isFinite(sinceMs) || nowMs - sinceMs > stallMs;
   }
 
   private delay(ms: number, signal: AbortSignal): Promise<void> {

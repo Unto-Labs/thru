@@ -24,6 +24,7 @@ export {
   type DepositUiConfig,
   type DepositRequestPayload,
   type DepositResult,
+  type DepositSource,
   type PrepareDepositPayload,
   type SDKEvent,
   type WalletTheme,

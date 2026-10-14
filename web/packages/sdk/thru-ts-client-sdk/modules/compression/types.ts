@@ -11,6 +11,8 @@ export interface PendingCompressionTransaction {
 export interface CompressionJournal {
   load(): Promise<PendingCompressionTransaction | undefined>;
   save(pending: PendingCompressionTransaction | undefined): Promise<void>;
+  /** Persist cleanup handles before an uploader creation transaction may be sent. */
+  saveUpload?(upload: UploadCleanup): Promise<void>;
 }
 
 export interface CompressionOptions {
@@ -72,6 +74,8 @@ export interface CompressionTransaction {
   stateUnits: number;
   computeUnits: number;
   flags?: number;
+  /** Internal bootstrap transaction for an archived, zero-data EOA payer. */
+  payerRestoration?: { image: AccountImage; proof: Uint8Array };
 }
 
 export interface UploadPair {

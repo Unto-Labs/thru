@@ -9,7 +9,7 @@
  * of it - muted, checking, fine, a warning or an error - announced politely
  * to screen readers as it changes, with an optional Retry.
  */
-import { type RefObject, useState } from "react";
+import { type RefObject, useCallback, useLayoutEffect, useRef, useState } from "react";
 import {
   Platform,
   Pressable,
@@ -64,9 +64,27 @@ export function AddressField({
   const styles = useStyles();
   const colors = useThemeColors();
   const [focused, setFocused] = useState(false);
-  /* A multi-line field on web does not grow by itself; it follows its content
-     height, which includes the padding. */
+  /* A textarea's scrollHeight is never less than its own height, so measure
+     at natural height on web or the field could only grow. */
   const [contentHeight, setContentHeight] = useState(0);
+  const nodeRef = useRef<TextInput | null>(null);
+  const setInputRef = useCallback((node: TextInput | null) => {
+    nodeRef.current = node;
+    if (inputRef) inputRef.current = node;
+  }, [inputRef]);
+  useLayoutEffect(() => {
+    if (!IS_WEB) return;
+    const node = nodeRef.current as unknown as {
+      scrollHeight: number;
+      style: { height: string };
+    } | null;
+    if (!node) return;
+    const height = node.style.height;
+    node.style.height = "auto";
+    const natural = Math.ceil(node.scrollHeight);
+    node.style.height = height;
+    setContentHeight(natural);
+  });
   const empty = value === "";
 
   return (
@@ -91,8 +109,10 @@ export function AddressField({
         /* An address has no line breaks; Return is the field's submit, and a
            pasted break is dropped. */
         onChangeText={(next) => onChangeText(next.replace(/[\r\n]+/g, ""))}
-        onContentSizeChange={(event) =>
-          setContentHeight(Math.ceil(event.nativeEvent.contentSize.height))
+        onContentSizeChange={
+          IS_WEB
+            ? undefined
+            : (event) => setContentHeight(Math.ceil(event.nativeEvent.contentSize.height))
         }
         onFocus={() => setFocused(true)}
         onKeyPress={
@@ -113,7 +133,7 @@ export function AddressField({
         onSubmitEditing={IS_WEB ? undefined : onSubmitEditing}
         placeholder={placeholder}
         placeholderTextColor={colors.fgSubtle}
-        ref={inputRef as RefObject<TextInput | null> | undefined}
+        ref={setInputRef}
         returnKeyType="next"
         selectionColor={colors.accent}
         spellCheck={false}

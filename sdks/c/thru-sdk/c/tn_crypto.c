@@ -407,19 +407,12 @@ tn_crypto_verify_aggregate_with_dst( tn_bls_signature_t const * aggregate_sig,
   if( UNLIKELY( !dst ) ) return TN_CRYPTO_ERR_AGG_VERIFY_DST_IS_NULL;
 
   /* Group check public key (as recommended by blst README) */
-  if( UNLIKELY( !blst_p1_affine_in_g1( aggregate_pk ) ) ) {
-    FD_LOG_WARNING(( "aggregate public key group check failed" ));
-    return TN_CRYPTO_ERR_AGG_VERIFY_PUBKEY_NOT_IN_G1;
-  }
+  if( UNLIKELY( !blst_p1_affine_in_g1( aggregate_pk ) ) ) return TN_CRYPTO_ERR_AGG_VERIFY_PUBKEY_NOT_IN_G1;
 
-  if( UNLIKELY( !blst_p2_affine_in_g2( aggregate_sig ) ) ) {
-    FD_LOG_WARNING(( "aggregate signature group check failed" ));
-    return TN_CRYPTO_ERR_AGG_VERIFY_SIGNATURE_NOT_IN_G2;
-  }
+  if( UNLIKELY( !blst_p2_affine_in_g2( aggregate_sig ) ) ) return TN_CRYPTO_ERR_AGG_VERIFY_SIGNATURE_NOT_IN_G2;
 
   if( UNLIKELY( !tn_crypto_pairing_check( aggregate_sig, aggregate_pk, message,
                                           message_len, dst, dst_len ) ) ) {
-    FD_LOG_WARNING(( "aggregate pairing check failed" ));
     return TN_CRYPTO_ERR_AGG_VERIFY_PAIRING_MISMATCH;
   }
 
@@ -439,7 +432,6 @@ tn_crypto_verify_aggregate_prechecked( tn_bls_signature_t const * aggregate_sig,
   if( UNLIKELY( !tn_crypto_pairing_check( aggregate_sig, aggregate_pk, message,
                                           message_len, TN_CONSENSUS_DST,
                                           sizeof( TN_CONSENSUS_DST ) - 1 ) ) ) {
-    FD_LOG_WARNING(( "aggregate pairing check failed (prechecked)" ));
     return TN_CRYPTO_ERR_AGG_VERIFY_PAIRING_MISMATCH;
   }
 
@@ -511,16 +503,10 @@ tn_crypto_deserialize_pubkey( tn_bls_pubkey_t *                pubkey,
 
   /* Deserialize from uncompressed format directly to affine */
   BLST_ERROR err = blst_p1_deserialize( pubkey, serialized );
-  if( UNLIKELY( err != BLST_SUCCESS ) ) {
-    FD_LOG_WARNING(( "blst_p1_deserialize failed: %d (invalid uncompressed format)", (int)err ));
-    return TN_CRYPTO_ERR_DESERIALIZE_PUBKEY_ENCODING_REJECTED;
-  }
+  if( UNLIKELY( err != BLST_SUCCESS ) ) return TN_CRYPTO_ERR_DESERIALIZE_PUBKEY_ENCODING_REJECTED;
 
   /* Group check the deserialized public key */
-  if( UNLIKELY( !blst_p1_affine_in_g1( pubkey ) ) ) {
-    FD_LOG_WARNING(( "deserialized public key group check failed" ));
-    return TN_CRYPTO_ERR_DESERIALIZE_PUBKEY_NOT_IN_G1;
-  }
+  if( UNLIKELY( !blst_p1_affine_in_g1( pubkey ) ) ) return TN_CRYPTO_ERR_DESERIALIZE_PUBKEY_NOT_IN_G1;
 
   return TN_CRYPTO_SUCCESS;
 }
@@ -551,23 +537,11 @@ tn_crypto_deserialize_signature( tn_bls_signature_t *                signature,
 
   /* Deserialize from uncompressed format directly to affine */
   BLST_ERROR err = blst_p2_deserialize( signature, serialized );
-  if( UNLIKELY( err != BLST_SUCCESS ) ) {
-    if( err == BLST_POINT_NOT_ON_CURVE ) {
-      FD_LOG_WARNING(( "blst_p2_deserialize failed: %d (point not on curve)", (int)err ));
-    } else if( err == BLST_BAD_ENCODING ) {
-      FD_LOG_WARNING(( "blst_p2_deserialize failed: %d (bad encoding)", (int)err ));
-    } else {
-      FD_LOG_WARNING(( "blst_p2_deserialize failed: %d", (int)err ));
-    }
-    return TN_CRYPTO_ERR_DESERIALIZE_SIGNATURE_ENCODING_REJECTED;
-  }
+  if( UNLIKELY( err != BLST_SUCCESS ) ) return TN_CRYPTO_ERR_DESERIALIZE_SIGNATURE_ENCODING_REJECTED;
 
   /* Signatures are group-checked internally by blst during verification,
      but we can also check here for early validation */
-  if( UNLIKELY( !blst_p2_affine_in_g2( signature ) ) ) {
-    FD_LOG_WARNING(( "deserialized signature group check failed" ));
-    return TN_CRYPTO_ERR_DESERIALIZE_SIGNATURE_NOT_IN_G2;
-  }
+  if( UNLIKELY( !blst_p2_affine_in_g2( signature ) ) ) return TN_CRYPTO_ERR_DESERIALIZE_SIGNATURE_NOT_IN_G2;
 
   return TN_CRYPTO_SUCCESS;
 }

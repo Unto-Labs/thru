@@ -50,6 +50,13 @@
 .tds-acc__panel[data-ending-style] {
   height: 0;
 }
+/* Reduced motion: the panel opens and closes at once, the chevron snaps. */
+@media (prefers-reduced-motion: reduce) {
+  .tds-acc__trigger > svg,
+  .tds-acc__panel {
+    transition: none;
+  }
+}
 
 .tds-acc__panel-inner {
   padding: 0 var(--space-4) var(--space-4);

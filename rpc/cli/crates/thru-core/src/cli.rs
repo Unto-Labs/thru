@@ -175,6 +175,13 @@ pub enum Commands {
         subcommand: TokenCommands,
     },
 
+    /// Sign in to Thru Developers without exporting wallet keys
+    #[command(name = "auth")]
+    Auth {
+        #[command(subcommand)]
+        subcommand: AuthCommands,
+    },
+
     /// Faucet program commands
     #[command(name = "faucet")]
     Faucet {
@@ -1634,15 +1641,30 @@ pub enum TokenCommands {
     },
 }
 
-/// Faucet program subcommands
+/// Thru Developers account authentication
+#[derive(Subcommand)]
+pub enum AuthCommands {
+    /// Approve this CLI installation in your browser
+    Login {
+        /// Display the approval URL/code without opening a browser
+        #[arg(long)]
+        no_browser: bool,
+    },
+    /// Validate the current Developers account, refreshing credentials if needed
+    Status,
+    /// Revoke this installation and clear its local credentials
+    Logout,
+}
+
+/// Native THRU and test THRUSD faucet commands
 #[derive(Subcommand)]
 pub enum FaucetCommands {
-    /// Deposit tokens into the faucet
+    /// Deposit native THRU into the on-chain faucet
     Deposit {
         /// Account identifier (key name or ta.../hex pubkey) to use as depositor (must match fee payer)
         account: String,
 
-        /// Amount to deposit
+        /// Amount to deposit in raw native balance units
         amount: u64,
 
         /// Fee payer account name (defaults to 'default')
@@ -1650,17 +1672,35 @@ pub enum FaucetCommands {
         fee_payer: Option<String>,
     },
 
-    /// Withdraw tokens from the faucet
+    /// Withdraw native THRU or test THRUSD
     Withdraw {
+        #[command(subcommand)]
+        subcommand: FaucetWithdrawCommands,
+    },
+}
+
+#[derive(Subcommand)]
+pub enum FaucetWithdrawCommands {
+    /// Withdraw native THRU from the on-chain faucet using a local signing key
+    Native {
         /// Account identifier (key name or ta.../hex pubkey) to use as recipient
         account: String,
 
-        /// Amount to withdraw (max 10000 per transaction)
+        /// Amount in raw native balance units (max 10000 per transaction)
         amount: u64,
 
         /// Fee payer account name (defaults to 'default')
         #[arg(long)]
         fee_payer: Option<String>,
+    },
+
+    /// Fund an existing test THRUSD token account through Thru Developers
+    Thrusd {
+        /// Existing ta... THRUSD token-account address on the selected network
+        account: String,
+
+        /// Positive decimal token amount, such as 10 or 0.001
+        amount: String,
     },
 }
 

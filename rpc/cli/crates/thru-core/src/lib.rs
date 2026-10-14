@@ -19,7 +19,7 @@ pub mod output;
 pub mod utils;
 pub mod version_check;
 
-use cli::{Cli, Commands};
+use cli::{Cli, Commands, FaucetCommands, FaucetWithdrawCommands};
 use config::Config;
 use error::CliError;
 
@@ -38,7 +38,21 @@ pub async fn run() -> anyhow::Result<()> {
 
     // Load configuration. A default key is resolved lazily by commands that
     // omit an explicit named signer.
-    let mut config = Config::load().await?;
+    let auth_only = matches!(&cli.command, Commands::Auth { .. });
+    let developers_only = auth_only
+        || matches!(
+            &cli.command,
+            Commands::Faucet {
+                subcommand: FaucetCommands::Withdraw {
+                    subcommand: FaucetWithdrawCommands::Thrusd { .. }
+                }
+            }
+        );
+    let mut config = if auth_only {
+        Config::default()
+    } else {
+        Config::load().await?
+    };
 
     // Announce the pending transaction signature before sending, except in
     // machine-readable (`--json`) or `--quiet` modes. This works in scripts,
@@ -47,7 +61,9 @@ pub async fn run() -> anyhow::Result<()> {
     config.announce_pending_signature = !cli.json && !cli.quiet;
 
     // Apply global network overrides
-    if let Some(ref url) = cli.url {
+    if auth_only {
+        // Developers auth does not load or select a wallet/RPC identity.
+    } else if let Some(ref url) = cli.url {
         config.rpc_base_url = url.clone();
     } else if let Some(ref network_name) = cli.network {
         let name = network_name.to_lowercase();
@@ -75,7 +91,7 @@ pub async fn run() -> anyhow::Result<()> {
 
     // Skip TLS verification when requested (e.g. self-signed / direct-IP nodes)
     config.insecure = cli.insecure;
-    if cli.insecure && !cli.quiet {
+    if cli.insecure && !cli.quiet && !developers_only {
         eprintln!(
             "warning: TLS certificate verification disabled (--insecure); \
              the connection is not authenticated and is exposed to man-in-the-middle attacks."
@@ -121,6 +137,9 @@ pub async fn run() -> anyhow::Result<()> {
         }
         Commands::Token { subcommand } => {
             commands::token::handle_token_command(&config, subcommand, cli.json).await
+        }
+        Commands::Auth { subcommand } => {
+            commands::developers::handle_auth(subcommand, cli.json).await
         }
         Commands::Faucet { subcommand } => {
             commands::faucet::handle_faucet_command(&config, subcommand, cli.json).await
@@ -241,6 +260,18 @@ pub fn format_error_json(err: &CliError) -> Value {
 
             json!({ "error": error_obj })
         }
+        CliError::Developers {
+            code,
+            message,
+            status,
+            retry_after,
+            signature,
+        } => json!({
+            "error": {
+                "type": "developers", "code": code, "message": message,
+                "status": status, "retry_after_seconds": retry_after, "signature": signature,
+            }
+        }),
         CliError::TransactionSubmission(message) => json!({
             "error": {
                 "type": "transaction_submission",

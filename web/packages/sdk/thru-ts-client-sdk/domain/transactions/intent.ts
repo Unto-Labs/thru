@@ -23,7 +23,10 @@ export interface ThruTransactionReviewPayload {
 }
 
 export interface ThruTransactionIntent {
-  /** Maximum state growth in 4 KiB units, rounded per account. Defaults to 1. */
+  /**
+   * Maximum state growth in 4 KiB units, rounded per account. Defaults to 0:
+   * set it for any transaction that creates or grows an account.
+   */
   stateUnits?: number;
   walletAddress?: string;
   programAddress: string;

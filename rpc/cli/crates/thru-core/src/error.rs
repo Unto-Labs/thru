@@ -21,6 +21,16 @@ pub enum CliError {
     #[error("Validation error: {0}")]
     Validation(String),
 
+    /// Structured Developers authentication/funding failure; never contains credentials
+    #[error("{message}")]
+    Developers {
+        code: String,
+        message: String,
+        status: Option<u16>,
+        retry_after: Option<u64>,
+        signature: Option<String>,
+    },
+
     /// I/O errors
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),

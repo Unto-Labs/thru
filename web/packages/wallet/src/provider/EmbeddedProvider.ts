@@ -81,6 +81,10 @@ export class EmbeddedProvider {
   getNetwork() {
     return this.iframeManager.getNetwork();
   }
+  /** The provider outlives network switches, so its constructor network can be stale. */
+  private depositNetwork(): ThruNetwork | undefined {
+    return (this.iframeManager.getNetwork()?.id as ThruNetwork | undefined) ?? this.defaultNetwork;
+  }
   async switchNetwork(selection: WalletNetworkSelection) {
     if (!this.iframeManager.supportsNetworkSwitching())
       throw new Error('This wallet does not support network switching.');
@@ -534,7 +538,7 @@ export class EmbeddedProvider {
     const response = await this.iframeManager.sendMessage({
       id: createRequestId(),
       type: POST_MESSAGE_REQUEST_TYPES.PREPARE_DEPOSIT,
-      payload: { ...payload, network: payload.network ?? this.defaultNetwork },
+      payload: { ...payload, network: payload.network ?? this.depositNetwork() },
       origin: window.location.origin,
     });
 
@@ -555,14 +559,13 @@ export class EmbeddedProvider {
     }
 
     try {
+      const network = payload.network ?? this.depositNetwork();
       const response = await this.iframeManager.sendMessage({
         id: createRequestId(),
         type: POST_MESSAGE_REQUEST_TYPES.DEPOSIT,
         payload: {
           ...payload,
-          ...(payload.destination || payload.network || !this.defaultNetwork
-            ? {}
-            : { network: this.defaultNetwork }),
+          ...(payload.destination || !network ? {} : { network }),
           ...(this.depositUiConfig
             ? { resolvedDepositUiConfig: this.depositUiConfig }
             : {}),

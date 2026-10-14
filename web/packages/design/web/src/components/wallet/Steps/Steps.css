@@ -53,3 +53,20 @@
     transform: rotate(360deg);
   }
 }
+
+/* Reduced motion: no rotation; the ring pulses so the step still reads as
+   in progress. */
+@keyframes tds-steps-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tds-steps__spin {
+    animation: tds-steps-pulse 1.6s ease-in-out infinite;
+  }
+}

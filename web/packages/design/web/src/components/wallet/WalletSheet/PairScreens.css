@@ -431,9 +431,19 @@
   flex: none;
 }
 
+@keyframes tds-pair-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
+  /* No rotation; the ring pulses so it still reads as working. */
   .tds-pair__spin {
-    animation: none;
+    animation: tds-pair-pulse 1.6s ease-in-out infinite;
   }
   .tds-pair__qr-svg,
   .tds-pair__details-chev {

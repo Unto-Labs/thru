@@ -46,6 +46,7 @@ const ADVANCES_NONCE = new Set<number>([
 
 /** Private concrete operation. RPC, building and sending use the SDK directly. */
 export class CompressionSession {
+  readonly baseCtx: ThruClientContext;
   readonly feePayer: string;
   readonly authority: string;
   readonly wallet: boolean;
@@ -54,6 +55,9 @@ export class CompressionSession {
   readonly interval: number;
   constructor(readonly ctx: ThruClientContext, readonly options: SessionOptions,
     readonly state: SubmissionState) {
+    this.baseCtx = ctx;
+    if (options.signal) this.ctx = { ...ctx, callOptions: { ...ctx.callOptions,
+      signal: ctx.callOptions?.signal ? AbortSignal.any([ctx.callOptions.signal, options.signal]) : options.signal } };
     this.feePayer = Pubkey.from(options.feePayer.publicKey).toThruFmt();
     this.wallet = options.walletAddress !== undefined;
     this.authority = options.walletAddress ?? this.feePayer;
@@ -65,6 +69,10 @@ export class CompressionSession {
     if (this.wallet && this.fee !== 0n) throw new RangeError('Wallet intents currently support zero-fee transactions only');
     if (!Number.isFinite(this.timeout) || this.timeout <= 0 || !Number.isFinite(this.interval) || this.interval <= 0)
       throw new RangeError('timeoutMs and pollIntervalMs must be positive');
+  }
+  forCleanup(): CompressionSession {
+    // Drop only this operation's signal, preserving client options and shared pending/journal state.
+    return new CompressionSession(this.baseCtx, { ...this.options, signal: undefined }, this.state);
   }
   current(address: string, signal?: AbortSignal) { return readAccount(this.ctx, address, false, signal); }
   historical(address: string, signal?: AbortSignal) { return readAccount(this.ctx, address, true, signal); }
@@ -89,6 +97,8 @@ export class CompressionSession {
       header: { fee: this.fee, stateUnits: request.stateUnits, computeUnits: request.computeUnits,
         memoryUnits: 10_000, expiryAfter: 128, flags: request.flags,
         ...(measure ? { nonce: 0n, startSlot: 0n, chainId: 1 } : { nonce }) },
+      feePayerStateProof: request.payerRestoration?.proof,
+      feePayerAccountMetaRaw: request.payerRestoration?.image.meta,
       instructionData: async context => request.instructionData({
         getAccountIndex: address => context.getAccountIndex(address),
         instructionDataOffset: 112 + 32 * (context.accounts.length - 2),
@@ -111,6 +121,16 @@ export class CompressionSession {
     await this.state.journal?.save(undefined);
     this.state.pending = undefined;
   }
+  private async payerState() {
+    try {
+      const payer = await getAccount(this.ctx, this.feePayer, { view: AccountView.META_ONLY });
+      if (payer.meta && !payer.meta.flags.isCompressed && !payer.meta.flags.isDeleted)
+        return { nonce: payer.meta.nonce ?? 0n, active: true };
+      if (payer.meta?.flags.isDeleted) return undefined;
+    } catch (error) { if (!notFound(error)) throw error; }
+    const image = await this.historical(this.feePayer);
+    return image && !image.deleted ? { nonce: image.nonce, active: false } : undefined;
+  }
   private async reconcile(): Promise<{ vmError: number; userErrorCode: bigint } | "expired" | undefined> {
     if (!this.state.pending) return undefined;
     let result: { vmError: number; userErrorCode: bigint } | undefined;
@@ -120,9 +140,11 @@ export class CompressionSession {
       if (!notFound(error)) throw error;
     }
     if (result) {
-      const payer = await getAccount(this.ctx, this.feePayer, { view: AccountView.META_ONLY });
       // Wait for account indexing too, so the next build does not reuse a stale nonce.
-      if (ADVANCES_NONCE.has(result.vmError) && (payer.meta?.nonce ?? 0n) <= this.state.pending.nonce) return undefined;
+      if (ADVANCES_NONCE.has(result.vmError)) {
+        const payer = await this.payerState();
+        if (!payer || payer.nonce <= this.state.pending.nonce) return undefined;
+      }
       await this.clearPending();
       return result;
     }
@@ -131,11 +153,10 @@ export class CompressionSession {
     // durable export frontier; wait for it before trusting an unchanged nonce.
     const { stateRoots } = await getStateRoots(this.ctx);
     if (!stateRoots.some(root => root.slot > this.state.pending!.validUntilSlot)) return undefined;
-    const payer = await getAccount(this.ctx, this.feePayer, { view: AccountView.META_ONLY });
+    const payer = await this.payerState();
     // An advanced nonce can mean committed work whose status is still missing.
     // Keep its signature until the actual result arrives, never infer failure.
-    if (!payer.meta || payer.meta.flags.isCompressed || payer.meta.flags.isDeleted ||
-        payer.meta.nonce !== this.state.pending.nonce) return undefined;
+    if (!payer || payer.nonce !== this.state.pending.nonce) return undefined;
     await this.clearPending();
     return "expired";
   }
@@ -147,7 +168,11 @@ export class CompressionSession {
       this.state.loaded = true;
     }
     if (this.state.pending) {
-      await this.reconcile();
+      try { await this.reconcile(); }
+      catch (cause) {
+        throw new CompressionError('TRANSACTION_UNCERTAIN', 'Unable to reconcile the previous submission',
+          { signature: this.state.pending.signature, cause });
+      }
       if (this.state.pending) throw new CompressionError("TRANSACTION_UNCERTAIN",
         "Previous submission is unresolved; reconcile its signature before reusing this payer", { signature: this.state.pending.signature });
     }
@@ -155,10 +180,13 @@ export class CompressionSession {
   }
   async execute(request: CompressionTransaction, signal?: AbortSignal): Promise<string> {
     await this.reconcilePending(signal);
-    const payer = await getAccount(this.ctx, this.feePayer, { view: AccountView.META_ONLY });
-    if (!payer.meta || payer.meta.flags.isCompressed || payer.meta.flags.isDeleted)
+    const payer = await this.payerState();
+    if (!payer || (!payer.active && !request.payerRestoration))
       throw new CompressionError("MISSING_ACCOUNT", "Compression prerequisites require an active funded fee payer", { address: this.feePayer });
-    const nonce = payer.meta.nonce ?? 0n;
+    // Never sign a stale archived nonce if another actor already restored the payer.
+    if (request.payerRestoration && (payer.active || payer.nonce !== request.payerRestoration.image.nonce))
+      throw new CompressionError("TRANSACTION_FAILED", "Fee payer changed before restoration", { address: this.feePayer });
+    const nonce = payer.nonce;
     cancelled(signal);
     const signed = await this.sign(request, nonce);
     const unsigned = Transaction.fromWire(signed);

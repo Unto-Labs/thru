@@ -4,7 +4,9 @@
  * (brick), outline (stone-300 border), danger-outline (brick-200 border,
  * brick text), ghost. Colors follow the active theme.
  */
-import { ActivityIndicator, Pressable, Text, type ViewStyle } from "react-native";
+import type { ReactNode } from "react";
+import { Pressable, Text, type ViewStyle } from "react-native";
+import { Spinner } from "./Spinner";
 import { TapHaptic } from "./TapHaptic";
 import { font, text, touch } from "./tokens";
 import { makeStyles, useThemeColors, type ThemeColors } from "./theme";
@@ -23,6 +25,9 @@ export interface ButtonProps {
   /** Tick on iOS web when pressed (see TapHaptic). Pass it only when a press
       should buzz; a busy button never does. */
   tapHaptic?: boolean;
+  /** A 16pt glyph beside the label, coloured by the caller. */
+  icon?: ReactNode;
+  iconPosition?: "start" | "end";
 }
 
 const HEIGHTS: Record<ButtonSize, number> = { lg: touch.controlLg, md: touch.controlMd, sm: touch.controlSm };
@@ -57,7 +62,18 @@ function variants(c: ThemeColors): Record<ButtonVariant, VariantStyle> {
   return built;
 }
 
-export function Button({ label, onPress, variant = "primary", size = "md", disabled, loading, style, tapHaptic }: ButtonProps) {
+export function Button({
+  label,
+  onPress,
+  variant = "primary",
+  size = "md",
+  disabled,
+  loading,
+  style,
+  tapHaptic,
+  icon,
+  iconPosition = "start",
+}: ButtonProps) {
   const styles = useStyles();
   const v = variants(useThemeColors())[variant];
   const busy = Boolean(disabled || loading);
@@ -77,7 +93,8 @@ export function Button({ label, onPress, variant = "primary", size = "md", disab
         style,
       ]}
     >
-      {loading ? <ActivityIndicator size="small" color={v.text.color} /> : null}
+      {loading ? <Spinner color={v.text.color} /> : null}
+      {icon && !loading && iconPosition === "start" ? icon : null}
       <Text
         style={[
           styles.label,
@@ -88,6 +105,7 @@ export function Button({ label, onPress, variant = "primary", size = "md", disab
       >
         {label}
       </Text>
+      {icon && !loading && iconPosition === "end" ? icon : null}
       {tapHaptic && !busy ? <TapHaptic /> : null}
     </Pressable>
   );

@@ -9,11 +9,12 @@ function notFound(error: unknown): boolean { return error instanceof ConnectErro
 export function cancelled(signal?: AbortSignal): void {
   if (signal?.aborted) throw new CompressionError('CANCELLED', 'Compression operation cancelled');
 }
-export async function readAccount(ctx: ThruClientContext, address: string, historical: boolean, signal?: AbortSignal): Promise<AccountImage | undefined> {
+export async function readAccount(ctx: ThruClientContext, address: string, historical: boolean, signal?: AbortSignal,
+  historicalView: AccountView.FULL | AccountView.META_ONLY = AccountView.FULL): Promise<AccountImage | undefined> {
     cancelled(signal);
     try {
       const value = await getRawAccount(ctx, address, {
-        view: historical ? AccountView.FULL : AccountView.META_ONLY,
+        view: historical ? historicalView : AccountView.META_ONLY,
         versionContext: historical ? currentOrHistoricalVersionContext() : currentVersionContext(),
       });
       cancelled(signal);

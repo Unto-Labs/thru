@@ -204,6 +204,13 @@ button.tds-navbar__status:hover,
     opacity: 0;
   }
 }
+/* Reduced motion: no expanding ring; the solid status dot stays. */
+@media (prefers-reduced-motion: reduce) {
+  .tds-navbar__dot-pulse {
+    animation: none;
+    opacity: 0;
+  }
+}
 
 /* ── Hamburger (mobile only) ──────────────────────────────────────
    thru.org-style toggle: a quiet 32px surface tile with a three-line glyph.
@@ -280,6 +287,33 @@ button.tds-navbar__status:hover,
 @keyframes tds-navbar-menu-out {
   from { transform: translateY(0); }
   to { transform: translateY(-100%); }
+}
+/* Reduced motion: the drawer fades instead of sliding. Still keyframes, so
+   animationend fires and Base UI unmounts it; re-asserts the drawer's own
+   overrides of the base dialog (whose reduced-motion rule loads first). */
+@keyframes tds-navbar-menu-fade-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes tds-navbar-menu-fade-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tds-navbar__drawer {
+    transition: none;
+  }
+  .tds-navbar__drawer[data-starting-style],
+  .tds-navbar__drawer[data-ending-style] {
+    opacity: 1;
+    transform: none;
+  }
+  .tds-navbar__drawer[data-open] {
+    animation: tds-navbar-menu-fade-in var(--duration-fast) var(--ease-standard);
+  }
+  .tds-navbar__drawer[data-ending-style] {
+    animation: tds-navbar-menu-fade-out var(--duration-fast) var(--ease-standard) forwards;
+  }
 }
 .tds-navbar__drawer-nav {
   display: flex;

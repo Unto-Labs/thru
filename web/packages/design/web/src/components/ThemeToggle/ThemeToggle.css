@@ -51,6 +51,13 @@
   opacity: 1;
   transform: scale(1) rotate(0deg);
 }
+/* Reduced motion: the Sun and Moon cross-fade quickly, with no spin or zoom. */
+@media (prefers-reduced-motion: reduce) {
+  .tds-theme-toggle__icon {
+    transform: none;
+    transition: opacity var(--duration-fast) var(--ease-standard);
+  }
+}
 
 /* `gif-mask`: the new theme is revealed through the animated wing GIF mask via
    the View Transition API. `retokenize`: the no-VT fallback — surfaces

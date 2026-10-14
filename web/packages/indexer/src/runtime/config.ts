@@ -51,6 +51,15 @@ export interface IndexerConfig {
   streamStaleMs?: number;
 
   /**
+   * Mark a stream stalled, and the indexer unhealthy, when one batch has spent
+   * this long in filterBatch or commit. Unlike streamStaleMs it does not
+   * depend on event volume, so it suits sparse streams. Set it above any
+   * bounded work a filterBatch hook does. Disabled by default, also disabled
+   * with 0.
+   */
+  streamPhaseStallMs?: number;
+
+  /**
    * Validate parse output at runtime using Zod schemas.
    * Useful for development to catch type mismatches early.
    * Disabled by default for performance in production.

@@ -8,8 +8,13 @@ abi:
     derived under this program with ASCII vault padded to 32 bytes. It has
     no account data. Initialize creates it and transfers a positive amount
     from transaction fee payer index zero atomically; it rejects existing
-    vaults. Deposit is an explicit top-up. Withdraw is capped at 10000 base
-    units per call, not per identity or time interval. Not a production treasury.
+    vaults. Deposit is an explicit top-up. Withdrawals go only through the
+    rate limiter program: withdraw_rate_limited (tag 3) is accepted only when
+    the rate limiter invokes the faucet directly under a VERIFIED faucet
+    policy named by policy_account_idx, and is capped at 10000 base units per
+    call; per-identity and per-interval limits come from that policy. The
+    legacy withdraw (tag 1) reverts with error 4 (RATE_LIMIT_REQUIRED). Not a
+    production treasury.
   options:
     program-metadata:
       root-types:
@@ -40,6 +45,19 @@ types:
             field-type: { primitive: u16 }
           - name: amount
             field-type: { primitive: u64 }
+  - name: WithdrawRateLimitedArgs
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: faucet_account_idx
+            field-type: { primitive: u16 }
+          - name: recipient_account_idx
+            field-type: { primitive: u16 }
+          - name: amount
+            field-type: { primitive: u64 }
+          - name: policy_account_idx
+            field-type: { primitive: u16 }
   - name: InitializeArgs
     kind:
       struct:
@@ -80,6 +98,9 @@ types:
                   - name: initialize
                     tag-value: 2
                     variant-type: { type-ref: { name: InitializeArgs } }
+                  - name: withdraw_rate_limited
+                    tag-value: 3
+                    variant-type: { type-ref: { name: WithdrawRateLimitedArgs } }
   - name: FaucetError
     kind:
       struct:

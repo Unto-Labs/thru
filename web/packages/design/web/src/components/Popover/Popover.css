@@ -16,6 +16,16 @@
   opacity: 0;
   transform: scale(0.97);
 }
+/* Reduced motion: fade only, no zoom. */
+@media (prefers-reduced-motion: reduce) {
+  .tds-popover {
+    transition: opacity var(--duration-fast) var(--ease-standard);
+  }
+  .tds-popover[data-starting-style],
+  .tds-popover[data-ending-style] {
+    transform: none;
+  }
+}
 
 /* Panel variant — no chrome of its own (width / padding / border / background
    are owned by the consumer). Only the shared entrance/exit fade so app-owned

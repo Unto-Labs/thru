@@ -36,6 +36,7 @@ import {
 import { font, space, text, touch } from "../tokens";
 import { makeStyles, useThemeColors } from "../theme";
 import { BrandTile } from "../BrandTile";
+import { CopyButton } from "../CopyButton";
 
 /* One full flip of a single cell: half collapses, half expands. */
 const FLAP_MS = 120;
@@ -470,19 +471,71 @@ export function FlapDigits({ value, size = text.display, color }: FlapDigitsProp
 export interface MetaTableRow {
   label: string;
   value: string;
+  /** detail variant: a copy button after the value (addresses, signatures). */
+  copy?: boolean;
+  /** Read out for the copy button; defaults to "Copy <label>". */
+  copyLabel?: string;
+  /** detail variant: the value in brick, as a failure's error code. */
+  danger?: boolean;
 }
 
 export interface MetaTableProps {
   rows: readonly MetaTableRow[];
+  /** `board` (default) is the compact ruled table of the loading boards.
+      `detail` is the 52pt label/value table of a detail screen: a 96pt label
+      column, hairlines between rows, and an optional copy button per row. */
+  variant?: "board" | "detail";
+  /** Called with the row whose copy button was pressed. */
+  onCopy?: (row: MetaTableRow) => void;
+  /** The label of the row just copied: its button shows a check for now. */
+  copied?: string | null;
   style?: StyleProp<ViewStyle>;
 }
 
 /**
  * Hairline-ruled label/value rows. Each row carries its own rule on top, so
  * the block reads as a ruled table with a leading rule and no trailing one.
+ * The detail variant rules every row below and the table above.
  */
-export function MetaTable({ rows, style }: MetaTableProps) {
+export function MetaTable({ rows, variant = "board", onCopy, copied = null, style }: MetaTableProps) {
   const styles = useStyles();
+  const colors = useThemeColors();
+  if (variant === "detail") {
+    return (
+      <View style={[styles.detailTable, style]}>
+        {rows.map((row) => {
+          const copyable = Boolean(row.copy && onCopy);
+          return (
+            <View key={row.label} style={styles.detailRow}>
+              <View accessible accessibilityLabel={`${row.label}, ${row.value}`} style={styles.detailText}>
+                <Text style={styles.detailLabel} numberOfLines={1}>
+                  {row.label}
+                </Text>
+                {/* Two lines, so a long value (a date at 320) wraps rather
+                    than losing its end. */}
+                <Text
+                  style={[styles.detailValue, row.danger ? { color: colors.accent } : null]}
+                  numberOfLines={2}
+                  ellipsizeMode="middle"
+                >
+                  {row.value}
+                </Text>
+              </View>
+              {copyable ? (
+                <CopyButton
+                  copied={copied === row.label}
+                  onPress={() => onCopy?.(row)}
+                  accessibilityLabel={row.copyLabel ?? `Copy ${row.label.toLowerCase()}`}
+                  copiedLabel={`${row.label} copied`}
+                  style={styles.copyButton}
+                />
+              ) : null}
+            </View>
+          );
+        })}
+      </View>
+    );
+  }
   return (
     <View style={[styles.meta, style]}>
       {rows.map((row) => (
@@ -679,4 +732,43 @@ const useStyles = makeStyles((c) => ({
     fontSize: text.sm,
     textAlign: "right",
   },
+  detailTable: {
+    alignSelf: "stretch",
+    borderTopColor: c.bgMuted,
+    borderTopWidth: 1,
+  },
+  detailRow: {
+    alignItems: "center",
+    borderBottomColor: c.bgMuted,
+    borderBottomWidth: 1,
+    flexDirection: "row",
+    minHeight: 52,
+    paddingLeft: touch.screenX,
+    paddingRight: touch.screenX,
+  },
+  detailText: {
+    alignItems: "center",
+    flex: 1,
+    flexDirection: "row",
+    gap: touch.gutter,
+    minWidth: 0,
+  },
+  detailLabel: {
+    color: c.fgMuted,
+    fontFamily: font.mono,
+    fontSize: text.xxs,
+    letterSpacing: 0.9,
+    textTransform: "uppercase",
+    width: 96,
+  },
+  detailValue: {
+    color: c.fg,
+    flex: 1,
+    fontFamily: font.mono,
+    fontSize: text.sm,
+    lineHeight: 18,
+    minWidth: 0,
+    textAlign: "right",
+  },
+  copyButton: { marginLeft: touch.gutter },
 }));

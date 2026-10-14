@@ -8,12 +8,9 @@ import { TELEMETRY_EVENTS } from "../observability";
 import { getErrorCode, getErrorMessage } from "../internal/telemetry-fields";
 import {
   AddressType,
-  type AppMetadata,
   type AddressType as AddressTypeValue,
   type ConnectResult,
   type IThruChain,
-  type ThruSigningSessionCreateOptions,
-  type ThruSigningSessionDescriptor,
   type WalletAccount,
   normalizeActiveWalletAccounts,
   normalizeWalletAccountResult,
@@ -25,7 +22,6 @@ import {
   sanitizePasskeyName,
   type ConnectMetadataInput,
   type ConnectRequestPayload,
-  type CreateAccountResult,
   type DepositDestination,
   type DepositRequestPayload,
   type DepositResult,
@@ -33,7 +29,6 @@ import {
   type GetConnectionStateResult,
   type ManageAccountsResult,
   type PrepareDepositPayload,
-  type SigningSessionDescriptorPayload,
   type ThruNetwork,
   type WalletTheme,
   type WalletThemePreference,
@@ -90,11 +85,7 @@ import {
   resolveConnectionHintStorageKey,
   type WalletAvailability,
 } from "../connection-state";
-import {
-  WalletSDKStorageError,
-  withWalletSDKStorageErrors,
-  type WalletSDKStorage,
-} from "../storage";
+import { withWalletSDKStorageErrors, type WalletSDKStorage } from "../storage";
 import type {
   AccountsApi,
   ConnectionApi,
@@ -104,7 +95,6 @@ import type {
 } from "../sdk-contract";
 
 export type IosWebViewMode = "direct" | "shell-iframe";
-export type NativeWalletExperience = "standard" | "transparent";
 
 export interface NativeSDKConfig {
   walletUrl?: string;
@@ -117,13 +107,10 @@ export interface NativeSDKConfig {
   /** Bounded host-app-provided dimensions stamped on telemetry events
       (at most 5 short keys/values). Never interpreted by the SDK. */
   appContext?: TelemetryAppContext;
-  /** Wallet presentation loaded in the native WebView. Transparent mode
-      signs in without opening the native wallet sheet. */
-  walletExperience?: NativeWalletExperience;
   /** Stamped on every postMessage so wallet's ConnectedAppsStorage can
       scope per-host. Default: 'thru-mobile://app'. */
   origin?: string;
-  /** Default app metadata used for connection and transparent hydration. */
+  /** Default app metadata used for connection requests. */
   metadata?: ConnectMetadataInput;
   /**
    * The color scheme the wallet's sheets draw for (default light): `light`,
@@ -163,25 +150,7 @@ export interface NativeSDKConfig {
   };
 }
 
-export interface SignInOptions {
-  app_id: string;
-  app_display_name: string;
-  image_url?: string;
-  intent?: ConnectOptions["intent"];
-}
-
 export interface ConnectOptions extends WalletConnectOptions {}
-
-export interface CreateAccountOptions {
-  accountName?: string;
-  /** Custom name for the passkey created for this account. */
-  passkeyName?: string;
-  metadata?: ConnectMetadataInput;
-  createSigningSession?: Omit<
-    ThruSigningSessionCreateOptions,
-    "walletAddress" | "review"
-  >;
-}
 
 export type RestoreConnectionOptions = Record<string, never>;
 
@@ -208,37 +177,6 @@ export interface NativeSDKUiHandlers {
 
 const DEFAULT_STORAGE_KEY = "thru.native-sdk.connection.v1";
 const DEFAULT_NATIVE_WALLET_URL = "https://app.tid.sh/embedded/native";
-const DEFAULT_TRANSPARENT_WALLET_URL =
-  "https://app.tid.sh/embedded/native/transparent";
-
-function completeAppMetadata(
-  metadata: ConnectMetadataInput | AppMetadata | null | undefined,
-  origin: string,
-): AppMetadata | undefined {
-  if (!metadata?.appId || !metadata.appName) {
-    return undefined;
-  }
-  return {
-    appId: metadata.appId,
-    appName: metadata.appName,
-    appUrl: origin,
-    ...(metadata.imageUrl ? { imageUrl: metadata.imageUrl } : {}),
-  };
-}
-
-function signingSessionDescriptorFromWire(
-  session: SigningSessionDescriptorPayload,
-): ThruSigningSessionDescriptor {
-  return {
-    id: session.id,
-    walletAddress: session.walletAddress,
-    publicKey: session.publicKey,
-    authIdx: session.authIdx,
-    expiresAt: Number(BigInt(session.expiresAt)),
-    createdAt: Number(BigInt(session.createdAt)),
-  };
-}
-
 /**
  * NativeSDK - mobile mirror of `@thru/wallet`'s `BrowserSDK`.
  * Public surface matches verbatim except `mountInline(HTMLElement)` is
@@ -269,7 +207,10 @@ export class NativeSDK implements WalletSDK {
   private assertDepositNetwork(requested?: string): void {
     if (
       this.activeNetwork &&
-      (!(this.activeNetwork.depositConfigured ?? this.activeNetwork.depositProviders?.length) ||
+      (!(
+        this.activeNetwork.depositConfigured ??
+        this.activeNetwork.depositProviders?.length
+      ) ||
         (requested && requested !== this.activeNetwork.id))
     )
       throw new Error("Add funds unavailable on this network");
@@ -305,7 +246,6 @@ export class NativeSDK implements WalletSDK {
   private readonly selectedAccountStorageKey: string;
   private readonly connectionHints?: ConnectionHintStore;
   private readonly iosWebViewMode: IosWebViewMode;
-  private readonly walletExperience: NativeWalletExperience;
   private readonly defaultMetadata?: ConnectMetadataInput;
   private readonly defaultNetwork?: ThruNetwork;
   private readonly depositProviders: ReadonlySet<string>;
@@ -342,12 +282,6 @@ export class NativeSDK implements WalletSDK {
     revoke: (id) => this.thru.revokeSigningSession(id),
   };
 
-  readonly nativeOnboarding = {
-    signIn: (options: SignInOptions) => this.signIn(options),
-    createAccount: (options?: CreateAccountOptions) =>
-      this.createAccount(options),
-  };
-
   readonly deposits: DepositsApi = createDepositsApi({
     prepare: (targetOrPayload) => this.prepareDeposit(targetOrPayload),
     ensureAccount: (params) => this.ensureDepositAccount(params),
@@ -371,18 +305,14 @@ export class NativeSDK implements WalletSDK {
       : undefined;
     this.storageKey = config.storageKey ?? DEFAULT_STORAGE_KEY;
     this.iosWebViewMode = config.iosWebViewMode ?? "shell-iframe";
-    this.walletExperience = config.walletExperience ?? "standard";
     this.defaultMetadata = config.metadata;
     this.autoRestore = config.autoRestore ?? true;
     this.defaultNetwork = config.network;
     this.depositProviders = new Set(config.deposits?.providers ?? ["unifold"]);
     const walletUrl = withWalletNetwork(
       withTransactionSigningScheme(
-      config.walletUrl ??
-        (this.walletExperience === "transparent"
-          ? DEFAULT_TRANSPARENT_WALLET_URL
-          : DEFAULT_NATIVE_WALLET_URL),
-      config.transactionSigningScheme,
+        config.walletUrl ?? DEFAULT_NATIVE_WALLET_URL,
+        config.transactionSigningScheme,
       ),
       config.walletNetwork,
       config.rpcUrl,
@@ -449,7 +379,6 @@ export class NativeSDK implements WalletSDK {
         signingSessions,
         broadcastTransaction: (signedTransaction) =>
           this.getThru().transactions.send(base64ToBytes(signedTransaction)),
-        walletExperience: this.walletExperience,
         network: config.network,
         depositUiConfig: config.depositUiConfig,
       });
@@ -461,7 +390,7 @@ export class NativeSDK implements WalletSDK {
     this.telemetry.record(TELEMETRY_EVENTS.SDK_CONSTRUCTED, {
       severity: "info",
       outcome: "created",
-      operation: this.walletExperience,
+      operation: "standard",
     });
   }
 
@@ -756,78 +685,6 @@ export class NativeSDK implements WalletSDK {
     return inFlight;
   }
 
-  /** @deprecated Use `nativeOnboarding.signIn()`. */
-  async signIn(options: SignInOptions): Promise<ConnectResult> {
-    return this.connect({
-      metadata: this.resolveSignInMetadata(options),
-      ...(options.intent ? { intent: options.intent } : {}),
-    });
-  }
-
-  /** @deprecated Use `nativeOnboarding.createAccount()`. */
-  async createAccount(
-    options: CreateAccountOptions = {},
-  ): Promise<CreateAccountResult> {
-    this.emit("connect", { status: "connecting" });
-
-    try {
-      if (!this.initialized) await this.initialize();
-
-      const metadata = this.resolveMetadata(options.metadata);
-      const passkeyName = sanitizePasskeyName(options.passkeyName);
-      const result = await this.provider.createAccount({
-        ...(options.accountName ? { accountName: options.accountName } : {}),
-        ...(passkeyName ? { passkeyName } : {}),
-        ...(metadata ? { metadata } : {}),
-        ...(options.createSigningSession
-          ? { createSigningSession: options.createSigningSession }
-          : {}),
-      });
-      const selectedAccount = result.selectedAccount ?? result.account;
-      const activeResult: CreateAccountResult = {
-        ...result,
-        accounts: this.provider.getAccounts(),
-        selectedAccount,
-        account: selectedAccount,
-      };
-      const completedResult: ConnectResult = {
-        accounts: activeResult.accounts,
-        selectedAccount: activeResult.selectedAccount,
-        status: "completed",
-        metadata: completeAppMetadata(metadata, this.origin),
-      };
-      this.lastConnectResult = completedResult;
-      await this.persistSelectedAccountAddress(
-        activeResult.selectedAccount.address,
-      );
-      if (activeResult.signingSession) {
-        if (!this.signingSessions) {
-          throw new Error("NativeSDKStorage is required for signing sessions");
-        }
-        try {
-          await this.signingSessions.saveReplacingWalletSessions(
-            signingSessionDescriptorFromWire(activeResult.signingSession),
-          );
-        } catch (error) {
-          if (error instanceof WalletSDKStorageError) {
-            error.walletOperationCompleted = true;
-          }
-          throw error;
-        }
-      }
-      await this.clearPersistedConnection();
-      this.setWalletAvailability(
-        walletAvailabilityFromConnectResult(completedResult),
-      );
-      this.emit("connect", completedResult);
-      this.emit("accountChanged", activeResult.selectedAccount);
-      return activeResult;
-    } catch (error) {
-      this.emit("error", error);
-      throw error;
-    }
-  }
-
   /** @deprecated Use `connection.disconnect()`. */
   async disconnect(): Promise<void> {
     const startedAt = Date.now();
@@ -1008,9 +865,8 @@ export class NativeSDK implements WalletSDK {
     if (!this.initialized) await this.initialize();
     return this.provider.withNetworkOperation(async () => {
       this.assertDepositNetwork(params.destination?.network);
-      const { destination, walletAddress } = await this.resolveDepositDestination(
-        params.destination,
-      );
+      const { destination, walletAddress } =
+        await this.resolveDepositDestination(params.destination);
       return ensureDepositAccountForWallet({
         thru: this.getThru(),
         walletAddress,
@@ -1027,9 +883,8 @@ export class NativeSDK implements WalletSDK {
     if (!this.initialized) await this.initialize();
     return this.provider.withNetworkOperation(async () => {
       this.assertDepositNetwork(params.destination?.network);
-      const { destination, walletAddress } = await this.resolveDepositDestination(
-        params.destination,
-      );
+      const { destination, walletAddress } =
+        await this.resolveDepositDestination(params.destination);
       return getDepositAccountStateForWallet({
         thru: this.getThru(),
         walletAddress,
@@ -1045,9 +900,8 @@ export class NativeSDK implements WalletSDK {
     if (!this.initialized) await this.initialize();
     return this.provider.withNetworkOperation(async () => {
       this.assertDepositNetwork(params.destination?.network);
-      const { destination, walletAddress } = await this.resolveDepositDestination(
-        params.destination,
-      );
+      const { destination, walletAddress } =
+        await this.resolveDepositDestination(params.destination);
       return waitForDepositForWallet({
         thru: this.getThru(),
         walletAddress,
@@ -1254,7 +1108,8 @@ export class NativeSDK implements WalletSDK {
   }
 
   private setWalletAvailability(availability: WalletAvailability): void {
-    if (this.activeNetwork) availability = { ...availability, network: this.activeNetwork };
+    if (this.activeNetwork)
+      availability = { ...availability, network: this.activeNetwork };
     this.walletAvailability = availability;
     this.emit("availabilityChanged", availability);
   }
@@ -1280,15 +1135,6 @@ export class NativeSDK implements WalletSDK {
     };
     if (effectiveInput.appName) metadata.appName = effectiveInput.appName;
     if (effectiveInput.imageUrl) metadata.imageUrl = effectiveInput.imageUrl;
-    return metadata;
-  }
-
-  private resolveSignInMetadata(options: SignInOptions): ConnectMetadataInput {
-    const metadata: ConnectMetadataInput = {
-      appId: options.app_id,
-      appName: options.app_display_name,
-    };
-    if (options.image_url) metadata.imageUrl = options.image_url;
     return metadata;
   }
 

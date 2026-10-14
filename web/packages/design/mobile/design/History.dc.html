@@ -1,0 +1,380 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<title>Thru Wallet — Activity (History redesign)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="thru-mobile-tokens.css">
+<style>
+body{margin:0;font-family:'Inter Tight',system-ui,sans-serif;background:#F9FBFB;color:#181B1B;-webkit-font-smoothing:antialiased;}
+a{color:#D33C43;text-decoration:none;}
+a:hover{text-decoration:underline;text-underline-offset:3px;}
+</style>
+</helmet>
+<div data-m-theme="light" style="min-height:100vh;display:inline-flex;flex-direction:column;min-width:100%;background:var(--m-bg);color:var(--m-fg);font-family:'Inter Tight',system-ui,sans-serif">
+
+  <header data-screen-label="Top bar" style="display:flex;align-items:center;gap:18px;padding:13px 24px;background:#181B1B;color:#F9FBFB;border-bottom:1px solid #334747;white-space:nowrap">
+    <span style="display:inline-flex;align-items:center;gap:10px"><img src="assets/thru-disc.svg" alt="" style="width:26px;height:26px;display:block"><span style="font-weight:700;letter-spacing:-0.4px;font-size:20px">thru<span style="color:#729D9D;font-weight:500;margin:0 8px">/</span><span style="color:#B6CECE;font-weight:500;font-size:15px">mobile · activity</span></span></span>
+    <nav style="display:flex;align-items:center;gap:14px;margin-left:auto">
+      <a href="#s0" style="color:#B6CECE;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase" style-hover="color:#F9FBFB">Decisions</a>
+      <a href="#s1" style="color:#B6CECE;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase" style-hover="color:#F9FBFB">Feed</a>
+      <a href="#s2" style="color:#B6CECE;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase" style-hover="color:#F9FBFB">Rows</a>
+      <a href="#s3" style="color:#B6CECE;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase" style-hover="color:#F9FBFB">States</a>
+      <a href="#s4" style="color:#B6CECE;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase" style-hover="color:#F9FBFB">Detail</a>
+      <a href="#s5" style="color:#B6CECE;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase" style-hover="color:#F9FBFB">Home</a>
+      <a href="#s6" style="color:#B6CECE;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase" style-hover="color:#F9FBFB">Desktop</a>
+      <a href="#s7" style="color:#B6CECE;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase" style-hover="color:#F9FBFB">Components</a>
+    </nav>
+  </header>
+
+  <section data-screen-label="Intro" style="padding:40px 40px 32px;border-bottom:1px solid var(--m-border);max-width:1400px">
+    <div style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;letter-spacing:0.1em;text-transform:uppercase;color:var(--m-fg-muted);margin-bottom:14px">Thru Wallet · PWA · History → Activity</div>
+    <h1 style="margin:0 0 14px;font-size:40px;line-height:1.05;letter-spacing:-0.9px;font-weight:700">A feed you can read, <em style="color:var(--m-accent);font-style:normal">not</em> a block explorer.</h1>
+    <p style="margin:0;font-size:16px;line-height:1.5;color:var(--m-fg-muted);max-width:70ch;text-wrap:pretty">Every row answers what happened, how much, with whom and when — in that order. Raw instructions, slot numbers and hex move behind a Technical details disclosure on the detail screen. Built from @thru/design/mobile: Segmented, SectionLabel, Cell, Badge, Skeleton, MetaTable, Button, NavBar, TabBar; anything the kit lacks is marked <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;background:var(--m-bg-muted);padding:2px 6px">NEW PRIMITIVE</span>.</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:18px">
+      <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;background:var(--m-bg-muted);padding:4px 8px;letter-spacing:0.02em">PHONE 390 · LIGHT + DARK</span>
+      <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;background:var(--m-bg-muted);padding:4px 8px;letter-spacing:0.02em">DESKTOP 1440 · FEED 880 · DETAIL 800</span>
+      <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;background:var(--m-bg-muted);padding:4px 8px;letter-spacing:0.02em">CELLS 56 · HIT ≥ 44 · RADIUS 0</span>
+      <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;background:var(--m-bg-muted);padding:4px 8px;letter-spacing:0.02em">ADDRESSES MONO · NEVER UPPERCASED</span>
+    </div>
+  </section>
+
+  <div style="padding:0 0 80px;display:flex;flex-direction:column;align-items:flex-start;gap:0">
+
+    <section id="s0" data-screen-label="00 Decisions" style="padding:40px 40px 48px;border-bottom:1px solid var(--m-border);display:flex;flex-direction:column;gap:18px;align-self:stretch">
+      <div style="display:flex;align-items:baseline;gap:14px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;color:var(--m-accent);letter-spacing:0.04em">00</span><h2 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.4px">Decisions</h2><span style="font-size:14px;color:var(--m-fg-muted)">options side by side · the recommendation is applied on every artboard below</span></div>
+      <div style="display:grid;grid-template-columns:repeat(2,700px);gap:20px">
+
+        <div style="border:1px solid var(--m-border);background:var(--m-bg);padding:20px;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;flex-direction:column;gap:4px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">1 · Presets</span><span style="font-size:17px;font-weight:600">Which filters, in which control</span></div>
+          <div style="display:flex;flex-direction:column;gap:12px">
+            <div style="display:flex;flex-direction:column;gap:8px">
+              <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:var(--m-fg-muted)">A · Segmented · All · Deposits · Transfers · Account</span><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:3px 6px;background:var(--m-accent);color:var(--m-bg)">Recommended</span></div>
+              <div style="border:1px solid var(--m-border);background:var(--m-bg);padding:12px;width:358px;box-sizing:border-box"><div role="tablist" style="display:flex;border:1px solid var(--m-border-strong)"><span style="flex:1;height:44px;display:grid;place-items:center;background:var(--m-fg);color:var(--m-bg);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px">All</span><span style="flex:1;height:44px;display:grid;place-items:center;border-left:1px solid var(--m-border-strong);color:var(--m-fg-muted);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px">Deposits</span><span style="flex:1;height:44px;display:grid;place-items:center;border-left:1px solid var(--m-border-strong);color:var(--m-fg-muted);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px">Transfers</span><span style="flex:1;height:44px;display:grid;place-items:center;border-left:1px solid var(--m-border-strong);color:var(--m-fg-muted);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px">Account</span></div></div>
+            </div>
+            <div style="display:flex;gap:16px;align-items:flex-start">
+              <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:0">
+                <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:var(--m-fg-muted)">B · Segmented · All · Money · Account</span>
+                <div style="border:1px solid var(--m-border);background:var(--m-bg);padding:12px;box-sizing:border-box"><div role="tablist" style="display:flex;border:1px solid var(--m-border-strong)"><span style="flex:1;height:44px;display:grid;place-items:center;background:var(--m-fg);color:var(--m-bg);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px">All</span><span style="flex:1;height:44px;display:grid;place-items:center;border-left:1px solid var(--m-border-strong);color:var(--m-fg-muted);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px">Money</span><span style="flex:1;height:44px;display:grid;place-items:center;border-left:1px solid var(--m-border-strong);color:var(--m-fg-muted);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px">Account</span></div></div>
+              </div>
+              <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:0">
+                <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:var(--m-fg-muted)">C · Scrolling chip row · NEW PRIMITIVE</span>
+                <div style="border:1px solid var(--m-border);background:var(--m-bg);padding:12px 0 12px 12px;overflow:hidden;box-sizing:border-box"><div style="display:flex;gap:8px;white-space:nowrap"><span style="flex:none;height:36px;padding:0 12px;display:grid;place-items:center;background:var(--m-fg);color:var(--m-bg);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px">All</span><span style="flex:none;height:36px;padding:0 12px;display:grid;place-items:center;border:1px solid var(--m-border-strong);color:var(--m-fg-muted);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;box-sizing:border-box">Deposits</span><span style="flex:none;height:36px;padding:0 12px;display:grid;place-items:center;border:1px solid var(--m-border-strong);color:var(--m-fg-muted);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;box-sizing:border-box">Transfers</span><span style="flex:none;height:36px;padding:0 12px;display:grid;place-items:center;border:1px solid var(--m-border-strong);color:var(--m-fg-muted);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;box-sizing:border-box">Account</span><span style="flex:none;height:36px;padding:0 12px;display:grid;place-items:center;border:1px solid var(--m-border-strong);color:var(--m-fg-muted);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;box-sizing:border-box">Failed</span></div></div>
+              </div>
+            </div>
+          </div>
+          <div style="font-size:13px;line-height:1.5;color:var(--m-fg-muted);text-wrap:pretty"><span style="color:var(--m-fg);font-weight:600">Why A:</span> four fixed presets fit a 44 pt Segmented at 390 with every option visible; a chip row only earns its scroll once the set grows, and B hides the deposit-vs-transfer question people actually bring.</div>
+        </div>
+
+        <div style="border:1px solid var(--m-border);background:var(--m-bg);padding:20px;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;flex-direction:column;gap:4px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">2 · Row times</span><span style="font-size:17px;font-weight:600">Clock time under day labels, or relative</span></div>
+          <div style="display:flex;gap:16px;align-items:flex-start">
+            <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:var(--m-fg-muted)">A · Clock time</span><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:3px 6px;background:var(--m-accent);color:var(--m-bg)">Recommended</span></div>
+              <div style="border:1px solid var(--m-border);background:var(--m-bg)"><div style="padding:12px 16px 6px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">Today</div><dc-import name="History Row" kind="sent" status="pending" sub="to taB3…9kDe" amount="−$10.00" time="2:16 PM" hint-size="100%,56px"></dc-import><dc-import name="History Row" kind="received" sub="from ta7Q…x2Lp" amount="+$25.00" time="2:14 PM" hint-size="100%,56px"></dc-import></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:0">
+              <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:var(--m-fg-muted)">B · Relative</span>
+              <div style="border:1px solid var(--m-border);background:var(--m-bg)"><div style="padding:12px 16px 6px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">Today</div><dc-import name="History Row" kind="sent" status="pending" sub="to taB3…9kDe" amount="−$10.00" time="Just now" hint-size="100%,56px"></dc-import><dc-import name="History Row" kind="received" sub="from ta7Q…x2Lp" amount="+$25.00" time="2 min ago" hint-size="100%,56px"></dc-import></div>
+            </div>
+          </div>
+          <div style="font-size:13px;line-height:1.5;color:var(--m-fg-muted);text-wrap:pretty"><span style="color:var(--m-fg);font-weight:600">Why A:</span> the day label already says which day; a clock time stays true without re-rendering, matches the timestamp on the detail screen, and "5 min ago" under Yesterday is a contradiction waiting to happen.</div>
+        </div>
+
+        <div style="border:1px solid var(--m-border);background:var(--m-bg);padding:20px;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;flex-direction:column;gap:4px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">3 · Failed items</span><span style="font-size:17px;font-weight:600">A marker on the row, or their own filter</span></div>
+          <div style="display:flex;gap:16px;align-items:flex-start">
+            <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:var(--m-fg-muted)">A · Badge in place</span><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:3px 6px;background:var(--m-accent);color:var(--m-bg)">Recommended</span></div>
+              <div style="border:1px solid var(--m-border);background:var(--m-bg)"><dc-import name="History Row" kind="sent" status="failed" sub="to taB3…9kDe" amount="−$5.00" time="8:02 AM" hint-size="100%,56px"></dc-import><dc-import name="History Row" kind="signed_in" sub="Safari on iPhone" time="9:39 AM" hint-size="100%,56px"></dc-import></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:0">
+              <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:var(--m-fg-muted)">B · Fifth preset</span>
+              <div style="border:1px solid var(--m-border);background:var(--m-bg);padding:12px;box-sizing:border-box"><div role="tablist" style="display:flex;border:1px solid var(--m-border-strong)"><span style="flex:1;min-width:0;height:44px;display:grid;place-items:center;background:var(--m-fg);color:var(--m-bg);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px">All</span><span style="flex:1;min-width:0;height:44px;display:grid;place-items:center;border-left:1px solid var(--m-border-strong);color:var(--m-fg-muted);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px;box-sizing:border-box">Deposits</span><span style="flex:1;min-width:0;height:44px;display:grid;place-items:center;border-left:1px solid var(--m-border-strong);color:var(--m-fg-muted);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px;box-sizing:border-box">Transfers</span><span style="flex:1;min-width:0;height:44px;display:grid;place-items:center;border-left:1px solid var(--m-border-strong);color:var(--m-fg-muted);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px;box-sizing:border-box">Account</span><span style="flex:1;min-width:0;height:44px;display:grid;place-items:center;border-left:1px solid var(--m-border-strong);color:var(--m-fg-muted);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;padding:0 4px;box-sizing:border-box">Failed</span></div><div style="margin-top:10px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--m-fg-muted)">five segments at 390 → 65 pt each, labels clip</div></div>
+            </div>
+          </div>
+          <div style="font-size:13px;line-height:1.5;color:var(--m-fg-muted);text-wrap:pretty"><span style="color:var(--m-fg);font-weight:600">Why A:</span> failures are rare — a filter that is usually empty teaches people to ignore it; the badge keeps the failure where it happened and the detail screen says why in plain words.</div>
+        </div>
+
+        <div style="border:1px solid var(--m-border);background:var(--m-bg);padding:20px;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;flex-direction:column;gap:4px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">4 · Deposit row title</span><span style="font-size:17px;font-weight:600">"Deposit" or "Added funds"</span></div>
+          <div style="display:flex;gap:16px;align-items:flex-start">
+            <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:var(--m-fg-muted)">A · Deposit</span><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:3px 6px;background:var(--m-accent);color:var(--m-bg)">Recommended</span></div>
+              <div style="border:1px solid var(--m-border);background:var(--m-bg)"><dc-import name="History Row" kind="deposit" sub="Card" amount="+$50.00" time="9:41 AM" hint-size="100%,56px"></dc-import><dc-import name="History Row" kind="deposit" sub="Crypto · Base" amount="+$250.00" time="Sep 30" hint-size="100%,56px"></dc-import></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:0">
+              <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:var(--m-fg-muted)">B · Added funds</span>
+              <div style="border:1px solid var(--m-border);background:var(--m-bg)"><dc-import name="History Row" kind="deposit" title="Added funds" sub="Card" amount="+$50.00" time="9:41 AM" hint-size="100%,56px"></dc-import><dc-import name="History Row" kind="deposit" title="Added funds" sub="Crypto · Base" amount="+$250.00" time="Sep 30" hint-size="100%,56px"></dc-import></div>
+            </div>
+          </div>
+          <div style="font-size:13px;line-height:1.5;color:var(--m-fg-muted);text-wrap:pretty"><span style="color:var(--m-fg);font-weight:600">Why A:</span> the Home button, the sheet and the filter already say Deposit — one word for one thing; the subline carries the source (Card, Crypto · Base, Test tokens), so one row type covers all three.</div>
+        </div>
+
+        <div style="border:1px solid var(--m-border);background:var(--m-bg);padding:20px;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;flex-direction:column;gap:4px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">5 · Screen name</span><span style="font-size:17px;font-weight:600">"Activity" or "History"</span></div>
+          <div style="display:flex;gap:16px;align-items:flex-start">
+            <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:var(--m-fg-muted)">A · Activity</span><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:3px 6px;background:var(--m-accent);color:var(--m-bg)">Recommended</span></div>
+              <div style="border:1px solid var(--m-border);background:var(--m-bg);display:flex;flex-direction:column"><div style="padding:16px 16px 14px;font-size:28px;font-weight:700;letter-spacing:-0.5px;line-height:34px">Activity</div><div style="display:flex;border-top:1px solid var(--m-border)"><span style="flex:1;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--m-fg-subtle)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M3 11 12 3l9 8"></path><path d="M5 9.5V21h14V9.5"></path></svg><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase">Home</span></span><span style="position:relative;flex:1;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--m-accent)"><span style="position:absolute;top:-1px;left:14px;right:14px;height:2px;background:var(--m-accent)"></span><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 3"></path></svg><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase">Activity</span></span><span style="flex:1;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--m-fg-subtle)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"></path></svg><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase">Settings</span></span></div></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:0">
+              <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:var(--m-fg-muted)">B · History (tab label today)</span>
+              <div style="border:1px solid var(--m-border);background:var(--m-bg);display:flex;flex-direction:column"><div style="padding:16px 16px 14px;font-size:28px;font-weight:700;letter-spacing:-0.5px;line-height:34px">History</div><div style="display:flex;border-top:1px solid var(--m-border)"><span style="flex:1;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--m-fg-subtle)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M3 11 12 3l9 8"></path><path d="M5 9.5V21h14V9.5"></path></svg><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase">Home</span></span><span style="position:relative;flex:1;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--m-accent)"><span style="position:absolute;top:-1px;left:14px;right:14px;height:2px;background:var(--m-accent)"></span><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 3"></path></svg><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase">History</span></span><span style="flex:1;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--m-fg-subtle)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"></path></svg><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase">Settings</span></span></div></div>
+            </div>
+          </div>
+          <div style="font-size:13px;line-height:1.5;color:var(--m-fg-muted);text-wrap:pretty"><span style="color:var(--m-fg);font-weight:600">Why A:</span> the feed now holds sign-ins, sessions and passkeys, not only transactions, and Home's card is already called Recent activity — its VIEW ALL should land on a screen with the same name.</div>
+        </div>
+
+        <div style="border:1px solid var(--m-border);background:var(--m-bg);padding:20px;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;flex-direction:column;gap:4px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">6 · Session wording</span><span style="font-size:17px;font-weight:600">"Signing session" or "Session key"</span></div>
+          <div style="display:flex;gap:16px;align-items:flex-start">
+            <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:var(--m-fg-muted)">A · Signing session</span><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:3px 6px;background:var(--m-accent);color:var(--m-bg)">Recommended</span></div>
+              <div style="border:1px solid var(--m-border);background:var(--m-bg)"><dc-import name="History Row" kind="session_created" sub="Expires Oct 6, 9:41 AM" time="9:40 AM" hint-size="100%,56px"></dc-import><dc-import name="History Row" kind="session_ended" sub="Safari on iPhone" time="9:41 AM" hint-size="100%,56px"></dc-import></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:0">
+              <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:var(--m-fg-muted)">B · Session key (Settings today)</span>
+              <div style="border:1px solid var(--m-border);background:var(--m-bg)"><dc-import name="History Row" kind="session_created" title="Session key created" sub="Expires Oct 6, 9:41 AM" time="9:40 AM" hint-size="100%,56px"></dc-import><dc-import name="History Row" kind="session_ended" title="Session key revoked" sub="Safari on iPhone" time="9:41 AM" hint-size="100%,56px"></dc-import></div>
+            </div>
+          </div>
+          <div style="font-size:13px;line-height:1.5;color:var(--m-fg-muted);text-wrap:pretty"><span style="color:var(--m-fg);font-weight:600">Why A:</span> it names what the thing does, not how it is built; Settings should adopt the same words so one thing has one name (listed as a copy change, not applied here).</div>
+        </div>
+
+        <div style="border:1px solid var(--m-border);background:var(--m-bg);padding:20px;display:flex;flex-direction:column;gap:14px">
+          <div style="display:flex;flex-direction:column;gap:4px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">7 · Row icon</span><span style="font-size:17px;font-weight:600">A per-kind icon, or the kit's square status marker</span></div>
+          <div style="display:flex;gap:16px;align-items:flex-start">
+            <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:0">
+              <div style="display:flex;align-items:center;gap:8px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:var(--m-fg-muted)">A · IconTile 32 · NEW PRIMITIVE</span><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;padding:3px 6px;background:var(--m-accent);color:var(--m-bg)">Recommended</span></div>
+              <div style="border:1px solid var(--m-border);background:var(--m-bg)"><dc-import name="History Row" kind="received" sub="from ta7Q…x2Lp" amount="+$25.00" time="2:14 PM" hint-size="100%,56px"></dc-import><dc-import name="History Row" kind="sent" sub="to taB3…9kDe" amount="−$10.00" time="2:16 PM" hint-size="100%,56px"></dc-import><dc-import name="History Row" kind="passkey_added" sub="iPhone 17 Pro" time="11:08 AM" hint-size="100%,56px"></dc-import></div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:8px;flex:1;min-width:0">
+              <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.06em;text-transform:uppercase;color:var(--m-fg-muted)">B · 8 pt status marker (kit today)</span>
+              <div style="border:1px solid var(--m-border);background:var(--m-bg)"><dc-import name="History Row" kind="received" marker="{{ true }}" sub="from ta7Q…x2Lp" amount="+$25.00" time="2:14 PM" hint-size="100%,56px"></dc-import><dc-import name="History Row" kind="sent" marker="{{ true }}" sub="to taB3…9kDe" amount="−$10.00" time="2:16 PM" hint-size="100%,56px"></dc-import><dc-import name="History Row" kind="passkey_added" marker="{{ true }}" sub="iPhone 17 Pro" time="11:08 AM" hint-size="100%,56px"></dc-import></div>
+            </div>
+          </div>
+          <div style="font-size:13px;line-height:1.5;color:var(--m-fg-muted);text-wrap:pretty"><span style="color:var(--m-fg);font-weight:600">Why A:</span> direction and kind were exactly what the old rows lacked — a glyph says both before the title is read, and status moves to a badge where it cannot be mistaken for a colour.</div>
+        </div>
+
+        <div style="border:1px solid var(--m-border);background:var(--m-bg-muted);padding:20px;display:flex;flex-direction:column;gap:10px;font-size:13px;line-height:1.5;color:var(--m-fg-muted);text-wrap:pretty">
+          <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">Contrast and copy calls, both themes</span>
+          <div><span style="color:var(--m-fg);font-weight:600">fgSubtle is 2.5:1 on light</span> (#81A7A7 on #F9FBFB) — sublines, times and day labels use fgMuted (7.6:1 / 9.9:1 dark); fgSubtle stays on inactive tab tints only.</div>
+          <div><span style="color:var(--m-fg);font-weight:600">Error red (#FF4750) is 3.4:1 on light</span> — Failed uses destructive brick (4.9:1 light, 7.0:1 dark); the kit's validation red stays on fields.</div>
+          <div><span style="color:var(--m-fg);font-weight:600">Badge brand tone is 3.9:1</span> (brick on brickSoft) — FAILED is a solid badge, brick fill with bg text (4.9:1 / 7.3:1) → Badge tone <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px">error</span>, new. PENDING keeps the kit's warn tone (5.6:1 / 8.0:1).</div>
+          <div><span style="color:var(--m-fg);font-weight:600">IconTile soft fills carry glyphs only</span> — forest on forestSoft 5.3:1 light / 3.3:1 dark, saffron on saffronSoft 5.6 / 8.0, brick on brickSoft 3.9 / 4.3; all ≥ 3:1.</div>
+          <div><span style="color:var(--m-fg);font-weight:600">Addresses are never uppercased</span> — base58 is case-sensitive, and the old caps meta line ("TA9XPL…3KQ1") printed a different string from the one you could copy. Shortened as 4 + … + 4 in mono.</div>
+          <div><span style="color:var(--m-fg);font-weight:600">A row is one sentence to a screen reader:</span> "Received $25.00 from ta7Q…x2Lp, 2:14 PM" · "Sent $10.00 to taB3…9kDe, pending, 2:16 PM". Children are aria-hidden; the row is the control.</div>
+        </div>
+      </div>
+    </section>
+
+    <section id="s1" data-screen-label="01 Feed" style="padding:40px 40px 48px;border-bottom:1px solid var(--m-border);display:flex;flex-direction:column;gap:18px;align-self:stretch">
+      <div style="display:flex;align-items:baseline;gap:14px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;color:var(--m-accent);letter-spacing:0.04em">01</span><h2 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.4px">Activity feed</h2><span style="font-size:14px;color:var(--m-fg-muted)">phone 390 · sample data, every kind present · the filter is live</span></div>
+      <sc-for list="{{ themes }}" as="th" hint-placeholder-count="2">
+        <div data-m-theme="{{ th.theme }}" style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;padding:24px;background:{{ th.panelBg }}">
+          <sc-for list="{{ feedFrames }}" as="f" hint-placeholder-count="3">
+            <figure style="margin:0;border:1px solid var(--m-border);background:var(--m-bg);display:flex;flex-direction:column;flex:none;width:392px;box-sizing:border-box">
+              <div style="position:relative;width:390px;height:844px;overflow:hidden"><dc-import name="History Feed" filter="{{ f.filter }}" scrolled="{{ f.scrolled }}" style="position:absolute;top:0;left:0;right:0;bottom:0" hint-size="390px,844px"></dc-import></div>
+              <figcaption style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.04em;line-height:1.5;color:var(--m-fg-muted);padding:7px 12px;border-top:1px solid var(--m-border);background:var(--m-bg-muted)">{{ f.label }}{{ th.suffix }} — {{ f.cap }}</figcaption>
+            </figure>
+          </sc-for>
+        </div>
+      </sc-for>
+    </section>
+
+    <section id="s2" data-screen-label="02 Row catalogue" style="padding:40px 40px 48px;border-bottom:1px solid var(--m-border);display:flex;flex-direction:column;gap:18px;align-self:stretch">
+      <div style="display:flex;align-items:baseline;gap:14px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;color:var(--m-accent);letter-spacing:0.04em">02</span><h2 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.4px">Row catalogue</h2><span style="font-size:14px;color:var(--m-fg-muted)">every kind · normal, pending, failed · ActivityRow NEW PRIMITIVE (extends Cell)</span></div>
+      <sc-for list="{{ themes }}" as="th" hint-placeholder-count="2">
+        <div data-m-theme="{{ th.theme }}" style="display:flex;flex-direction:column;gap:16px;padding:24px;background:{{ th.panelBg }}">
+          <div style="display:grid;grid-template-columns:repeat(5,358px);gap:16px">
+            <sc-for list="{{ catalogue }}" as="k" hint-placeholder-count="10">
+              <figure style="margin:0;border:1px solid var(--m-border);background:var(--m-bg);display:flex;flex-direction:column">
+                <div style="padding:10px 16px 6px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">{{ k.label }}</div>
+                <div style="border-top:1px solid var(--m-hair)">
+                  <sc-for list="{{ k.states }}" as="s" hint-placeholder-count="3">
+                    <dc-import name="History Row" kind="{{ s.kind }}" status="{{ s.status }}" sub="{{ s.sub }}" amount="{{ s.amount }}" time="{{ s.time }}" hint-size="100%,56px"></dc-import>
+                  </sc-for>
+                </div>
+              </figure>
+            </sc-for>
+          </div>
+          <div style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.04em;line-height:1.6;color:var(--m-fg-muted);padding:7px 12px;border:1px solid var(--m-border);background:var(--m-bg-muted);max-width:1854px;box-sizing:border-box">ActivityRow{{ th.suffix }} — h56 · IconTile 32 + glyph 18 (1.5 stroke, square caps) · title 15/500 · Badge 11 mono caps for PENDING (warn) / FAILED (error, solid) · sub mono 11 fgMuted · amount mono 14/500 right: +forest / −fg / pending + failed fgMuted · time mono 11 fgMuted · separator inset 16 · press bgMuted · tile tones: incoming forestSoft, pending saffronSoft, failed brickSoft, else bgMuted · passkey rows use a plain key — the FIDO mark is reserved for ceremony buttons</div>
+        </div>
+      </sc-for>
+    </section>
+
+    <section id="s3" data-screen-label="03 Feed states" style="padding:40px 40px 48px;border-bottom:1px solid var(--m-border);display:flex;flex-direction:column;gap:18px;align-self:stretch">
+      <div style="display:flex;align-items:baseline;gap:14px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;color:var(--m-accent);letter-spacing:0.04em">03</span><h2 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.4px">Feed states</h2><span style="font-size:14px;color:var(--m-fg-muted)">loading · load failed · refresh failed · empty — for All and for Deposits · empty is only ever drawn after a successful load</span></div>
+      <sc-for list="{{ themes }}" as="th" hint-placeholder-count="2">
+        <div data-m-theme="{{ th.theme }}" style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;padding:24px;background:{{ th.panelBg }};max-width:1760px">
+          <sc-for list="{{ feedStates }}" as="s" hint-placeholder-count="8">
+            <figure style="margin:0;border:1px solid var(--m-border);background:var(--m-bg);display:flex;flex-direction:column;flex:none;width:392px;box-sizing:border-box">
+              <div style="position:relative;width:390px;height:844px;overflow:hidden"><dc-import name="History Feed" filter="{{ s.filter }}" state="{{ s.state }}" style="position:absolute;top:0;left:0;right:0;bottom:0" hint-size="390px,844px"></dc-import></div>
+              <figcaption style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.04em;line-height:1.5;color:var(--m-fg-muted);padding:7px 12px;border-top:1px solid var(--m-border);background:var(--m-bg-muted)">{{ s.label }}{{ th.suffix }} — {{ s.cap }}</figcaption>
+            </figure>
+          </sc-for>
+        </div>
+      </sc-for>
+    </section>
+
+    <section id="s4" data-screen-label="04 Detail" style="padding:40px 40px 48px;border-bottom:1px solid var(--m-border);display:flex;flex-direction:column;gap:18px;align-self:stretch">
+      <div style="display:flex;align-items:baseline;gap:14px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;color:var(--m-accent);letter-spacing:0.04em">04</span><h2 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.4px">Detail screen</h2><span style="font-size:14px;color:var(--m-fg-muted)">tap a row · Received, a failed Sent, Signing session created · Technical details collapsed and expanded · the disclosure is live</span></div>
+      <sc-for list="{{ themes }}" as="th" hint-placeholder-count="2">
+        <div data-m-theme="{{ th.theme }}" style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap;padding:24px;background:{{ th.panelBg }}">
+          <sc-for list="{{ details }}" as="d" hint-placeholder-count="4">
+            <figure style="margin:0;border:1px solid var(--m-border);background:var(--m-bg);display:flex;flex-direction:column;flex:none;width:392px;box-sizing:border-box">
+              <div style="position:relative;width:390px;min-height:844px"><dc-import name="History Detail" event="{{ d.event }}" tech-open="{{ d.open }}" style="display:block;min-height:844px" hint-size="390px,844px"></dc-import></div>
+              <figcaption style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.04em;line-height:1.5;color:var(--m-fg-muted);padding:7px 12px;border-top:1px solid var(--m-border);background:var(--m-bg-muted)">{{ d.label }}{{ th.suffix }} — {{ d.cap }}</figcaption>
+            </figure>
+          </sc-for>
+        </div>
+      </sc-for>
+    </section>
+
+    <section id="s5" data-screen-label="05 Home" style="padding:40px 40px 48px;border-bottom:1px solid var(--m-border);display:flex;flex-direction:column;gap:18px;align-self:stretch">
+      <div style="display:flex;align-items:baseline;gap:14px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;color:var(--m-accent);letter-spacing:0.04em">05</span><h2 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.4px">Home → Recent activity</h2><span style="font-size:14px;color:var(--m-fg-muted)">the three newest rows inside Home's existing card · VIEW ALL → opens Activity</span></div>
+      <div style="display:flex;gap:24px;align-items:flex-start;flex-wrap:wrap">
+        <sc-for list="{{ themes }}" as="th" hint-placeholder-count="2">
+          <div data-m-theme="{{ th.theme }}" style="display:flex;gap:24px;align-items:flex-start;padding:24px;background:{{ th.panelBg }}">
+            <figure style="margin:0;border:1px solid var(--m-border);background:var(--m-bg);display:flex;flex-direction:column;flex:none;width:392px;box-sizing:border-box">
+              <div style="position:relative;width:390px;height:844px;overflow:hidden"><dc-import name="Wallet Home" style="position:absolute;top:0;left:0;right:0;bottom:0" hint-size="390px,844px"></dc-import></div>
+              <figcaption style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.04em;line-height:1.5;color:var(--m-fg-muted);padding:7px 12px;border-top:1px solid var(--m-border);background:var(--m-bg-muted)">Home{{ th.suffix }} — same ActivityRow, newest three · section label + VIEW ALL → mono 11 · tab bar label becomes Activity · no day labels on Home: the time column carries it</figcaption>
+            </figure>
+          </div>
+        </sc-for>
+      </div>
+    </section>
+
+    <section id="s6" data-screen-label="06 Desktop" style="padding:40px 40px 48px;border-bottom:1px solid var(--m-border);display:flex;flex-direction:column;gap:18px;align-self:stretch">
+      <div style="display:flex;align-items:baseline;gap:14px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;color:var(--m-accent);letter-spacing:0.04em">06</span><h2 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.4px">Desktop · 1440</h2><span style="font-size:14px;color:var(--m-fg-muted)">DesktopShell NEW PRIMITIVE (web only): sidebar 240, nav rows 44, page column capped at 880 (feed) / 800 (detail)</span></div>
+      <div style="display:flex;flex-direction:column;gap:32px">
+        <sc-for list="{{ desktop }}" as="d" hint-placeholder-count="4">
+          <figure data-m-theme="{{ d.theme }}" style="margin:0;display:flex;flex-direction:column;flex:none;width:1440px">
+            <x-import component-from-global-scope="ChromeWindow" from="./browser-window.jsx" width="{{ 1440 }}" height="{{ 900 }}" url="{{ d.url }}" tabs="{{ browserTabs }}" hint-size="1440px,900px">
+              <div style="display:flex;width:1440px;height:816px;background:var(--m-bg);color:var(--m-fg);font-family:'Inter Tight',system-ui,sans-serif;overflow:hidden">
+                <aside style="width:240px;flex:none;border-right:1px solid var(--m-border);display:flex;flex-direction:column;background:var(--m-bg);box-sizing:border-box">
+                  <div style="display:flex;align-items:center;gap:10px;height:64px;padding:0 20px;border-bottom:1px solid var(--m-hair);flex:none"><img src="assets/thru-disc.svg" alt="" style="width:24px;height:24px;display:block"><span aria-label="thru" style="display:inline-block;width:44px;height:16px;background:var(--m-fg);-webkit-mask:url(assets/thru-wordmark.svg) center / contain no-repeat;mask:url(assets/thru-wordmark.svg) center / contain no-repeat"></span></div>
+                  <nav aria-label="Main" style="display:flex;flex-direction:column;padding:12px 0">
+                    <a href="#" style="display:flex;align-items:center;gap:12px;height:44px;padding:0 20px;color:var(--m-fg-muted);font-size:15px;font-weight:500" style-hover="background:var(--m-bg-muted);color:var(--m-fg);text-decoration:none"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M3 11 12 3l9 8"></path><path d="M5 9.5V21h14V9.5"></path></svg>Home</a>
+                    <a href="#" aria-current="page" style="position:relative;display:flex;align-items:center;gap:12px;height:44px;padding:0 20px;color:var(--m-fg);background:var(--m-bg-muted);font-size:15px;font-weight:500" style-hover="text-decoration:none"><span style="position:absolute;left:0;top:0;bottom:0;width:2px;background:var(--m-accent)"></span><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 3"></path></svg>Activity</a>
+                    <a href="#" style="display:flex;align-items:center;gap:12px;height:44px;padding:0 20px;color:var(--m-fg-muted);font-size:15px;font-weight:500" style-hover="background:var(--m-bg-muted);color:var(--m-fg);text-decoration:none"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"></path></svg>Settings</a>
+                  </nav>
+                  <div style="margin-top:auto;display:flex;align-items:center;gap:10px;height:64px;padding:0 20px;border-top:1px solid var(--m-hair);flex:none"><span style="width:32px;height:32px;border-radius:50%;background:var(--m-bg-inset);display:grid;place-items:center;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--m-fg-muted);flex:none">TA</span><span style="display:flex;flex-direction:column;gap:2px;min-width:0"><span style="font-size:13px;font-weight:500">Main</span><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--m-fg-muted)">ta1kqV…9fq2</span></span></div>
+                </aside>
+                <main style="flex:1;min-width:0;display:flex;justify-content:center;overflow:hidden;padding:0 40px;box-sizing:border-box">
+                  <sc-if value="{{ d.isFeed }}" hint-placeholder-val="{{ true }}"><div style="width:880px;max-width:100%;height:816px"><dc-import name="History Feed" layout="desktop" filter="all" style="display:block;height:100%" hint-size="880px,816px"></dc-import></div></sc-if>
+                  <sc-if value="{{ d.isDetail }}" hint-placeholder-val="{{ false }}"><div style="width:800px;max-width:100%"><dc-import name="History Detail" layout="desktop" event="{{ d.event }}" tech-open="{{ true }}" hint-size="800px,700px"></dc-import></div></sc-if>
+                </main>
+              </div>
+            </x-import>
+            <figcaption style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.04em;line-height:1.5;color:var(--m-fg-muted);padding:7px 12px;border:1px solid var(--m-border);border-top:none;background:var(--m-bg-muted)">{{ d.label }} — {{ d.cap }}</figcaption>
+          </figure>
+        </sc-for>
+      </div>
+    </section>
+
+    <section id="s7" data-screen-label="07 Components" style="padding:40px 40px 48px;display:flex;flex-direction:column;gap:18px;align-self:stretch">
+      <div style="display:flex;align-items:baseline;gap:14px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;color:var(--m-accent);letter-spacing:0.04em">07</span><h2 style="margin:0;font-size:24px;font-weight:600;letter-spacing:-0.4px">Component map</h2><span style="font-size:14px;color:var(--m-fg-muted)">every element → a kit component, or a labelled new primitive</span></div>
+      <div style="display:grid;grid-template-columns:220px 260px minmax(0,1fr);max-width:1180px;border:1px solid var(--m-border);background:var(--m-bg);font-size:13px;line-height:1.5">
+        <div style="padding:10px 14px;border-bottom:1px solid var(--m-border);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">Element</div>
+        <div style="padding:10px 14px;border-bottom:1px solid var(--m-border);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">Maps to</div>
+        <div style="padding:10px 14px;border-bottom:1px solid var(--m-border);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">Spec</div>
+        <sc-for list="{{ components }}" as="c" hint-placeholder-count="16">
+          <div style="padding:9px 14px;border-bottom:1px solid var(--m-hair);font-weight:500">{{ c.el }}</div>
+          <div style="padding:9px 14px;border-bottom:1px solid var(--m-hair);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;color:{{ c.mapColor }}">{{ c.map }}</div>
+          <div style="padding:9px 14px;border-bottom:1px solid var(--m-hair);color:var(--m-fg-muted);text-wrap:pretty">{{ c.spec }}</div>
+        </sc-for>
+      </div>
+    </section>
+
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+const THEMES = [
+  { theme: 'light', panelBg: 'var(--m-bg-muted)', suffix: '' },
+  { theme: 'dark', panelBg: 'var(--m-bg)', suffix: ' · dark' },
+];
+const FEED_FRAMES = [
+  { label: 'All', filter: 'all', scrolled: false, cap: 'status 54 · large title 28/700 · Segmented h44, inset 16 · day label SectionLabel mono 11 caps fgMuted, 20 above / 8 below, sticky · ActivityRow h56 · tab bar 56 + safe 34, Activity active in brick' },
+  { label: 'All · scrolled to the end', filter: 'all', scrolled: true, cap: 'Sep 28 group · Load more = Button ghost md 48, inset 16, 16 above / 24 below · busy: 16 spinner replaces the label · pull-to-refresh at the top (kit, threshold 72)' },
+  { label: 'Account filter', filter: 'account', scrolled: false, cap: 'sign-ins, signing sessions, passkeys · no amount column: the time sits alone, vertically centred · Other only appears under All' },
+];
+const KIND_ROWS = [
+  { label: 'Sent', kind: 'sent', sub: 'to taB3\u20269kDe', amount: '\u2212$10.00', time: '2:16 PM' },
+  { label: 'Received', kind: 'received', sub: 'from ta7Q\u2026x2Lp', amount: '+$25.00', time: '2:14 PM' },
+  { label: 'Deposit', kind: 'deposit', sub: 'Card', amount: '+$50.00', time: '9:41 AM' },
+  { label: 'Account created', kind: 'account_created', sub: 'Main \u00b7 ta1k\u20269fq2', amount: '', time: '11:05 AM' },
+  { label: 'Signed in', kind: 'signed_in', sub: 'Safari on iPhone', amount: '', time: '9:39 AM' },
+  { label: 'Signing session created', kind: 'session_created', sub: 'Expires Oct 6, 9:41 AM', amount: '', time: '9:40 AM' },
+  { label: 'Signing session ended', kind: 'session_ended', sub: 'Safari on iPhone', amount: '', time: '9:41 AM' },
+  { label: 'Passkey added', kind: 'passkey_added', sub: 'iPhone 17 Pro', amount: '', time: '11:08 AM' },
+  { label: 'Passkey removed', kind: 'passkey_removed', sub: 'MacBook Pro', amount: '', time: '4:12 PM' },
+  { label: 'Other \u00b7 named by its program', kind: 'other', sub: 'Program taAM\u20267mQs', amount: '', time: '11:02 AM' },
+];
+const FEED_STATES = [
+  { label: 'Loading \u00b7 All', state: 'loading', filter: 'all', cap: 'Skeleton (kit) composed as ActivityRowSkeleton: label 56\u00d710 \u00b7 tile 32 \u00b7 lines 132\u00d712 / 92\u00d79 \u00b7 right 52\u00d712 / 40\u00d79 \u00b7 bgInset, pulse 1.4 s \u00b7 the Segmented stays live' },
+  { label: 'Loading \u00b7 Deposits', state: 'loading', filter: 'deposits', cap: 'same skeleton under the active filter \u2014 switching filters never flashes an empty state' },
+  { label: 'Load failed \u00b7 All', state: 'failed', filter: 'all', cap: 'EmptyState NEW PRIMITIVE, error variant: title 17/600 \u00b7 body 14 fgMuted \u00b7 Button outline md "Try again" \u00b7 centred above the tab bar \u00b7 never drawn as empty' },
+  { label: 'Load failed \u00b7 Deposits', state: 'failed', filter: 'deposits', cap: 'the noun follows the filter: "your deposits" \u00b7 Try again re-requests the same filter' },
+  { label: 'Refresh failed \u00b7 All', state: 'refreshFailed', filter: 'all', cap: 'InlineError NEW PRIMITIVE: h44 \u00b7 alert 16 + 13 brick + RETRY mono 11 caps in a 44 hit \u00b7 rows stay \u00b7 clears on the next successful refresh' },
+  { label: 'Refresh failed \u00b7 Deposits', state: 'refreshFailed', filter: 'deposits', cap: 'same line above the filtered rows' },
+  { label: 'Empty \u00b7 All', state: 'empty', filter: 'all', cap: '"No transactions yet" \u00b7 EmptyState: title 17/600 + body 14 fgMuted \u00b7 only after a load that succeeded' },
+  { label: 'Empty \u00b7 Deposits', state: 'empty', filter: 'deposits', cap: '"No deposits yet" \u00b7 per filter: "No transfers yet", "No account activity yet"' },
+];
+const DETAILS = [
+  { label: 'Received \u00b7 collapsed', event: 'received', open: false, cap: 'NavBar 52, back 44, "Details" 17/600 \u00b7 DetailHero NEW PRIMITIVE: IconTile 48 + glyph 24, title 20/600, amount 34/700, StatusText 14/500 with a 16 glyph \u00b7 MetaTable rows h52: label mono 11 caps 96 wide, value mono 13 right, copy in a 44 hit \u00b7 Button outline md \u00d7 2, gutter 12 \u00b7 Disclosure NEW PRIMITIVE h56, collapsed by default' },
+  { label: 'Received \u00b7 expanded', event: 'received', open: true, cap: 'Technical details open: Program \u00b7 Fee payer \u00b7 Slot \u00b7 Instruction as MetaTable, then Decoded data as a key/value grid in Card bgMuted, mono 12/18 \u00b7 raw hex never reaches a main surface' },
+  { label: 'Sent \u00b7 failed \u00b7 expanded', event: 'sentFailed', open: true, cap: 'status Failed in brick + the reason in plain words, 14 fgMuted \u00b7 amount in fgMuted, no strikethrough \u00b7 From reads You \u00b7 the program error code lives in the technical rows' },
+  { label: 'Signing session created \u00b7 collapsed', event: 'session', open: false, cap: 'account events: same hero without the amount \u00b7 Expires and Device join the table (passkeys add Device only) \u00b7 same actions' },
+];
+const DESKTOP = [
+  { theme: 'light', isFeed: true, isDetail: false, event: 'received', url: 'wallet.tid.sh/activity', label: 'Feed \u00b7 light', cap: 'sidebar 240: lockup 64, nav rows 44 (icon 20 + 15/500, active bgMuted + 2 px brick bar), account 64 at the bottom \u00b7 page column 880 centred, 40 side padding \u00b7 header: title 28/700 + Segmented 440 \u00b7 rows and day labels unchanged' },
+  { theme: 'light', isFeed: false, isDetail: true, event: 'received', url: 'wallet.tid.sh/activity/3nVq\u20268Hd2', label: 'Detail \u00b7 light', cap: 'column 800 \u00b7 "\u2190 Activity" mono 12 replaces the NavBar \u00b7 actions sit at natural width, gutter 12 \u00b7 Technical details shown expanded' },
+  { theme: 'dark', isFeed: true, isDetail: false, event: 'received', url: 'wallet.tid.sh/activity', label: 'Feed \u00b7 dark', cap: 'dark tokens: bg #181B1B, hairlines #334747, forest #75D1CC, saffron #FFC377, brick #ED787E' },
+  { theme: 'dark', isFeed: false, isDetail: true, event: 'sentFailed', url: 'wallet.tid.sh/activity/7Lp2\u2026kQ4c', label: 'Detail \u00b7 dark \u00b7 failed Sent', cap: 'FAILED on dark: brick #ED787E on #181B1B 7.0:1 \u00b7 badge text #181B1B on #ED787E 7.3:1' },
+];
+const COMPONENTS = [
+  ['Large title', 'NavBar \u00b7 large variant', '28/700 left, −0.5 px, 34 line \u00b7 collapses to the 52 NavBar on scroll \u00b7 NEW VARIANT of NavBar', false],
+  ['Filter presets', 'Segmented', 'h44 square group, shared hairlines, selected inverts to fg \u00b7 All \u00b7 Deposits \u00b7 Transfers \u00b7 Account \u00b7 desktop width 440', false],
+  ['Day labels', 'SectionLabel', 'mono 11 caps tracked, fgMuted (not fgSubtle \u2014 contrast) \u00b7 Today / Yesterday / Sep 28 \u00b7 sticky', false],
+  ['Activity row', 'ActivityRow \u00b7 NEW PRIMITIVE', 'extends Cell: IconTile + title 15/500 + Badge + sub mono 11 + amount mono 14/500 + time mono 11 \u00b7 one accessibilityLabel sentence \u00b7 onPress \u2192 detail', true],
+  ['Kind / status glyph', 'IconTile \u00b7 NEW PRIMITIVE', '32 square soft fill + 18 stroke glyph (48 + 24 in the hero) \u00b7 tones: neutral bgMuted/fg, incoming forestSoft/forest, pending saffronSoft/saffron, failed brickSoft/brick', true],
+  ['Pending / Failed', 'Badge', 'warn tone for PENDING \u00b7 new tone error for FAILED: solid brick, bg text \u00b7 mono 11/500 caps, 4/8 padding', false],
+  ['Load more', 'Button \u00b7 ghost md', 'h48 full width inset 16 \u00b7 loading: spinner 16', false],
+  ['Loading rows', 'Skeleton', 'ActivityRowSkeleton composition \u00b7 bgInset blocks \u00b7 opacity pulse 1.4 s, respects reduce-motion', false],
+  ['Refresh failed line', 'InlineError \u00b7 NEW PRIMITIVE', 'h44 band above the rows \u00b7 alert 16 brick + 13 text + RETRY mono 11 in a 44 hit \u00b7 role=alert', true],
+  ['Empty / failed load', 'EmptyState \u00b7 NEW PRIMITIVE', 'title 17/600 \u00b7 body 14 fgMuted, max 280 \u00b7 optional Button outline md \u00b7 centred in the list area', true],
+  ['Detail header', 'DetailHero \u00b7 NEW PRIMITIVE', 'IconTile 48 \u00b7 title 20/600 \u00b7 amount 34/700 (omitted for account events) \u00b7 StatusText with glyph: Completed forest / Pending saffron / Failed brick + plain-words reason', true],
+  ['Label / value rows', 'MetaTable + copy', 'rows h52, hairlines \u00b7 label mono 11 caps 96 \u00b7 value mono 13 right \u00b7 copy = IconCopy 16 in a 44 hit (addresses, signature) \u00b7 own address reads "You"', false],
+  ['Actions', 'Button \u00b7 outline md \u00d7 2', 'View in explorer (\u2197 16) \u00b7 Share \u00b7 paired 50/50, gutter 12 on phone; natural width on desktop', false],
+  ['Technical details', 'Disclosure \u00b7 NEW PRIMITIVE', 'h56 header 15/500 + chevron 18 (rotates 180\u00b0, 200 ms) \u00b7 aria-expanded \u00b7 collapsed by default \u00b7 body: MetaTable + Card bgMuted key/value grid mono 12/18', true],
+  ['Tab bar', 'TabBar', '56 + safe 34 \u00b7 icon 22 + mono 10 caps \u00b7 active brick + 2 px indicator \u00b7 label History \u2192 Activity', false],
+  ['Desktop shell', 'DesktopShell \u00b7 NEW PRIMITIVE (web)', 'sidebar 240 with nav rows 44 \u00b7 page column 880 / 800 \u00b7 shown at \u2265 1024; the phone layout below', true],
+  ['Icons', 'Icons.tsx \u00b7 stroke set', 'new glyphs: arrow-in (Received), tray (Deposit), wallet (Account), sign-in, clock (session), key (passkey), code (program) \u00b7 1.5 stroke, square caps, 24 viewBox', false],
+];
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      themes: THEMES,
+      feedFrames: FEED_FRAMES,
+      catalogue: KIND_ROWS.map((k) => ({ label: k.label, states: ['done', 'pending', 'failed'].map((status) => ({ kind: k.kind, status, sub: k.sub, amount: k.amount, time: k.time })) })),
+      feedStates: FEED_STATES,
+      details: DETAILS,
+      desktop: DESKTOP,
+      browserTabs: [{ title: 'Thru Wallet' }],
+      components: COMPONENTS.map(([el, map, spec, isNew]) => ({ el, map, spec, mapColor: isNew ? 'var(--m-accent)' : 'var(--m-fg)' })),
+    };
+  }
+}
+</script>
+</body>
+</html>

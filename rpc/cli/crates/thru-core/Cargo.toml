@@ -47,6 +47,9 @@ blst = "0.3"
 
 # System utilities
 dirs = "6.0"
+fs2 = "0.4"
+libc = "0.2"
+keyring = { version = "3.6.3", default-features = false }
 
 # DWARF debug info resolution
 addr2line = "0.26"
@@ -90,3 +93,13 @@ tokio-test = "0.4"
 tempfile = "3.8"
 wiremock = "0.6"
 assert_matches = "1.5"
+
+[target.'cfg(target_os = "macos")'.dependencies]
+keyring = { version = "3.6.3", default-features = false, features = ["apple-native"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+keyring = { version = "3.6.3", default-features = false, features = ["windows-native"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# zbus + Rust crypto: no libdbus headers/library needed on CI or user machines.
+keyring = { version = "3.6.3", default-features = false, features = ["async-secret-service", "tokio", "crypto-rust"] }

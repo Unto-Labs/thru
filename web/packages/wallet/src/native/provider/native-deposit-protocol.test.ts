@@ -243,7 +243,7 @@ describe("native deposit protocol round-trip", () => {
     expect(hidden).toBe(true);
   });
 
-  it("keeps a transparent deposit surface visible while another request settles", async () => {
+  it("keeps the standard deposit sheet visible while another request settles", async () => {
     const pending = new Map<
       string,
       (response: { id: string; success: true; result: unknown }) => void
@@ -258,7 +258,16 @@ describe("native deposit protocol round-trip", () => {
     const provider = new NativeProvider({
       walletUrl: WALLET_URL,
       origin: APP_ORIGIN,
-      walletExperience: "transparent",
+    });
+    const account = {
+      accountType: "thru" as const,
+      address: "thru_test_address",
+      label: "Account",
+    };
+    provider.hydrateConnection({
+      accounts: [account],
+      selectedAccount: account,
+      status: "completed",
     });
     const surface: string[] = [];
     provider.onShowRequested = (reason) => surface.push(`show:${reason}`);
@@ -317,7 +326,6 @@ describe("native deposit protocol round-trip", () => {
     const provider = new NativeProvider({
       walletUrl: WALLET_URL,
       origin: APP_ORIGIN,
-      walletExperience: "transparent",
     });
     const surface: string[] = [];
     provider.onShowRequested = (reason) => surface.push(`show:${reason}`);
@@ -365,7 +373,7 @@ describe("native deposit protocol round-trip", () => {
     await disconnectPromise;
     expect(provider.isConnected()).toBe(true);
     expect(provider.getSelectedAccount()).toEqual(newerAccount);
-    expect(surface).toEqual(["show:deposit-open"]);
+    expect(surface).toEqual(["show:disconnect-open"]);
 
     pending.get(POST_MESSAGE_REQUEST_TYPES.DEPOSIT)?.({
       id: "deposit-response",
@@ -373,7 +381,7 @@ describe("native deposit protocol round-trip", () => {
       result: { status: "cancelled" },
     });
     await expect(depositPromise).resolves.toEqual({ status: "cancelled" });
-    expect(surface).toEqual(["show:deposit-open", "hide:deposit-settled"]);
+    expect(surface).toEqual(["show:disconnect-open", "hide:deposit-settled"]);
   });
 
   it("preserves the local connection when disconnect fails", async () => {
@@ -384,7 +392,6 @@ describe("native deposit protocol round-trip", () => {
     const provider = new NativeProvider({
       walletUrl: WALLET_URL,
       origin: APP_ORIGIN,
-      walletExperience: "transparent",
     });
     const account = {
       accountType: "thru" as const,
@@ -402,5 +409,28 @@ describe("native deposit protocol round-trip", () => {
     );
     expect(provider.isConnected()).toBe(true);
     expect(provider.getSelectedAccount()).toEqual(account);
+  });
+  it("invalidates dismissed request leases so late completions cannot close a reopened deposit", async () => {
+    const provider = new NativeProvider({
+      walletUrl: WALLET_URL,
+      origin: APP_ORIGIN,
+    });
+    const surface: string[] = [];
+    provider.onShowRequested = (reason) => surface.push(`show:${reason}`);
+    provider.onHideRequested = (reason) => surface.push(`hide:${reason}`);
+    const oldDeposit = await provider.requestShow("old-deposit");
+    const oldNested = await provider.requestShow("nested-challenge");
+    provider.rejectPendingRequests();
+    const current = await provider.requestShow("reopened-deposit");
+    provider.requestHide("late-old-response", oldDeposit);
+    provider.requestHide("late-nested-response", oldNested);
+    expect(surface).toEqual([
+      "show:old-deposit",
+      "hide:user-dismissed",
+      "show:reopened-deposit",
+    ]);
+    provider.requestHide("reopened-settled", current);
+    expect(surface[surface.length - 1]).toBe("hide:reopened-settled");
+    provider.destroy();
   });
 });

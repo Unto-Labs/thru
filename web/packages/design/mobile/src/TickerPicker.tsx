@@ -4,8 +4,10 @@
  * `TickerPicker` is one row - the token's mark, its availability, a chevron,
  * and Max - that opens a checkable list of the tokens there are. It opens
  * even with one token, so nothing about it changes when a second arrives.
- * `TokenMark` is the round mark: ThruUSD's own logo, or for any other token
- * an ink disc with its sign or its ticker's first letters knocked out of it.
+ * `TokenMark` is the round mark: ThruUSD's own logo when the caller says the
+ * token is the wallet's own dollars (never from the label: anyone can name a
+ * token THRUSD), or for any other token an ink disc with its sign or its
+ * ticker's first letters knocked out of it.
  */
 import { useEffect, useState } from "react";
 import { Animated, Easing, Pressable, Text, View } from "react-native";
@@ -13,13 +15,21 @@ import { font, space, text, touch } from "./tokens";
 import { makeStyles, useThemeColors } from "./theme";
 import { Button } from "./Button";
 import { IconCheck, IconChevronDown } from "./Icons";
+import { useReduceMotion } from "./reduceMotion";
 import { Spinner } from "./loading/MarkDrawOn";
 import { ThruUsdLogo } from "./ThruUsdLogo";
-import { isThruUsdSymbol } from "../../tokens/src/thrusd";
 
-export function TokenMark({ label, size = 28 }: { label: string; size?: number }) {
+export function TokenMark({
+  label,
+  size = 28,
+  thrusd = false,
+}: {
+  label: string;
+  size?: number;
+  thrusd?: boolean;
+}) {
   const styles = useStyles();
-  if (isThruUsdSymbol(label)) return <ThruUsdLogo size={size} />;
+  if (thrusd) return <ThruUsdLogo size={size} />;
   /* A sign reads alone; a ticker keeps its first two letters. */
   const glyph = label.length <= 1 ? label : label.slice(0, 2);
   return (
@@ -46,6 +56,8 @@ export interface TickerOption {
   key: string;
   /** What the mark shows: the sign, or the ticker. */
   mark: string;
+  /** The wallet's own dollars: drawn with ThruUSD's logo. */
+  thrusd?: boolean;
   /** The token's name ("Dollars"). */
   name: string;
   /** "$56 available". */
@@ -85,14 +97,16 @@ export function TickerPicker({
   const styles = useStyles();
   const colors = useThemeColors();
   const [turn] = useState(() => new Animated.Value(open ? 1 : 0));
+  const reduceMotion = useReduceMotion();
   useEffect(() => {
     Animated.timing(turn, {
       toValue: open ? 1 : 0,
-      duration: 200,
+      /* Under reduced motion the chevron turns at once. */
+      duration: reduceMotion ? 0 : 200,
       easing: Easing.bezier(0.2, 0.8, 0.2, 1),
       useNativeDriver: true,
     }).start();
-  }, [open, turn]);
+  }, [open, reduceMotion, turn]);
   const rotate = turn.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "180deg"] });
   const selected = options.find((option) => option.key === selectedKey) ?? options[0];
 
@@ -120,7 +134,7 @@ export function TickerPicker({
           onPress={onToggle}
           style={styles.rowToggle}
         >
-          <TokenMark label={selected.mark} />
+          <TokenMark label={selected.mark} thrusd={selected.thrusd} />
           <Text
             numberOfLines={1}
             style={[styles.availability, overBalance ? { color: colors.error } : null]}
@@ -155,7 +169,7 @@ export function TickerPicker({
                 onPress={() => onSelect(option.key)}
                 style={({ pressed }) => [styles.option, pressed ? styles.pressed : null]}
               >
-                <TokenMark label={option.mark} />
+                <TokenMark label={option.mark} thrusd={option.thrusd} />
                 <View style={styles.optionCopy}>
                   <Text numberOfLines={1} style={styles.optionName}>
                     {option.name}

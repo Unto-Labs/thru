@@ -1,3 +1,4 @@
+import { AccountView } from '@thru/sdk/proto';
 import type { ThruClientContext } from '../../core/client';
 import { readAccount } from './accounts';
 import { CompressionError, type AccountImage, type AccountState } from "./types";
@@ -10,13 +11,14 @@ export type AccountCompressionStatus = {
   retrySlot?: bigint;
 };
 
-export async function lookupAccount(ctx: ThruClientContext, options: { signal?: AbortSignal }, address: string): Promise<{
+export async function lookupAccount(ctx: ThruClientContext, options: { signal?: AbortSignal }, address: string,
+  historicalView: AccountView.FULL | AccountView.META_ONLY = AccountView.FULL): Promise<{
   current?: AccountState; image?: AccountImage;
 }> {
   if (options.signal?.aborted) throw new CompressionError("CANCELLED", "Compression operation cancelled");
   const current = await readAccount(ctx, address, false, options.signal);
   if (current) return { current };
-  const image = await readAccount(ctx, address, true, options.signal);
+  const image = await readAccount(ctx, address, true, options.signal, historicalView);
   // Historical reads clear COMPRESSED. A retained DELETED marker is distinct
   // from a compression archive. Recheck current in case restoration just landed.
   const recheck = await readAccount(ctx, address, false, options.signal);
@@ -29,7 +31,7 @@ export async function getAccountStatuses(ctx: ThruClientContext, options: { sign
 }): Promise<AccountCompressionStatus[]> {
   const statuses = new Map<string, AccountCompressionStatus>();
   for (const address of new Set(options.accounts)) {
-    const { current, image } = await lookupAccount(ctx, options, address);
+    const { current, image } = await lookupAccount(ctx, options, address, AccountView.META_ONLY);
     statuses.set(address, current ? { address, status: "ACTIVE" } : image ? {
       address, status: "COMPRESSED", compressionSlot: image.slot,
       retrySlot: image.slot === undefined ? undefined : image.slot + 384n,

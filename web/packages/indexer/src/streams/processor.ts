@@ -213,6 +213,14 @@ export async function runEventStreamProcessor(
 
   // Commit a batch to the database
   const commitBatch = async (batch: StreamBatch): Promise<void> => {
+    try {
+      await commitBatchPhases(batch);
+    } finally {
+      observer?.onPhase?.({ phase: null });
+    }
+  };
+
+  const commitBatchPhases = async (batch: StreamBatch): Promise<void> => {
     const lastSeenEvent = (batch.events as Record<string, unknown>[])[
       batch.events.length - 1
     ] as { id?: string } | undefined;
@@ -221,6 +229,7 @@ export async function runEventStreamProcessor(
 
     // Apply filterBatch hook if defined
     if (stream.filterBatch) {
+      observer?.onPhase?.({ phase: "filterBatch", slot: batch.slot });
       try {
         eventsToCommit = (await stream.filterBatch(
           eventsToCommit as any,
@@ -256,6 +265,7 @@ export async function runEventStreamProcessor(
       | undefined;
     const lastEventToCommitId = lastEventToCommit?.id ?? null;
     let committedEvents = eventsToCommit;
+    observer?.onPhase?.({ phase: "commit", slot: batch.slot });
     try {
       await db.transaction(async (tx) => {
         // Insert events (skip duplicates)
@@ -301,6 +311,20 @@ export async function runEventStreamProcessor(
     }
   };
 
+  /* Commits run one at a time, in the order their batches left the batcher,
+     which is slot order. Both the main loop and the timer flush take batches
+     from the batcher. Without this, the timer could commit a newer batch while
+     an older one was still in filterBatch. The older commit's checkpoint upsert
+     would then move the checkpoint backwards; or, if the older commit failed,
+     the newer checkpoint would already be durable and a restart would skip the
+     failed batch. Once a commit fails, every later one rejects without running. */
+  let commitTail: Promise<void> = Promise.resolve();
+  const commitInOrder = (batch: StreamBatch): Promise<void> => {
+    const run = commitTail.then(() => commitBatch(batch));
+    commitTail = run;
+    return run;
+  };
+
   let rejectFlushFailure: (error: unknown) => void = () => {};
   const flushFailure = new Promise<never>((_, reject) => {
     rejectFlushFailure = reject;
@@ -313,7 +337,7 @@ export async function runEventStreamProcessor(
     const batch = batcher.flushIfStale();
     if (batch) {
       try {
-        await commitBatch(batch);
+        await commitInOrder(batch);
         log(
           "debug",
           `Timeout flush: ${batch.events.length} event(s) at slot ${batch.slot}`
@@ -371,7 +395,7 @@ export async function runEventStreamProcessor(
       // Add to batcher
       const batch = batcher.addEvent(parsed, event.slot!);
       if (batch) {
-        await commitBatch(batch);
+        await commitInOrder(batch);
         log(
           "info",
           `Committed ${batch.events.length} event(s) at slot ${batch.slot} (total: ${stats.eventsProcessed})`
@@ -393,7 +417,7 @@ export async function runEventStreamProcessor(
     // Flush any remaining events
     const finalBatch = batcher.flush();
     if (finalBatch) {
-      await commitBatch(finalBatch);
+      await commitInOrder(finalBatch);
       log(
         "info",
         `Final flush: ${finalBatch.events.length} event(s) at slot ${finalBatch.slot}`
@@ -412,7 +436,21 @@ export async function runEventStreamProcessor(
   } finally {
     clearInterval(flushInterval);
     rejectFlushFailure = () => {};
+    /* Let an in-flight commit settle before returning, so the next supervisor
+       generation does not read the checkpoint while this one still writes it. */
+    await commitTail.catch(() => {});
   }
+
+  /* The replay loop ended cleanly, but a timer-flushed commit that was still in
+     flight may have failed after rejectFlushFailure was disarmed. Report that
+     failure instead of success. */
+  await commitTail.catch((err) => {
+    log(
+      "error",
+      `Stream error: ${err instanceof Error ? err.message : String(err)}`
+    );
+    throw err;
+  });
 
   log(
     "info",

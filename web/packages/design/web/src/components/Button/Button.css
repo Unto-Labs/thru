@@ -77,12 +77,19 @@
   background: var(--color-surface-primary);
 }
 
-/* Ghost — borderless text button. */
+/* Ghost — borderless text button: its box shows only on hover or focus. The
+   hover fill waits for a real pointer, since touch browsers keep :hover on
+   whatever was under the last tap and would draw the box on the next
+   screen's button (a sheet's Close lands where its Try again was). */
 .tds-btn--ghost {
   background: transparent;
   color: var(--color-text-primary);
 }
-.tds-btn--ghost:hover:not(:disabled),
 .tds-btn--ghost:focus-visible {
   background: var(--color-surface-lower);
+}
+@media (hover: hover) {
+  .tds-btn--ghost:hover:not(:disabled) {
+    background: var(--color-surface-lower);
+  }
 }

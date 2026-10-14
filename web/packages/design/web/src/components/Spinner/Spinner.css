@@ -27,6 +27,23 @@
   }
 }
 
+/* Reduced motion: no rotation; the ring breathes (a slow opacity pulse) so
+   it still reads as working. */
+@keyframes tds-spin-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tds-spinner {
+    animation: tds-spin-pulse 1.6s ease-in-out infinite;
+  }
+}
+
 /* Inherit — rides on currentColor so it sits inside any button or label. */
 .tds-spinner--inherit {
   border-color: color-mix(in srgb, currentColor 28%, transparent);

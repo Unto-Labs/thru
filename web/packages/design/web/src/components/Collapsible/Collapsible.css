@@ -10,6 +10,12 @@
 .tds-coll__panel[data-ending-style] {
   height: 0;
 }
+/* Reduced motion: no height growth; the panel opens and closes at once. */
+@media (prefers-reduced-motion: reduce) {
+  .tds-coll__panel {
+    transition: none;
+  }
+}
 
 .tds-coll__inner {
   padding: var(--space-3) 0 0;

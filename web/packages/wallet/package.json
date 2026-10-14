@@ -42,6 +42,10 @@
       "import": "./dist/react-ui.js",
       "types": "./dist/react-ui.d.ts"
     },
+    "./internal/accounts": {
+      "import": "./dist/internal/accounts.js",
+      "types": "./dist/internal/accounts.d.ts"
+    },
     "./internal/deposit": {
       "import": "./dist/internal/deposit.js",
       "types": "./dist/internal/deposit.d.ts"
@@ -61,12 +65,6 @@
       "react-native": "./src/native/react/index.ts",
       "import": "./dist/native/react.js",
       "default": "./dist/native/react.js"
-    },
-    "./native/react/transparent": {
-      "types": "./dist/native/react/transparent.d.ts",
-      "react-native": "./src/native/react/transparent.ts",
-      "import": "./dist/native/react/transparent.js",
-      "default": "./dist/native/react/transparent.js"
     },
     "./native/plugin": "./app.plugin.cjs",
     "./networks": {

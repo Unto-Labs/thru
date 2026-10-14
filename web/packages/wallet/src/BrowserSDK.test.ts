@@ -107,12 +107,22 @@ vi.mock("./provider/EmbeddedProvider", () => ({
       throw new Error("prepareDeposit mock not configured");
     }
 
+    async deposit(): Promise<never> {
+      throw new Error("deposit mock not configured");
+    }
+
     destroy(): void {}
   },
 }));
 
 import { BrowserSDK } from "./BrowserSDK";
-import { EMBEDDED_PROVIDER_EVENTS } from "./protocol";
+import {
+  DepositTarget,
+  EMBEDDED_PROVIDER_EVENTS,
+  ThruNetwork,
+  type DepositDestination,
+  type DepositResult,
+} from "./protocol";
 import { TransactionSigningScheme } from "./transaction-signing-scheme";
 import { SecureStoreTestStorage } from "./test-utils/secure-store";
 import { stubColorSchemeMedia } from "./test-utils/match-media";
@@ -440,12 +450,15 @@ describe("BrowserSDK transaction signing scheme", () => {
     sdk.destroy();
   });
 
-  it("prepares a faucet-only destination but rejects paid deposits and other networks", async () => {
+  it("opens the faucet-only chooser but rejects paid deposits and other networks", async () => {
     const sdk = new BrowserSDK({ iframeUrl: "https://app.tid.sh/embedded", signingSessionStorage: false });
     const internals = sdk as unknown as {
       initialized: boolean;
       activeNetwork: { id: string; depositConfigured: boolean; depositProviders: string[] };
-      provider: { prepareDeposit: (payload: unknown) => Promise<never> };
+      provider: {
+        prepareDeposit: (payload: unknown) => Promise<never>;
+        deposit: (payload: unknown) => Promise<never>;
+      };
     };
     internals.initialized = true;
     internals.activeNetwork = { id: "betanet", depositConfigured: true, depositProviders: [] };
@@ -453,11 +466,95 @@ describe("BrowserSDK transaction signing scheme", () => {
     await expect(sdk.deposits.prepare({ network: "betanet" as never })).resolves.toMatchObject({ network: "betanet" });
     expect(prepare).toHaveBeenCalledOnce();
     expect(await sdk.deposits.getProviders()).toEqual([]);
-    await expect(sdk.deposits.open({})).rejects.toThrow();
+    const open = vi.spyOn(internals.provider, "deposit").mockResolvedValue({ status: "cancelled" } as never);
+    await expect(sdk.deposits.open({})).resolves.toMatchObject({ status: "cancelled" });
+    expect(open).toHaveBeenCalledExactlyOnceWith({ enabledProviders: [] });
+    for (const payload of [{ method: "card" }, { method: "crypto" }, { providerId: "coinbase" }, { providerId: "unifold" }] as const) {
+      await expect(sdk.deposits.open(payload)).rejects.toThrow("Deposit provider is not configured");
+    }
+    expect(open).toHaveBeenCalledOnce();
     await expect(sdk.deposits.prepare({ network: "alphanet" as never })).rejects.toThrow("Add funds unavailable");
     internals.activeNetwork.depositConfigured = false;
+    await expect(sdk.deposits.open({})).rejects.toThrow("Add funds unavailable");
     await expect(sdk.deposits.prepare({ network: "betanet" as never })).rejects.toThrow("Add funds unavailable");
     sdk.destroy();
+  });
+
+  describe("opening prepared deposits", () => {
+    let sdk: BrowserSDK;
+    let internals: {
+      initialized: boolean;
+      activeNetwork: { id: string; depositConfigured: boolean; depositProviders: string[] };
+      provider: {
+        prepareDeposit: (payload: unknown) => Promise<DepositDestination>;
+        deposit: (payload: unknown) => Promise<DepositResult>;
+      };
+    };
+
+    beforeEach(() => {
+      sdk = new BrowserSDK({
+        iframeUrl: "https://app.tid.sh/embedded",
+        signingSessionStorage: false,
+        deposits: { providers: ["unifold", "coinbase"] },
+      });
+      internals = sdk as unknown as typeof internals;
+      internals.initialized = true;
+      internals.activeNetwork = {
+        id: ThruNetwork.Betanet,
+        depositConfigured: true,
+        depositProviders: [],
+      };
+      vi.spyOn(internals.provider, "prepareDeposit").mockImplementation(async () => ({
+        network: internals.activeNetwork.id as ThruNetwork,
+        depositTarget: DepositTarget.THRUSD,
+        tokenAccountAddress: "ta_token_account",
+        mintAddress: "ta_mint",
+        tokenProgramAddress: "ta_token_program",
+        symbol: "$",
+        decimals: 6,
+      }));
+      vi.spyOn(internals.provider, "deposit").mockResolvedValue({ status: "cancelled" });
+    });
+
+    afterEach(() => sdk.destroy());
+
+    it("opens the faucet-only Betanet chooser with a prepared destination", async () => {
+      const destination = await sdk.deposits.prepare();
+
+      await expect(sdk.deposits.open({ destination })).resolves.toEqual({ status: "cancelled" });
+      expect(internals.provider.deposit).toHaveBeenCalledExactlyOnceWith({
+        destination,
+        enabledProviders: [],
+      });
+    });
+
+    it.each([{ method: "crypto" }, { providerId: "unifold" }] as const)(
+      "rejects an explicit paid provider on faucet-only Betanet (%j)",
+      async (selection) => {
+        const destination = await sdk.deposits.prepare();
+
+        await expect(sdk.deposits.open({ destination, ...selection })).rejects.toThrow(
+          "Deposit provider is not configured: unifold",
+        );
+        expect(internals.provider.deposit).not.toHaveBeenCalled();
+      },
+    );
+
+    it("keeps the Unifold default for a prepared destination where configured", async () => {
+      internals.activeNetwork = {
+        id: ThruNetwork.Alphanet,
+        depositConfigured: true,
+        depositProviders: ["unifold"],
+      };
+      const destination = await sdk.deposits.prepare();
+
+      await expect(sdk.deposits.open({ destination })).resolves.toEqual({ status: "cancelled" });
+      expect(internals.provider.deposit).toHaveBeenCalledExactlyOnceWith({
+        destination,
+        providerId: "unifold",
+        enabledProviders: ["unifold"],
+      });
+    });
   });
 
   it("returns only the dapp-configured deposit provider IDs", async () => {

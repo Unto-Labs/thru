@@ -12,6 +12,7 @@ packages:
   - 'test-dapp'
   - 'explorer'
   - 'faucet'
+  - 'platform'
   - 'gallery'
   - 'jcoin-app'
   - 'etl-bridge'

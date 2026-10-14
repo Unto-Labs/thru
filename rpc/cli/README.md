@@ -109,3 +109,23 @@ verification and install.
   > Error: `thru-cli` has been retired. Install `thru` instead: npm i -g thru
 - Mark the crate as deprecated on crates.io
 - Remove `crates/thru-cli/` from the workspace
+
+
+## Developers login and test funds
+
+Build with `cargo build --bin thru`, then:
+
+```sh
+target/debug/thru auth login
+target/debug/thru --network betanet faucet withdraw thrusd ta... 100
+```
+
+Use an existing THRUSD token account. Native THRU uses `faucet withdraw native <account> <raw-amount>`; `faucet deposit` is unchanged.
+
+`auth status` checks your account; `auth logout` revokes this installation. Re-login replaces its saved authorization only after approval. Credentials default to the OS keyring; Unix users can explicitly choose `THRU_DEVELOPERS_CREDENTIAL_STORE=file` (owner-only files under `~/.thru/cli/auth`). Log out before switching stores. macOS debug rebuilds can trigger new Keychain prompts.
+
+`THRU_DEVELOPERS_URL` defaults to `https://dev.thru.org`; use `http://127.0.0.1:3018` for the local preview. Hosted staging requires Cloudflare Access transport that the CLI does not provide. For development, use local Developers with the authenticated staging faucet.
+
+`THRU_DEVELOPERS_API_KEY` supplies a raw API key from your secret environment, overriding login only for THRUSD funding. Each account shares 5 requests per rolling minute across all callers. Funding is never retried automatically; check balance/history after uncertain results.
+
+[Authentication configuration](https://thru.org/docs/cli-reference/global-flags-and-config#developers-authentication) · [Faucet reference](https://thru.org/docs/cli-reference/faucet-commands)

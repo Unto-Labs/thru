@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="thru-mobile-tokens.css">
+<style>
+body{margin:0;-webkit-font-smoothing:antialiased;}
+a{color:var(--m-accent);text-decoration:none;}
+a:hover{text-decoration:underline;text-underline-offset:3px;}
+</style>
+</helmet>
+<div data-screen-label="Receive on Thru" role="dialog" aria-modal="true" aria-label="{{ dialogLabel }}" style="position:relative;width:100%;box-sizing:border-box;display:flex;flex-direction:column;background:var(--m-bg);color:var(--m-fg);font-family:'Inter Tight',system-ui,sans-serif;border-radius:{{ radius }};box-shadow:{{ shadow }};overflow:hidden">
+  <div style="display:flex;align-items:center;gap:12px;height:52px;padding:0 4px 0 16px;border-bottom:1px solid var(--m-border);flex:none">
+    <h2 style="flex:1;min-width:0;margin:0;font-size:17px;font-weight:600;letter-spacing:-0.25px;line-height:22px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Receive {{ ticker }}</h2>
+    <button type="button" aria-label="Close" style="width:44px;height:44px;flex:none;display:grid;place-items:center;border:none;background:none;padding:0;cursor:pointer;color:var(--m-fg-muted)" style-active="background:var(--m-bg-muted)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"></path></svg></button>
+  </div>
+  <div style="display:flex;flex-direction:column;align-items:center;gap:16px;padding:24px 16px 0">
+    <div aria-label="QR code of your address" style="position:relative;width:200px;height:200px;flex:none;border:1px solid #B6CECE;background:#F9FBFB;box-sizing:border-box">
+      <span aria-hidden="true" style="position:absolute;inset:10px;display:grid;grid-template-columns:repeat(15,1fr);grid-template-rows:repeat(15,1fr)"><sc-for list="{{ qr }}" as="cell" hint-placeholder-count="225"><span style="background:{{ cell.bg }}"></span></sc-for></span>
+      <span aria-hidden="true" style="position:absolute;inset:0;display:grid;place-items:center"><span style="background:#F9FBFB;padding:3px;display:grid"><img src="assets/thru-disc.svg" alt="" style="width:32px;height:32px;display:block"></span></span>
+    </div>
+    <div style="text-align:center;font-size:15px;font-weight:500;line-height:20px;text-wrap:pretty">Send <span style="font-family:'JetBrains Mono',ui-monospace,monospace">{{ ticker }}</span> to this address on Thru {{ network }}</div>
+    <div style="width:100%;max-width:360px;display:flex;flex-direction:column">
+      <div aria-label="Your address" style="padding:12px 14px;border:1px solid var(--m-border-strong);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;line-height:1.5;overflow-wrap:anywhere;color:var(--m-fg);text-align:center">{{ address }}</div>
+      <div style="display:flex;border:1px solid var(--m-border-strong);border-top:none;background:var(--m-bg-muted)">
+        <button type="button" onClick="{{ onCopy }}" aria-live="polite" style="flex:1;height:44px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:none;background:none;cursor:pointer;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;font-weight:600;color:{{ copyColor }}" style-active="background:var(--m-bg-inset)">
+          <sc-if value="{{ notCopied }}" hint-placeholder-val="{{ true }}"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3" aria-hidden="true"><rect x="5.5" y="5.5" width="8" height="8"></rect><path d="M10.5 5.5V3a.5.5 0 0 0-.5-.5H3a.5.5 0 0 0-.5.5v7a.5.5 0 0 0 .5.5h2.5"></path></svg></sc-if>
+          <sc-if value="{{ copied }}" hint-placeholder-val="{{ false }}"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true"><path d="M20 6 9 17l-5-5"></path></svg></sc-if>
+          <span>{{ copyLabel }}</span>
+        </button>
+        <button type="button" style="flex:1;height:44px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:none;border-left:1px solid var(--m-border-strong);background:none;cursor:pointer;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;font-weight:600;color:var(--m-fg)" style-active="background:var(--m-bg-inset)"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M12 3v13M7 8l5-5 5 5"></path><path d="M5 12v8h14v-8"></path></svg>Share</button>
+      </div>
+    </div>
+    <div role="note" style="width:100%;max-width:360px;display:flex;gap:12px;align-items:flex-start;padding:12px 14px;background:var(--m-saffron-soft);box-sizing:border-box">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true" style="flex:none;margin-top:2px;color:var(--m-saffron)"><path d="M12 3 2 21h20L12 3z"></path><path d="M12 10v5M12 17.5v.5"></path></svg>
+      <span style="flex:1;min-width:0;display:flex;flex-direction:column;gap:2px;font-size:13px;line-height:19px;text-wrap:pretty"><span style="font-weight:600;color:var(--m-fg)">Only Thru {{ network }} transfers arrive here.</span><span style="color:var(--m-fg-muted)">Tokens sent from any other network can’t be recovered.</span></span>
+    </div>
+  </div>
+  <div style="height:{{ bottomPad }};flex:none"></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:620},&quot;ticker&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;COOL&quot;,&quot;tsType&quot;:&quot;string&quot;},&quot;network&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;Alphanet&quot;,&quot;options&quot;:[&quot;Alphanet&quot;,&quot;Betanet&quot;],&quot;tsType&quot;:&quot;'Alphanet' | 'Betanet'&quot;},&quot;copied&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;layout&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;sheet&quot;,&quot;options&quot;:[&quot;sheet&quot;,&quot;dialog&quot;],&quot;tsType&quot;:&quot;'sheet' | 'dialog'&quot;}}">
+const ADDRESS = 'ta1kqVmN4pQ7rT1vW9xZ3bC6eF0hJ5kL2nP8qR4tV7sD9fq2';
+function qrGrid(seed) {
+  const n = 15, out = []; let s = seed;
+  for (let i = 0; i < n * n; i++) {
+    s = (s * 1103515245 + 12345) & 0x7fffffff;
+    const r = Math.floor(i / n), c = i % n;
+    const z = (r < 6 && c < 6) ? [r, c] : (r < 6 && c >= n - 6) ? [r, c - (n - 5)] : (r >= n - 6 && c < 6) ? [r - (n - 5), c] : null;
+    let on;
+    if (z) { const [lr, lc] = z; on = lr >= 0 && lr <= 4 && lc >= 0 && lc <= 4 && (lr === 0 || lr === 4 || lc === 0 || lc === 4 || (lr === 2 && lc === 2)); }
+    else on = (s >> 16) % 2 === 0;
+    out.push({ bg: on ? '#181B1B' : 'transparent' });
+  }
+  return out;
+}
+class Component extends DCLogic {
+  state = { copied: null };
+  componentWillUnmount() { clearTimeout(this.t); }
+  renderVals() {
+    const p = this.props;
+    const ticker = p.ticker ?? 'COOL', network = p.network ?? 'Alphanet';
+    const dialog = (p.layout ?? 'sheet') === 'dialog';
+    const copied = this.state.copied ?? !!p.copied;
+    return {
+      dialogLabel: 'Receive ' + ticker + ' on Thru ' + network,
+      ticker, network, address: ADDRESS,
+      radius: dialog ? '12px' : '12px 12px 0 0',
+      shadow: dialog ? '0 24px 64px var(--m-sheet-shadow)' : '0 -20px 48px var(--m-sheet-shadow)',
+      qr: qrGrid(29),
+      copied, notCopied: !copied, copyLabel: copied ? 'Copied' : 'Copy address', copyColor: copied ? 'var(--m-forest)' : 'var(--m-fg)',
+      onCopy: () => { try { navigator.clipboard && navigator.clipboard.writeText(ADDRESS); } catch (e) {} this.setState({ copied: true }); clearTimeout(this.t); this.t = setTimeout(() => this.setState({ copied: false }), 1200); },
+      bottomPad: dialog ? '24px' : '58px',
+    };
+  }
+}
+</script>
+</body>
+</html>

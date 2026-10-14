@@ -457,10 +457,13 @@ message StreamTransactionsResponse {
 //   event.event_id (string), event.slot (uint64), event.payload (bytes),
 //   event.call_idx (uint32), event.signature (Signature),
 //   event.signature.value (bytes), event.program (Pubkey),
-//   event.program.value (bytes), event.timestamp (Timestamp)
+//   event.program.value (bytes), event.timestamp (Timestamp),
+//   event.program_idx (uint32), event.block_offset (uint32),
+//   event.fee_payer (Pubkey), event.fee_payer.value (bytes),
+//   event.block_timestamp (Timestamp)
 //
 // Note: Unlike ListEventsRequest in QueryService, StreamEventsRequest does NOT support:
-//   event.block_offset, event.program_idx, event.payload_size, event.transaction_signature
+//   event.payload_size, event.transaction_signature
 //
 // Available filter functions:
 //   - has(field): Check if optional field exists
@@ -566,9 +569,18 @@ message StreamEventsRequest {
 }
 
 // StreamEventsResponse delivers event payloads.
+//
+// program_idx, block_offset, fee_payer and block_timestamp carry the same
+// values ListEvents and GetEvent return for the event. program_idx and
+// block_offset come from the event itself and are always set. program and
+// fee_payer need the emitting transaction's context, and block_timestamp the
+// event's block; when the node cannot resolve those at publish time they are
+// absent, and a client needing them should look the event up.
 message StreamEventsResponse {
   string event_id = 1 [(google.api.field_behavior) = REQUIRED];
   optional bytes payload = 2 [(google.api.field_behavior) = OPTIONAL];
+  // When the node published the event, not when its block was produced; see
+  // block_timestamp.
   optional google.protobuf.Timestamp timestamp = 3
       [(google.api.field_behavior) = OPTIONAL];
   thru.common.v1.Pubkey program = 4 [(google.api.field_behavior) = REQUIRED];
@@ -576,6 +588,17 @@ message StreamEventsResponse {
   thru.common.v1.Signature signature = 6
       [(google.api.field_behavior) = REQUIRED];
   uint64 slot = 7 [(google.api.field_behavior) = REQUIRED];
+  // Index of the emitting program in the transaction's account list.
+  optional uint32 program_idx = 8 [(google.api.field_behavior) = OPTIONAL];
+  // Byte offset of the emitting transaction within its block.
+  optional uint32 block_offset = 9 [(google.api.field_behavior) = OPTIONAL];
+  // Fee payer of the emitting transaction.
+  optional thru.common.v1.Pubkey fee_payer = 10
+      [(google.api.field_behavior) = OPTIONAL];
+  // Block production time of the event's block: the timestamp ListEvents
+  // and GetEvent return.
+  optional google.protobuf.Timestamp block_timestamp = 11
+      [(google.api.field_behavior) = OPTIONAL];
 }
 
 // TrackTransactionRequest subscribes to status updates for a transaction.

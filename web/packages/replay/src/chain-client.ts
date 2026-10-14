@@ -78,7 +78,10 @@ export interface TransactionSource {
 }
 
 export interface EventSource {
-  listEvents(request: Partial<ListEventsRequest>): Promise<ListEventsResponse>;
+  listEvents(
+    request: Partial<ListEventsRequest>,
+    options?: Pick<CallOptions, "signal" | "timeoutMs">,
+  ): Promise<ListEventsResponse>;
   streamEvents(
     request: Partial<StreamEventsRequest>,
   ): AsyncIterable<StreamEventsResponse>;
@@ -169,8 +172,19 @@ export class ChainClient implements ReplayDataSource {
     return this.streaming.streamTransactions(create(StreamTransactionsRequestSchema, request), this.callOptions);
   }
 
-  listEvents(request: Partial<ListEventsRequest>): Promise<ListEventsResponse> {
-    return this.query.listEvents(create(ListEventsRequestSchema, request), this.callOptions);
+  listEvents(
+    request: Partial<ListEventsRequest>,
+    options?: Pick<CallOptions, "signal" | "timeoutMs">,
+  ): Promise<ListEventsResponse> {
+    const defaultSignal = this.callOptions?.signal;
+    const signal = defaultSignal && options?.signal
+      ? AbortSignal.any([defaultSignal, options.signal])
+      : options?.signal ?? defaultSignal;
+    return this.query.listEvents(create(ListEventsRequestSchema, request), {
+      ...this.callOptions,
+      signal,
+      timeoutMs: options?.timeoutMs ?? this.callOptions?.timeoutMs,
+    });
   }
 
   streamEvents(

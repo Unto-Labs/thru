@@ -1,28 +1,25 @@
-export { NativeSDK } from './NativeSDK';
+export { NativeSDK } from "./NativeSDK";
 export {
   TRANSACTION_SIGNING_SCHEME_SEARCH_PARAM,
   TransactionSigningScheme,
   withTransactionSigningScheme,
-} from '../transaction-signing-scheme';
+} from "../transaction-signing-scheme";
 export type {
   EventCallback,
   ConnectOptions,
-  CreateAccountOptions,
   IosWebViewMode,
   NativeSDKConfig,
   NativeSDKStorage,
   NativeSDKUiHandlers,
-  NativeWalletExperience,
   RestoreConnectionOptions,
   SDKEvent,
-  SignInOptions,
-} from './NativeSDK';
+} from "./NativeSDK";
 export type {
   WalletAvailability,
   WalletAvailabilityStatus,
-} from '../connection-state';
+} from "../connection-state";
 
-export { AddressType, ThruTransactionEncoding } from '../interfaces';
+export { AddressType, ThruTransactionEncoding } from "../interfaces";
 export type {
   AppMetadata,
   ConnectResult,
@@ -39,49 +36,49 @@ export type {
   ThruSigningSessionTimestamp,
   ThruTransactionIntent,
   WalletAccount,
-} from '../interfaces';
-export type { SigningSessionStorage } from '../signing-sessions';
-export type { WalletSDKStorage } from '../storage';
-export { WalletSDKStorageError } from '../storage';
+} from "../interfaces";
+export type { SigningSessionStorage } from "../signing-sessions";
+export type { WalletSDKStorage } from "../storage";
+export { WalletSDKStorageError } from "../storage";
 export type {
   AccountsApi,
   ConnectionApi,
   SigningSessionsApi,
   WalletConnectOptions,
   WalletSDK,
-} from '../sdk-contract';
+} from "../sdk-contract";
 
 export {
   EMBEDDED_PROVIDER_EVENTS,
   ErrorCode,
   POST_MESSAGE_REQUEST_TYPES,
-} from '../protocol';
+} from "../protocol";
 export type {
   ConnectMetadataInput,
-  CreateAccountResult,
   DepositDestination,
   DepositFundingMethod,
   DepositRequestPayload,
   DepositResult,
+  DepositSource,
   DepositUiConfig,
   GetConnectionStateResult,
   ManageAccountsResult,
   PrepareDepositPayload,
   WalletTheme,
   WalletThemePreference,
-} from '../protocol';
-export { DepositTarget, ThruNetwork } from '../protocol';
+} from "../protocol";
+export { DepositTarget, ThruNetwork } from "../protocol";
 export type {
   DepositAccountState,
   DepositsApi,
   EnsureDepositAccountParams,
   GetDepositAccountStateParams,
   WaitForDepositParams,
-} from '../deposit';
+} from "../deposit";
 export {
   DepositTransactionError,
   formatDepositAmount,
   formatTokenAmountLabel,
-} from '../deposit';
+} from "../deposit";
 
-export * from '../networks';
+export * from "../networks";

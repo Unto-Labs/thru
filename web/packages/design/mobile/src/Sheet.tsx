@@ -6,13 +6,20 @@
  * title between a back slot and the close button, ruled off with a hairline,
  * for a sheet that steps through pages. Two heights: the content's own, and
  * `fixed`, which runs from just under the status bar to the bottom of the
- * screen so the header never moves between pages.
+ * screen so the header never moves between pages. A page that ends in an
+ * action row puts what is above the row in a `SheetBody`, which scrolls when
+ * the sheet is too short for it, so the row stays on screen.
+ *
+ * The dialog is named after the title. The scrim is hidden from
+ * accessibility unless it does something the close button does not; then
+ * `dismissLabel` names it (see scrimAccessibilityProps).
  */
 import {
   createContext,
   type ReactNode,
   useContext,
   useEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -24,6 +31,7 @@ import {
   Modal,
   Platform,
   Pressable,
+  ScrollView,
   StyleSheet,
   Text,
   View,
@@ -33,6 +41,8 @@ import { font, radius, space, text, touch } from "./tokens";
 import { makeStyles, useThemeColors } from "./theme";
 import { IconChevronLeft, IconClose } from "./Icons";
 import { safeAreaBottomInset } from "./Chrome";
+import { scrimAccessibilityProps } from "./scrimAccessibilityProps";
+import { REDUCED_MOTION_MS, useReduceMotion } from "./reduceMotion";
 
 /* The sheet reaches the screen edge, so its own spacer clears the home
    indicator: the environment inset on web, the iPhone value natively. */
@@ -40,8 +50,13 @@ const DEFAULT_BOTTOM_INSET = safeAreaBottomInset(space[3], 34);
 
 const IS_WEB = Platform.OS === "web";
 
-/** The kit's sheet motion: 360ms on the standard curve. */
+/** The kit's sheet motion: 360ms on the standard curve. Under reduced
+    motion the sheet fades in REDUCED_MOTION_MS instead of sliding. */
 export const SHEET_DURATION_MS = 360;
+
+/* How far past its own height a bottom sheet travels, so its top shadow
+   is off screen too. */
+const SHADOW_ROOM = 48;
 
 /** Gap between the status bar and the top of a fixed-height sheet. */
 const FIXED_SHEET_GAP = space[2];
@@ -73,6 +88,58 @@ export function isSheetDialog(
   dialogMinWidth: number
 ): boolean {
   return IS_WEB && presentation === "adaptive" && width >= dialogMinWidth;
+}
+
+/**
+ * The part of a sheet page above its action row. It fills the room the row
+ * leaves, so content in it can grow with `flex: 1`, and scrolls when the
+ * sheet is too short for it - a small phone, a dialog in a short window, the
+ * keyboard up - so the row stays on screen. It needs a bounded page around
+ * it: a `fixed` sheet's page is `flex: 1, minHeight: 0`, and in the dialog
+ * or a content-height sheet the page takes `flexShrink: 1, minHeight: 0`,
+ * so it gives way once the sheet reaches the window's height.
+ */
+export function SheetBody({ children }: { children: ReactNode }) {
+  const styles = useStyles();
+  const [height, setHeight] = useState(0);
+  const [contentHeight, setContentHeight] = useState(0);
+  const fit = useMemo<SheetBodyFit>(
+    () => ({ height, overflow: height > 0 ? Math.max(0, contentHeight - height) : 0 }),
+    [height, contentHeight],
+  );
+  return (
+    <SheetBodyFitContext.Provider value={fit}>
+      <ScrollView
+        alwaysBounceVertical={false}
+        contentContainerStyle={styles.bodyContent}
+        keyboardShouldPersistTaps="handled"
+        onContentSizeChange={(_width, h) => setContentHeight(h)}
+        onLayout={(event) => setHeight(event.nativeEvent.layout.height)}
+        showsVerticalScrollIndicator={false}
+        style={styles.body}
+      >
+        {children}
+      </ScrollView>
+    </SheetBodyFitContext.Provider>
+  );
+}
+
+export interface SheetBodyFit {
+  /** The body's own height, 0 until laid out. */
+  height: number;
+  /** How far its content runs past that height; 0 when it fits. */
+  overflow: number;
+}
+
+const SheetBodyFitContext = createContext<SheetBodyFit | null>(null);
+
+/**
+ * How a `SheetBody` around this component fits its content, or null outside
+ * one. Content that can give up height (the Keypad's keys) takes the overflow
+ * before the body scrolls.
+ */
+export function useSheetBodyFit(): SheetBodyFit | null {
+  return useContext(SheetBodyFitContext);
 }
 
 interface KeyboardFrame {
@@ -157,23 +224,49 @@ function useKeyboardFrame(active: boolean): KeyboardFrame {
   return frame;
 }
 
+/**
+ * How far the sheet slides, in px: a dialog drops 24, a bottom sheet its
+ * own height plus its shadow, so no part of it is on screen at either end.
+ * Until the panel is measured it starts a window's height down, off screen
+ * for any sheet. Under reduced motion it does not move; it only fades.
+ */
+export function sheetTravel({
+  reduceMotion,
+  dialog,
+  panelHeight,
+  windowHeight,
+}: {
+  reduceMotion: boolean;
+  dialog: boolean;
+  panelHeight: number;
+  windowHeight: number;
+}): number {
+  if (reduceMotion) return 0;
+  if (dialog) return 24;
+  return (panelHeight > 0 ? panelHeight : windowHeight) + SHADOW_ROOM;
+}
+
 export function Sheet({
   visible,
   title,
   onClose,
   onDismiss,
+  dismissLabel,
   onBack,
   backLabel = "Back",
   header = "leading",
   height = "content",
   topInset,
   animateIn = true,
+  onExited,
   children,
   keyboardAvoiding = false,
   bottomInset = DEFAULT_BOTTOM_INSET,
   presentation = "sheet",
   dialogMinWidth = 840,
   dialogWidth = 480,
+  headerContent,
+  accessibilityLabel,
 }: {
   visible: boolean;
   title: string;
@@ -183,6 +276,12 @@ export function Sheet({
       Separate so a sheet can keep what was entered when it is only put
       away, and discard it on the close button. */
   onDismiss?: () => void;
+  /** Names the scrim, only while `onDismiss` does something the close
+      button does not (Send keeps the draft; its X discards it). Without it
+      the scrim is hidden from accessibility, since it would be a second
+      "Close <title>". A tap, Escape and the system back dismiss either way.
+      Ignored without `onDismiss`. */
+  dismissLabel?: string;
   /** The centred header's back button; hidden when absent. */
   onBack?: () => void;
   backLabel?: string;
@@ -199,6 +298,10 @@ export function Sheet({
   /** False shows the sheet already open - for a sheet that was on screen a
       moment ago and has only been remounted. */
   animateIn?: boolean;
+  /** The sheet has finished leaving after `visible` went false. A parent
+      that unmounts the sheet waits for this, so the sheet slides away
+      instead of vanishing. */
+  onExited?: () => void;
   children: ReactNode;
   keyboardAvoiding?: boolean;
   /** Space under the content; pass a safe-area-derived value when known.
@@ -212,16 +315,27 @@ export function Sheet({
   dialogMinWidth?: number;
   /** The dialog's width. */
   dialogWidth?: number;
+  /** Replaces the title row, for a sheet that draws its own header with
+      its own close. */
+  headerContent?: ReactNode;
+  /** Names the panel as a modal dialog for assistive tech. */
+  accessibilityLabel?: string;
 }) {
   const styles = useStyles();
   const colors = useThemeColors();
-  const { width } = useWindowDimensions();
+  const { width, height: windowHeight } = useWindowDimensions();
+  const reduceMotion = useReduceMotion();
   const isDialog = isSheetDialog(width, presentation, dialogMinWidth);
   const isFixed = height === "fixed" && !isDialog;
   const [mounted, setMounted] = useState(visible);
   const progress = useRef(new Animated.Value(visible && !animateIn ? 1 : 0)).current;
   const keyboard = useKeyboardFrame(mounted && isFixed);
   const dismiss = onDismiss ?? onClose;
+  /* The panel's own height, so it slides exactly off screen: a constant
+     left part of a tall sheet on screen at both ends of the slide. */
+  const [panelHeight, setPanelHeight] = useState(0);
+  const onExitedRef = useRef(onExited);
+  onExitedRef.current = onExited;
 
   useEffect(() => {
     if (visible) setMounted(true);
@@ -232,19 +346,23 @@ export function Sheet({
 
     const animation = Animated.timing(progress, {
       toValue: visible ? 1 : 0,
-      duration: SHEET_DURATION_MS,
+      duration: reduceMotion ? REDUCED_MOTION_MS : SHEET_DURATION_MS,
       easing: Easing.bezier(0.2, 0.8, 0.2, 1),
       useNativeDriver: true,
     });
     animation.start(({ finished }) => {
-      if (finished && !visible) setMounted(false);
+      if (finished && !visible) {
+        setMounted(false);
+        onExitedRef.current?.();
+      }
     });
     return () => animation.stop();
-  }, [mounted, progress, visible]);
+  }, [mounted, progress, reduceMotion, visible]);
 
+  const travel = sheetTravel({ reduceMotion, dialog: isDialog, panelHeight, windowHeight });
   const translateY = progress.interpolate({
     inputRange: [0, 1],
-    outputRange: [isDialog ? 24 : isFixed ? 800 : 400, 0],
+    outputRange: [travel, 0],
   });
 
   /* On web the fixed sheet follows the visible area: its top stays just under
@@ -267,6 +385,7 @@ export function Sheet({
   const centered = header === "centered";
   const panel = (
     <Animated.View
+      onLayout={(event) => setPanelHeight(event.nativeEvent.layout.height)}
       style={[
         styles.panel,
         isDialog
@@ -279,12 +398,15 @@ export function Sheet({
               ? styles.keyboardPanel
               : styles.absolutePanel,
         {
-          opacity: isDialog ? progress : 1,
+          opacity: isDialog || reduceMotion ? progress : 1,
           transform: [{ translateY }],
         },
       ]}
+      {...(accessibilityLabel
+        ? { accessibilityLabel, accessibilityViewIsModal: true, "aria-modal": true, role: "dialog" as const }
+        : null)}
     >
-      {centered ? (
+      {headerContent ?? (centered ? (
         <View style={styles.centeredHeader}>
           <View style={styles.headerSlot}>
             {onBack ? (
@@ -325,7 +447,7 @@ export function Sheet({
             <IconClose />
           </Pressable>
         </View>
-      )}
+      ))}
       <SheetLayoutContext.Provider value={{ dialog: isDialog, keyboardOpen: keyboard.open }}>
         {isFixed ? <View style={styles.fixedBody}>{children}</View> : children}
       </SheetLayoutContext.Provider>
@@ -343,11 +465,16 @@ export function Sheet({
   );
 
   return (
-    <Modal visible={mounted} transparent animationType="none" onRequestClose={dismiss}>
+    <Modal
+      aria-label={title}
+      visible={mounted}
+      transparent
+      animationType="none"
+      onRequestClose={dismiss}
+    >
       <Animated.View style={[styles.scrim, { opacity: progress }]}>
         <Pressable
-          accessibilityLabel={`Close ${title}`}
-          accessibilityRole="button"
+          {...scrimAccessibilityProps(IS_WEB, onDismiss ? dismissLabel : undefined)}
           style={styles.scrimPressable}
           onPress={dismiss}
         />
@@ -396,6 +523,14 @@ const useStyles = makeStyles((c) => ({
     left: 0,
     right: 0,
     bottom: 0,
+    /* On web a content-height sheet stops where a fixed one starts, just
+       under the status bar: in a short window its SheetBody scrolls instead
+       of the header and close button running off the top. */
+    ...(IS_WEB
+      ? {
+          maxHeight: `calc(100dvh - env(safe-area-inset-top, 0px) - ${FIXED_SHEET_GAP}px)` as unknown as number,
+        }
+      : null),
   },
   fixedPanel: {
     position: "absolute",
@@ -416,6 +551,11 @@ const useStyles = makeStyles((c) => ({
     shadowRadius: 24,
   },
   fixedBody: { flex: 1, minHeight: 0 },
+  /* react-native-web puts every ScrollView on its own layer
+     (translateZ(0)), and text in it can land a pixel off where the sheet
+     would draw it. The body stays on the sheet's layer. */
+  body: IS_WEB ? { transform: "none" } : {},
+  bodyContent: { flexGrow: 1 },
   keyboardSkirt: {
     position: "absolute",
     left: 0,

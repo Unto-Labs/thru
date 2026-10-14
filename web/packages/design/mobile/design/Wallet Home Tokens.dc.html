@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="thru-mobile-tokens.css">
+<style>
+body{margin:0;-webkit-font-smoothing:antialiased;}
+a{color:var(--m-accent);text-decoration:none;}
+a:hover{text-decoration:underline;text-underline-offset:3px;}
+</style>
+</helmet>
+<div data-screen-label="Wallet home · tokens" style="position:absolute;top:0;left:0;right:0;bottom:0;background:var(--m-bg);color:var(--m-fg);font-family:'Inter Tight',system-ui,sans-serif;display:flex;flex-direction:column;overflow:hidden;isolation:isolate">
+  <sc-if value="{{ isIos }}" hint-placeholder-val="{{ true }}"><div style="height:62px;flex:none"></div></sc-if>
+  <sc-if value="{{ isWeb }}" hint-placeholder-val="{{ false }}"><div style="height:16px;flex:none"></div></sc-if>
+  <div style="display:flex;align-items:center;gap:10px;padding:8px 16px;flex:none">
+    <span style="width:32px;height:32px;border-radius:50%;background:var(--m-bg-inset);display:grid;place-items:center;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--m-fg-muted);flex:none">TA</span>
+    <span style="display:inline-flex;align-items:center;gap:6px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;background:var(--m-bg-muted);color:var(--m-fg-muted);padding:5px 8px">ta1kqV…9fq2<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><rect x="9" y="9" width="11" height="11"></rect><path d="M5 15V5h10"></path></svg></span>
+    <span style="display:inline-flex;align-items:center;gap:6px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;font-weight:500;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted);padding:5px 8px;background:var(--m-bg-muted)"><span style="width:6px;height:6px;border-radius:50%;background:var(--m-forest)"></span>{{ network }}</span>
+    <span style="flex:1"></span>
+    <button type="button" aria-label="Settings" style="width:44px;height:44px;display:grid;place-items:center;border:none;background:none;padding:0;cursor:pointer;color:var(--m-fg)" style-active="background:var(--m-bg-muted)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"></path></svg></button>
+  </div>
+  <div style="flex:1;min-height:0;overflow:hidden;position:relative">
+    <div style="transform:translateY({{ scrollT }})">
+      <div style="padding:20px 16px 0">
+        <div style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted);margin-bottom:6px">Balance</div>
+        <div style="font-size:44px;font-weight:700;letter-spacing:-1px;line-height:1.05">{{ balance }}</div>
+      </div>
+      <div style="display:flex;gap:12px;padding:20px 16px 0">
+        <button type="button" style="flex:1;height:48px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:none;cursor:pointer;background:var(--m-bg-inverse);color:var(--m-fg-inverse);font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:600;font-size:15px" style-active="background:var(--m-fg-press)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M12 3v13M6 11l6 6 6-6"></path></svg>Deposit</button>
+        <button type="button" style="flex:1;height:48px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--m-border-strong);cursor:pointer;background:transparent;color:var(--m-fg);font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:600;font-size:15px;box-sizing:border-box" style-active="background:var(--m-bg-muted)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M4 8V4h4M16 4h4v4M20 16v4h-4M8 20H4v-4"></path><rect x="9" y="9" width="6" height="6"></rect></svg>Receive</button>
+        <button type="button" style="flex:1;height:48px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--m-border-strong);cursor:pointer;background:transparent;color:var(--m-fg);font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:600;font-size:15px;box-sizing:border-box" style-active="background:var(--m-bg-muted)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"></path></svg>Send</button>
+      </div>
+      <dc-import name="Token List" state="{{ state }}" cap="{{ 4 }}" hint-size="100%,306px"></dc-import>
+      <div style="display:flex;align-items:baseline;padding:20px 16px 8px"><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">Recent activity</span><span style="flex:1"></span><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;color:var(--m-accent)">VIEW ALL →</span></div>
+      <div style="border-top:1px solid var(--m-border)">
+        <dc-import name="History Row" kind="sent" status="pending" sub="to taB3…9kDe" amount="−$10.00" time="2:16 PM" hint-size="100%,56px"></dc-import>
+        <dc-import name="History Row" kind="received" sub="from ta7Q…x2Lp" amount="+$25.00" time="2:14 PM" hint-size="100%,56px"></dc-import>
+        <sc-if value="{{ thirdActivity }}" hint-placeholder-val="{{ false }}"><dc-import name="History Row" kind="deposit" sub="Card" amount="+$50.00" time="9:41 AM" hint-size="100%,56px"></dc-import></sc-if>
+      </div>
+      <div style="height:4px"></div>
+    </div>
+  </div>
+  <div style="flex:none;background:var(--m-bg);position:relative;z-index:1">
+    <div style="display:flex;border-top:1px solid var(--m-border)">
+      <span style="position:relative;flex:1;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--m-accent)"><span style="position:absolute;top:-1px;left:14px;right:14px;height:2px;background:var(--m-accent)"></span><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M3 11 12 3l9 8"></path><path d="M5 9.5V21h14V9.5"></path></svg><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;font-weight:600">Home</span></span>
+      <span style="flex:1;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--m-fg-subtle)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M7 4v13M3 8l4-4 4 4M17 20V7M13 16l4 4 4-4"></path></svg><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase">Trade</span></span>
+      <span style="flex:1;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--m-fg-subtle)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 3"></path></svg><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase">Activity</span></span>
+      <span style="flex:1;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--m-fg-subtle)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"></path></svg><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase">Settings</span></span>
+    </div>
+    <sc-if value="{{ isIos }}" hint-placeholder-val="{{ true }}"><div style="height:34px"></div></sc-if>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:844},&quot;state&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;ready&quot;,&quot;options&quot;:[&quot;ready&quot;,&quot;loading&quot;,&quot;error&quot;,&quot;empty&quot;,&quot;edge&quot;,&quot;many&quot;],&quot;tsType&quot;:&quot;'ready' | 'loading' | 'error' | 'empty' | 'edge' | 'many'&quot;},&quot;scrollY&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:0,&quot;tsType&quot;:&quot;number&quot;,&quot;min&quot;:0,&quot;max&quot;:1200},&quot;network&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;Alphanet&quot;,&quot;options&quot;:[&quot;Alphanet&quot;,&quot;Betanet&quot;],&quot;tsType&quot;:&quot;'Alphanet' | 'Betanet'&quot;},&quot;platform&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;ios&quot;,&quot;options&quot;:[&quot;ios&quot;,&quot;web&quot;],&quot;tsType&quot;:&quot;'ios' | 'web'&quot;},&quot;balance&quot;:{&quot;editor&quot;:&quot;text&quot;,&quot;default&quot;:&quot;$56.00&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const p = this.props;
+    const web = (p.platform ?? 'ios') === 'web';
+    return {
+      isIos: !web, isWeb: web,
+      network: p.network ?? 'Alphanet',
+      balance: p.balance ?? '$56.00',
+      state: p.state ?? 'ready',
+      thirdActivity: ['error', 'empty'].includes(p.state ?? 'ready'),
+      scrollT: '-' + Number(p.scrollY ?? 0) + 'px',
+    };
+  }
+}
+</script>
+</body>
+</html>

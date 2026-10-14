@@ -4,12 +4,14 @@ import { describe, expect, it } from 'vitest';
 import { deriveManagedProgramAddresses, MANAGER_PROGRAM_PUBKEY, MANAGER_PROGRAM_ADDRESS, MANAGER_PROGRAM_SEED, ROOT_MANAGER_PROGRAM_ADDRESS } from '../manager';
 import { UPLOADER_PROGRAM_SEED, UPLOADER_PROGRAM_ADDRESS } from '../uploader';
 import {
+  BOOTSTRAP_FAUCET_RATE_LIMIT_POLICY_ADDRESS,
   BOOTSTRAP_PROGRAM_ADDRESSES,
   BOOTSTRAP_PROGRAM_SEEDS,
   CREDITS_MINT_ADDRESS,
   CREDITS_MINT_AUTHORITY_ADDRESS,
   CREDITS_MINT_SEED_HEX,
 } from './index';
+import { Pubkey } from '@thru/sdk';
 import { createThruClient } from '@thru/sdk/client';
 import { deriveMintAddress } from '../token';
 
@@ -32,6 +34,7 @@ const EXPECTED_ADDRESSES = {
   eoa: 'taEOAD2uLK1SLzPgtabFLUAx22yDlBs9DE9nZFTOESIGRr',
   uploader: 'taUPLMH5QYOAT4ktwQeO7DXAEKtqBhYehalNGf5BJFQDYq',
   compression: 'taRB54_92jNbBdcmt2jus88F-xrOSne1GR9mmyOh4RidAK',
+  ratelimit: 'taRATE6MTrtFFKY10oyskMcvokJs53iD5nWE8ZyUuGknMA',
 } as const;
 
 describe('bootstrap-managed program addresses', () => {
@@ -96,6 +99,20 @@ describe('bootstrap-managed program addresses', () => {
         .toString('base64url');
       expect(address).toBe(EXPECTED_ADDRESSES[name]);
     }
+  });
+
+  it('derives the VERIFIED faucet rate limit policy independently of any admin', () => {
+    const sha = (...parts: Uint8Array[]) => {
+      const hash = createHash('sha256');
+      for (const part of parts) hash.update(part);
+      return hash.digest();
+    };
+    const id = Buffer.alloc(8); // policy_id 0, u64 little-endian
+    const seed = sha(Buffer.from('tn_ratelimit_verified_policy_v1'),
+      Pubkey.from(BOOTSTRAP_PROGRAM_ADDRESSES.faucet).toBytes(), id);
+    const policy = sha(Pubkey.from(BOOTSTRAP_PROGRAM_ADDRESSES.ratelimit).toBytes(), Uint8Array.of(0), seed);
+    expect(Pubkey.from(BOOTSTRAP_FAUCET_RATE_LIMIT_POLICY_ADDRESS).toBytes()).toEqual(new Uint8Array(policy));
+    expect(BOOTSTRAP_FAUCET_RATE_LIMIT_POLICY_ADDRESS).toBe('taDrvTPLhMWuRsCyAAnyNm5pkkrlmegsHrwYsJQ1GoBvfd');
   });
 
   it('derives the approved Alphanet THRUSD mint with the wallet setup default', () => {

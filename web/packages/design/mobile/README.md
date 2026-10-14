@@ -28,10 +28,16 @@ step.
   hairline; `height="fixed"` runs it from just under the status bar to the
   bottom so the header stays put between pages, and on web it shortens from
   the bottom while the keyboard is up. `onDismiss` handles the scrim, Escape
-  and system back separately from the close button; `dialogMinWidth` /
+  and system back separately from the close button. The dialog is named after
+  `title`, and the scrim is hidden from accessibility (it would be a second
+  "Close <title>") unless `dismissLabel` names it for an `onDismiss` that does
+  something the close button does not; `scrimAccessibilityProps` gives a
+  custom modal's scrim the same treatment. `dialogMinWidth` /
   `dialogWidth` size the adaptive dialog; `animateIn={false}` shows a
   remounted sheet already open. `useSheetLayout()` tells content whether it
-  is in the dialog and whether the keyboard is up
+  is in the dialog and whether the keyboard is up. `SheetBody` wraps what
+  sits above a page's action row: it fills the room the row leaves and
+  scrolls when the sheet or dialog is too short, so the row stays on screen
 - **`AmountDisplay` / `Keypad`** — the centred 44pt amount with its currency
   sign leading (placeholder tone when empty, shrinks past 9 characters;
   `editable` takes typed input with a caret, for wide layouts), and the 3 x 4
@@ -41,12 +47,19 @@ step.
   Paste (empty) or Clear (filled) inside it, focus ring in the accent; and the
   helper line under a field in muted / checking / ok / warn / error tones, a
   polite live region with an optional Retry
+- **`AddressRow`** — a read-only address in full: mono text wrapping in a
+  bordered box, with the copy button beside it
+- **`AddressCard`** — an address to hand over: mono, centred, with an
+  attached Copy address | Share row (Copied with a forest check)
+- **`QRCard`** — an address as a QR code, dark-on-light in both themes,
+  error correction H with the Thru mark in the centre
 - **`TickerPicker` / `TokenMark`** — the token row (mark, availability,
   chevron, Max) that opens a checkable list even with one token, with a
   loading state; and the ink-disc token mark
 - **`SummaryRows` / `Callout`** — review rows (72pt mono label, value, edit
   glyph; locked while busy) and the square status block, neutral with a
-  spinner or error on the soft accent
+  spinner, error on the soft accent, info with a still glyph, or warn on
+  saffron
 - **`PresetChips` / `QuoteLine`** — the 4-column quick-amount grid (48pt
   cells, inverse when the typed amount matches), and the one line under an
   amount in subtle / muted / loading / error tones, a polite live region with

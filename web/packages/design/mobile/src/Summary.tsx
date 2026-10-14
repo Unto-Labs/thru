@@ -4,14 +4,15 @@
  *
  * Rows lock - no edit glyph, no press - while the thing they describe is
  * under way. A callout is square and borderless: neutral with a spinner for
- * something in progress, or the soft accent with an error glyph for
- * something that failed.
+ * something in progress, the soft accent with an error glyph for something
+ * that failed, info with a still glyph for a fact worth knowing, or warn on
+ * saffron for one the user must not miss.
  */
 import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import { font, space, text, touch } from "./tokens";
 import { makeStyles, useThemeColors } from "./theme";
-import { IconAlert, IconEdit } from "./Icons";
+import { IconAlert, IconEdit, IconInfo, IconWarning } from "./Icons";
 import { Spinner } from "./loading/MarkDrawOn";
 
 export interface SummaryRow {
@@ -77,11 +78,16 @@ export function SummaryRows({
 export function Callout({
   tone = "neutral",
   title,
+  icon,
   children,
 }: {
-  /** `neutral` spins for something under way; `error` is for a failure. */
-  tone?: "neutral" | "error";
+  /** `neutral` spins for something under way; `error` is for a failure;
+      `info` is a still note, such as how a balance is split; `warn` is a
+      caution, such as which network a transfer must come from. */
+  tone?: "neutral" | "error" | "info" | "warn";
   title: string;
+  /** Replaces the info glyph (a 16pt icon, coloured by the caller). */
+  icon?: ReactNode;
   children?: ReactNode;
 }) {
   const styles = useStyles();
@@ -89,11 +95,18 @@ export function Callout({
   return (
     <View
       accessibilityLiveRegion="polite"
-      style={[styles.callout, tone === "error" ? styles.calloutError : null]}
+      style={[
+        styles.callout,
+        tone === "error" ? styles.calloutError : tone === "warn" ? styles.calloutWarn : null,
+      ]}
     >
       <View style={styles.calloutGlyph}>
         {tone === "error" ? (
           <IconAlert size={16} color={colors.error} />
+        ) : tone === "warn" ? (
+          <IconWarning size={16} color={colors.saffron} />
+        ) : tone === "info" ? (
+          (icon ?? <IconInfo size={16} color={colors.fg} />)
         ) : (
           <Spinner size={14} color={colors.fgMuted} />
         )}
@@ -147,6 +160,7 @@ const useStyles = makeStyles((c) => ({
     paddingVertical: space[3],
   },
   calloutError: { backgroundColor: c.accentSoft },
+  calloutWarn: { backgroundColor: c.saffronSoft },
   calloutGlyph: { alignItems: "center", height: 19, justifyContent: "center", width: 16 },
   calloutCopy: { flex: 1, gap: 2 },
   calloutTitle: { color: c.fg, fontFamily: font.sansSemiBold, fontSize: text.sm, lineHeight: 19 },

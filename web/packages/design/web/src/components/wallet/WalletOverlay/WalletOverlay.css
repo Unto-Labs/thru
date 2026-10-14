@@ -61,15 +61,6 @@
   overscroll-behavior: contain;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .tds-woverlay,
-  .tds-woverlay[data-ending-style],
-  .tds-woverlay__scrim,
-  .tds-woverlay__scrim[data-ending-style] {
-    animation-duration: 0.01ms;
-  }
-}
-
 /* ── Mobile: bottom sheet ───────────────────────────────────────────────────
    Below 640px the island stops being a popup and becomes a sheet anchored to
    the bottom edge, full width. Values are from the "Wallet Bottom Sheet"
@@ -127,5 +118,24 @@
 @media (max-width: 640px) {
   :where([data-theme="dark"]) .tds-woverlay__scrim {
     background: rgba(0, 0, 0, 0.72);
+  }
+}
+
+/* ── Reduced motion ─────────────────────────────────────────────────────────
+   No travel: the island's clip-path growth (desktop) and the sheet's slide
+   (phone) both become a short opacity fade, and the scrim fades just as
+   quickly. Exits still run as keyframes, so Base UI's unmount and the
+   renderer's fixed exit hold both see them finish. Kept last on purpose:
+   the ≤640px block above uses the `animation` shorthand, which would reset
+   any earlier duration override at the same specificity. */
+
+@media (prefers-reduced-motion: reduce) {
+  .tds-woverlay,
+  .tds-woverlay__scrim {
+    animation: tds-island-fade-in var(--duration-fast) var(--ease-standard) both;
+  }
+  .tds-woverlay[data-ending-style],
+  .tds-woverlay__scrim[data-ending-style] {
+    animation: tds-island-fade-out var(--duration-fast) var(--ease-standard) both;
   }
 }

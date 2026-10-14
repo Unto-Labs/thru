@@ -5,6 +5,7 @@
  */
 import type { ReactNode } from "react";
 import {
+  Platform,
   Pressable,
   Text,
   TextInput,
@@ -13,6 +14,7 @@ import {
   type DimensionValue,
   type StyleProp,
   type TextInputProps,
+  type TextStyle,
   type ViewStyle,
 } from "react-native";
 import { font, text, touch } from "./tokens";
@@ -24,9 +26,24 @@ export function Card({ children, style }: { children: ReactNode; style?: StylePr
   return <View style={[styles.card, style]}>{children}</View>;
 }
 
-export function SectionLabel({ children }: { children: ReactNode }) {
+/* `muted` is for labels that carry content, such as the Activity feed's day
+   labels; subtle (fgSubtle) is 2.5:1 on light and only fits decoration. */
+export function SectionLabel({
+  children,
+  tone = "subtle",
+  style,
+}: {
+  children: ReactNode;
+  tone?: "subtle" | "muted";
+  style?: StyleProp<TextStyle>;
+}) {
   const styles = useStyles();
-  return <Text style={styles.sectionLabel}>{children}</Text>;
+  const colors = useThemeColors();
+  return (
+    <Text style={[styles.sectionLabel, tone === "muted" ? { color: colors.fgMuted } : null, style]}>
+      {children}
+    </Text>
+  );
 }
 
 export interface SkeletonProps {
@@ -125,13 +142,15 @@ export function Cell({
           </Text>
         ) : null}
       </View>
-      {right}
+      {right ? <View style={styles.cellRight}>{right}</View> : null}
       {chevron ? <IconChevronRight /> : null}
     </Pressable>
   );
 }
 
-export type BadgeTone = "neutral" | "success" | "warn" | "brand";
+/* `error` is solid: brick fill, bg text (4.9:1 light, 7.3:1 dark). The `brand`
+   tone, brick on brickSoft, is 3.9:1 and too faint to say "failed". */
+export type BadgeTone = "neutral" | "success" | "warn" | "brand" | "error";
 
 function badgeTone(c: ThemeColors, tone: BadgeTone): { bg: string; fg: string } {
   switch (tone) {
@@ -141,6 +160,8 @@ function badgeTone(c: ThemeColors, tone: BadgeTone): { bg: string; fg: string } 
       return { bg: c.saffronSoft, fg: c.saffron };
     case "brand":
       return { bg: c.brickSoft, fg: c.accent };
+    case "error":
+      return { bg: c.accent, fg: c.bg };
     default:
       return { bg: c.bgMuted, fg: c.fgMuted };
   }
@@ -282,6 +303,11 @@ const useStyles = makeStyles((c) => ({
   cellBody: { flex: 1, gap: 2 },
   cellTitle: { fontFamily: font.sansMedium, fontSize: text.base, color: c.fg },
   cellSubtitle: { fontFamily: font.mono, fontSize: text.sm, color: c.fgMuted },
+  /* The right slot gets its own box so an accessory that pins itself (Badge's
+     alignSelf flex-start, kept for chip and title rows) still centres in the
+     row; row + gutter lays out a multi-node accessory as before, and it
+     shrinks like the bare accessory did when the row runs out of room. */
+  cellRight: { flexDirection: "row", alignItems: "center", gap: touch.gutter, flexShrink: 1, minWidth: 0 },
   badge: { paddingHorizontal: 8, paddingVertical: 4, alignSelf: "flex-start" },
   badgeText: { fontFamily: font.monoMedium, fontSize: text.xxs, letterSpacing: 0.5, textTransform: "uppercase" },
   segmented: {
@@ -289,12 +315,16 @@ const useStyles = makeStyles((c) => ({
     borderWidth: 1,
     borderColor: c.borderStrong,
   },
+  /* Equal while every label fits. On the web a segment never shrinks below
+     its label, so a long one ("Transfers" at 320) takes the room a short one
+     ("All") leaves instead of truncating. */
   segment: {
     flex: 1,
     height: touch.hitMin,
     alignItems: "center",
     justifyContent: "center",
     paddingHorizontal: 4,
+    ...(Platform.OS === "web" ? { minWidth: "auto" as const } : null),
   },
   segmentDivided: {
     borderLeftWidth: 1,

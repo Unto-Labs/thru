@@ -1,13 +1,8 @@
-import { useCallback, useEffect, useRef } from 'react';
-import type { ConnectResult, IThruChain } from '../../../interfaces';
-import type { CreateAccountResult } from '../../../protocol';
-import type {
-  ConnectOptions,
-  CreateAccountOptions,
-  SignInOptions,
-} from '../../NativeSDK';
-import { useThru } from './useThru';
-import { waitForWallet } from './waitForWallet';
+import { useCallback, useEffect, useRef } from "react";
+import type { ConnectResult, IThruChain } from "../../../interfaces";
+import type { ConnectOptions } from "../../NativeSDK";
+import { useThru } from "./useThru";
+import { waitForWallet } from "./waitForWallet";
 
 /**
  * useWallet - mirror of @thru/wallet/react's useWallet. The `wallet` field
@@ -42,27 +37,9 @@ export function useWallet() {
 
   const connect = useCallback(
     async (options?: ConnectOptions): Promise<ConnectResult> => {
-    const ready =
-      walletRef.current ?? (await waitForWallet(() => walletRef.current));
-    return ready.connect(options);
-    },
-    [],
-  );
-
-  const signIn = useCallback(
-    async (options: SignInOptions): Promise<ConnectResult> => {
-    const ready =
-      walletRef.current ?? (await waitForWallet(() => walletRef.current));
-    return ready.signIn(options);
-    },
-    [],
-  );
-
-  const createTransparentAccount = useCallback(
-    async (options?: CreateAccountOptions): Promise<CreateAccountResult> => {
       const ready =
         walletRef.current ?? (await waitForWallet(() => walletRef.current));
-      return ready.createAccount(options);
+      return ready.connect(options);
     },
     [],
   );
@@ -75,9 +52,9 @@ export function useWallet() {
 
   const refreshWalletAvailability = useCallback(
     async (options?: ConnectOptions) => {
-    const ready =
-      walletRef.current ?? (await waitForWallet(() => walletRef.current));
-    return ready.refreshWalletAvailability(options);
+      const ready =
+        walletRef.current ?? (await waitForWallet(() => walletRef.current));
+      return ready.refreshWalletAvailability(options);
     },
     [],
   );
@@ -92,8 +69,6 @@ export function useWallet() {
     sessions: wallet?.sessions,
     accounts,
     connect,
-    signIn,
-    createAccount: createTransparentAccount,
     disconnect,
     isConnected: isConnected && !!wallet,
     isConnecting,
@@ -110,7 +85,7 @@ export function useWallet() {
     walletAvailability,
     hasPasskey: walletAvailability.hasPasskey,
     hasWalletAccount: walletAvailability.hasWalletAccount,
-    isWalletAvailabilityLoading: walletAvailability.status === 'checking',
+    isWalletAvailabilityLoading: walletAvailability.status === "checking",
     refreshWalletAvailability,
   };
 }

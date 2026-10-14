@@ -29,6 +29,12 @@
   from { opacity: 0; }
   to { opacity: 1; }
 }
+/* Reduced motion: keep the fade, but short. */
+@media (prefers-reduced-motion: reduce) {
+  .tds-wsheet__escalation {
+    animation-duration: var(--duration-fast);
+  }
+}
 
 /* Connected account row */
 .tds-wsheet__account {
@@ -162,6 +168,13 @@
 .tds-wsheet__advanced-panel[data-ending-style] {
   height: 0;
 }
+/* Reduced motion: Advanced opens and closes at once, the chevron snaps. */
+@media (prefers-reduced-motion: reduce) {
+  .tds-wsheet__advanced-chev,
+  .tds-wsheet__advanced-panel {
+    transition: none;
+  }
+}
 .tds-wsheet__advanced-body {
   padding: 0 var(--space-2) var(--space-2);
 }
@@ -218,6 +231,12 @@
     font-family: var(--font-mono);
     font-weight: var(--fw-semibold);
     font-size: 15px;
+  }
+
+  /* A ghost CTA ending the sheet over the network status (Frame.css): the
+     status moves up to its label, half of the 48px less the 15px label. */
+  .tds-frame--network:has(.tds-screen:not([hidden] *) > .tds-screen__body:last-child > .tds-wsheet__cta.tds-btn--ghost:last-child):not(:has(.tds-powered)) .tds-frame__network {
+    margin-top: calc((15px - 48px) / 2);
   }
 
   /* A field stacked with those actions takes the same 48px, as the Input's

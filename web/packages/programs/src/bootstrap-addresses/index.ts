@@ -1,4 +1,5 @@
 import { deriveManagedProgramAddresses } from '../manager/derivation.js';
+import { deriveRatelimitPolicyAddress } from '../ratelimit/derivation.js';
 import { deriveAddress, deriveProgramAddress, Pubkey } from '@thru/sdk';
 
 /** Permanent seeds used by programs/bootstrap. Changing a seed changes every
@@ -22,6 +23,7 @@ export const BOOTSTRAP_PROGRAM_SEEDS = Object.freeze({
   eoa: 'thru-program:207434',
   uploader: 'thru-program:1073768',
   compression: 'thru-compression:v1',
+  ratelimit: 'thru-program:1697627',
 } as const);
 
 function managedProgramAddress(seed: string): string {
@@ -56,6 +58,7 @@ export const BOOTSTRAP_PROGRAM_ADDRESSES = Object.freeze({
   eoa: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.eoa),
   uploader: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.uploader),
   compression: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.compression),
+  ratelimit: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.ratelimit),
 } as const);
 
 function stateAddress(program: string, label: string): string {
@@ -67,6 +70,15 @@ function stateAddress(program: string, label: string): string {
 const wthruSeed = new Uint8Array(32);
 /** Created by Faucet initialization after deployment, never by genesis. */
 export const BOOTSTRAP_FAUCET_VAULT_ADDRESS = stateAddress(BOOTSTRAP_PROGRAM_ADDRESSES.faucet, 'vault');
+
+/** VERIFIED rate limiter policy 0 for the faucet, created by bootstrap
+ * ratelimit setup. Its address depends only on the rate limiter, the faucet
+ * and policy_id, so it is the same on every network. */
+export const BOOTSTRAP_FAUCET_RATE_LIMIT_POLICY_ID = 0n;
+export const BOOTSTRAP_FAUCET_RATE_LIMIT_POLICY_ADDRESS = deriveRatelimitPolicyAddress(
+  BOOTSTRAP_PROGRAM_ADDRESSES.ratelimit,
+  { target: BOOTSTRAP_PROGRAM_ADDRESSES.faucet, policyId: BOOTSTRAP_FAUCET_RATE_LIMIT_POLICY_ID, verified: true },
+).address;
 
 wthruSeed.set(new TextEncoder().encode('wthru'));
 const wthruMintSeed = deriveAddress([

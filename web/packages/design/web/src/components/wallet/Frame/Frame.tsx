@@ -173,6 +173,9 @@ export interface FrameProps {
   /** Ease the frame to its new size when the content changes — for a frame
    *  that stays mounted while screens swap inside it. */
   animateResize?: boolean;
+  /** Active network, e.g. "Alphanet": a status line under the screens. It
+   *  sits the same distance under every screen; see Frame.css. */
+  network?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }
@@ -180,7 +183,8 @@ export interface FrameProps {
 /**
  * Frame — the wallet chrome: a top bar with the site identity (mark, label,
  * optional verified badge + tag) and a close button, wrapping the screen
- * content. Self-contained light surface so it reads over a dark stage.
+ * content and, optionally, the network status under it. Self-contained light
+ * surface so it reads over a dark stage.
  */
 export const Frame = React.forwardRef<HTMLDivElement, FrameProps>(
   function Frame(
@@ -192,11 +196,13 @@ export const Frame = React.forwardRef<HTMLDivElement, FrameProps>(
       backLabel = "Back",
       animate = false,
       animateResize = false,
+      network,
       children,
       className,
     },
     ref,
   ) {
+    const hasNetwork = network != null;
     const frameRef = React.useRef<HTMLDivElement | null>(null);
     const contentRef = React.useRef<HTMLDivElement | null>(null);
     const setFrameRef = React.useCallback(
@@ -217,6 +223,7 @@ export const Frame = React.forwardRef<HTMLDivElement, FrameProps>(
           animate === "in" && "tds-frame--in",
           animate === "out" && "tds-frame--out",
           animateResize && "tds-frame--resize",
+          hasNetwork && "tds-frame--network",
           className,
         )}
       >
@@ -262,6 +269,13 @@ export const Frame = React.forwardRef<HTMLDivElement, FrameProps>(
         <div ref={contentRef} className="tds-frame__content">
           {children}
         </div>
+        {hasNetwork && (
+          <p className="tds-frame__network">
+            <span className="tds-frame__network-dot" aria-hidden />
+            <span className="tds-frame__network-hint">Network: </span>
+            <span className="tds-frame__network-name">{network}</span>
+          </p>
+        )}
       </div>
     );
   },

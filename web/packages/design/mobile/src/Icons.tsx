@@ -374,3 +374,76 @@ export function IconScan({ size = 18, color }: IconProps) {
     </Svg>
   );
 }
+
+/* Activity: one glyph per kind of event, from the Activity handoff
+   (design/History Row.dc.html). Each is a single stroked path. */
+
+function ActivityGlyph({ d, size, color }: IconProps & { d: string }) {
+  const c = useIconColor(color);
+  return (
+    <Svg {...base(size ?? 18)}>
+      <Path d={d} {...stroke(c)} strokeLinejoin="miter" />
+    </Svg>
+  );
+}
+
+/** Money out: the arrow leaving to the top right. Also "opens elsewhere". */
+export function IconArrowOut({ size = 18, color }: IconProps) {
+  return <ActivityGlyph d="M7 17 17 7M8 7h9v9" size={size} color={color} />;
+}
+
+/** Money in: the arrow arriving at the bottom left. */
+export function IconArrowIn({ size = 18, color }: IconProps) {
+  return <ActivityGlyph d="M17 7 7 17M16 17H7V8" size={size} color={color} />;
+}
+
+/** A deposit: down into the tray. */
+export function IconTray({ size = 18, color }: IconProps) {
+  return <ActivityGlyph d="M12 3v12M7 10l5 5 5-5M4 20h16" size={size} color={color} />;
+}
+
+/** An account: the wallet with its flap. */
+export function IconAccount({ size = 18, color }: IconProps) {
+  return <ActivityGlyph d="M3 7h18v12H3zM3 7V5h14v2M15 13h3" size={size} color={color} />;
+}
+
+/** Signing in: the arrow through the door. */
+export function IconSignIn({ size = 18, color }: IconProps) {
+  return <ActivityGlyph d="M14 4h6v16h-6M3 12h11M10 8l4 4-4 4" size={size} color={color} />;
+}
+
+/** Time: signing sessions, pending states and the Activity tab. */
+export function IconClock({ size = 18, color }: IconProps) {
+  return <ActivityGlyph d="M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0zM12 7v5l3 3" size={size} color={color} />;
+}
+
+/** A passkey: a plain key. The FIDO mark stays on ceremony buttons. */
+export function IconKey({ size = 18, color }: IconProps) {
+  return (
+    <ActivityGlyph d="M11 12a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0zM11 12h10M18 12v3M15 12v2" size={size} color={color} />
+  );
+}
+
+/** Sharing: up and out of the tray. The detail screen's Share action;
+    IconShare is Safari's own button, drawn for install steps. */
+export function IconShareOut({ size = 16, color }: IconProps) {
+  const c = useIconColor(color);
+  return (
+    <Svg {...base(size)}>
+      <Path d="M12 3v13M7 8l5-5 5 5" {...stroke(c)} strokeLinejoin="miter" />
+      <Path d="M5 12v8h14v-8" {...stroke(c)} strokeLinejoin="miter" />
+    </Svg>
+  );
+}
+
+/** A receipt: a transaction not yet known to be any kind. */
+export function IconReceipt({ size = 18, color }: IconProps) {
+  return (
+    <ActivityGlyph d="M5 3h14v18l-2-1.5L15 21l-2-1.5L11 21l-2-1.5L7 21l-2-1.5zM8 8h8M8 12h8M8 16h5" size={size} color={color} />
+  );
+}
+
+/** A program: angle brackets. */
+export function IconCode({ size = 18, color }: IconProps) {
+  return <ActivityGlyph d="M8 8 4 12l4 4M16 8l4 4-4 4" size={size} color={color} />;
+}

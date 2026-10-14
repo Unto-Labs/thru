@@ -444,9 +444,19 @@
   color: var(--m-fg-subtle);
 }
 
+@keyframes tds-mpair-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
 @media (prefers-reduced-motion: reduce) {
+  /* No rotation; the ring pulses so it still reads as working. */
   .tds-mpair__spin {
-    animation: none;
+    animation: tds-mpair-pulse 1.6s ease-in-out infinite;
   }
   .tds-mpair__btn {
     transition: none;

@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="thru-mobile-tokens.css">
+<style>
+body{margin:0;-webkit-font-smoothing:antialiased;}
+a{color:var(--m-accent);text-decoration:none;}
+a:hover{text-decoration:underline;text-underline-offset:3px;}
+@keyframes tm-spin{to{transform:rotate(360deg);}}
+@keyframes tm-shimmer{0%,100%{opacity:1;}50%{opacity:0.55;}}
+</style>
+</helmet>
+<div data-screen-label="Activity feed" style="position:relative;width:100%;height:100%;box-sizing:border-box;display:flex;flex-direction:column;background:var(--m-bg);color:var(--m-fg);font-family:'Inter Tight',system-ui,sans-serif;overflow:hidden">
+  <sc-if value="{{ isPhone }}" hint-placeholder-val="{{ true }}">
+    <div aria-hidden="true" style="height:54px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 26px 10px 32px;flex:none">
+      <span style="font-size:15px;font-weight:600;letter-spacing:-0.2px">9:41</span>
+      <span style="display:inline-flex;align-items:center;gap:6px;color:var(--m-fg)"><svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="8" width="3" height="4"></rect><rect x="5" y="5.5" width="3" height="6.5"></rect><rect x="10" y="3" width="3" height="9"></rect><rect x="15" y="0" width="3" height="12"></rect></svg><svg width="16" height="12" viewBox="0 0 16 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M1.5 4.5a9.5 9.5 0 0 1 13 0M4 7.2a6 6 0 0 1 8 0M6.5 9.9a2.4 2.4 0 0 1 3 0"></path></svg><svg width="26" height="12" viewBox="0 0 26 12" fill="none"><rect x="0.5" y="0.5" width="22" height="11" stroke="currentColor"></rect><rect x="2" y="2" width="19" height="8" fill="currentColor"></rect><rect x="24" y="4" width="2" height="4" fill="currentColor"></rect></svg></span>
+    </div>
+    <div style="padding:6px 16px 12px;flex:none"><h1 style="margin:0;font-size:28px;font-weight:700;letter-spacing:-0.5px;line-height:34px">{{ title }}</h1></div>
+    <div style="padding:0 16px 8px;flex:none">
+      <div role="tablist" aria-label="Filter" style="display:flex;border:1px solid var(--m-border-strong)">
+        <sc-for list="{{ filters }}" as="f" hint-placeholder-count="4">
+          <button type="button" role="tab" aria-selected="{{ f.on }}" onClick="{{ f.select }}" style="flex:1;min-width:0;height:44px;padding:0 4px;border:none;border-left:{{ f.bl }};background:{{ f.bg }};color:{{ f.fg }};font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" style-active="opacity:0.8">{{ f.label }}</button>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+  <sc-if value="{{ isDesktop }}" hint-placeholder-val="{{ false }}">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:24px;padding:40px 0 20px;flex:none">
+      <h1 style="margin:0;font-size:28px;font-weight:700;letter-spacing:-0.5px;line-height:34px">{{ title }}</h1>
+      <div role="tablist" aria-label="Filter" style="display:flex;width:440px;border:1px solid var(--m-border-strong)">
+        <sc-for list="{{ filters }}" as="f" hint-placeholder-count="4">
+          <button type="button" role="tab" aria-selected="{{ f.on }}" onClick="{{ f.select }}" style="flex:1;min-width:0;height:44px;padding:0 4px;border:none;border-left:{{ f.bl }};background:{{ f.bg }};color:{{ f.fg }};font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;cursor:pointer;white-space:nowrap" style-hover="opacity:0.85">{{ f.label }}</button>
+        </sc-for>
+      </div>
+    </div>
+  </sc-if>
+  <sc-if value="{{ isRefreshFailed }}" hint-placeholder-val="{{ false }}">
+    <div role="alert" style="display:flex;align-items:center;gap:10px;min-height:44px;padding:0 4px 0 16px;border-top:1px solid var(--m-hair);flex:none">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true" style="flex:none;color:var(--m-accent)"><circle cx="12" cy="12" r="9"></circle><path d="M12 7.5v6M12 16v.5"></path></svg>
+      <span style="flex:1;min-width:0;font-size:13px;line-height:18px;color:var(--m-accent);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Couldn’t refresh — showing what loaded earlier.</span>
+      <button type="button" style="height:44px;padding:0 12px;border:none;background:none;cursor:pointer;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg)" style-active="background:var(--m-bg-muted)">Retry</button>
+    </div>
+  </sc-if>
+  <div style="flex:1;min-height:0;display:flex;flex-direction:column;justify-content:{{ listJustify }};overflow:hidden">
+    <sc-if value="{{ hasRows }}" hint-placeholder-val="{{ true }}">
+      <div style="flex:none">
+        <sc-for list="{{ groups }}" as="g" hint-placeholder-count="3">
+          <div style="position:sticky;top:0;padding:20px 16px 8px;background:var(--m-bg);font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">{{ g.label }}</div>
+          <div style="border-top:1px solid var(--m-hair)">
+            <sc-for list="{{ g.rows }}" as="r" hint-placeholder-count="3">
+              <dc-import name="History Row" kind="{{ r.kind }}" status="{{ r.status }}" sub="{{ r.sub }}" amount="{{ r.amount }}" time="{{ r.time }}" selected="{{ r.selected }}" hint-size="100%,56px"></dc-import>
+            </sc-for>
+          </div>
+        </sc-for>
+        <div style="padding:16px 16px 24px">
+          <button type="button" style="width:100%;height:48px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:none;background:transparent;color:var(--m-fg);font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:600;font-size:15px;cursor:pointer" style-active="background:var(--m-bg-muted)">Load more</button>
+        </div>
+      </div>
+    </sc-if>
+    <sc-if value="{{ isLoading }}" hint-placeholder-val="{{ false }}">
+      <div aria-busy="true" aria-label="Loading activity" style="flex:none;animation:tm-shimmer 1.4s ease-in-out infinite">
+        <sc-for list="{{ skeletonGroups }}" as="sg" hint-placeholder-count="2">
+          <div style="padding:22px 16px 10px"><span style="display:block;width:56px;height:10px;background:var(--m-bg-inset)"></span></div>
+          <div style="border-top:1px solid var(--m-hair)">
+            <sc-for list="{{ sg.rows }}" as="k" hint-placeholder-count="3">
+              <div style="position:relative;display:flex;align-items:center;gap:12px;height:56px;padding:0 16px">
+                <span style="width:32px;height:32px;flex:none;background:var(--m-bg-inset)"></span>
+                <span style="flex:1;display:flex;flex-direction:column;gap:7px"><span style="display:block;width:132px;height:12px;background:var(--m-bg-inset)"></span><span style="display:block;width:92px;height:9px;background:var(--m-bg-inset)"></span></span>
+                <span style="display:flex;flex-direction:column;align-items:flex-end;gap:7px"><span style="display:block;width:52px;height:12px;background:var(--m-bg-inset)"></span><span style="display:block;width:40px;height:9px;background:var(--m-bg-inset)"></span></span>
+                <span style="position:absolute;left:16px;right:16px;bottom:0;height:1px;background:var(--m-hair)"></span>
+              </div>
+            </sc-for>
+          </div>
+        </sc-for>
+      </div>
+    </sc-if>
+    <sc-if value="{{ isFailed }}" hint-placeholder-val="{{ false }}">
+      <div role="alert" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:0 32px 96px;text-align:center">
+        <div style="font-size:17px;font-weight:600;line-height:22px">Couldn’t load your {{ failNoun }}</div>
+        <div style="font-size:14px;line-height:20px;color:var(--m-fg-muted);text-wrap:pretty;max-width:280px">Check your connection and try again.</div>
+        <button type="button" style="margin-top:12px;height:48px;padding:0 24px;border:1px solid var(--m-border-strong);background:transparent;color:var(--m-fg);font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:600;font-size:15px;cursor:pointer" style-active="background:var(--m-bg-muted)">Try again</button>
+      </div>
+    </sc-if>
+    <sc-if value="{{ isEmpty }}" hint-placeholder-val="{{ false }}">
+      <div role="status" style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;padding:0 32px 96px;text-align:center">
+        <div style="font-size:17px;font-weight:600;line-height:22px">{{ emptyTitle }}</div>
+        <div style="font-size:14px;line-height:20px;color:var(--m-fg-muted);text-wrap:pretty;max-width:280px">{{ emptyBody }}</div>
+      </div>
+    </sc-if>
+  </div>
+  <sc-if value="{{ isPhone }}" hint-placeholder-val="{{ true }}">
+    <div style="flex:none;background:var(--m-bg)">
+      <div role="tablist" style="display:flex;border-top:1px solid var(--m-border)">
+        <span role="tab" style="flex:1;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--m-fg-subtle)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M3 11 12 3l9 8"></path><path d="M5 9.5V21h14V9.5"></path></svg><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase">Home</span></span>
+        <span role="tab" style="flex:1;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--m-fg-subtle)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M7 4v13M3 8l4-4 4 4M17 20V7M13 16l4 4 4-4"></path></svg><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase">Trade</span></span>
+        <span role="tab" aria-selected="true" style="position:relative;flex:1;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--m-accent)"><span style="position:absolute;top:-1px;left:14px;right:14px;height:2px;background:var(--m-accent)"></span><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v5l3 3"></path></svg><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase;font-weight:600">{{ title }}</span></span>
+        <span role="tab" style="flex:1;height:56px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--m-fg-subtle)"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter" aria-hidden="true"><path d="M21 4h-7M10 4H3M21 12h-9M8 12H3M21 20h-5M12 20H3M14 2v4M8 10v4M16 18v4"></path></svg><span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:10px;letter-spacing:0.08em;text-transform:uppercase">Settings</span></span>
+      </div>
+      <div style="height:34px"></div>
+    </div>
+  </sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:844},&quot;filter&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;all&quot;,&quot;options&quot;:[&quot;all&quot;,&quot;deposits&quot;,&quot;transfers&quot;,&quot;account&quot;],&quot;tsType&quot;:&quot;'all' | 'deposits' | 'transfers' | 'account'&quot;},&quot;state&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;ready&quot;,&quot;options&quot;:[&quot;ready&quot;,&quot;loading&quot;,&quot;failed&quot;,&quot;refreshFailed&quot;,&quot;empty&quot;],&quot;tsType&quot;:&quot;FeedState&quot;},&quot;scrolled&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;layout&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;phone&quot;,&quot;options&quot;:[&quot;phone&quot;,&quot;desktop&quot;],&quot;tsType&quot;:&quot;'phone' | 'desktop'&quot;},&quot;title&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;Activity&quot;,&quot;options&quot;:[&quot;Activity&quot;,&quot;History&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;selectedRow&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:-1,&quot;tsType&quot;:&quot;number&quot;,&quot;min&quot;:-1,&quot;max&quot;:8}}">
+const FILTERS = [['all', 'All'], ['deposits', 'Deposits'], ['transfers', 'Transfers'], ['account', 'Account']];
+const IN_FILTER = { deposits: ['deposit'], transfers: ['sent', 'received'], account: ['account_created', 'signed_in', 'session_created', 'session_ended', 'passkey_added', 'passkey_removed'] };
+const EVENTS = [
+  { day: 'Today', kind: 'sent', status: 'pending', sub: 'to taB3\u20269kDe', amount: '\u2212$10.00', time: '2:16 PM' },
+  { day: 'Today', kind: 'received', status: 'done', sub: 'from ta7Q\u2026x2Lp', amount: '+$25.00', time: '2:14 PM' },
+  { day: 'Today', kind: 'deposit', status: 'done', sub: 'Card', amount: '+$50.00', time: '9:41 AM' },
+  { day: 'Yesterday', kind: 'session_created', status: 'done', sub: 'Expires Oct 6, 9:41 AM', amount: '', time: '9:40 AM' },
+  { day: 'Yesterday', kind: 'signed_in', status: 'done', sub: 'Safari on iPhone', amount: '', time: '9:39 AM' },
+  { day: 'Yesterday', kind: 'sent', status: 'failed', sub: 'to taB3\u20269kDe', amount: '\u2212$5.00', time: '8:02 AM' },
+  { day: 'Sep 28', kind: 'passkey_added', status: 'done', sub: 'iPhone 17 Pro', amount: '', time: '11:08 AM' },
+  { day: 'Sep 28', kind: 'account_created', status: 'done', sub: 'Main \u00b7 ta1k\u20269fq2', amount: '', time: '11:05 AM' },
+  { day: 'Sep 28', kind: 'other', status: 'done', sub: 'Program taAM\u20267mQs', amount: '', time: '11:02 AM' },
+];
+const EMPTY = {
+  all: ['No transactions yet', 'Deposits, transfers and account events will show up here.'],
+  deposits: ['No deposits yet', 'Money you add to your wallet shows up here.'],
+  transfers: ['No transfers yet', 'Money you send or receive shows up here.'],
+  account: ['No account activity yet', 'Sign-ins, signing sessions and passkeys show up here.'],
+};
+const NOUN = { all: 'transactions', deposits: 'deposits', transfers: 'transfers', account: 'account activity' };
+class Component extends DCLogic {
+  state = { filter: null };
+  renderVals() {
+    const p = this.props;
+    const filter = this.state.filter ?? p.filter ?? 'all';
+    const st = p.state ?? 'ready';
+    const layout = p.layout ?? 'phone';
+    const title = p.title ?? 'Activity';
+    const sel = Number(p.selectedRow ?? -1);
+    const evs = EVENTS.filter((e) => filter === 'all' || IN_FILTER[filter].includes(e.kind));
+    const groups = [];
+    for (const e of evs) { let g = groups.find((x) => x.label === e.day); if (!g) { g = { label: e.day, rows: [] }; groups.push(g); } g.rows.push({ ...e, selected: EVENTS.indexOf(e) === sel }); }
+    return {
+      isPhone: layout === 'phone', isDesktop: layout === 'desktop', title,
+      filters: FILTERS.map(([v, l], i) => ({ label: l, on: v === filter, bg: v === filter ? 'var(--m-fg)' : 'transparent', fg: v === filter ? 'var(--m-bg)' : 'var(--m-fg-muted)', bl: i ? '1px solid var(--m-border-strong)' : 'none', select: () => this.setState({ filter: v }) })),
+      groups,
+      hasRows: st === 'ready' || st === 'refreshFailed',
+      isLoading: st === 'loading', isFailed: st === 'failed', isRefreshFailed: st === 'refreshFailed', isEmpty: st === 'empty',
+      listJustify: p.scrolled ? 'flex-end' : 'flex-start',
+      emptyTitle: EMPTY[filter][0], emptyBody: EMPTY[filter][1], failNoun: NOUN[filter],
+      skeletonGroups: [{ rows: [1, 2, 3] }, { rows: [1, 2, 3] }],
+    };
+  }
+}
+</script>
+</body>
+</html>

@@ -30,10 +30,14 @@
  */
 import { useEffect, useState } from 'react';
 import { AccessibilityInfo, Animated, Easing, Text, View } from 'react-native';
-import Svg, { Circle, Path } from 'react-native-svg';
+import Svg, { Path } from 'react-native-svg';
 import { font, space, text } from '../tokens';
 import { makeStyles, useThemeColors } from '../theme';
 import { Button } from '../Button';
+import { Spinner } from '../Spinner';
+
+/* Re-exported so the kit's index and existing imports keep their path. */
+export { Spinner, type SpinnerProps } from '../Spinner';
 import {
   WINGS_MARK_PATH,
   WINGS_MARK_TRIM_ASPECT,
@@ -44,7 +48,6 @@ import {
 const DRAW_MS = 900;
 const FILL_MS = 220;
 const HANDOFF_MS = 200;
-const ORBIT_PERIOD_MS = 1200;
 const ORBIT_AFTER_MS = 2400;
 const ESCALATE_AFTER_MS = 8000;
 /* Anything that fades purely to acknowledge a state change. */
@@ -52,7 +55,6 @@ const REVEAL_MS = 200;
 
 /* Hairline weights, in pt. */
 const MARK_STROKE_PT = 1.5;
-const ORBIT_STROKE_PT = 2;
 
 /* The orbit has to clear the glyph. Flattening WINGS_MARK_PATH puts its true
    circumscribed radius at 54.8pt for an 88pt mark — well inside the 59.2pt
@@ -237,74 +239,6 @@ export function MarkDraw({ size = MARK_SIZE, color, drawing = true }: MarkDrawPr
   );
 }
 
-export interface SpinnerProps {
-  /** Outer diameter in pt. */
-  size?: number;
-  /** Defaults to the theme accent. */
-  color?: string;
-}
-
-/**
- * A 90-degree accent arc orbiting once every 1200ms, built as a Thru-shaped
- * stand-in for the platform `ActivityIndicator`. Prototype-local, so it is not
- * a general-purpose kit spinner today.
- * The sweep is a static dash pattern on a circle and the revolution is a
- * native-driven rotation, so nothing crosses the bridge per frame. Honours
- * reduce motion by holding the arc still.
- */
-export function Spinner({ size = 20, color }: SpinnerProps) {
-  const colors = useThemeColors();
-  const reduceMotion = useReduceMotion();
-  const styles = useStyles();
-  const tint = color ?? colors.accent;
-  const [spin] = useState(() => new Animated.Value(0));
-
-  useEffect(() => {
-    if (reduceMotion) {
-      spin.setValue(0);
-      return;
-    }
-    const loop = Animated.loop(
-      Animated.timing(spin, {
-        toValue: 1,
-        duration: ORBIT_PERIOD_MS,
-        easing: Easing.linear,
-        useNativeDriver: true,
-      })
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [reduceMotion, spin]);
-
-  /* Inset by half the stroke so the arc sits inside the declared box. */
-  const radius = (size - ORBIT_STROKE_PT) / 2;
-  const circumference = 2 * Math.PI * radius;
-  const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
-
-  return (
-    <Animated.View
-      accessible={false}
-      accessibilityElementsHidden
-      importantForAccessibility="no-hide-descendants"
-      style={[styles.orbit, { width: size, height: size, transform: [{ rotate }] }]}
-    >
-      <Svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} fill="none">
-        <Circle
-          cx={size / 2}
-          cy={size / 2}
-          r={radius}
-          stroke={tint}
-          strokeWidth={ORBIT_STROKE_PT}
-          strokeLinecap="butt"
-          /* A quarter on, a full circumference off: the gap outlasts the
-             contour, so exactly one arc exists no matter the radius. */
-          strokeDasharray={[circumference / 4, circumference]}
-        />
-      </Svg>
-    </Animated.View>
-  );
-}
-
 export interface SplashStateProps {
   /** The one reassuring sentence. Sentence case, one line, never two. */
   copy: string;
@@ -468,5 +402,4 @@ const useStyles = makeStyles((c) => ({
     textAlign: 'center',
   },
   retry: { marginTop: space[5] },
-  orbit: { alignItems: 'center', justifyContent: 'center' },
 }));

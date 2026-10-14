@@ -296,6 +296,58 @@ describe("Indexer supervisor", () => {
     await startPromise;
   });
 
+  it("marks a stream stalled, and the indexer unhealthy, when one batch phase exceeds streamPhaseStallMs", async () => {
+    const logger = createMockLogger();
+    const indexer = new Indexer({
+      db: createDb() as any,
+      clientFactory: (() => ({})) as any,
+      eventStreams: [createEventStream("token-history")],
+      logger,
+      streamPhaseStallMs: 60_000,
+    });
+    const nowSpy = vi.spyOn(Date, "now");
+
+    try {
+      const startPromise = indexer.start();
+      await waitFor(() => indexer.getStatus().streams[0].state === "running");
+
+      processorState.latestObserver?.onPhase?.({ phase: "filterBatch", slot: 42n });
+      const busy = indexer.getStatus();
+      expect(busy.healthy).toBe(true);
+      expect(busy.streams[0]).toMatchObject({
+        activePhase: "filterBatch",
+        activeBatchSlot: "42",
+        stalled: false,
+      });
+      expect(busy.streams[0].activePhaseSince).not.toBeNull();
+
+      nowSpy.mockReturnValue(Date.now() + 61_000);
+      const stalled = indexer.getStatus();
+      expect(stalled.healthy).toBe(false);
+      expect(stalled.streams[0]).toMatchObject({ state: "running", stalled: true });
+      expect(
+        logger.warn.mock.calls.filter(
+          (call) => call[1]?.event === "indexer.stream.unhealthy" && call[1]?.reason === "stalled"
+        )
+      ).toHaveLength(1);
+
+      processorState.latestObserver?.onPhase?.({ phase: null });
+      const idle = indexer.getStatus();
+      expect(idle.healthy).toBe(true);
+      expect(idle.streams[0]).toMatchObject({
+        activePhase: null,
+        activePhaseSince: null,
+        activeBatchSlot: null,
+        stalled: false,
+      });
+
+      indexer.stop();
+      await startPromise;
+    } finally {
+      nowSpy.mockRestore();
+    }
+  });
+
   it("does not mark streams stale unless streamStaleMs is configured", async () => {
     const indexer = new Indexer({
       db: createDb() as any,

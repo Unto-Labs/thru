@@ -39,6 +39,11 @@ import type { WebViewRefLike } from "../provider/WebViewBridge";
 import QRCodeStyledImport from "react-native-qrcode-styled";
 import { useThru } from "./hooks/useThru";
 import { enableWebAuthnSupport } from "./android-webauthn";
+import { ApplePayWidget } from "./ApplePayWidget";
+import {
+  CoinbasePaymentHost,
+  type CoinbasePaymentHostState,
+} from "./coinbase-payment-host";
 import { useWalletTheme } from "../../react/useWalletTheme";
 
 /* The sheet chrome the wallet document cannot draw (the area behind the
@@ -62,6 +67,9 @@ const DEFAULT_SNAP_POINTS: (string | number)[] = ["50%", "85%"];
 const DEFAULT_FIT_CONTENT_MAX_SHEET_RATIO = 0.75;
 const DEFAULT_FIT_CONTENT_MIN_SHEET_RATIO = 0;
 const SHEET_HANDLE_HEIGHT = 10;
+const NATIVE_COINBASE_PAYMENT_MESSAGE = "wallet:coinbase-payment";
+const NATIVE_DEPOSIT_LIFECYCLE_MESSAGE = "wallet:deposit-lifecycle";
+const NATIVE_COINBASE_PAYMENT_EVENT = "thru:coinbase-onramp-event";
 const NATIVE_CONTENT_HEIGHT_MESSAGE = "wallet:content-height";
 const NATIVE_SCREEN_BRIGHTNESS_MESSAGE = "wallet:screen-brightness";
 const NATIVE_PAIR_DEVICE_QR_MESSAGE = "wallet:pair-device-qr";
@@ -290,12 +298,10 @@ class OptionalNativeQrBoundary extends Component<
   }
 }
 
-function appendNativeBottomInset(
-  urlValue: string,
-  bottomInset: number,
-): string {
+function appendNativeHostParams(urlValue: string, bottomInset: number): string {
   try {
     const url = new URL(urlValue);
+    url.searchParams.set("tn_native_platform", Platform.OS);
     url.searchParams.set(
       NATIVE_BOTTOM_INSET_PARAM,
       String(Math.max(0, Math.ceil(bottomInset))),
@@ -326,11 +332,7 @@ export const ThruWalletSheet = forwardRef<
   ThruWalletSheetHandle,
   ThruWalletSheetProps
 >(function ThruWalletSheet(
-  {
-    snapPoints,
-    initialOpenIndex,
-    backgroundColor: backgroundColorOverride,
-  },
+  { snapPoints, initialOpenIndex, backgroundColor: backgroundColorOverride },
   ref,
 ) {
   const { wallet } = useThru();
@@ -341,11 +343,30 @@ export const ThruWalletSheet = forwardRef<
   const sheetRef = useRef<BottomSheetType>(null);
   const webViewRef = useRef<WebViewType | null>(null);
   const webViewNativeTagRef = useRef<number | null>(null);
+  const [coinbase, setCoinbase] = useState<CoinbasePaymentHostState>({
+    active: false,
+    payment: null,
+  });
+  const forwardCoinbaseEvent = useCallback((rawData: string) => {
+    const message = { type: NATIVE_COINBASE_PAYMENT_EVENT, data: rawData };
+    webViewRef.current?.injectJavaScript(`(function () {
+      var message = ${JSON.stringify(message)};
+      if (typeof window.__pushIn === 'function') window.__pushIn(message);
+      else window.dispatchEvent(new CustomEvent(${JSON.stringify(NATIVE_COINBASE_PAYMENT_EVENT)}, { detail: message.data }));
+    })(); true;`);
+  }, []);
+  const coinbaseHost = useMemo(
+    () => new CoinbasePaymentHost(forwardCoinbaseEvent, setCoinbase),
+    [forwardCoinbaseEvent],
+  );
+  useEffect(() => () => coinbaseHost.reset(), [coinbaseHost, wallet]);
+
   const brightnessQueueRef = useRef<Promise<void>>(Promise.resolve());
   const previousScreenBrightnessRef =
     useRef<PreviousScreenBrightnessState | null>(null);
   const didRefreshWalletAvailabilityRef = useRef(false);
   const isProviderClosingRef = useRef(false);
+  const isSurfaceRequestedRef = useRef(false);
   const isSheetOpenRef = useRef(false);
   const containerLayoutState = useSharedValue({
     height,
@@ -549,7 +570,7 @@ export const ThruWalletSheet = forwardRef<
      postMessage protocol as web iframe consumers. */
   useEffect(() => {
     if (!wallet) return;
-    const walletUrl = appendNativeBottomInset(
+    const walletUrl = appendNativeHostParams(
       wallet.getIframeSrc(),
       insets.bottom,
     );
@@ -667,10 +688,14 @@ export const ThruWalletSheet = forwardRef<
     if (!wallet) return;
     wallet.setUiHandlers({
       onShowRequested: () => {
-        isProviderClosingRef.current = false;
+        isSurfaceRequestedRef.current = true;
+        // A previous close animation can still report -1 while reopening.
+        // Keep its guard until the new open index is observed.
         snapToSheetIndex(openIndex);
       },
       onHideRequested: () => {
+        isSurfaceRequestedRef.current = false;
+        coinbaseHost.reset();
         isProviderClosingRef.current = true;
         sheetRef.current?.close();
       },
@@ -678,7 +703,7 @@ export const ThruWalletSheet = forwardRef<
     return () => {
       wallet.clearUiHandlers();
     };
-  }, [wallet, openIndex, snapToSheetIndex]);
+  }, [wallet, openIndex, snapToSheetIndex, coinbaseHost]);
 
   useEffect(() => {
     if (!isSheetOpenRef.current) return;
@@ -713,6 +738,7 @@ export const ThruWalletSheet = forwardRef<
         const data = JSON.parse(event.nativeEvent.data) as {
           type?: string;
           data?: {
+            paymentUrl?: unknown;
             approveUrl?: string;
             fitContent?: boolean;
             frame?: unknown;
@@ -725,6 +751,16 @@ export const ThruWalletSheet = forwardRef<
             visible?: boolean;
           };
         };
+        if (data.type === NATIVE_COINBASE_PAYMENT_MESSAGE) {
+          if (!isSurfaceRequestedRef.current) return;
+          coinbaseHost.open(
+            data.data?.paymentUrl,
+            Platform.OS,
+            Platform.Version,
+          );
+          return;
+        }
+        if (data.type === NATIVE_DEPOSIT_LIFECYCLE_MESSAGE) return;
         if (data.type === NATIVE_CONTENT_HEIGHT_MESSAGE) {
           const nextMaxSheetRatio = data.data?.maxSheetRatio;
           const nextMinSheetRatio = data.data?.minSheetRatio;
@@ -834,6 +870,7 @@ export const ThruWalletSheet = forwardRef<
       }
     },
     [
+      coinbaseHost,
       enableAndroidWebAuthnIfNeeded,
       hasBridgeMessage,
       isNativeQrUnavailable,
@@ -858,7 +895,10 @@ export const ThruWalletSheet = forwardRef<
   const handleSheetChange = useCallback(
     (index: number) => {
       isSheetOpenRef.current = index !== -1;
-      if (index !== -1) return;
+      if (index !== -1) {
+        isProviderClosingRef.current = false;
+        return;
+      }
       restoreScreenBrightness();
       setPairDeviceQr(null);
       if (isProviderClosingRef.current) {
@@ -900,207 +940,249 @@ export const ThruWalletSheet = forwardRef<
         appearsOnIndex={0}
         disappearsOnIndex={-1}
         opacity={0.38}
-        pressBehavior="close"
+        pressBehavior={coinbase.active ? "none" : "close"}
       />
     ),
-    [],
+    [coinbase.active],
   );
 
   return (
-    <BottomSheet
-      ref={sheetRef}
-      index={-1}
-      snapPoints={memoSnapPoints}
-      containerLayoutState={containerLayoutState}
-      enableDynamicSizing={false}
-      enableContentPanningGesture={false}
-      handleComponent={renderHandle}
-      backdropComponent={renderBackdrop}
-      enablePanDownToClose
-      onChange={handleSheetChange}
-      backgroundStyle={{ backgroundColor }}
-    >
-      <View style={[styles.body, { backgroundColor }]}>
-        {QRCodeStyled ? (
-          <View
-            collapsable={false}
-            pointerEvents="none"
-            style={styles.nativeQrWarmup}
-          >
-            <QRCodeStyled
-              data={NATIVE_QR_WARMUP_DATA}
-              size={64}
-              color={NATIVE_QR_DARK_COLOR}
-              errorCorrectionLevel="L"
-              padding={0}
-              pieceScale={1.025}
-            />
-          </View>
-        ) : null}
-        {webViewSource ? (
-          <WebView
-            ref={webViewRef}
-            source={webViewSource}
-            originWhitelist={["*"]}
-            javaScriptEnabled
-            domStorageEnabled
-            webviewDebuggingEnabled={__DEV__}
-            nestedScrollEnabled
-            sharedCookiesEnabled
-            allowsInlineMediaPlayback
-            mediaPlaybackRequiresUserAction={false}
-            /* iOS WKWebView: direct wallet pages need app-bound
+    <>
+      <BottomSheet
+        ref={sheetRef}
+        accessible={false}
+        index={-1}
+        snapPoints={memoSnapPoints}
+        containerLayoutState={containerLayoutState}
+        enableDynamicSizing={false}
+        enableContentPanningGesture={false}
+        handleComponent={renderHandle}
+        backdropComponent={renderBackdrop}
+        enablePanDownToClose={!coinbase.active}
+        onChange={handleSheetChange}
+        backgroundStyle={{ backgroundColor }}
+      >
+        <View style={[styles.body, { backgroundColor }]}>
+          {QRCodeStyled ? (
+            <View
+              collapsable={false}
+              pointerEvents="none"
+              style={styles.nativeQrWarmup}
+            >
+              <QRCodeStyled
+                data={NATIVE_QR_WARMUP_DATA}
+                size={64}
+                color={NATIVE_QR_DARK_COLOR}
+                errorCorrectionLevel="L"
+                padding={0}
+                pieceScale={1.025}
+              />
+            </View>
+          ) : null}
+          {webViewSource ? (
+            <WebView
+              ref={webViewRef}
+              source={webViewSource}
+              originWhitelist={["*"]}
+              javaScriptEnabled
+              domStorageEnabled
+              keyboardDisplayRequiresUserAction={false}
+              pointerEvents={coinbase.active ? "none" : "auto"}
+              accessible={coinbase.active ? false : undefined}
+              accessibilityElementsHidden={coinbase.active}
+              importantForAccessibility={
+                coinbase.active ? "no-hide-descendants" : "auto"
+              }
+              webviewDebuggingEnabled={__DEV__}
+              nestedScrollEnabled
+              sharedCookiesEnabled
+              allowsInlineMediaPlayback
+              mediaPlaybackRequiresUserAction={false}
+              /* iOS WKWebView: direct wallet pages need app-bound
                navigation so WebAuthn and injected JS run in the
                WKAppBoundDomains context configured by the host app. */
-            limitsNavigationsToAppBoundDomains={
-              limitsNavigationsToAppBoundDomains
-            }
-            onLoadStart={() => {
-              wallet?.recordWebViewLoadStarted();
-              attachIfReady();
-              void enableAndroidWebAuthnIfNeeded();
-            }}
-            onLoadEnd={handleLoadEnd}
-            onLayout={handleWebViewLayout}
-            onError={(event) => {
-              const description =
-                event.nativeEvent.description ||
-                "Wallet WebView failed to load";
-              wallet?.recordWebViewTransportError(
-                event.nativeEvent.code,
-                description,
-              );
-              if (hasBridgeMessage) {
-                console.warn(
-                  "[ThruWalletSheet] Ignoring post-ready WebView error:",
-                  event.nativeEvent,
-                );
-                return;
+              limitsNavigationsToAppBoundDomains={
+                limitsNavigationsToAppBoundDomains
               }
-              setWebViewError(description);
-              console.warn("[ThruWalletSheet] WebView error:", description);
-            }}
-            onHttpError={(event) => {
-              const status = event.nativeEvent.statusCode;
-              const description = `Wallet returned HTTP ${status}`;
-              wallet?.recordWebViewHttpError(status);
-              if (hasBridgeMessage) {
-                console.warn(
-                  "[ThruWalletSheet] Ignoring post-ready WebView HTTP error:",
-                  event.nativeEvent,
+              onLoadStart={() => {
+                wallet?.recordWebViewLoadStarted();
+                attachIfReady();
+                void enableAndroidWebAuthnIfNeeded();
+              }}
+              onLoadEnd={handleLoadEnd}
+              onLayout={handleWebViewLayout}
+              onError={(event) => {
+                const description =
+                  event.nativeEvent.description ||
+                  "Wallet WebView failed to load";
+                wallet?.recordWebViewTransportError(
+                  event.nativeEvent.code,
+                  description,
                 );
-                return;
-              }
-              setWebViewError(description);
-              console.warn(
-                "[ThruWalletSheet] WebView HTTP error:",
-                description,
-              );
-            }}
-            onContentProcessDidTerminate={() => {
-              wallet?.recordWebViewContentProcessTerminated();
-            }}
-            onMessage={handleMessage}
-            style={[styles.webview, { backgroundColor }]}
-          />
-        ) : null}
-        {webViewSource &&
-        ((!isDirectWalletSource && !hasBridgeMessage) || webViewError) ? (
-          <View
-            pointerEvents="none"
-            style={[styles.loadingOverlay, { backgroundColor }]}
-          >
-            <Text style={[styles.loadingTitle, { color: chrome.title }]}>
-              {webViewError ? "Wallet failed to load" : walletLoadStatus}
-            </Text>
-            {webViewError ? (
-              <Text style={[styles.loadingDetail, { color: chrome.detail }]}>
-                {webViewError}
-              </Text>
-            ) : null}
-          </View>
-        ) : null}
-        {pairDeviceQr && (pairDeviceQr.qrDataUrl || QRCodeStyled) ? (
-          <View
-            pointerEvents="none"
-            style={[
-              styles.nativeQrOverlay,
-              {
-                height: pairDeviceQr.frame.height,
-                left: pairDeviceQr.frame.left,
-                top: pairDeviceQr.frame.top,
-                width: pairDeviceQr.frame.width,
-              },
-            ]}
-          >
-            <OptionalNativeQrBoundary
-              key={pairDeviceQr.approveUrl}
-              onError={handleNativeQrError}
+                if (hasBridgeMessage) {
+                  console.warn(
+                    "[ThruWalletSheet] Ignoring post-ready WebView error:",
+                    event.nativeEvent,
+                  );
+                  return;
+                }
+                setWebViewError(description);
+                console.warn("[ThruWalletSheet] WebView error:", description);
+              }}
+              onHttpError={(event) => {
+                const status = event.nativeEvent.statusCode;
+                const description = `Wallet returned HTTP ${status}`;
+                wallet?.recordWebViewHttpError(status);
+                if (hasBridgeMessage) {
+                  console.warn(
+                    "[ThruWalletSheet] Ignoring post-ready WebView HTTP error:",
+                    event.nativeEvent,
+                  );
+                  return;
+                }
+                setWebViewError(description);
+                console.warn(
+                  "[ThruWalletSheet] WebView HTTP error:",
+                  description,
+                );
+              }}
+              onContentProcessDidTerminate={() => {
+                wallet?.recordWebViewContentProcessTerminated();
+                coinbaseHost.reset();
+                wallet?.rejectPendingRequests("Wallet WebView was interrupted");
+              }}
+              onMessage={handleMessage}
+              style={[styles.webview, { backgroundColor }]}
+            />
+          ) : null}
+          {webViewSource &&
+          ((!isDirectWalletSource && !hasBridgeMessage) || webViewError) ? (
+            <View
+              pointerEvents="none"
+              style={[styles.loadingOverlay, { backgroundColor }]}
             >
-              <View style={styles.nativeQrCard}>
-                {pairDeviceQr.qrDataUrl ? (
-                  <Image
-                    resizeMode="contain"
-                    source={{ uri: pairDeviceQr.qrDataUrl }}
-                    style={[
-                      styles.nativeQrImage,
-                      {
-                        height: pairDeviceQrSize,
-                        width: pairDeviceQrSize,
-                      },
-                    ]}
-                  />
-                ) : QRCodeStyled ? (
-                  <View
-                    style={[
-                      styles.nativeQrStyledFallback,
-                      {
-                        height: pairDeviceQrSize,
-                        width: pairDeviceQrSize,
-                      },
-                    ]}
-                  >
-                    <QRCodeStyled
-                      data={pairDeviceQr.approveUrl}
-                      size={pairDeviceQrSize}
-                      color={NATIVE_QR_DARK_COLOR}
-                      gradient={NATIVE_QR_GRADIENT}
-                      errorCorrectionLevel="H"
-                      innerEyesOptions={NATIVE_QR_INNER_EYE_OPTIONS}
-                      isPiecesGlued
-                      outerEyesOptions={NATIVE_QR_OUTER_EYE_OPTIONS}
-                      padding={0}
-                      pieceBorderRadius="42%"
-                      pieceCornerType="rounded"
-                      pieceLiquidRadius="30%"
-                      pieceScale={1.02}
-                      style={styles.nativeQrSvg}
+              <Text style={[styles.loadingTitle, { color: chrome.title }]}>
+                {webViewError ? "Wallet failed to load" : walletLoadStatus}
+              </Text>
+              {webViewError ? (
+                <Text style={[styles.loadingDetail, { color: chrome.detail }]}>
+                  {webViewError}
+                </Text>
+              ) : null}
+            </View>
+          ) : null}
+          {pairDeviceQr && (pairDeviceQr.qrDataUrl || QRCodeStyled) ? (
+            <View
+              pointerEvents="none"
+              style={[
+                styles.nativeQrOverlay,
+                {
+                  height: pairDeviceQr.frame.height,
+                  left: pairDeviceQr.frame.left,
+                  top: pairDeviceQr.frame.top,
+                  width: pairDeviceQr.frame.width,
+                },
+              ]}
+            >
+              <OptionalNativeQrBoundary
+                key={pairDeviceQr.approveUrl}
+                onError={handleNativeQrError}
+              >
+                <View style={styles.nativeQrCard}>
+                  {pairDeviceQr.qrDataUrl ? (
+                    <Image
+                      resizeMode="contain"
+                      source={{ uri: pairDeviceQr.qrDataUrl }}
+                      style={[
+                        styles.nativeQrImage,
+                        {
+                          height: pairDeviceQrSize,
+                          width: pairDeviceQrSize,
+                        },
+                      ]}
                     />
-                    <View style={styles.nativeQrFallbackBadge}>
-                      <Text
-                        style={[
-                          styles.nativeQrFallbackBadgeText,
-                          {
-                            fontSize: pairDeviceQrBadgeFontSize,
-                            lineHeight: pairDeviceQrBadgeFontSize * 1.05,
-                          },
-                        ]}
-                      >
-                        J
-                      </Text>
+                  ) : QRCodeStyled ? (
+                    <View
+                      style={[
+                        styles.nativeQrStyledFallback,
+                        {
+                          height: pairDeviceQrSize,
+                          width: pairDeviceQrSize,
+                        },
+                      ]}
+                    >
+                      <QRCodeStyled
+                        data={pairDeviceQr.approveUrl}
+                        size={pairDeviceQrSize}
+                        color={NATIVE_QR_DARK_COLOR}
+                        gradient={NATIVE_QR_GRADIENT}
+                        errorCorrectionLevel="H"
+                        innerEyesOptions={NATIVE_QR_INNER_EYE_OPTIONS}
+                        isPiecesGlued
+                        outerEyesOptions={NATIVE_QR_OUTER_EYE_OPTIONS}
+                        padding={0}
+                        pieceBorderRadius="42%"
+                        pieceCornerType="rounded"
+                        pieceLiquidRadius="30%"
+                        pieceScale={1.02}
+                        style={styles.nativeQrSvg}
+                      />
+                      <View style={styles.nativeQrFallbackBadge}>
+                        <Text
+                          style={[
+                            styles.nativeQrFallbackBadgeText,
+                            {
+                              fontSize: pairDeviceQrBadgeFontSize,
+                              lineHeight: pairDeviceQrBadgeFontSize * 1.05,
+                            },
+                          ]}
+                        >
+                          J
+                        </Text>
+                      </View>
                     </View>
-                  </View>
-                ) : null}
-              </View>
-            </OptionalNativeQrBoundary>
-          </View>
-        ) : null}
-      </View>
-    </BottomSheet>
+                  ) : null}
+                </View>
+              </OptionalNativeQrBoundary>
+            </View>
+          ) : null}
+        </View>
+      </BottomSheet>
+      {coinbase.active ? (
+        <View style={styles.applePayOverlay}>
+          <View
+            accessible={false}
+            onStartShouldSetResponder={() => true}
+            style={StyleSheet.absoluteFill}
+          />
+          {coinbase.payment ? (
+            <ApplePayWidget
+              key={coinbase.payment.id}
+              paymentUrl={coinbase.payment.url}
+              topInset={Math.max(insets.top, 12)}
+              bottomInset={insets.bottom}
+              hideApplePayButton
+              onCancel={() => coinbaseHost.cancel(coinbase.payment!.id)}
+              onCoinbaseMessage={(event) =>
+                coinbaseHost.receive(
+                  coinbase.payment!.id,
+                  event.nativeEvent.url,
+                  event.nativeEvent.data,
+                )
+              }
+              onLoadError={(message, code) =>
+                coinbaseHost.loadError(coinbase.payment!.id, message, code)
+              }
+            />
+          ) : null}
+        </View>
+      ) : null}
+    </>
   );
 });
 
 const styles = StyleSheet.create({
+  applePayOverlay: { ...StyleSheet.absoluteFill, zIndex: 2147483647 },
   body: { flex: 1 },
   handleContainer: {
     alignItems: "center",

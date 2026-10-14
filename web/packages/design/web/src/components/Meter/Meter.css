@@ -36,3 +36,9 @@
   background: var(--grass-400);
   transition: width var(--duration-med) var(--ease-standard);
 }
+/* Reduced motion: the fill jumps to its new value instead of growing. */
+@media (prefers-reduced-motion: reduce) {
+  .tds-meter__ind {
+    transition: none;
+  }
+}

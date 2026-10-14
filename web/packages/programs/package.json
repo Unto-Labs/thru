@@ -42,6 +42,11 @@
       "import": "./dist/passkey-manager/index.js",
       "require": "./dist/passkey-manager/index.cjs"
     },
+    "./ratelimit": {
+      "types": "./dist/ratelimit/index.d.ts",
+      "import": "./dist/ratelimit/index.js",
+      "require": "./dist/ratelimit/index.cjs"
+    },
     "./multicall": {
       "types": "./dist/multicall/index.d.ts",
       "import": "./dist/multicall/index.js",

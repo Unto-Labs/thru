@@ -36,6 +36,21 @@
   transform: translate(-50%, -48%) scale(0.97);
 }
 
+/* Reduced motion: no drop or zoom, only a short fade. The opacity
+   transition still runs, so Base UI waits for it and the exit completes. */
+@media (prefers-reduced-motion: reduce) {
+  .tds-scrim {
+    transition-duration: var(--duration-fast);
+  }
+  .tds-dialog {
+    transition: opacity var(--duration-fast) var(--ease-standard);
+  }
+  .tds-dialog[data-starting-style],
+  .tds-dialog[data-ending-style] {
+    transform: translate(-50%, -50%);
+  }
+}
+
 .tds-dialog__head {
   display: flex;
   justify-content: space-between;

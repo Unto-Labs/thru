@@ -1,15 +1,7 @@
-import { type ReactNode, useCallback, useEffect, useMemo } from "react";
+import { type ReactNode, useEffect, useMemo } from "react";
 import { useColorScheme } from "react-native";
-import {
-  NativeSDK,
-  type CreateAccountOptions,
-  type NativeSDKConfig,
-} from "../NativeSDK";
-import type {
-  CreateAccountResult,
-  WalletTheme,
-  WalletThemePreference,
-} from "../../protocol";
+import { NativeSDK, type NativeSDKConfig } from "../NativeSDK";
+import type { WalletTheme, WalletThemePreference } from "../../protocol";
 import { useWalletSDKController } from "../../react/useWalletSDKController";
 import { ThruContext } from "./ThruContext";
 
@@ -31,10 +23,16 @@ export interface ThruProviderProps {
 }
 
 /** Native wrapper around the shared wallet React controller. */
-export function ThruProvider({ children, config, theme, developerMode }: ThruProviderProps) {
+export function ThruProvider({
+  children,
+  config,
+  theme,
+  developerMode,
+}: ThruProviderProps) {
   const requestedTheme = theme ?? config.theme ?? "light";
   const requestedDeveloperMode = developerMode ?? config.developerMode ?? false;
-  const systemTheme: WalletTheme = useColorScheme() === "dark" ? "dark" : "light";
+  const systemTheme: WalletTheme =
+    useColorScheme() === "dark" ? "dark" : "light";
   const sdk = useMemo(() => {
     const instance = new NativeSDK(config);
     /* Resolve before any wallet WebView builds its URL, so the first load
@@ -60,27 +58,12 @@ export function ThruProvider({ children, config, theme, developerMode }: ThruPro
     sdk.setDeveloperMode(requestedDeveloperMode);
   }, [sdk, requestedDeveloperMode]);
 
-  const createAccount = useCallback(
-    async (options?: CreateAccountOptions): Promise<CreateAccountResult> => {
-      try {
-        const result = await sdk.nativeOnboarding.createAccount(options);
-        controller.syncFromSDK(result.selectedAccount);
-        return result;
-      } catch (error) {
-        controller.captureError(error);
-        throw error;
-      }
-    },
-    [controller, sdk],
-  );
-
   return (
     <ThruContext.Provider
       value={{
         wallet: sdk,
         thru: sdk.getThru(),
         ...controller,
-        createAccount,
       }}
     >
       {children}

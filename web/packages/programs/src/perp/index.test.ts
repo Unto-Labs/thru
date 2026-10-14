@@ -21,12 +21,27 @@ import {
   PERP_SEAT_ARENA_ENTRIES_OFFSET,
   PERP_SEAT_ENTRY_SIZE,
   PERP_SEAT_MANAGER_RESERVED_SIZE,
+  createPerpFundingUpdateInstruction,
   createPerpLiquidateInstruction,
+  createPerpMarketSetFundingInstruction,
+  createPerpSettleFundingInstruction,
   createPerpMarketCreateInstruction,
   createPerpMarketRecordInstruction,
   createPerpMarketSetOracleInstruction,
   derivePerpMarketAccounts,
   parsePerpEvent,
+  perpFundingHourlyRate,
+  perpFundingParamsProblem,
+  perpFundingPremiumSample,
+  perpFundingRoundDue,
+  perpFundingSampleDue,
+  perpNextFundingRoundNs,
+  perpSettleFunding,
+  PERP_EVENT_FUNDING_ROUND,
+  PERP_INSTRUCTION_FUNDING_UPDATE,
+  PERP_INSTRUCTION_MARKET_SET_FUNDING,
+  PERP_INSTRUCTION_SETTLE_FUNDING,
+  type PerpFunding,
   parsePerpMarketAccount,
   parsePerpOrderArenaAccount,
   parsePerpSeatArenaAccount,
@@ -114,6 +129,20 @@ function marketBytes(): Uint8Array {
   view.setUint32(280, 100, true); /* liquidation_fee_bps */
   view.setInt32(284, -8, true); /* oracle_exponent */
   view.setBigUint64(288, 60_000_000_000n, true); /* max_mark_age_ns */
+  /* funding */
+  view.setBigInt64(320, -5_000_000n, true); /* funding_index (lo): -5,000,000 as signed 128 bit */
+  view.setBigInt64(328, -1n, true); /* funding_index (hi) */
+  view.setBigInt64(336, 7n, true); /* funding_balance */
+  view.setBigUint64(344, 3_600_000_000_000n, true); /* funding_last_round_ns */
+  view.setBigUint64(352, 3_660_000_000_000n, true); /* funding_last_sample_ns */
+  view.setBigInt64(360, -120_000n, true); /* funding_premium_sum */
+  view.setBigUint64(368, 19_400n, true); /* funding_impact_notional */
+  view.setBigInt64(376, -312n, true); /* funding_rate */
+  view.setUint32(384, 100, true); /* funding_interest_rate */
+  view.setUint32(388, 500, true); /* funding_clamp_small */
+  view.setUint32(392, 40_000, true); /* funding_clamp_big */
+  view.setUint32(396, 100, true); /* funding_premium_multiplier */
+  view.setUint32(400, 3, true); /* funding_sample_cnt */
   return data;
 }
 
@@ -129,6 +158,8 @@ function seatBytes(seat: {
   entryNotional: bigint;
   openBidNotional: bigint;
   openAskNotional: bigint;
+  fundingSnapshot?: bigint;
+  fundingCarry?: number;
   active: boolean;
 }): Uint8Array {
   const data = new Uint8Array(PERP_SEAT_ENTRY_SIZE);
@@ -143,6 +174,9 @@ function seatBytes(seat: {
   view.setBigUint64(80, seat.entryNotional, true);
   view.setBigUint64(88, seat.openBidNotional, true);
   view.setBigUint64(96, seat.openAskNotional, true);
+  view.setUint32(76, seat.fundingCarry ?? 0, true); /* funding_carry */
+  view.setBigInt64(104, BigInt.asIntN(64, seat.fundingSnapshot ?? 0n), true); /* funding_snapshot (lo) */
+  view.setBigInt64(112, (seat.fundingSnapshot ?? 0n) < 0n ? -1n : 0n, true); /* funding_snapshot (hi) */
   view.setBigUint64(120, seat.active ? 1n : 0n, true); /* non_nullable_reserved */
   return data;
 }
@@ -248,7 +282,7 @@ const minLots = (a: bigint, b: bigint) => (a < b ? a : b);
 /* Tests *********************************************************************/
 
 describe('perp account parsers', () => {
-  it('parses the 320 byte market account', () => {
+  it('parses the 448 byte market account with its funding state', () => {
     const market = parsePerpMarketAccount(marketBytes());
     expect(market).toEqual<PerpMarket>({
       magic: PERP_MARKET_MAGIC,
@@ -274,12 +308,26 @@ describe('perp account parsers', () => {
       liquidationFeeBps: 100,
       oracleExponent: -8,
       maxMarkAgeNs: 60_000_000_000n,
+      funding: {
+        index: -5_000_000n,
+        balance: 7n,
+        lastRoundNs: 3_600_000_000_000n,
+        lastSampleNs: 3_660_000_000_000n,
+        premiumSum: -120_000n,
+        sampleCount: 3,
+        rate: -312n,
+        interestRate: 100,
+        clampSmall: 500,
+        clampBig: 40_000,
+        premiumMultiplier: 100,
+        impactNotional: 19_400n,
+      },
     });
   });
 
   it('rejects a short (224 byte) market', () => {
-    expect(() => parsePerpMarketAccount(marketBytes().subarray(0, 224))).toThrow(/320 bytes/);
-    expect(() => parsePerpMarketAccount(new Uint8Array(320))).toThrow(/not a perp market/);
+    expect(() => parsePerpMarketAccount(marketBytes().subarray(0, 224))).toThrow(/448 bytes/);
+    expect(() => parsePerpMarketAccount(new Uint8Array(448))).toThrow(/not a perp market/);
   });
 
   it('rejects a header whose margin fields are not a margined market', () => {
@@ -325,6 +373,8 @@ describe('perp account parsers', () => {
           entryNotional: 850_000_000n,
           openBidNotional: 168_000_000n,
           openAskNotional: 258_000_000n,
+          fundingSnapshot: -4_000_000n,
+          fundingCarry: 123,
           active: true,
         }),
         seatBytes({
@@ -364,6 +414,8 @@ describe('perp account parsers', () => {
         entryNotional: 850_000_000n,
         openBidNotional: 168_000_000n,
         openAskNotional: 258_000_000n,
+        fundingSnapshot: -4_000_000n,
+        fundingCarry: 123,
       },
     ]);
   });
@@ -818,5 +870,139 @@ describe('perp events', () => {
     data[160] = 1;
     const short = parsePerpEvent(data);
     expect(short.variant === 'liquidation' && short.targetSide).toBe('short');
+  });
+});
+
+describe('perp funding', () => {
+  /* The vectors match thru-perps/tests/test_txn_perp_program/test_funding.c. */
+  const params = { interestRate: 100, clampSmall: 500, clampBig: 40_000, premiumMultiplier: 100 };
+
+  it('turns the premium samples into the hourly rate as Lighter does', () => {
+    expect(perpFundingHourlyRate(0n, params)).toBe(12n);
+    expect(perpFundingHourlyRate(60n * 2_000n, params)).toBe(187n);
+    expect(perpFundingHourlyRate(-60n * 3_000n, params)).toBe(-312n);
+    expect(perpFundingHourlyRate(60n * 400n, params)).toBe(12n);
+    expect(perpFundingHourlyRate(60n * 100_000n, params)).toBe(5_000n);
+    expect(perpFundingHourlyRate(-60n * 100_000n, params)).toBe(-5_000n);
+    expect(perpFundingHourlyRate(30n * 2_000n, params)).toBe(62n);
+    expect(perpFundingHourlyRate(60n * 2_000n, { ...params, premiumMultiplier: 50 })).toBe((1_000n - 250n) / 8n);
+    expect(perpFundingHourlyRate(59n, { interestRate: 0, clampSmall: 0, clampBig: 40_000, premiumMultiplier: 100 })).toBe(0n);
+    expect(perpFundingHourlyRate(-59n, { interestRate: 0, clampSmall: 0, clampBig: 40_000, premiumMultiplier: 100 })).toBe(0n);
+  });
+
+  it('samples the premium from the impact prices', () => {
+    expect(perpFundingPremiumSample(200n, 220n, 240n)).toBe(100_000n);
+    expect(perpFundingPremiumSample(200n, 160n, 180n)).toBe(-100_000n);
+    expect(perpFundingPremiumSample(200n, 190n, 210n)).toBe(0n);
+    expect(perpFundingPremiumSample(200n, 0n, 0n)).toBe(0n);
+    expect(perpFundingPremiumSample(200n, 1_000n, 0n)).toBe(1_000_000n);
+    expect(perpFundingPremiumSample(3n, 4n, 0n)).toBe(333_333n);
+    expect(perpFundingPremiumSample(0n, 4n, 5n)).toBe(0n);
+  });
+
+  it('validates parameters like market_set_funding', () => {
+    const margins = { initialMarginBps: 1000, maintenanceMarginBps: 500 };
+    const ok = { interestRate: 100, clampSmall: 500, clampBig: 400_000, premiumMultiplier: 100, impactNotional: 1n };
+    expect(perpFundingParamsProblem(margins, ok)).toBeNull();
+    expect(perpFundingParamsProblem(margins, { ...ok, clampBig: 400_008 })).toMatch(/margin gap/);
+    expect(perpFundingParamsProblem(margins, { ...ok, premiumMultiplier: 101 })).toMatch(/premiumMultiplier/);
+    expect(perpFundingParamsProblem(margins, { ...ok, impactNotional: 0n })).toMatch(/impactNotional/);
+    expect(perpFundingParamsProblem(margins, { ...ok, interestRate: 1_000_001 })).toMatch(/interestRate/);
+    expect(perpFundingParamsProblem(margins, { ...ok, premiumMultiplier: 0, impactNotional: 0n })).toBeNull();
+  });
+
+  it('schedules rounds on UTC hours and samples on UTC minutes', () => {
+    const t0 = 1_767_225_600_000_000_000n; /* an exact UTC hour */
+    const funding = { lastRoundNs: t0 + 30_000_000_000n, lastSampleNs: t0 + 30_000_000_000n };
+    expect(perpNextFundingRoundNs(funding)).toBe(t0 + 3_600_000_000_000n);
+    expect(perpFundingRoundDue(funding, t0 + 3_599_999_999_999n)).toBe(false);
+    expect(perpFundingRoundDue(funding, t0 + 3_600_000_000_000n)).toBe(true);
+    expect(perpFundingSampleDue(funding, t0 + 59_000_000_000n)).toBe(false);
+    expect(perpFundingSampleDue(funding, t0 + 60_000_000_000n)).toBe(true);
+  });
+
+  it('settles seats exactly, rounding against the seat, carrying the remainder', () => {
+    const funding: PerpFunding = {
+      index: 232_800n, balance: 0n, lastRoundNs: 0n, lastSampleNs: 0n, premiumSum: 0n, sampleCount: 0, rate: 12n,
+      interestRate: 100, clampSmall: 500, clampBig: 40_000, premiumMultiplier: 100, impactNotional: 1n,
+    };
+    const market = { funding };
+    const longer = seat({ quantityQuote: 1_000n, longLots: 10n, shortLots: 0n });
+    const shorter = seat({ quantityQuote: 1_000n, longLots: 0n, shortLots: 10n });
+    const a = perpSettleFunding(market, longer);
+    expect(a.paid).toBe(-3n);
+    expect(a.seat.quantityQuote).toBe(997n);
+    expect(a.seat.fundingCarry).toBe(672_000);
+    expect(a.seat.fundingSnapshot).toBe(232_800n);
+    const b = perpSettleFunding(market, shorter);
+    expect(b.paid).toBe(2n);
+    expect(b.seat.quantityQuote).toBe(1_002n);
+    expect(b.seat.fundingCarry).toBe(328_000);
+    /* the collected atom is exactly the two carries */
+    expect((-a.paid - b.paid) * 1_000_000n).toBe(BigInt(a.seat.fundingCarry + b.seat.fundingCarry));
+    /* settling a settled seat is a no-op */
+    expect(perpSettleFunding(market, a.seat)).toEqual({ seat: a.seat, paid: 0n, badDebt: 0n });
+    /* a charge beyond the collateral raises a long's cost basis */
+    const poor = perpSettleFunding(market, seat({ quantityQuote: 1n, longLots: 10n, shortLots: 0n, entryNotional: 100n }));
+    expect(poor.seat.quantityQuote).toBe(0n);
+    expect(poor.seat.entryNotional).toBe(102n);
+    expect(poor.badDebt).toBe(0n);
+    /* a short's entry absorbs what it can; the rest is bad debt */
+    const down = { funding: { ...funding, index: -232_800n } };
+    const thin = perpSettleFunding(down, seat({ quantityQuote: 1n, longLots: 0n, shortLots: 10n, entryNotional: 1n }));
+    expect(thin.seat.quantityQuote).toBe(0n);
+    expect(thin.seat.entryNotional).toBe(0n);
+    expect(thin.badDebt).toBe(1n);
+    /* no funding on the market: nothing moves */
+    expect(perpSettleFunding({}, longer)).toEqual({ seat: { ...longer, fundingSnapshot: 0n, fundingCarry: 0 }, paid: 0n, badDebt: 0n });
+  });
+
+  it('funding update is 8 bytes; market set funding is 32', async () => {
+    const ctx = { getAccountIndex: () => 0 } as never;
+    expect([...(await createPerpFundingUpdateInstruction({ marketRecordIndex: 1 })(ctx))]).toEqual([PERP_INSTRUCTION_FUNDING_UPDATE, 1, 0, 0, 0, 0, 0, 0]);
+    const bytes = await createPerpMarketSetFundingInstruction({
+      marketRecordIndex: 1, interestRate: 100, clampSmall: 500, clampBig: 40_000, premiumMultiplier: 100, impactNotional: 19_400n,
+    })(ctx);
+    expect(bytes.length).toBe(32);
+    const view = new DataView(bytes.buffer, bytes.byteOffset);
+    expect(bytes[0]).toBe(PERP_INSTRUCTION_MARKET_SET_FUNDING);
+    expect(bytes[1]).toBe(1);
+    expect(view.getUint32(4, true)).toBe(100);
+    expect(view.getUint32(8, true)).toBe(500);
+    expect(view.getUint32(12, true)).toBe(40_000);
+    expect(view.getUint32(16, true)).toBe(100);
+    expect(view.getBigUint64(24, true)).toBe(19_400n);
+    expect([...(await createPerpSettleFundingInstruction({ marketRecordIndex: 1, targetSeatIndex: 42 })(ctx))]).toEqual([
+      PERP_INSTRUCTION_SETTLE_FUNDING, 1, 0, 0, 42, 0, 0, 0,
+    ]);
+    expect(() => createPerpSettleFundingInstruction({ marketRecordIndex: 1, targetSeatIndex: 0 })).toThrow(/targetSeatIndex/);
+    expect(() => createPerpMarketSetFundingInstruction({
+      marketRecordIndex: 1, interestRate: -1, clampSmall: 0, clampBig: 0, premiumMultiplier: 0, impactNotional: 0n,
+    })).toThrow(/interestRate/);
+  });
+
+  it('parses the funding round event (type 16)', () => {
+    const data = new Uint8Array(8 + 32 + 8 + 8 + 4 + 4 + 8 + 16 + 8);
+    const view = new DataView(data.buffer);
+    view.setBigUint64(0, BigInt(PERP_EVENT_FUNDING_ROUND), true);
+    data.set(key(60), 8); /* market */
+    view.setBigInt64(40, -312n, true); /* rate */
+    view.setBigInt64(48, -180_000n, true); /* premium_sum */
+    view.setUint32(56, 60, true); /* sample_cnt */
+    view.setBigUint64(64, 200n, true); /* index_price */
+    view.setBigInt64(72, -6_052_800n, true); /* funding_index lo */
+    view.setBigInt64(80, -1n, true); /* funding_index hi */
+    view.setBigUint64(88, 3_600_000_000_000n, true); /* round_ns */
+    const event = parsePerpEvent(data);
+    expect(event).toMatchObject({
+      variant: 'funding_round',
+      market: address(60),
+      rate: -312n,
+      premiumSum: -180_000n,
+      sampleCount: 60,
+      indexPrice: 200n,
+      fundingIndex: -6_052_800n,
+      roundNs: 3_600_000_000_000n,
+    });
   });
 });

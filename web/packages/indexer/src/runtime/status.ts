@@ -46,6 +46,9 @@ export interface IndexerStreamCounters {
   batchesCommitted: number;
 }
 
+/** Work an event stream does on one batch after taking it from the batcher. */
+export type IndexerStreamPhase = "filterBatch" | "commit";
+
 export interface IndexerStreamStatus {
   name: string;
   kind: IndexerStreamKind;
@@ -54,6 +57,14 @@ export interface IndexerStreamStatus {
   lastProcessedSlot: string | null;
   lastEventAt: string | null;
   stale: boolean;
+  /** Phase of the batch being committed now, or null between batches. */
+  activePhase: IndexerStreamPhase | null;
+  /** When activePhase began. */
+  activePhaseSince: string | null;
+  /** Slot of the batch in activePhase. */
+  activeBatchSlot: string | null;
+  /** activePhase has run longer than IndexerConfig.streamPhaseStallMs. */
+  stalled: boolean;
   restartCount: number;
   lastStartedAt: string | null;
   lastErrorAt: string | null;
@@ -90,6 +101,11 @@ export interface ProcessorStatusObserver {
     slot: bigint;
   }): void;
   onError?(phase: IndexerErrorPhase, error: unknown): void;
+  /** A batch entered a phase, or (phase null) its commit finished. */
+  onPhase?(info: {
+    phase: IndexerStreamPhase | null;
+    slot?: bigint;
+  }): void;
 }
 
 export function emptyStreamCounters(): IndexerStreamCounters {

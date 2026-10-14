@@ -47,6 +47,16 @@
   opacity: 0;
   transform: translateY(-4px);
 }
+/* Reduced motion: fade only, no drop. */
+@media (prefers-reduced-motion: reduce) {
+  .tds-navmenu__popup {
+    transition: opacity var(--duration-fast) var(--ease-standard);
+  }
+  .tds-navmenu__popup[data-starting-style],
+  .tds-navmenu__popup[data-ending-style] {
+    transform: none;
+  }
+}
 
 .tds-navmenu__link {
   display: block;

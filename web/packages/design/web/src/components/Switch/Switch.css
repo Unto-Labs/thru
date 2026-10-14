@@ -55,6 +55,12 @@
 .tds-switch[data-checked] .tds-switch__thumb {
   transform: translateX(20px);
 }
+/* Reduced motion: the thumb jumps; the track's colour change is kept. */
+@media (prefers-reduced-motion: reduce) {
+  .tds-switch__thumb {
+    transition: none;
+  }
+}
 
 .tds-switch__label {
   line-height: 1;

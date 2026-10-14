@@ -156,13 +156,18 @@ function createThru(
     tokenExists?: boolean;
     balanceRaw?: bigint;
     failedSignature?: boolean;
+    compressed?: boolean;
   } = {},
 ) {
   let tokenExists = options.tokenExists ?? true;
   let balanceRaw = options.balanceRaw ?? 0n;
   const accounts = {
-    get: vi.fn(async (address: string) => {
+    get: vi.fn(async (address: string, request?: unknown) => {
       if (address === DESTINATION.mintAddress) return {};
+      if (options.compressed && address === DESTINATION.tokenAccountAddress) {
+        if (request) return tokenAccount(balanceRaw);
+        throw NOT_FOUND;
+      }
       if (address === DESTINATION.tokenAccountAddress && tokenExists) {
         return tokenAccount(balanceRaw);
       }
@@ -187,6 +192,10 @@ function createThru(
   };
   return {
     accounts,
+    compression: {
+      getAccountStatuses: vi.fn(async ({ accounts: addresses }: { accounts: string[] }) =>
+        addresses.map(address => ({ address, status: options.compressed ? "COMPRESSED" : "DOES_NOT_EXIST", retrySlot: 500n }))),
+    },
     proofs: {
       generate: vi.fn(async () => ({ proof: new Uint8Array([9]) })),
     },
@@ -195,6 +204,20 @@ function createThru(
 }
 
 describe("wallet deposit account helpers", () => {
+  it("preserves a compressed balance and never recreates its account", async () => {
+    const thru = createThru({ compressed: true, balanceRaw: 1_000_004n });
+    const signTransaction = vi.fn();
+    const params = { thru: thru as never, walletAddress: "ta_wallet", destination: DESTINATION };
+
+    const state = await getDepositAccountStateForWallet(params);
+    expect(state.balanceRaw).toBe(1_000_004n);
+    expect(state.compression).toEqual({ status: "COMPRESSED", retrySlot: "500" });
+    expect((await ensureDepositAccountForWallet({ ...params, signTransaction })).balanceRaw)
+      .toBe(1_000_004n);
+    expect(signTransaction).not.toHaveBeenCalled();
+    expect(thru.proofs.generate).not.toHaveBeenCalled();
+    expect(thru.transactions.send).not.toHaveBeenCalled();
+  });
   it("uses the canonical Token only when a network has no explicit override", () => {
     const configured = JSON.parse(RUNTIME_CONFIG.networkConfigJson!);
     expect(createDepositConfig(RUNTIME_CONFIG).getTarget("devnet", "credits").tokenProgramAddress)
@@ -257,6 +280,7 @@ describe("wallet deposit account helpers", () => {
       }),
     });
     expect(config.getNetwork().network).toBe(ThruNetwork.Betanet);
+    expect(config.getNetwork().faucetOnly).toBe(true);
     expect(config.getNetwork().providers.size).toBe(0);
     expect(config.getTarget(ThruNetwork.Betanet, DepositTarget.THRUSD).mintAddress)
       .toBe("ta_betanet_mint");
@@ -317,6 +341,14 @@ describe("wallet deposit account helpers", () => {
       balanceRaw: 0n,
       balanceLabel: "0",
     });
+  });
+
+  it("does not turn an RPC failure mentioning not-found into a zero balance", async () => {
+    const thru = createThru();
+    const failure = Object.assign(new Error('not found upstream'), { code: 14 });
+    thru.accounts.get.mockRejectedValue(failure);
+    await expect(getDepositAccountStateForWallet({ thru: thru as never,
+      walletAddress: 'ta_wallet', destination: DESTINATION })).rejects.toBe(failure);
   });
 
   it("skips setup when the deposit account already exists", async () => {

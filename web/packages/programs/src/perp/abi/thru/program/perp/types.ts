@@ -3108,6 +3108,193 @@ __tnRegisterFootprint("ExchangeSetStatusInstruction", (params) => ExchangeSetSta
 __tnRegisterValidate("ExchangeSetStatusInstruction", (buffer, params) => ExchangeSetStatusInstruction.__tnInvokeValidate(buffer, params));
 __tnRegisterDynamicValidate("ExchangeSetStatusInstruction", (buffer) => { const result = ExchangeSetStatusInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
+/* ----- TYPE DEFINITION FOR FundingUpdateInstruction ----- */
+
+const __tn_ir_FundingUpdateInstruction = {
+  typeName: "FundingUpdateInstruction",
+  root: { op: "const", value: 7n }
+} as const;
+
+export class FundingUpdateInstruction {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): FundingUpdateInstruction {
+    if (!buffer || buffer.length === undefined) throw new Error("FundingUpdateInstruction.__tnCreateView requires a Uint8Array");
+    return new FundingUpdateInstruction(new Uint8Array(buffer));
+  }
+
+  static builder(): FundingUpdateInstructionBuilder {
+    return new FundingUpdateInstructionBuilder();
+  }
+
+  static fromBuilder(builder: FundingUpdateInstructionBuilder): FundingUpdateInstruction | null {
+    const buffer = builder.build();
+    return FundingUpdateInstruction.from_array(buffer);
+  }
+
+  get_market_record_idx(): number {
+    const offset = 0;
+    return this.view.getUint8(offset);
+  }
+
+  set_market_record_idx(value: number): void {
+    const offset = 0;
+    this.view.setUint8(offset, value);
+  }
+
+  get market_record_idx(): number {
+    return this.get_market_record_idx();
+  }
+
+  set market_record_idx(value: number) {
+    this.set_market_record_idx(value);
+  }
+
+  get_reserved0(): number {
+    const offset = 1;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_reserved0(value: number): void {
+    const offset = 1;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get reserved0(): number {
+    return this.get_reserved0();
+  }
+
+  set reserved0(value: number) {
+    this.set_reserved0(value);
+  }
+
+  get_reserved1(): number {
+    const offset = 3;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_reserved1(value: number): void {
+    const offset = 3;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get reserved1(): number {
+    return this.get_reserved1();
+  }
+
+  set reserved1(value: number) {
+    this.set_reserved1(value);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_FundingUpdateInstruction.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_FundingUpdateInstruction, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for FundingUpdateInstruction');
+    }
+    return __tnBigIntToNumber(irResult, 'FundingUpdateInstruction::footprint');
+  }
+
+  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    if (buffer.length < 7) return { ok: false, code: "tn.buffer_too_small", consumed: 7 };
+    return { ok: true, consumed: 7 };
+  }
+
+  static new(market_record_idx: number, reserved0: number, reserved1: number): FundingUpdateInstruction {
+    const buffer = new Uint8Array(7);
+    const view = new DataView(buffer.buffer);
+
+    let offset = 0;
+    view.setUint8(0, market_record_idx); /* market_record_idx */
+    view.setUint16(1, reserved0, true); /* reserved0 (little-endian) */
+    view.setUint32(3, reserved1, true); /* reserved1 (little-endian) */
+
+    return new FundingUpdateInstruction(buffer);
+  }
+
+  static from_array(buffer: Uint8Array): FundingUpdateInstruction | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new FundingUpdateInstruction(buffer);
+  }
+
+}
+
+export class FundingUpdateInstructionBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+
+  constructor() {
+    this.buffer = new Uint8Array(7);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  set_market_record_idx(value: number): this {
+    this.view.setUint8(0, value);
+    return this;
+  }
+
+  set_reserved0(value: number): this {
+    this.view.setUint16(1, value, true);
+    return this;
+  }
+
+  set_reserved1(value: number): this {
+    this.view.setUint32(3, value, true);
+    return this;
+  }
+
+  build(): Uint8Array {
+    return this.buffer.slice();
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    target.set(this.buffer, offset);
+    return target;
+  }
+
+  finish(): FundingUpdateInstruction {
+    const view = FundingUpdateInstruction.from_array(this.buffer.slice());
+    if (!view) throw new Error("failed to build FundingUpdateInstruction");
+    return view;
+  }
+}
+
+__tnRegisterFootprint("FundingUpdateInstruction", (params) => FundingUpdateInstruction.__tnInvokeFootprint(params));
+__tnRegisterValidate("FundingUpdateInstruction", (buffer, params) => FundingUpdateInstruction.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("FundingUpdateInstruction", (buffer) => { const result = FundingUpdateInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
 /* ----- TYPE DEFINITION FOR LiquidateInstruction ----- */
 
 const __tn_ir_LiquidateInstruction = {
@@ -5468,6 +5655,314 @@ __tnRegisterFootprint("MarketSetExchangeStatusInstruction", (params) => MarketSe
 __tnRegisterValidate("MarketSetExchangeStatusInstruction", (buffer, params) => MarketSetExchangeStatusInstruction.__tnInvokeValidate(buffer, params));
 __tnRegisterDynamicValidate("MarketSetExchangeStatusInstruction", (buffer) => { const result = MarketSetExchangeStatusInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
+/* ----- TYPE DEFINITION FOR MarketSetFundingInstruction ----- */
+
+const __tn_ir_MarketSetFundingInstruction = {
+  typeName: "MarketSetFundingInstruction",
+  root: { op: "const", value: 31n }
+} as const;
+
+export class MarketSetFundingInstruction {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MarketSetFundingInstruction {
+    if (!buffer || buffer.length === undefined) throw new Error("MarketSetFundingInstruction.__tnCreateView requires a Uint8Array");
+    return new MarketSetFundingInstruction(new Uint8Array(buffer));
+  }
+
+  static builder(): MarketSetFundingInstructionBuilder {
+    return new MarketSetFundingInstructionBuilder();
+  }
+
+  static fromBuilder(builder: MarketSetFundingInstructionBuilder): MarketSetFundingInstruction | null {
+    const buffer = builder.build();
+    return MarketSetFundingInstruction.from_array(buffer);
+  }
+
+  get_market_record_idx(): number {
+    const offset = 0;
+    return this.view.getUint8(offset);
+  }
+
+  set_market_record_idx(value: number): void {
+    const offset = 0;
+    this.view.setUint8(offset, value);
+  }
+
+  get market_record_idx(): number {
+    return this.get_market_record_idx();
+  }
+
+  set market_record_idx(value: number) {
+    this.set_market_record_idx(value);
+  }
+
+  get_reserved0(): number {
+    const offset = 1;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_reserved0(value: number): void {
+    const offset = 1;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get reserved0(): number {
+    return this.get_reserved0();
+  }
+
+  set reserved0(value: number) {
+    this.set_reserved0(value);
+  }
+
+  get_interest_rate(): number {
+    const offset = 3;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_interest_rate(value: number): void {
+    const offset = 3;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get interest_rate(): number {
+    return this.get_interest_rate();
+  }
+
+  set interest_rate(value: number) {
+    this.set_interest_rate(value);
+  }
+
+  get_clamp_small(): number {
+    const offset = 7;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_clamp_small(value: number): void {
+    const offset = 7;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get clamp_small(): number {
+    return this.get_clamp_small();
+  }
+
+  set clamp_small(value: number) {
+    this.set_clamp_small(value);
+  }
+
+  get_clamp_big(): number {
+    const offset = 11;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_clamp_big(value: number): void {
+    const offset = 11;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get clamp_big(): number {
+    return this.get_clamp_big();
+  }
+
+  set clamp_big(value: number) {
+    this.set_clamp_big(value);
+  }
+
+  get_premium_multiplier(): number {
+    const offset = 15;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_premium_multiplier(value: number): void {
+    const offset = 15;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get premium_multiplier(): number {
+    return this.get_premium_multiplier();
+  }
+
+  set premium_multiplier(value: number) {
+    this.set_premium_multiplier(value);
+  }
+
+  get_reserved1(): number {
+    const offset = 19;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_reserved1(value: number): void {
+    const offset = 19;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get reserved1(): number {
+    return this.get_reserved1();
+  }
+
+  set reserved1(value: number) {
+    this.set_reserved1(value);
+  }
+
+  get_impact_notional(): bigint {
+    const offset = 23;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_impact_notional(value: bigint): void {
+    const offset = 23;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get impact_notional(): bigint {
+    return this.get_impact_notional();
+  }
+
+  set impact_notional(value: bigint) {
+    this.set_impact_notional(value);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_MarketSetFundingInstruction.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_MarketSetFundingInstruction, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for MarketSetFundingInstruction');
+    }
+    return __tnBigIntToNumber(irResult, 'MarketSetFundingInstruction::footprint');
+  }
+
+  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    if (buffer.length < 31) return { ok: false, code: "tn.buffer_too_small", consumed: 31 };
+    return { ok: true, consumed: 31 };
+  }
+
+  static new(market_record_idx: number, reserved0: number, interest_rate: number, clamp_small: number, clamp_big: number, premium_multiplier: number, reserved1: number, impact_notional: bigint): MarketSetFundingInstruction {
+    const buffer = new Uint8Array(31);
+    const view = new DataView(buffer.buffer);
+
+    let offset = 0;
+    view.setUint8(0, market_record_idx); /* market_record_idx */
+    view.setUint16(1, reserved0, true); /* reserved0 (little-endian) */
+    view.setUint32(3, interest_rate, true); /* interest_rate (little-endian) */
+    view.setUint32(7, clamp_small, true); /* clamp_small (little-endian) */
+    view.setUint32(11, clamp_big, true); /* clamp_big (little-endian) */
+    view.setUint32(15, premium_multiplier, true); /* premium_multiplier (little-endian) */
+    view.setUint32(19, reserved1, true); /* reserved1 (little-endian) */
+    view.setBigUint64(23, impact_notional, true); /* impact_notional (little-endian) */
+
+    return new MarketSetFundingInstruction(buffer);
+  }
+
+  static from_array(buffer: Uint8Array): MarketSetFundingInstruction | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new MarketSetFundingInstruction(buffer);
+  }
+
+}
+
+export class MarketSetFundingInstructionBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+
+  constructor() {
+    this.buffer = new Uint8Array(31);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  set_market_record_idx(value: number): this {
+    this.view.setUint8(0, value);
+    return this;
+  }
+
+  set_reserved0(value: number): this {
+    this.view.setUint16(1, value, true);
+    return this;
+  }
+
+  set_interest_rate(value: number): this {
+    this.view.setUint32(3, value, true);
+    return this;
+  }
+
+  set_clamp_small(value: number): this {
+    this.view.setUint32(7, value, true);
+    return this;
+  }
+
+  set_clamp_big(value: number): this {
+    this.view.setUint32(11, value, true);
+    return this;
+  }
+
+  set_premium_multiplier(value: number): this {
+    this.view.setUint32(15, value, true);
+    return this;
+  }
+
+  set_reserved1(value: number): this {
+    this.view.setUint32(19, value, true);
+    return this;
+  }
+
+  set_impact_notional(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(23, cast, true);
+    return this;
+  }
+
+  build(): Uint8Array {
+    return this.buffer.slice();
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    target.set(this.buffer, offset);
+    return target;
+  }
+
+  finish(): MarketSetFundingInstruction {
+    const view = MarketSetFundingInstruction.from_array(this.buffer.slice());
+    if (!view) throw new Error("failed to build MarketSetFundingInstruction");
+    return view;
+  }
+}
+
+__tnRegisterFootprint("MarketSetFundingInstruction", (params) => MarketSetFundingInstruction.__tnInvokeFootprint(params));
+__tnRegisterValidate("MarketSetFundingInstruction", (buffer, params) => MarketSetFundingInstruction.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("MarketSetFundingInstruction", (buffer) => { const result = MarketSetFundingInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
 /* ----- TYPE DEFINITION FOR MarketSetOracleInstruction ----- */
 
 const __tn_ir_MarketSetOracleInstruction = {
@@ -7771,22 +8266,22 @@ export class SeatEntry {
     this.set_head_order_entry_idx(value);
   }
 
-  get_reserved0(): number {
+  get_funding_carry(): number {
     const offset = 76;
     return this.view.getUint32(offset, true); /* little-endian */
   }
 
-  set_reserved0(value: number): void {
+  set_funding_carry(value: number): void {
     const offset = 76;
     this.view.setUint32(offset, value, true); /* little-endian */
   }
 
-  get reserved0(): number {
-    return this.get_reserved0();
+  get funding_carry(): number {
+    return this.get_funding_carry();
   }
 
-  set reserved0(value: number) {
-    this.set_reserved0(value);
+  set funding_carry(value: number) {
+    this.set_funding_carry(value);
   }
 
   get_entry_notional(): bigint {
@@ -7843,31 +8338,40 @@ export class SeatEntry {
     this.set_open_ask_notional(value);
   }
 
-  get_reserved1(): number[] {
+  get_funding_snapshot_lo(): bigint {
     const offset = 104;
-    const result: number[] = [];
-    for (let i = 0; i < 16; i++) {
-      result.push(this.view.getUint8((offset + i * 1)));
-    }
-    return result;
+    return this.view.getBigUint64(offset, true); /* little-endian */
   }
 
-  set_reserved1(value: number[]): void {
+  set_funding_snapshot_lo(value: bigint): void {
     const offset = 104;
-    if (value.length !== 16) {
-      throw new Error('Array length must be 16');
-    }
-    for (let i = 0; i < 16; i++) {
-      this.view.setUint8((offset + i * 1), value[i]);
-    }
+    this.view.setBigUint64(offset, value, true); /* little-endian */
   }
 
-  get reserved1(): number[] {
-    return this.get_reserved1();
+  get funding_snapshot_lo(): bigint {
+    return this.get_funding_snapshot_lo();
   }
 
-  set reserved1(value: number[]) {
-    this.set_reserved1(value);
+  set funding_snapshot_lo(value: bigint) {
+    this.set_funding_snapshot_lo(value);
+  }
+
+  get_funding_snapshot_hi(): bigint {
+    const offset = 112;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_funding_snapshot_hi(value: bigint): void {
+    const offset = 112;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get funding_snapshot_hi(): bigint {
+    return this.get_funding_snapshot_hi();
+  }
+
+  set funding_snapshot_hi(value: bigint) {
+    this.set_funding_snapshot_hi(value);
   }
 
   get_non_nullable_reserved(): bigint {
@@ -7986,7 +8490,7 @@ export class SeatEntryBuilder {
     return this;
   }
 
-  set_reserved0(value: number): this {
+  set_funding_carry(value: number): this {
     this.view.setUint32(76, value, true);
     return this;
   }
@@ -8009,12 +8513,15 @@ export class SeatEntryBuilder {
     return this;
   }
 
-  set_reserved1(values: number[]): this {
-    if (values.length !== 16) throw new Error("reserved1 expects 16 elements");
-    for (let i = 0; i < values.length; i++) {
-      const byteOffset = 104 + i * 1;
-      this.view.setUint8(byteOffset, values[i]);
-    }
+  set_funding_snapshot_lo(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(104, cast, true);
+    return this;
+  }
+
+  set_funding_snapshot_hi(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(112, cast, true);
     return this;
   }
 
@@ -8044,6 +8551,193 @@ export class SeatEntryBuilder {
 __tnRegisterFootprint("SeatEntry", (params) => SeatEntry.__tnInvokeFootprint(params));
 __tnRegisterValidate("SeatEntry", (buffer, params) => SeatEntry.__tnInvokeValidate(buffer, params));
 __tnRegisterDynamicValidate("SeatEntry", (buffer) => { const result = SeatEntry.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
+/* ----- TYPE DEFINITION FOR SettleFundingInstruction ----- */
+
+const __tn_ir_SettleFundingInstruction = {
+  typeName: "SettleFundingInstruction",
+  root: { op: "const", value: 7n }
+} as const;
+
+export class SettleFundingInstruction {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): SettleFundingInstruction {
+    if (!buffer || buffer.length === undefined) throw new Error("SettleFundingInstruction.__tnCreateView requires a Uint8Array");
+    return new SettleFundingInstruction(new Uint8Array(buffer));
+  }
+
+  static builder(): SettleFundingInstructionBuilder {
+    return new SettleFundingInstructionBuilder();
+  }
+
+  static fromBuilder(builder: SettleFundingInstructionBuilder): SettleFundingInstruction | null {
+    const buffer = builder.build();
+    return SettleFundingInstruction.from_array(buffer);
+  }
+
+  get_market_record_idx(): number {
+    const offset = 0;
+    return this.view.getUint8(offset);
+  }
+
+  set_market_record_idx(value: number): void {
+    const offset = 0;
+    this.view.setUint8(offset, value);
+  }
+
+  get market_record_idx(): number {
+    return this.get_market_record_idx();
+  }
+
+  set market_record_idx(value: number) {
+    this.set_market_record_idx(value);
+  }
+
+  get_reserved0(): number {
+    const offset = 1;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_reserved0(value: number): void {
+    const offset = 1;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get reserved0(): number {
+    return this.get_reserved0();
+  }
+
+  set reserved0(value: number) {
+    this.set_reserved0(value);
+  }
+
+  get_target_seat_idx(): number {
+    const offset = 3;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_target_seat_idx(value: number): void {
+    const offset = 3;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get target_seat_idx(): number {
+    return this.get_target_seat_idx();
+  }
+
+  set target_seat_idx(value: number) {
+    this.set_target_seat_idx(value);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_SettleFundingInstruction.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_SettleFundingInstruction, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for SettleFundingInstruction');
+    }
+    return __tnBigIntToNumber(irResult, 'SettleFundingInstruction::footprint');
+  }
+
+  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    if (buffer.length < 7) return { ok: false, code: "tn.buffer_too_small", consumed: 7 };
+    return { ok: true, consumed: 7 };
+  }
+
+  static new(market_record_idx: number, reserved0: number, target_seat_idx: number): SettleFundingInstruction {
+    const buffer = new Uint8Array(7);
+    const view = new DataView(buffer.buffer);
+
+    let offset = 0;
+    view.setUint8(0, market_record_idx); /* market_record_idx */
+    view.setUint16(1, reserved0, true); /* reserved0 (little-endian) */
+    view.setUint32(3, target_seat_idx, true); /* target_seat_idx (little-endian) */
+
+    return new SettleFundingInstruction(buffer);
+  }
+
+  static from_array(buffer: Uint8Array): SettleFundingInstruction | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new SettleFundingInstruction(buffer);
+  }
+
+}
+
+export class SettleFundingInstructionBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+
+  constructor() {
+    this.buffer = new Uint8Array(7);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  set_market_record_idx(value: number): this {
+    this.view.setUint8(0, value);
+    return this;
+  }
+
+  set_reserved0(value: number): this {
+    this.view.setUint16(1, value, true);
+    return this;
+  }
+
+  set_target_seat_idx(value: number): this {
+    this.view.setUint32(3, value, true);
+    return this;
+  }
+
+  build(): Uint8Array {
+    return this.buffer.slice();
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    target.set(this.buffer, offset);
+    return target;
+  }
+
+  finish(): SettleFundingInstruction {
+    const view = SettleFundingInstruction.from_array(this.buffer.slice());
+    if (!view) throw new Error("failed to build SettleFundingInstruction");
+    return view;
+  }
+}
+
+__tnRegisterFootprint("SettleFundingInstruction", (params) => SettleFundingInstruction.__tnInvokeFootprint(params));
+__tnRegisterValidate("SettleFundingInstruction", (buffer, params) => SettleFundingInstruction.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("SettleFundingInstruction", (buffer) => { const result = SettleFundingInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR TokenBalanceEvent ----- */
 
@@ -10244,6 +10938,329 @@ __tnRegisterFootprint("ExchangeStatusEvent", (params) => ExchangeStatusEvent.__t
 __tnRegisterValidate("ExchangeStatusEvent", (buffer, params) => ExchangeStatusEvent.__tnInvokeValidate(buffer, params));
 __tnRegisterDynamicValidate("ExchangeStatusEvent", (buffer) => { const result = ExchangeStatusEvent.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
+/* ----- TYPE DEFINITION FOR FundingRoundEvent ----- */
+
+const __tn_ir_FundingRoundEvent = {
+  typeName: "FundingRoundEvent",
+  root: { op: "const", value: 88n }
+} as const;
+
+export class FundingRoundEvent {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): FundingRoundEvent {
+    if (!buffer || buffer.length === undefined) throw new Error("FundingRoundEvent.__tnCreateView requires a Uint8Array");
+    return new FundingRoundEvent(new Uint8Array(buffer));
+  }
+
+  static builder(): FundingRoundEventBuilder {
+    return new FundingRoundEventBuilder();
+  }
+
+  static fromBuilder(builder: FundingRoundEventBuilder): FundingRoundEvent | null {
+    const buffer = builder.build();
+    return FundingRoundEvent.from_array(buffer);
+  }
+
+  get_market(): Pubkey {
+    const offset = 0;
+    const slice = this.buffer.subarray(offset, offset + 32);
+    return Pubkey.from_array(slice)!;
+  }
+
+  set_market(value: Pubkey): void {
+    /* Copy bytes from source struct to this field */
+    const sourceBytes = (value as any).buffer as Uint8Array;
+    const offset = 0;
+    this.buffer.set(sourceBytes, offset);
+  }
+
+  get market(): Pubkey {
+    return this.get_market();
+  }
+
+  set market(value: Pubkey) {
+    this.set_market(value);
+  }
+
+  get_rate(): bigint {
+    const offset = 32;
+    return this.view.getBigInt64(offset, true); /* little-endian */
+  }
+
+  set_rate(value: bigint): void {
+    const offset = 32;
+    this.view.setBigInt64(offset, value, true); /* little-endian */
+  }
+
+  get rate(): bigint {
+    return this.get_rate();
+  }
+
+  set rate(value: bigint) {
+    this.set_rate(value);
+  }
+
+  get_premium_sum(): bigint {
+    const offset = 40;
+    return this.view.getBigInt64(offset, true); /* little-endian */
+  }
+
+  set_premium_sum(value: bigint): void {
+    const offset = 40;
+    this.view.setBigInt64(offset, value, true); /* little-endian */
+  }
+
+  get premium_sum(): bigint {
+    return this.get_premium_sum();
+  }
+
+  set premium_sum(value: bigint) {
+    this.set_premium_sum(value);
+  }
+
+  get_sample_cnt(): number {
+    const offset = 48;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_sample_cnt(value: number): void {
+    const offset = 48;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get sample_cnt(): number {
+    return this.get_sample_cnt();
+  }
+
+  set sample_cnt(value: number) {
+    this.set_sample_cnt(value);
+  }
+
+  get_reserved0(): number {
+    const offset = 52;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_reserved0(value: number): void {
+    const offset = 52;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get reserved0(): number {
+    return this.get_reserved0();
+  }
+
+  set reserved0(value: number) {
+    this.set_reserved0(value);
+  }
+
+  get_index_price(): bigint {
+    const offset = 56;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_index_price(value: bigint): void {
+    const offset = 56;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get index_price(): bigint {
+    return this.get_index_price();
+  }
+
+  set index_price(value: bigint) {
+    this.set_index_price(value);
+  }
+
+  get_funding_index_lo(): bigint {
+    const offset = 64;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_funding_index_lo(value: bigint): void {
+    const offset = 64;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get funding_index_lo(): bigint {
+    return this.get_funding_index_lo();
+  }
+
+  set funding_index_lo(value: bigint) {
+    this.set_funding_index_lo(value);
+  }
+
+  get_funding_index_hi(): bigint {
+    const offset = 72;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_funding_index_hi(value: bigint): void {
+    const offset = 72;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get funding_index_hi(): bigint {
+    return this.get_funding_index_hi();
+  }
+
+  set funding_index_hi(value: bigint) {
+    this.set_funding_index_hi(value);
+  }
+
+  get_round_ns(): bigint {
+    const offset = 80;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_round_ns(value: bigint): void {
+    const offset = 80;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get round_ns(): bigint {
+    return this.get_round_ns();
+  }
+
+  set round_ns(value: bigint) {
+    this.set_round_ns(value);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_FundingRoundEvent.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_FundingRoundEvent, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for FundingRoundEvent');
+    }
+    return __tnBigIntToNumber(irResult, 'FundingRoundEvent::footprint');
+  }
+
+  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    if (buffer.length < 88) return { ok: false, code: "tn.buffer_too_small", consumed: 88 };
+    return { ok: true, consumed: 88 };
+  }
+
+  static from_array(buffer: Uint8Array): FundingRoundEvent | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new FundingRoundEvent(buffer);
+  }
+
+}
+
+export class FundingRoundEventBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+
+  constructor() {
+    this.buffer = new Uint8Array(88);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  set_market(value: Uint8Array): this {
+    if (value.length !== 32) throw new Error("market expects 32 bytes");
+    this.buffer.set(value, 0);
+    return this;
+  }
+
+  set_rate(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigInt64(32, cast, true);
+    return this;
+  }
+
+  set_premium_sum(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigInt64(40, cast, true);
+    return this;
+  }
+
+  set_sample_cnt(value: number): this {
+    this.view.setUint32(48, value, true);
+    return this;
+  }
+
+  set_reserved0(value: number): this {
+    this.view.setUint32(52, value, true);
+    return this;
+  }
+
+  set_index_price(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(56, cast, true);
+    return this;
+  }
+
+  set_funding_index_lo(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(64, cast, true);
+    return this;
+  }
+
+  set_funding_index_hi(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(72, cast, true);
+    return this;
+  }
+
+  set_round_ns(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(80, cast, true);
+    return this;
+  }
+
+  build(): Uint8Array {
+    return this.buffer.slice();
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    target.set(this.buffer, offset);
+    return target;
+  }
+
+  finish(): FundingRoundEvent {
+    const view = FundingRoundEvent.from_array(this.buffer.slice());
+    if (!view) throw new Error("failed to build FundingRoundEvent");
+    return view;
+  }
+}
+
+__tnRegisterFootprint("FundingRoundEvent", (params) => FundingRoundEvent.__tnInvokeFootprint(params));
+__tnRegisterValidate("FundingRoundEvent", (buffer, params) => FundingRoundEvent.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("FundingRoundEvent", (buffer) => { const result = FundingRoundEvent.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
 /* ----- TYPE DEFINITION FOR LiquidationEvent ----- */
 
 const __tn_ir_LiquidationEvent = {
@@ -10684,7 +11701,7 @@ __tnRegisterDynamicValidate("LiquidationEvent", (buffer) => { const result = Liq
 
 const __tn_ir_MarketAccount = {
   typeName: "MarketAccount",
-  root: { op: "const", value: 320n }
+  root: { op: "const", value: 448n }
 } as const;
 
 export class MarketAccount {
@@ -11194,6 +12211,285 @@ export class MarketAccount {
     this.set_reserved2(value);
   }
 
+  get_funding_index_lo(): bigint {
+    const offset = 320;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_funding_index_lo(value: bigint): void {
+    const offset = 320;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get funding_index_lo(): bigint {
+    return this.get_funding_index_lo();
+  }
+
+  set funding_index_lo(value: bigint) {
+    this.set_funding_index_lo(value);
+  }
+
+  get_funding_index_hi(): bigint {
+    const offset = 328;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_funding_index_hi(value: bigint): void {
+    const offset = 328;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get funding_index_hi(): bigint {
+    return this.get_funding_index_hi();
+  }
+
+  set funding_index_hi(value: bigint) {
+    this.set_funding_index_hi(value);
+  }
+
+  get_funding_balance(): bigint {
+    const offset = 336;
+    return this.view.getBigInt64(offset, true); /* little-endian */
+  }
+
+  set_funding_balance(value: bigint): void {
+    const offset = 336;
+    this.view.setBigInt64(offset, value, true); /* little-endian */
+  }
+
+  get funding_balance(): bigint {
+    return this.get_funding_balance();
+  }
+
+  set funding_balance(value: bigint) {
+    this.set_funding_balance(value);
+  }
+
+  get_funding_last_round_ns(): bigint {
+    const offset = 344;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_funding_last_round_ns(value: bigint): void {
+    const offset = 344;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get funding_last_round_ns(): bigint {
+    return this.get_funding_last_round_ns();
+  }
+
+  set funding_last_round_ns(value: bigint) {
+    this.set_funding_last_round_ns(value);
+  }
+
+  get_funding_last_sample_ns(): bigint {
+    const offset = 352;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_funding_last_sample_ns(value: bigint): void {
+    const offset = 352;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get funding_last_sample_ns(): bigint {
+    return this.get_funding_last_sample_ns();
+  }
+
+  set funding_last_sample_ns(value: bigint) {
+    this.set_funding_last_sample_ns(value);
+  }
+
+  get_funding_premium_sum(): bigint {
+    const offset = 360;
+    return this.view.getBigInt64(offset, true); /* little-endian */
+  }
+
+  set_funding_premium_sum(value: bigint): void {
+    const offset = 360;
+    this.view.setBigInt64(offset, value, true); /* little-endian */
+  }
+
+  get funding_premium_sum(): bigint {
+    return this.get_funding_premium_sum();
+  }
+
+  set funding_premium_sum(value: bigint) {
+    this.set_funding_premium_sum(value);
+  }
+
+  get_funding_impact_notional(): bigint {
+    const offset = 368;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_funding_impact_notional(value: bigint): void {
+    const offset = 368;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get funding_impact_notional(): bigint {
+    return this.get_funding_impact_notional();
+  }
+
+  set funding_impact_notional(value: bigint) {
+    this.set_funding_impact_notional(value);
+  }
+
+  get_funding_rate(): bigint {
+    const offset = 376;
+    return this.view.getBigInt64(offset, true); /* little-endian */
+  }
+
+  set_funding_rate(value: bigint): void {
+    const offset = 376;
+    this.view.setBigInt64(offset, value, true); /* little-endian */
+  }
+
+  get funding_rate(): bigint {
+    return this.get_funding_rate();
+  }
+
+  set funding_rate(value: bigint) {
+    this.set_funding_rate(value);
+  }
+
+  get_funding_interest_rate(): number {
+    const offset = 384;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_funding_interest_rate(value: number): void {
+    const offset = 384;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get funding_interest_rate(): number {
+    return this.get_funding_interest_rate();
+  }
+
+  set funding_interest_rate(value: number) {
+    this.set_funding_interest_rate(value);
+  }
+
+  get_funding_clamp_small(): number {
+    const offset = 388;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_funding_clamp_small(value: number): void {
+    const offset = 388;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get funding_clamp_small(): number {
+    return this.get_funding_clamp_small();
+  }
+
+  set funding_clamp_small(value: number) {
+    this.set_funding_clamp_small(value);
+  }
+
+  get_funding_clamp_big(): number {
+    const offset = 392;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_funding_clamp_big(value: number): void {
+    const offset = 392;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get funding_clamp_big(): number {
+    return this.get_funding_clamp_big();
+  }
+
+  set funding_clamp_big(value: number) {
+    this.set_funding_clamp_big(value);
+  }
+
+  get_funding_premium_multiplier(): number {
+    const offset = 396;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_funding_premium_multiplier(value: number): void {
+    const offset = 396;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get funding_premium_multiplier(): number {
+    return this.get_funding_premium_multiplier();
+  }
+
+  set funding_premium_multiplier(value: number) {
+    this.set_funding_premium_multiplier(value);
+  }
+
+  get_funding_sample_cnt(): number {
+    const offset = 400;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_funding_sample_cnt(value: number): void {
+    const offset = 400;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get funding_sample_cnt(): number {
+    return this.get_funding_sample_cnt();
+  }
+
+  set funding_sample_cnt(value: number) {
+    this.set_funding_sample_cnt(value);
+  }
+
+  get_reserved3(): number {
+    const offset = 404;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_reserved3(value: number): void {
+    const offset = 404;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get reserved3(): number {
+    return this.get_reserved3();
+  }
+
+  set reserved3(value: number) {
+    this.set_reserved3(value);
+  }
+
+  get_reserved4(): number[] {
+    const offset = 408;
+    const result: number[] = [];
+    for (let i = 0; i < 40; i++) {
+      result.push(this.view.getUint8((offset + i * 1)));
+    }
+    return result;
+  }
+
+  set_reserved4(value: number[]): void {
+    const offset = 408;
+    if (value.length !== 40) {
+      throw new Error('Array length must be 40');
+    }
+    for (let i = 0; i < 40; i++) {
+      this.view.setUint8((offset + i * 1), value[i]);
+    }
+  }
+
+  get reserved4(): number[] {
+    return this.get_reserved4();
+  }
+
+  set reserved4(value: number[]) {
+    this.set_reserved4(value);
+  }
+
   private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
     return __tnEvalFootprint(__tn_ir_MarketAccount.root, { params: __tnParams });
   }
@@ -11224,8 +12520,8 @@ export class MarketAccount {
   }
 
   static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
-    if (buffer.length < 320) return { ok: false, code: "tn.buffer_too_small", consumed: 320 };
-    return { ok: true, consumed: 320 };
+    if (buffer.length < 448) return { ok: false, code: "tn.buffer_too_small", consumed: 448 };
+    return { ok: true, consumed: 448 };
   }
 
   static from_array(buffer: Uint8Array): MarketAccount | null {
@@ -11247,7 +12543,7 @@ export class MarketAccountBuilder {
   private view: DataView;
 
   constructor() {
-    this.buffer = new Uint8Array(320);
+    this.buffer = new Uint8Array(448);
     this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
   }
 
@@ -11400,6 +12696,93 @@ export class MarketAccountBuilder {
     return this;
   }
 
+  set_funding_index_lo(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(320, cast, true);
+    return this;
+  }
+
+  set_funding_index_hi(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(328, cast, true);
+    return this;
+  }
+
+  set_funding_balance(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigInt64(336, cast, true);
+    return this;
+  }
+
+  set_funding_last_round_ns(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(344, cast, true);
+    return this;
+  }
+
+  set_funding_last_sample_ns(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(352, cast, true);
+    return this;
+  }
+
+  set_funding_premium_sum(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigInt64(360, cast, true);
+    return this;
+  }
+
+  set_funding_impact_notional(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(368, cast, true);
+    return this;
+  }
+
+  set_funding_rate(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigInt64(376, cast, true);
+    return this;
+  }
+
+  set_funding_interest_rate(value: number): this {
+    this.view.setUint32(384, value, true);
+    return this;
+  }
+
+  set_funding_clamp_small(value: number): this {
+    this.view.setUint32(388, value, true);
+    return this;
+  }
+
+  set_funding_clamp_big(value: number): this {
+    this.view.setUint32(392, value, true);
+    return this;
+  }
+
+  set_funding_premium_multiplier(value: number): this {
+    this.view.setUint32(396, value, true);
+    return this;
+  }
+
+  set_funding_sample_cnt(value: number): this {
+    this.view.setUint32(400, value, true);
+    return this;
+  }
+
+  set_reserved3(value: number): this {
+    this.view.setUint32(404, value, true);
+    return this;
+  }
+
+  set_reserved4(values: number[]): this {
+    if (values.length !== 40) throw new Error("reserved4 expects 40 elements");
+    for (let i = 0; i < values.length; i++) {
+      const byteOffset = 408 + i * 1;
+      this.view.setUint8(byteOffset, values[i]);
+    }
+    return this;
+  }
+
   build(): Uint8Array {
     return this.buffer.slice();
   }
@@ -11425,7 +12808,7 @@ __tnRegisterDynamicValidate("MarketAccount", (buffer) => { const result = Market
 
 const __tn_ir_MarketAccountPayload = {
   typeName: "MarketAccountPayload",
-  root: { op: "const", value: 319n }
+  root: { op: "const", value: 447n }
 } as const;
 
 export class MarketAccountPayload {
@@ -11917,6 +13300,285 @@ export class MarketAccountPayload {
     this.set_reserved2(value);
   }
 
+  get_funding_index_lo(): bigint {
+    const offset = 319;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_funding_index_lo(value: bigint): void {
+    const offset = 319;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get funding_index_lo(): bigint {
+    return this.get_funding_index_lo();
+  }
+
+  set funding_index_lo(value: bigint) {
+    this.set_funding_index_lo(value);
+  }
+
+  get_funding_index_hi(): bigint {
+    const offset = 327;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_funding_index_hi(value: bigint): void {
+    const offset = 327;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get funding_index_hi(): bigint {
+    return this.get_funding_index_hi();
+  }
+
+  set funding_index_hi(value: bigint) {
+    this.set_funding_index_hi(value);
+  }
+
+  get_funding_balance(): bigint {
+    const offset = 335;
+    return this.view.getBigInt64(offset, true); /* little-endian */
+  }
+
+  set_funding_balance(value: bigint): void {
+    const offset = 335;
+    this.view.setBigInt64(offset, value, true); /* little-endian */
+  }
+
+  get funding_balance(): bigint {
+    return this.get_funding_balance();
+  }
+
+  set funding_balance(value: bigint) {
+    this.set_funding_balance(value);
+  }
+
+  get_funding_last_round_ns(): bigint {
+    const offset = 343;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_funding_last_round_ns(value: bigint): void {
+    const offset = 343;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get funding_last_round_ns(): bigint {
+    return this.get_funding_last_round_ns();
+  }
+
+  set funding_last_round_ns(value: bigint) {
+    this.set_funding_last_round_ns(value);
+  }
+
+  get_funding_last_sample_ns(): bigint {
+    const offset = 351;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_funding_last_sample_ns(value: bigint): void {
+    const offset = 351;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get funding_last_sample_ns(): bigint {
+    return this.get_funding_last_sample_ns();
+  }
+
+  set funding_last_sample_ns(value: bigint) {
+    this.set_funding_last_sample_ns(value);
+  }
+
+  get_funding_premium_sum(): bigint {
+    const offset = 359;
+    return this.view.getBigInt64(offset, true); /* little-endian */
+  }
+
+  set_funding_premium_sum(value: bigint): void {
+    const offset = 359;
+    this.view.setBigInt64(offset, value, true); /* little-endian */
+  }
+
+  get funding_premium_sum(): bigint {
+    return this.get_funding_premium_sum();
+  }
+
+  set funding_premium_sum(value: bigint) {
+    this.set_funding_premium_sum(value);
+  }
+
+  get_funding_impact_notional(): bigint {
+    const offset = 367;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_funding_impact_notional(value: bigint): void {
+    const offset = 367;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get funding_impact_notional(): bigint {
+    return this.get_funding_impact_notional();
+  }
+
+  set funding_impact_notional(value: bigint) {
+    this.set_funding_impact_notional(value);
+  }
+
+  get_funding_rate(): bigint {
+    const offset = 375;
+    return this.view.getBigInt64(offset, true); /* little-endian */
+  }
+
+  set_funding_rate(value: bigint): void {
+    const offset = 375;
+    this.view.setBigInt64(offset, value, true); /* little-endian */
+  }
+
+  get funding_rate(): bigint {
+    return this.get_funding_rate();
+  }
+
+  set funding_rate(value: bigint) {
+    this.set_funding_rate(value);
+  }
+
+  get_funding_interest_rate(): number {
+    const offset = 383;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_funding_interest_rate(value: number): void {
+    const offset = 383;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get funding_interest_rate(): number {
+    return this.get_funding_interest_rate();
+  }
+
+  set funding_interest_rate(value: number) {
+    this.set_funding_interest_rate(value);
+  }
+
+  get_funding_clamp_small(): number {
+    const offset = 387;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_funding_clamp_small(value: number): void {
+    const offset = 387;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get funding_clamp_small(): number {
+    return this.get_funding_clamp_small();
+  }
+
+  set funding_clamp_small(value: number) {
+    this.set_funding_clamp_small(value);
+  }
+
+  get_funding_clamp_big(): number {
+    const offset = 391;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_funding_clamp_big(value: number): void {
+    const offset = 391;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get funding_clamp_big(): number {
+    return this.get_funding_clamp_big();
+  }
+
+  set funding_clamp_big(value: number) {
+    this.set_funding_clamp_big(value);
+  }
+
+  get_funding_premium_multiplier(): number {
+    const offset = 395;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_funding_premium_multiplier(value: number): void {
+    const offset = 395;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get funding_premium_multiplier(): number {
+    return this.get_funding_premium_multiplier();
+  }
+
+  set funding_premium_multiplier(value: number) {
+    this.set_funding_premium_multiplier(value);
+  }
+
+  get_funding_sample_cnt(): number {
+    const offset = 399;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_funding_sample_cnt(value: number): void {
+    const offset = 399;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get funding_sample_cnt(): number {
+    return this.get_funding_sample_cnt();
+  }
+
+  set funding_sample_cnt(value: number) {
+    this.set_funding_sample_cnt(value);
+  }
+
+  get_reserved3(): number {
+    const offset = 403;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_reserved3(value: number): void {
+    const offset = 403;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get reserved3(): number {
+    return this.get_reserved3();
+  }
+
+  set reserved3(value: number) {
+    this.set_reserved3(value);
+  }
+
+  get_reserved4(): number[] {
+    const offset = 407;
+    const result: number[] = [];
+    for (let i = 0; i < 40; i++) {
+      result.push(this.view.getUint8((offset + i * 1)));
+    }
+    return result;
+  }
+
+  set_reserved4(value: number[]): void {
+    const offset = 407;
+    if (value.length !== 40) {
+      throw new Error('Array length must be 40');
+    }
+    for (let i = 0; i < 40; i++) {
+      this.view.setUint8((offset + i * 1), value[i]);
+    }
+  }
+
+  get reserved4(): number[] {
+    return this.get_reserved4();
+  }
+
+  set reserved4(value: number[]) {
+    this.set_reserved4(value);
+  }
+
   private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
     return __tnEvalFootprint(__tn_ir_MarketAccountPayload.root, { params: __tnParams });
   }
@@ -11947,8 +13609,8 @@ export class MarketAccountPayload {
   }
 
   static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
-    if (buffer.length < 319) return { ok: false, code: "tn.buffer_too_small", consumed: 319 };
-    return { ok: true, consumed: 319 };
+    if (buffer.length < 447) return { ok: false, code: "tn.buffer_too_small", consumed: 447 };
+    return { ok: true, consumed: 447 };
   }
 
   static from_array(buffer: Uint8Array): MarketAccountPayload | null {
@@ -11970,7 +13632,7 @@ export class MarketAccountPayloadBuilder {
   private view: DataView;
 
   constructor() {
-    this.buffer = new Uint8Array(319);
+    this.buffer = new Uint8Array(447);
     this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
   }
 
@@ -12113,6 +13775,93 @@ export class MarketAccountPayloadBuilder {
     if (values.length !== 24) throw new Error("reserved2 expects 24 elements");
     for (let i = 0; i < values.length; i++) {
       const byteOffset = 295 + i * 1;
+      this.view.setUint8(byteOffset, values[i]);
+    }
+    return this;
+  }
+
+  set_funding_index_lo(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(319, cast, true);
+    return this;
+  }
+
+  set_funding_index_hi(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(327, cast, true);
+    return this;
+  }
+
+  set_funding_balance(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigInt64(335, cast, true);
+    return this;
+  }
+
+  set_funding_last_round_ns(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(343, cast, true);
+    return this;
+  }
+
+  set_funding_last_sample_ns(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(351, cast, true);
+    return this;
+  }
+
+  set_funding_premium_sum(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigInt64(359, cast, true);
+    return this;
+  }
+
+  set_funding_impact_notional(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(367, cast, true);
+    return this;
+  }
+
+  set_funding_rate(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigInt64(375, cast, true);
+    return this;
+  }
+
+  set_funding_interest_rate(value: number): this {
+    this.view.setUint32(383, value, true);
+    return this;
+  }
+
+  set_funding_clamp_small(value: number): this {
+    this.view.setUint32(387, value, true);
+    return this;
+  }
+
+  set_funding_clamp_big(value: number): this {
+    this.view.setUint32(391, value, true);
+    return this;
+  }
+
+  set_funding_premium_multiplier(value: number): this {
+    this.view.setUint32(395, value, true);
+    return this;
+  }
+
+  set_funding_sample_cnt(value: number): this {
+    this.view.setUint32(399, value, true);
+    return this;
+  }
+
+  set_reserved3(value: number): this {
+    this.view.setUint32(403, value, true);
+    return this;
+  }
+
+  set_reserved4(values: number[]): this {
+    if (values.length !== 40) throw new Error("reserved4 expects 40 elements");
+    for (let i = 0; i < values.length; i++) {
+      const byteOffset = 407 + i * 1;
       this.view.setUint8(byteOffset, values[i]);
     }
     return this;
@@ -15078,7 +16827,7 @@ __tnRegisterDynamicValidate("OrderPostedEvent", (buffer) => { const result = Ord
 
 const __tn_ir_PerpEvent = {
   typeName: "PerpEvent",
-  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "align", alignment: 8, node: { op: "const", value: 8n } }, right: { op: "align", alignment: 1, node: { op: "switch", tag: "PerpEvent::payload.event_type", cases: [{ value: 1, node: { op: "align", alignment: 1, node: { op: "const", value: 68n } } }, { value: 2, node: { op: "align", alignment: 1, node: { op: "const", value: 104n } } }, { value: 3, node: { op: "align", alignment: 1, node: { op: "const", value: 256n } } }, { value: 4, node: { op: "align", alignment: 1, node: { op: "const", value: 180n } } }, { value: 5, node: { op: "align", alignment: 1, node: { op: "const", value: 112n } } }, { value: 6, node: { op: "align", alignment: 1, node: { op: "const", value: 112n } } }, { value: 7, node: { op: "align", alignment: 1, node: { op: "const", value: 120n } } }, { value: 8, node: { op: "align", alignment: 1, node: { op: "const", value: 168n } } }, { value: 9, node: { op: "align", alignment: 1, node: { op: "const", value: 168n } } }, { value: 10, node: { op: "align", alignment: 1, node: { op: "const", value: 72n } } }, { value: 11, node: { op: "align", alignment: 1, node: { op: "const", value: 104n } } }, { value: 12, node: { op: "align", alignment: 1, node: { op: "const", value: 72n } } }, { value: 13, node: { op: "align", alignment: 1, node: { op: "const", value: 136n } } }, { value: 14, node: { op: "align", alignment: 1, node: { op: "const", value: 72n } } }, { value: 15, node: { op: "align", alignment: 1, node: { op: "const", value: 160n } } }] } } } }
+  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "align", alignment: 8, node: { op: "const", value: 8n } }, right: { op: "align", alignment: 1, node: { op: "switch", tag: "PerpEvent::payload.event_type", cases: [{ value: 1, node: { op: "align", alignment: 1, node: { op: "const", value: 68n } } }, { value: 2, node: { op: "align", alignment: 1, node: { op: "const", value: 104n } } }, { value: 3, node: { op: "align", alignment: 1, node: { op: "const", value: 256n } } }, { value: 4, node: { op: "align", alignment: 1, node: { op: "const", value: 180n } } }, { value: 5, node: { op: "align", alignment: 1, node: { op: "const", value: 112n } } }, { value: 6, node: { op: "align", alignment: 1, node: { op: "const", value: 112n } } }, { value: 7, node: { op: "align", alignment: 1, node: { op: "const", value: 120n } } }, { value: 8, node: { op: "align", alignment: 1, node: { op: "const", value: 168n } } }, { value: 9, node: { op: "align", alignment: 1, node: { op: "const", value: 168n } } }, { value: 10, node: { op: "align", alignment: 1, node: { op: "const", value: 72n } } }, { value: 11, node: { op: "align", alignment: 1, node: { op: "const", value: 104n } } }, { value: 12, node: { op: "align", alignment: 1, node: { op: "const", value: 72n } } }, { value: 13, node: { op: "align", alignment: 1, node: { op: "const", value: 136n } } }, { value: 14, node: { op: "align", alignment: 1, node: { op: "const", value: 72n } } }, { value: 15, node: { op: "align", alignment: 1, node: { op: "const", value: 160n } } }, { value: 16, node: { op: "align", alignment: 1, node: { op: "const", value: 88n } } }] } } } }
 } as const;
 
 export class PerpEvent_payload_Inner {
@@ -15174,6 +16923,11 @@ export class PerpEvent_payload_Inner {
   asLiquidation(): LiquidationEvent | null {
     if (!this.descriptor || this.descriptor.tag !== 15) return null;
     return LiquidationEvent.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asFundingRound(): FundingRoundEvent | null {
+    if (!this.descriptor || this.descriptor.tag !== 16) return null;
+    return FundingRoundEvent.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
 }
@@ -15328,6 +17082,13 @@ export class PerpEvent {
       payloadSize: 160,
       payloadType: "PerpEvent::payload::liquidation",
       createPayloadBuilder: () => __tnMaybeCallBuilder(LiquidationEvent),
+    },
+    {
+      name: "funding_round",
+      tag: 16,
+      payloadSize: 88,
+      payloadType: "PerpEvent::payload::funding_round",
+      createPayloadBuilder: () => __tnMaybeCallBuilder(FundingRoundEvent),
     },
   ] as const);
 
@@ -15721,6 +17482,21 @@ export class PerpInstruction_payload_Inner {
     return MarketSetOracleInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
+  asFundingUpdate(): FundingUpdateInstruction | null {
+    if (!this.descriptor || this.descriptor.tag !== 18) return null;
+    return FundingUpdateInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarketSetFunding(): MarketSetFundingInstruction | null {
+    if (!this.descriptor || this.descriptor.tag !== 19) return null;
+    return MarketSetFundingInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asSettleFunding(): SettleFundingInstruction | null {
+    if (!this.descriptor || this.descriptor.tag !== 20) return null;
+    return SettleFundingInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
 }
 
 export class PerpInstruction {
@@ -15874,6 +17650,27 @@ export class PerpInstruction {
       payloadType: "PerpInstruction::payload::market_set_oracle",
       createPayloadBuilder: () => __tnMaybeCallBuilder(MarketSetOracleInstruction),
     },
+    {
+      name: "funding_update",
+      tag: 18,
+      payloadSize: 7,
+      payloadType: "PerpInstruction::payload::funding_update",
+      createPayloadBuilder: () => __tnMaybeCallBuilder(FundingUpdateInstruction),
+    },
+    {
+      name: "market_set_funding",
+      tag: 19,
+      payloadSize: 31,
+      payloadType: "PerpInstruction::payload::market_set_funding",
+      createPayloadBuilder: () => __tnMaybeCallBuilder(MarketSetFundingInstruction),
+    },
+    {
+      name: "settle_funding",
+      tag: 20,
+      payloadSize: 7,
+      payloadType: "PerpInstruction::payload::settle_funding",
+      createPayloadBuilder: () => __tnMaybeCallBuilder(SettleFundingInstruction),
+    },
   ] as const);
 
   static __tnComputeSequentialLayout(view: DataView, buffer: Uint8Array): { params: Record<string, bigint> | null; offsets: Record<string, number> | null; derived: Record<string, bigint> | null } | null {
@@ -15904,6 +17701,9 @@ export class PerpInstruction {
       case 15: break;
       case 16: break;
       case 17: break;
+      case 18: break;
+      case 19: break;
+      case 20: break;
       default: return null;
     }
     if (__tnCursorMutable > __tnLength) return null;
@@ -16220,7 +18020,7 @@ __tnRegisterDynamicValidate("PerpInstruction", (buffer) => { const result = Perp
 
 const __tn_ir_PerpProgramAccount = {
   typeName: "PerpProgramAccount",
-  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "align", alignment: 1, node: { op: "const", value: 1n } }, right: { op: "align", alignment: 1, node: { op: "switch", tag: "PerpProgramAccount::payload.account_tag", cases: [{ value: 121, node: { op: "align", alignment: 1, node: { op: "const", value: 319n } } }, { value: 120, node: { op: "align", alignment: 1, node: { op: "const", value: 95n } } }] } } } }
+  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "align", alignment: 1, node: { op: "const", value: 1n } }, right: { op: "align", alignment: 1, node: { op: "switch", tag: "PerpProgramAccount::payload.account_tag", cases: [{ value: 121, node: { op: "align", alignment: 1, node: { op: "const", value: 447n } } }, { value: 120, node: { op: "align", alignment: 1, node: { op: "const", value: 95n } } }] } } } }
 } as const;
 
 export class PerpProgramAccount_payload_Inner {
@@ -16304,7 +18104,7 @@ export class PerpProgramAccount {
     {
       name: "market",
       tag: 121,
-      payloadSize: 319,
+      payloadSize: 447,
       payloadType: "PerpProgramAccount::payload::market",
       createPayloadBuilder: () => __tnMaybeCallBuilder(MarketAccountPayload),
     },
@@ -16609,7 +18409,7 @@ __tnRegisterDynamicValidate("PerpProgramAccount", (buffer) => { const result = P
 
 const __tn_ir_SeatArenaAccount = {
   typeName: "SeatArenaAccount",
-  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "add", left: { op: "add", left: { op: "align", alignment: 1, node: { op: "const", value: 320n } }, right: { op: "align", alignment: 1, node: { op: "const", value: 192n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 128n } } }, right: { op: "align", alignment: 1, node: { op: "mul", left: { op: "div", left: { op: "sub", left: { op: "field", param: "__buffer_size" }, right: { op: "const", value: 640n } }, right: { op: "const", value: 128n } }, right: { op: "const", value: 128n } } } } }
+  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "add", left: { op: "add", left: { op: "align", alignment: 1, node: { op: "const", value: 448n } }, right: { op: "align", alignment: 1, node: { op: "const", value: 64n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 128n } } }, right: { op: "align", alignment: 1, node: { op: "mul", left: { op: "div", left: { op: "sub", left: { op: "field", param: "__buffer_size" }, right: { op: "const", value: 640n } }, right: { op: "const", value: 128n } }, right: { op: "const", value: 128n } } } } }
 } as const;
 
 export class SeatArenaAccount {
@@ -16647,7 +18447,7 @@ export class SeatArenaAccount {
 
   get_market(): MarketAccount {
     const offset = 0;
-    const slice = this.buffer.subarray(offset, offset + 320);
+    const slice = this.buffer.subarray(offset, offset + 448);
     return MarketAccount.from_array(slice)!;
   }
 
@@ -16667,20 +18467,20 @@ export class SeatArenaAccount {
   }
 
   get_reserved_market_padding(): number[] {
-    const offset = 320;
+    const offset = 448;
     const result: number[] = [];
-    for (let i = 0; i < 192; i++) {
+    for (let i = 0; i < 64; i++) {
       result.push(this.view.getUint8((offset + i * 1)));
     }
     return result;
   }
 
   set_reserved_market_padding(value: number[]): void {
-    const offset = 320;
-    if (value.length !== 192) {
-      throw new Error('Array length must be 192');
+    const offset = 448;
+    if (value.length !== 64) {
+      throw new Error('Array length must be 64');
     }
-    for (let i = 0; i < 192; i++) {
+    for (let i = 0; i < 64; i++) {
       this.view.setUint8((offset + i * 1), value[i]);
     }
   }

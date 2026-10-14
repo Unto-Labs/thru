@@ -3,6 +3,8 @@ import { CompressionError, type AccountImage,
   type CompressionResult, type CompressionTransaction, type Instruction,
   type UploadCleanup, type UploadPair } from "./types";
 import { lookupAccount } from "./status";
+import { Pubkey } from '../../domain/primitives';
+import { EOA_PROGRAM_ID, NOOP_PROGRAM_ADDRESS } from '../../../src/core-program-addresses';
 
 const MAX_DATA = 16 * 1024 * 1024;
 const MAX_WIRE = 32_768;
@@ -92,7 +94,9 @@ export async function compressAccount(options: WorkflowOptions & { account: stri
 async function imageFor(options: WorkflowOptions, address: string): Promise<AccountImage | undefined> {
   checkAbort(options.signal);
   const { current, image } = await lookupAccount(options.session.ctx, options, address);
-  if (current) return undefined;
+  if (current && !current.deleted) return undefined;
+  if (current?.deleted)
+    throw new CompressionError("MISSING_ACCOUNT", "Deleted accounts cannot be restored", { address });
   if (!image)
     throw new CompressionError("MISSING_ACCOUNT", "Account does not have a restorable image", { address });
   validateImage(image);
@@ -147,7 +151,9 @@ async function upload(options: WorkflowOptions, output: CompressionResult, bytes
   const hash = new Uint8Array(await crypto.subtle.digest("SHA-256", new Uint8Array(bytes)));
   const pair = options.programs.deriveUpload(seed);
   // Register before submission: even a timeout creating the buffer must expose recovery handles.
-  output.uploads.push({ ...pair, uploader: options.programs.uploader, status: "pending" });
+  const cleanup: UploadCleanup = { ...pair, uploader: options.programs.uploader, status: "pending" };
+  await options.session.state.journal?.saveUpload?.(cleanup);
+  output.uploads.push(cleanup);
   await execute(options, output, transaction(options.programs.uploader, [pair.meta, pair.buffer],
     options.programs.createUpload(pair, options.session.authority, seed, bytes.length, hash), bytes.length, [], 2));
   // Reserve room for transaction/accounts and the uploader header at a caller's lower wire limit.
@@ -231,7 +237,8 @@ async function restoreLarge(options: WorkflowOptions, output: CompressionResult,
   } finally {
     // Do not delete staging that an uncertain restoration could still read.
     if (!uncertain) {
-      const cleaned = await cleanupUploads({ ...options, signal: undefined, uploads: output.uploads.slice(firstUpload) });
+      const cleaned = await cleanupUploads({ ...options, session: options.session.forCleanup(),
+        signal: undefined, uploads: output.uploads.slice(firstUpload) });
       output.uploads.splice(firstUpload, cleaned.uploads.length, ...cleaned.uploads);
       output.signatures.push(...cleaned.signatures);
     }
@@ -245,7 +252,32 @@ export async function decompressAccounts(options: WorkflowOptions & { accounts: 
   const packingProofs = new Map<string, Uint8Array>();
   try {
     checkedLimit(options);
-    for (const address of new Set(options.accounts)) {
+    const accounts = options.accounts.map(address => Pubkey.from(address).toThruFmt());
+    if (!options.session.wallet && accounts.includes(options.session.feePayer)) {
+      const address = options.session.feePayer;
+      const image = await imageFor(options, address);
+      if (image) {
+        if (image.dataSize !== 0 || Pubkey.from(image.meta.subarray(16, 48)).toThruFmt() !== EOA_PROGRAM_ID)
+          throw new CompressionError('INVALID_IMAGE', 'Self-restoration requires a zero-data EOA fee payer', { address });
+        const request: CompressionTransaction = {
+          program: NOOP_PROGRAM_ADDRESS, readWrite: [], instructionData: () => new Uint8Array(),
+          stateUnits: 1, computeUnits: 1_000_000,
+          payerRestoration: { image, proof: await options.session.proof(address, 'existing', options.signal) },
+        };
+        try {
+          const signature = await execute(options, output, request);
+          output.accounts.push({ address, status: 'restored', signatures: [signature] });
+        } catch (error) {
+          // Only a definite failure permits a race check. Uncertain submissions retain their journal.
+          if (!(error instanceof CompressionError) || error.code !== 'TRANSACTION_FAILED') throw error;
+          const current = await options.session.current(address, options.signal);
+          if (!current || current.deleted) throw error;
+          output.accounts.push({ address, status: 'active', signatures: [] });
+        }
+      }
+    }
+    for (const address of new Set(accounts)) {
+      if (output.accounts.some(account => account.address === address)) continue;
       const image = await imageFor(options, address);
       if (!image) {
         output.accounts.push({ address, status: "active", signatures: [] });

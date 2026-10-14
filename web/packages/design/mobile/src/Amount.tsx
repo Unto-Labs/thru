@@ -21,6 +21,8 @@ import {
 import { font, space, text, touch } from "./tokens";
 import { makeStyles, useThemeColors } from "./theme";
 import { IconBackspace } from "./Icons";
+import { useReduceMotion } from "./reduceMotion";
+import { useSheetBodyFit, useSheetLayout } from "./Sheet";
 import type { FieldHandle } from "./AddressField";
 
 /* The figure starts shrinking past this many characters, sign included. */
@@ -29,6 +31,13 @@ const AMOUNT_MIN_SIZE = text.xxl;
 /* A figure with the screen to itself - Send's amount and review steps on a
    phone - reads larger. */
 const AMOUNT_SIZES = { default: text.display, large: 64 } as const;
+
+/* A phone sheet's SheetBody shorter than this (an iPhone SE in a Safari tab
+   leaves ~400pt) draws the amount compact: its own line plus 4pt above and
+   below, in place of the 120pt it takes elsewhere, so the keypad under it
+   keeps its size. Not in the dialog, whose body is only as tall as its
+   content and scrolls when the window is short. */
+const COMPACT_BODY_HEIGHT = 440;
 
 function amountFontSize(chars: number, full: number): number {
   if (chars <= AMOUNT_FULL_SIZE_CHARS) return full;
@@ -83,9 +92,20 @@ export function AmountDisplay({
     AMOUNT_SIZES[sizeName]
   );
   const tone = empty ? colors.fgSubtle : colors.fg;
+  const fit = useSheetBodyFit();
+  const { dialog } = useSheetLayout();
+  const compact =
+    !dialog && fit !== null && fit.height > 0 && fit.height < COMPACT_BODY_HEIGHT;
 
   return (
-    <View style={styles.display}>
+    <View
+      style={[
+        styles.display,
+        compact
+          ? { minHeight: Math.round(AMOUNT_SIZES[sizeName] * 1.15) + space[2] }
+          : null,
+      ]}
+    >
       <View
         accessibilityLabel={editable ? undefined : accessibilityLabel}
         accessibilityRole={editable ? undefined : "text"}
@@ -131,7 +151,13 @@ export function AmountDisplay({
 function Caret({ height }: { height: number }) {
   const styles = useStyles();
   const [blink] = useState(() => new Animated.Value(1));
+  /* Under reduced motion the caret stays lit. */
+  const reduceMotion = useReduceMotion();
   useEffect(() => {
+    if (reduceMotion) {
+      blink.setValue(1);
+      return;
+    }
     const loop = Animated.loop(
       Animated.sequence([
         Animated.timing(blink, {
@@ -152,7 +178,7 @@ function Caret({ height }: { height: number }) {
     );
     loop.start();
     return () => loop.stop();
-  }, [blink]);
+  }, [blink, reduceMotion]);
   return <Animated.View style={[styles.caret, { height, opacity: blink }]} />;
 }
 
@@ -175,15 +201,66 @@ export interface KeypadProps {
   decimalLabel?: string;
 }
 
-/** A 3 x 4 numeric keypad: digits, a decimal point and delete. */
+/* What the keypad can give up when the SheetBody around it is too short:
+   12pt from each key (56 -> the 44pt touch minimum), then its 8pt top margin. */
+const KEYPAD_KEY_GIVE = (touch.controlLg - touch.hitMin) * KEY_ROWS.length;
+const KEYPAD_MARGIN_TOP = space[2];
+
+/* The keypad's metrics in the SheetBody around it. The body's overflow
+   accumulates into a squeeze, taken from the keys first and then the top
+   margin; past that the body scrolls. A different body height (a rotation, a
+   resize) starts from the full size again, so the keys grow back when there
+   is room. Outside a SheetBody the keypad keeps its full size. */
+function useFittedKeypad(): { keyHeight: number; marginTop: number } {
+  const fit = useSheetBodyFit();
+  const [squeeze, setSqueeze] = useState(0);
+  const bodyHeight = fit?.height ?? 0;
+  const overflow = fit?.overflow ?? 0;
+  /* The overflow measured with the previous height is stale once the height
+     changes (the amount above may turn compact with it), so it waits for the
+     content to be measured again, or a moment if nothing re-measures. */
+  const measuredHeight = useRef(bodyHeight);
+  const [settled, setSettled] = useState(0);
+  useEffect(() => {
+    setSqueeze(0);
+  }, [bodyHeight]);
+  useEffect(() => {
+    if (measuredHeight.current !== bodyHeight) {
+      measuredHeight.current = bodyHeight;
+      const timer = setTimeout(() => setSettled((count) => count + 1), 50);
+      return () => clearTimeout(timer);
+    }
+    if (overflow < 0.5) return;
+    setSqueeze((given) =>
+      Math.min(KEYPAD_KEY_GIVE + KEYPAD_MARGIN_TOP, given + Math.ceil(overflow)),
+    );
+  }, [bodyHeight, overflow, settled]);
+  const fromKeys = Math.min(KEYPAD_KEY_GIVE, squeeze);
+  return {
+    keyHeight: touch.controlLg - Math.ceil(fromKeys / KEY_ROWS.length),
+    marginTop: KEYPAD_MARGIN_TOP - (squeeze - fromKeys),
+  };
+}
+
+/** A 3 x 4 numeric keypad: digits, a decimal point and delete. In a
+ *  `SheetBody` too short for its page (an iPhone SE in a Safari tab), the
+ *  keys give up height first, down to the 44pt touch minimum, then the
+ *  keypad's top margin, so the whole keypad stays in view before the body
+ *  has to scroll. */
 export function Keypad({ onKey, disabled = false, decimalLabel = "." }: KeypadProps) {
   const styles = useStyles();
   const colors = useThemeColors();
+  const { keyHeight, marginTop } = useFittedKeypad();
   /* A long press on delete clears, and the release that ends it must not
      also delete a character. */
   const clearedRef = useRef(false);
   return (
-    <View style={styles.keypad}>
+    <View
+      style={[
+        styles.keypad,
+        marginTop === KEYPAD_MARGIN_TOP ? null : { marginTop },
+      ]}
+    >
       {KEY_ROWS.map((row) => (
         <View key={row.join("")} style={styles.keyRow}>
           {row.map((key) => {
@@ -217,6 +294,7 @@ export function Keypad({ onKey, disabled = false, decimalLabel = "." }: KeypadPr
                 }}
                 style={({ pressed }) => [
                   styles.key,
+                  keyHeight === touch.controlLg ? null : { height: keyHeight },
                   pressed && !disabled ? styles.keyPressed : null,
                   disabled ? styles.keyDisabled : null,
                 ]}
@@ -278,7 +356,7 @@ const useStyles = makeStyles((c) => ({
     right: 0,
     top: 0,
   },
-  keypad: { marginTop: space[2] },
+  keypad: { marginTop: KEYPAD_MARGIN_TOP },
   keyRow: { flexDirection: "row" },
   key: {
     alignItems: "center",

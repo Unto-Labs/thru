@@ -90,6 +90,53 @@ describe("event replay", () => {
     expect(streamFilters[0]).toBe("event.slot >= uint(42)");
   });
 
+  test("live events carry the query metadata, with block time as their timestamp", async () => {
+    const feePayer = { value: new Uint8Array(32).fill(3) };
+    const blockTimestamp = { seconds: 1_700_000_000n, nanos: 5 };
+    const client: EventSource = {
+      async listEvents() {
+        return create(ListEventsResponseSchema, { page: create(PageResponseSchema, {}) });
+      },
+      streamEvents() {
+        return {
+          [Symbol.asyncIterator]: async function* () {
+            yield create(StreamEventsResponseSchema, {
+              eventId: "sig:42:7:3:0",
+              slot: 42n,
+              callIdx: 3,
+              programIdx: 1,
+              blockOffset: 7,
+              feePayer,
+              timestamp: { seconds: 1_800_000_000n, nanos: 0 },
+              blockTimestamp,
+            });
+            /* A node without block_timestamp: no publish-time substitute. */
+            yield create(StreamEventsResponseSchema, {
+              eventId: "sig:43:0:0:0",
+              slot: 43n,
+              timestamp: { seconds: 1_800_000_000n, nanos: 0 },
+            });
+          },
+        };
+      },
+    };
+
+    const replay = createEventReplay({ client, startSlot: 42n, resubscribeOnEnd: false });
+    const events: Event[] = [];
+    for await (const event of replay) events.push(event);
+
+    expect(events).toHaveLength(2);
+    expect(events[0]).toMatchObject({
+      eventId: "sig:42:7:3:0",
+      programIdx: 1,
+      blockOffset: 7,
+      feePayer: { value: feePayer.value },
+      timestamp: { seconds: blockTimestamp.seconds, nanos: blockTimestamp.nanos },
+    });
+    expect(events[1]!.timestamp).toBeUndefined();
+    expect(events[1]!.programIdx).toBeUndefined();
+  });
+
   test("falls back to slot-only resume when the checkpoint event id is not parseable", async () => {
     const listFilters: string[] = [];
     const streamFilters: string[] = [];

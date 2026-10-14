@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="thru-mobile-tokens.css">
+<style>
+body{margin:0;-webkit-font-smoothing:antialiased;}
+a{color:var(--m-accent);text-decoration:none;}
+a:hover{text-decoration:underline;text-underline-offset:3px;}
+</style>
+</helmet>
+<div data-screen-label="Activity detail" style="position:relative;width:100%;min-height:100%;box-sizing:border-box;display:flex;flex-direction:column;background:var(--m-bg);color:var(--m-fg);font-family:'Inter Tight',system-ui,sans-serif">
+  <sc-if value="{{ isPhone }}" hint-placeholder-val="{{ true }}">
+    <div aria-hidden="true" style="height:54px;display:flex;align-items:flex-end;justify-content:space-between;padding:0 26px 10px 32px;flex:none">
+      <span style="font-size:15px;font-weight:600;letter-spacing:-0.2px">9:41</span>
+      <span style="display:inline-flex;align-items:center;gap:6px;color:var(--m-fg)"><svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="8" width="3" height="4"></rect><rect x="5" y="5.5" width="3" height="6.5"></rect><rect x="10" y="3" width="3" height="9"></rect><rect x="15" y="0" width="3" height="12"></rect></svg><svg width="16" height="12" viewBox="0 0 16 12" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M1.5 4.5a9.5 9.5 0 0 1 13 0M4 7.2a6 6 0 0 1 8 0M6.5 9.9a2.4 2.4 0 0 1 3 0"></path></svg><svg width="26" height="12" viewBox="0 0 26 12" fill="none"><rect x="0.5" y="0.5" width="22" height="11" stroke="currentColor"></rect><rect x="2" y="2" width="19" height="8" fill="currentColor"></rect><rect x="24" y="4" width="2" height="4" fill="currentColor"></rect></svg></span>
+    </div>
+    <div style="display:flex;align-items:center;height:52px;padding:0 6px;border-bottom:1px solid var(--m-border);flex:none">
+      <button type="button" aria-label="Back to Activity" style="width:44px;height:44px;display:grid;place-items:center;border:none;background:none;padding:0;cursor:pointer;color:var(--m-fg)" style-active="background:var(--m-bg-muted)"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M15 18 9 12l6-6"></path></svg></button>
+      <span style="flex:1;text-align:center;font-size:17px;font-weight:600;letter-spacing:-0.25px">Details</span>
+      <span style="width:44px;height:44px"></span>
+    </div>
+  </sc-if>
+  <sc-if value="{{ isDesktop }}" hint-placeholder-val="{{ false }}">
+    <div style="padding:32px 0 4px;flex:none"><a href="#" style="display:inline-flex;align-items:center;gap:6px;height:32px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;letter-spacing:0.04em;color:var(--m-fg-muted)" style-hover="color:var(--m-fg);text-decoration:none"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M15 18 9 12l6-6"></path></svg>Activity</a></div>
+  </sc-if>
+
+  <div style="display:flex;gap:16px;align-items:flex-start;padding:24px 16px 20px;flex:none">
+    <span aria-hidden="true" style="width:48px;height:48px;flex:none;display:grid;place-items:center;background:{{ tileBg }};color:{{ tileFg }}"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" stroke-linejoin="miter"><path d="{{ glyph }}"></path></svg></span>
+    <div style="flex:1;min-width:0;display:flex;flex-direction:column;gap:4px">
+      <h1 style="margin:0;font-size:20px;font-weight:600;letter-spacing:-0.3px;line-height:26px">{{ title }}</h1>
+      <sc-if value="{{ hasAmount }}" hint-placeholder-val="{{ true }}"><div style="font-size:34px;font-weight:700;letter-spacing:-0.75px;line-height:40px;color:{{ amountColor }}">{{ amount }}</div></sc-if>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:4px;font-size:14px;font-weight:500;line-height:20px;color:{{ statusColor }}"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="square" aria-hidden="true" style="flex:none"><path d="{{ statusGlyph }}"></path></svg><span>{{ statusWord }}</span></div>
+      <sc-if value="{{ hasReason }}" hint-placeholder-val="{{ false }}"><div style="font-size:14px;line-height:20px;color:var(--m-fg-muted);text-wrap:pretty">{{ reason }}</div></sc-if>
+    </div>
+  </div>
+
+  <div style="border-top:1px solid var(--m-hair);flex:none">
+    <sc-for list="{{ rows }}" as="r" hint-placeholder-count="5">
+      <div style="display:flex;align-items:center;gap:12px;min-height:52px;padding:0 {{ r.padRight }} 0 16px;border-bottom:1px solid var(--m-hair)">
+        <span style="width:96px;flex:none;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">{{ r.label }}</span>
+        <span style="flex:1;min-width:0;text-align:right;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;line-height:18px;color:var(--m-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ r.value }}</span>
+        <sc-if value="{{ r.copy }}" hint-placeholder-val="{{ false }}"><button type="button" aria-label="{{ r.copyLabel }}" style="width:44px;height:44px;flex:none;display:grid;place-items:center;border:none;background:none;padding:0;cursor:pointer;color:var(--m-fg-muted)" style-active="background:var(--m-bg-muted)"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><rect x="9" y="9" width="11" height="11"></rect><path d="M5 15V5h10"></path></svg></button></sc-if>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="display:flex;gap:12px;padding:20px 16px;flex:none">
+    <a href="#" style="flex:{{ btnFlex }};height:48px;padding:0 20px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--m-border-strong);background:transparent;color:var(--m-fg);font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:600;font-size:15px;box-sizing:border-box;white-space:nowrap" style-hover="background:var(--m-bg-muted);text-decoration:none" style-active="background:var(--m-bg-muted)">View in explorer<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M7 17 17 7M8 7h9v9"></path></svg></a>
+    <button type="button" style="flex:{{ btnFlex }};height:48px;padding:0 20px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border:1px solid var(--m-border-strong);background:transparent;color:var(--m-fg);font-family:'JetBrains Mono',ui-monospace,monospace;font-weight:600;font-size:15px;cursor:pointer;box-sizing:border-box;white-space:nowrap" style-hover="background:var(--m-bg-muted)" style-active="background:var(--m-bg-muted)"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true"><path d="M12 3v13M7 8l5-5 5 5"></path><path d="M5 12v8h14v-8"></path></svg>Share</button>
+  </div>
+
+  <div style="border-top:1px solid var(--m-border);flex:none">
+    <button type="button" aria-expanded="{{ techOpen }}" onClick="{{ toggleTech }}" style="width:100%;height:56px;display:flex;align-items:center;gap:12px;padding:0 16px;border:none;background:none;cursor:pointer;text-align:left;color:var(--m-fg);font-family:'Inter Tight',system-ui,sans-serif;font-size:15px;font-weight:500" style-active="background:var(--m-bg-muted)">
+      <span style="flex:1">Technical details</span>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square" aria-hidden="true" style="color:var(--m-fg-muted);transform:rotate({{ chevRot }});transition:transform 200ms cubic-bezier(0.2,0.8,0.2,1)"><path d="m6 9 6 6 6-6"></path></svg>
+    </button>
+    <sc-if value="{{ techOpen }}" hint-placeholder-val="{{ false }}">
+      <div style="border-top:1px solid var(--m-hair)">
+        <sc-for list="{{ techRows }}" as="t" hint-placeholder-count="4">
+          <div style="display:flex;align-items:center;gap:12px;min-height:52px;padding:0 16px;border-bottom:1px solid var(--m-hair)">
+            <span style="width:96px;flex:none;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">{{ t.label }}</span>
+            <span style="flex:1;min-width:0;text-align:right;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:13px;line-height:18px;color:var(--m-fg);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ t.value }}</span>
+          </div>
+        </sc-for>
+        <div style="padding:16px 16px 24px;display:flex;flex-direction:column;gap:8px">
+          <span style="font-family:'JetBrains Mono',ui-monospace,monospace;font-size:11px;letter-spacing:0.08em;text-transform:uppercase;color:var(--m-fg-muted)">Decoded data</span>
+          <div style="background:var(--m-bg-muted);padding:12px 14px;display:grid;grid-template-columns:max-content minmax(0,1fr);column-gap:16px;row-gap:6px;font-family:'JetBrains Mono',ui-monospace,monospace;font-size:12px;line-height:18px">
+            <sc-for list="{{ data }}" as="d" hint-placeholder-count="4">
+              <span style="color:var(--m-fg-muted)">{{ d.k }}</span><span style="color:var(--m-fg);min-width:0;overflow-wrap:anywhere">{{ d.v }}</span>
+            </sc-for>
+          </div>
+        </div>
+      </div>
+    </sc-if>
+  </div>
+  <sc-if value="{{ isPhone }}" hint-placeholder-val="{{ true }}"><div style="height:34px;flex:none"></div></sc-if>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:390,&quot;height&quot;:844},&quot;event&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;received&quot;,&quot;options&quot;:[&quot;received&quot;,&quot;sentPending&quot;,&quot;sentFailed&quot;,&quot;session&quot;,&quot;passkey&quot;],&quot;tsType&quot;:&quot;string&quot;},&quot;techOpen&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:false,&quot;tsType&quot;:&quot;boolean&quot;},&quot;layout&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;default&quot;:&quot;phone&quot;,&quot;options&quot;:[&quot;phone&quot;,&quot;desktop&quot;],&quot;tsType&quot;:&quot;'phone' | 'desktop'&quot;}}">
+const CLOCK = 'M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0zM12 7v5l3 3';
+const GLYPH = { sent: 'M7 17 17 7M8 7h9v9', received: 'M17 7 7 17M16 17H7V8', deposit: 'M12 3v12M7 10l5 5 5-5M4 20h16', session_created: CLOCK, signed_in: 'M14 4h6v16h-6M3 12h11M10 8l4 4-4 4', passkey_added: 'M11 12a3.5 3.5 0 1 1-7 0 3.5 3.5 0 0 1 7 0zM11 12h10M18 12v3M15 12v2' };
+const C = true;
+const EVENTS = {
+  received: { kind: 'received', dir: 'in', status: 'done', title: 'Received', amount: '+$25.00',
+    rows: [['Date & time', 'Oct 2, 2026 \u00b7 2:14:05 PM'], ['From', 'ta7Q\u2026x2Lp', C], ['To', 'You'], ['Network', 'thru-alphanet'], ['Signature', '3nVq\u20268Hd2', C]],
+    tech: [['Program', 'Transfer \u00b7 taPR\u2026q7Lm'], ['Fee payer', 'ta7Q\u2026x2Lp'], ['Slot', '1,234,567'], ['Instruction', 'transfer']],
+    data: [['amount', '25000000'], ['decimals', '6'], ['source', 'ta7Q\u2026x2Lp'], ['destination', 'ta1k\u20269fq2']] },
+  sentPending: { kind: 'sent', dir: 'out', status: 'pending', title: 'Sent', amount: '\u2212$10.00', reason: 'Waiting for the network to confirm. Usually under a minute.',
+    rows: [['Date & time', 'Oct 2, 2026 \u00b7 2:16:40 PM'], ['From', 'You'], ['To', 'taB3\u20269kDe', C], ['Network', 'thru-alphanet'], ['Signature', '5KjR\u20269pQw', C]],
+    tech: [['Program', 'Transfer \u00b7 taPR\u2026q7Lm'], ['Fee payer', 'You'], ['Slot', '\u2014'], ['Instruction', 'transfer']],
+    data: [['amount', '10000000'], ['decimals', '6'], ['source', 'ta1k\u20269fq2'], ['destination', 'taB3\u20269kDe']] },
+  sentFailed: { kind: 'sent', dir: 'out', status: 'failed', title: 'Sent', amount: '\u2212$5.00', reason: 'Not enough $ in your account when it ran. Nothing left your account.',
+    rows: [['Date & time', 'Oct 1, 2026 \u00b7 8:02:17 AM'], ['From', 'You'], ['To', 'taB3\u20269kDe', C], ['Network', 'thru-alphanet'], ['Signature', '7Lp2\u2026kQ4c', C]],
+    tech: [['Program', 'Transfer \u00b7 taPR\u2026q7Lm'], ['Fee payer', 'You'], ['Slot', '1,231,902'], ['Error', 'InsufficientFunds (0x1)']],
+    data: [['amount', '5000000'], ['decimals', '6'], ['source', 'ta1k\u20269fq2'], ['destination', 'taB3\u20269kDe']] },
+  session: { kind: 'session_created', status: 'done', title: 'Signing session created', amount: '',
+    rows: [['Date & time', 'Oct 1, 2026 \u00b7 9:40:12 AM'], ['Expires', 'Oct 6, 2026 \u00b7 9:41 AM'], ['Device', 'Safari on iPhone'], ['Network', 'thru-alphanet'], ['Signature', '9Rt5\u2026mW1a', C]],
+    tech: [['Program', 'Session \u00b7 taSE\u2026k2Vw'], ['Fee payer', 'You'], ['Slot', '1,232,410'], ['Instruction', 'create_session']],
+    data: [['session_key', 'taSK\u2026p8Nd'], ['expires_slot', '1,296,000'], ['scope', 'sign']] },
+  passkey: { kind: 'passkey_added', status: 'done', title: 'Passkey added', amount: '',
+    rows: [['Date & time', 'Sep 28, 2026 \u00b7 11:08:03 AM'], ['Device', 'iPhone 17 Pro'], ['Network', 'thru-alphanet'], ['Signature', '2Hq8\u2026vL3s', C]],
+    tech: [['Program', 'Account \u00b7 taAC\u2026w9Rz'], ['Fee payer', 'You'], ['Slot', '1,198,004'], ['Instruction', 'add_passkey']],
+    data: [['credential_id', 'Qm3k\u2026xT7a'], ['transports', 'internal, hybrid'], ['aaguid', 'fbfc\u2026e0f1']] },
+};
+const STATUS = {
+  done: { word: 'Completed', color: 'var(--m-forest)', glyph: 'M20 6 9 17l-5-5' },
+  pending: { word: 'Pending', color: 'var(--m-saffron)', glyph: CLOCK },
+  failed: { word: 'Failed', color: 'var(--m-accent)', glyph: 'M18 6 6 18M6 6l12 12' },
+};
+class Component extends DCLogic {
+  state = { techOpen: null };
+  renderVals() {
+    const p = this.props;
+    const ev = EVENTS[p.event] || EVENTS.received;
+    const st = STATUS[ev.status];
+    const layout = p.layout ?? 'phone';
+    const techOpen = this.state.techOpen ?? !!p.techOpen;
+    const failed = ev.status === 'failed', pending = ev.status === 'pending', incoming = ev.dir === 'in';
+    let tileBg = 'var(--m-bg-muted)', tileFg = 'var(--m-fg)';
+    if (failed) { tileBg = 'var(--m-accent-soft)'; tileFg = 'var(--m-accent)'; }
+    else if (pending) { tileBg = 'var(--m-saffron-soft)'; tileFg = 'var(--m-saffron)'; }
+    else if (incoming) { tileBg = 'var(--m-forest-soft)'; tileFg = 'var(--m-forest)'; }
+    return {
+      isPhone: layout === 'phone', isDesktop: layout === 'desktop',
+      title: ev.title, amount: ev.amount, hasAmount: !!ev.amount, glyph: GLYPH[ev.kind], tileBg, tileFg,
+      amountColor: failed || pending ? 'var(--m-fg-muted)' : incoming ? 'var(--m-forest)' : 'var(--m-fg)',
+      statusWord: st.word, statusColor: st.color, statusGlyph: st.glyph, hasReason: !!ev.reason, reason: ev.reason || '',
+      rows: ev.rows.map(([label, value, copy]) => ({ label, value, copy: !!copy, copyLabel: 'Copy ' + label.toLowerCase(), padRight: copy ? '4px' : '16px' })),
+      btnFlex: layout === 'phone' ? '1' : 'none',
+      techOpen, chevRot: techOpen ? '180deg' : '0deg', toggleTech: () => this.setState({ techOpen: !techOpen }),
+      techRows: ev.tech.map(([label, value]) => ({ label, value })),
+      data: ev.data.map(([k, v]) => ({ k, v })),
+    };
+  }
+}
+</script>
+</body>
+</html>

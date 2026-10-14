@@ -1,5 +1,6 @@
 import type { Event as QueryEvent } from "@thru/sdk/proto";
 import type { StreamEventsResponse } from "@thru/sdk/proto";
+import type { Timestamp } from "@bufbuild/protobuf/wkt";
 import { timestampToNanoseconds } from "../../utils/utils";
 
 export interface ChainEventParams {
@@ -12,6 +13,9 @@ export interface ChainEventParams {
     programIndex?: number;
     payloadSize?: number;
     timestampNs?: bigint;
+    blockTimestampNs?: bigint;
+    feePayer?: Uint8Array;
+    blockOffset?: number;
 }
 
 export class ChainEvent {
@@ -23,7 +27,12 @@ export class ChainEvent {
     readonly callIndex?: number;
     readonly programIndex?: number;
     readonly payloadSize?: number;
+    /** Time the node published the live event; set only by fromStream. */
     readonly timestampNs?: bigint;
+    /** Header time of the block holding the event. */
+    readonly blockTimestampNs?: bigint;
+    readonly feePayer?: Uint8Array;
+    readonly blockOffset?: number;
 
     constructor(params: ChainEventParams) {
         if (!params.id) {
@@ -38,6 +47,9 @@ export class ChainEvent {
         this.programIndex = params.programIndex;
         this.payloadSize = params.payloadSize;
         this.timestampNs = params.timestampNs;
+        this.blockTimestampNs = params.blockTimestampNs;
+        this.feePayer = copyBytes(params.feePayer);
+        this.blockOffset = params.blockOffset;
     }
 
     static fromQuery(proto: QueryEvent): ChainEvent {
@@ -50,21 +62,31 @@ export class ChainEvent {
             callIndex: proto.callIdx,
             programIndex: proto.programIdx,
             payloadSize: proto.payloadSize,
+            blockTimestampNs: optionalNanoseconds(proto.timestamp),
+            feePayer: proto.feePayer?.value,
+            blockOffset: proto.blockOffset,
         });
     }
 
     static fromStream(proto: StreamEventsResponse): ChainEvent {
-        const id = normalizeStreamEventId(proto.eventId);
         return new ChainEvent({
-            id,
+            id: proto.eventId,
             transactionSignature: proto.signature?.value,
             program: proto.program?.value,
             payload: proto.payload,
             slot: proto.slot,
             callIndex: proto.callIdx,
             timestampNs: timestampToNanoseconds(proto.timestamp),
+            blockTimestampNs: optionalNanoseconds(proto.blockTimestamp),
+            programIndex: proto.programIdx,
+            feePayer: proto.feePayer?.value,
+            blockOffset: proto.blockOffset,
         });
     }
+}
+
+function optionalNanoseconds(timestamp?: Timestamp): bigint | undefined {
+    return timestamp ? timestampToNanoseconds(timestamp) : undefined;
 }
 
 function copyBytes(input?: Uint8Array): Uint8Array | undefined {
@@ -74,12 +96,4 @@ function copyBytes(input?: Uint8Array): Uint8Array | undefined {
     const copy = new Uint8Array(input.length);
     copy.set(input);
     return copy;
-}
-
-function normalizeStreamEventId(id: string): string {
-    const parts = id.split(":" );
-    if (parts.length >= 4) {
-        return parts.slice(0, 4).join(":" );
-    }
-    return id;
 }

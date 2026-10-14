@@ -680,6 +680,13 @@ export function createMarketRecordInstruction(args: MarketRecordArgs): Instructi
   };
 }
 
+/** State units a market_create transaction must request. The runtime charges
+    ceil((64 + data_sz) / 4096) per new account, and market_create creates six:
+    the seat arena (64320 bytes: 16), the order arena (64072 bytes: 16), the
+    bids and asks cbooks (96 bytes: 1 each) and the base and quote vault token
+    accounts (73 bytes: 1 each). Requesting fewer fails with SU_EXHAUSTED. */
+export const CLOB_MARKET_CREATE_STATE_UNITS = 36;
+
 export function createMarketCreateInstruction(args: MarketCreateArgs): InstructionData {
   return async (context) => {
     assertU64(args.lotSize, 'lotSize');

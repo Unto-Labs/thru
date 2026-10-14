@@ -946,22 +946,23 @@ export class BrowserSDK implements WalletSDK {
     if (!this.initialized) {
       await this.initialize();
     }
-    /* `method` picks the rail; an explicit providerId (legacy callers) wins.
-       Neither → the wallet shows its chooser, restricted to the providers
-       this SDK enables. */
     this.assertDepositNetwork(payload.destination?.network);
-    if (!this.availableDepositProviders().length)
-      throw new Error('Add funds unavailable on this network');
+    const enabledProviders = this.availableDepositProviders();
+    /* An explicit providerId wins; otherwise `method` picks the rail.
+       With neither, a destination uses legacy Unifold only when configured;
+       otherwise the wallet opens its chooser, including faucet-only networks.
+       Explicit payment rails still require a configured provider. */
     const providerId =
       payload.providerId ??
       (payload.method === 'card'
         ? 'coinbase'
-        : payload.method === 'crypto' || payload.destination
+        : payload.method === 'crypto' ||
+            (payload.destination && enabledProviders.includes('unifold'))
           ? 'unifold'
           : undefined);
     if (
       providerId !== undefined &&
-      !this.availableDepositProviders().includes(providerId)
+      !enabledProviders.includes(providerId)
     ) {
       throw new Error(`Deposit provider is not configured: ${providerId}`);
     }
@@ -971,7 +972,7 @@ export class BrowserSDK implements WalletSDK {
       ...(payload.amount && !payload.paymentAmount
         ? { paymentAmount: payload.amount }
         : {}),
-      enabledProviders: this.availableDepositProviders(),
+      enabledProviders,
     });
   }
 

@@ -19,8 +19,6 @@ import {
   createRequestId,
   type ConnectMetadataInput,
   type ConnectRequestPayload,
-  type CreateAccountPayload,
-  type CreateAccountResult,
   type DepositDestination,
   type DepositRequestPayload,
   type DepositResult,
@@ -42,13 +40,10 @@ import {
   type WebViewMessageEventLike,
   type WebViewRefLike,
 } from "./WebViewBridge";
-import { resolveSessionExpirySeconds } from "../../signing-sessions";
-import type { ThruSigningSessionCreateOptions } from "../../interfaces";
 import type { WalletTheme } from "../../protocol";
 
 const DEFAULT_WALLET_URL = "https://app.tid.sh/embedded/native";
 const DEFAULT_ORIGIN = "thru-mobile://app";
-const TRANSPARENT_FOCUS_SETTLE_MS = 500;
 
 export interface NativeProviderConfig {
   /** app.tid.sh/embedded/native URL to load. */
@@ -61,12 +56,10 @@ export interface NativeProviderConfig {
   /** Bounded host-app-provided dimensions forwarded to the wallet. */
   telemetryContext?: TelemetryAppContext;
   telemetry?: NativeTelemetryRecorder;
-  /** Standard bottom-sheet wallet or transparent auto-signing wallet. */
-  walletExperience?: "standard" | "transparent";
   /** Caller-supplied dapp origin. Stamped on every postMessage so
       wallet's ConnectedAppsStorage can scope per-host. */
   origin?: string;
-  /** Default app metadata used by trusted transparent requests. */
+  /** Default app metadata used by connection requests. */
   metadata?: ConnectMetadataInput;
   addressTypes?: AddressTypeValue[];
   signingSessions?: SigningSessionDescriptorStore;
@@ -86,42 +79,8 @@ export interface ConnectOptions {
   passkeyName?: string;
 }
 
-export interface CreateAccountOptions {
-  accountName?: string;
-  passkeyName?: string;
-  metadata?: ConnectMetadataInput;
-  createSigningSession?: Omit<
-    ThruSigningSessionCreateOptions,
-    "walletAddress" | "review"
-  >;
-}
-
 export type NativeProviderEvent = EmbeddedProviderEvent;
 export type NativeProviderEventCallback = (data?: unknown) => void;
-
-const TRANSPARENT_CONTENT_PRESENTATION_PREFIX = "wallet-content:";
-
-function getUiShowReason(payload: unknown): string {
-  if (
-    payload &&
-    typeof payload === "object" &&
-    "reason" in payload &&
-    typeof payload.reason === "string" &&
-    payload.reason.length > 0
-  ) {
-    return payload.reason;
-  }
-  return "ui-show";
-}
-
-/** Internal lifecycle tag used by the transparent React host. The first show
- * request only expands/focuses the otherwise invisible WebView; this tagged
- * request arrives when the wallet has actually rendered visible content. */
-export function isTransparentContentPresentationReason(
-  reason?: string,
-): boolean {
-  return reason?.startsWith(TRANSPARENT_CONTENT_PRESENTATION_PREFIX) ?? false;
-}
 
 /**
  * RN-side analog of `web/packages/embedded-provider/src/EmbeddedProvider.ts`.
@@ -149,13 +108,15 @@ export class NativeProvider {
       payload: selection,
       origin: this.origin,
     });
-    await this.bridge.waitForNetwork(response.result.scope, response.result.name);
+    await this.bridge.waitForNetwork(
+      response.result.scope,
+      response.result.name,
+    );
     return response.result;
   }
 
   private readonly bridge: WebViewBridge;
   private readonly origin: string;
-  private readonly transparent: boolean;
   private _thruChain?: IThruChain;
   private connected = false;
   private accounts: WalletAccount[] = [];
@@ -163,7 +124,7 @@ export class NativeProvider {
   private defaultNetwork?: ThruNetwork;
   private depositUiConfig?: DepositUiConfig;
   private isSurfaceShown = false;
-  private transparentSurfaceRequestCount = 0;
+  private readonly surfaceRequests = new Set<symbol>();
   private connectionRevision = 0;
   private readonly telemetry?: NativeTelemetryRecorder;
   private readonly eventListeners = new Map<
@@ -178,7 +139,6 @@ export class NativeProvider {
   constructor(config: NativeProviderConfig = {}) {
     const walletUrl = config.walletUrl ?? DEFAULT_WALLET_URL;
     this.origin = config.origin ?? DEFAULT_ORIGIN;
-    this.transparent = config.walletExperience === "transparent";
     this.defaultNetwork = config.network;
     this.depositUiConfig = config.depositUiConfig;
     this.telemetry = config.telemetry;
@@ -199,24 +159,12 @@ export class NativeProvider {
     });
 
     this.bridge.onEvent = (eventType, payload) => {
-      if (this.transparent && eventType === EMBEDDED_PROVIDER_EVENTS.UI_SHOW) {
-        /* Only a request that is holding the surface open can present content.
-           UI_SHOW also arrives outside a requestShow/requestHide bracket (the
-           wallet emits it on disconnect), and expanding the invisible surface
-           then would leave a full-screen tap-blocking layer that no matching
-           requestHide can ever collapse. */
-        if (this.transparentSurfaceRequestCount > 0) {
-          this.onShowRequested?.(
-            `${TRANSPARENT_CONTENT_PRESENTATION_PREFIX}${getUiShowReason(payload)}`,
-          );
-        }
-        return;
-      }
-
       this.emit(eventType as NativeProviderEvent, payload);
 
       if (eventType === EMBEDDED_PROVIDER_EVENTS.UI_SHOW) {
-        this.requestShow(eventType);
+        // UI_SHOW is a notification inside a request, not another request lease.
+        // Ignore delayed events after cancellation/completion so they cannot reopen UI.
+        if (this.surfaceRequests.size > 0) this.showSurface(eventType);
         return;
       }
 
@@ -227,7 +175,7 @@ export class NativeProvider {
 
       if (eventType === EMBEDDED_PROVIDER_EVENTS.DISCONNECT) {
         this.clearConnection();
-        this.requestHide(eventType);
+        this.closeSurface(eventType);
         return;
       }
 
@@ -335,26 +283,22 @@ export class NativeProvider {
     await this.bridge.awaitReady();
   }
 
-  /** Open or focus the wallet host surface. Transparent hosts use this
-      to give WKWebView a focused document for WebAuthn without showing
-      wallet UI. */
-  async requestShow(reason = "request-started"): Promise<void> {
-    if (this.transparent) {
-      this.transparentSurfaceRequestCount++;
-      if (this.transparentSurfaceRequestCount === 1) {
-        this.isSurfaceShown = true;
-        this.recordTelemetry(TELEMETRY_EVENTS.BRIDGE_SURFACE_SHOWN, {
-          severity: "info",
-          operation: reason,
-          outcome: "shown",
-        });
-        this.onShowRequested?.(reason);
-      }
-      await new Promise((resolve) =>
-        setTimeout(resolve, TRANSPARENT_FOCUS_SETTLE_MS),
-      );
+  /** Hold the standard sheet open for this request, including nested deposit work. */
+  async requestShow(reason = "request-started"): Promise<symbol> {
+    const request = Symbol(reason);
+    this.surfaceRequests.add(request);
+    this.showSurface(reason);
+    return request;
+  }
+
+  /** Release only this request. A late completion must not close a newer sheet. */
+  requestHide(reason: string, request: symbol): void {
+    if (!this.surfaceRequests.delete(request) || this.surfaceRequests.size > 0)
       return;
-    }
+    this.hideSurface(reason);
+  }
+
+  private showSurface(reason: string): void {
     if (this.isSurfaceShown) return;
     this.isSurfaceShown = true;
     this.recordTelemetry(TELEMETRY_EVENTS.BRIDGE_SURFACE_SHOWN, {
@@ -365,16 +309,8 @@ export class NativeProvider {
     this.onShowRequested?.(reason);
   }
 
-  /** Close the wallet UI (called internally; also exposed for host). */
-  requestHide(reason = "request-completed"): void {
-    if (this.transparent) {
-      if (this.transparentSurfaceRequestCount > 0) {
-        this.transparentSurfaceRequestCount--;
-      }
-      if (this.transparentSurfaceRequestCount > 0 || !this.isSurfaceShown) {
-        return;
-      }
-    }
+  private hideSurface(reason: string): void {
+    if (!this.isSurfaceShown) return;
     this.isSurfaceShown = false;
     this.recordTelemetry(TELEMETRY_EVENTS.BRIDGE_SURFACE_HIDDEN, {
       severity: "info",
@@ -384,15 +320,21 @@ export class NativeProvider {
     this.onHideRequested?.(reason);
   }
 
-  /** Reject pending requests after a user-driven native sheet dismiss. */
+  private closeSurface(reason: string): void {
+    this.surfaceRequests.clear();
+    this.hideSurface(reason);
+  }
+
+  /** Reject pending requests after a user-driven sheet dismiss, invalidating old leases. */
   rejectPendingRequests(message?: string): void {
+    this.closeSurface("user-dismissed");
     this.bridge.rejectPendingRequests(message);
   }
 
   async connect(options?: ConnectOptions): Promise<ConnectResult> {
     this.emit(EMBEDDED_PROVIDER_EVENTS.CONNECT_START, {});
+    const surface = await this.requestShow("connect-open");
     try {
-      await this.requestShow("connect-open");
       const payload: ConnectRequestPayload = {};
       if (options?.metadata) payload.metadata = options.metadata;
       if (options?.preferredAccountAddress) {
@@ -415,70 +357,11 @@ export class NativeProvider {
       this.hydrateConnection(result, result.selectedAccount.address);
 
       this.emit(EMBEDDED_PROVIDER_EVENTS.CONNECT, result);
-      this.requestHide("connect-settled");
+      this.requestHide("connect-settled", surface);
       return result;
     } catch (error) {
-      this.requestHide("connect-error");
+      this.requestHide("connect-error", surface);
       this.emit(EMBEDDED_PROVIDER_EVENTS.CONNECT_ERROR, { error });
-      throw error;
-    }
-  }
-
-  async createAccount(
-    options?: CreateAccountOptions,
-  ): Promise<CreateAccountResult> {
-    try {
-      await this.requestShow("create-account-open");
-      const payload: CreateAccountPayload = {};
-      if (options?.accountName) payload.accountName = options.accountName;
-      if (options?.passkeyName) payload.passkeyName = options.passkeyName;
-      if (options?.metadata) payload.metadata = options.metadata;
-      if (options?.createSigningSession) {
-        payload.createSigningSession = {
-          expiresAt: String(
-            resolveSessionExpirySeconds(options.createSigningSession),
-          ),
-        };
-      }
-
-      const response = await this.bridge.sendMessage({
-        id: createRequestId(),
-        type: POST_MESSAGE_REQUEST_TYPES.CREATE_ACCOUNT,
-        payload,
-        origin: this.origin,
-      });
-
-      const normalized = normalizeWalletAccountResult(
-        response.result,
-        response.result.selectedAccount ?? response.result.account,
-      );
-      const selectedAccount =
-        normalized.selectedAccount ?? response.result.account;
-      if (!selectedAccount) {
-        throw new Error("Wallet did not return a created account");
-      }
-      const result: CreateAccountResult = {
-        ...response.result,
-        accounts: normalized.accounts,
-        selectedAccount,
-        account: selectedAccount,
-      };
-      this.hydrateConnection(result, result.selectedAccount.address);
-
-      this.emit(EMBEDDED_PROVIDER_EVENTS.CONNECT, {
-        accounts: result.accounts,
-        selectedAccount: result.selectedAccount,
-        status: "completed",
-        metadata: options?.metadata,
-      });
-      this.emit(EMBEDDED_PROVIDER_EVENTS.ACCOUNT_CHANGED, {
-        account: result.selectedAccount,
-      });
-      this.requestHide("create-account-settled");
-      return result;
-    } catch (error) {
-      this.requestHide("create-account-error");
-      this.emit(EMBEDDED_PROVIDER_EVENTS.ERROR, { error });
       throw error;
     }
   }
@@ -524,6 +407,7 @@ export class NativeProvider {
 
   async disconnect(): Promise<void> {
     const connectionRevision = this.connectionRevision;
+    const surface = await this.requestShow("disconnect-open");
     try {
       await this.bridge.sendMessage({
         id: createRequestId(),
@@ -538,15 +422,13 @@ export class NativeProvider {
         this.emit(EMBEDDED_PROVIDER_EVENTS.ERROR, { error });
       }
       throw error;
+    } finally {
+      this.requestHide("disconnect-settled", surface);
     }
   }
 
   isConnected(): boolean {
     return this.connected;
-  }
-
-  isTransparent(): boolean {
-    return this.transparent;
   }
 
   hydrateConnection(
@@ -605,8 +487,8 @@ export class NativeProvider {
 
   async manageAccounts(): Promise<ManageAccountsResult> {
     if (!this.connected) throw new Error("Wallet not connected");
+    const surface = await this.requestShow("manage-accounts-open");
     try {
-      await this.requestShow("manage-accounts-open");
       const response = await this.bridge.sendMessage({
         id: createRequestId(),
         type: POST_MESSAGE_REQUEST_TYPES.MANAGE_ACCOUNTS,
@@ -616,10 +498,10 @@ export class NativeProvider {
       const result = response.result;
       this.selectedAccount = result.selectedAccount;
       this.accounts = this.selectedAccount ? [this.selectedAccount] : [];
-      this.requestHide("manage-accounts-settled");
+      this.requestHide("manage-accounts-settled", surface);
       return result;
     } catch (error) {
-      this.requestHide("manage-accounts-error");
+      this.requestHide("manage-accounts-error", surface);
       this.emit(EMBEDDED_PROVIDER_EVENTS.ERROR, { error });
       throw error;
     }
@@ -647,12 +529,12 @@ export class NativeProvider {
    * resolve once the user completes or cancels. The wallet site runs the
    * third-party deposit widget (Unifold); crediting is authoritative on the
    * server webhook, so the result only reports the terminal UX state. Shows the
-   * (transparent) wallet surface for the duration of the flow, like
+   * standard wallet sheet for the duration of the flow, like
    * manageAccounts().
    */
   async deposit(payload: DepositRequestPayload): Promise<DepositResult> {
+    const surface = await this.requestShow("deposit-open");
     try {
-      await this.requestShow("deposit-open");
       const response = await this.bridge.sendMessage({
         id: createRequestId(),
         type: POST_MESSAGE_REQUEST_TYPES.DEPOSIT,
@@ -669,7 +551,7 @@ export class NativeProvider {
       this.emit(EMBEDDED_PROVIDER_EVENTS.ERROR, { error });
       throw error;
     } finally {
-      this.requestHide("deposit-settled");
+      this.requestHide("deposit-settled", surface);
     }
   }
 
@@ -697,6 +579,7 @@ export class NativeProvider {
   }
 
   destroy(): void {
+    this.closeSurface("destroyed");
     this.bridge.destroy();
     this.eventListeners.clear();
     this.clearConnection();

@@ -205,10 +205,51 @@ legacy outer-transaction signing:
 import { TransactionSigningScheme } from '@thru/wallet';
 
 const config = {
-  walletUrl: 'https://app.tid.sh/embedded/native/transparent',
+  walletUrl: 'https://app.tid.sh/embedded/native',
   transactionSigningScheme: TransactionSigningScheme.Legacy,
 };
 ```
 
 The setting is fixed for the SDK instance and propagated to the hosted wallet.
 RFC-8032 remains the default, and no automatic fallback is performed.
+
+## Breaking native migration: one wallet sheet
+
+Native iOS and Android integrations now use `ThruWalletSheet` and `connect()`.
+The sheet owns signin, signup, passkey naming, account management, transaction
+approval, and session authorization. The wallet WebView owns passkey ceremonies;
+the wallet sheet keeps its existing size and expansion behavior.
+
+```tsx
+import { ThruProvider, ThruWalletSheet, useWallet } from '@thru/wallet/native/react';
+
+function ConnectButton() {
+  const { connect } = useWallet();
+  return <Button title="Continue with Thru" onPress={() => void connect()} />;
+}
+
+<ThruProvider config={{ walletUrl: 'https://app.tid.sh/embedded/native' }}>
+  <App />
+  <ThruWalletSheet />
+</ThruProvider>;
+```
+
+- Replace `ThruTransparentWalletBridge` with `ThruWalletSheet` from
+  `@thru/wallet/native/react`. The `/native/react/transparent` entrypoint is removed.
+- Remove `walletExperience` and `NativeWalletExperience`; there is one native presentation.
+- Replace native `signIn()`, `createAccount()`, `nativeOnboarding`, and
+  `useNativeOnboarding()` with `connect()`. Remove the associated hook/context
+  members and onboarding option/result types. Keep app identity in the existing
+  `connect({ metadata })` option or provider configuration.
+- Use the existing `thru.createSigningSession()` and session APIs after connecting.
+  New session authorization and transactions without a valid authorized session
+  require the sheet's approval. Existing authorized sessions, stored accounts,
+  and wallet storage continue to work. A failed session cannot silently fall back
+  to passkey signing while disconnected: connect again and approve the request.
+- Point native URLs to `/embedded/native`. The old `/embedded/native/transparent`
+  URL is an alias for the standard page and retains query parameters and fragments.
+  It does not restore removed SDK APIs. A legacy `createAccount` wire request
+  fails immediately with an explicit instruction to upgrade and use `connect()`.
+
+Coinbase Apple Pay is hosted by the standard sheet on iOS. Android retains the
+standard deposit flow. Browser integration APIs and presentation are unchanged.
