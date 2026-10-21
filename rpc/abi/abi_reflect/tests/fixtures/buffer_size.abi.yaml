@@ -1,0 +1,24 @@
+abi:
+  package: tests.buffer_size
+  name: buffer-size
+  abi-version: 1
+  package-version: 1.0.0
+  description: Buffer size regression fixture
+  imports: []
+types:
+  - name: Payload
+    kind:
+      struct:
+        packed: true
+        fields:
+          - name: data_len
+            field-type:
+              primitive: u32
+          - name: values
+            field-type:
+              array:
+                size:
+                  field-ref:
+                    path: [data_len]
+                element-type:
+                  primitive: u32
