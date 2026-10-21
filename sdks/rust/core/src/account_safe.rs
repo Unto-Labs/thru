@@ -16,14 +16,10 @@ use heapless::IndexMap;
 /// let mgr: AccountManager<NUM_ACCOUNTS> = /* ... */;
 /// ```
 pub const fn next_pow2(n: usize) -> usize {
-    if n == 0 {
-        return 1;
+    match n.checked_next_power_of_two() {
+        Some(p) => p,
+        None => usize::MAX,
     }
-    let mut p = 1;
-    while p < n {
-        p = p.saturating_mul(2);
-    }
-    p
 }
 
 use crate::{
@@ -806,5 +802,21 @@ impl<'a, const N: usize> IntoIterator for &'a AccountManager<N> {
 
     fn into_iter(self) -> Self::IntoIter {
         self.accounts_iter()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_next_pow2() {
+        assert_eq!(next_pow2(0), 1);
+        assert_eq!(next_pow2(1), 1);
+        assert_eq!(next_pow2(2), 2);
+        assert_eq!(next_pow2(3), 4);
+        assert_eq!(next_pow2(10), 16);
+        assert_eq!(next_pow2(16), 16);
+        assert_eq!(next_pow2(17), 32);
     }
 }
