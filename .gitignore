@@ -1,0 +1,38 @@
+# Rust
+target/
+
+# Node
+node_modules/
+.pnpm-store/
+
+# Build and test output
+dist/
+build/
+out/
+coverage/
+.nyc_output/
+.esbuild/
+*.tsbuildinfo
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment files
+.env
+.env.*.local
+*.local
+
+# Editor and OS files
+.vscode/
+.idea/
+*.sublime-workspace
+*.sublime-project
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
