@@ -20,12 +20,9 @@ echo ""
 # Installing Rust SDK
 echo "Installing Rust SDK to: $THRU_DIR/.thru/sdk/rust"
 mkdir -p "$THRU_DIR/.thru/sdk/rust"
-# Copy Rust SDK files if they exist
-if [ -d "thru-sdk" ]; then
-    cp -r thru-sdk/* "$THRU_DIR/.thru/sdk/rust/"
-fi
+cp -rL "$SCRIPT_DIR"/* "$THRU_DIR/.thru/sdk/rust/"
 
 echo ""
 echo "Rust SDK setup complete!"
 echo "Rust toolchain installed. Source environment: source \$HOME/.cargo/env"
-echo "RISC-V target 'riscv64imac-unknown-none-elf' is now available" 
+echo "RISC-V target 'riscv64imac-unknown-none-elf' is now available"

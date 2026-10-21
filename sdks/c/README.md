@@ -45,7 +45,7 @@ If you prefer to run the dependency installation manually:
 
 ```bash
 # Install toolchain dependencies
-./deps.sh --thru-dir $HOME fetch check install-c
+../deps.sh --thru-dir $HOME fetch check install-c
 
 # Build and install C SDK
 echo "Installing C SDK to: $HOME/.thru/sdk/c"
@@ -66,5 +66,5 @@ export PATH="$HOME/.thru/sdk/toolchain/bin:$PATH"
 ```
 
 **Build failures:**
-- Ensure all system dependencies are installed: `./deps.sh check`
+- Ensure all system dependencies are installed: `../deps.sh check`
 - Check that RISC-V toolchain is in PATH: `which riscv64-unknown-elf-gcc` 
