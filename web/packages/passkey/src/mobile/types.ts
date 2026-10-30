@@ -1,6 +1,6 @@
-import type { PasskeySigningResult, PasskeyMetadata } from '@thru/programs/passkey-manager';
+import type { PasskeySigningResult, PasskeyMetadata } from '@thru/programs/wallet';
 
-export type { PasskeySigningResult, PasskeyMetadata } from '@thru/programs/passkey-manager';
+export type { PasskeySigningResult, PasskeyMetadata } from '@thru/programs/wallet';
 
 export interface PasskeyMobileConfig {
   rpId?: string;

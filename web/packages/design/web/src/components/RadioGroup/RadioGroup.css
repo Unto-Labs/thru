@@ -1,5 +1,4 @@
-/* RadioGroup — ported from thru-design app.css .radio, retargeted to tokens.
-   State via Base UI [data-checked] / [data-disabled]. */
+/* State via Base UI [data-checked] / [data-disabled]. */
 
 .tds-radio-row {
   display: flex;
@@ -59,7 +58,6 @@
 .tds-radio__circle[data-checked] .tds-radio__dot {
   transform: scale(1);
 }
-/* Reduced motion: the dot appears at once instead of growing. */
 @media (prefers-reduced-motion: reduce) {
   .tds-radio__dot {
     transition: none;

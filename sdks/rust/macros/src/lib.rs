@@ -342,6 +342,10 @@ pub fn entry(args: TokenStream, input: TokenStream) -> TokenStream {
             pub extern "C" fn start(instr_data: *const u8, instr_data_sz: u64) -> ! {
                 use core::arch::asm;
 
+                if instr_data_sz > isize::MAX as u64 {
+                    thru_core::syscall::sys_exit(thru_core::syscall::SyscallCode::BadParams as u64, 1);
+                }
+
                 let data: &[u8] = if instr_data.is_null() {
                     &[]
                 } else {
@@ -372,6 +376,10 @@ pub fn entry(args: TokenStream, input: TokenStream) -> TokenStream {
             #[unsafe(export_name = "start")]
             pub extern "C" fn start(instr_data: *const u8, instr_data_sz: u64) -> ! {
                 use core::arch::asm;
+
+                if instr_data_sz > isize::MAX as u64 {
+                    thru_core::syscall::sys_exit(thru_core::syscall::SyscallCode::BadParams as u64, 1);
+                }
 
                 let data: &[u8] = if instr_data.is_null() {
                     &[]

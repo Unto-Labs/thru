@@ -8,6 +8,7 @@ import { Input } from "../../Input/Input";
 import { Spinner } from "../../Spinner/Spinner";
 import { Stepper } from "../../Stepper/Stepper";
 import { ToggleGroup } from "../../Toggle/Toggle";
+import { shortenWalletAddress } from "../AccountMenu/AccountMenu";
 import { Screen } from "../Screen/Screen";
 import { Steps, type StepItem } from "../Steps/Steps";
 import { Disc } from "../Disc/Disc";
@@ -17,7 +18,6 @@ import { chainMeta } from "../registry";
 import { useWaitStages, WaitHero, WALLET_SHEET_SLOW_MS } from "./wait";
 import "./DepositScreens.css";
 
-/* ── Icons ─────────────────────────────────────────────────────────── */
 const PlusCircle = (p: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 16 16" fill="none" aria-hidden {...p}>
     <circle cx="8" cy="8" r="6.25" stroke="currentColor" strokeWidth="1.5" />
@@ -87,7 +87,6 @@ const ShieldCheck = (p: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
-/* ── Types ─────────────────────────────────────────────────────────── */
 /** `faucet` is the test faucet a wallet offers in developer mode. */
 export type WalletSheetDepositMethod = "crypto" | "card" | "faucet";
 
@@ -116,13 +115,6 @@ export interface DepositPayMethodOption {
   icon?: React.ReactNode;
 }
 
-function shortAddress(address: string): string {
-  return address.length > 12 ? `${address.slice(0, 6)}…${address.slice(-4)}` : address;
-}
-
-/* ── Shared bits ───────────────────────────────────────────────────── */
-
-/** Left-aligned title + sub, no badge (the crypto / card rails). */
 function RailHeader({ title, description }: { title: React.ReactNode; description?: React.ReactNode }) {
   return (
     <div className="tds-dep__rail-head">
@@ -172,7 +164,7 @@ interface DepositSelectItem {
   icon?: React.ReactNode;
 }
 
-/** Field-labelled Base UI Select with an icon per item, in the Menu look. */
+/** Field-labelled Base UI Select with an icon per item. */
 function DepositSelect({
   label,
   items,
@@ -250,9 +242,8 @@ export interface DepositQrProps {
 }
 
 /**
- * DepositQr — a real QR (error-correction H, so the Thru disc can sit over the
- * centre) drawn as SVG on the design tokens: modules in the primary text color
- * on the higher surface, a 26px Thru disc on a 3px surface pad.
+ * DepositQr — a real QR, error-correction H so the Thru disc can sit over the
+ * centre.
  */
 export function DepositQr({ value, size = 148, className }: DepositQrProps) {
   const matrix = React.useMemo(() => {
@@ -293,7 +284,7 @@ export function DepositQr({ value, size = 148, className }: DepositQrProps) {
   );
 }
 
-/** The 1px "hosted by Coinbase" chrome around Coinbase's own surface. */
+/** The "hosted by Coinbase" chrome around Coinbase's own surface. */
 export function CoinbaseFrame({
   host = "pay.coinbase.com",
   hostedBy = "hosted by Coinbase",
@@ -323,8 +314,7 @@ export function CoinbaseFrame({
 
 /**
  * The card rail's pay action ("Continue with Apple Pay"), shown until an order
- * exists and Coinbase's own button takes over: the design system's primary
- * Button, with a Spinner while the order is being created.
+ * exists and Coinbase's own button takes over.
  */
 export function DepositPayButton({
   children,
@@ -353,7 +343,6 @@ export function DepositPayButton({
   );
 }
 
-/* ── Deposit (chooser) ─────────────────────────────────────────────── */
 export interface WalletSheetDepositProps {
   title?: React.ReactNode;
   description?: React.ReactNode;
@@ -522,7 +511,7 @@ function DepositScreen({
           <span>Deposits land in</span>
           <span className="tds-dep__lands-acct" title={destination.address}>
             <span className="tds-dep__lands-dot" style={{ background: destination.color ?? "#0279b1" }} />
-            {destination.name} · {shortAddress(destination.address)}
+            {destination.name} · {shortenWalletAddress(destination.address)}
           </span>
         </div>
       )}
@@ -530,7 +519,6 @@ function DepositScreen({
   );
 }
 
-/* ── Deposit crypto ────────────────────────────────────────────────── */
 export interface WalletSheetDepositCryptoProps {
   title?: React.ReactNode;
   description?: React.ReactNode;
@@ -630,7 +618,6 @@ function DepositCrypto({
   );
 }
 
-/* ── Card (Apple Pay / Google Pay via Coinbase) ────────────────────── */
 export const COINBASE_GUEST_CHECKOUT_TERMS_HREF = "https://www.coinbase.com/legal/guest-checkout/us";
 export const COINBASE_USER_AGREEMENT_HREF = "https://www.coinbase.com/legal/user_agreement";
 export const COINBASE_PRIVACY_POLICY_HREF = "https://www.coinbase.com/legal/privacy";
@@ -739,7 +726,6 @@ function AmountField({
     setText(format(amount));
   }, [amount]);
   const onInput = (raw: string) => {
-    /* Digits and one dot, at most two decimals. */
     const cleaned = raw.replace(/[^0-9.]/g, "");
     const [whole, ...rest] = cleaned.split(".");
     const next = rest.length > 0 ? `${whole}.${rest.join("").slice(0, 2)}` : whole;
@@ -890,7 +876,6 @@ function DepositCard({
   );
 }
 
-/* ── Test faucet (developer mode) ──────────────────────────────────── */
 const DEFAULT_FAUCET_PRESETS = [10, 100, 1000];
 
 /** The test faucet's drop, for a faucet option in a Pay with select. */
@@ -981,7 +966,7 @@ function DepositFaucet({
   if (embedded) {
     return (
       <div className="tds-dep__faucet tds-dep__embedded">
-        {description != null && <div className="tds-dep__rail-sub">{description}</div>}
+        <RailHeader title={title} description={description} />
         {fields}
       </div>
     );
@@ -994,8 +979,6 @@ function DepositFaucet({
     </Screen>
   );
 }
-
-/* ── Your details (Coinbase guest checkout contact) ─────────────────── */
 
 export interface DepositContactFieldProps {
   /** National US digits for the phone field, or the email as typed. */
@@ -1015,7 +998,7 @@ export interface WalletSheetDepositContactProps {
   /** Runs on submit (Enter or the button). */
   onContinue: () => void;
   continueLabel?: React.ReactNode;
-  /** Button text while  (the passkey / order round trip). */
+  /** Button text while loading (the passkey / order round trip). */
   loadingLabel?: React.ReactNode;
   /** Disable the fields and the button (an order is in flight). */
   disabled?: boolean;
@@ -1099,8 +1082,7 @@ function EmailField({
   );
 }
 
-/** The US mobile + email pair, with our own inline messages. Shared by the
- *  contact step and the card form's inline contact block. */
+/** The US mobile + email pair, with our own inline messages. */
 function ContactFields({
   phone,
   email,
@@ -1148,7 +1130,6 @@ function DepositContact({
       <RailHeader title={title} description={description} />
       <form
         className="tds-dep__contact-form"
-        /* Our own inline messages, not the browser's validation bubble. */
         noValidate
         onSubmit={(event) => {
           event.preventDefault();
@@ -1164,8 +1145,6 @@ function DepositContact({
     </Screen>
   );
 }
-
-/* ── Stepped card rail: phone, email, confirm ──────────────────────── */
 
 interface StepFormProps {
   title: React.ReactNode;
@@ -1185,7 +1164,6 @@ function StepForm({ title, description, step, onContinue, continueLabel = "Conti
       <StepHeader title={title} description={description} step={step} />
       <form
         className="tds-dep__contact-form"
-        /* Our own inline messages, not the browser's validation bubble. */
         noValidate
         onSubmit={(event) => {
           event.preventDefault();
@@ -1350,7 +1328,6 @@ function DepositReview({
   );
 }
 
-/* ── Verify with Coinbase ──────────────────────────────────────────── */
 export interface WalletSheetDepositVerifyProps {
   title?: React.ReactNode;
   description?: React.ReactNode;
@@ -1387,7 +1364,6 @@ function DepositVerify({
   );
 }
 
-/* ── Deposit pending ───────────────────────────────────────────────── */
 export interface WalletSheetDepositPendingProps {
   method?: WalletSheetDepositMethod;
   title?: React.ReactNode;
@@ -1405,7 +1381,7 @@ function DepositPending({
   description,
   steps,
   slowAfterMs = WALLET_SHEET_SLOW_MS,
-  note = "Safe to close — we’ll notify you when it lands.",
+  note = "Safe to close. We’ll notify you when it lands.",
   onClose,
   closeLabel = "Close",
 }: WalletSheetDepositPendingProps) {
@@ -1437,7 +1413,6 @@ function DepositPending({
   );
 }
 
-/* ── Funded ────────────────────────────────────────────────────────── */
 export interface WalletSheetDepositDoneRow {
   label: React.ReactNode;
   value: React.ReactNode;

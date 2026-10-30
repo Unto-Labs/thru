@@ -1,11 +1,6 @@
-/**
- * The Thru logomark as a real vector, transcribed from the shared brand asset
- * (web/explorer/public/logomark.svg). The kit previously had no logo at all,
- * so apps were rasterizing PNGs; this keeps the mark crisp at any size, tints
- * from the active theme, and exposes the single path so loaders can stroke it
- * on with strokeDasharray/strokeDashoffset.
- */
+import { View } from "react-native";
 import Svg, { Path } from "react-native-svg";
+import { palette } from "./tokens";
 import { useThemeColors } from "./theme";
 
 /** Intrinsic aspect of the mark — width / height. */
@@ -20,7 +15,7 @@ export const BRAND_MARK_PATH =
 export interface BrandMarkProps {
   /** Height in pt; width follows BRAND_MARK_ASPECT. */
   size?: number;
-  /** Defaults to the theme foreground, so the mark inverts for free. */
+  /** Defaults to the theme foreground. */
   color?: string;
   /** Renders as an outline instead of a solid fill. */
   outline?: boolean;
@@ -44,5 +39,23 @@ export function BrandMark({ size = 88, color, outline, strokeWidth = 1.5 }: Bran
         strokeWidth={outline ? strokeWidth : undefined}
       />
     </Svg>
+  );
+}
+
+/** The bird on the brand red disc, as in thru-disc.svg: Thru as a network. */
+export function ThruDisc({ size = 24 }: { size?: number }) {
+  return (
+    <View
+      style={{
+        alignItems: "center",
+        backgroundColor: palette.brick[400],
+        borderRadius: size / 2,
+        height: size,
+        justifyContent: "center",
+        width: size,
+      }}
+    >
+      <BrandMark color={palette.stone[0]} size={size * 0.62} />
+    </View>
   );
 }

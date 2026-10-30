@@ -1,13 +1,5 @@
 /**
- * The copy button: a 44 square with a 1pt strong border, the copy glyph at
- * 18 in `fgMuted`. After a copy the glyph cross-fades to a forest check, and
- * back when `copied` clears; the label says what was copied. The caller owns
- * the clipboard and how long `copied` stays true. Settings' wallet address
- * and every copyable `MetaTable` row draw this one.
- *
- * Motion is RN `Animated` (the kit has no reanimated): the check fades in
- * over 160ms and the glyph out over 120ms, as the app's small icon swaps do.
- * With Reduce Motion on, the swap is instant.
+ * The caller owns the clipboard and how long `copied` stays true.
  */
 
 import { useEffect, useRef } from "react";
@@ -15,7 +7,7 @@ import { Animated, Easing, Pressable, StyleSheet, type StyleProp, type ViewStyle
 import { touch } from "./tokens";
 import { makeStyles, useThemeColors } from "./theme";
 import { IconCheck, IconCopy } from "./Icons";
-import { useReduceMotion } from "./motion";
+import { useReduceMotion } from "./reduceMotion";
 
 const FADE_IN_MS = 160;
 const FADE_OUT_MS = 120;

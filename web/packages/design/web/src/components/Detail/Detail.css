@@ -1,5 +1,3 @@
-/* Detail — static label/value row. */
-
 .tds-detail {
   display: flex;
   align-items: center;
@@ -24,8 +22,6 @@
   text-align: right;
 }
 
-/* Summary rows invert which half is machine-facing: the label is prose, the
-   figure is mono and tabular so a stack of amounts aligns on the decimal. */
 .tds-detail--summary .tds-detail__label {
   font-family: var(--font-sans);
   color: var(--color-text-tertiary);

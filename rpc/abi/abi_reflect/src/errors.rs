@@ -43,6 +43,15 @@ pub enum ReflectError {
         available: u64,
     },
 
+    /// A field was too short for the bytes remaining in the buffer.
+    #[error("type '{type_name}' field '{field}' requires {required} bytes but only {available} available")]
+    FieldBufferTooSmall {
+        type_name: String,
+        field: String,
+        required: u128,
+        available: u64,
+    },
+
     /// Dynamic parameter extraction is not yet supported for this path.
     #[error("dynamic parameter '{parameter}' for type '{type_name}' is not supported: {reason}")]
     UnsupportedDynamicParam {

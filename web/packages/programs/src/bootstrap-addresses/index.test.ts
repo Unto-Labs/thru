@@ -4,7 +4,6 @@ import { describe, expect, it } from 'vitest';
 import { deriveManagedProgramAddresses, MANAGER_PROGRAM_PUBKEY, MANAGER_PROGRAM_ADDRESS, MANAGER_PROGRAM_SEED, ROOT_MANAGER_PROGRAM_ADDRESS } from '../manager';
 import { UPLOADER_PROGRAM_SEED, UPLOADER_PROGRAM_ADDRESS } from '../uploader';
 import {
-  BOOTSTRAP_FAUCET_RATE_LIMIT_POLICY_ADDRESS,
   BOOTSTRAP_PROGRAM_ADDRESSES,
   BOOTSTRAP_PROGRAM_SEEDS,
   CREDITS_MINT_ADDRESS,
@@ -27,17 +26,24 @@ const EXPECTED_ADDRESSES = {
   clob: 'taCLOBcFk1PT8JTHQM1LzsyK6HLv1YkSJKZ2ZyIxo8fiTe',
   thru_registrar: 'taREGMtyyVIMr27zDpvN0aRiSS2aOVffM9cZCsc0Xomaxw',
   wthru: 'taWTHRUBelpONhTRjYc7n4OovodUsUtZKTIuREWAi9G9lm',
-  passkey_manager: 'taPASSIvjIgz2kZ1CIIhvbT00XV9Ve5kZ2I9uDLanzIgbA',
+  wallet: 'taPASSIvjIgz2kZ1CIIhvbT00XV9Ve5kZ2I9uDLanzIgbA',
   nft: 'taNFTjOaeDBSPHNf0LVRWAkF4raUFQgrz0EQIgJd60ENb5',
   block_producer: 'taBPUH9m3CXZcBQyCrTmclHtltipiPelIHzdAf8QdIDvnt',
   consensus_validator: 'taCONStGMCE1RJ9ttceyt0FZhYapGJ7zzBuCE5qqYdLhaF',
   eoa: 'taEOAD2uLK1SLzPgtabFLUAx22yDlBs9DE9nZFTOESIGRr',
   uploader: 'taUPLMH5QYOAT4ktwQeO7DXAEKtqBhYehalNGf5BJFQDYq',
   compression: 'taRB54_92jNbBdcmt2jus88F-xrOSne1GR9mmyOh4RidAK',
-  ratelimit: 'taRATE6MTrtFFKY10oyskMcvokJs53iD5nWE8ZyUuGknMA',
 } as const;
 
 describe('bootstrap-managed program addresses', () => {
+  it('preserves the deprecated wallet registry alias without duplicating enumeration', () => {
+    expect(BOOTSTRAP_PROGRAM_SEEDS.passkey_manager).toBe(BOOTSTRAP_PROGRAM_SEEDS.wallet);
+    expect(BOOTSTRAP_PROGRAM_ADDRESSES.passkey_manager).toBe(BOOTSTRAP_PROGRAM_ADDRESSES.wallet);
+    expect(Object.keys(BOOTSTRAP_PROGRAM_SEEDS)).not.toContain('passkey_manager');
+    expect(Object.keys(BOOTSTRAP_PROGRAM_ADDRESSES)).not.toContain('passkey_manager');
+    expect(new Set(Object.values(BOOTSTRAP_PROGRAM_SEEDS)).size).toBe(Object.keys(BOOTSTRAP_PROGRAM_SEEDS).length);
+    expect(new Set(Object.values(BOOTSTRAP_PROGRAM_ADDRESSES)).size).toBe(Object.keys(BOOTSTRAP_PROGRAM_ADDRESSES).length);
+  });
   it('pins the root, approved main Manager and Uploader derivations', () => {
     expect(ROOT_MANAGER_PROGRAM_ADDRESS).toBe('taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAEB');
     expect(deriveManagedProgramAddresses(MANAGER_PROGRAM_SEED, false, ROOT_MANAGER_PROGRAM_ADDRESS).programAccountAddress)
@@ -99,20 +105,6 @@ describe('bootstrap-managed program addresses', () => {
         .toString('base64url');
       expect(address).toBe(EXPECTED_ADDRESSES[name]);
     }
-  });
-
-  it('derives the VERIFIED faucet rate limit policy independently of any admin', () => {
-    const sha = (...parts: Uint8Array[]) => {
-      const hash = createHash('sha256');
-      for (const part of parts) hash.update(part);
-      return hash.digest();
-    };
-    const id = Buffer.alloc(8); // policy_id 0, u64 little-endian
-    const seed = sha(Buffer.from('tn_ratelimit_verified_policy_v1'),
-      Pubkey.from(BOOTSTRAP_PROGRAM_ADDRESSES.faucet).toBytes(), id);
-    const policy = sha(Pubkey.from(BOOTSTRAP_PROGRAM_ADDRESSES.ratelimit).toBytes(), Uint8Array.of(0), seed);
-    expect(Pubkey.from(BOOTSTRAP_FAUCET_RATE_LIMIT_POLICY_ADDRESS).toBytes()).toEqual(new Uint8Array(policy));
-    expect(BOOTSTRAP_FAUCET_RATE_LIMIT_POLICY_ADDRESS).toBe('taDrvTPLhMWuRsCyAAnyNm5pkkrlmegsHrwYsJQ1GoBvfd');
   });
 
   it('derives the approved Alphanet THRUSD mint with the wallet setup default', () => {

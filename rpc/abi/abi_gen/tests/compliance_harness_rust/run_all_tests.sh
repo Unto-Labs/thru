@@ -71,8 +71,17 @@ fi
 echo "Build complete"
 echo ""
 
-# Create a unique temporary directory for this test run
-TEMP_BASE=$(mktemp -d)
+# Create a unique temporary directory for this test run, or use the fixed one
+# CI names. The generated crates are built through the vcache rustc wrapper,
+# and their target paths (-L dependency=<dir>/...) are part of its key: a new
+# mktemp path every run made each of them a miss that was stored and never hit.
+if [ -n "${ABI_COMPLIANCE_TEMP_BASE:-}" ]; then
+  TEMP_BASE="$ABI_COMPLIANCE_TEMP_BASE"
+  rm -rf "$TEMP_BASE"
+  mkdir -p "$TEMP_BASE"
+else
+  TEMP_BASE=$(mktemp -d)
+fi
 echo "Using temporary directory: $TEMP_BASE"
 echo ""
 

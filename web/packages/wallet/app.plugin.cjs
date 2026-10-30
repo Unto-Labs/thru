@@ -5,8 +5,6 @@ const DEFAULT_RP_DOMAIN = "app.tid.sh";
 const COINBASE_APP_BOUND_DOMAIN = "coinbase.com";
 const APP_BOUND_DOMAIN_CAP = 10;
 const MIN_ANDROID_SDK_FOR_PASSKEYS = 28;
-const ANDROID_SYSTEM_BRIGHTNESS_PERMISSION =
-  "android.permission.WRITE_SETTINGS";
 const IOS_ASSOCIATED_DOMAIN_MODES = new Set([
   "developer",
   "managed",
@@ -75,14 +73,6 @@ function withThruWalletNative(config, opts = {}) {
   if (currentMin < MIN_ANDROID_SDK_FOR_PASSKEYS) {
     config.android.minSdkVersion = MIN_ANDROID_SDK_FOR_PASSKEYS;
   }
-
-  const existingPermissions = Array.isArray(config.android.permissions)
-    ? config.android.permissions.slice()
-    : [];
-  if (!existingPermissions.includes(ANDROID_SYSTEM_BRIGHTNESS_PERMISSION)) {
-    existingPermissions.push(ANDROID_SYSTEM_BRIGHTNESS_PERMISSION);
-  }
-  config.android.permissions = existingPermissions;
 
   const existingDeps = Array.isArray(config.android.extraDependencies)
     ? config.android.extraDependencies.slice()

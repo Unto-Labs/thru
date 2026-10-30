@@ -1,5 +1,4 @@
-/* Dialog / AlertDialog — ported from thru-design app.css, retargeted to tokens.
-   Enter/exit via Base UI's [data-starting-style] / [data-ending-style] hooks. */
+/* Enter/exit via Base UI's [data-starting-style] / [data-ending-style]. */
 
 .tds-scrim {
   position: fixed;
@@ -36,8 +35,8 @@
   transform: translate(-50%, -48%) scale(0.97);
 }
 
-/* Reduced motion: no drop or zoom, only a short fade. The opacity
-   transition still runs, so Base UI waits for it and the exit completes. */
+/* The opacity transition still runs, so Base UI waits for it and the exit
+   completes. */
 @media (prefers-reduced-motion: reduce) {
   .tds-scrim {
     transition-duration: var(--duration-fast);

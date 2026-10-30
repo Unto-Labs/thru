@@ -1,19 +1,11 @@
 import type { AddressType } from "../interfaces";
 
 /**
- * A wallet-issued restore record.
- *
- * The wallet keeps a host's authorization in its own storage, which WebKit
- * holds in memory only for a cross-origin frame: a reload keeps it, quitting
- * the host page (an installed web app, Safari itself) loses it. So the wallet
- * hands the host a record of what it would need to rebuild that authorization
- * and the SDK keeps it in the host's own, persistent storage. On the next
- * launch the SDK sends it back and the wallet, finding its store empty,
- * validates it and rehydrates. It holds nothing secret: the account address
- * and label, which app it was issued to, and when. Signing still needs the
- * passkey.
- *
- * The SDK treats it as opaque: it checks shape and size, never meaning.
+ * A wallet-issued restore record. WebKit keeps a cross-origin frame's storage
+ * in memory only, so quitting the host page loses the wallet's authorization;
+ * the host persists this record and a wallet with an empty store rehydrates
+ * from it. It holds nothing secret, and signing still needs the passkey. The
+ * SDK checks shape and size, never meaning.
  */
 export const WALLET_RESTORE_RECORD_VERSION = 1 as const;
 

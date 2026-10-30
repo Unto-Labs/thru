@@ -21,7 +21,6 @@ import {
   ErrorCode,
   sanitizePasskeyName,
   type ConnectMetadataInput,
-  type ConnectRequestPayload,
   type DepositDestination,
   type DepositRequestPayload,
   type DepositResult,
@@ -177,12 +176,7 @@ export interface NativeSDKUiHandlers {
 
 const DEFAULT_STORAGE_KEY = "thru.native-sdk.connection.v1";
 const DEFAULT_NATIVE_WALLET_URL = "https://app.tid.sh/embedded/native";
-/**
- * NativeSDK - mobile mirror of `@thru/wallet`'s `BrowserSDK`.
- * Public surface matches verbatim except `mountInline(HTMLElement)` is
- * replaced by `attachWebView(WebViewRefLike)` since the host bottom
- * sheet owns the WebView lifecycle.
- */
+/** BrowserSDK for React Native: `attachWebView(ref)` replaces `mountInline(container)`. */
 export class NativeSDK implements WalletSDK {
   private readonly requiresNetworkProtocol: boolean;
   private activeNetwork: ResolvedWalletNetwork | null = null;
@@ -461,7 +455,6 @@ export class NativeSDK implements WalletSDK {
     this.emit("themeChanged", theme);
   }
 
-  /** Hand the WebView ref to the underlying provider/bridge. */
   attachWebView(ref: WebViewRefLike): void {
     this.provider.attachWebView(ref);
   }
@@ -471,7 +464,6 @@ export class NativeSDK implements WalletSDK {
     this.provider.recordWebViewLoadStarted();
   }
 
-  /** Record the WebView's load-end callback. */
   recordWebViewLoadEnded(): void {
     this.provider.recordWebViewLoadEnded();
   }
@@ -509,7 +501,6 @@ export class NativeSDK implements WalletSDK {
     return this.provider.getIframeSrc();
   }
 
-  /** Wallet origin (e.g. https://app.tid.sh). */
   getWalletOrigin(): string {
     return this.provider.getWalletOrigin();
   }
@@ -526,8 +517,8 @@ export class NativeSDK implements WalletSDK {
   }
 
   /** Reject in-flight wallet requests after a user-driven host dismiss. */
-  rejectPendingRequests(message?: string): void {
-    this.provider.rejectPendingRequests(message);
+  rejectPendingRequests(message?: string, code?: ErrorCode): void {
+    this.provider.rejectPendingRequests(message, code);
   }
 
   /** iOS WebView host mode. Non-iOS hosts should ignore this value. */
@@ -843,8 +834,6 @@ export class NativeSDK implements WalletSDK {
 
   /**
    * Open the wallet's Deposit ("Add funds") screen for a token account.
-   * Mirror of `BrowserSDK.deposit`; delegates to the provider, which shows the
-   * wallet surface for the flow and tears it down afterward.
    *
    * @deprecated Use `deposits.open()`.
    */
@@ -953,7 +942,6 @@ export class NativeSDK implements WalletSDK {
     this.telemetry.destroy();
   }
 
-  /** Lazily-instantiated Thru chain client. */
   public getThru(): Thru {
     if (!this.thruClient) {
       this.thruClient = createNativeThruClient(
@@ -1015,7 +1003,6 @@ export class NativeSDK implements WalletSDK {
       try {
         cb(data);
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.error(`[NativeSDK] listener error for ${event}:`, err);
       }
     });
@@ -1125,9 +1112,8 @@ export class NativeSDK implements WalletSDK {
   ): ConnectMetadataInput | undefined {
     const effectiveInput = input ?? this.defaultMetadata;
     if (!effectiveInput) {
-      /* On RN we have no window.location.origin; require explicit
-         metadata, but stamp the configured origin as appId so the
-         wallet can scope per-host. */
+      /* React Native has no window.location.origin, so the configured
+         origin stands in as appId for per-host scoping. */
       return { appId: this.origin };
     }
     const metadata: ConnectMetadataInput = {

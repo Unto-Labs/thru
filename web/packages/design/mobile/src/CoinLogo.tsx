@@ -1,5 +1,8 @@
-import { View } from "react-native";
-import Svg, { Circle, G, Path } from "react-native-svg";
+import { Text, View } from "react-native";
+import Svg, { Circle, G, Path, SvgXml } from "react-native-svg";
+import { NETWORK_LOGOS } from "../../web/src/components/wallet/assets/logos";
+import { font } from "./tokens";
+import { useThemeColors } from "./theme";
 
 export type Coin = "btc" | "eth";
 
@@ -40,6 +43,51 @@ export function CoinLogo({ coin, size = 24, label }: CoinLogoProps) {
           </>
         )}
       </Svg>
+    </View>
+  );
+}
+
+/* One copy of the network logos, shared with the web kit; keyed by the
+   wallet SDK's crypto deposit source key. */
+const NETWORK_LOGO_BY_SOURCE: Readonly<Record<string, string>> = {
+  "ethereum:8453": NETWORK_LOGOS.base,
+  "ethereum:1": NETWORK_LOGOS.ethereum,
+  "solana:mainnet": NETWORK_LOGOS.solana,
+  "ethereum:42161": NETWORK_LOGOS.arbitrum,
+  "bitcoin:mainnet": NETWORK_LOGOS.bitcoin,
+};
+const DATA_SVG = "data:image/svg+xml,";
+
+export interface ChainLogoProps {
+  /** The SDK's source key, such as "ethereum:8453". */
+  sourceKey: string;
+  /** The network's name; its first letter marks a network without a logo. */
+  name: string;
+  size?: number;
+}
+
+/** A deposit network's logo, or a lettered disc for one the kit has no logo
+    for, so a network the SDK adds shows up without a kit change. */
+export function ChainLogo({ sourceKey, name, size = 24 }: ChainLogoProps) {
+  const colors = useThemeColors();
+  const logo = NETWORK_LOGO_BY_SOURCE[sourceKey];
+  if (logo) {
+    return <SvgXml height={size} width={size} xml={decodeURIComponent(logo.slice(DATA_SVG.length))} />;
+  }
+  return (
+    <View
+      style={{
+        alignItems: "center",
+        backgroundColor: colors.bgMuted,
+        borderRadius: size / 2,
+        height: size,
+        justifyContent: "center",
+        width: size,
+      }}
+    >
+      <Text style={{ color: colors.fgMuted, fontFamily: font.sansSemiBold, fontSize: Math.round(size * 0.5) }}>
+        {name.slice(0, 1)}
+      </Text>
     </View>
   );
 }

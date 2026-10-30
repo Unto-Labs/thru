@@ -123,8 +123,6 @@ function isStateful(label: CopyButtonProps["label"]): label is StatefulLabel {
 
 /**
  * CopyButton — copies `value` to the clipboard with a brief confirmation.
- * Presentational and self-contained: pass icon nodes via `copyIcon`/`copiedIcon`
- * (no built-in icon set). `text` renders the inline link variant.
  */
 export function CopyButton({
   value,

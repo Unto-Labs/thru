@@ -114,6 +114,15 @@ message GetRawBlockRequest {
       [(google.api.field_behavior) = OPTIONAL];
 }
 
+// Selects the account storage states included in a listing.
+enum AccountStateFilter {
+  // Defaults to ALL, including both live and compressed accounts.
+  ACCOUNT_STATE_FILTER_UNSPECIFIED = 0;
+  ACCOUNT_STATE_FILTER_LIVE = 1;
+  ACCOUNT_STATE_FILTER_COMPRESSED = 2;
+  ACCOUNT_STATE_FILTER_ALL = 3;
+}
+
 // ListAccountsRequest lists accounts using CEL filters.
 //
 // The filter expression supports filtering on account metadata fields using CEL (Common Expression Language).
@@ -135,6 +144,7 @@ message GetRawBlockRequest {
 //   - account.meta.flags.is_deleted (bool): Flag indicating if account is deleted
 //   - account.meta.flags.is_new (bool): Flag indicating if account is new
 //   - account.meta.flags.is_compressed (bool): Flag indicating if account data is compressed
+//   - account.meta.flags.is_native_receiver (bool): Raw native-receipt opt-in flag
 //   - account.meta.last_updated_slot (uint64): Slot when account was last modified
 //
 // Available CEL functions:
@@ -230,7 +240,8 @@ message GetRawBlockRequest {
 //   - The startsWith() function only works with strings, not bytes
 //   - The bytesPrefix() function is NOT available for ListAccounts (use range comparison instead)
 //   - Parameter names other than owner_bytes, prefix, tag, min_slot, min_updated_slot are NOT permitted
-//   - All filters are pushed down to SQL for optimal performance where possible
+//   - Filters are evaluated on account metadata from the selected state sources
+//   - Compressed-account discovery depends on retained compression archives
 message ListAccountsRequest {
   optional thru.core.v1.AccountView view = 1 [(google.api.field_behavior) = OPTIONAL];
   optional thru.common.v1.VersionContext version_context = 2
@@ -241,6 +252,11 @@ message ListAccountsRequest {
   optional thru.common.v1.PageRequest page = 4 [(google.api.field_behavior) = OPTIONAL];
   optional thru.common.v1.ConsensusStatus min_consensus = 5
       [(google.api.field_behavior) = OPTIONAL];
+  // Omitted or UNSPECIFIED means ALL. Use LIVE for the previous live-only
+  // behavior. Each page merges the selected sources by address at one committed
+  // snapshot; subsequent pages may observe a newer committed snapshot.
+  AccountStateFilter state = 6 [(google.api.field_behavior) = OPTIONAL,
+      (buf.validate.field).enum.defined_only = true];
 }
 
 // ListAccountsResponse contains paginated accounts.
@@ -1049,12 +1065,12 @@ message GetSlotMetricsResponse {
   // Global counter tracking total deactivated state across all accounts.
   uint64 global_deactivated_state_counter = 3 [(google.api.field_behavior) = REQUIRED];
   // Fees credited to the absent-block-producer fee receiver this block
-  // because the block producer account was not live (UNTO-1293). Field
-  // number unchanged (4).
+  // because no eligible producer exists (absent/non-live or live but
+  // receipt-ineligible). Field number unchanged (4).
   uint64 absent_block_producer_fees = 4 [(google.api.field_behavior) = REQUIRED];
   // Block timestamp when available.
   optional google.protobuf.Timestamp block_timestamp = 5 [(google.api.field_behavior) = OPTIONAL];
-  // Fees credited to a live block-producer account this block. Disjoint from
+  // Fees credited to an eligible block-producer account this block. Disjoint from
   // absent_block_producer_fees by destination; total block fees =
   // absent_block_producer_fees + claimed_fees.
   uint64 claimed_fees = 6 [(google.api.field_behavior) = REQUIRED];
@@ -1349,7 +1365,9 @@ service QueryService {
     };
   }
 
-  // Get account information.
+  // Get account information. With version_context.slot, a slot above the
+  // durable cursor is rejected with FAILED_PRECONDITION instead of answered
+  // with an older version; retry once the slot is durable.
   rpc GetAccount(GetAccountRequest) returns (thru.core.v1.Account) {
     option (google.api.http) = {
       get: "/v1/accounts/{address.value}"

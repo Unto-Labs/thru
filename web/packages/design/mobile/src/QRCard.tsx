@@ -1,8 +1,7 @@
 /**
- * A QR code of an address, to scan from another wallet: dark modules on a
- * light card in both themes (scanners read dark-on-light), error correction
- * H so the Thru mark can sit in the centre on its own pad. Encodes the value
- * as given - the bare address, no URI scheme.
+ * Dark-on-light in both themes, since scanners read dark-on-light; error
+ * correction H so the mark can cover the centre. Encodes the value as given:
+ * the bare address, no URI scheme.
  */
 
 import { useMemo } from "react";
@@ -12,7 +11,6 @@ import QRCode from "qrcode";
 import { BrandMark } from "./BrandMark";
 import { makeStyles } from "./theme";
 
-/* Fixed, not themed: the card stays dark-on-light in dark mode. */
 const QR_INK = "#181B1B";
 const QR_PAPER = "#F9FBFB";
 const QR_EDGE = "#B6CECE";

@@ -16,7 +16,14 @@ export interface CompressionJournal {
 }
 
 export interface CompressionOptions {
-  programAddresses?: { compression?: string; multicall?: string; uploader?: string; passkeyManager?: string };
+  programAddresses?: {
+    compression?: string;
+    multicall?: string;
+    uploader?: string;
+    wallet?: string;
+    /** @deprecated Use wallet. */
+    passkeyManager?: string;
+  };
   signal?: AbortSignal;
   fee?: bigint;
   timeoutMs?: number;

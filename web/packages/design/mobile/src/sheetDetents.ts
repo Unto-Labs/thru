@@ -1,12 +1,11 @@
 /**
- * Where a detents sheet sits, and where a drag lets go of it (the Activity
- * sheet handoff, §03; design/Activity Sheet.dc.html). Positions are the
- * sheet's top edge, in points from the top of the screen.
- * - Half: the sheet is max(52 % of the screen, 360) tall.
- * - Full: its top sits 16 under the status bar.
- * - Closed: its top is at the bottom of the screen.
+ * Positions are the sheet's top edge, in points from the top of the screen.
  * No React Native here, so the rules can be tested as they are.
  */
+
+import { SHEET_FLICK_VELOCITY, sheetDragPosition } from "./sheetGesture";
+
+export { SHEET_FLICK_VELOCITY, SHEET_OVERDRAG } from "./sheetGesture";
 
 export type SheetDetent = "half" | "full";
 
@@ -15,13 +14,9 @@ export const SHEET_HALF_MIN = 360;
 export const SHEET_FULL_GAP = 16;
 /** Snapping to a detent; the kit's curve, no overshoot. */
 export const SHEET_SNAP_MS = 320;
-/** How much of the finger's travel past full the sheet follows. */
-export const SHEET_OVERDRAG = 0.3;
 /** Let go with less than this share of the half height showing: dismiss. */
 export const SHEET_DISMISS_FRACTION = 0.6;
-/** Points per millisecond: a downward flick at least this fast dismisses. */
-export const SHEET_FLICK_VELOCITY = 0.5;
-/** The scrim's share of its full strength at half: 40 % of the kit's 64 %. */
+/** The scrim's share of its full strength at half. */
 export const SHEET_HALF_SCRIM = 0.4 / 0.64;
 
 export interface SheetGeometry {
@@ -45,15 +40,13 @@ export function detentTop(detent: SheetDetent, geometry: SheetGeometry): number 
   return detent === "full" ? geometry.fullTop : geometry.halfTop;
 }
 
-/** Follows the finger 1:1, and at 0.3× past full. */
+/** Follows the finger 1:1, and at SHEET_OVERDRAG past full. */
 export function dragTop(startTop: number, dy: number, geometry: SheetGeometry): number {
-  const next = startTop + dy;
-  if (next >= geometry.fullTop) return next;
-  return geometry.fullTop - (geometry.fullTop - next) * SHEET_OVERDRAG;
+  return sheetDragPosition(startTop, dy, geometry.fullTop);
 }
 
 /** Where a released drag goes.
-    - Dismiss when less than 60 % of the half height shows.
+    - Dismiss when less than SHEET_DISMISS_FRACTION of the half height shows.
     - A downward flick dismisses from half, and from full drops to half.
     - An upward flick goes to full.
     - Otherwise, the nearer detent. */

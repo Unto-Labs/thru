@@ -148,6 +148,7 @@ export function createMockAccountFlags(overrides: {
   isDeleted?: boolean;
   isNew?: boolean;
   isCompressed?: boolean;
+  isNativeReceiver?: boolean;
 } = {}): AccountFlags {
   return create(AccountFlagsSchema, {
     isProgram: overrides.isProgram ?? false,
@@ -157,6 +158,7 @@ export function createMockAccountFlags(overrides: {
     isDeleted: overrides.isDeleted ?? false,
     isNew: overrides.isNew ?? false,
     isCompressed: overrides.isCompressed ?? false,
+    isNativeReceiver: overrides.isNativeReceiver ?? false,
   });
 }
 

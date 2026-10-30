@@ -1,13 +1,10 @@
 import { create } from "@bufbuild/protobuf";
 import {
   type Filter,
-  type PageRequest,
   PageRequestSchema,
   type ConsensusStatus,
   type Transaction,
-  type ListTransactionsRequest,
   ListTransactionsRequestSchema,
-  type StreamTransactionsRequest,
   StreamTransactionsRequestSchema,
   type StreamTransactionsResponse,
 } from "@thru/sdk/proto";
@@ -76,7 +73,7 @@ export function createTransactionReplay(
       minConsensus: options.minConsensus,
     });
     return mapAsyncIterable(
-      client.streamTransactions(request),
+      client.streamTransactions(request, { signal: options.signal }),
       (resp: StreamTransactionsResponse) => resp.transaction,
     );
   };

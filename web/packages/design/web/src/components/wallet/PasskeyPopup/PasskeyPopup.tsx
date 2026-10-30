@@ -12,7 +12,6 @@ import { ThruDisc, ThruWordmark } from "../Brand/Brand";
 import { useWaitStages, WaitHero, WALLET_SHEET_SLOW_MS } from "../WalletSheet/wait";
 import "./PasskeyPopup.css";
 
-/* ── Icons ─────────────────────────────────────────────────────────── */
 const Check = (p: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 16 16" fill="none" aria-hidden {...p}>
     <path d="M3 8.5l3.5 3.5L13 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
@@ -30,7 +29,6 @@ const Lock = (p: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
-/* ── Types ─────────────────────────────────────────────────────────── */
 export type PasskeyPopupState = "waiting" | "ready" | "signing" | "done" | "error";
 
 /** What the ceremony is for: sign in (an assertion), sign up (a
@@ -87,7 +85,6 @@ export interface PasskeyPopupProps {
   onRetry?: () => void;
   /** Close the window (done). */
   onClose?: () => void;
-  /** Footer caption. */
   footer?: React.ReactNode;
   /** Move focus to the primary action once the request is ready. Default true. */
   autoFocus?: boolean;
@@ -96,7 +93,6 @@ export interface PasskeyPopupProps {
   className?: string;
 }
 
-/* ── Copy ──────────────────────────────────────────────────────────── */
 interface FlowCopy {
   title: string;
   description: (app: React.ReactNode) => React.ReactNode;
@@ -144,9 +140,7 @@ const COPY: Record<PasskeyPopupFlow, FlowCopy> = {
 };
 
 const DEFAULT_ERROR_DESCRIPTION = "The passkey request was cancelled or timed out.";
-const DEFAULT_FOOTER = "This window opened so your browser can verify the passkey on tid.sh";
 
-/* ── Parts ─────────────────────────────────────────────────────────── */
 function Bar({ env }: { env?: string }) {
   return (
     <div className="tds-ppopup__bar">
@@ -327,18 +321,14 @@ function Signing({
   );
 }
 
-/* ── Root ──────────────────────────────────────────────────────────── */
 /**
  * PasskeyPopup — the first-party window (`app.tid.sh/passkey/popup`) the
- * wallet opens when a passkey ceremony cannot run inside its iframe. A 56px
- * lockup header with the host's lock tag, a centered 360px column, and a
- * footer saying why the window opened. Five states:
+ * wallet opens when a passkey ceremony cannot run inside its iframe. Five
+ * states:
  *
  *   waiting → ready → signing → done | error
  *
- * Presentational: the page drives the state from its opener handshake. The
- * waiting state has the ready state's shape (skeleton origin cell, disabled
- * primary) so nothing jumps when the request arrives.
+ * The page drives the state from its opener handshake.
  */
 export function PasskeyPopup({
   state,
@@ -353,7 +343,7 @@ export function PasskeyPopup({
   onCancel,
   onRetry,
   onClose,
-  footer = DEFAULT_FOOTER,
+  footer = `Use your passkey to continue${env ? ` on ${env}` : ""}.`,
   autoFocus = true,
   slowAfterMs = WALLET_SHEET_SLOW_MS,
   className,

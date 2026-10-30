@@ -17,6 +17,8 @@ export interface AccountFlagsData {
     isDeleted: boolean;
     isNew: boolean;
     isCompressed: boolean;
+    /** Raw native-receipt opt-in; EOAs can receive without this bit. */
+    isNativeReceiver: boolean;
 }
 
 export class AccountFlags implements AccountFlagsData {
@@ -27,6 +29,7 @@ export class AccountFlags implements AccountFlagsData {
     readonly isDeleted: boolean;
     readonly isNew: boolean;
     readonly isCompressed: boolean;
+    readonly isNativeReceiver: boolean;
 
     constructor(flags?: Partial<AccountFlagsData>) {
         this.isProgram = flags?.isProgram ?? false;
@@ -36,6 +39,7 @@ export class AccountFlags implements AccountFlagsData {
         this.isDeleted = flags?.isDeleted ?? false;
         this.isNew = flags?.isNew ?? false;
         this.isCompressed = flags?.isCompressed ?? false;
+        this.isNativeReceiver = flags?.isNativeReceiver ?? false;
     }
 
     static fromProto(flags?: ProtoAccountFlags): AccountFlags {
@@ -50,6 +54,7 @@ export class AccountFlags implements AccountFlagsData {
             isDeleted: flags.isDeleted,
             isNew: flags.isNew,
             isCompressed: flags.isCompressed,
+            isNativeReceiver: flags.isNativeReceiver,
         });
     }
 }

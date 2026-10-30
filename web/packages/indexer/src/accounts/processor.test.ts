@@ -1,5 +1,21 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { SQL } from "drizzle-orm";
+import { bigint, PgDialect, pgTable, text } from "drizzle-orm/pg-core";
+import { encodeAddress } from "@thru/sdk/helpers";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { runAccountStreamProcessor } from "./processor";
+
+const accountsTable = pgTable("test_accounts", {
+  address: text("address").primaryKey(),
+  slot: bigint("slot", { mode: "bigint" }).notNull(),
+});
+
+const sequencedAccountsTable = pgTable("test_sequenced_accounts", {
+  address: text("address").primaryKey(),
+  slot: bigint("slot", { mode: "bigint" }).notNull(),
+  seq: bigint("seq", { mode: "bigint" }).notNull(),
+});
+
+const dialect = new PgDialect();
 
 const replayMocks = vi.hoisted(() => ({
   events: [] as unknown[],
@@ -24,7 +40,7 @@ describe("runAccountStreamProcessor", () => {
     replayMocks.events = [];
     replayMocks.createAccountsByOwnerReplay.mockImplementation((options) => ({
       [Symbol.asyncIterator]: async function* () {
-        options.onBackfillComplete?.(25n);
+        options.onBackfillComplete?.(25n, 25n);
         yield* replayMocks.events;
       },
     }));
@@ -32,17 +48,9 @@ describe("runAccountStreamProcessor", () => {
     checkpointMocks.updateCheckpoint.mockResolvedValue(undefined);
   });
 
-  function sqlText(node: unknown): string {
-    if (node === null || node === undefined) return "";
-    if (typeof node === "string") return node;
-    if (typeof node === "bigint" || typeof node === "number") return node.toString();
-    if (Array.isArray(node)) return node.map(sqlText).join("");
-    const record = node as { queryChunks?: unknown[]; value?: unknown[]; name?: string };
-    if (record.queryChunks) return record.queryChunks.map(sqlText).join("");
-    if (record.value) return record.value.join("");
-    if (record.name) return record.name;
-    return "";
-  }
+  afterEach(() => {
+    vi.useRealTimers();
+  });
 
   function createStream(overrides: Record<string, unknown> = {}) {
     return {
@@ -51,12 +59,104 @@ describe("runAccountStreamProcessor", () => {
       expectedSize: undefined,
       dataSizes: undefined,
       schema: {},
-      table: {},
+      table: accountsTable,
       getOwnerProgram: vi.fn(() => new Uint8Array([1])),
       parse: vi.fn(() => null),
       ...overrides,
     } as any;
   }
+
+  function accountEvent(slot: bigint, overrides: Record<string, unknown> = {}) {
+    const address = new Uint8Array(32).fill(1);
+    return {
+      type: "account",
+      account: { address, addressHex: "01".repeat(32), data: new Uint8Array([1]), isDelete: false, slot, seq: 0n, ...overrides },
+    };
+  }
+
+  /* An in-memory table that commits like Postgres: an INSERT's rows become
+     visible when it commits, and a DELETE removes only committed rows. */
+  function createDb(commitInsert: () => Promise<void> = async () => {}) {
+    const rows = new Map<unknown, Record<string, unknown>>();
+    const writes: string[] = [];
+    const inserts: Array<Array<Record<string, unknown>>> = [];
+    const db = {
+      insert: () => ({
+        values: (values: Record<string, unknown> | Array<Record<string, unknown>>) => ({
+          onConflictDoUpdate: () => ({
+            returning: async () => {
+              const batch = Array.isArray(values) ? values : [values];
+              inserts.push(batch);
+              writes.push("insert");
+              await commitInsert();
+              for (const row of batch) rows.set(row.address, row);
+              writes.push("insert committed");
+              return batch;
+            },
+          }),
+        }),
+      }),
+      delete: () => ({
+        where: async (condition: SQL) => {
+          writes.push("delete");
+          rows.delete(dialect.sqlToQuery(condition).params[0]);
+        },
+      }),
+    };
+    checkpointMocks.updateCheckpoint.mockImplementation(async (_db: unknown, _name: string, slot: bigint) => {
+      writes.push(`checkpoint ${slot}`);
+    });
+    return { db: db as any, rows, writes, inserts };
+  }
+
+  /* A drained replay whose live events the test pushes one at a time; it
+     ends on end() or when the processor aborts it. */
+  function liveReplay() {
+    const queue: unknown[] = [];
+    let wake = () => {};
+    let ended = false;
+    replayMocks.createAccountsByOwnerReplay.mockImplementation((options) => ({
+      [Symbol.asyncIterator]: async function* () {
+        options.onBackfillComplete?.(0n, 0n);
+        for (;;) {
+          while (queue.length > 0) yield queue.shift();
+          if (ended || options.signal?.aborted) return;
+          await new Promise<void>((resolve) => {
+            wake = resolve;
+            options.signal?.addEventListener("abort", () => resolve(), { once: true });
+          });
+        }
+      },
+    }));
+    return {
+      push: (...events: unknown[]) => {
+        queue.push(...events);
+        wake();
+      },
+      end: () => {
+        ended = true;
+        wake();
+      },
+    };
+  }
+
+  const addressOf = (byte: number) => new Uint8Array(32).fill(byte);
+  const liveAccount = (byte: number, slot: bigint, overrides: Record<string, unknown> = {}) =>
+    accountEvent(slot, { address: addressOf(byte), addressHex: byte.toString(16).padStart(2, "0").repeat(32), ...overrides });
+  const row = (byte: number, slot: bigint) => ({ address: encodeAddress(addressOf(byte)), slot });
+
+  const parseAccount = (account: { address: Uint8Array; slot: bigint }) => ({
+    address: encodeAddress(account.address),
+    slot: account.slot,
+  });
+
+  it("observes consumed empty blocks without inventing a persisted checkpoint", async () => {
+    replayMocks.events = [{ type: "blockFinished", block: { slot: 100n } }, { type: "blockFinished", block: { slot: 101n } }];
+    const onProgress = vi.fn();
+    await runAccountStreamProcessor(createStream(), { clientFactory: vi.fn(), db: {} as any, logLevel: "error", observer: { onProgress } });
+    expect(onProgress.mock.calls).toEqual([[{ slot: 100n }], [{ slot: 101n }]]);
+    expect(checkpointMocks.updateCheckpoint).not.toHaveBeenCalled();
+  });
 
   it("does not checkpoint the backfill high-water mark without handling an account", async () => {
     await runAccountStreamProcessor(
@@ -73,8 +173,15 @@ describe("runAccountStreamProcessor", () => {
 
   it("passes abort signals through to account replay", async () => {
     const controller = new AbortController();
+    let replaySignal: AbortSignal | undefined;
+    replayMocks.createAccountsByOwnerReplay.mockImplementation((options) => ({
+      [Symbol.asyncIterator]: async function* () {
+        replaySignal = options.signal;
+        while (!options.signal?.aborted) await new Promise((resolve) => setTimeout(resolve, 5));
+      },
+    }));
 
-    await runAccountStreamProcessor(
+    const processing = runAccountStreamProcessor(
       createStream(),
       {
         clientFactory: vi.fn(),
@@ -84,11 +191,10 @@ describe("runAccountStreamProcessor", () => {
       controller.signal
     );
 
-    expect(replayMocks.createAccountsByOwnerReplay).toHaveBeenCalledWith(
-      expect.objectContaining({
-        signal: controller.signal,
-      })
-    );
+    await vi.waitFor(() => expect(replaySignal?.aborted).toBe(false));
+    controller.abort();
+    await processing;
+    expect(replaySignal?.aborted).toBe(true);
   });
 
   it("resumes from a slot-zero checkpoint without checkpointing an empty replay", async () => {
@@ -123,7 +229,7 @@ describe("runAccountStreamProcessor", () => {
     const onCheckpoint = vi.fn();
 
     await runAccountStreamProcessor(createStream({
-      table: { address: { name: "address" }, slot: { name: "slot" } },
+      table: accountsTable,
       parse: vi.fn(() => ({ address: "account-1", slot: 0n })),
     }), {
       clientFactory: vi.fn(), db: { insert, delete: deleteRow } as any,
@@ -138,6 +244,94 @@ describe("runAccountStreamProcessor", () => {
       2, expect.anything(), "account:test-accounts", 0n, null
     );
     expect(onCheckpoint).toHaveBeenCalledWith({ slot: 0n });
+  });
+
+  it("reports a deleted row after success and checkpoints only after the block checkpoint is persisted", async () => {
+    replayMocks.events = [
+      { type: "account", account: {
+        address: new Uint8Array(32).fill(1), addressHex: "01".repeat(32),
+        data: new Uint8Array(), isDelete: true, slot: 5n,
+      } },
+      { type: "blockFinished", block: { slot: 10n } },
+    ];
+    let finishDelete!: () => void;
+    const deletion = new Promise<void>((resolve) => { finishDelete = resolve; });
+    let finishCheckpoint!: () => void;
+    const checkpoint = new Promise<void>((resolve) => { finishCheckpoint = resolve; });
+    const where = vi.fn(() => deletion);
+    checkpointMocks.updateCheckpoint.mockImplementationOnce(() => checkpoint);
+    const onBatchCommitted = vi.fn();
+    const onCheckpoint = vi.fn();
+    const db = { delete: vi.fn(() => ({ where })) };
+
+    const processing = runAccountStreamProcessor(createStream({
+      table: accountsTable,
+    }), {
+      clientFactory: vi.fn(), db: db as any, logLevel: "error",
+      observer: { onBatchCommitted, onCheckpoint },
+    });
+
+    await vi.waitFor(() => expect(where).toHaveBeenCalledTimes(1));
+    expect(onBatchCommitted).not.toHaveBeenCalled();
+    expect(onCheckpoint).not.toHaveBeenCalled();
+    expect(checkpointMocks.updateCheckpoint).not.toHaveBeenCalled();
+    finishDelete();
+
+    await vi.waitFor(() => expect(checkpointMocks.updateCheckpoint).toHaveBeenCalledTimes(1));
+    expect(onBatchCommitted).toHaveBeenCalledExactlyOnceWith({ slot: 5n, count: 1 });
+    expect(checkpointMocks.updateCheckpoint).toHaveBeenCalledWith(db, "account:test-accounts", 5n, null);
+    expect(onCheckpoint).not.toHaveBeenCalled();
+    finishCheckpoint();
+    await processing;
+
+    expect(onBatchCommitted).toHaveBeenCalledTimes(1);
+    expect(onCheckpoint.mock.calls).toEqual([[{ slot: 5n }], [{ slot: 5n }]]);
+  });
+
+  it("does not report a committed deletion or checkpoint when deleting the row fails", async () => {
+    replayMocks.events = [{ type: "account", account: {
+      address: new Uint8Array(32).fill(1), addressHex: "01".repeat(32),
+      data: new Uint8Array(), isDelete: true, slot: 5n,
+    } }];
+    const failure = new Error("row deletion failed");
+    const where = vi.fn().mockRejectedValue(failure);
+    const onBatchCommitted = vi.fn();
+    const onCheckpoint = vi.fn();
+    const onError = vi.fn();
+
+    await expect(runAccountStreamProcessor(createStream({
+      table: accountsTable,
+    }), {
+      clientFactory: vi.fn(), db: { delete: () => ({ where }) } as any,
+      logLevel: "error", observer: { onBatchCommitted, onCheckpoint, onError },
+    })).rejects.toBe(failure);
+    expect(onBatchCommitted).not.toHaveBeenCalled();
+    expect(onCheckpoint).not.toHaveBeenCalled();
+    expect(checkpointMocks.updateCheckpoint).not.toHaveBeenCalled();
+    expect(onError).toHaveBeenCalledWith("commit", failure);
+  });
+
+  it("does not report a persisted checkpoint when checkpointing a successfully deleted row fails", async () => {
+    replayMocks.events = [
+      { type: "account", account: {
+        address: new Uint8Array(32).fill(1), addressHex: "01".repeat(32),
+        data: new Uint8Array(), isDelete: true, slot: 5n,
+      } },
+      { type: "blockFinished", block: { slot: 10n } },
+    ];
+    const failure = new Error("checkpoint write failed");
+    checkpointMocks.updateCheckpoint.mockRejectedValueOnce(failure);
+    const onBatchCommitted = vi.fn();
+    const onCheckpoint = vi.fn();
+
+    await expect(runAccountStreamProcessor(createStream({
+      table: accountsTable,
+    }), {
+      clientFactory: vi.fn(), db: { delete: () => ({ where: async () => undefined }) } as any,
+      logLevel: "error", observer: { onBatchCommitted, onCheckpoint },
+    })).rejects.toBe(failure);
+    expect(onBatchCommitted).toHaveBeenCalledExactlyOnceWith({ slot: 5n, count: 1 });
+    expect(onCheckpoint).not.toHaveBeenCalled();
   });
 
   it("delegates idle recovery to one replay instance", async () => {
@@ -205,14 +399,15 @@ describe("runAccountStreamProcessor", () => {
       },
       { type: "blockFinished", block: { slot: 10n } },
     ];
-    const returning = vi.fn(async () => [{ address: "account-1" }]);
+    /* Postgres RETURNING "slot" hands back the written row's slot. */
+    const returning = vi.fn(async () => [{ address: "account-1", slot: 5n }]);
     const onConflictDoUpdate = vi.fn(() => ({ returning }));
     const values = vi.fn(() => ({ onConflictDoUpdate }));
     const insert = vi.fn(() => ({ values }));
 
     await runAccountStreamProcessor(
       createStream({
-        table: { address: { name: "address" }, slot: { name: "slot" } },
+        table: accountsTable,
         api: { idField: "address" },
         parse: vi.fn(() => ({ address: "account-1", slot: 5n })),
       }),
@@ -223,12 +418,11 @@ describe("runAccountStreamProcessor", () => {
       }
     );
 
-    expect(checkpointMocks.updateCheckpoint).toHaveBeenCalledWith(
-      expect.anything(),
-      "account:test-accounts",
-      5n,
-      null
-    );
+    expect(values.mock.calls).toEqual([[[{ address: "account-1", slot: 5n }]]]);
+    expect(checkpointMocks.updateCheckpoint.mock.calls).toEqual([
+      [expect.anything(), "account:test-accounts", 5n, null],
+      [expect.anything(), "account:test-accounts", 5n, null],
+    ]);
     expect(checkpointMocks.updateCheckpoint).not.toHaveBeenCalledWith(
       expect.anything(),
       "account:test-accounts",
@@ -254,12 +448,11 @@ describe("runAccountStreamProcessor", () => {
             slot,
           },
         };
-        options.onBackfillComplete?.(25n);
-        /* A quiet stream: no live update arrives for a long time. */
+        options.onBackfillComplete?.(25n, 25n);
         await live;
       },
     }));
-    const returning = vi.fn(async () => [{ address: "account-1" }]);
+    const returning = vi.fn(async () => [{ address: "account-1", slot }]);
     const onConflictDoUpdate = vi.fn(() => ({ returning }));
     const values = vi.fn(() => ({ onConflictDoUpdate }));
     const insert = vi.fn(() => ({ values }));
@@ -267,7 +460,7 @@ describe("runAccountStreamProcessor", () => {
 
     const processing = runAccountStreamProcessor(
       createStream({
-        table: { address: { name: "address" }, slot: { name: "slot" } },
+        table: accountsTable,
         api: { idField: "address" },
         parse: vi.fn(() => ({ address: "account-1", slot })),
       }),
@@ -303,8 +496,6 @@ describe("runAccountStreamProcessor", () => {
   it("does not checkpoint at block boundaries or on exit before the backfill drains", async () => {
     replayMocks.createAccountsByOwnerReplay.mockImplementation(() => ({
       [Symbol.asyncIterator]: async function* () {
-        /* A live update interleaved with backfill: the backfill may not have
-           reached accounts below slot 20 yet. */
         yield {
           type: "account",
           account: {
@@ -323,9 +514,9 @@ describe("runAccountStreamProcessor", () => {
     const values = vi.fn(() => ({ onConflictDoUpdate }));
     const insert = vi.fn(() => ({ values }));
 
-    await runAccountStreamProcessor(
+    await expect(runAccountStreamProcessor(
       createStream({
-        table: { address: { name: "address" }, slot: { name: "slot" } },
+        table: accountsTable,
         api: { idField: "address" },
         parse: vi.fn(() => ({ address: "account-1", slot: 20n })),
       }),
@@ -334,9 +525,8 @@ describe("runAccountStreamProcessor", () => {
         db: { insert } as any,
         logLevel: "error",
       }
-    );
+    )).resolves.toMatchObject({ accountsProcessed: 1 });
 
-    expect(insert).toHaveBeenCalled();
     expect(checkpointMocks.updateCheckpoint).not.toHaveBeenCalled();
   });
 
@@ -356,11 +546,11 @@ describe("runAccountStreamProcessor", () => {
             slot: 5n,
           },
         };
-        options.onBackfillComplete?.(5n);
+        options.onBackfillComplete?.(5n, 5n);
         yield { type: "blockFinished", block: { slot: 6n } };
       },
     }));
-    const returning = vi.fn(async () => [{ address: "account-1" }]);
+    const returning = vi.fn(async () => [{ address: "account-1", slot: 5n }]);
     const onConflictDoUpdate = vi.fn(() => ({ returning }));
     const values = vi.fn(() => ({ onConflictDoUpdate }));
     const insert = vi.fn(() => ({ values }));
@@ -368,7 +558,7 @@ describe("runAccountStreamProcessor", () => {
     await expect(
       runAccountStreamProcessor(
         createStream({
-          table: { address: { name: "address" }, slot: { name: "slot" } },
+          table: accountsTable,
           api: { idField: "address" },
           parse: vi.fn(() => ({ address: "account-1", slot: 5n })),
         }),
@@ -379,36 +569,27 @@ describe("runAccountStreamProcessor", () => {
         }
       )
     ).resolves.toMatchObject({ accountsUpdated: 1 });
-    /* The block boundary retries the write that failed. */
     expect(checkpointMocks.updateCheckpoint).toHaveBeenCalledTimes(3);
   });
 
-  it("orders same-slot upserts by sequence", async () => {
-    replayMocks.events = [{
-      type: "account",
-      account: {
-        address: new Uint8Array([1]),
-        addressHex: "01",
-        data: new Uint8Array([1]),
-        isDelete: false,
-        slot: 5n,
-        seq: 2n,
+  it("orders same-slot upserts by sequence, in backfill batches and live rows", async () => {
+    replayMocks.createAccountsByOwnerReplay.mockImplementation((options) => ({
+      [Symbol.asyncIterator]: async function* () {
+        yield accountEvent(5n, { seq: 2n });
+        options.onBackfillComplete?.(5n, 5n);
+        yield accountEvent(6n, { seq: 3n });
       },
-    }];
-    const returning = vi.fn(async () => [{ address: "account-1" }]);
-    const onConflictDoUpdate = vi.fn(() => ({ returning }));
-    const values = vi.fn(() => ({ onConflictDoUpdate }));
+    }));
+    const returning = vi.fn(async () => [{ address: "account-1", slot: 5n }]);
+    const onConflictDoUpdate = vi.fn((_conflict: { set: Record<string, SQL>; where: SQL }) => ({ returning }));
+    const values = vi.fn((_rows: unknown) => ({ onConflictDoUpdate }));
     const insert = vi.fn(() => ({ values }));
 
     await runAccountStreamProcessor(
       createStream({
-        table: {
-          address: { name: "address" },
-          slot: { name: "slot" },
-          seq: { name: "seq" },
-        },
+        table: sequencedAccountsTable,
         api: { idField: "address" },
-        parse: vi.fn(() => ({ address: "account-1", slot: 5n, seq: 2n })),
+        parse: vi.fn((account) => ({ address: "account-1", slot: account.slot, seq: account.seq })),
       }),
       {
         clientFactory: vi.fn(),
@@ -417,9 +598,23 @@ describe("runAccountStreamProcessor", () => {
       }
     );
 
-    const conflict = (onConflictDoUpdate.mock.calls as unknown[][])[0]?.[0] as { where: unknown };
-    expect(sqlText(conflict.where)).toContain("slot");
-    expect(sqlText(conflict.where)).toContain("seq");
+    expect(values.mock.calls).toEqual([
+      [[{ address: "account-1", slot: 5n, seq: 2n }]],
+      [[{ address: "account-1", slot: 6n, seq: 3n }]],
+    ]);
+    const versionGuard = {
+      sql: '("test_sequenced_accounts"."slot" < excluded."slot" or ("test_sequenced_accounts"."slot" = excluded."slot" and "test_sequenced_accounts"."seq" <= excluded."seq"))',
+      params: [],
+    };
+    const conflicts = onConflictDoUpdate.mock.calls.map(([conflict]) => ({
+      set: Object.fromEntries(Object.entries(conflict.set).map(([key, value]) => [key, dialect.sqlToQuery(value).sql])),
+      where: dialect.sqlToQuery(conflict.where),
+    }));
+    const setFromProposed = { address: 'excluded."address"', slot: 'excluded."slot"', seq: 'excluded."seq"' };
+    expect(conflicts).toEqual([
+      { set: setFromProposed, where: versionGuard },
+      { set: setFromProposed, where: versionGuard },
+    ]);
   });
 
   it("does not advance the checkpoint for parser-null accounts", async () => {
@@ -482,5 +677,249 @@ describe("runAccountStreamProcessor", () => {
     expect(returning).toHaveBeenCalled();
     expect(stats.accountsUpdated).toBe(0);
     expect(checkpointMocks.updateCheckpoint).not.toHaveBeenCalled();
+  });
+
+  it("never checkpoints past the slot the live stream delivered", async () => {
+    replayMocks.createAccountsByOwnerReplay.mockImplementation((options) => ({
+      [Symbol.asyncIterator]: async function* () {
+        yield accountEvent(9_000n);
+        options.onBackfillComplete?.(9_000n, 5_000n);
+        yield { type: "blockFinished", block: { slot: 8_000n } };
+        yield { type: "blockFinished", block: { slot: 9_100n } };
+      },
+    }));
+    const { db } = createDb();
+
+    await runAccountStreamProcessor(createStream({ parse: vi.fn(parseAccount) }), {
+      clientFactory: vi.fn(), db, logLevel: "error",
+    });
+
+    expect(checkpointMocks.updateCheckpoint.mock.calls.map(([, , slot]) => slot)).toEqual([5_000n, 8_000n, 9_000n, 9_000n]);
+  });
+
+  it("checkpoints after the backfill on a quiet chain whose stream delivered nothing", async () => {
+    const controller = new AbortController();
+    replayMocks.createAccountsByOwnerReplay.mockImplementation((options) => ({
+      [Symbol.asyncIterator]: async function* () {
+        yield accountEvent(9_000n);
+        options.onBackfillComplete?.(9_000n, 0n);
+        while (!options.signal?.aborted) await new Promise((resolve) => setTimeout(resolve, 5));
+      },
+    }));
+    const { db } = createDb();
+    const onCheckpoint = vi.fn();
+
+    const processing = runAccountStreamProcessor(createStream({ parse: vi.fn(parseAccount) }), {
+      clientFactory: vi.fn(), db, logLevel: "error", observer: { onCheckpoint },
+    }, controller.signal);
+
+    await vi.waitFor(() => expect(onCheckpoint).toHaveBeenCalledWith({ slot: 0n }));
+    expect(checkpointMocks.updateCheckpoint).toHaveBeenCalledExactlyOnceWith(db, "account:test-accounts", 0n, null);
+    controller.abort();
+    await processing;
+  });
+
+  it("rejects with the final backfill flush's error, even when no live event wakes the loop", async () => {
+    let replaySignal: AbortSignal | undefined;
+    replayMocks.createAccountsByOwnerReplay.mockImplementation((options) => ({
+      [Symbol.asyncIterator]: async function* () {
+        replaySignal = options.signal;
+        yield accountEvent(5n);
+        options.onBackfillComplete?.(5n, 5n);
+        while (!options.signal?.aborted) await new Promise((resolve) => setTimeout(resolve, 5));
+      },
+    }));
+    const failure = new Error("connection reset");
+    const { db, rows } = createDb(async () => {
+      throw failure;
+    });
+    const onError = vi.fn();
+
+    await expect(runAccountStreamProcessor(createStream({ parse: vi.fn(parseAccount) }), {
+      clientFactory: vi.fn(), db, logLevel: "error", observer: { onError },
+    })).rejects.toBe(failure);
+    expect(replaySignal?.aborted).toBe(true);
+    expect(onError).toHaveBeenCalledWith("commit", failure);
+    expect(checkpointMocks.updateCheckpoint).not.toHaveBeenCalled();
+    expect(rows.size).toBe(0);
+  });
+
+  it("holds a live delete until the final backfill flush commits, so the flush cannot bring the row back", async () => {
+    replayMocks.createAccountsByOwnerReplay.mockImplementation((options) => ({
+      [Symbol.asyncIterator]: async function* () {
+        yield accountEvent(5n);
+        options.onBackfillComplete?.(5n, 5n);
+        yield accountEvent(6n, { isDelete: true });
+      },
+    }));
+    let commitFlush!: () => void;
+    const flushCommitted = new Promise<void>((resolve) => {
+      commitFlush = resolve;
+    });
+    const { db, rows, writes } = createDb(() => flushCommitted);
+
+    const processing = runAccountStreamProcessor(createStream({ parse: vi.fn(parseAccount) }), {
+      clientFactory: vi.fn(), db, logLevel: "error",
+    });
+    await vi.waitFor(() => expect(writes).toEqual(["insert"]));
+    /* Room for a delete that does not wait to run before the flush commits. */
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    commitFlush();
+    await processing;
+
+    expect(writes).toEqual(["insert", "insert committed", "checkpoint 5", "delete", "checkpoint 5"]);
+    expect([...rows.keys()]).toEqual([]);
+  });
+
+  it("writes a block's live rows in one insert, then checkpoints the block", async () => {
+    replayMocks.events = [
+      liveAccount(1, 7n),
+      liveAccount(2, 7n),
+      liveAccount(3, 7n),
+      { type: "blockFinished", block: { slot: 7n } },
+    ];
+    const { db, writes, inserts } = createDb();
+
+    const stats = await runAccountStreamProcessor(createStream({ parse: vi.fn(parseAccount) }), {
+      clientFactory: vi.fn(), db, logLevel: "error",
+    });
+
+    expect(inserts).toEqual([[row(1, 7n), row(2, 7n), row(3, 7n)]]);
+    expect(writes).toEqual(["insert", "insert committed", "checkpoint 7", "checkpoint 7"]);
+    expect(stats).toEqual({ accountsProcessed: 3, accountsUpdated: 3, accountsDeleted: 0 });
+  });
+
+  it("does not checkpoint a block until its rows are written, and checkpoints each block after its own insert", async () => {
+    replayMocks.events = [
+      liveAccount(1, 7n),
+      { type: "blockFinished", block: { slot: 7n } },
+      liveAccount(2, 8n),
+      { type: "blockFinished", block: { slot: 8n } },
+    ];
+    let commitFirst!: () => void;
+    const firstCommitted = new Promise<void>((resolve) => {
+      commitFirst = resolve;
+    });
+    const { db, writes, inserts } = createDb(() => firstCommitted);
+
+    const processing = runAccountStreamProcessor(createStream({ parse: vi.fn(parseAccount) }), {
+      clientFactory: vi.fn(), db, logLevel: "error",
+    });
+    await vi.waitFor(() => expect(writes).toEqual(["insert"]));
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(writes).toEqual(["insert"]);
+    commitFirst();
+    await processing;
+
+    expect(inserts).toEqual([[row(1, 7n)], [row(2, 8n)]]);
+    expect(writes).toEqual([
+      "insert", "insert committed", "checkpoint 7",
+      "insert", "insert committed", "checkpoint 8",
+      "checkpoint 8",
+    ]);
+  });
+
+  it("writes a live row after 250 ms of quiet with no block marker, and not before", async () => {
+    vi.useFakeTimers();
+    const live = liveReplay();
+    live.push(liveAccount(1, 7n));
+    const { db, writes, inserts } = createDb();
+
+    const processing = runAccountStreamProcessor(createStream({ parse: vi.fn(parseAccount) }), {
+      clientFactory: vi.fn(), db, logLevel: "error",
+    });
+    await vi.advanceTimersByTimeAsync(249);
+    expect(writes).toEqual([]);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(inserts).toEqual([[row(1, 7n)]]);
+    expect(writes).toEqual(["insert", "insert committed"]);
+
+    live.push({ type: "blockFinished", block: { slot: 7n } });
+    live.end();
+    await processing;
+    expect(inserts).toEqual([[row(1, 7n)]]);
+    expect(writes).toEqual(["insert", "insert committed", "checkpoint 7", "checkpoint 7"]);
+  });
+
+  it("drops a row buffered earlier in the block when the account is deleted, so the block insert cannot bring it back", async () => {
+    replayMocks.events = [
+      liveAccount(1, 7n),
+      liveAccount(2, 7n),
+      liveAccount(1, 7n, { isDelete: true }),
+      { type: "blockFinished", block: { slot: 7n } },
+    ];
+    const { db, rows, writes, inserts } = createDb();
+    rows.set(encodeAddress(addressOf(1)), row(1, 6n));
+
+    const stats = await runAccountStreamProcessor(createStream({ parse: vi.fn(parseAccount) }), {
+      clientFactory: vi.fn(), db, logLevel: "error",
+    });
+
+    expect(writes).toEqual(["delete", "insert", "insert committed", "checkpoint 7", "checkpoint 7"]);
+    expect(inserts).toEqual([[row(2, 7n)]]);
+    expect([...rows.values()]).toEqual([row(2, 7n)]);
+    expect(stats).toEqual({ accountsProcessed: 3, accountsUpdated: 1, accountsDeleted: 1 });
+  });
+
+  it("writes rows still buffered when the replay ends before a block marker", async () => {
+    replayMocks.events = [liveAccount(1, 7n), liveAccount(2, 8n)];
+    const { db, writes, inserts } = createDb();
+
+    await runAccountStreamProcessor(createStream({ parse: vi.fn(parseAccount) }), {
+      clientFactory: vi.fn(), db, logLevel: "error",
+    });
+
+    expect(inserts).toEqual([[row(1, 7n), row(2, 8n)]]);
+    expect(writes).toEqual(["insert", "insert committed", "checkpoint 8"]);
+  });
+
+  it("writes rows still buffered when the caller aborts before the idle flush", async () => {
+    vi.useFakeTimers();
+    const controller = new AbortController();
+    const live = liveReplay();
+    live.push(liveAccount(1, 7n));
+    const { db, writes, inserts } = createDb();
+
+    const processing = runAccountStreamProcessor(createStream({ parse: vi.fn(parseAccount) }), {
+      clientFactory: vi.fn(), db, logLevel: "error",
+    }, controller.signal);
+    await vi.advanceTimersByTimeAsync(100);
+    expect(writes).toEqual([]);
+    controller.abort();
+    const stats = await processing;
+
+    expect(inserts).toEqual([[row(1, 7n)]]);
+    expect(writes).toEqual(["insert", "insert committed", "checkpoint 0"]);
+    expect(stats).toEqual({ accountsProcessed: 1, accountsUpdated: 1, accountsDeleted: 0 });
+  });
+
+  it("does not handle the next event while an idle flush is still writing", async () => {
+    vi.useFakeTimers();
+    const live = liveReplay();
+    live.push(liveAccount(1, 7n));
+    let commitIdleFlush!: () => void;
+    const idleFlushCommitted = new Promise<void>((resolve) => {
+      commitIdleFlush = resolve;
+    });
+    const { db, writes, inserts } = createDb(() => idleFlushCommitted);
+    const onRecord = vi.fn();
+
+    const processing = runAccountStreamProcessor(createStream({ parse: vi.fn(parseAccount) }), {
+      clientFactory: vi.fn(), db, logLevel: "error", observer: { onRecord },
+    });
+    await vi.advanceTimersByTimeAsync(250);
+    expect(writes).toEqual(["insert"]);
+    live.push(liveAccount(2, 8n), { type: "blockFinished", block: { slot: 8n } });
+    await vi.advanceTimersByTimeAsync(1_000);
+    expect(onRecord.mock.calls).toEqual([[{ slot: 7n, id: "01".repeat(32) }]]);
+    expect(writes).toEqual(["insert"]);
+
+    commitIdleFlush();
+    await vi.advanceTimersByTimeAsync(0);
+    live.end();
+    await processing;
+    expect(onRecord.mock.calls).toEqual([[{ slot: 7n, id: "01".repeat(32) }], [{ slot: 8n, id: "02".repeat(32) }]]);
+    expect(inserts).toEqual([[row(1, 7n)], [row(2, 8n)]]);
+    expect(writes).toEqual(["insert", "insert committed", "insert", "insert committed", "checkpoint 8", "checkpoint 8"]);
   });
 });

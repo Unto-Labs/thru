@@ -66,6 +66,8 @@ pub use thru_grpc_client::thru as proto;
 pub type Result<T> = std::result::Result<T, ClientError>;
 
 const POLL_INTERVAL: Duration = Duration::from_millis(500);
+/* About 5 s at POLL_INTERVAL: a node's durable cursor trails finalized by a few slots. */
+const PINNED_READ_RETRIES: u32 = 10;
 
 /// Builder used to construct a gRPC client with configuration.
 #[derive(Debug, Clone)]
@@ -332,6 +334,9 @@ impl Client {
     ///
     /// This queries historical account state from the ClickHouse database.
     /// Returns the account state as it was at the beginning of the specified slot.
+    ///
+    /// A node refuses a slot above its durable cursor with FAILED_PRECONDITION
+    /// until it commits that slot, so a read near the head retries briefly.
     pub async fn get_account_at_slot(&self, pubkey: &Pubkey, slot: u64) -> Result<Option<Account>> {
         let mut client = QueryServiceClient::new(self.channel.clone())
             .max_decoding_message_size(128 * 1024 * 1024)
@@ -347,17 +352,27 @@ impl Client {
             data_slice: None,
         };
 
-        let mut grpc_request = Request::new(request);
-        self.apply_metadata(&mut grpc_request);
-        grpc_request.set_timeout(self.timeout);
+        let mut retries = 0;
+        loop {
+            let mut grpc_request = Request::new(request.clone());
+            self.apply_metadata(&mut grpc_request);
+            grpc_request.set_timeout(self.timeout);
 
-        match client.get_account(grpc_request).await {
-            Ok(response) => {
-                let account = response.into_inner();
-                Ok(Some(Account::from_proto(account)?))
+            match client.get_account(grpc_request).await {
+                Ok(response) => {
+                    let account = response.into_inner();
+                    return Ok(Some(Account::from_proto(account)?));
+                }
+                Err(status) if status.code() == tonic::Code::NotFound => return Ok(None),
+                Err(status)
+                    if status.code() == tonic::Code::FailedPrecondition
+                        && retries < PINNED_READ_RETRIES =>
+                {
+                    retries += 1;
+                    time::sleep(POLL_INTERVAL).await;
+                }
+                Err(status) => return Err(ClientError::Rpc(status.to_string())),
             }
-            Err(status) if status.code() == tonic::Code::NotFound => Ok(None),
-            Err(status) => Err(ClientError::Rpc(status.to_string())),
         }
     }
 
@@ -1621,11 +1636,12 @@ pub struct SlotMetricsUpdate {
     /// Slot these metrics describe.
     pub slot: u64,
     /// Fees credited to the absent-block-producer fee receiver this block
-    /// because the producer account was not live (UNTO-1293). Disjoint from
+    /// because no eligible producer exists (absent/non-live or live but
+    /// receipt-ineligible). Disjoint from
     /// `claimed_fees`; total block fees = `absent_block_producer_fees` +
     /// `claimed_fees`.
     pub absent_block_producer_fees: u64,
-    /// Fees credited to a live block-producer account this block (UNTO-1293).
+    /// Fees credited to an eligible block-producer account this block.
     pub claimed_fees: u64,
     /// Running total of activated state across all accounts.
     pub global_activated_state_counter: u64,
@@ -2075,10 +2091,11 @@ pub struct SlotMetrics {
     pub global_activated_state_counter: u64,
     pub global_deactivated_state_counter: u64,
     /// Fees credited to the absent-block-producer fee receiver this block
-    /// because the producer account was not live (UNTO-1293). Disjoint from
+    /// because no eligible producer exists (absent/non-live or live but
+    /// receipt-ineligible). Disjoint from
     /// `claimed_fees`.
     pub absent_block_producer_fees: u64,
-    /// Fees credited to a live block-producer account this block (UNTO-1293).
+    /// Fees credited to an eligible block-producer account this block.
     pub claimed_fees: u64,
     pub block_timestamp: Option<std::time::SystemTime>,
 }

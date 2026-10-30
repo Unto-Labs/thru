@@ -1,5 +1,10 @@
+import { Code, ConnectError } from "@connectrpc/connect";
 import type { AccountSource } from "./chain-client";
 import { AccountView, type Account } from "@thru/sdk/proto";
+import { abortableDelay } from "./retry";
+/* About 5 s: a node's durable cursor trails finalized by a few slots. */
+const NOT_DURABLE_RETRIES = 10;
+const NOT_DURABLE_DELAY_MS = 500;
 /** A bounded alternative to owner enumeration. No inference about catalog completeness
  * or finality is made. The caller selects an execution-complete historical cut. */
 export async function readPinnedAccounts(
@@ -44,11 +49,7 @@ export async function readPinnedAccounts(
           while (next < addresses.length) {
             signal.throwIfAborted();
             const i = next++;
-            const account = await source.getAccount({
-              address: { value: addresses[i] } as any,
-              view: AccountView.FULL,
-              versionContext: { version: { case: "slot", value: slot } } as any,
-            }, { signal });
+            const account = await getAccountAtSlot(source, addresses[i], slot, signal);
             signal.throwIfAborted();
             const version =
               account.versionContext?.slot ?? account.meta?.lastUpdatedSlot;
@@ -81,6 +82,32 @@ export async function readPinnedAccounts(
   } finally {
     options.signal?.removeEventListener("abort", forwardAbort);
     signal.removeEventListener("abort", onAbort);
+  }
+}
+/* A node refuses a slot above its durable cursor with FailedPrecondition until it
+   commits that slot, so a cut near the head retries instead of failing. */
+async function getAccountAtSlot(
+  source: Pick<AccountSource, "getAccount">,
+  address: Uint8Array,
+  slot: bigint,
+  signal: AbortSignal,
+): Promise<Account> {
+  for (let retries = 0; ; retries++) {
+    try {
+      return await source.getAccount({
+        address: { value: address } as any,
+        view: AccountView.FULL,
+        versionContext: { version: { case: "slot", value: slot } } as any,
+      }, { signal });
+    } catch (error) {
+      if (
+        retries >= NOT_DURABLE_RETRIES ||
+        !(error instanceof ConnectError && error.code === Code.FailedPrecondition)
+      )
+        throw error;
+      await abortableDelay(NOT_DURABLE_DELAY_MS, signal, { keepAlive: true });
+      signal.throwIfAborted();
+    }
   }
 }
 function equal(a: Uint8Array, b: Uint8Array) {

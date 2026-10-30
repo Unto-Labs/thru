@@ -44,8 +44,6 @@ it('keeps the selected signing credential and RP ID in explicit popup mode', asy
   );
   expect(result.passkey).toBe(selected);
 });
-/* The account switch in a popup-only browser: a stored passkey must NOT pin the
-   popup to that credential, or the user can never reach another one. */
 it('hands the popup a discoverable request when a switch forces the picker', async () => {
   const selected = { credentialId: 'selected-credential', rpId: 'app.tid.sh' } as PasskeyMetadata;
   popup.request.mockResolvedValue({

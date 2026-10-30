@@ -1,14 +1,3 @@
-/**
- * An address field and the helper line under it.
- *
- * `AddressField` is a multi-line mono field: a Thru address is 46 characters,
- * which wraps to two lines on a phone rather than scrolling out of sight.
- * Empty, it offers Paste inside the field; filled, a Clear button.
- *
- * `FieldHelper` is the one line under a field that says what the app thinks
- * of it - muted, checking, fine, a warning or an error - announced politely
- * to screen readers as it changes, with an optional Retry.
- */
 import { type RefObject, useCallback, useLayoutEffect, useRef, useState } from "react";
 import {
   Platform,
@@ -21,7 +10,7 @@ import {
 import { font, space, text, touch } from "./tokens";
 import { makeStyles, useThemeColors } from "./theme";
 import { Button } from "./Button";
-import { IconAlert, IconCheck, IconClose, IconInfo, IconWarning } from "./Icons";
+import { IconAlert, IconCheck, IconClose, IconInfo, IconScan, IconWarning } from "./Icons";
 import { Spinner } from "./loading/MarkDrawOn";
 
 const IS_WEB = Platform.OS === "web";
@@ -38,9 +27,11 @@ export interface AddressFieldProps {
   onChangeText: (value: string) => void;
   /** Paste, shown while the field is empty. */
   onPaste?: () => void;
+  /** A QR scan button beside Paste, shown while the field is empty. */
+  onScan?: () => void;
   /** Clear, shown once it has a value; empties the field when absent. */
   onClear?: () => void;
-  /** Marks the value as wrong: an error-red border. */
+  /** Marks the value as wrong. */
   error?: boolean;
   placeholder?: string;
   accessibilityLabel?: string;
@@ -53,6 +44,7 @@ export function AddressField({
   value,
   onChangeText,
   onPaste,
+  onScan,
   onClear,
   error = false,
   placeholder,
@@ -147,9 +139,20 @@ export function AddressField({
         value={value}
       />
       {empty ? (
-        onPaste ? (
+        onPaste || onScan ? (
           <View style={styles.pasteSlot}>
-            <Button label="Paste" onPress={onPaste} size="sm" variant="outline" />
+            {onPaste ? <Button label="Paste" onPress={onPaste} size="sm" variant="outline" /> : null}
+            {onScan ? (
+              <Pressable
+                accessibilityLabel="Scan QR code"
+                accessibilityRole="button"
+                hitSlop={(touch.hitMin - touch.controlSm) / 2}
+                onPress={onScan}
+                style={({ pressed }) => [styles.scan, pressed ? { opacity: 0.85 } : null]}
+              >
+                <IconScan size={18} color={colors.fg} />
+              </Pressable>
+            ) : null}
           </View>
         ) : null
       ) : (
@@ -229,8 +232,8 @@ const useStyles = makeStyles((c) => ({
     minHeight: touch.controlMd,
   },
   fieldFocused: {
-    borderColor: c.accent,
-    ...(IS_WEB ? { boxShadow: `inset 0 0 0 1px ${c.accent}` } : null),
+    borderColor: c.fgMuted,
+    ...(IS_WEB ? { boxShadow: `inset 0 0 0 1px ${c.fgMuted}` } : null),
   } as never,
   fieldError: {
     borderColor: c.error,
@@ -254,7 +257,16 @@ const useStyles = makeStyles((c) => ({
       : null),
   } as never,
   /* Inset 5 so the 36pt button sits inside the 46pt interior. */
-  pasteSlot: { padding: 5 },
+  pasteSlot: { flexDirection: "row", gap: 6, padding: 5 },
+  /* Button's outline sm, square around the glyph. */
+  scan: {
+    alignItems: "center",
+    borderColor: c.borderStrong,
+    borderWidth: 1,
+    height: touch.controlSm,
+    justifyContent: "center",
+    width: touch.controlSm,
+  },
   clear: {
     alignItems: "center",
     height: touch.hitMin,

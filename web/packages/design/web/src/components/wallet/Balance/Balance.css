@@ -87,7 +87,6 @@
     transform: rotate(360deg);
   }
 }
-/* Reduced motion: no rotation; the ring pulses instead. */
 @keyframes tds-balance-pulse {
   0%,
   100% {

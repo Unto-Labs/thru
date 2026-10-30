@@ -1,7 +1,4 @@
-/**
- * Indexer configuration types.
- */
-
+import type { ProjectionRuntime } from "../projections/define";
 import type { ChainClientFactory, ReplayLogger } from "@thru/replay";
 import type { DatabaseClient } from "../schema/types";
 import type { EventStream } from "../streams/types";
@@ -11,11 +8,16 @@ import type { AccountStream } from "../accounts/types";
  * Configuration for the Indexer runtime.
  */
 export interface IndexerConfig {
-  /** Database client */
-  db: DatabaseClient;
+  /** Optional best-effort metrics observer. Stream labels are deployment-owned. */
+  telemetry?: { record(name: "apps.indexer.consumed" | "apps.indexer.checkpoint" | "apps.indexer.last_progress_timestamp" | "apps.indexer.records" | "apps.indexer.retries" | "apps.dependency.requests" | "apps.dependency.errors" | "apps.dependency.duration", attributes: Record<string, unknown>, value?: number): void };
+  /** Required for ordinary account/event streams; projections own their writer. */
+  db?: DatabaseClient;
 
   /** Factory to create fresh chain clients for reconnection */
   clientFactory: ChainClientFactory;
+
+  /** Transactional projections share the ordinary stream supervisor. */
+  projections?: ProjectionRuntime[];
 
   /** Event streams to run */
   eventStreams?: EventStream<any>[];

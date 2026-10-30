@@ -58,6 +58,11 @@ message VersionContext {
     CurrentOrHistoricalVersion currentOrHistorical = 2 [(google.api.field_behavior) = OPTIONAL];
 
     // Request the version for a specific slot number.
+    // GetAccount, GetRawAccount and BatchGetRawAccounts reject a slot above
+    // the serving node's durable cursor with FAILED_PRECONDITION; retry once
+    // the slot is durable. The durable cursor is the highest slot the node
+    // has durably committed, and it can trail the finalized slot GetHeight
+    // reports. If no slot is durable yet, those reads return UNAVAILABLE.
     uint64 slot = 3 [(google.api.field_behavior) = OPTIONAL];
 
     // Request the version nearest to the provided block timestamp.

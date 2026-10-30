@@ -11,8 +11,8 @@ vi.mock('@thru/sdk/helpers', () => ({
   encodeSignature: (bytes: Uint8Array) => `sig-${bytes[0]}`,
 }));
 
-vi.mock('@thru/programs/passkey-manager', () => ({
-  PASSKEY_MANAGER_PROGRAM_ADDRESS: 'passkey-program',
+vi.mock('@thru/programs/wallet', () => ({
+  WALLET_PROGRAM_ADDRESS: 'passkey-program',
   base64UrlToBytes: () => new Uint8Array([7]),
   buildAccountContext: (params: { readWriteAccounts: Uint8Array[] }) => ({
     walletAccountIdx: params.readWriteAccounts.length === 0 ? 2 : 3,

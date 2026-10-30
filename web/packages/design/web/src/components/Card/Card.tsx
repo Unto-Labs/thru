@@ -6,10 +6,6 @@ export interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
   variant?: "default" | "elevated" | "outlined";
 }
 
-/**
- * Card — token-driven surface. API matches the legacy design-system's Card 1:1
- * (variant: default | elevated | outlined). No Base UI primitive needed.
- */
 export const Card = React.forwardRef<HTMLDivElement, CardProps>(
   function Card({ className, variant = "default", children, ...props }, ref) {
     return (

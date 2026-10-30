@@ -15,7 +15,6 @@
   text-underline-offset: 3px;
 }
 
-/* Icon-only variant — bare inline copy icon (no Button chrome). */
 .tds-copy-icon {
   display: inline-flex;
   align-items: center;

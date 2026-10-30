@@ -1,7 +1,3 @@
-/**
- * Account streams module exports.
- */
-
 export { defineAccountStream } from "./define";
 export {
   runAccountStreamProcessor,

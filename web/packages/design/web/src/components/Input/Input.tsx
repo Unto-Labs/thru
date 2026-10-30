@@ -23,9 +23,7 @@ export interface InputProps extends Omit<React.InputHTMLAttributes<HTMLInputElem
 
 /**
  * Input — built on Base UI's Field (label association + a11y wiring).
- * API matches the legacy design-system's Input 1:1 (error / label / wrapperClassName),
- * styled with plain CSS against the tokens. Clicking anywhere in the padded
- * wrapper focuses the control, mirroring the old behavior.
+ * Clicking anywhere in the padded wrapper focuses the control.
  */
 export const Input = React.forwardRef<HTMLInputElement, InputProps>(
   function Input(

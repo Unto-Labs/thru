@@ -67,8 +67,9 @@ define _make-cargo-bin
 .PHONY: cargo-build-$(2)
 cargo-build-$(2): cargo-build-examples
 
-# Cargo's ELF output - depends on phony cargo-build target
+# The recipe makes Make recheck the ELF timestamp after Cargo rebuilds it.
 target/$(RUST_TARGET)/$(CARGO_PROFILE_DIR)/examples/$(2): cargo-build-$(2)
+	test -f $$@
 
 # Our output files depend on cargo's ELF output
 $(OBJDIR)/bin/$(1).bin: target/$(RUST_TARGET)/$(CARGO_PROFILE_DIR)/examples/$(2)
@@ -138,4 +139,4 @@ MKPATH:=
 endef
 
 # Include all Local.mk files
-$(foreach mk,$(shell $(FIND) . -type f -name Local.mk),$(eval $(call _include-mk,$(mk)))) 
+$(foreach mk,$(shell $(FIND) . -type f -name Local.mk),$(eval $(call _include-mk,$(mk))))

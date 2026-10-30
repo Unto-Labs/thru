@@ -5,17 +5,14 @@ import "./Detail.css";
 export type DetailVariant = "default" | "summary";
 
 export interface DetailProps {
-  /** Left-hand label. */
   label?: React.ReactNode;
-  /** Right-hand value. */
   children?: React.ReactNode;
   /** Stack label over value instead of the default inline row. */
   stacked?: boolean;
   /**
    * Which half is machine-facing, and so which half is mono.
    *
-   * `default` — a field name and its contents (mono label, sans value), the
-   * explorer's key/value shape.
+   * `default` — a field name and its contents (mono label, sans value).
    * `summary` — a plain-language label against a figure (sans label, mono
    * tabular value), for money and totals, where the numbers must align.
    */
@@ -26,8 +23,8 @@ export interface DetailProps {
 }
 
 /**
- * Detail — a static label/value row. The presentational core of the explorer's
- * SummaryDatum; loading/skeleton/empty handling stays in the consumer.
+ * Detail — a static label/value row; loading/skeleton/empty handling stays in
+ * the consumer.
  */
 export function Detail({
   label,

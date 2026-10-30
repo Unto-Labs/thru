@@ -321,7 +321,6 @@ describe('WebViewBridge', () => {
   });
 
   it('pushes theme changes to the loaded wallet and restates them after a reload', () => {
-    /* Before ready there is nobody to tell; the URL carries it instead. */
     bridge.setTheme('dark');
     expect(webView.injected).toHaveLength(0);
     expect(new URL(bridge.getIframeSrc()).searchParams.get('tn_theme')).toBe(
@@ -362,7 +361,6 @@ describe('WebViewBridge', () => {
   });
 
   it('pushes developer mode changes to the loaded wallet and restates them after a reload', () => {
-    /* Before ready there is nobody to tell; the URL carries it instead. */
     bridge.setDeveloperMode(true);
     expect(webView.injected).toHaveLength(0);
     expect(new URL(bridge.getIframeSrc()).searchParams.get('tn_developer_mode')).toBe('1');

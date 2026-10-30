@@ -1,7 +1,5 @@
-/* PasskeyPopup — the first-party passkey window. The root fills its parent
-   (a flex column: the page's viewport wrapper, or a fixed frame in the
-   gallery); the column centers with auto margins so tall content scrolls
-   instead of clipping its top. */
+/* The column centers with auto margins so tall content scrolls instead of
+   clipping its top. */
 .tds-ppopup {
   position: relative;
   box-sizing: border-box;
@@ -13,13 +11,12 @@
   background: var(--color-surface-higher);
   color: var(--color-text-primary);
   font-family: var(--font-sans);
-  /* The canvas sets no line-height; don't inherit a host's preflight. */
+  /* Don't inherit a host preflight's line-height. */
   line-height: normal;
 }
 
-/* ── Header ─────────────────────────────────────────────────────────── */
-/* Header and footer heights exclude their hairline (the design's 56 + 1 and
-   44 + 1), whatever box-sizing the host sets. */
+/* Header and footer heights exclude their hairline, whatever box-sizing the
+   host sets. */
 .tds-ppopup__bar {
   box-sizing: content-box;
   flex: none;
@@ -39,8 +36,6 @@
   color: var(--color-text-primary);
 }
 
-/* The mono chip shared by the header's host tag and the origin cell's
-   network tag. */
 .tds-ppopup__chip {
   flex: none;
   font-family: var(--font-mono);
@@ -61,7 +56,6 @@
   flex: none;
 }
 
-/* ── Body ───────────────────────────────────────────────────────────── */
 .tds-ppopup__body {
   box-sizing: border-box;
   flex: 1 1 auto;
@@ -112,7 +106,6 @@
   border-top-color: var(--color-text-tertiary);
 }
 
-/* ── Origin / account cell ──────────────────────────────────────────── */
 .tds-ppopup__cell {
   box-sizing: border-box;
   display: flex;
@@ -183,7 +176,6 @@
   white-space: nowrap;
 }
 
-/* ── Skeleton ───────────────────────────────────────────────────────── */
 .tds-ppopup__skel {
   display: block;
   flex: none;
@@ -219,7 +211,6 @@
   }
 }
 
-/* ── Steps (page scale) ─────────────────────────────────────────────── */
 .tds-ppopup__steps.tds-steps {
   padding: 10px 14px;
 }
@@ -228,7 +219,6 @@
   min-height: 22px;
 }
 
-/* ── Error box (page scale) ─────────────────────────────────────────── */
 .tds-ppopup .tds-errbox {
   padding: 10px 14px;
   gap: 6px;
@@ -237,13 +227,11 @@
   min-height: 28px;
 }
 
-/* ── Actions ────────────────────────────────────────────────────────── */
 .tds-ppopup__actions {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
-/* The design's square mono call to action at 40px. */
 .tds-ppopup__btn.tds-btn {
   box-sizing: border-box;
   width: 100%;
@@ -269,7 +257,6 @@
   cursor: default;
 }
 
-/* ── Footer ─────────────────────────────────────────────────────────── */
 .tds-ppopup__foot {
   box-sizing: content-box;
   flex: none;
@@ -285,7 +272,6 @@
   text-align: center;
 }
 
-/* Visually hidden, still read (the live region, the verified label). */
 .tds-ppopup__sr {
   position: absolute;
   width: 1px;
@@ -298,15 +284,18 @@
   border: 0;
 }
 
+@media (max-width: 640px) {
+  .tds-ppopup__btn.tds-btn {
+    min-height: 48px;
+  }
+}
+
 @media (max-width: 400px) {
   .tds-ppopup__body {
     padding: 20px var(--space-4);
   }
 }
 
-/* Reduced motion: the skeleton holds still. The Spinner and Steps rings
-   keep their own reduced-motion pulse (Spinner.css, Steps.css) instead of
-   rotating, so the pending state still reads as working. */
 @media (prefers-reduced-motion: reduce) {
   .tds-ppopup__skel {
     animation: none;

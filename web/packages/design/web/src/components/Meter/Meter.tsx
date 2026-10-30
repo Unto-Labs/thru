@@ -4,7 +4,6 @@ import "./Meter.css";
 
 /**
  * Meter — a static measurement within a known range, exposed as styled parts.
- * Uses a secondary (grass) hue to distinguish it from Progress.
  *
  *   <Meter.Root value={78}>
  *     <Meter.Head>

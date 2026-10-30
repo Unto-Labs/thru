@@ -665,11 +665,11 @@ impl<'a> StructWalker<'a> {
                 cursor = align_up(cursor, field.field_type.alignment)
                     .ok_or_else(|| self.align_error(&field.name))?;
             }
+            path.push(field.name.clone());
             if cursor > data.len() {
-                return Err(self.buffer_error(cursor as u64));
+                return Err(self.buffer_error(path, cursor, data.len()));
             }
 
-            path.push(field.name.clone());
             let is_last = idx + 1 == fields.len();
             let consumed = self.process_field(&field.field_type, path, &data[cursor..], is_last)?;
             path.pop();
@@ -770,7 +770,7 @@ impl<'a> StructWalker<'a> {
             let mut cursor = 0usize;
             for i in 0..count {
                 if cursor > data.len() {
-                    return Err(self.buffer_error(cursor as u64));
+                    return Err(self.buffer_error(path, cursor, data.len()));
                 }
                 path.push(i.to_string());
                 let consumed = self.process_field(element_type, path, &data[cursor..], false)?;
@@ -814,7 +814,7 @@ impl<'a> StructWalker<'a> {
         let consumed = bytes;
 
         if consumed > data.len() {
-            return Err(self.buffer_error(consumed as u64));
+            return Err(self.buffer_error(path, consumed, data.len()));
         }
 
         /* Store each element's value in value_lookup for field reference resolution */
@@ -920,7 +920,7 @@ impl<'a> StructWalker<'a> {
             }
         };
         if size > data.len() {
-            return Err(self.buffer_error(size as u64));
+            return Err(self.buffer_error(path, size, data.len()));
         }
         self.store_field_value(path, size as i128);
         if let Some(param_names) = self.field_params.get(&path_key(path)) {
@@ -982,7 +982,7 @@ impl<'a> StructWalker<'a> {
     ) -> ReflectResult<()> {
         let size = primitive_size(prim_type);
         if size > data.len() {
-            return Err(self.buffer_error(size as u64));
+            return Err(self.buffer_error(path, size, data.len()));
         }
 
         if let PrimitiveType::Integral(_) = prim_type {
@@ -1217,11 +1217,20 @@ impl<'a> StructWalker<'a> {
         }
     }
 
-    fn buffer_error(&self, required: u64) -> ReflectError {
-        ReflectError::BufferTooSmall {
-            type_name: self.type_name.to_string(),
-            required: required as u128,
-            available: required,
+    fn buffer_error(&self, path: &[String], required: usize, available: usize) -> ReflectError {
+        if path.is_empty() {
+            ReflectError::BufferTooSmall {
+                type_name: self.type_name.to_string(),
+                required: required as u128,
+                available: available as u64,
+            }
+        } else {
+            ReflectError::FieldBufferTooSmall {
+                type_name: self.type_name.to_string(),
+                field: path_key(path),
+                required: required as u128,
+                available: available as u64,
+            }
         }
     }
 }

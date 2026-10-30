@@ -1,7 +1,3 @@
-/* Toolbar — a horizontal roving-focus bar grouping related controls.
-   Modeled on thru-design app.css's .row / .sep--v layout, retargeted to the
-   canonical tokens. Square-first (radius 0). */
-
 .tds-toolbar {
   display: flex;
   flex-wrap: wrap;

@@ -5,6 +5,7 @@ export * from "./BrandMark";
 export * from "./BrandTile";
 export * from "./BrandWordmark";
 export * from "./Button";
+export * from "./Switch";
 export * from "./CopyButton";
 export * from "./Chrome";
 export * from "./Bits";
@@ -32,5 +33,5 @@ export * from "./loading/SlotTicker";
 export * from "./loading/ThroughputMeter";
 
 export { ThruUsdLogo, type ThruUsdLogoProps } from "./ThruUsdLogo";
-export { CoinLogo, type Coin, type CoinLogoProps } from "./CoinLogo";
+export { ChainLogo, CoinLogo, type ChainLogoProps, type Coin, type CoinLogoProps } from "./CoinLogo";
 export { isThruUsdSymbol } from "../../tokens/src/thrusd";

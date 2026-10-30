@@ -1,7 +1,7 @@
 {
   "name": "@thru/programs",
   "version": "0.0.1",
-  "description": "Typed TypeScript clients for Thru's core on-chain programs: token, AMM, CLOB, oracle, multicall, passkey manager, and others.",
+  "description": "Typed TypeScript clients for Thru's core on-chain programs: token, AMM, CLOB, oracle, multicall, Wallet Program, and others.",
   "license": "Apache-2.0",
   "homepage": "https://thru.org/docs/sdks/web-packages/programs/",
   "repository": {
@@ -42,10 +42,10 @@
       "import": "./dist/passkey-manager/index.js",
       "require": "./dist/passkey-manager/index.cjs"
     },
-    "./ratelimit": {
-      "types": "./dist/ratelimit/index.d.ts",
-      "import": "./dist/ratelimit/index.js",
-      "require": "./dist/ratelimit/index.cjs"
+    "./wallet": {
+      "types": "./dist/wallet/index.d.ts",
+      "import": "./dist/wallet/index.js",
+      "require": "./dist/wallet/index.cjs"
     },
     "./multicall": {
       "types": "./dist/multicall/index.d.ts",
@@ -87,10 +87,35 @@
       "import": "./dist/deploy/index.js",
       "require": "./dist/deploy/index.cjs"
     },
+    "./perps": {
+      "import": {
+        "types": "./dist/perps/index.d.ts",
+        "default": "./dist/perps/index.js"
+      },
+      "require": {
+        "types": "./dist/perps/index.d.cts",
+        "default": "./dist/perps/index.cjs"
+      }
+    },
     "./perp": {
-      "types": "./dist/perp/index.d.ts",
-      "import": "./dist/perp/index.js",
-      "require": "./dist/perp/index.cjs"
+      "import": {
+        "types": "./dist/perps/index.d.ts",
+        "default": "./dist/perps/index.js"
+      },
+      "require": {
+        "types": "./dist/perps/index.d.cts",
+        "default": "./dist/perps/index.cjs"
+      }
+    },
+    "./perps/testing": {
+      "import": {
+        "types": "./dist/perps/testing.d.ts",
+        "default": "./dist/perps/testing.js"
+      },
+      "require": {
+        "types": "./dist/perps/testing.d.cts",
+        "default": "./dist/perps/testing.cjs"
+      }
     },
     "./compression": {
       "types": "./dist/compression/index.d.ts",
@@ -101,13 +126,20 @@
       "types": "./dist/resources.d.ts",
       "import": "./dist/resources.js",
       "require": "./dist/resources.cjs"
+    },
+    "./faucet": {
+      "types": "./dist/faucet/index.d.ts",
+      "import": "./dist/faucet/index.js",
+      "require": "./dist/faucet/index.cjs"
     }
   },
   "scripts": {
     "build": "tsup",
     "dev": "tsup --watch",
-    "test": "vitest run",
-    "test:run": "vitest run",
+    "test": "pnpm run test:run",
+    "test:run": "vitest run && pnpm run test:compatibility && pnpm run test:pack",
+    "test:compatibility": "node scripts/check-wallet-compatibility.mjs",
+    "test:pack": "node scripts/check-perps-pack.mjs",
     "clean": "rm -rf dist"
   },
   "dependencies": {

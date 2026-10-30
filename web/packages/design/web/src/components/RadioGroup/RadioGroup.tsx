@@ -22,9 +22,6 @@ export interface RadioGroupProps {
 /**
  * RadioGroup — one choice from a set. Closed, data-driven wrapper over Base UI's
  * RadioGroup + Radio parts.
- *
- * The selected dot scales in via a CSS transform keyed on the circle's
- * [data-checked] state; nothing is computed in JS.
  */
 export const RadioGroup = React.forwardRef<HTMLDivElement, RadioGroupProps>(
   function RadioGroup(

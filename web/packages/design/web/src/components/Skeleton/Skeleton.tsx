@@ -5,7 +5,7 @@ import "./Skeleton.css";
 export interface SkeletonProps extends React.HTMLAttributes<HTMLSpanElement> {
   width?: number | string;
   height?: number | string;
-  /** Round the block (defaults to square, per square-first). */
+  /** Round the block (defaults to square). */
   rounded?: boolean;
 }
 

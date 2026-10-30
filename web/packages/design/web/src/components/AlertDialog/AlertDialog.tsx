@@ -4,7 +4,6 @@ import "../Dialog/Dialog.css";
 
 /**
  * AlertDialog — a modal that demands a decision (no dismiss-by-backdrop).
- * Same look as Dialog (reuses Dialog.css), exposed as styled parts.
  */
 export const AlertDialog = {
   Root: Base.Root,

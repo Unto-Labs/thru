@@ -86,6 +86,7 @@ export const AMM_ERROR_LABELS: Record<number, string> = {
   18: 'Vault mismatch',
   19: 'LP mint mismatch',
   20: 'Slippage exceeded',
+  21: 'Invalid token program',
 };
 
 const PUBKEY_LENGTH = 32;

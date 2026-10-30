@@ -42,6 +42,30 @@ describe("deposit API", () => {
 
     await expect(api.getProviders()).resolves.toEqual(["unifold"]);
   });
+
+  it("lists the crypto rail's networks only where Unifold is enabled", async () => {
+    const api = (providers: string[]) => createDepositsApi({
+      prepare: vi.fn(),
+      ensureAccount: vi.fn(),
+      open: vi.fn(),
+      getProviders: async () => providers,
+      getAccountState: vi.fn(),
+      waitForDeposit: vi.fn(),
+      formatAmount: vi.fn(),
+    });
+
+    const sources = await api(["unifold", "coinbase"]).getCryptoSources();
+    expect(sources.map((source) => [source.name, source.chainType, source.chainId, source.symbol])).toEqual([
+      ["Base", "ethereum", "8453", "USDC"],
+      ["Ethereum", "ethereum", "1", "ETH"],
+      ["Solana", "solana", "mainnet", "USDC"],
+      ["Arbitrum", "ethereum", "42161", "USDC"],
+      ["Polygon", "ethereum", "137", "USDC"],
+      ["Bitcoin", "bitcoin", "mainnet", "BTC"],
+    ]);
+    expect(sources.every((source) => source.key === `${source.chainType}:${source.chainId}`)).toBe(true);
+    await expect(api(["coinbase"]).getCryptoSources()).resolves.toEqual([]);
+  });
 });
 
 describe("prepared deposit snapshots", () => {
@@ -71,7 +95,7 @@ describe("prepared deposit snapshots", () => {
   });
 });
 
-vi.mock("@thru/programs/passkey-manager", () => ({
+vi.mock("@thru/programs/wallet", () => ({
   buildWalletAccountContext: vi.fn(() => ({
     readWriteAddresses: ["ta_token_account"],
     readOnlyAddresses: ["ta_token_program", "ta_mint"],

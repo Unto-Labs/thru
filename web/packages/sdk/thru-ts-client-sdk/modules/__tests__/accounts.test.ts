@@ -2,7 +2,7 @@ import { create } from "@bufbuild/protobuf";
 import { describe, expect, it, vi } from "vitest";
 import { createMockAccount, createMockContext, generateTestAddress, generateTestPubkey } from "../../__tests__/helpers/test-utils";
 import { ConsensusStatus, CurrentVersionSchema, VersionContextSchema } from "@thru/sdk/proto";
-import { AccountView } from "@thru/sdk/proto";
+import { AccountView, AccountStateFilter } from "@thru/sdk/proto";
 import { GenerateStateProofResponseSchema, GetChainInfoResponseSchema, ListAccountsResponseSchema } from "@thru/sdk/proto";
 import { Account } from "../../domain/accounts";
 import { Filter, FilterParamValue } from "../../domain/filters";
@@ -159,6 +159,15 @@ describe("accounts", () => {
   });
 
   describe("listAccounts", () => {
+    it.each([undefined, AccountStateFilter.LIVE, AccountStateFilter.COMPRESSED, AccountStateFilter.ALL])(
+      "passes state %s with ALL as the default",
+      async (state) => {
+        const ctx = createMockContext();
+        const query = vi.spyOn(ctx.query, "listAccounts").mockResolvedValue(create(ListAccountsResponseSchema));
+        await listAccounts(ctx, { state });
+        expect(query.mock.calls[0][0].state).toBe(state ?? AccountStateFilter.ALL);
+      },
+    );
     it("should list owned accounts", async () => {
       const ctx = createMockContext();
       const mockResponse = create(ListAccountsResponseSchema, {

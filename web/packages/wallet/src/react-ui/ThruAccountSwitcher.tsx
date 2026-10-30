@@ -3,7 +3,7 @@
 import { useAccounts, useWallet } from '../react';
 import type { CSSProperties } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import Logo from '../static/logomark_red.svg';
+import Logo from '@thru/design/assets/brand/logos/logomark_red.svg';
 
 const containerStyle: CSSProperties = {
     display: 'flex',

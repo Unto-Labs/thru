@@ -1,7 +1,3 @@
-/**
- * Unit tests for schema/validation.ts
- */
-
 import { describe, it, expect } from "vitest";
 import { generateZodSchema, validateParsedData } from "./validation";
 import { t } from "./builder";
@@ -72,7 +68,7 @@ describe("generateZodSchema", () => {
   describe("nullability handling", () => {
     it("allows null for nullable columns", () => {
       const schema = {
-        name: t.text(), // nullable by default
+        name: t.text(),
       };
       const zodSchema = generateZodSchema(schema);
 
@@ -93,7 +89,7 @@ describe("generateZodSchema", () => {
     it("handles mixed nullable and non-nullable columns", () => {
       const schema = {
         id: t.text().notNull(),
-        description: t.text(), // nullable
+        description: t.text(),
       };
       const zodSchema = generateZodSchema(schema);
 
@@ -136,7 +132,7 @@ describe("generateZodSchema", () => {
 
       const invalidData = {
         ...validData,
-        slot: 1000, // should be bigint, not number
+        slot: 1000,
       };
 
       expect(zodSchema.safeParse(invalidData).success).toBe(false);
@@ -184,7 +180,7 @@ describe("validateParsedData", () => {
     it("returns error for invalid type", () => {
       const data = {
         id: "test-123",
-        slot: 42, // number instead of bigint
+        slot: 42,
         name: "Test",
       };
 
@@ -199,7 +195,7 @@ describe("validateParsedData", () => {
 
     it("returns error for null in notNull field", () => {
       const data = {
-        id: null, // primary key, should not be null
+        id: null,
         slot: 42n,
         name: "Test",
       };
@@ -215,7 +211,6 @@ describe("validateParsedData", () => {
     it("returns error for missing required fields", () => {
       const data = {
         id: "test-123",
-        // slot is missing
         name: "Test",
       };
 
@@ -226,7 +221,7 @@ describe("validateParsedData", () => {
 
     it("includes stream name in error message", () => {
       const data = {
-        id: 123, // wrong type
+        id: 123,
         slot: 42n,
         name: "Test",
       };

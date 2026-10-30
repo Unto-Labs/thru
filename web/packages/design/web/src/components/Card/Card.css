@@ -1,5 +1,3 @@
-/* Card — square-first surface dressed in semantic tokens. */
-
 .tds-card {
   padding: var(--space-5);
   background: var(--color-surface-card);
@@ -25,7 +23,6 @@
   background: var(--color-surface-card);
   border-color: var(--color-border-tertiary);
 }
-
 
 :where([data-theme="dark"], :root[data-theme="dark"]) .tds-card--outlined {
   background: var(--color-surface-card);

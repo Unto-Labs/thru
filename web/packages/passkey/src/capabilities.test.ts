@@ -1,12 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
-  getPasskeyPromptMode,
   getPasskeyRestriction,
   getPermissionsPolicyAllowsFeature,
   classifyIframeRestriction,
   markInlinePasskeyRefused,
   resetInlinePasskeyRefusal,
-  maybePreopenPopup,
+  shouldUsePasskeyPopup,
 } from './capabilities';
 
 const safari = 'Mozilla/5.0 (Macintosh) AppleWebKit/605.1.15 Version/18.0 Safari/605.1.15';
@@ -35,30 +34,30 @@ beforeEach(() => {
 
 describe('operation-specific iframe routing', () => {
   it('attempts both operations inline without capability or policy APIs', async () => {
-    expect(await getPasskeyPromptMode('create')).toBe('inline');
-    expect(await getPasskeyPromptMode('get')).toBe('inline');
+    expect(await shouldUsePasskeyPopup('create')).toBe(false);
+    expect(await shouldUsePasskeyPopup('get')).toBe(false);
   });
   it('does not consult asynchronous authenticator capabilities', async () => {
     const probe = vi.fn(() => new Promise(() => {}));
     (window as any).PublicKeyCredential = { getClientCapabilities: probe };
-    expect(await getPasskeyPromptMode('create')).toBe('inline');
+    expect(await shouldUsePasskeyPopup('create')).toBe(false);
     expect(probe).not.toHaveBeenCalled();
   });
   it.each([safari, 'Mozilla/5.0 (iPhone) AppleWebKit/605.1.15 CriOS/130.0 Mobile Safari/604.1'])(
     'only routes cross-origin WebKit creation to recovery: %s',
     async (ua) => {
       frame(ua);
-      expect(await getPasskeyPromptMode('create')).toBe('popup');
-      expect(await getPasskeyPromptMode('get')).toBe('inline');
+      expect(await shouldUsePasskeyPopup('create')).toBe(true);
+      expect(await shouldUsePasskeyPopup('get')).toBe(false);
       frame(ua, true);
-      expect(await getPasskeyPromptMode('create')).toBe('inline');
+      expect(await shouldUsePasskeyPopup('create')).toBe(false);
     }
   );
   it('keeps same-origin/top-level ceremonies inline', async () => {
     frame(safari, true);
-    expect(await getPasskeyPromptMode('create')).toBe('inline');
+    expect(await shouldUsePasskeyPopup('create')).toBe(false);
     (window as any).self = window.top;
-    expect(await getPasskeyPromptMode('create')).toBe('inline');
+    expect(await shouldUsePasskeyPopup('create')).toBe(false);
   });
   it('binds the policy receiver and distinguishes denial from unavailable', async () => {
     const policy = {
@@ -68,8 +67,8 @@ describe('operation-specific iframe routing', () => {
       },
     };
     vi.stubGlobal('document', { permissionsPolicy: policy });
-    expect(await getPasskeyPromptMode('get')).toBe('inline');
-    expect(await getPasskeyPromptMode('create')).toBe('popup');
+    expect(await shouldUsePasskeyPopup('get')).toBe(false);
+    expect(await shouldUsePasskeyPopup('create')).toBe(true);
     vi.stubGlobal('document', { featurePolicy: policy });
     expect(getPermissionsPolicyAllowsFeature('publickey-credentials-get')).toBe(true);
     vi.stubGlobal('document', {
@@ -83,14 +82,8 @@ describe('operation-specific iframe routing', () => {
   });
   it('does not let a create refusal affect get', async () => {
     markInlinePasskeyRefused('create', 'ancestor-restriction');
-    expect(await getPasskeyPromptMode('create')).toBe('popup');
-    expect(await getPasskeyPromptMode('get')).toBe('inline');
-  });
-  it('never speculatively opens a popup', () => {
-    frame(safari);
-    const open = vi.fn();
-    expect(maybePreopenPopup('create', open)).toBe(null);
-    expect(open).not.toHaveBeenCalled();
+    expect(await shouldUsePasskeyPopup('create')).toBe(true);
+    expect(await shouldUsePasskeyPopup('get')).toBe(false);
   });
 });
 
@@ -101,28 +94,28 @@ describe('HTTP host pages', () => {
   it('routes both operations to recovery when the top-level page is HTTP', async () => {
     embeddedUnder(['http://localhost:3100']);
     expect(getPasskeyRestriction('get')?.reason).toBe('insecure-host');
-    expect(await getPasskeyPromptMode('create')).toBe('popup');
+    expect(await shouldUsePasskeyPopup('create')).toBe(true);
   });
   it('judges the top-level page, not intermediate frames', async () => {
     embeddedUnder(['https://widget.example', 'http://localhost:3100']);
-    expect(await getPasskeyPromptMode('get')).toBe('popup');
+    expect(await shouldUsePasskeyPopup('get')).toBe(true);
     embeddedUnder(['http://localhost:3100', 'https://dapp.example']);
-    expect(await getPasskeyPromptMode('get')).toBe('inline');
+    expect(await shouldUsePasskeyPopup('get')).toBe(false);
   });
   it.each(['localhost', 'wallet.localhost', '127.0.0.1', '[::1]'])(
     'keeps a localhost wallet frame inline: %s',
     async (hostname) => {
       embeddedUnder(['http://localhost:3000'], hostname);
-      expect(await getPasskeyPromptMode('get')).toBe('inline');
+      expect(await shouldUsePasskeyPopup('get')).toBe(false);
     }
   );
   it('keeps inline under HTTPS or unknown top-level pages', async () => {
     embeddedUnder(['https://dapp.example']);
-    expect(await getPasskeyPromptMode('get')).toBe('inline');
+    expect(await shouldUsePasskeyPopup('get')).toBe(false);
     embeddedUnder(['null']);
-    expect(await getPasskeyPromptMode('get')).toBe('inline');
+    expect(await shouldUsePasskeyPopup('get')).toBe(false);
     embeddedUnder([]);
-    expect(await getPasskeyPromptMode('get')).toBe('inline');
+    expect(await shouldUsePasskeyPopup('get')).toBe(false);
   });
 });
 

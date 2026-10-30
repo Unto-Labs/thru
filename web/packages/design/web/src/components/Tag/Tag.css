@@ -1,6 +1,3 @@
-/* Tag / Chip — solid-fill mono labels, square by default.
-   Ported from thru-design app.css .chip, retargeted to canonical tokens. */
-
 .tds-tag {
   font-family: var(--font-mono);
   font-size: 11px;

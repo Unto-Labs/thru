@@ -149,7 +149,6 @@ export interface BrowserSDKConfig {
 
 export interface ConnectOptions extends WalletConnectOptions {}
 
-/** What a restore asks the wallet with: the hint's address and its record. */
 type RestoreConnectOptions = ConnectOptions & {
   preferredAccountAddress?: string;
   restore?: WalletRestoreRecord;
@@ -203,10 +202,6 @@ function getPwaDisplayMode(): PwaDisplayMode | null {
     : null;
 }
 
-/**
- * Browser SDK - Main entry point for dApp developers
- * Wraps EmbeddedProvider with a clean, simple API
- */
 export class BrowserSDK implements WalletSDK {
   private readonly requiresNetworkProtocol: boolean;
   private activeNetwork: ResolvedWalletNetwork | null = null;
@@ -483,12 +478,10 @@ export class BrowserSDK implements WalletSDK {
       : undefined;
     this.depositProviders = new Set(config.deposits?.providers ?? ['unifold']);
 
-    // Forward provider events to SDK events
     this.setupEventForwarding();
     this.syncSystemThemeWatcher();
   }
 
-  /* Follow the OS setting only while the host asks for `system`. */
   private syncSystemThemeWatcher(): void {
     if (this.themePreference !== 'system') {
       this.stopWatchingSystemTheme?.();
@@ -591,13 +584,8 @@ export class BrowserSDK implements WalletSDK {
     }
   }
 
-  /**
-   * Connect to wallet
-   * Shows wallet modal and requests connection
-   * @deprecated Use `connection.connect()`.
-   */
+  /** @deprecated Use `connection.connect()`. */
   async connect(options?: ConnectOptions): Promise<ConnectResult> {
-    // Auto-initialize if not done yet
     if (!this.initialized) {
       await this.initialize();
     }
@@ -684,17 +672,11 @@ export class BrowserSDK implements WalletSDK {
     return inFlight;
   }
 
-  /**
-   * Mount the wallet iframe inline in a container.
-   */
   async mountInline(container: HTMLElement): Promise<void> {
     await this.provider.mountInline(container);
   }
 
-  /**
-   * Disconnect from wallet
-   * @deprecated Use `connection.disconnect()`.
-   */
+  /** @deprecated Use `connection.disconnect()`. */
   async disconnect(): Promise<void> {
     const startedAt = Date.now();
     this.telemetry.record(TELEMETRY_EVENTS.SDK_DISCONNECT_STARTED, {
@@ -750,9 +732,6 @@ export class BrowserSDK implements WalletSDK {
     }
   }
 
-  /**
-   * Check if connected
-   */
   isConnected(): boolean {
     return this.provider.isConnected();
   }
@@ -948,10 +927,7 @@ export class BrowserSDK implements WalletSDK {
     }
     this.assertDepositNetwork(payload.destination?.network);
     const enabledProviders = this.availableDepositProviders();
-    /* An explicit providerId wins; otherwise `method` picks the rail.
-       With neither, a destination uses legacy Unifold only when configured;
-       otherwise the wallet opens its chooser, including faucet-only networks.
-       Explicit payment rails still require a configured provider. */
+    /* No providerId lets the wallet open its own chooser (faucet-only networks too). */
     const providerId =
       payload.providerId ??
       (payload.method === 'card'
@@ -1042,16 +1018,10 @@ export class BrowserSDK implements WalletSDK {
   /** @deprecated Use `deposits.formatAmount()`. */
   formatDepositAmount = formatDepositAmount;
 
-  /**
-   * Get Thru chain API (iframe-backed signer)
-   */
   get thru(): IThruChain {
     return this.provider.thru;
   }
 
-  /**
-   * Event emitter: on
-   */
   on(event: SDKEvent, callback: EventCallback): void {
     if (!this.eventListeners.has(event)) {
       this.eventListeners.set(event, new Set());
@@ -1059,16 +1029,10 @@ export class BrowserSDK implements WalletSDK {
     this.eventListeners.get(event)!.add(callback);
   }
 
-  /**
-   * Event emitter: off
-   */
   off(event: SDKEvent, callback: EventCallback): void {
     this.eventListeners.get(event)?.delete(callback);
   }
 
-  /**
-   * Event emitter: once (listen once and auto-remove)
-   */
   once(event: SDKEvent, callback: EventCallback): void {
     const wrappedCallback = (...args: any[]) => {
       callback(...args);
@@ -1077,9 +1041,6 @@ export class BrowserSDK implements WalletSDK {
     this.on(event, wrappedCallback);
   }
 
-  /**
-   * Emit event to all listeners
-   */
   private emit(event: SDKEvent, data?: any): void {
     this.eventListeners.get(event)?.forEach((callback) => {
       try {
@@ -1090,18 +1051,10 @@ export class BrowserSDK implements WalletSDK {
     });
   }
 
-  /**
-   * Set up event forwarding from provider to SDK
-   */
   private setupEventForwarding(): void {
     this.provider.on(EMBEDDED_PROVIDER_EVENTS.NETWORK_CHANGED, (data: any) =>
       this.applyNetwork(data),
     );
-    // Forward all relevant provider events to SDK events
-    this.provider.on(EMBEDDED_PROVIDER_EVENTS.CONNECT, (data: any) => {
-      // Already handled in connect() method
-    });
-
     this.provider.on(EMBEDDED_PROVIDER_EVENTS.DISCONNECT, (data: any) => {
       this.telemetry.record(TELEMETRY_EVENTS.SDK_WALLET_DISCONNECTED, {
         operation: 'disconnect',
@@ -1143,8 +1096,6 @@ export class BrowserSDK implements WalletSDK {
       this.emit('accountChanged', account);
     });
 
-    /* The wallet reports the Add funds lifecycle as it happens; the
-       deposit() promise still resolves with the terminal state. */
     for (const event of [
       EMBEDDED_PROVIDER_EVENTS.DEPOSIT_OPENED,
       EMBEDDED_PROVIDER_EVENTS.DEPOSIT_PENDING,
@@ -1155,9 +1106,6 @@ export class BrowserSDK implements WalletSDK {
     }
   }
 
-  /**
-   * Destroy SDK and cleanup
-   */
   destroy(): void {
     this.telemetry.record(TELEMETRY_EVENTS.SDK_DESTROYED, {
       operation: 'destroy',
@@ -1364,21 +1312,13 @@ export class BrowserSDK implements WalletSDK {
   }
 
   /**
-   * Whether the host's storage holds a connection the wallet can rebuild,
-   * before the wallet is asked. Only a hint carrying the wallet's restore
-   * record counts: an address-only hint (from before records existed) cannot
-   * restore anything once the wallet's own storage is gone, and opening the
-   * signed-in shell on it would only bounce back to the sign-in screen.
+   * Whether host storage holds a connection the wallet can rebuild, checked
+   * without asking the wallet. Only a hint carrying a restore record counts.
    */
   hasRememberedConnection(): boolean {
     return Boolean(this.connectionHints?.peek()?.restore);
   }
 
-  /**
-   * Remember the selected address, and the wallet's restore record for it
-   * when the wallet sent one. Without a record the store keeps the one it
-   * has only while the address is unchanged.
-   */
   private async persistSelectedAccount(
     selectedAccountAddress: string | null,
     restore?: WalletRestoreRecord,

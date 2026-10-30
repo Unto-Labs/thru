@@ -1,5 +1,4 @@
-/* Accordion — ported from thru-design app.css .acc, retargeted to tokens.
-   Panel height animates via Base UI's --accordion-panel-height. */
+/* Panel height animates via Base UI's --accordion-panel-height. */
 
 .tds-acc {
   border: 1px solid var(--color-border-tertiary);
@@ -32,7 +31,6 @@
   background: color-mix(in srgb, var(--color-surface-primary) 72%, var(--color-surface-higher));
 }
 
-/* Chevron glyph rendered inside the trigger rotates when its panel opens. */
 .tds-acc__trigger > svg {
   color: var(--color-text-tertiary);
   transition: transform var(--duration-med) var(--ease-standard);
@@ -50,7 +48,6 @@
 .tds-acc__panel[data-ending-style] {
   height: 0;
 }
-/* Reduced motion: the panel opens and closes at once, the chevron snaps. */
 @media (prefers-reduced-motion: reduce) {
   .tds-acc__trigger > svg,
   .tds-acc__panel {

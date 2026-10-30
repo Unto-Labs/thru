@@ -22,10 +22,6 @@ function waitForWallet(
   });
 }
 
-/**
- * useThruChain - Hook for accessing the Thru chain API exposed by the Browser SDK.
- * Returns the chain instance (if available) and a boolean indicating readiness.
- */
 export function useWallet() {
   const {
     wallet,

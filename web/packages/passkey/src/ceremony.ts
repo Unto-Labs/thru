@@ -54,7 +54,6 @@ export function cancelPasskeyCeremony(): void {
   activeCeremony?.abort();
 }
 
-/** One transaction-independent ceremony; recovery never replays wallet writes. */
 export async function runPasskeyCeremony<T>(
   action: PasskeyPromptAction,
   inline: (signal: AbortSignal) => Promise<T>,

@@ -36,6 +36,7 @@ import {
   perpFundingRoundDue,
   perpFundingSampleDue,
   perpNextFundingRoundNs,
+  perpSeatSideIndex,
   perpSettleFunding,
   PERP_EVENT_FUNDING_ROUND,
   PERP_INSTRUCTION_FUNDING_UPDATE,
@@ -45,6 +46,9 @@ import {
   parsePerpMarketAccount,
   parsePerpOrderArenaAccount,
   parsePerpSeatArenaAccount,
+  parsePerpSeatEntry,
+  perpSeatEntryOffset,
+  perpWithdrawable,
   perpAverageEntryPrice,
   perpBankruptcyPrice,
   perpCanPostOrder,
@@ -59,6 +63,8 @@ import {
   perpMarkFraction,
   perpMarkFromFeed,
   perpMarkPrice,
+  perpOracleFeedIsFresh,
+  perpOracleMaxAgeNs,
   perpMarketAccountAddresses,
   perpMarketReadOnlyAddresses,
   perpMaxBuyLots,
@@ -73,6 +79,37 @@ import {
   type PerpMarginSeat,
   type PerpMarket,
   type PerpSeatEntry,
+  PERP_EVENT_MARGIN,
+  PERP_INSTRUCTION_MARGIN_ACCOUNT_CREATE,
+  PERP_INSTRUCTION_MARGIN_LINK,
+  PERP_INSTRUCTION_MARGIN_RECORD,
+  PERP_INSTRUCTION_MARGIN_TRANSFER,
+  PERP_INSTRUCTION_MARGIN_UNLINK,
+  PERP_INSTRUCTION_MARKET_SET_CROSS,
+  PERP_INSTRUCTION_MARKET_SET_VAULT,
+  PERP_MARGIN_ACCOUNT_SIZE,
+  PERP_MARGIN_MAGIC,
+  PERP_SEAT_FLAG_ACTIVE,
+  PERP_SEAT_FLAG_CROSS,
+  createPerpMarginAccountCreateInstruction,
+  createPerpMarginLinkInstruction,
+  createPerpMarginRecordInstruction,
+  createPerpMarginTransferInstruction,
+  createPerpMarginUnlinkInstruction,
+  createPerpMarketSetCrossInstruction,
+  createPerpMarketSetVaultInstruction,
+  derivePerpMarginAccountAddress,
+  parsePerpMarginAccount,
+  perpCrossIsBankruptFlat,
+  perpCrossIsLiquidatable,
+  perpCrossLiquidationAction,
+  perpCrossLiquidationFee,
+  perpCrossLiquidationTotals,
+  perpCrossMakerFillAllowed,
+  perpCrossTotals,
+  perpCrossWithdrawable,
+  perpMarginEquity,
+  perpSeatIsCross,
 } from './index';
 
 /* Fixtures ******************************************************************/
@@ -143,6 +180,28 @@ function marketBytes(): Uint8Array {
   view.setUint32(392, 40_000, true); /* funding_clamp_big */
   view.setUint32(396, 100, true); /* funding_premium_multiplier */
   view.setUint32(400, 3, true); /* funding_sample_cnt */
+  view.setUint32(404, 2_500, true); /* cross_upnl_haircut_bps */
+  /* the loss waterfall (0.5.0) */
+  view.setUint16(4, 300, true); /* socialize_cap_bps */
+  view.setUint16(6, 2_500, true); /* if_epoch_budget_bps */
+  view.setUint16(316, 50, true); /* bankrupt_liq_reward_bps */
+  view.setBigUint64(416, 9_000n, true); /* insurance_balance */
+  view.setBigUint64(424, 1_000n, true); /* epoch_if_drawn */
+  view.setBigUint64(432, 42n, true); /* epoch_soc_ticks */
+  view.setBigUint64(440, 23n, true); /* bad_debt_both */
+  view.setBigUint64(448, 142_857_143n, true); /* loss_offset_long (lo) */
+  view.setBigInt64(464, -71_428_572n, true); /* loss_offset_short (lo): negative as signed 128 bit */
+  view.setBigInt64(472, -1n, true); /* loss_offset_short (hi) */
+  view.setUint32(480, 61_351, true); /* epoch_id */
+  /* trading fees (0.5.0) */
+  view.setUint32(296, 300, true); /* taker_fee_ppm */
+  view.setUint32(300, 100, true); /* maker_rebate_ppm */
+  view.setUint32(304, 50, true); /* builder_fee_cap_ppm */
+  view.setUint32(308, 250_000, true); /* fee_insurance_share_ppm */
+  view.setUint32(312, 500_000, true); /* liq_insurance_share_ppm */
+  view.setUint32(488, 400, true); /* pending_taker_fee_ppm */
+  view.setUint32(492, 0, true); /* pending_builder_fee_cap_ppm */
+  view.setBigUint64(496, 7_200_000_000_000n, true); /* pending_activation_ns */
   return data;
 }
 
@@ -160,12 +219,14 @@ function seatBytes(seat: {
   openAskNotional: bigint;
   fundingSnapshot?: bigint;
   fundingCarry?: number;
+  /** Flags word when active (default 1: an isolated seat). */
+  flags?: bigint;
   active: boolean;
 }): Uint8Array {
   const data = new Uint8Array(PERP_SEAT_ENTRY_SIZE);
   const view = new DataView(data.buffer);
   data.set(seat.authority, 0);
-  view.setBigUint64(32, seat.quantityQuote, true);
+  view.setBigUint64(32, BigInt.asUintN(64, seat.quantityQuote), true);
   view.setBigUint64(40, seat.longLots, true);
   view.setBigUint64(48, seat.shortLots, true);
   view.setBigUint64(56, seat.openBidLots, true);
@@ -177,7 +238,7 @@ function seatBytes(seat: {
   view.setUint32(76, seat.fundingCarry ?? 0, true); /* funding_carry */
   view.setBigInt64(104, BigInt.asIntN(64, seat.fundingSnapshot ?? 0n), true); /* funding_snapshot (lo) */
   view.setBigInt64(112, (seat.fundingSnapshot ?? 0n) < 0n ? -1n : 0n, true); /* funding_snapshot (hi) */
-  view.setBigUint64(120, seat.active ? 1n : 0n, true); /* non_nullable_reserved */
+  view.setBigUint64(120, seat.active ? seat.flags ?? 1n : 0n, true); /* flags */
   return data;
 }
 
@@ -282,7 +343,7 @@ const minLots = (a: bigint, b: bigint) => (a < b ? a : b);
 /* Tests *********************************************************************/
 
 describe('perp account parsers', () => {
-  it('parses the 448 byte market account with its funding state', () => {
+  it('parses the 512 byte market account with its funding, loss waterfall and fee state', () => {
     const market = parsePerpMarketAccount(marketBytes());
     expect(market).toEqual<PerpMarket>({
       magic: PERP_MARKET_MAGIC,
@@ -322,12 +383,36 @@ describe('perp account parsers', () => {
         premiumMultiplier: 100,
         impactNotional: 19_400n,
       },
+      crossUpnlHaircutBps: 2_500,
+      risk: {
+        socializeCapBps: 300,
+        ifEpochBudgetBps: 2_500,
+        bankruptLiqRewardBps: 50,
+        feeBalance: 0n,
+        insuranceBalance: 9_000n,
+        epochId: 61_351,
+        epochIfDrawn: 1_000n,
+        epochSocTicks: 42n,
+        badDebtBoth: 23n,
+        lossOffsetLong: 142_857_143n,
+        lossOffsetShort: -71_428_572n,
+      },
+      fees: {
+        takerFeePpm: 300,
+        makerRebatePpm: 100,
+        builderFeeCapPpm: 50,
+        feeInsuranceSharePpm: 250_000,
+        liqInsuranceSharePpm: 500_000,
+        pendingTakerFeePpm: 400,
+        pendingBuilderFeeCapPpm: 0,
+        pendingActivationNs: 7_200_000_000_000n,
+      },
     });
   });
 
   it('rejects a short (224 byte) market', () => {
-    expect(() => parsePerpMarketAccount(marketBytes().subarray(0, 224))).toThrow(/448 bytes/);
-    expect(() => parsePerpMarketAccount(new Uint8Array(448))).toThrow(/not a perp market/);
+    expect(() => parsePerpMarketAccount(marketBytes().subarray(0, 224))).toThrow(/512 bytes/);
+    expect(() => parsePerpMarketAccount(new Uint8Array(512))).toThrow(/not a perp market/);
   });
 
   it('rejects a header whose margin fields are not a margined market', () => {
@@ -416,8 +501,30 @@ describe('perp account parsers', () => {
         openAskNotional: 258_000_000n,
         fundingSnapshot: -4_000_000n,
         fundingCarry: 123,
+        cross: false,
       },
     ]);
+  });
+
+  it('parses one seat entry read as a slice the same as the whole arena', () => {
+    const active = { authority: key(10), quantityQuote: 50_000_000n, longLots: 10n, shortLots: 0n, openBidLots: 2n, openAskLots: 3n,
+      headOrderEntryIndex: 7, entryNotional: 850_000_000n, openBidNotional: 168_000_000n, openAskNotional: 258_000_000n };
+    const bytes = seatArenaBytes([
+      seatBytes({ ...active, authority: key(11), active: false }),
+      seatBytes({ ...active, active: true }),
+      seatBytes({ ...active, quantityQuote: -5_000_000n, flags: 3n, active: true }),
+    ]);
+    expect(perpSeatEntryOffset(1)).toBe(PERP_SEAT_ARENA_ENTRIES_OFFSET);
+    const slice = (seatIndex: number) =>
+      bytes.subarray(perpSeatEntryOffset(seatIndex), perpSeatEntryOffset(seatIndex) + PERP_SEAT_ENTRY_SIZE);
+    const arena = parsePerpSeatArenaAccount(bytes);
+    expect(parsePerpSeatEntry(slice(2), 2)).toEqual(arena.seats[0]);
+    expect(parsePerpSeatEntry(slice(3), 3)).toEqual(arena.seats[1]);
+    expect(arena.seats[1]).toMatchObject({ cross: true, quantityQuote: -5_000_000n });
+    expect(arena.seats[0]!.seatIndex).toBe(2);
+    expect(parsePerpSeatEntry(slice(1), 1)).toBeNull();
+    expect(() => parsePerpSeatEntry(bytes.subarray(0, 64), 1)).toThrow(/128 bytes/);
+    expect(parsePerpMarketAccount(bytes.subarray(0, PERP_MARKET_ACCOUNT_SIZE))).toEqual(arena.market);
   });
 
   it('decodes active order slots only and keeps arena indexes for the seat list walk', () => {
@@ -478,6 +585,23 @@ describe('perp margin math', () => {
     expect(() => perpMarkFromFeed({ ...feed, exponent: -6 }, MARKET)).toThrow(/"BTC\/USD" exponent -6 differs from the market's -8/);
     expect(() => perpMarkFromFeed({ kind: 'boolean', common, value: true }, MARKET)).toThrow(/boolean feed, not a price feed/);
     expect(() => perpMarkFromFeed({ ...feed, price: 0n }, MARKET)).toThrow(/zero/);
+  });
+
+  it("applies the program's oracle freshness rule (oracle_feed_is_fresh)", () => {
+    const feed = { common: { maxStalenessNs: 10n, lastUpdateNs: 100n, adminAddress: address(1), reporterAddress: address(2), feedName: 'BTC/USD' } };
+    /* The market's maxMarkAgeNs, or the feed's maxStalenessNs when it is 0. */
+    expect(perpOracleMaxAgeNs({ maxMarkAgeNs: 0n }, feed)).toBe(10n);
+    expect(perpOracleMaxAgeNs({ maxMarkAgeNs: 3n }, feed)).toBe(3n);
+    expect(perpOracleFeedIsFresh(feed, { maxMarkAgeNs: 0n }, 100n)).toBe(true);
+    expect(perpOracleFeedIsFresh(feed, { maxMarkAgeNs: 0n }, 110n)).toBe(true); /* the boundary is fresh */
+    expect(perpOracleFeedIsFresh(feed, { maxMarkAgeNs: 0n }, 111n)).toBe(false);
+    expect(perpOracleFeedIsFresh(feed, { maxMarkAgeNs: 3n }, 103n)).toBe(true);
+    expect(perpOracleFeedIsFresh(feed, { maxMarkAgeNs: 3n }, 104n)).toBe(false);
+    expect(perpOracleFeedIsFresh(feed, { maxMarkAgeNs: 0n }, 99n)).toBe(false); /* stamped after now */
+    /* Both ages 0: fresh only at the update's own time. */
+    const zero = { common: { ...feed.common, maxStalenessNs: 0n } };
+    expect(perpOracleFeedIsFresh(zero, { maxMarkAgeNs: 0n }, 100n)).toBe(true);
+    expect(perpOracleFeedIsFresh(zero, { maxMarkAgeNs: 0n }, 101n)).toBe(false);
   });
 
   it('mark fraction is 10^(quoteDecimals - baseDecimals + exponent) as an integer fraction', () => {
@@ -548,6 +672,10 @@ describe('perp margin math', () => {
     const withOrders = seat({ openBidLots: 1n, openBidNotional: 84_000_000n });
     expect(perpInitialMargin(MARKET, withOrders, ENTRY)).toBe(42_500_000n + 4_200_000n);
     expect(perpFreeCollateral(MARKET, withOrders, ENTRY)).toBe(3_300_000n);
+    /* withdrawable: free floored at zero and capped at the balance */
+    expect(perpWithdrawable(MARKET, s, 86_000_000n)).toBe(17_000_000n);
+    expect(perpWithdrawable(MARKET, s, 84_000_000n)).toBe(0n);
+    expect(perpWithdrawable(MARKET, seat({ longLots: 0n, entryNotional: 0n }), ENTRY)).toBe(COLLATERAL);
   });
 
   it('nets resting orders against the position they would reduce', () => {
@@ -637,7 +765,7 @@ describe('perp margin math', () => {
     const s = seat();
     /* mark below bankruptcy: transfer at the bankruptcy price, target keeps nothing */
     const gap = perpLiquidationPreview(MARKET, s, 79_000_000n)!;
-    expect(gap).toEqual({ side: 'long', lots: LOTS, price: 80_000_000n, fee: 0n, targetQuoteAfter: 0n });
+    expect(gap).toEqual({ side: 'long', lots: LOTS, price: 80_000_000n, fee: 0n, insurance: 0n, liquidatorFee: 0n, targetQuoteAfter: 0n });
     /* mark between liquidation and bankruptcy: fee 1% of notional capped by what is left */
     const mark = 81_000_000n;
     const preview = perpLiquidationPreview(MARKET, s, mark)!;
@@ -646,6 +774,11 @@ describe('perp margin math', () => {
     expect(quoteAfterClose).toBe(10_000_000n);
     expect(preview.fee).toBe((850_000_000n - 40_000_000n) / 100n); /* 8,100,000 */
     expect(preview.targetQuoteAfter).toBe(quoteAfterClose - preview.fee);
+    expect(preview.liquidatorFee).toBe(preview.fee);
+    /* A 0.5.0 market sends floor( fee * share ) to insurance: the liquidator gets the rest. */
+    const shared = perpLiquidationPreview({ ...MARKET, fees: { liqInsuranceSharePpm: 333_333 } }, s, mark)!;
+    expect(shared.insurance).toBe((8_100_000n * 333_333n) / 1_000_000n);
+    expect(shared.liquidatorFee).toBe(8_100_000n - shared.insurance);
     /* ceil_bps matches the reference helper for the margin figures */
     expect(perpInitialMargin(MARKET, s, mark)).toBe(ceilBps(810_000_000n, 500n));
   });
@@ -957,6 +1090,34 @@ describe('perp funding', () => {
     expect(perpSettleFunding({}, longer)).toEqual({ seat: { ...longer, fundingSnapshot: 0n, fundingCarry: 0 }, paid: 0n, badDebt: 0n });
   });
 
+  it('settles loss charges against the side index (0.5.0)', () => {
+    const funding: PerpFunding = {
+      index: 0n, balance: 0n, lastRoundNs: 0n, lastSampleNs: 0n, premiumSum: 0n, sampleCount: 0, rate: 0n,
+      interestRate: 100, clampSmall: 500, clampBig: 40_000, premiumMultiplier: 100, impactNotional: 1n,
+    };
+    /* Longs charged 142,857,143 ticks a lot (R = 1,000 over 7 lots, rounded
+       up), shorts untouched. */
+    const risk = {
+      socializeCapBps: 500, ifEpochBudgetBps: 0, bankruptLiqRewardBps: 0, feeBalance: 0n, insuranceBalance: 0n, epochId: 0,
+      epochIfDrawn: 0n, epochSocTicks: 142_857_143n, badDebtBoth: 0n, lossOffsetLong: 142_857_143n, lossOffsetShort: 0n,
+    };
+    const market = { funding, risk };
+    const long3 = seat({ quantityQuote: 10_000n, longLots: 3n, shortLots: 0n });
+    const short7 = seat({ quantityQuote: 10_000n, longLots: 0n, shortLots: 7n });
+    const flat = seat({ quantityQuote: 10_000n, longLots: 0n, shortLots: 0n });
+    expect(perpSeatSideIndex(market, long3)).toBe(142_857_143n);
+    expect(perpSeatSideIndex(market, short7)).toBe(0n);
+    const a = perpSettleFunding(market, long3);
+    /* 3 * 142,857,143 = 428,571,429 ticks: 429 atoms, carry 428,571 */
+    expect(a.paid).toBe(-429n);
+    expect(a.seat.fundingCarry).toBe(428_571);
+    expect(a.seat.fundingSnapshot).toBe(142_857_143n);
+    expect(perpSettleFunding(market, short7).paid).toBe(0n);
+    expect(perpSettleFunding(market, flat).paid).toBe(0n);
+    /* a market without the waterfall settles against the funding index */
+    expect(perpSettleFunding({ funding }, long3).paid).toBe(0n);
+  });
+
   it('funding update is 8 bytes; market set funding is 32', async () => {
     const ctx = { getAccountIndex: () => 0 } as never;
     expect([...(await createPerpFundingUpdateInstruction({ marketRecordIndex: 1 })(ctx))]).toEqual([PERP_INSTRUCTION_FUNDING_UPDATE, 1, 0, 0, 0, 0, 0, 0]);
@@ -1003,6 +1164,255 @@ describe('perp funding', () => {
       indexPrice: 200n,
       fundingIndex: -6_052_800n,
       roundNs: 3_600_000_000_000n,
+    });
+  });
+});
+
+describe('perp cross margin', () => {
+  /* Vectors match thru-perps/tests/test_txn_perp_program/test_cross.c: lot
+     97, 10% initial, 5% maintenance, marks in quote atoms (100 ticks = 200). */
+  const market = { lotSize: 97n, initialMarginBps: 1000, maintenanceMarginBps: 500, crossUpnlHaircutBps: 0 };
+  const flat = (quantityQuote: bigint): PerpMarginSeat => ({
+    quantityQuote, longLots: 0n, shortLots: 0n, openBidLots: 0n, openAskLots: 0n,
+    entryNotional: 0n, openBidNotional: 0n, openAskNotional: 0n, cross: true,
+  });
+  const long = (quantityQuote: bigint, lots: bigint, entryTicks: bigint): PerpMarginSeat => ({
+    ...flat(quantityQuote), longLots: lots, entryNotional: lots * 97n * entryTicks * 2n,
+  });
+
+  it('reads a cross seat\'s balance as signed', () => {
+    const arena = parsePerpSeatArenaAccount(
+      seatArenaBytes([
+        seatBytes({
+          authority: key(12), quantityQuote: -300n, longLots: 0n, shortLots: 0n, openBidLots: 0n, openAskLots: 0n,
+          headOrderEntryIndex: 0, entryNotional: 0n, openBidNotional: 0n, openAskNotional: 0n,
+          flags: PERP_SEAT_FLAG_ACTIVE | PERP_SEAT_FLAG_CROSS, active: true,
+        }),
+        seatBytes({
+          authority: key(13), quantityQuote: 0xffff_ffff_ffff_fed4n, longLots: 0n, shortLots: 0n, openBidLots: 0n, openAskLots: 0n,
+          headOrderEntryIndex: 0, entryNotional: 0n, openBidNotional: 0n, openAskNotional: 0n, active: true,
+        }),
+      ]),
+    );
+    expect(arena.seats[0]).toMatchObject({ quantityQuote: -300n, cross: true });
+    /* the same bits on an isolated seat are an unsigned balance */
+    expect(arena.seats[1]).toMatchObject({ quantityQuote: 0xffff_ffff_ffff_fed4n, cross: false });
+    expect(perpSeatIsCross(3n)).toBe(true);
+    expect(perpSeatIsCross(1n)).toBe(false);
+  });
+
+  it('parses the 433 byte margin account', () => {
+    expect(PERP_MARGIN_ACCOUNT_SIZE).toBe(433);
+    const data = new Uint8Array(PERP_MARGIN_ACCOUNT_SIZE);
+    const view = new DataView(data.buffer);
+    data[0] = PERP_MARGIN_MAGIC;
+    data[1] = 1; /* version */
+    data[2] = 2; /* link_cnt */
+    view.setUint32(8, 7, true); /* account_id */
+    data.set(key(30), 16); /* owner */
+    data.set(key(31), 48); /* vault */
+    data.set(key(32), 80); /* links[0].market */
+    view.setUint32(112, 3, true); /* links[0].seat_idx */
+    data.set(key(33), 120); /* links[1].market */
+    view.setUint32(152, 9, true); /* links[1].seat_idx */
+    data.set(key(34), 160); /* links[2] beyond link_cnt: ignored */
+    expect(parsePerpMarginAccount(data)).toEqual({
+      accountId: 7, owner: address(30), vault: address(31),
+      links: [{ market: address(32), seatIndex: 3 }, { market: address(33), seatIndex: 9 }],
+    });
+    expect(() => parsePerpMarginAccount(data.subarray(0, 432))).toThrow(/433 bytes/);
+    data[0] = PERP_MARKET_MAGIC;
+    expect(() => parsePerpMarginAccount(data)).toThrow(/not a perp margin account/);
+  });
+
+  it('profit in one market backs a position in another', () => {
+    /* long 5 lots at 100 ticks in market A with 10000; market B's seat holds nothing */
+    const a = long(10_000n, 5n, 100n);
+    const b = flat(0n);
+    expect(perpCrossTotals([{ market, seat: a, mark: 200n }, { market, seat: b }]).free).toBe(300n);
+    const up = perpCrossTotals([{ market, seat: a, mark: 220n }, { market, seat: b }]);
+    expect(up.free).toBe(9_030n);
+    expect(perpCanPostOrder(market, b, 'buy', 1n, 200n, 200n, 300n)).toBe(false);
+    expect(perpCanPostOrder(market, b, 'buy', 1n, 200n, 200n, 9_030n)).toBe(true);
+    /* a flat seat needs no mark; an exposed one does */
+    expect(() => perpCrossTotals([{ market, seat: a }])).toThrow(/mark/);
+  });
+
+  it('a loss in one market makes the account liquidatable; profit elsewhere nets it', () => {
+    const a = long(20_000n, 5n, 100n);
+    const b = long(0n, 5n, 100n);
+    const down = perpCrossTotals([{ market, seat: a, mark: 200n }, { market, seat: b, mark: 160n }]);
+    expect(down).toEqual({ equity: 600n, free: 600n - 9_700n - 7_760n, maintenance: 8_730n, collateral: 20_000n, hasPosition: true });
+    expect(perpCrossIsLiquidatable(down)).toBe(true);
+    /* short 5 in A instead: both legs at 80 net to the collateral */
+    const shortA: PerpMarginSeat = { ...flat(20_000n), shortLots: 5n, entryNotional: 5n * 97n * 200n };
+    const netted = perpCrossTotals([{ market, seat: shortA, mark: 160n }, { market, seat: b, mark: 160n }]);
+    expect(netted.equity).toBe(20_000n);
+    expect(netted.maintenance).toBe(7_760n);
+    expect(perpCrossIsLiquidatable(netted)).toBe(false);
+    /* flat everywhere with a negative sum: written off */
+    expect(perpCrossIsBankruptFlat(perpCrossTotals([{ market, seat: flat(10_000n) }, { market, seat: flat(-14_550n) }]))).toBe(true);
+  });
+
+  it('liquidation bounds a market without a mark and cancels orders where the account is flat', () => {
+    /* test_cross.c "Cross stale liquidation": short 1 in A (entry 19400) on
+       20000, long 5 in B (entry 97000); cap 1000 ticks, 1% fee. */
+    const capped = { ...market, priceCap: 2_000n, liquidationFeeBps: 100 };
+    const shortA: PerpMarginSeat = { ...flat(20_000n), shortLots: 1n, entryNotional: 19_400n };
+    const longB = long(0n, 5n, 100n);
+    /* B at 70 ticks: exact, liquidatable */
+    const exact = perpCrossLiquidationTotals([{ market: capped, seat: shortA, mark: 200n }, { market: capped, seat: longB, mark: 140n }]);
+    expect(exact).toMatchObject({ equityLow: -9_100n, equityHigh: -9_100n, maintenanceLow: 4_365n, bounded: false });
+    expect(perpCrossLiquidationAction(longB, 140n, exact)).toBe('liquidate');
+    /* A unread: its short is worth up to its entry, 10300 >= 3395 */
+    const inconclusive = perpCrossLiquidationTotals([{ market: capped, seat: shortA }, { market: capped, seat: longB, mark: 140n }]);
+    expect(inconclusive).toMatchObject({ equityHigh: 10_300n, maintenanceLow: 3_395n, bounded: true });
+    expect(perpCrossLiquidationAction(longB, 140n, inconclusive)).toBeNull();
+    /* B at 10 ticks: at most -47900 against 485; the short at the cap leaves no fee */
+    const decided = perpCrossLiquidationTotals([{ market: capped, seat: shortA }, { market: capped, seat: longB, mark: 20n }]);
+    expect(decided).toMatchObject({ equityLow: 20_000n + 19_400n - 194_000n - 87_300n, equityHigh: -47_900n, maintenanceLow: 485n });
+    expect(perpCrossLiquidationAction(longB, 20n, decided)).toBe('liquidate');
+    expect(perpCrossLiquidationFee(capped, 5n, 20n, decided)).toBe(0n);
+    /* the market's own mark is still needed for its position */
+    expect(perpCrossLiquidationAction(longB, undefined, decided)).toBeNull();
+    /* resting orders in a market without a position: cancelled when liquidatable */
+    const bidOnly: PerpMarginSeat = { ...flat(0n), openBidLots: 2n, openBidNotional: 2n * 97n * 180n };
+    const withOrders = perpCrossLiquidationTotals([{ market: capped, seat: bidOnly }, { market: capped, seat: longB, mark: 140n }, { market: capped, seat: flat(20_000n) }]);
+    expect(perpCrossLiquidationAction(bidOnly, undefined, withOrders)).toBe('cancel');
+    const healthy = perpCrossLiquidationTotals([{ market: capped, seat: bidOnly }, { market: capped, seat: longB, mark: 200n }, { market: capped, seat: flat(20_000n) }]);
+    expect(perpCrossLiquidationAction(bidOnly, 200n, healthy)).toBeNull();
+    /* flat everywhere with a negative sum: written off */
+    expect(perpCrossLiquidationAction(flat(-500n), 200n, perpCrossLiquidationTotals([{ market: capped, seat: flat(-500n) }]))).toBe('write-off');
+  });
+
+  it('withdrawals are bounded by free margin and realized collateral', () => {
+    const a = long(10_000n, 5n, 100n);
+    expect(perpCrossWithdrawable(perpCrossTotals([{ market, seat: a, mark: 200n }, { market, seat: flat(10_000n) }]))).toBe(10_300n);
+    /* market A at 130 ticks: free 26190, realized 9700 */
+    const t = perpCrossTotals([{ market, seat: a, mark: 260n }, { market, seat: flat(-300n) }]);
+    expect(t.free).toBe(26_190n);
+    expect(perpCrossWithdrawable(t)).toBe(9_700n);
+  });
+
+  it('haircuts a cross seat\'s positive unrealized pnl for initial margin only', () => {
+    const a = long(10_000n, 5n, 100n);
+    const cut = { ...market, crossUpnlHaircutBps: 5_000 };
+    expect(perpMarginEquity(cut, a, 220n)).toBe(10_000n + 4_850n);
+    expect(perpFreeCollateral(cut, a, 220n)).toBe(10_000n + 4_850n - 10_670n);
+    expect(perpEquity(cut, a, 220n)).toBe(19_700n);
+    /* an isolated seat is never cut */
+    expect(perpMarginEquity(cut, { ...a, cross: false }, 220n)).toBe(19_700n);
+    /* a loss is never cut */
+    expect(perpMarginEquity({ ...market, crossUpnlHaircutBps: 10_000 }, a, 180n)).toBe(10_000n - 9_700n);
+  });
+
+  it('accepts a cross maker fill only at or better than the mark', () => {
+    /* a bid at 95 ticks: fine with the mark at 100 or exactly 95, evicted with the mark at 80 */
+    expect(perpCrossMakerFillAllowed('buy', 190n, 200n)).toBe(true);
+    expect(perpCrossMakerFillAllowed('buy', 190n, 190n)).toBe(true);
+    expect(perpCrossMakerFillAllowed('buy', 190n, 160n)).toBe(false);
+    /* an ask: at or above the mark */
+    expect(perpCrossMakerFillAllowed('sell', 190n, 160n)).toBe(true);
+    expect(perpCrossMakerFillAllowed('sell', 190n, 200n)).toBe(false);
+  });
+
+  it('settles a cross seat\'s funding into a negative balance', () => {
+    const funding: PerpFunding = {
+      index: 2_000_000_000n, balance: 0n, lastRoundNs: 0n, lastSampleNs: 0n, premiumSum: 0n, sampleCount: 0, rate: 0n,
+      interestRate: 100, clampSmall: 500, clampBig: 40_000, premiumMultiplier: 100, impactNotional: 1n,
+    };
+    const settled = perpSettleFunding({ funding }, { ...long(0n, 5n, 100n), fundingSnapshot: 0n, fundingCarry: 0 });
+    expect(settled.paid).toBe(-10_000n);
+    expect(settled.seat.quantityQuote).toBe(-10_000n);
+    expect(settled.seat.entryNotional).toBe(5n * 97n * 200n);
+    expect(settled.badDebt).toBe(0n);
+  });
+
+  const marginAccount = key(40);
+  const arenaA = key(41);
+  const arenaB = key(42);
+  const arenaC = key(43);
+  const feedA = key(44);
+  const owner = key(45);
+  const vault = key(46);
+  const newVault = key(47);
+  const exchangeMeta = key(48);
+  const ctx = context([
+    [marginAccount, 9], [arenaA, 1], [arenaB, 2], [arenaC, 3], [feedA, 4], [owner, 5], [vault, 6], [newVault, 7], [exchangeMeta, 8],
+  ]);
+
+  it('margin record: 8 bytes plus every link padded to 8 bytes', async () => {
+    const three = await createPerpMarginRecordInstruction({
+      marginRecordIndex: 2,
+      marginAccountBytes: marginAccount,
+      exchangeMetaAccountBytes: exchangeMeta,
+      entries: [{ seatArenaAccountBytes: arenaA, oracleFeedAccountBytes: feedA }, { seatArenaAccountBytes: arenaB }, { seatArenaAccountBytes: arenaC }],
+    })(ctx);
+    expect([...three]).toEqual([
+      PERP_INSTRUCTION_MARGIN_RECORD, 2, 9, 0, 3, 0, 8, 0,
+      1, 0, 4, 0, 2, 0, 0xff, 0xff,
+      3, 0, 0xff, 0xff, 0, 0, 0, 0,
+    ]);
+    const none = await createPerpMarginRecordInstruction({ marginRecordIndex: 0, marginAccountBytes: marginAccount, exchangeMetaAccountBytes: exchangeMeta, entries: [] })(ctx);
+    expect([...none]).toEqual([PERP_INSTRUCTION_MARGIN_RECORD, 0, 9, 0, 0, 0, 8, 0]);
+    expect(() => createPerpMarginRecordInstruction({ marginRecordIndex: 4, marginAccountBytes: marginAccount, exchangeMetaAccountBytes: exchangeMeta, entries: [] })).toThrow(/marginRecordIndex/);
+  });
+
+  it('margin link, unlink, transfer, set vault and set cross layouts', async () => {
+    expect([...(await createPerpMarginLinkInstruction({ marginRecordIndex: 1, marketRecordIndex: 3 })(ctx))]).toEqual([
+      PERP_INSTRUCTION_MARGIN_LINK, 1, 3, 0, 0, 0, 0, 0,
+    ]);
+    expect([...(await createPerpMarginUnlinkInstruction({ marginRecordIndex: 1, marketRecordIndex: 3 })(ctx))]).toEqual([
+      PERP_INSTRUCTION_MARGIN_UNLINK, 1, 3, 0, 0, 0, 0, 0,
+    ]);
+    const transfer = await createPerpMarginTransferInstruction({ marginRecordIndex: 0, fromLink: 0, toLink: 2, ownerAccountBytes: owner, amount: 3_880n })(ctx);
+    expect(transfer.length).toBe(16);
+    expect([...transfer.subarray(0, 8)]).toEqual([PERP_INSTRUCTION_MARGIN_TRANSFER, 0, 0, 2, 5, 0, 0, 0]);
+    expect(new DataView(transfer.buffer, transfer.byteOffset).getBigUint64(8, true)).toBe(3_880n);
+    expect([...(await createPerpMarketSetVaultInstruction({ marketRecordIndex: 4, exchangeAdminAccountBytes: owner, newVaultAccountBytes: newVault })(ctx))]).toEqual([
+      PERP_INSTRUCTION_MARKET_SET_VAULT, 4, 5, 0, 7, 0, 0, 0,
+    ]);
+    expect([...(await createPerpMarketSetCrossInstruction({ marketRecordIndex: 1, crossUpnlHaircutBps: 5_000 })(ctx))]).toEqual([
+      PERP_INSTRUCTION_MARKET_SET_CROSS, 1, 0, 0, 0x88, 0x13, 0, 0,
+    ]);
+    expect(() => createPerpMarketSetCrossInstruction({ marketRecordIndex: 1, crossUpnlHaircutBps: 10_001 })).toThrow(/crossUpnlHaircutBps/);
+  });
+
+  it('margin account create carries the proof after a 16 byte header', async () => {
+    const proof = new Uint8Array([9, 8, 7]);
+    const bytes = await createPerpMarginAccountCreateInstruction({
+      ownerAccountBytes: owner, marginAccountBytes: marginAccount, vaultAccountBytes: vault, accountId: 258, proof,
+    })(ctx);
+    expect(bytes.length).toBe(19);
+    expect([...bytes]).toEqual([PERP_INSTRUCTION_MARGIN_ACCOUNT_CREATE, 0, 5, 0, 9, 0, 6, 0, 2, 1, 0, 0, 3, 0, 0, 0, 9, 8, 7]);
+  });
+
+  it('derives the margin account address like margin_account_create', async () => {
+    const id = new Uint8Array([7, 0, 0, 0]);
+    const seed = createHash('sha256').update(Buffer.from('perp_margin')).update(key(30)).update(key(31)).update(id).digest();
+    const expected = deriveProgramAddress({ programAddress: PERP_PROGRAM_ADDRESS, seed: new Uint8Array(seed), ephemeral: false });
+    const derived = await derivePerpMarginAccountAddress({ ownerAddress: address(30), vaultAddress: address(31), accountId: 7 });
+    expect(derived.address).toBe(expected.address);
+    expect([...derived.seed]).toEqual([...seed]);
+  });
+
+  it('parses the margin event (type 17)', () => {
+    const data = new Uint8Array(8 + 152);
+    const view = new DataView(data.buffer);
+    view.setBigUint64(0, BigInt(PERP_EVENT_MARGIN), true);
+    data[8] = 3; /* action: transfer */
+    data[9] = 2; /* link_cnt */
+    view.setUint32(12, 4, true); /* seat_idx */
+    view.setUint32(16, 6, true); /* to_seat_idx */
+    view.setUint32(20, 1, true); /* account_id */
+    view.setBigUint64(24, 3_880n, true); /* amount */
+    data.set(key(70), 32); /* margin_account */
+    data.set(key(71), 64); /* owner */
+    data.set(key(72), 96); /* market */
+    data.set(key(73), 128); /* to_market */
+    expect(parsePerpEvent(data)).toMatchObject({
+      variant: 'margin', action: 'transfer', linkCount: 2, seatIndex: 4, toSeatIndex: 6, accountId: 1, amount: 3_880n,
+      marginAccount: address(70), owner: address(71), market: address(72), toMarket: address(73),
     });
   });
 });

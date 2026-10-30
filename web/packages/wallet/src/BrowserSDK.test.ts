@@ -990,8 +990,6 @@ describe("BrowserSDK restore record", () => {
     expect(sdk.hasRememberedConnection()).toBe(true);
     expect(sdk.connection.hasRememberedConnection?.()).toBe(true);
 
-    /* An address-only hint cannot rebuild anything once the wallet's own
-       storage is gone; opening the signed-in shell on it would only bounce. */
     seedHint(storage);
     expect(sdk.hasRememberedConnection()).toBe(false);
     expect(queuedTelemetryEvents(sdk)).toContainEqual(

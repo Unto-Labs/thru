@@ -3,8 +3,7 @@ import { styledPart } from "../../lib/styled";
 import "../Popover/Popover.css";
 
 /**
- * PreviewCard — rich hover preview for a link/entity. Reuses the Popover look,
- * exposed as styled parts.
+ * PreviewCard — rich hover preview for a link/entity, exposed as styled parts.
  */
 export const PreviewCard = {
   Root: Base.Root,

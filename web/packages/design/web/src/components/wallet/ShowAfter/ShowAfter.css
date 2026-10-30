@@ -5,7 +5,6 @@
 .tds-show-after[data-shown] {
   opacity: 1;
 }
-/* Reduced motion: keep the fade, but short. */
 @media (prefers-reduced-motion: reduce) {
   .tds-show-after {
     transition-duration: var(--duration-fast);

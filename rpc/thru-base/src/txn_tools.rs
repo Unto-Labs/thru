@@ -1679,51 +1679,6 @@ mod tests {
         }
     }
 
-    /// The rate limited faucet withdrawal sorts its accounts, points the
-    /// forwarded withdraw at the right indices and requests one state unit
-    /// per bucket it creates.
-    #[test]
-    fn faucet_withdraw_rate_limited_layout() {
-        let (fp, rl, faucet, vault, recipient, policy) = (key(1), key(9), key(2), key(7), key(3), key(5));
-        let (b0, b1) = (key(8), key(4));
-        let tx = TransactionBuilder::build_faucet_withdraw_rate_limited(
-            fp,
-            rl,
-            faucet,
-            vault,
-            recipient,
-            policy,
-            vec![(b0, [0u8; 32], vec![1, 2, 3]), (b1, [0u8; 32], vec![])],
-            1234,
-            0,
-            1,
-            2,
-        )
-        .unwrap();
-        assert_eq!(tx.program, rl);
-        assert_eq!(tx.req_state_units, 1);
-        assert_eq!(tx.rw_accs.as_deref().unwrap(), &[recipient, b1, vault, b0]);
-        assert_eq!(tx.r_accs.as_deref().unwrap(), &[faucet, policy]);
-
-        let data = tx.instructions.as_deref().unwrap();
-        assert_eq!(&data[0..4], &crate::ratelimit::INSTRUCTION_CALL.to_le_bytes());
-        /* policy 7, target (faucet) 6, no authority, inner 18 bytes */
-        assert_eq!(&data[4..12], &[7, 0, 6, 0, 0xFF, 0xFF, FAUCET_WITHDRAW_RATE_LIMITED_SIZE as u8, 0]);
-        /* bucket entries: b0 at 5 with a 3-byte proof, b1 at 3 existing */
-        assert_eq!(&data[12..16], &[5, 0, 3, 0]);
-        assert_eq!(&data[48..52], &[3, 0, 0, 0]);
-        assert_eq!(&data[84..87], &[1, 2, 3]);
-        let inner = &data[87..];
-        assert_eq!(inner.len(), FAUCET_WITHDRAW_RATE_LIMITED_SIZE);
-        assert_eq!(&inner[0..4], &FAUCET_INSTRUCTION_WITHDRAW_RATE_LIMITED.to_le_bytes());
-        let field = |off: u16| u16::from_le_bytes([inner[off as usize], inner[off as usize + 1]]);
-        assert_eq!(field(FAUCET_WITHDRAW_RATE_LIMITED_FAUCET_IDX_OFFSET), 4);
-        assert_eq!(field(FAUCET_WITHDRAW_RATE_LIMITED_RECIPIENT_IDX_OFFSET), 2);
-        let amount_off = FAUCET_WITHDRAW_RATE_LIMITED_AMOUNT_OFFSET as usize;
-        assert_eq!(&inner[amount_off..amount_off + 8], &1234u64.to_le_bytes());
-        assert_eq!(field(FAUCET_WITHDRAW_RATE_LIMITED_POLICY_IDX_OFFSET), 7);
-    }
-
     /// Builders that create accounts request one unit per new account footprint.
     #[test]
     fn creating_builders_request_their_account_state_units() {
@@ -5612,58 +5567,6 @@ impl TransactionBuilder {
         Ok(tx.with_instructions(instruction_data))
     }
 
-    /// Build a rate limited faucet withdrawal: a rate limiter CALL that
-    /// forwards faucet WITHDRAW_RATE_LIMITED. `buckets` lists each policy
-    /// rule's bucket in rule order as (address, attested key, creation proof);
-    /// the proof is empty for buckets that already exist.
-    pub fn build_faucet_withdraw_rate_limited(
-        fee_payer: TnPubkey,
-        ratelimit_program: TnPubkey,
-        faucet_program: TnPubkey,
-        faucet_account: TnPubkey,
-        recipient_account: TnPubkey,
-        policy_account: TnPubkey,
-        buckets: Vec<(TnPubkey, [u8; 32], Vec<u8>)>,
-        amount: u64,
-        fee: u64,
-        nonce: u64,
-        start_slot: u64,
-    ) -> Result<Transaction> {
-        let creations = buckets.iter().filter(|(_, _, proof)| !proof.is_empty()).count();
-        let tx = Transaction::new(fee_payer, ratelimit_program, fee, nonce)
-            .with_start_slot(start_slot)
-            .with_expiry_after(100)
-            .with_compute_units(1_000_000)
-            .with_state_units(u16::try_from(creations)?)
-            .with_memory_units(10_000);
-
-        /* faucet account, recipient, buckets..., faucet program, policy */
-        let mut accounts = vec![(faucet_account, true), (recipient_account, true)];
-        accounts.extend(buckets.iter().map(|(addr, _, _)| (*addr, true)));
-        accounts.push((faucet_program, false));
-        accounts.push((policy_account, false));
-        let (tx, indices) = add_sorted_accounts(tx, &accounts);
-        let (faucet_idx, recipient_idx) = (indices[0], indices[1]);
-        let bucket_indices = &indices[2..2 + buckets.len()];
-        let (faucet_program_idx, policy_idx) = (indices[2 + buckets.len()], indices[3 + buckets.len()]);
-
-        let inner = build_faucet_withdraw_rate_limited_instruction(faucet_idx, recipient_idx, amount, policy_idx);
-        let call_buckets: Vec<_> = buckets
-            .into_iter()
-            .zip(bucket_indices)
-            .map(|((_, key, proof), &account_idx)| crate::ratelimit::CallBucket { account_idx, proof, key })
-            .collect();
-        let instruction_data = crate::ratelimit::build_call_instruction(
-            policy_idx,
-            faucet_program_idx,
-            crate::ratelimit::NO_ACCOUNT,
-            &call_buckets,
-            &inner,
-        )?;
-
-        Ok(tx.with_instructions(instruction_data))
-    }
-
     /// Build consensus validator program ACTIVATE transaction.
     ///
     /// This creates a transaction that activates a validator in the consensus system.
@@ -6908,40 +6811,6 @@ fn build_faucet_withdraw_instruction(
     instruction_data.extend_from_slice(&amount.to_le_bytes());
 
     Ok(instruction_data)
-}
-
-/// Faucet WITHDRAW_RATE_LIMITED discriminant
-/// (`TN_FAUCET_INSTRUCTION_WITHDRAW_RATE_LIMITED`).
-pub const FAUCET_INSTRUCTION_WITHDRAW_RATE_LIMITED: u32 = 3;
-/// Size of a WITHDRAW_RATE_LIMITED instruction: u32 discriminant followed by
-/// the packed tn_faucet_withdraw_rate_limited_args_t.
-pub const FAUCET_WITHDRAW_RATE_LIMITED_SIZE: usize = 18;
-/// Byte offsets of the WITHDRAW_RATE_LIMITED fields within the instruction
-/// (what a rate limit rule's `key_offset` refers to).
-pub const FAUCET_WITHDRAW_RATE_LIMITED_FAUCET_IDX_OFFSET: u16 = 4;
-pub const FAUCET_WITHDRAW_RATE_LIMITED_RECIPIENT_IDX_OFFSET: u16 = 6;
-pub const FAUCET_WITHDRAW_RATE_LIMITED_AMOUNT_OFFSET: u16 = 8;
-pub const FAUCET_WITHDRAW_RATE_LIMITED_POLICY_IDX_OFFSET: u16 = 16;
-
-/// Build faucet WITHDRAW_RATE_LIMITED instruction data
-/// (tn_faucet_withdraw_rate_limited_args_t).
-pub fn build_faucet_withdraw_rate_limited_instruction(
-    faucet_account_idx: u16,
-    recipient_account_idx: u16,
-    amount: u64,
-    policy_account_idx: u16,
-) -> Vec<u8> {
-    let mut instruction_data = vec![0u8; FAUCET_WITHDRAW_RATE_LIMITED_SIZE];
-    let mut put = |off: u16, bytes: &[u8]| {
-        let off = off as usize;
-        instruction_data[off..off + bytes.len()].copy_from_slice(bytes);
-    };
-    put(0, &FAUCET_INSTRUCTION_WITHDRAW_RATE_LIMITED.to_le_bytes());
-    put(FAUCET_WITHDRAW_RATE_LIMITED_FAUCET_IDX_OFFSET, &faucet_account_idx.to_le_bytes());
-    put(FAUCET_WITHDRAW_RATE_LIMITED_RECIPIENT_IDX_OFFSET, &recipient_account_idx.to_le_bytes());
-    put(FAUCET_WITHDRAW_RATE_LIMITED_AMOUNT_OFFSET, &amount.to_le_bytes());
-    put(FAUCET_WITHDRAW_RATE_LIMITED_POLICY_IDX_OFFSET, &policy_account_idx.to_le_bytes());
-    instruction_data
 }
 
 /// Build consensus validator ACTIVATE instruction data.

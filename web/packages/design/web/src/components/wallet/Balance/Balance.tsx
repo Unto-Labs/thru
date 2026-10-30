@@ -34,8 +34,7 @@ export interface BalanceProps {
 
 /**
  * Balance — a token balance row: a token disc with a chain badge, the token
- * name and chain, and a refreshable fiat value. Icons/colors come from the
- * built-in chain/token registry.
+ * name and chain, and a refreshable fiat value.
  */
 export const Balance = React.forwardRef<HTMLDivElement, BalanceProps>(
   function Balance(

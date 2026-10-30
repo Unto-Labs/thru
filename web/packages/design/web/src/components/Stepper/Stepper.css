@@ -1,5 +1,3 @@
-/* Stepper — dot progress for a short wizard. */
-
 .tds-stepper {
   display: inline-flex;
   align-items: center;
@@ -16,8 +14,6 @@
     background-color var(--duration-med) var(--ease-standard);
 }
 
-/* Done reads as a filled dot, not a check: at 6px a glyph is noise, and
-   the contrast step alone carries the distinction. */
 .tds-stepper__dot[data-state="complete"] {
   background: var(--color-text-disabled);
 }

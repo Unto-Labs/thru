@@ -323,14 +323,12 @@ describe("NativeSDK", () => {
     const urlTheme = () =>
       new URL(themed.getIframeSrc()).searchParams.get("tn_theme");
 
-    /* No OS reading yet: system draws light. */
     expect(urlTheme()).toBe("light");
     themed.setSystemTheme("dark");
     expect(themed.getTheme()).toBe("dark");
     expect(themed.getThemePreference()).toBe("system");
     expect(urlTheme()).toBe("dark");
 
-    /* A fixed choice ignores the OS. */
     themed.setTheme("light");
     themed.setSystemTheme("light");
     themed.setSystemTheme("dark");
@@ -646,7 +644,7 @@ describe("NativeSDK", () => {
           expiresAt: String(expiresAt),
           createdAt: String(expiresAt - 120),
         },
-        programAddress: "thru_passkey_manager",
+        programAddress: "wallet_program",
         instructionData: "AQID",
       }),
     );
@@ -705,68 +703,8 @@ describe("NativeSDK", () => {
     expect(sdk.isConnected()).toBe(false);
   });
 
-  it("sends connected passkey challenge signing requests through the wallet WebView", async () => {
-    sdk.destroy();
-    sdk = new NativeSDK({
-      walletUrl: "http://localhost:3000/embedded/native",
-      origin: "thru-mobile://token-dummy",
-    });
-    webView = new MockWebView();
-    sdk.attachWebView(webView);
-    const onShowRequested = vi.fn();
-    const onHideRequested = vi.fn();
-    sdk.setUiHandlers({ onShowRequested, onHideRequested });
-
-    const frameId = frameIdFor(sdk);
-    const connecting = sdk.connect();
-    sdk.onMessage(readyMessage(frameId));
-    const connectRequest = parseInjectedRequest(
-      await waitForInjectedRequest(webView),
-    );
-    const account = {
-      accountType: "thru",
-      address: "thru_test_address",
-      label: "Account",
-    };
-    sdk.onMessage(
-      responseMessage(frameId, connectRequest.id, {
-        accounts: [account],
-        selectedAccount: account,
-        status: "completed",
-      }),
-    );
-    await connecting;
-    webView.injected.length = 0;
-    onShowRequested.mockClear();
-    onHideRequested.mockClear();
-    const promise = sdk.thru.signPasskeyChallenge({
-      challenge: "challenge_base64url",
-      walletAddress: "thru_test_address",
-    });
-
-    sdk.onMessage(readyMessage(frameId));
-    await flush();
-
-    expect(onShowRequested).toHaveBeenCalledTimes(1);
-    const request = parseInjectedRequest(await waitForInjectedRequest(webView));
-    expect(request.type).toBe(
-      POST_MESSAGE_REQUEST_TYPES.SIGN_PASSKEY_CHALLENGE,
-    );
-    expect(request.payload).toEqual({
-      challenge: "challenge_base64url",
-      walletAddress: "thru_test_address",
-    });
-
-    const result = {
-      signatureR: "01",
-      signatureS: "02",
-      authenticatorData: "authenticator_data_base64",
-      clientDataJSON: "client_data_json_base64",
-    };
-    sdk.onMessage(responseMessage(frameId, request.id, result));
-
-    await expect(promise).resolves.toEqual(result);
-    expect(onHideRequested).toHaveBeenCalledTimes(1);
+  it("does not expose raw passkey challenge signing", () => {
+    expect(sdk.thru).not.toHaveProperty("signPasskeyChallenge");
   });
 
   it("passes app metadata through connect", async () => {
@@ -1419,6 +1357,41 @@ describe("NativeSDK", () => {
       selectedAccount: state.selectedAccount,
     });
     expect(storage.values.has(storageKey)).toBe(false);
+  });
+
+  it("keeps the saved connection when the wallet WebView crashes mid-connect", async () => {
+    const storage = new MockStorage();
+    const storageKey = "test-connection";
+    storage.setItem(storageKey, JSON.stringify({ version: 1, saved: true }));
+    sdk.destroy();
+    sdk = new NativeSDK({
+      walletUrl: "http://localhost:3000/embedded",
+      origin: "thru-mobile://token-dummy",
+      storage,
+      storageKey,
+      autoRestore: false,
+    });
+    webView = new MockWebView();
+    sdk.attachWebView(webView);
+    const disconnects: unknown[] = [];
+    sdk.on("disconnect", (event) => disconnects.push(event));
+
+    const promise = sdk.connect({
+      metadata: { appId: "token_dummy_app", appName: "Token Dummy App" },
+    });
+    sdk.onMessage(readyMessage(frameIdFor(sdk)));
+    await flush();
+    sdk.rejectPendingRequests(
+      "The wallet stopped unexpectedly. Try again.",
+      ErrorCode.UNKNOWN_ERROR,
+    );
+
+    await expect(promise).rejects.toMatchObject({
+      code: ErrorCode.UNKNOWN_ERROR,
+      message: "The wallet stopped unexpectedly. Try again.",
+    });
+    expect(storage.values.has(storageKey)).toBe(true);
+    expect(disconnects).toEqual([]);
   });
 
   it("keeps legacy native session state cleared when sign-in consent is denied", async () => {

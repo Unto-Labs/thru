@@ -1,6 +1,24 @@
 # @thru/programs
 
-Typed TypeScript clients for Thru's core on-chain programs: token, AMM, CLOB, oracle, multicall, passkey manager, and others.
+Typed TypeScript clients for Thru's core on-chain programs: token, AMM, CLOB, oracle, multicall, Wallet Program, and others.
+
+## Perpetual futures (`@thru/programs/perps`)
+
+`@thru/programs/perps` is the SDK of the Thru perp program:
+
+- `createPerpsClient`, which reads through the perps indexer or RPC;
+- transaction builders for isolated and cross-margined seats;
+- keypair, wallet and signing session signers;
+- sending on the fast confirm path, with named program errors;
+- unit helpers;
+- an action catalog with JSON Schemas for LLM agents.
+
+It also decodes every ABI version of the program into one domain model and
+detects a deployment's version from its program hash.
+`@thru/programs/perp` is an alias of the same module.
+
+See [src/perp/README.md](./src/perp/README.md) for the SDK and
+[src/perp/VERSIONS.md](./src/perp/VERSIONS.md) for ABI versions.
 
 ## Managed program primitives
 

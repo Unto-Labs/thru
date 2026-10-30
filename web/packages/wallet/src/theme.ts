@@ -1,6 +1,5 @@
-/* Host color-scheme resolution shared by the browser and native SDKs. Free of
- * DOM and React Native imports: `matchMedia` is read off globalThis when it
- * exists, so this also loads (as a no-op watcher) under React Native. */
+/* `matchMedia` is read off globalThis, so this also loads under React Native,
+   where it is absent and the watcher is a no-op. */
 
 import type { WalletTheme, WalletThemePreference } from './protocol';
 

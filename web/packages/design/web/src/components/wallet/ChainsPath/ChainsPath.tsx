@@ -9,11 +9,9 @@ const ArrowRight = (p: React.SVGProps<SVGSVGElement>) => (
 );
 
 export interface ChainMeta {
-  /** Display name. */
   name: string;
   /** Single-character glyph for the disc. */
   glyph?: string;
-  /** Optional accent color. */
   color?: string;
 }
 
@@ -38,7 +36,7 @@ function Disc({ chain }: { chain: ChainMeta }) {
 /**
  * ChainsPath — a source → destination route across chains. With a single chain
  * it renders just that disc + name; with several, the sources overlap into a
- * stack, then an arrow, then the destination. Presentational; data via props.
+ * stack, then an arrow, then the destination.
  */
 export const ChainsPath = React.forwardRef<HTMLDivElement, ChainsPathProps>(
   function ChainsPath({ chains, className }, ref) {

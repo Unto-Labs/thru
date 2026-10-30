@@ -11,13 +11,12 @@ import type {
   PackageId,
   ResolvedPackage,
   ResolutionResult,
-  AbiMetadata,
   AbiFile,
   RpcEndpoints,
   RevisionSpec,
 } from "./types";
 import { ResolutionError, DEFAULT_RPC_ENDPOINTS } from "./types";
-import { OnchainFetcher, type OnchainFetcherConfig } from "./onchainFetcher";
+import { OnchainFetcher } from "./onchainFetcher";
 
 export interface ResolverConfig {
   onchainFetcher?: OnchainFetcher;
@@ -115,7 +114,7 @@ class ImportResolver {
     }
 
     /* Check for version conflict: same package name, different version */
-    for (const [key, pkg] of this.visited) {
+    for (const pkg of this.visited.values()) {
       if (pkg.id.packageName === packageId.packageName && pkg.id.version !== packageId.version) {
         throw new ResolutionError(
           "VERSION_CONFLICT",

@@ -1,10 +1,6 @@
-/**
- * Small kit pieces: Field (48pt mono input), Cell (56pt list row), Badge
- * (11pt mono chip), BalanceHero (11 mono label over 44pt display), Card
- * (hairline panel), SectionLabel. All colors follow the active theme.
- */
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import {
+  Animated,
   Platform,
   Pressable,
   Text,
@@ -17,7 +13,8 @@ import {
   type TextStyle,
   type ViewStyle,
 } from "react-native";
-import { font, text, touch } from "./tokens";
+import { font, space, text, touch } from "./tokens";
+import { pulseLoop } from "./Spinner";
 import { makeStyles, useThemeColors, type ThemeColors } from "./theme";
 import { IconChevronRight } from "./Icons";
 
@@ -26,8 +23,8 @@ export function Card({ children, style }: { children: ReactNode; style?: StylePr
   return <View style={[styles.card, style]}>{children}</View>;
 }
 
-/* `muted` is for labels that carry content, such as the Activity feed's day
-   labels; subtle (fgSubtle) is 2.5:1 on light and only fits decoration. */
+/* `muted` is for labels that carry content; fgSubtle is 2.5:1 on light and
+   only fits decoration. */
 export function SectionLabel({
   children,
   tone = "subtle",
@@ -46,6 +43,57 @@ export function SectionLabel({
   );
 }
 
+/** A section header's trailing link ("View all"): the label's type in the
+    accent, with an arrow. */
+export function SectionAction({
+  label,
+  accessibilityLabel,
+  onPress,
+}: {
+  label: string;
+  accessibilityLabel: string;
+  onPress: () => void;
+}) {
+  const styles = useStyles();
+  const colors = useThemeColors();
+  return (
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={styles.sectionActionTarget}
+    >
+      <Text style={[styles.sectionLabel, { color: colors.accent }]}>{label} →</Text>
+    </Pressable>
+  );
+}
+
+/* One clock for every skeleton on screen, so blocks that mount at different
+   times pulse together. It runs while any skeleton is mounted. */
+const skeletonOpacity = new Animated.Value(1);
+let skeletonUsers = 0;
+let skeletonLoop: Animated.CompositeAnimation | null = null;
+
+/** The opacity every skeleton block pulses on. Opacity is non-spatial, so it
+    pulses under reduced motion too, as the Spinner's pulse does. */
+export function useSkeletonPulse(): Animated.Value {
+  useEffect(() => {
+    skeletonUsers += 1;
+    if (skeletonUsers === 1) {
+      skeletonLoop = pulseLoop(skeletonOpacity);
+      skeletonLoop.start();
+    }
+    return () => {
+      skeletonUsers -= 1;
+      if (skeletonUsers > 0) return;
+      skeletonLoop?.stop();
+      skeletonLoop = null;
+      skeletonOpacity.setValue(1);
+    };
+  }, []);
+  return skeletonOpacity;
+}
+
 export interface SkeletonProps {
   height: number;
   width?: DimensionValue;
@@ -55,12 +103,13 @@ export interface SkeletonProps {
 /** Layout-preserving placeholder for content that has not loaded yet. */
 export function Skeleton({ height, width = "100%", style }: SkeletonProps) {
   const styles = useStyles();
+  const opacity = useSkeletonPulse();
   return (
-    <View
+    <Animated.View
       accessible={false}
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
-      style={[styles.skeleton, { height, width }, style]}
+      style={[styles.skeleton, { height, width }, style, { opacity }]}
     />
   );
 }
@@ -116,11 +165,9 @@ export function Cell({
       accessibilityHint={accessibilityHint}
       accessibilityLabel={accessibilityLabel}
       accessibilityRole={interactive ? "button" : undefined}
-      accessibilityState={
-        interactive
-          ? { ...accessibilityState, disabled: Boolean(disabled) }
-          : accessibilityState
-      }
+      accessibilityState={accessibilityState}
+      /* react-native-web drops accessibilityState; expanded is the one state valid on a button. */
+      aria-expanded={accessibilityState?.expanded}
       disabled={!interactive || Boolean(disabled)}
       onPress={onPress}
       style={({ pressed }) => [
@@ -148,8 +195,8 @@ export function Cell({
   );
 }
 
-/* `error` is solid: brick fill, bg text (4.9:1 light, 7.3:1 dark). The `brand`
-   tone, brick on brickSoft, is 3.9:1 and too faint to say "failed". */
+/* `error` is solid: the `brand` tone, brick on brickSoft, is 3.9:1 and too
+   faint to say "failed". */
 export type BadgeTone = "neutral" | "success" | "warn" | "brand" | "error";
 
 function badgeTone(c: ThemeColors, tone: BadgeTone): { bg: string; fg: string } {
@@ -180,11 +227,15 @@ export function Badge({ tone = "neutral", children }: { tone?: BadgeTone; childr
 export function BalanceHero({
   label,
   value,
+  unavailable = false,
   chips,
   style,
 }: {
   label: string;
-  value: string;
+  /** Null while it loads: a skeleton holds the value's place. */
+  value: string | null;
+  /** The value is a status such as "Unavailable", not money. */
+  unavailable?: boolean;
   chips?: ReactNode;
   style?: StyleProp<ViewStyle>;
 }) {
@@ -192,9 +243,13 @@ export function BalanceHero({
   return (
     <View style={[styles.hero, style]}>
       <Text style={styles.heroLabel}>{label}</Text>
-      <Text style={styles.heroValue} numberOfLines={1}>
-        {value}
-      </Text>
+      {value === null ? (
+        <Skeleton height={48} width="64%" />
+      ) : (
+        <Text style={[styles.heroValue, unavailable ? styles.heroUnavailable : null]} numberOfLines={1}>
+          {value}
+        </Text>
+      )}
       {chips ? <View style={styles.heroChips}>{chips}</View> : null}
     </View>
   );
@@ -222,9 +277,8 @@ export interface SegmentedProps<T extends string> {
 }
 
 /**
- * One square group with shared hairlines — not N separate boxes. The selected
- * segment inverts to the foreground fill; 44pt tall so every segment is a
- * full hit target.
+ * One square group with shared hairlines. The selected segment inverts to
+ * the foreground fill; every segment is a full hit target.
  */
 export function Segmented<T extends string>({
   accessibilityLabel,
@@ -244,7 +298,7 @@ export function Segmented<T extends string>({
           <Pressable
             key={option.value}
             accessibilityRole="tab"
-            accessibilityState={{ selected, disabled: Boolean(disabled) }}
+            aria-selected={selected}
             disabled={disabled}
             onPress={() => onChange(option.value)}
             style={({ pressed }) => [
@@ -278,6 +332,7 @@ const useStyles = makeStyles((c) => ({
     textTransform: "uppercase",
     color: c.fgSubtle,
   },
+  sectionActionTarget: { paddingVertical: space[4], marginVertical: -space[4] },
   skeleton: {
     backgroundColor: c.bgInset,
   },
@@ -303,10 +358,8 @@ const useStyles = makeStyles((c) => ({
   cellBody: { flex: 1, gap: 2 },
   cellTitle: { fontFamily: font.sansMedium, fontSize: text.base, color: c.fg },
   cellSubtitle: { fontFamily: font.mono, fontSize: text.sm, color: c.fgMuted },
-  /* The right slot gets its own box so an accessory that pins itself (Badge's
-     alignSelf flex-start, kept for chip and title rows) still centres in the
-     row; row + gutter lays out a multi-node accessory as before, and it
-     shrinks like the bare accessory did when the row runs out of room. */
+  /* Its own box so an accessory that pins itself (Badge's alignSelf
+     flex-start) still centres in the row. */
   cellRight: { flexDirection: "row", alignItems: "center", gap: touch.gutter, flexShrink: 1, minWidth: 0 },
   badge: { paddingHorizontal: 8, paddingVertical: 4, alignSelf: "flex-start" },
   badgeText: { fontFamily: font.monoMedium, fontSize: text.xxs, letterSpacing: 0.5, textTransform: "uppercase" },
@@ -315,9 +368,8 @@ const useStyles = makeStyles((c) => ({
     borderWidth: 1,
     borderColor: c.borderStrong,
   },
-  /* Equal while every label fits. On the web a segment never shrinks below
-     its label, so a long one ("Transfers" at 320) takes the room a short one
-     ("All") leaves instead of truncating. */
+  /* On the web a segment never shrinks below its label, so a long one takes
+     the room a short one leaves instead of truncating. */
   segment: {
     flex: 1,
     height: touch.hitMin,
@@ -340,7 +392,7 @@ const useStyles = makeStyles((c) => ({
     fontSize: text.xxs,
     letterSpacing: 1.2,
     textTransform: "uppercase",
-    color: c.fgSubtle,
+    color: c.fgMuted,
     marginBottom: 8,
   },
   heroValue: {
@@ -350,6 +402,8 @@ const useStyles = makeStyles((c) => ({
     lineHeight: 48,
     color: c.fg,
   },
+  /* Keeps the 48 line, so the hero holds its height between states. */
+  heroUnavailable: { color: c.fgMuted, fontSize: text.lg, letterSpacing: 0 },
   heroChips: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 },
   status: { fontFamily: font.mono, fontSize: text.sm, minHeight: 20 },
 }));

@@ -1,12 +1,7 @@
-/**
- * Entering an amount: the big centred figure with its currency sign leading,
- * and the in-sheet numeric keypad that feeds it.
- *
- * The keypad is used in place of the system decimal pad on phones: in a Home
- * Screen web app the system pad does not reliably resize the viewport, it
- * covers the controls under the amount, and its decimal key follows the
- * locale. A wide layout has a real keyboard, so there the figure takes typed
- * input instead (`editable`).
+/*
+ * The keypad replaces the system decimal pad on phones: in a Home Screen web
+ * app that pad does not reliably resize the viewport, and its decimal key
+ * follows the locale.
  */
 import { type RefObject, useEffect, useRef, useState } from "react";
 import {
@@ -28,15 +23,10 @@ import type { FieldHandle } from "./AddressField";
 /* The figure starts shrinking past this many characters, sign included. */
 const AMOUNT_FULL_SIZE_CHARS = 9;
 const AMOUNT_MIN_SIZE = text.xxl;
-/* A figure with the screen to itself - Send's amount and review steps on a
-   phone - reads larger. */
 const AMOUNT_SIZES = { default: text.display, large: 64 } as const;
 
 /* A phone sheet's SheetBody shorter than this (an iPhone SE in a Safari tab
-   leaves ~400pt) draws the amount compact: its own line plus 4pt above and
-   below, in place of the 120pt it takes elsewhere, so the keypad under it
-   keeps its size. Not in the dialog, whose body is only as tall as its
-   content and scrolls when the window is short. */
+   leaves ~400pt) draws the amount compact. */
 const COMPACT_BODY_HEIGHT = 440;
 
 function amountFontSize(chars: number, full: number): number {
@@ -201,16 +191,11 @@ export interface KeypadProps {
   decimalLabel?: string;
 }
 
-/* What the keypad can give up when the SheetBody around it is too short:
-   12pt from each key (56 -> the 44pt touch minimum), then its 8pt top margin. */
 const KEYPAD_KEY_GIVE = (touch.controlLg - touch.hitMin) * KEY_ROWS.length;
 const KEYPAD_MARGIN_TOP = space[2];
 
-/* The keypad's metrics in the SheetBody around it. The body's overflow
-   accumulates into a squeeze, taken from the keys first and then the top
-   margin; past that the body scrolls. A different body height (a rotation, a
-   resize) starts from the full size again, so the keys grow back when there
-   is room. Outside a SheetBody the keypad keeps its full size. */
+/* The body's overflow accumulates into a squeeze, taken from the keys first
+   and then the top margin. A new body height starts from full size again. */
 function useFittedKeypad(): { keyHeight: number; marginTop: number } {
   const fit = useSheetBodyFit();
   const [squeeze, setSqueeze] = useState(0);
@@ -243,10 +228,8 @@ function useFittedKeypad(): { keyHeight: number; marginTop: number } {
 }
 
 /** A 3 x 4 numeric keypad: digits, a decimal point and delete. In a
- *  `SheetBody` too short for its page (an iPhone SE in a Safari tab), the
- *  keys give up height first, down to the 44pt touch minimum, then the
- *  keypad's top margin, so the whole keypad stays in view before the body
- *  has to scroll. */
+ *  `SheetBody` too short for its page, the keys give up height first, down
+ *  to the touch minimum, then the top margin, before the body scrolls. */
 export function Keypad({ onKey, disabled = false, decimalLabel = "." }: KeypadProps) {
   const styles = useStyles();
   const colors = useThemeColors();
@@ -345,8 +328,7 @@ const useStyles = makeStyles((c) => ({
     marginLeft: 2,
     width: 2,
   },
-  /* Laid over the figure so a click on it focuses the field; drawn
-     transparent because the figure is what reads. */
+  /* Laid over the figure so a click on it focuses the field. */
   hiddenInput: {
     bottom: 0,
     color: "transparent",

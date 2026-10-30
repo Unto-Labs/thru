@@ -1,37 +1,10 @@
-/**
- * "Mark Draw-On" loading direction — restraint over telemetry.
- *
- * Leans on kit primitives throughout — tokens, theming, `Button`, the wings
- * path — and keeps the kit's peer-dep discipline: RN `Animated` only, never
- * reanimated.
- *
- * The Thru wings glyph strokes itself on over 900ms and then cross-fades from a
- * hairline outline to a solid fill. One sentence of Inter Tight sits under it.
- * Nothing else is on screen until the wait misbehaves: at 2.4s a thin accent
- * arc starts orbiting the mark, and at 8s the copy admits the delay and offers
- * a retry. The escalation ladder is the whole idea — a splash that stays quiet
- * when things are normal and only spends pixels when it owes the user one.
- *
- * Animation drivers are split deliberately:
- *   - transforms and View opacity run on the native driver;
- *   - `strokeDashoffset`, `strokeOpacity` and `fillOpacity` are SVG attributes,
- *     which the native driver cannot touch, so the draw and the stroke-to-fill
- *     cross-fade run with `useNativeDriver: false` on an animated `Path`.
- * Those are separate `Animated.Value`s on purpose: a single value may never be
- * shared between a native-driven and a JS-driven animation.
- *
- * The resting state is the monochrome `WINGS_MARK_PATH` in the theme
- * foreground, not the red `BrandTile` lockup. The stroke-to-fill cross-fade
- * only reads as "the mark solidifying" if the thing that fills in is the same
- * silhouette that was just drawn; a rounded red tile introduces a shape nobody
- * drew and inverts the glyph from dark-on-background to a light knockout mid
- * transition. The tile is also the iOS launch image the user saw a moment
- * earlier, so repeating it here spends the brand hit twice.
- */
+/* An `Animated.Value` may never be shared between a native-driven and a
+   JS-driven animation, so each driver gets its own values. */
 import { useEffect, useState } from 'react';
-import { AccessibilityInfo, Animated, Easing, Text, View } from 'react-native';
+import { Animated, Easing, Text, View } from 'react-native';
 import Svg, { Path } from 'react-native-svg';
 import { font, space, text } from '../tokens';
+import { useReduceMotion } from '../reduceMotion';
 import { makeStyles, useThemeColors } from '../theme';
 import { Button } from '../Button';
 import { Spinner } from '../Spinner';
@@ -44,45 +17,24 @@ import {
   WINGS_MARK_TRIM_VIEW_BOX,
 } from '../BrandTile';
 
-/* Motion ladder, in ms. */
 const DRAW_MS = 900;
 const FILL_MS = 220;
 const HANDOFF_MS = 200;
 const ORBIT_AFTER_MS = 2400;
 const ESCALATE_AFTER_MS = 8000;
-/* Anything that fades purely to acknowledge a state change. */
 const REVEAL_MS = 200;
 
-/* Hairline weights, in pt. */
 const MARK_STROKE_PT = 1.5;
 
-/* The orbit has to clear the glyph. Flattening WINGS_MARK_PATH puts its true
-   circumscribed radius at 54.8pt for an 88pt mark — well inside the 59.2pt
-   bounding-box half-diagonal, because the wings do not reach their box's
-   corners. A 120pt orbit gives a 59pt arc radius, so 4.2pt of air. Reserving
-   the box up front means the arc's arrival at 2.4s costs no layout shift. */
+/* Clears the glyph's 54.8pt circumscribed radius at an 88pt mark. */
 const ORBIT_SIZE = 120;
 const MARK_SIZE = 88;
 
-/* The glyph's height in viewBox user units, read off the TRIMMED box (332.46,
-   not the tile's 400) so the pt-to-user-unit conversion below still yields a
-   true 1.5pt hairline, and so this survives a change to the brand asset. */
 const VIEW_BOX_HEIGHT = Number(WINGS_MARK_TRIM_VIEW_BOX.split(' ')[3]);
 
-/* react-native-svg exposes no getTotalLength() on iOS, so the dash length is a
-   measured constant rather than something we can ask the renderer for.
-   WINGS_MARK_PATH is 11 subpaths totalling 4192.9 user units, the longest of
-   which is 853.7 and the second 836.6 — the two wings, which is why this mark
-   draws coherently: 40% of the ink is in two near-equal strokes that finish
-   together at the very end. Both rasterisers under react-native-svg restart the
-   dash pattern at every subpath (CoreGraphics inherits PostScript `setdash`
-   semantics; Skia restarts per contour), so the number that governs the reveal
-   is the longest subpath, not the sum. 880 clears it with ~3% headroom: the
-   glyph is completely unpainted at offset 880 and completely painted by offset
-   ~26, i.e. the reveal uses 97% of the 900ms and leaves no dead tail. Using the
-   4193 sum instead would finish the draw a quarter of the way in and then hold
-   a static mark for 675ms. This constant is specific to this path — it was 560
-   for the dove in BrandMark.tsx and does not carry over. */
+/* react-native-svg has no getTotalLength() on iOS, so this is measured. Both
+   rasterisers (CoreGraphics, Skia) restart the dash at every subpath, so it
+   covers the longest subpath of WINGS_MARK_PATH (853.7), not the sum. */
 const MARK_DASH = 880;
 const MARK_DASH_ARRAY = [MARK_DASH, MARK_DASH];
 
@@ -93,38 +45,10 @@ const RETRY_LABEL = 'Try again';
    styles, so this component is animated with useNativeDriver: false. */
 const AnimatedPath = Animated.createAnimatedComponent(Path);
 
-/**
- * Tracks the OS "Reduce Motion" switch. Local to this file on purpose: it is a
- * generic name, and this prototype is deliberately self-contained.
- */
-function useReduceMotion(): boolean {
-  const [reduceMotion, setReduceMotion] = useState(false);
-
-  useEffect(() => {
-    let alive = true;
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then((enabled) => {
-        if (alive) setReduceMotion(enabled);
-      })
-      .catch(() => {
-        /* Treat an unavailable a11y bridge as "motion is fine". */
-      });
-    const sub = AccessibilityInfo.addEventListener('reduceMotionChanged', (enabled) => {
-      if (alive) setReduceMotion(enabled);
-    });
-    return () => {
-      alive = false;
-      sub.remove();
-    };
-  }, []);
-
-  return reduceMotion;
-}
-
 export interface MarkDrawProps {
   /** Height in pt; width follows WINGS_MARK_TRIM_ASPECT. */
   size?: number;
-  /** Defaults to the theme foreground, so the mark inverts for free. */
+  /** Defaults to the theme foreground. */
   color?: string;
   /**
    * Play the draw-on. Pass `false` for a mark that is simply present — the same
@@ -133,12 +57,7 @@ export interface MarkDrawProps {
   drawing?: boolean;
 }
 
-/**
- * The logomark stroking itself on and then filling. The outline and the fill
- * are two stacked copies of the same path; the draw runs the dash offset down
- * to zero, then the fill rises as the stroke retires and the mark settles from
- * 0.98 to 1.0.
- */
+/** The logomark stroking itself on, then filling. */
 export function MarkDraw({ size = MARK_SIZE, color, drawing = true }: MarkDrawProps) {
   const colors = useThemeColors();
   const reduceMotion = useReduceMotion();
@@ -153,7 +72,6 @@ export function MarkDraw({ size = MARK_SIZE, color, drawing = true }: MarkDrawPr
 
   useEffect(() => {
     if (!animate) {
-      /* Jump to the resting state: no stroke, full fill, no scale. */
       draw.setValue(1);
       fill.setValue(1);
       settle.setValue(1);
@@ -195,8 +113,7 @@ export function MarkDraw({ size = MARK_SIZE, color, drawing = true }: MarkDrawPr
     return () => animation.stop();
   }, [animate, draw, fill, settle]);
 
-  /* 1.5pt expressed in viewBox units, so the hairline reads as 1.5pt at any
-     rendered size instead of scaling with the mark. */
+  /* In viewBox units, so the hairline does not scale with the mark. */
   const strokeWidth = (MARK_STROKE_PT * VIEW_BOX_HEIGHT) / size;
 
   const strokeDashoffset = draw.interpolate({
@@ -213,8 +130,6 @@ export function MarkDraw({ size = MARK_SIZE, color, drawing = true }: MarkDrawPr
       importantForAccessibility="no-hide-descendants"
       style={{ transform: [{ scale }] }}
     >
-      {/* Trimmed box: the wings sit low and right inside their 400 tile, so the
-          full box would centre the padding rather than the glyph. */}
       <Svg
         width={size * WINGS_MARK_TRIM_ASPECT}
         height={size}
@@ -227,8 +142,7 @@ export function MarkDraw({ size = MARK_SIZE, color, drawing = true }: MarkDrawPr
           fill="none"
           stroke={tint}
           strokeWidth={strokeWidth}
-          /* Butt caps: a square or round cap can paint a dot for a zero-length
-             dash, which would leave the mark faintly visible at offset 880. */
+          /* A square or round cap paints a dot for a zero-length dash. */
           strokeLinecap="butt"
           strokeDasharray={MARK_DASH_ARRAY}
           strokeDashoffset={strokeDashoffset}
@@ -246,9 +160,9 @@ export interface SplashStateProps {
   onRetry?: () => void;
   /** Runs the handoff: the mark scales to 1.04 and fades over 200ms. */
   handoff?: boolean;
-  /** Escape hatch for prototypes and tests; the default is the spec's 2.4s. */
+  /** Defaults to 2400ms. */
   orbitAfterMs?: number;
-  /** Escape hatch for prototypes and tests; the default is the spec's 8.0s. */
+  /** Defaults to 8000ms. */
   escalateAfterMs?: number;
 }
 
@@ -286,7 +200,6 @@ export function SplashState({
   useEffect(() => {
     if (!orbiting) return;
     if (reduceMotion) {
-      /* No orbit at all under reduce motion; only the copy swap survives. */
       orbitIn.setValue(0);
       return;
     }
@@ -344,8 +257,8 @@ export function SplashState({
       <Animated.View
         style={[styles.stack, { opacity: exitOpacity, transform: [{ scale: exitScale }] }]}
       >
-        {/* One accessible node for the whole indeterminate wait; the retry
-            button stays outside it so VoiceOver can still reach it. */}
+        {/* The retry stays outside this accessible node so VoiceOver can
+            reach it. */}
         <View
           accessible
           accessibilityRole="progressbar"
@@ -393,8 +306,6 @@ const useStyles = makeStyles((c) => ({
   },
   orbitLayer: { position: 'absolute' },
   copy: {
-    /* The orbit box already contributes 16pt of air below the 88pt mark, so
-       8 + 16 lands the spec's 24pt optical gap. */
     marginTop: space[2],
     fontFamily: font.sans,
     fontSize: text.md,

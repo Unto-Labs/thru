@@ -302,7 +302,7 @@ function ActivityKit({
       <SectionLabel style={styles.subsection}>Couldn't load</SectionLabel>
       <View style={styles.frame}>
         <SheetHeader icon={IconReceipt} title="Details" actions={<IconButton icon={IconClose} accessibilityLabel="Close" onPress={() => undefined} />} />
-        <InlineError message="Couldn't load this transaction." actionLabel="Try again" onAction={() => undefined} />
+        <InlineError message="Couldn't load this transaction." onAction={() => undefined} />
         <MetaTable variant="detail" rows={[{ label: 'Signature', value: '3nVq…8Hd2', copy: true }]} onCopy={() => undefined} />
         {thruScan}
       </View>
@@ -326,7 +326,7 @@ function ActivityKit({
           ]}
           active="activity"
           onChange={() => undefined}
-          account={{ name: 'Main', address: 'ta1kqVxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx9fq2' }}
+          account={{ name: 'Main', address: 'ta1k…9fq2' }}
         />
       </View>
     </Screen>

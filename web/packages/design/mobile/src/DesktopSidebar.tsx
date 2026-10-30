@@ -1,16 +1,3 @@
-/**
- * The Desktop shell's sidebar (the Activity handoff, §7; design/History.dc.html
- * section 06), for web at the wide layout:
- * - 224 wide, a hairline at its right. The handoff drew 240; 224 leaves the
- *   page 416 at the app's 640 breakpoint and 800 at 1024, for two columns;
- * - the 64pt lockup (disc 24 and wordmark) over a hairline;
- * - nav rows of 44: a 20 glyph and a 15/500 label in fgMuted, the active row
- *   in fg on bgMuted with a 2pt brick bar at its left edge;
- * - the account row of 64 at the bottom: a 32 avatar, the account's name and
- *   its shortened address.
- * The page column beside it is the app's: centred, 40 side padding, capped
- * per screen (880 for a feed, 800 for a detail).
- */
 import { useState } from "react";
 import { Platform, Pressable, Text, View, type StyleProp, type ViewStyle } from "react-native";
 import { BrandLockup } from "./BrandWordmark";
@@ -30,7 +17,8 @@ export interface DesktopSidebarProps<K extends string> {
   items: readonly TabItem<K>[];
   active: K;
   onChange: (key: K) => void;
-  /** The signed-in account, for the row at the bottom. */
+  /** The signed-in account, for the row at the bottom. `address` is shown as
+      given, so the app passes it already shortened. */
   account?: { name: string; address: string } | null;
   /** Which rows tick on iOS web when pressed (see TapHaptic). */
   tapHaptic?: (key: K) => boolean;
@@ -38,11 +26,6 @@ export interface DesktopSidebarProps<K extends string> {
 }
 
 const pointer = Platform.OS === "web" ? ({ cursor: "pointer" } as unknown as ViewStyle) : null;
-
-/* ta1kqV…9fq2: six, an ellipsis, four. */
-function sidebarAddress(address: string): string {
-  return address.length <= 11 ? address : `${address.slice(0, 6)}…${address.slice(-4)}`;
-}
 
 function SidebarRow<K extends string>({
   item,
@@ -63,7 +46,7 @@ function SidebarRow<K extends string>({
     <Pressable
       accessibilityLabel={item.label}
       accessibilityRole="tab"
-      accessibilityState={{ selected: active }}
+      aria-selected={active}
       onHoverIn={() => setHovered(true)}
       onHoverOut={() => setHovered(false)}
       onPress={onPress}
@@ -109,7 +92,7 @@ export function DesktopSidebar<K extends string>({
       {account ? (
         <View
           accessible
-          accessibilityLabel={`${account.name}, ${sidebarAddress(account.address)}`}
+          accessibilityLabel={`${account.name}, ${account.address}`}
           style={styles.account}
         >
           <View style={styles.avatar}>
@@ -120,7 +103,7 @@ export function DesktopSidebar<K extends string>({
               {account.name}
             </Text>
             <Text style={styles.accountAddress} numberOfLines={1}>
-              {sidebarAddress(account.address)}
+              {account.address}
             </Text>
           </View>
         </View>
@@ -138,12 +121,12 @@ const useStyles = makeStyles((c) => ({
     borderRightColor: c.border,
   },
   lockup: {
-    height: 64,
+    height: 76,
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: c.bgMuted,
+    borderBottomColor: c.border,
   },
   nav: { paddingVertical: 12 },
   row: {

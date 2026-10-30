@@ -1,15 +1,4 @@
-/* Add-passkey-to-account transaction builder, lifted from
-   `web/wallet-auth-manager/app/page.tsx` (`runValidateThen`,
-   `handleSubmitAddPasskey`) so the wallet's `/embedded` post-connect
-   step can reuse the exact same flow.
-
-   Builds the on-chain transaction:
-     VALIDATE(existingAuthority -> ADD_AUTHORITY(newPasskey))
-     or VALIDATE(existingAuthority -> multicall[ADD_AUTHORITY, REGISTER_CREDENTIAL])
-   asks the caller's existing passkey to sign the challenge, then asks
-   the caller's wallet signer to sign the assembled transaction, sends
-   it, and returns the result. */
-
+import { StateProofType } from "@thru/sdk/proto";
 import {
   type Authority,
   type AuthorityRecord,
@@ -26,15 +15,13 @@ import {
   parseWalletAuthorities,
   type ParsedAuthority,
   type WalletSigner,
-} from "@thru/programs/passkey-manager";
+} from "@thru/programs/wallet";
 import {
   MULTICALL_PROGRAM_ADDRESS,
   buildMulticallInstruction,
 } from "@thru/programs/multicall";
 
-/** Minimal shape required from a passkey signer. Both web's
-    `signWithDiscoverablePasskey`/`signWithPasskey` and mobile's
-    counterparts conform. */
+/** Minimal shape required from a passkey signer. */
 export interface PasskeyChallengeSigner {
   signChallenge: (challenge: Uint8Array) => Promise<{
     signatureR: Uint8Array;
@@ -44,14 +31,13 @@ export interface PasskeyChallengeSigner {
   }>;
 }
 
-/** Minimal shape required from a Thru chain client. Loosely-typed
-    because @thru/sdk's DTS emit is currently broken in this
-    repo. The caller passes the real Thru and we narrow operationally. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type AnyThruClient = any;
+/** The parts of a Thru chain client (`@thru/sdk/client`) this flow calls. */
+export interface AnyThruClient {
+  accounts: { get(address: string): Promise<{ data?: { data?: Uint8Array } } | null | undefined> };
+  proofs: { generate(request: { proofType: StateProofType; address: Uint8Array }): Promise<{ proof: Uint8Array }> };
+}
 
 export interface AddDeviceParams {
-  /** Loosely-typed Thru chain client (`@thru/sdk/client`). */
   thru: AnyThruClient;
   /** Wallet (the on-chain WalletAccount) to attach the passkey to. */
   walletAddress: string;
@@ -77,11 +63,7 @@ export interface AddDeviceParams {
       canonical managed deployment. Trusted network integrations may select a
       supported compatibility deployment. */
   multicallProgramAddress?: string;
-  /** Sign-and-send executor (lifted from passkey-transaction.ts in the
-      wallet-auth-manager - wallet apps own this because it depends on
-      the `Thru` client's transaction builder). */
   executor: TxExecutor;
-  /** Optional status callback so UIs can show progress. */
   onStatus?: (message: string) => void;
 }
 
@@ -98,9 +80,7 @@ export interface TxExecutorParams {
 
 export interface TxExecutorResult {
   signature: string;
-  /** Loosely-typed because @thru/sdk types aren't available. */
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  execution: any;
+  execution: unknown;
 }
 
 export type TxExecutor = (
@@ -159,7 +139,6 @@ export async function addAuthorityToAccount(
     );
   }
 
-  /* The new authority will land at the next free slot. */
   const newAuthorityIdx = parsed.authorities.length;
 
   let readWriteAccounts: Uint8Array[] = [];
@@ -176,7 +155,7 @@ export async function addAuthorityToAccount(
 
     status("Fetching state proof for credential lookup...");
     const proofResult = await params.thru.proofs.generate({
-      proofType: 1 /* StateProofType.CREATING */,
+      proofType: StateProofType.CREATING,
       address: lookupAddressBytes,
     });
     lookupProof = proofResult.proof;
@@ -233,7 +212,6 @@ export async function addAuthorityToAccount(
     ]);
   }
 
-  /* Build the VALIDATE challenge over the target CPI and ask the caller's passkey to sign. */
   const challenge = await createValidateChallenge(
     parsed.nonce,
     ctx.accountAddresses,

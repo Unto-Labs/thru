@@ -275,7 +275,7 @@ describe("Coinbase payment WebView", () => {
 
   it("reports presentation while preserving begin receiver, arguments, and return value", () => {
     const expectedResult = { started: true };
-    const begin = vi.fn(function (this: unknown, value: string) {
+    const begin = vi.fn(function (this: unknown, _value: string) {
       return expectedResult;
     });
     const execution = executeApplePayClickScript({
@@ -356,8 +356,6 @@ describe("Coinbase payment WebView", () => {
     expect(execution.messages[execution.messages.length - 1]?.status).toBe(
       "sheet-presented",
     );
-    /* The bounded wait is cleared by the click so it can never interrupt the
-       presented sheet. */
     expect(execution.pendingWatchdogCount()).toBe(0);
   });
 

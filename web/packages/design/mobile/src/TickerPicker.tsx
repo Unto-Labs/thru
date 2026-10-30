@@ -1,21 +1,11 @@
-/**
- * Which token an amount is in, and how much of it is available.
- *
- * `TickerPicker` is one row - the token's mark, its availability, a chevron,
- * and Max - that opens a checkable list of the tokens there are. It opens
- * even with one token, so nothing about it changes when a second arrives.
- * `TokenMark` is the round mark: ThruUSD's own logo when the caller says the
- * token is the wallet's own dollars (never from the label: anyone can name a
- * token THRUSD), or for any other token an ink disc with its sign or its
- * ticker's first letters knocked out of it.
- */
-import { useEffect, useState } from "react";
-import { Animated, Easing, Pressable, Text, View } from "react-native";
+/* `TokenMark` draws ThruUSD's logo only when the caller says the token is the
+   wallet's own dollars, never from the label: anyone can name a token THRUSD. */
+import { Animated, Pressable, Text, View } from "react-native";
 import { font, space, text, touch } from "./tokens";
 import { makeStyles, useThemeColors } from "./theme";
 import { Button } from "./Button";
 import { IconCheck, IconChevronDown } from "./Icons";
-import { useReduceMotion } from "./reduceMotion";
+import { CollapseBody, useCollapse } from "./Collapse";
 import { Spinner } from "./loading/MarkDrawOn";
 import { ThruUsdLogo } from "./ThruUsdLogo";
 
@@ -30,7 +20,6 @@ export function TokenMark({
 }) {
   const styles = useStyles();
   if (thrusd) return <ThruUsdLogo size={size} />;
-  /* A sign reads alone; a ticker keeps its first two letters. */
   const glyph = label.length <= 1 ? label : label.slice(0, 2);
   return (
     <View
@@ -96,17 +85,7 @@ export function TickerPicker({
 }: TickerPickerProps) {
   const styles = useStyles();
   const colors = useThemeColors();
-  const [turn] = useState(() => new Animated.Value(open ? 1 : 0));
-  const reduceMotion = useReduceMotion();
-  useEffect(() => {
-    Animated.timing(turn, {
-      toValue: open ? 1 : 0,
-      /* Under reduced motion the chevron turns at once. */
-      duration: reduceMotion ? 0 : 200,
-      easing: Easing.bezier(0.2, 0.8, 0.2, 1),
-      useNativeDriver: true,
-    }).start();
-  }, [open, reduceMotion, turn]);
+  const { turn, shown } = useCollapse(open);
   const rotate = turn.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "180deg"] });
   const selected = options.find((option) => option.key === selectedKey) ?? options[0];
 
@@ -129,7 +108,7 @@ export function TickerPicker({
           accessibilityHint="Choose which token to send"
           accessibilityLabel={`${selected.name}, ${availability}`}
           accessibilityRole="button"
-          accessibilityState={{ disabled, expanded: open }}
+          aria-expanded={open}
           disabled={disabled}
           onPress={onToggle}
           style={styles.rowToggle}
@@ -157,14 +136,16 @@ export function TickerPicker({
           />
         ) : null}
       </View>
-      {open
-        ? options.map((option) => {
+      {shown ? (
+        <CollapseBody open={open} turn={turn}>
+          {options.map((option) => {
             const active = option.key === selected.key;
             return (
               <Pressable
                 accessibilityLabel={`${option.name}, ${option.availability}`}
                 accessibilityRole="button"
                 accessibilityState={{ selected: active }}
+                disabled={!open}
                 key={option.key}
                 onPress={() => onSelect(option.key)}
                 style={({ pressed }) => [styles.option, pressed ? styles.pressed : null]}
@@ -181,8 +162,9 @@ export function TickerPicker({
                 {active ? <IconCheck size={16} color={colors.forest} /> : null}
               </Pressable>
             );
-          })
-        : null}
+          })}
+        </CollapseBody>
+      ) : null}
     </View>
   );
 }

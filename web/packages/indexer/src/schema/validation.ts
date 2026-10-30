@@ -1,8 +1,3 @@
-/**
- * Runtime validation for parsed data.
- * Generates Zod schemas from column definitions for validation.
- */
-
 import { z } from "zod";
 import type { SchemaDefinition, AnyColumnDef } from "./types";
 
@@ -19,7 +14,6 @@ export function generateZodSchema<TSchema extends SchemaDefinition>(
     const colDef = col as AnyColumnDef;
     let zodType: z.ZodTypeAny;
 
-    // Map column type to Zod type
     switch (colDef._columnType) {
       case "text":
         zodType = z.string();
@@ -40,7 +34,6 @@ export function generateZodSchema<TSchema extends SchemaDefinition>(
         zodType = z.unknown();
     }
 
-    // Handle nullability
     if (colDef._nullable) {
       zodType = zodType.nullable();
     }

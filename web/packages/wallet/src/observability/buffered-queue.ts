@@ -54,11 +54,6 @@ export interface BufferedEventQueueOptions<TEvent> {
 }
 
 /**
- * Transport-agnostic delivery pipeline shared by every telemetry producer:
- * a bounded ring buffer with size/byte-capped batches, a lazy background
- * flush timer, single-flight uploads with abort timeouts, optional
- * exponential retry backoff, and a synchronous teardown path.
- *
  * Delivery is best effort and at-least-once: events may be dropped under
  * pressure and may be duplicated when a timed-out upload actually landed.
  */

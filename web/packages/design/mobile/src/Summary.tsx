@@ -1,13 +1,3 @@
-/**
- * Reviewing before committing: `SummaryRows` lists what is about to happen,
- * each row tappable to go back and change it; `Callout` says how it is going.
- *
- * Rows lock - no edit glyph, no press - while the thing they describe is
- * under way. A callout is square and borderless: neutral with a spinner for
- * something in progress, the soft accent with an error glyph for something
- * that failed, info with a still glyph for a fact worth knowing, or warn on
- * saffron for one the user must not miss.
- */
 import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
 import { font, space, text, touch } from "./tokens";
@@ -23,7 +13,7 @@ export interface SummaryRow {
   /** Tapping the row goes back to change it. */
   onEdit?: () => void;
   editLabel?: string;
-  /** Mono 13, wrapping anywhere: for an address. */
+  /** Wraps anywhere: for an address. */
   mono?: boolean;
 }
 
@@ -86,7 +76,7 @@ export function Callout({
       caution, such as which network a transfer must come from. */
   tone?: "neutral" | "error" | "info" | "warn";
   title: string;
-  /** Replaces the info glyph (a 16pt icon, coloured by the caller). */
+  /** Replaces the info glyph; the caller colours it. */
   icon?: ReactNode;
   children?: ReactNode;
 }) {
@@ -102,7 +92,7 @@ export function Callout({
     >
       <View style={styles.calloutGlyph}>
         {tone === "error" ? (
-          <IconAlert size={16} color={colors.error} />
+          <IconAlert size={16} color={colors.destructive} />
         ) : tone === "warn" ? (
           <IconWarning size={16} color={colors.saffron} />
         ) : tone === "info" ? (

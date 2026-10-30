@@ -144,7 +144,7 @@ impl Developers {
         if funding {
             failure(
                 "FUNDING_STATUS_UNKNOWN",
-                "Funding result is unknown. Check your token balance/history before retrying; no automatic retry was performed.",
+                "Funding result is unknown. Check your account balance/history before retrying; no automatic retry was performed.",
                 None,
             )
         } else {
@@ -244,10 +244,10 @@ impl Developers {
                 "Developers could not check the account limit. No funding request was sent."
             }
             "FUNDING_STATUS_UNKNOWN" => {
-                "Funding result is unknown. Check your token balance/history before retrying; no automatic retry was performed."
+                "Funding result is unknown. Check your account balance/history before retrying; no automatic retry was performed."
             }
             _ if funding && status >= 500 => {
-                "Funding result is unknown. Check your token balance/history before retrying; no automatic retry was performed."
+                "Funding result is unknown. Check your account balance/history before retrying; no automatic retry was performed."
             }
             _ if status == 401 => {
                 "Developers authorization is invalid. Run thru auth status or thru auth login before retrying."
@@ -327,7 +327,7 @@ impl Developers {
         let saved = store.load().await?.ok_or_else(|| {
             failure(
                 "NOT_LOGGED_IN",
-                "No saved CLI login for this Developers origin. Run thru auth login; API-key overrides apply only to faucet withdraw thrusd",
+                "No saved CLI login for this Developers origin. Run thru auth login; API-key overrides apply only to faucet withdrawals",
                 None,
             )
         })?;
@@ -727,6 +727,7 @@ fn selected_network(config: &Config) -> Result<&'static str, CliError> {
     }
 }
 
+#[cfg(test)]
 async fn submit_fund(
     developers: &Developers,
     bearer: &str,
@@ -734,11 +735,24 @@ async fn submit_fund(
     token_account: &str,
     amount: &str,
 ) -> Result<Value, CliError> {
+    submit_funding(
+        developers,
+        bearer,
+        &json!({"network":network,"tokenAddress":token_account,"amount":amount}),
+    )
+    .await
+}
+
+async fn submit_funding(
+    developers: &Developers,
+    bearer: &str,
+    payload: &Value,
+) -> Result<Value, CliError> {
     let response = developers
         .client
         .post(developers.endpoint("/api/faucet/fund"))
         .bearer_auth(bearer)
-        .json(&json!({"network":network,"tokenAddress":token_account,"amount":amount}))
+        .json(payload)
         .send()
         .await
         .map_err(|_| Developers::network_error(true))?;
@@ -805,27 +819,59 @@ pub async fn fund(
             None,
         ));
     }
+    fund_asset(config, "thrusd", token_account, amount, json_format).await
+}
+
+pub async fn fund_thru(
+    config: &Config,
+    account: &str,
+    amount: u64,
+    json_format: bool,
+) -> Result<(), CliError> {
+    if amount == 0 || amount > 10_000 {
+        return Err(failure(
+            "INVALID_AMOUNT",
+            "THRU amount must be 1 to 10000 raw balance units",
+            None,
+        ));
+    }
+    let bytes = if let Ok(secret) = config.keys.get_key(account) {
+        crate::crypto::keypair_from_hex(secret)?.public_key
+    } else {
+        crate::utils::validate_address_or_hex(account)?
+    };
+    let address = thru_base::tn_tools::Pubkey::from_bytes(&bytes).to_string();
+    fund_asset(config, "thru", &address, &amount.to_string(), json_format).await
+}
+
+async fn fund_asset(
+    config: &Config,
+    asset: &str,
+    account: &str,
+    amount: &str,
+    json_format: bool,
+) -> Result<(), CliError> {
     let network = selected_network(config)?;
+    let payload = if asset == "thru" {
+        json!({"asset":"thru","network":network,"recipientAddress":account,"amount":amount})
+    } else {
+        json!({"network":network,"tokenAddress":account,"amount":amount})
+    };
     let developers = Developers::configured()?;
     let key = api_key()?;
     let result = if let Some(key) = key {
-        submit_fund(&developers, &key, network, token_account, amount).await?
+        submit_funding(&developers, &key, &payload).await?
     } else {
         let store = Store::configured(&developers.origin())?;
         let _guard = store.lock().await?;
         let saved = developers.access(&store).await?;
-        submit_fund(
-            &developers,
-            &saved.access_token,
-            network,
-            token_account,
-            amount,
-        )
-        .await?
+        submit_funding(&developers, &saved.access_token, &payload).await?
     };
-    output::print_output(
-        json!({"faucet_fund":{"network":network,"token_account":token_account,"amount":amount,"result":result}}),
-        json_format,
-    );
+    let mut funding =
+        json!({"asset":asset,"network":network,"account":account,"amount":amount,"result":result});
+    if asset == "thrusd" {
+        funding["token_account"] = json!(account);
+    }
+    output::print_output(json!({"faucet_fund":funding}), json_format);
     Ok(())
 }

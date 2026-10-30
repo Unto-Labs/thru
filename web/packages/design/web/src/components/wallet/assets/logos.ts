@@ -1,5 +1,5 @@
 /* Network brand logos as data URIs, generated from the sibling net-*.svg
-   files (the design canvas assets, C2PA metadata stripped). Inline so the
+   files (C2PA metadata stripped). Inline so the
    design package needs no bundler rule for .svg imports. Regenerate with:
 
      python3 -c "import urllib.parse,sys;print('data:image/svg+xml,'+urllib.parse.quote(open(sys.argv[1]).read().strip(),safe=''))" net-eth.svg

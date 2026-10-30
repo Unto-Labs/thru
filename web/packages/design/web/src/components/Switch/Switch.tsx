@@ -14,10 +14,7 @@ export interface SwitchProps {
 }
 
 /**
- * Switch — instant on/off, brand-red when active. Closed wrapper with a label.
- *
- * Base UI drives behavior + the [data-checked] / [data-disabled] hooks the CSS
- * styles against. The thumb slides via a CSS transform keyed on [data-checked].
+ * Switch — instant on/off. Closed wrapper with a label.
  */
 export const Switch = React.forwardRef<HTMLButtonElement, SwitchProps>(
   function Switch(

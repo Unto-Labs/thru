@@ -48,6 +48,8 @@
 #define TSDK_ACCOUNT_FLAG_DELETED ((uchar)0x10U)
 #define TSDK_ACCOUNT_FLAG_NEW ((uchar)0x20U)
 #define TSDK_ACCOUNT_FLAG_COMPRESSED ((uchar)0x40U)
+/* Opt in to native credits; this grants no authority to spend the balance. */
+#define TSDK_ACCOUNT_FLAG_RECEIVE_NATIVE ((uchar)0x80U)
 
 #define TN_SEED_SIZE (32UL)
 
@@ -175,6 +177,78 @@ int tsdk_is_program_reentrant( void );
 tn_pubkey_t * tsdk_create_program_defined_account_address(
   tn_pubkey_t const * owner, uchar is_ephemeral,
   uchar const seed[TN_SEED_SIZE], tn_pubkey_t * out_pubkey );
+
+/* Invoke-target authentication (UNTO-2328 / VERIA-1).
+
+   The runtime reports an invoke as successful whenever the callee returns
+   0; it has no notion of what the callee was supposed to do.  A program
+   that takes "the token program's account index" from its instruction
+   data and passes it straight to tsys_invoke therefore lets the
+   transaction author substitute any executable (the no-op program will
+   do) and have the burn / transfer / mint reported as done while no token
+   moves.  Every caller-supplied index of a well-known program must be
+   gated through tsdk_is_program_at_idx (or one of its wrappers) before it
+   reaches tsys_invoke.
+
+   tsdk_is_program_at_idx returns 1 iff account_idx is a valid index into
+   the transaction's account list, the account exists, carries
+   TSDK_ACCOUNT_FLAG_PROGRAM and its address equals expected; 0 otherwise.
+
+   The address compare is four aligned word loads.  The transaction's
+   account address table starts at byte 48 of the 8-byte aligned
+   transaction segment and every entry is 32 bytes, so each entry is
+   8-byte aligned; expected must be 8-byte aligned too (tsdk_program_addr_t
+   guarantees it).  tn_pubkey_t is packed, so comparing through it (or
+   through the SDK's byte-loop memcmp) would cost an order of magnitude
+   more compute per gate. */
+
+typedef union {
+  uchar uc[ 32 ];
+  ulong ul[ 4 ];
+} tsdk_program_addr_t;
+
+typedef ulong __attribute__(( may_alias )) tsdk_addr_word_t;
+
+static inline int
+tsdk_is_program_at_idx( ushort                      account_idx,
+                        tsdk_program_addr_t const * expected ) {
+  tsdk_txn_t const * txn = tsdk_get_txn( );
+  if( account_idx >= tsdk_txn_account_cnt( txn ) ) return 0;
+  tsdk_account_meta_t const * meta = tsdk_get_account_meta( account_idx );
+  if( meta->version == 0 || !( meta->flags & TSDK_ACCOUNT_FLAG_PROGRAM ) ) return 0;
+  tsdk_addr_word_t const * addr =
+    (tsdk_addr_word_t const *)__builtin_assume_aligned( tsdk_txn_get_acct_addrs( txn ) + account_idx, 8 );
+  return ( ( addr[0] ^ expected->ul[0] ) | ( addr[1] ^ expected->ul[1] ) |
+           ( addr[2] ^ expected->ul[2] ) | ( addr[3] ^ expected->ul[3] ) ) == 0UL;
+}
+
+/* tsdk_is_token_program_idx returns 1 iff account_idx names the canonical
+   token program (TSDK_TOKEN_PROGRAM_ADDR_BYTES). */
+
+static inline int
+tsdk_is_token_program_idx( ushort account_idx ) {
+  static tsdk_program_addr_t const addr = { .uc = TSDK_TOKEN_PROGRAM_ADDR_BYTES };
+  return tsdk_is_program_at_idx( account_idx, &addr );
+}
+
+/* tsdk_is_block_producer_program_idx returns 1 iff account_idx names the
+   canonical block-producer bond program
+   (TSDK_BLOCK_PRODUCER_PROGRAM_ADDR_BYTES). */
+
+static inline int
+tsdk_is_block_producer_program_idx( ushort account_idx ) {
+  static tsdk_program_addr_t const addr = { .uc = TSDK_BLOCK_PRODUCER_PROGRAM_ADDR_BYTES };
+  return tsdk_is_program_at_idx( account_idx, &addr );
+}
+
+/* tsdk_is_name_service_program_idx returns 1 iff account_idx names the
+   canonical name-service program (TSDK_NAME_SERVICE_PROGRAM_ADDR_BYTES). */
+
+static inline int
+tsdk_is_name_service_program_idx( ushort account_idx ) {
+  static tsdk_program_addr_t const addr = { .uc = TSDK_NAME_SERVICE_PROGRAM_ADDR_BYTES };
+  return tsdk_is_program_at_idx( account_idx, &addr );
+}
 
 TSDK_PROTOTYPES_END
 

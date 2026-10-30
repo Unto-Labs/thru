@@ -14,6 +14,8 @@ pub const TN_ACCOUNT_FLAG_EPHEMERAL: u8 = 0x08;
 pub const TN_ACCOUNT_FLAG_DELETED: u8 = 0x10;
 pub const TN_ACCOUNT_FLAG_NEW: u8 = 0x20;
 pub const TN_ACCOUNT_FLAG_COMPRESSED: u8 = 0x40;
+/// Raw native-receipt opt-in; EOAs can receive without this bit.
+pub const TN_ACCOUNT_FLAG_RECEIVE_NATIVE: u8 = 0x80;
 
 #[repr(C, packed)]
 #[derive(Clone)]
@@ -214,6 +216,11 @@ pub fn tn_account_is_program(meta: &TnAccountMeta) -> bool {
     (meta.flags & TN_ACCOUNT_FLAG_PROGRAM) != 0
 }
 
+/// Check the raw native-receipt opt-in bit, not inferred EOA eligibility.
+pub fn tn_account_is_native_receiver(meta: &TnAccountMeta) -> bool {
+    (meta.flags & TN_ACCOUNT_FLAG_RECEIVE_NATIVE) != 0
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -233,6 +240,19 @@ mod tests {
         // Test that the round-trip works correctly by re-serializing
         let second_wire_bytes = _deserialized.to_wire();
         assert_eq!(wire_bytes, second_wire_bytes);
+    }
+
+    #[test]
+    fn test_native_receipt_flag_wire_round_trip() {
+        let mut meta = TnAccountMeta::default();
+        assert!(!tn_account_is_native_receiver(&meta));
+        meta.flags = TN_ACCOUNT_FLAG_RECEIVE_NATIVE | TN_ACCOUNT_FLAG_UNCOMPRESSABLE;
+        let wire = meta.to_wire();
+        assert_eq!(wire.len(), 64);
+        assert_eq!(wire[3], 0x84);
+        let decoded = TnAccountMeta::from_wire(&wire).unwrap();
+        assert_eq!(decoded.flags, meta.flags);
+        assert!(tn_account_is_native_receiver(&decoded));
     }
 
     #[test]

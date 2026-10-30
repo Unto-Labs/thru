@@ -1,9 +1,37 @@
 import { createRouterTransport } from "@connectrpc/connect";
-import { QueryService } from "@thru/sdk/proto";
+import { create } from "@bufbuild/protobuf";
+import { AccountStateFilter, ListAccountsRequestSchema, QueryService } from "@thru/sdk/proto";
 import http2 from "node:http2";
 import type { AddressInfo } from "node:net";
 import { describe, expect, it, vi } from "vitest";
 import { ChainClient } from "./chain-client";
+
+describe("ChainClient.listAccounts state", () => {
+  it.each([
+    undefined,
+    AccountStateFilter.UNSPECIFIED,
+    AccountStateFilter.LIVE,
+    AccountStateFilter.COMPRESSED,
+    AccountStateFilter.ALL,
+  ])("forwards state %s from initializers and complete messages", async (state) => {
+    const seen: AccountStateFilter[] = [];
+    const transport = createRouterTransport((router) =>
+      router.service(QueryService, {
+        listAccounts(request) {
+          seen.push(request.state);
+          return { accounts: [] };
+        },
+      }),
+    );
+    const client = new ChainClient({ transport });
+    await client.listAccounts({ state });
+    await client.listAccounts(create(ListAccountsRequestSchema, { state }));
+    expect(seen).toEqual([
+      state ?? AccountStateFilter.UNSPECIFIED,
+      state ?? AccountStateFilter.UNSPECIFIED,
+    ]);
+  });
+});
 
 /* A ListEvents server that records each call's deadline as the transport
    delivered it, then holds the call until it is cancelled. */

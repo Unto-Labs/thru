@@ -25,10 +25,8 @@ export interface WalletOverlayProps {
 }
 
 /**
- * WalletOverlay — the top-center presentation of the wallet sheet: a light
- * scrim and a popup that grows out of a pill "island" (and collapses back on
- * close). Built on Base UI `Dialog` for the portal, Escape handling, and the
- * enter / exit style hooks.
+ * WalletOverlay — the top-center presentation of the wallet sheet, built on
+ * Base UI `Dialog`.
  *
  * It is deliberately **non-modal**: the real sign-in and signing ceremonies
  * happen in the hosted wallet iframe, which must stay interactive while this

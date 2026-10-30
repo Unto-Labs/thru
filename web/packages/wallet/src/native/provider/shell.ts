@@ -107,12 +107,8 @@ export interface ShellOptions {
 }
 
 /**
- * Returns the shell HTML for loading app.tid.sh/embedded inside a
- * react-native-webview. The shell hosts an <iframe> pointing at the wallet
- * and bridges window.postMessage traffic between the iframe and the
- * react-native-webview's onMessage / injectJavaScript channels.
- *
- * Caller substitutes the placeholders with the runtime wallet URL + origin.
+ * Shell HTML that hosts the wallet <iframe> inside react-native-webview and
+ * relays postMessage between them.
  */
 export function getShellHtml(opts: ShellOptions): string {
   return SHELL_HTML_TEMPLATE.replace(SHELL_PLACEHOLDER_PATTERN, (placeholder) =>

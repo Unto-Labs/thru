@@ -1,7 +1,3 @@
-/**
- * Checkpoint repository for reading and updating stream checkpoints.
- */
-
 import { eq } from "drizzle-orm";
 import type { DatabaseClient } from "../schema/types";
 import { checkpointTable, type Checkpoint } from "./table";

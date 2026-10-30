@@ -3,6 +3,9 @@ export { cn } from "./utils";
 export { Button } from "./components/Button/Button";
 export type { ButtonProps, ButtonVariant, ButtonSize } from "./components/Button/Button";
 
+export { PasskeyIcon } from "./components/PasskeyIcon/PasskeyIcon";
+export type { PasskeyIconProps } from "./components/PasskeyIcon/PasskeyIcon";
+
 export { ConnectButton, shortenWalletAddress } from "./components/ConnectButton/ConnectButton";
 export type {
   ConnectButtonProps,
@@ -30,7 +33,6 @@ export {
 } from "./components/Text/Text";
 export type { TextProps, TextVariant, TextComponentProps } from "./components/Text/Text";
 
-// Overlays (styled parts)
 export { Dialog } from "./components/Dialog/Dialog";
 export { Drawer } from "@base-ui/react/drawer";
 export { AlertDialog } from "./components/AlertDialog/AlertDialog";
@@ -40,13 +42,11 @@ export { PreviewCard } from "./components/PreviewCard/PreviewCard";
 export { Toast } from "./components/Toast/Toast";
 export type { ToastKind } from "./components/Toast/Toast";
 
-// Selection / input (composite)
 export { Combobox } from "./components/Combobox/Combobox";
 export { Autocomplete } from "./components/Autocomplete/Autocomplete";
 export { Menu } from "./components/Menu/Menu";
 export { Toolbar } from "./components/Toolbar/Toolbar";
 
-// Form controls
 export { Checkbox } from "./components/Checkbox/Checkbox";
 export type { CheckboxProps } from "./components/Checkbox/Checkbox";
 export { Switch } from "./components/Switch/Switch";
@@ -58,12 +58,10 @@ export { NumberField } from "./components/NumberField/NumberField";
 export { OTPField } from "./components/OTPField/OTPField";
 export { Slider } from "./components/Slider/Slider";
 
-// Field / form structure
 export { Field } from "./components/Field/Field";
 export { Fieldset } from "./components/Fieldset/Fieldset";
 export { Form } from "./components/Form/Form";
 
-// Navigation / layout
 export { Tabs } from "./components/Tabs/Tabs";
 export { Accordion } from "./components/Accordion/Accordion";
 export { Collapsible } from "./components/Collapsible/Collapsible";
@@ -88,7 +86,6 @@ export type { SheetRootProps, SheetHeaderProps, SheetControlProps } from "./comp
 export { Stepper } from "./components/Stepper/Stepper";
 export type { StepperProps } from "./components/Stepper/Stepper";
 
-// Display
 export { Tag } from "./components/Tag/Tag";
 export type { TagProps, TagTone } from "./components/Tag/Tag";
 export { Avatar } from "./components/Avatar/Avatar";
@@ -109,7 +106,6 @@ export type { SkeletonProps } from "./components/Skeleton/Skeleton";
 export { Detail } from "./components/Detail/Detail";
 export type { DetailProps, DetailVariant } from "./components/Detail/Detail";
 
-// Wallet
 export { DepositButton } from "./components/wallet/DepositButton/DepositButton";
 export type {
   DepositButtonProps,
@@ -214,23 +210,6 @@ export type {
   WalletSheetTxPendingProps,
   WalletSheetTxDoneProps,
 } from "./components/wallet/WalletSheet/WalletSheet";
-export { PairApprove } from "./components/wallet/PairApprove/PairApprove";
-export type {
-  PairApproveProps,
-  PairApproveState,
-  PairApproveAccount,
-  PairApproveStep,
-} from "./components/wallet/PairApprove/PairApprove";
-export { PairQr, sharePairLink } from "./components/wallet/WalletSheet/PairScreens";
-export type {
-  PairQrProps,
-  PairDeviceKind,
-  PairLayout,
-  PairCodeStatus,
-  WalletSheetPairIntroProps,
-  WalletSheetPairCodeProps,
-  WalletSheetPairDoneProps,
-} from "./components/wallet/WalletSheet/PairScreens";
 export {
   DepositQr,
   CoinbaseFrame,

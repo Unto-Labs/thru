@@ -45,6 +45,7 @@ pub async fn run() -> anyhow::Result<()> {
             Commands::Faucet {
                 subcommand: FaucetCommands::Withdraw {
                     subcommand: FaucetWithdrawCommands::Thrusd { .. }
+                        | FaucetWithdrawCommands::Thru { .. }
                 }
             }
         );

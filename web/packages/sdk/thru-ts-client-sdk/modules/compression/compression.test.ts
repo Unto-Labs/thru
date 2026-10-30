@@ -5,7 +5,7 @@ import { fixture, address, missing } from './__tests__/fixture';
 import { CompressionError, type UploadCleanup } from './types';
 import { Transaction } from '../../domain/transactions/Transaction';
 import { createThruClient } from '../../client';
-import { ValidateArgs } from '../../domain/programs/passkey-manager/abi/thru/program/passkey_manager/types';
+import { ValidateArgs } from '../../domain/programs/wallet/abi/thru/program/wallet/types';
 import { Pubkey } from '../../domain/primitives';
 
 const a = address(10), b = address(11);

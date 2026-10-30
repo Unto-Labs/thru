@@ -8,10 +8,6 @@ export interface ShowAfterProps {
   className?: string;
 }
 
-/**
- * ShowAfter — reveals its children after a delay, fading them in. The fade is
- * driven by the `data-shown` attribute in CSS (no inline transition logic).
- */
 export function ShowAfter({ delay = 0, children, className }: ShowAfterProps) {
   const [shown, setShown] = React.useState(delay === 0);
   React.useEffect(() => {

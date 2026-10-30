@@ -34,11 +34,6 @@ import {
   createRequestId,
 } from './types/messages';
 
-/**
- * Allowed production origins for wallet iframe URLs.
- * Development builds additionally allow localhost, LAN, and Tailscale
- * origins so local HTTPS RP-ID testing can use the hosted wallet path.
- */
 const TRUSTED_IFRAME_ORIGINS = [
   'https://app.tid.sh',
   'https://staging-app.tid.sh',
@@ -48,15 +43,13 @@ const TRUSTED_IFRAME_ORIGINS = [
 
 const SLOW_REQUEST_TIMEOUT_MS = 5 * 60 * 1000;
 const FAST_REQUEST_TIMEOUT_MS = 30 * 1000;
-/* A managed hide waits for the wallet's exit animation, capped so a bad
-   value never parks the frame over the page. */
 const MANAGED_HIDE_MAX_EXIT_MS = 1000;
-/* If the wallet never announces `ui_hide` after a response, hide anyway. */
 const MANAGED_HIDE_FALLBACK_MS = 4000;
 const PARENT_ORIGIN_SEARCH_PARAM = 'tn_parent_origin';
 const THEME_SEARCH_PARAM = 'tn_theme';
-/* web-share lets the wallet's "Send link" (pairing a new device) open the
-   system share sheet; without it the wallet falls back to copying. */
+/* A cross-origin frame needs each feature delegated: WebAuthn for passkeys,
+   payment for Coinbase Apple Pay, clipboard-write (Chromium blocks it
+   otherwise), and web-share for the system share sheet. */
 export function walletIframeAllow(walletUrl: string): string {
   const origin = new URL(walletUrl).origin;
   return `publickey-credentials-get ${origin}; publickey-credentials-create ${origin}; payment *; clipboard-write ${origin}; web-share ${origin}`;
@@ -66,16 +59,12 @@ export function walletIframeAllow(walletUrl: string): string {
 export const WALLET_IFRAME_ALLOW = walletIframeAllow('https://app.tid.sh');
 const WALLET_IFRAME_BACKGROUND = 'transparent';
 
-/* Anything the wallet answers by asking the user. Thirty seconds is a timeout
-   for a machine, not for someone reading a consent sheet. */
+/* Requests the wallet answers by asking the user, disconnect included. */
 const SLOW_REQUEST_TYPES: ReadonlySet<string> = new Set([
   POST_MESSAGE_REQUEST_TYPES.CONNECT,
-  /* Disconnect raises a consent sheet in the wallet's web presentation, so it
-     waits on a tap exactly like the rest of these. */
   POST_MESSAGE_REQUEST_TYPES.DISCONNECT,
   POST_MESSAGE_REQUEST_TYPES.SIGN_MESSAGE,
   POST_MESSAGE_REQUEST_TYPES.SIGN_TRANSACTION,
-  POST_MESSAGE_REQUEST_TYPES.SIGN_PASSKEY_CHALLENGE,
   POST_MESSAGE_REQUEST_TYPES.MANAGE_ACCOUNTS,
   POST_MESSAGE_REQUEST_TYPES.ACCOUNT_MENU,
   POST_MESSAGE_REQUEST_TYPES.CREATE_SIGNING_SESSION,
@@ -118,9 +107,8 @@ function isAllowedDevelopmentOrigin(url: URL): boolean {
   if (url.protocol !== 'http:' && url.protocol !== 'https:') return false;
   if (process.env.NODE_ENV === 'production') return false;
 
-  /* Browser SDK construction can run during a development SSR pass before a
-     window exists. The client constructs and validates its own instance, so
-     permit only an explicitly development-shaped wallet hostname here. */
+  /* A dev SSR pass constructs the SDK before a window exists; the client
+     re-validates, so allow only a development-shaped wallet hostname. */
   if (typeof window === 'undefined') {
     return isDevelopmentHostname(url.hostname.toLowerCase());
   }
@@ -131,15 +119,11 @@ function isAllowedDevelopmentOrigin(url: URL): boolean {
   return isDevelopmentHostname(url.hostname.toLowerCase());
 }
 
-/**
- * Validates that the iframe URL is from a trusted origin
- * @throws Error if the origin is not allowed
- */
 function validateIframeOrigin(iframeUrl: string): void {
   let url: URL;
   try {
     url = new URL(iframeUrl);
-  } catch (error) {
+  } catch {
     throw new Error(
       `Invalid iframe URL: ${iframeUrl}. URL must be a valid absolute URL.`,
     );
@@ -208,10 +192,6 @@ function warnIfHttpHost(walletOrigin: string): void {
   );
 }
 
-/**
- * Manages iframe lifecycle and postMessage communication
- * Handles creating, showing/hiding iframe, and message passing
- */
 export class IframeManager {
   private readonly networkState = new BridgeNetworkState(
     () => this.rejectPendingRequests(
@@ -245,21 +225,15 @@ export class IframeManager {
   private displayMode: 'modal' | 'inline' = 'modal';
   private inlineContainer: HTMLElement | null = null;
   private visible = false;
-  /* Declared by the wallet in its ready handshake: it announces `ui_hide`
-     when its UI closes, so a host hide after a response can wait for the
-     exit animation instead of cutting it off. */
+  private hostInerted = new Set<Element>();
+  private hostInertObserver: MutationObserver | null = null;
+  private hostFocus: Element | null = null;
   private managedHide = false;
-  /* The wallet has shown UI (`ui_show`) since the frame was last hidden. */
   private uiClaimed = false;
   private hideTimer: ReturnType<typeof setTimeout> | null = null;
   private hideFallbackTimer: ReturnType<typeof setTimeout> | null = null;
-  /* Callers waiting for a deferred hide to finish (`hide()` resolves). */
   private hiddenWaiters: Array<() => void> = [];
   private telemetry?: TelemetryClient;
-  /* The host page's resolved color scheme: carried on the URL so the wallet
-     document draws to match from its first paint, pushed by message when it
-     changes, and mirrored on the <iframe> so Chrome keeps the frame
-     transparent (a scheme mismatch paints it opaque). */
   private theme: WalletTheme = 'light';
   /* The theme changed after the frame URL was built, so a wallet document
      that reloads in place must be told again. */
@@ -272,9 +246,6 @@ export class IframeManager {
   private telemetryContext?: TelemetryAppContext;
   private telemetryContextUpdated = false;
 
-  /**
-   * Callback for event broadcasts from iframe (no request id)
-   */
   public onEvent?: (eventType: string, payload: any) => void;
 
   constructor(
@@ -282,7 +253,6 @@ export class IframeManager {
     telemetry?: TelemetryClient,
     options: { theme?: WalletTheme; developerMode?: boolean } = {},
   ) {
-    // Validate origin before accepting the URL
     validateIframeOrigin(iframeUrl);
 
     this.iframeUrl = iframeUrl;
@@ -326,11 +296,6 @@ export class IframeManager {
     return url.toString();
   }
 
-  /**
-   * Turn the host's developer mode on or off without reloading the wallet:
-   * the wallet document hears it by message, and any later (re)load carries
-   * it on the URL.
-   */
   setDeveloperMode(enabled: boolean): void {
     if (enabled === this.developerMode) return;
     this.developerMode = enabled;
@@ -360,11 +325,6 @@ export class IframeManager {
     return this.theme;
   }
 
-  /**
-   * Restyle the wallet for a new host color scheme without reloading it: the
-   * frame element follows at once, the wallet document hears it by message,
-   * and any later (re)load carries it on the URL.
-   */
   setTheme(theme: WalletTheme): void {
     if (theme === this.theme) return;
     this.theme = theme;
@@ -396,15 +356,10 @@ export class IframeManager {
     }
   }
 
-  /** Wallet origin (e.g. https://app.tid.sh) this manager is bound to. */
   get walletOrigin(): string {
     return this.iframeOrigin;
   }
 
-  /**
-   * Fail every in-flight request. Used when the host tears the wallet
-   * surface down before the wallet answered (e.g. a dismissed sheet).
-   */
   rejectPendingRequests(
     message = 'User rejected the request',
     code: ErrorCode = ErrorCode.USER_REJECTED,
@@ -421,10 +376,6 @@ export class IframeManager {
     }
   }
 
-  /**
-   * Create and inject iframe into DOM
-   * Returns a promise that resolves when iframe is ready
-   */
   async createIframe(): Promise<void> {
     if (this.readyPromise) {
       this.record(TELEMETRY_EVENTS.BRIDGE_IFRAME_CREATE_REUSED, {
@@ -441,6 +392,7 @@ export class IframeManager {
     this.readyPromise = (async () => {
       if (!this.iframe) {
         this.iframe = document.createElement('iframe');
+        this.iframe.title = 'Thru Wallet';
         this.iframe.src = this.getIframeSrc();
         this.iframe.addEventListener('load', () => {
           this.record(TELEMETRY_EVENTS.BRIDGE_IFRAME_LOADED, {
@@ -456,12 +408,8 @@ export class IframeManager {
             durationMs: Date.now() - startedAt,
           });
         });
-        /* Delegate WebAuthn for passkey auth, Payment Request for the
-           wallet-owned Coinbase Apple Pay iframe, and clipboard writes for
-           the wallet's copy buttons (Chromium blocks them otherwise). */
         this.iframe.allow = walletIframeAllow(this.iframe.src);
         this.applyIframeStyles();
-        /* Keep hidden (but still load) until the wallet asks to show UI. */
         this.setVisibility(false);
 
         if (this.displayMode === 'inline' && this.inlineContainer) {
@@ -470,7 +418,6 @@ export class IframeManager {
           document.body.appendChild(this.iframe);
         }
 
-        // Set up message listener
         this.messageListener = this.handleMessage.bind(this);
         window.addEventListener('message', this.messageListener);
       }
@@ -519,9 +466,6 @@ export class IframeManager {
     return this.readyPromise;
   }
 
-  /**
-   * Wait for iframe to send 'ready' signal
-   */
   private waitForReady(): Promise<void> {
     return new Promise((resolve, reject) => {
       let resolved = false;
@@ -575,14 +519,12 @@ export class IframeManager {
     this.telemetryContext = context ?? undefined;
   }
 
-  /** Set or clear the correlation label carried by wallet telemetry. */
   setTelemetryAppContextId(value: string | null): void {
     this.telemetryAppContextId = value ?? undefined;
     this.telemetryContextUpdated = true;
     this.sendTelemetryContext();
   }
 
-  /** Set or clear the host-app dimensions carried by wallet telemetry. */
   setTelemetryContext(value: TelemetryAppContext | null): void {
     this.telemetryContext = value ?? undefined;
     this.telemetryContextUpdated = true;
@@ -615,9 +557,6 @@ export class IframeManager {
     }
   }
 
-  /**
-   * Mount iframe inline inside the provided container.
-   */
   async mountInline(container: HTMLElement): Promise<void> {
     this.inlineContainer = container;
     this.displayMode = 'inline';
@@ -625,9 +564,6 @@ export class IframeManager {
     this.showInline();
   }
 
-  /**
-   * Show iframe inline (embedded in container).
-   */
   showInline(): void {
     this.clearHideTimers();
     this.settleHiddenWaiters();
@@ -650,9 +586,6 @@ export class IframeManager {
     this.setVisibility(true);
   }
 
-  /**
-   * Show iframe as a full-screen modal.
-   */
   showModal(): void {
     this.clearHideTimers();
     this.settleHiddenWaiters();
@@ -672,20 +605,10 @@ export class IframeManager {
     this.setVisibility(true);
   }
 
-  /**
-   * Show iframe modal
-   */
   show(): void {
     this.showModal();
   }
 
-  /**
-   * Hide the iframe modal. A wallet that manages its own hiding and has UI
-   * up keeps the frame until its `ui_hide` (the exit animation), with a
-   * fallback so a lost event never leaves the frame over the page. Resolves
-   * once the frame is actually hidden, so a caller can hold its own state
-   * (a "Signing in…" button) through the wallet's exit animation.
-   */
   hide(): Promise<void> {
     if (this.managedHide && this.uiClaimed && this.visible) {
       if (!this.hideFallbackTimer) {
@@ -711,11 +634,8 @@ export class IframeManager {
       return;
     }
 
-    /* Chrome paints a cross-origin iframe opaque when the <iframe> element's
-       used color scheme differs from the embedded document's. The wallet
-       document follows the host theme, so the element carries the same
-       scheme; otherwise the host sees a solid sheet instead of its own page
-       behind the scrim. */
+    /* Chrome paints a cross-origin iframe opaque when the element's color
+       scheme differs from the embedded document's, so the element carries it. */
     if (this.displayMode === 'inline') {
       this.iframe.style.cssText = `
         position: relative;
@@ -730,11 +650,8 @@ export class IframeManager {
       return;
     }
 
-    /* --thru-wallet-frame-max-width lets a host that presents itself in a
-       fixed-width column (a phone-shaped app on a desktop) keep the wallet
-       surface in that same column instead of spanning the viewport. Hosts
-       that do not set it resolve to `none`, which with the centering below is
-       identical to the full-bleed overlay this has always been. */
+    /* Hosts may set --thru-wallet-frame-max-width to keep the wallet in a
+       fixed-width column; unset, the overlay is full-bleed. */
     this.iframe.style.cssText = `
       position: fixed;
       top: 0;
@@ -760,6 +677,7 @@ export class IframeManager {
     this.iframe.style.opacity = visible ? '1' : '0';
     this.iframe.style.pointerEvents = visible ? 'auto' : 'none';
     this.iframe.style.visibility = visible ? 'visible' : 'hidden';
+    this.setHostInert(visible && this.displayMode === 'modal');
     if (changed) {
       this.record(visible ? 'bridge.iframe.shown' : 'bridge.iframe.hidden', {
         severity: 'debug',
@@ -768,9 +686,39 @@ export class IframeManager {
     }
   }
 
-  /**
-   * Send message to iframe and wait for response
-   */
+  private setHostInert(inert: boolean): void {
+    if (!inert || !this.iframe?.isConnected) {
+      this.hostInertObserver?.disconnect();
+      this.hostInertObserver = null;
+      this.hostInerted.forEach((element) => element.removeAttribute('inert'));
+      this.hostInerted.clear();
+      const savedFocus = this.hostFocus;
+      this.hostFocus = null;
+      if (
+        (document.activeElement === document.body || document.activeElement === this.iframe) &&
+        (savedFocus instanceof HTMLElement || savedFocus instanceof SVGElement) &&
+        savedFocus.isConnected &&
+        !savedFocus.closest('[inert]')
+      ) {
+        savedFocus.focus({ preventScroll: true });
+      }
+      return;
+    }
+
+    if (!this.hostInertObserver) this.hostFocus = document.activeElement === this.iframe ? null : document.activeElement;
+    for (const element of Array.from(document.body.children)) {
+      if (element === this.iframe || element.hasAttribute('inert')) continue;
+      /* Popovers may host passkey prompts outside the wallet iframe. */
+      if (element.hasAttribute('popover')) continue;
+      element.setAttribute('inert', '');
+      this.hostInerted.add(element);
+    }
+    if (!this.hostInertObserver) {
+      this.hostInertObserver = new MutationObserver(() => this.setHostInert(true));
+      this.hostInertObserver.observe(document.body, { childList: true });
+    }
+  }
+
   async sendMessage<TRequest extends PostMessageRequest>(
     request: TRequest,
   ): Promise<InferSuccessfulPostMessageResponse<TRequest>> {
@@ -826,8 +774,6 @@ export class IframeManager {
 
     return new Promise<InferSuccessfulPostMessageResponse<TRequest>>(
       (resolve, reject) => {
-      /* CONNECT, signing, and account-management requests require a human click and can take minutes.
-         Keep a longer timeout to avoid breaking "inline connect button" flows. */
       const timeoutMs = SLOW_REQUEST_TYPES.has(request.type)
         ? SLOW_REQUEST_TIMEOUT_MS
         : FAST_REQUEST_TIMEOUT_MS;
@@ -845,7 +791,6 @@ export class IframeManager {
         reject(new Error('Request timeout - wallet did not respond'));
       }, timeoutMs);
 
-      // Store handler for this request
         this.messageHandlers.set(
           request.id,
           (response: PostMessageResponse) => {
@@ -886,7 +831,6 @@ export class IframeManager {
           },
         );
 
-      // Send message to iframe
       try {
           this.iframe!.contentWindow!.postMessage(
             {
@@ -919,14 +863,9 @@ export class IframeManager {
     );
   }
 
-  /**
-   * Handle incoming messages from iframe
-   */
   private handleMessage(event: MessageEvent): void {
     const rejection = this.messageRejectionReason(event);
     if (rejection) {
-      /* Do not log unrelated cross-origin page traffic. Same-origin wallet
-         traffic with invalid correlation is useful and safe to diagnose. */
       const cameFromManagedIframe =
         !!event.source &&
         !!this.iframe?.contentWindow &&
@@ -937,12 +876,11 @@ export class IframeManager {
           outcome: rejection,
         });
       }
-      return; // Ignore messages from other origins
+      return;
     }
 
     const data = event.data;
 
-    // Handle response to a specific request (has id)
     if (data.id && this.messageHandlers.has(data.id)) {
       const handler = this.messageHandlers.get(data.id);
       if (handler) {
@@ -970,7 +908,6 @@ export class IframeManager {
       return;
     }
 
-    // Handle event broadcasts (type === 'event')
     if (data.type === POST_MESSAGE_EVENT_TYPE) {
       this.handleEvent(data as PostMessageEvent);
       return;
@@ -982,9 +919,6 @@ export class IframeManager {
     });
   }
 
-  /**
-   * Handle event broadcasts from iframe
-   */
   private handleEvent(data: PostMessageEvent): void {
     this.record(TELEMETRY_EVENTS.BRIDGE_EVENT_RECEIVED, {
       operation: data.event,
@@ -995,7 +929,6 @@ export class IframeManager {
       const exitMs = (data.data as UiHideEventPayload | undefined)?.exitMs;
       this.hideAfterExit(typeof exitMs === 'number' ? exitMs : 0);
     }
-    // Forward to EmbeddedProvider via callback
     if (this.onEvent) {
       this.onEvent(data.event, data.data);
     }
@@ -1020,18 +953,12 @@ export class IframeManager {
     }
   }
 
-  /**
-   * The wallet's UI is closing: give the host its pointer events back at
-   * once and hide the frame once the exit animation has played.
-   */
   private hideAfterExit(exitMs: number): void {
     if (this.displayMode === 'inline' || !this.visible) {
       return;
     }
     this.clearHideTimers();
-    if (this.iframe) {
-      this.iframe.style.pointerEvents = 'none';
-    }
+    this.setHostInert(false);
     const delay = Math.min(Math.max(exitMs, 0), MANAGED_HIDE_MAX_EXIT_MS);
     if (delay === 0) {
       this.finishHide();
@@ -1076,11 +1003,9 @@ export class IframeManager {
     return null;
   }
 
-  /**
-   * Destroy iframe and cleanup
-   */
   destroy(): void {
     this.clearHideTimers();
+    this.setHostInert(false);
     this.settleHiddenWaiters();
     this.record(TELEMETRY_EVENTS.BRIDGE_DESTROYED, {
       severity: 'debug',

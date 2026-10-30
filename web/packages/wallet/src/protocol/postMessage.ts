@@ -22,7 +22,6 @@ export const POST_MESSAGE_REQUEST_TYPES = {
   DISCONNECT: "disconnect",
   SIGN_MESSAGE: "signMessage",
   SIGN_TRANSACTION: "signTransaction",
-  SIGN_PASSKEY_CHALLENGE: "signPasskeyChallenge",
   GET_ACCOUNTS: "getAccounts",
   GET_CONNECTION_STATE: "getConnectionState",
   GET_SIGNING_CONTEXT: "getSigningContext",
@@ -252,11 +251,6 @@ export interface SignTransactionRequestMessage extends BaseRequest {
   payload: SignTransactionPayload;
 }
 
-export interface SignPasskeyChallengeRequestMessage extends BaseRequest {
-  type: typeof POST_MESSAGE_REQUEST_TYPES.SIGN_PASSKEY_CHALLENGE;
-  payload: SignPasskeyChallengePayload;
-}
-
 export interface GetAccountsRequestMessage extends BaseRequest {
   type: typeof POST_MESSAGE_REQUEST_TYPES.GET_ACCOUNTS;
   payload?: undefined;
@@ -370,7 +364,6 @@ export type PostMessageRequest =
   | DisconnectRequestMessage
   | SignMessageRequestMessage
   | SignTransactionRequestMessage
-  | SignPasskeyChallengeRequestMessage
   | GetAccountsRequestMessage
   | GetConnectionStateRequestMessage
   | GetSigningContextRequestMessage
@@ -452,7 +445,6 @@ type RequestResultMap = {
   [POST_MESSAGE_REQUEST_TYPES.DISCONNECT]: DisconnectResult;
   [POST_MESSAGE_REQUEST_TYPES.SIGN_MESSAGE]: SignMessageResult;
   [POST_MESSAGE_REQUEST_TYPES.SIGN_TRANSACTION]: SignTransactionResult;
-  [POST_MESSAGE_REQUEST_TYPES.SIGN_PASSKEY_CHALLENGE]: SignPasskeyChallengeResult;
   [POST_MESSAGE_REQUEST_TYPES.GET_ACCOUNTS]: GetAccountsResult;
   [POST_MESSAGE_REQUEST_TYPES.GET_CONNECTION_STATE]: GetConnectionStateResult;
   [POST_MESSAGE_REQUEST_TYPES.GET_SIGNING_CONTEXT]: GetSigningContextResult;
@@ -591,24 +583,6 @@ export interface SignTransactionPayload {
 
 export interface SignTransactionResult {
   signedTransaction: string;
-}
-
-export interface SignPasskeyChallengePayload {
-  /** base64url-encoded challenge bytes from a backend passkey-manager flow. */
-  challenge: string;
-  /** Optional expected wallet address for the selected wallet account. */
-  walletAddress?: string;
-}
-
-export interface SignPasskeyChallengeResult {
-  signatureR: string;
-  signatureS: string;
-  authenticatorData: string;
-  clientDataJSON: string;
-  /** Active on-chain passkey authority used for this assertion. */
-  authIdx: number;
-  /** WebAuthn relying-party id bound into authenticatorData. */
-  rpId: string;
 }
 
 export interface CreateSigningSessionPayload {
@@ -888,11 +862,7 @@ export interface DepositRequestPayload {
   customer?: CoinbaseDepositCustomerInput;
 }
 
-/**
- * Coinbase-compatible contact details. Kept as a standalone public type for
- * callers that validate contact input before constructing a richer customer
- * payload.
- */
+/** Coinbase-compatible contact details. */
 export interface CoinbaseOnrampContact {
   email: string;
   /** E.164 phone number, for example "+12055555555". */

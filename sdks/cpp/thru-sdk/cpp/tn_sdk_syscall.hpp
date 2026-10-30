@@ -86,6 +86,7 @@ ulong tsys_log( const void * data, ulong data_len );
 
 ulong tsys_emit_event( const void * data, ulong data_sz );
 
+// Pass the complete flags byte, preserving unrelated current flags.
 ulong tsys_account_set_flags( ushort account_idx, uchar flags );
 
 ulong tsys_account_create_eoa( ulong               account_idx,

@@ -1,7 +1,5 @@
-/* Island motion — the wallet sheet opens by growing out of a pill "island"
-   (the top bar first, then the body) and closes by collapsing back into it.
-   Shared by Frame (standalone `animate`) and WalletOverlay (Base UI
-   open / ending-style hooks). Durations follow the design: 640ms in, 480ms out. */
+/* Shared by Frame (standalone `animate`) and WalletOverlay (Base UI
+   open / ending-style hooks). */
 
 @keyframes tds-island-in {
   0% {

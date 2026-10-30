@@ -1,3 +1,4 @@
+/* eslint-disable no-console -- console is this sink's output. */
 import type { ReplayLogger } from "@thru/replay";
 
 export type IndexerLogLevel = "debug" | "info" | "warn" | "error";

@@ -35,7 +35,6 @@ export interface ObservableWalletSDK extends WalletSDK {
   off(event: SDKEvent, callback: (...args: any[]) => void): void;
 }
 
-/** Shared React state and operation controller for browser and native SDKs. */
 export function useWalletSDKController<TSDK extends ObservableWalletSDK>(
   sdk: TSDK,
 ) {
@@ -237,6 +236,7 @@ export function useWalletSDKController<TSDK extends ObservableWalletSDK>(
       ensureAccount: ensureDepositAccount,
       open: deposit,
       getProviders: () => sdk.deposits.getProviders(),
+      getCryptoSources: () => sdk.deposits.getCryptoSources(),
       getAccountState: getDepositAccountState,
       waitForDeposit: waitForDepositBalance,
       formatAmount: sdk.deposits.formatAmount,

@@ -15,6 +15,216 @@ afterEach(() => {
 });
 
 describe('IframeManager', () => {
+  it('does not restore host-owned inert after the host removes it while open', async () => {
+    const app = document.createElement('main');
+    app.setAttribute('inert', '');
+    document.body.append(app);
+    const { manager } = await readyManager();
+    manager.showModal();
+    app.removeAttribute('inert');
+    await manager.hide();
+    expect(app.hasAttribute('inert')).toBe(false);
+    manager.destroy();
+  });
+
+  it('releases the host when its visible iframe is removed', async () => {
+    const app = document.createElement('main');
+    document.body.append(app);
+    const { manager, iframe } = await readyManager();
+    manager.showModal();
+    expect(app.hasAttribute('inert')).toBe(true);
+    iframe.remove();
+    const later = document.createElement('div');
+    document.body.append(later);
+    await Promise.resolve();
+    expect(app.hasAttribute('inert')).toBe(false);
+    expect(later.hasAttribute('inert')).toBe(false);
+    manager.destroy();
+  });
+
+  it('names the wallet iframe for assistive technology', async () => {
+    const { manager, iframe } = await readyManager();
+    expect(iframe.title).toBe('Thru Wallet');
+    manager.destroy();
+  });
+
+  it('releases host inert at hide start while the iframe blocks taps through exit', async () => {
+    vi.useFakeTimers();
+    const app = document.createElement('main');
+    const alreadyInert = document.createElement('aside');
+    alreadyInert.setAttribute('inert', 'host-owned');
+    document.body.append(app, alreadyInert);
+    const { manager, frameId, iframe } = await readyManager({ managedHide: true });
+    expect(app.hasAttribute('inert')).toBe(false);
+
+    dispatchWalletMessage(frameId, { type: 'event', event: 'ui_show' });
+    manager.showModal();
+    expect(app.hasAttribute('inert')).toBe(true);
+    expect(alreadyInert.hasAttribute('inert')).toBe(true);
+    expect(iframe.hasAttribute('inert')).toBe(false);
+
+    manager.showModal();
+    manager.setTheme('dark');
+    const hidden = manager.hide();
+    dispatchWalletMessage(frameId, { type: 'event', event: 'ui_hide', data: { exitMs: 480 } });
+    expect(app.hasAttribute('inert')).toBe(false);
+    await vi.advanceTimersByTimeAsync(479);
+    expect(app.hasAttribute('inert')).toBe(false);
+    expect(iframe.style.pointerEvents).toBe('auto');
+    await vi.advanceTimersByTimeAsync(1);
+    await hidden;
+    expect(app.hasAttribute('inert')).toBe(false);
+    expect(alreadyInert.getAttribute('inert')).toBe('host-owned');
+    expect(iframe.style.pointerEvents).toBe('none');
+
+    app.setAttribute('inert', 'changed-by-host');
+    manager.showModal();
+    await manager.hide();
+    expect(app.getAttribute('inert')).toBe('changed-by-host');
+    manager.destroy();
+  });
+
+  it('restores host focus at hide start and preserves host focus changes through exit', async () => {
+    vi.useFakeTimers();
+    const app = document.createElement('main');
+    const opener = document.createElement('button');
+    const next = document.createElement('button');
+    app.append(opener, next);
+    document.body.append(app);
+    const { manager, frameId, iframe } = await readyManager({ managedHide: true });
+    opener.focus();
+    dispatchWalletMessage(frameId, { type: 'event', event: 'ui_show' });
+    manager.showModal();
+    opener.blur();
+    expect(document.activeElement).toBe(document.body);
+    manager.showModal();
+    const restoreFocus = vi.spyOn(opener, 'focus');
+
+    const hidden = manager.hide();
+    dispatchWalletMessage(frameId, { type: 'event', event: 'ui_hide', data: { exitMs: 480 } });
+    expect(document.activeElement).toBe(opener);
+    expect(restoreFocus).toHaveBeenCalledWith({ preventScroll: true });
+    expect(iframe.style.pointerEvents).toBe('auto');
+    next.focus();
+    await vi.advanceTimersByTimeAsync(480);
+    await hidden;
+    expect(document.activeElement).toBe(next);
+    manager.destroy();
+  });
+
+  it('restores host focus at hide start when the wallet iframe is focused', async () => {
+    vi.useFakeTimers();
+    const opener = document.createElement('button');
+    document.body.append(opener);
+    const { manager, frameId, iframe } = await readyManager({ managedHide: true });
+    opener.focus();
+    manager.showModal();
+    iframe.focus();
+    expect(document.activeElement).toBe(iframe);
+
+    dispatchWalletMessage(frameId, { type: 'event', event: 'ui_hide', data: { exitMs: 480 } });
+    expect(document.activeElement).toBe(opener);
+    manager.destroy();
+  });
+
+  it.each(['disconnected', 'inert', 'focused elsewhere'])(
+    'does not restore host focus when the saved element is %s',
+    async (state) => {
+      const app = document.createElement('main');
+      const opener = document.createElement('button');
+      const next = document.createElement('button');
+      app.append(opener, next);
+      document.body.append(app);
+      const { manager } = await readyManager();
+      opener.focus();
+      manager.showModal();
+      opener.blur();
+      if (state === 'disconnected') opener.remove();
+      if (state === 'inert') opener.setAttribute('inert', '');
+      if (state === 'focused elsewhere') next.focus();
+      const expectedFocus = document.activeElement;
+
+      await manager.hide();
+      expect(document.activeElement).toBe(expectedFocus);
+      manager.destroy();
+    }
+  );
+
+  it('makes new body children inert while open and restores them on destroy', async () => {
+    const { manager, iframe } = await readyManager();
+    manager.showModal();
+    const portal = document.createElement('div');
+    const alreadyInert = document.createElement('div');
+    alreadyInert.setAttribute('inert', '');
+    document.body.append(portal, alreadyInert);
+    await Promise.resolve();
+    expect(portal.hasAttribute('inert')).toBe(true);
+    expect(iframe.hasAttribute('inert')).toBe(false);
+
+    manager.destroy();
+    expect(portal.hasAttribute('inert')).toBe(false);
+    expect(alreadyInert.getAttribute('inert')).toBe('');
+    const later = document.createElement('div');
+    document.body.append(later);
+    await Promise.resolve();
+    expect(later.hasAttribute('inert')).toBe(false);
+  });
+
+  it.each(['before', 'after'])(
+    'does not make body popovers inert when inserted %s modal opening',
+    async (timing) => {
+      const app = document.createElement('main');
+      const popover = document.createElement('div');
+      popover.setAttribute('popover', 'manual');
+      const alreadyInert = document.createElement('div');
+      alreadyInert.setAttribute('popover', 'auto');
+      alreadyInert.setAttribute('inert', 'host-owned');
+      document.body.append(app);
+      if (timing === 'before') document.body.append(popover, alreadyInert);
+      const { manager } = await readyManager();
+
+      try {
+        manager.showModal();
+        if (timing === 'after') document.body.append(popover, alreadyInert);
+        await Promise.resolve();
+        expect(popover.hasAttribute('inert')).toBe(false);
+        expect(app.hasAttribute('inert')).toBe(true);
+        expect(alreadyInert.getAttribute('inert')).toBe('host-owned');
+
+        const portal = document.createElement('div');
+        document.body.append(portal);
+        await Promise.resolve();
+        expect(portal.hasAttribute('inert')).toBe(true);
+        expect(popover.hasAttribute('inert')).toBe(false);
+
+        await manager.hide();
+        expect(app.hasAttribute('inert')).toBe(false);
+        expect(portal.hasAttribute('inert')).toBe(false);
+        expect(alreadyInert.getAttribute('inert')).toBe('host-owned');
+      } finally {
+        manager.destroy();
+      }
+    }
+  );
+
+  it('keeps inline wallets and their host interactive when switching display modes', async () => {
+    const container = document.createElement('main');
+    document.body.append(container);
+    const { manager, iframe } = await readyManager();
+    await manager.mountInline(container);
+    expect(container.hasAttribute('inert')).toBe(false);
+    expect(iframe.parentElement).toBe(container);
+
+    manager.showModal();
+    expect(container.hasAttribute('inert')).toBe(true);
+    expect(iframe.parentElement).toBe(document.body);
+    manager.showInline();
+    expect(container.hasAttribute('inert')).toBe(false);
+    expect(iframe.parentElement).toBe(container);
+    expect(iframe.style.pointerEvents).toBe('auto');
+    manager.destroy();
+  });
+
   it.each(['https://app.tid.sh', 'https://staging-app.tid.sh'])(
     'delegates WebAuthn, clipboard writes and sharing only to configured origin %s',
     (origin) => {
@@ -38,8 +248,6 @@ describe('IframeManager', () => {
     manager.applyIframeStyles();
 
     expect(iframe.style.cssText).toContain('background: transparent;');
-    /* Matches the light wallet document so Chrome keeps the frame transparent
-       over a dark host (a color-scheme mismatch paints it opaque). */
     expect(iframe.style.cssText).toContain('color-scheme: light;');
   });
 
@@ -90,7 +298,6 @@ describe('IframeManager', () => {
       { type: 'wallet:theme', origin: window.location.origin, frameId, theme: 'dark' },
       'https://app.tid.sh'
     );
-    /* A later (re)load starts in the new theme. */
     expect(new URL(manager.getIframeSrc()).searchParams.get('tn_theme')).toBe('dark');
 
     postMessage.mockClear();
@@ -103,7 +310,6 @@ describe('IframeManager', () => {
     const { manager, frameId, iframe } = await readyManager();
     const postMessage = vi.spyOn(iframe.contentWindow!, 'postMessage');
 
-    /* Nothing to say while the load-time theme still holds. */
     dispatchWalletMessage(frameId, { type: 'iframe:ready', data: { ready: true } });
     expect(postMessage).not.toHaveBeenCalled();
 
@@ -135,7 +341,6 @@ describe('IframeManager', () => {
     const src = iframe.src;
     const postMessage = vi.spyOn(iframe.contentWindow!, 'postMessage');
 
-    /* Nothing to say while the load-time value still holds. */
     dispatchWalletMessage(frameId, { type: 'iframe:ready', data: { ready: true } });
     expect(postMessage).not.toHaveBeenCalled();
 
@@ -253,7 +458,6 @@ describe('IframeManager', () => {
     const firstSrc = iframe.src;
     const frameId = new URL(iframe.src).searchParams.get('tn_frame_id')!;
 
-    /* First deadline: no ready → one reload with the same frame id. */
     await vi.advanceTimersByTimeAsync(10_000);
     expect(telemetry.record).toHaveBeenCalledWith(
       'bridge.iframe.ready.retry',
@@ -262,7 +466,6 @@ describe('IframeManager', () => {
     expect(new URL(iframe.src).searchParams.get('tn_frame_id')).toBe(frameId);
     expect(iframe.src).toBe(firstSrc);
 
-    /* The warm second load answers in time. */
     dispatchWalletMessage(frameId, { type: 'iframe:ready', data: { ready: true } });
     await readyPromise;
     expect(telemetry.record).toHaveBeenCalledWith(
@@ -271,7 +474,6 @@ describe('IframeManager', () => {
     );
     manager.destroy();
 
-    /* Two silences in a row is the real failure. */
     document.body.replaceChildren();
     const failing = new IframeManager(
       'https://app.tid.sh/embedded',
@@ -336,23 +538,20 @@ describe('IframeManager', () => {
     manager.showModal();
     expect(iframe.style.visibility).toBe('visible');
 
-    /* The host's own hide (a response arrived) waits for the wallet. */
     manager.hide();
     expect(iframe.style.visibility).toBe('visible');
     expect(iframe.style.pointerEvents).toBe('auto');
 
-    /* The wallet announces its exit: pointer events go at once, the frame
-       hides once the animation has played. */
     dispatchWalletMessage(frameId, { type: 'event', event: 'ui_hide', data: { exitMs: 480 } });
     expect(iframe.style.visibility).toBe('visible');
-    expect(iframe.style.pointerEvents).toBe('none');
+    expect(iframe.style.pointerEvents).toBe('auto');
     await vi.advanceTimersByTimeAsync(479);
     expect(iframe.style.visibility).toBe('visible');
+    expect(iframe.style.pointerEvents).toBe('auto');
     await vi.advanceTimersByTimeAsync(1);
     expect(iframe.style.visibility).toBe('hidden');
+    expect(iframe.style.pointerEvents).toBe('none');
 
-    /* Once hidden the claim is cleared: a host hide with no wallet UI up is
-       immediate again. */
     manager.showModal();
     manager.hide();
     expect(iframe.style.visibility).toBe('hidden');
@@ -379,7 +578,6 @@ describe('IframeManager', () => {
     await hidden;
     expect(settled).toBe(true);
     expect(iframe.style.visibility).toBe('hidden');
-    /* An unmanaged or already-hidden frame settles at once. */
     await expect(manager.hide()).resolves.toBeUndefined();
     manager.destroy();
   });

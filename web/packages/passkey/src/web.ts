@@ -25,7 +25,7 @@ export {
   P256_HALF_N,
   bytesToBigIntBE,
   bigIntToBytesBE,
-} from '@thru/programs/passkey-manager';
+} from '@thru/programs/wallet';
 
 export {
   isWebAuthnSupported,
@@ -48,7 +48,7 @@ export {
   bytesEqual,
   compareBytes,
   uniqueAccounts,
-} from '@thru/programs/passkey-manager';
+} from '@thru/programs/wallet';
 
 export type {
   PasskeyCeremonyReporter,

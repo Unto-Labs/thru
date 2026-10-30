@@ -1,8 +1,6 @@
-// Main exports
 export { EmbeddedThruChain } from './chains/ThruChain';
 export { EmbeddedProvider, type ConnectOptions, type EmbeddedProviderConfig } from './EmbeddedProvider';
 
-// Type exports
 export type {
   ConnectResult, EmbeddedProviderEvent, PostMessageEvent, PostMessageRequest,
   PostMessageResponse, RequestType, SignMessagePayload,
@@ -13,5 +11,4 @@ export type {
 
 export { ErrorCode } from './types/messages';
 
-// Re-export types from chain-interfaces for convenience
 export type { IThruChain, WalletAccount } from '../interfaces';

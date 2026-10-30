@@ -3,7 +3,7 @@ import { defineConfig } from 'tsup';
 
 const sharedExternal = [
     '@thru/programs',
-    '@thru/programs/passkey-manager',
+    '@thru/programs/wallet',
     '@thru/programs/token',
     '@thru/sdk',
     '@thru/sdk/client',
@@ -23,11 +23,9 @@ const nativeExternal = [
   ...sharedExternal,
   '@gorhom/bottom-sheet',
   'expo',
-  'expo-brightness',
   'expo-modules-core',
   'react-native',
   'react-native-gesture-handler',
-  'react-native-qrcode-styled',
   'react-native-reanimated',
   'react-native-safe-area-context',
   'react-native-svg',

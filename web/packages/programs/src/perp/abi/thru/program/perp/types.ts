@@ -3108,6 +3108,218 @@ __tnRegisterFootprint("ExchangeSetStatusInstruction", (params) => ExchangeSetSta
 __tnRegisterValidate("ExchangeSetStatusInstruction", (buffer, params) => ExchangeSetStatusInstruction.__tnInvokeValidate(buffer, params));
 __tnRegisterDynamicValidate("ExchangeSetStatusInstruction", (buffer) => { const result = ExchangeSetStatusInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
+/* ----- TYPE DEFINITION FOR FeeClaimInstruction ----- */
+
+const __tn_ir_FeeClaimInstruction = {
+  typeName: "FeeClaimInstruction",
+  root: { op: "const", value: 15n }
+} as const;
+
+export class FeeClaimInstruction {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): FeeClaimInstruction {
+    if (!buffer || buffer.length === undefined) throw new Error("FeeClaimInstruction.__tnCreateView requires a Uint8Array");
+    return new FeeClaimInstruction(new Uint8Array(buffer));
+  }
+
+  static builder(): FeeClaimInstructionBuilder {
+    return new FeeClaimInstructionBuilder();
+  }
+
+  static fromBuilder(builder: FeeClaimInstructionBuilder): FeeClaimInstruction | null {
+    const buffer = builder.build();
+    return FeeClaimInstruction.from_array(buffer);
+  }
+
+  get_market_record_idx(): number {
+    const offset = 0;
+    return this.view.getUint8(offset);
+  }
+
+  set_market_record_idx(value: number): void {
+    const offset = 0;
+    this.view.setUint8(offset, value);
+  }
+
+  get market_record_idx(): number {
+    return this.get_market_record_idx();
+  }
+
+  set market_record_idx(value: number) {
+    this.set_market_record_idx(value);
+  }
+
+  get_reserved0(): number {
+    const offset = 1;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_reserved0(value: number): void {
+    const offset = 1;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get reserved0(): number {
+    return this.get_reserved0();
+  }
+
+  set reserved0(value: number) {
+    this.set_reserved0(value);
+  }
+
+  get_reserved1(): number {
+    const offset = 3;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_reserved1(value: number): void {
+    const offset = 3;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get reserved1(): number {
+    return this.get_reserved1();
+  }
+
+  set reserved1(value: number) {
+    this.set_reserved1(value);
+  }
+
+  get_amount(): bigint {
+    const offset = 7;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_amount(value: bigint): void {
+    const offset = 7;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get amount(): bigint {
+    return this.get_amount();
+  }
+
+  set amount(value: bigint) {
+    this.set_amount(value);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_FeeClaimInstruction.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_FeeClaimInstruction, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for FeeClaimInstruction');
+    }
+    return __tnBigIntToNumber(irResult, 'FeeClaimInstruction::footprint');
+  }
+
+  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    if (buffer.length < 15) return { ok: false, code: "tn.buffer_too_small", consumed: 15 };
+    return { ok: true, consumed: 15 };
+  }
+
+  static new(market_record_idx: number, reserved0: number, reserved1: number, amount: bigint): FeeClaimInstruction {
+    const buffer = new Uint8Array(15);
+    const view = new DataView(buffer.buffer);
+
+    let offset = 0;
+    view.setUint8(0, market_record_idx); /* market_record_idx */
+    view.setUint16(1, reserved0, true); /* reserved0 (little-endian) */
+    view.setUint32(3, reserved1, true); /* reserved1 (little-endian) */
+    view.setBigUint64(7, amount, true); /* amount (little-endian) */
+
+    return new FeeClaimInstruction(buffer);
+  }
+
+  static from_array(buffer: Uint8Array): FeeClaimInstruction | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new FeeClaimInstruction(buffer);
+  }
+
+}
+
+export class FeeClaimInstructionBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+
+  constructor() {
+    this.buffer = new Uint8Array(15);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  set_market_record_idx(value: number): this {
+    this.view.setUint8(0, value);
+    return this;
+  }
+
+  set_reserved0(value: number): this {
+    this.view.setUint16(1, value, true);
+    return this;
+  }
+
+  set_reserved1(value: number): this {
+    this.view.setUint32(3, value, true);
+    return this;
+  }
+
+  set_amount(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(7, cast, true);
+    return this;
+  }
+
+  build(): Uint8Array {
+    return this.buffer.slice();
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    target.set(this.buffer, offset);
+    return target;
+  }
+
+  finish(): FeeClaimInstruction {
+    const view = FeeClaimInstruction.from_array(this.buffer.slice());
+    if (!view) throw new Error("failed to build FeeClaimInstruction");
+    return view;
+  }
+}
+
+__tnRegisterFootprint("FeeClaimInstruction", (params) => FeeClaimInstruction.__tnInvokeFootprint(params));
+__tnRegisterValidate("FeeClaimInstruction", (buffer, params) => FeeClaimInstruction.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("FeeClaimInstruction", (buffer) => { const result = FeeClaimInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
 /* ----- TYPE DEFINITION FOR FundingUpdateInstruction ----- */
 
 const __tn_ir_FundingUpdateInstruction = {
@@ -3295,6 +3507,218 @@ __tnRegisterFootprint("FundingUpdateInstruction", (params) => FundingUpdateInstr
 __tnRegisterValidate("FundingUpdateInstruction", (buffer, params) => FundingUpdateInstruction.__tnInvokeValidate(buffer, params));
 __tnRegisterDynamicValidate("FundingUpdateInstruction", (buffer) => { const result = FundingUpdateInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
+/* ----- TYPE DEFINITION FOR InsuranceDepositInstruction ----- */
+
+const __tn_ir_InsuranceDepositInstruction = {
+  typeName: "InsuranceDepositInstruction",
+  root: { op: "const", value: 15n }
+} as const;
+
+export class InsuranceDepositInstruction {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): InsuranceDepositInstruction {
+    if (!buffer || buffer.length === undefined) throw new Error("InsuranceDepositInstruction.__tnCreateView requires a Uint8Array");
+    return new InsuranceDepositInstruction(new Uint8Array(buffer));
+  }
+
+  static builder(): InsuranceDepositInstructionBuilder {
+    return new InsuranceDepositInstructionBuilder();
+  }
+
+  static fromBuilder(builder: InsuranceDepositInstructionBuilder): InsuranceDepositInstruction | null {
+    const buffer = builder.build();
+    return InsuranceDepositInstruction.from_array(buffer);
+  }
+
+  get_market_record_idx(): number {
+    const offset = 0;
+    return this.view.getUint8(offset);
+  }
+
+  set_market_record_idx(value: number): void {
+    const offset = 0;
+    this.view.setUint8(offset, value);
+  }
+
+  get market_record_idx(): number {
+    return this.get_market_record_idx();
+  }
+
+  set market_record_idx(value: number) {
+    this.set_market_record_idx(value);
+  }
+
+  get_reserved0(): number {
+    const offset = 1;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_reserved0(value: number): void {
+    const offset = 1;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get reserved0(): number {
+    return this.get_reserved0();
+  }
+
+  set reserved0(value: number) {
+    this.set_reserved0(value);
+  }
+
+  get_reserved1(): number {
+    const offset = 3;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_reserved1(value: number): void {
+    const offset = 3;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get reserved1(): number {
+    return this.get_reserved1();
+  }
+
+  set reserved1(value: number) {
+    this.set_reserved1(value);
+  }
+
+  get_amount(): bigint {
+    const offset = 7;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_amount(value: bigint): void {
+    const offset = 7;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get amount(): bigint {
+    return this.get_amount();
+  }
+
+  set amount(value: bigint) {
+    this.set_amount(value);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_InsuranceDepositInstruction.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_InsuranceDepositInstruction, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for InsuranceDepositInstruction');
+    }
+    return __tnBigIntToNumber(irResult, 'InsuranceDepositInstruction::footprint');
+  }
+
+  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    if (buffer.length < 15) return { ok: false, code: "tn.buffer_too_small", consumed: 15 };
+    return { ok: true, consumed: 15 };
+  }
+
+  static new(market_record_idx: number, reserved0: number, reserved1: number, amount: bigint): InsuranceDepositInstruction {
+    const buffer = new Uint8Array(15);
+    const view = new DataView(buffer.buffer);
+
+    let offset = 0;
+    view.setUint8(0, market_record_idx); /* market_record_idx */
+    view.setUint16(1, reserved0, true); /* reserved0 (little-endian) */
+    view.setUint32(3, reserved1, true); /* reserved1 (little-endian) */
+    view.setBigUint64(7, amount, true); /* amount (little-endian) */
+
+    return new InsuranceDepositInstruction(buffer);
+  }
+
+  static from_array(buffer: Uint8Array): InsuranceDepositInstruction | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new InsuranceDepositInstruction(buffer);
+  }
+
+}
+
+export class InsuranceDepositInstructionBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+
+  constructor() {
+    this.buffer = new Uint8Array(15);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  set_market_record_idx(value: number): this {
+    this.view.setUint8(0, value);
+    return this;
+  }
+
+  set_reserved0(value: number): this {
+    this.view.setUint16(1, value, true);
+    return this;
+  }
+
+  set_reserved1(value: number): this {
+    this.view.setUint32(3, value, true);
+    return this;
+  }
+
+  set_amount(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(7, cast, true);
+    return this;
+  }
+
+  build(): Uint8Array {
+    return this.buffer.slice();
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    target.set(this.buffer, offset);
+    return target;
+  }
+
+  finish(): InsuranceDepositInstruction {
+    const view = InsuranceDepositInstruction.from_array(this.buffer.slice());
+    if (!view) throw new Error("failed to build InsuranceDepositInstruction");
+    return view;
+  }
+}
+
+__tnRegisterFootprint("InsuranceDepositInstruction", (params) => InsuranceDepositInstruction.__tnInvokeFootprint(params));
+__tnRegisterValidate("InsuranceDepositInstruction", (buffer, params) => InsuranceDepositInstruction.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("InsuranceDepositInstruction", (buffer) => { const result = InsuranceDepositInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
 /* ----- TYPE DEFINITION FOR LiquidateInstruction ----- */
 
 const __tn_ir_LiquidateInstruction = {
@@ -3481,6 +3905,1558 @@ export class LiquidateInstructionBuilder {
 __tnRegisterFootprint("LiquidateInstruction", (params) => LiquidateInstruction.__tnInvokeFootprint(params));
 __tnRegisterValidate("LiquidateInstruction", (buffer, params) => LiquidateInstruction.__tnInvokeValidate(buffer, params));
 __tnRegisterDynamicValidate("LiquidateInstruction", (buffer) => { const result = LiquidateInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
+/* ----- TYPE DEFINITION FOR MarginAccountCreateInstruction ----- */
+
+const __tn_ir_MarginAccountCreateInstruction = {
+  typeName: "MarginAccountCreateInstruction",
+  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "align", alignment: 1, node: { op: "const", value: 1n } }, right: { op: "align", alignment: 2, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 2, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 2, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 4, node: { op: "const", value: 4n } } }, right: { op: "align", alignment: 4, node: { op: "const", value: 4n } } }, right: { op: "align", alignment: 1, node: { op: "mul", left: { op: "field", param: "proof.proof_sz" }, right: { op: "const", value: 1n } } } } }
+} as const;
+
+export class MarginAccountCreateInstruction {
+  private view: DataView;
+  private __tnFieldContext: Record<string, number | bigint> | null = null;
+  private __tnParams: MarginAccountCreateInstruction.Params;
+
+  private constructor(private buffer: Uint8Array, params?: MarginAccountCreateInstruction.Params, fieldContext?: Record<string, number | bigint>) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    this.__tnFieldContext = fieldContext ?? null;
+    if (params) {
+      this.__tnParams = params;
+    } else {
+      const derived = MarginAccountCreateInstruction.__tnExtractParams(this.view, buffer);
+      if (!derived) {
+        throw new Error("MarginAccountCreateInstruction: failed to derive dynamic parameters");
+      }
+      this.__tnParams = derived.params;
+    }
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { params?: MarginAccountCreateInstruction.Params, fieldContext?: Record<string, number | bigint> }): MarginAccountCreateInstruction {
+    if (!buffer || buffer.length === undefined) throw new Error("MarginAccountCreateInstruction.__tnCreateView requires a Uint8Array");
+    let params = opts?.params ?? null;
+    if (!params) {
+      const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+      const derived = MarginAccountCreateInstruction.__tnExtractParams(view, buffer);
+      if (!derived) throw new Error("MarginAccountCreateInstruction.__tnCreateView: failed to derive params");
+      params = derived.params;
+    }
+    const instance = new MarginAccountCreateInstruction(new Uint8Array(buffer), params, opts?.fieldContext);
+    return instance;
+  }
+
+  dynamicParams(): MarginAccountCreateInstruction.Params {
+    return this.__tnParams;
+  }
+
+  withFieldContext(context: Record<string, number | bigint>): this {
+    this.__tnFieldContext = context;
+    return this;
+  }
+
+  private __tnResolveFieldRef(path: string): number {
+    const getterName = `get_${path.replace(/[.]/g, '_')}`;
+    const getter = (this as any)[getterName];
+    if (typeof getter === "function") {
+      const value = getter.call(this);
+      return typeof value === "bigint" ? __tnBigIntToNumber(value, "MarginAccountCreateInstruction::__tnResolveFieldRef") : value;
+    }
+    if (this.__tnFieldContext && Object.prototype.hasOwnProperty.call(this.__tnFieldContext, path)) {
+      const contextValue = this.__tnFieldContext[path];
+      return typeof contextValue === "bigint" ? __tnBigIntToNumber(contextValue, "MarginAccountCreateInstruction::__tnResolveFieldRef") : contextValue;
+    }
+    throw new Error("MarginAccountCreateInstruction: field reference '" + path + "' is not available; provide fieldContext when creating this view");
+  }
+
+  static builder(): MarginAccountCreateInstructionBuilder {
+    return new MarginAccountCreateInstructionBuilder();
+  }
+
+  static fromBuilder(builder: MarginAccountCreateInstructionBuilder): MarginAccountCreateInstruction | null {
+    const buffer = builder.build();
+    const params = builder.dynamicParams();
+    return MarginAccountCreateInstruction.from_array(buffer, { params });
+  }
+
+  static readonly flexibleArrayWriters = Object.freeze([
+    { field: "proof", method: "proof", sizeField: "proof_sz", paramKey: "proof_sz", elementSize: 1 },
+  ] as const);
+
+  private static __tnExtractParams(view: DataView, buffer: Uint8Array): { params: MarginAccountCreateInstruction.Params; derived: Record<string, bigint> | null } | null {
+    if (buffer.length < 15) {
+      return null;
+    }
+    const __tnParam_proof_proof_sz = __tnToBigInt(view.getUint32(11, true));
+    const __tnExtractedParams = MarginAccountCreateInstruction.Params.fromValues({
+      proof_proof_sz: __tnParam_proof_proof_sz,
+    });
+    return { params: __tnExtractedParams, derived: null };
+  }
+
+  get_reserved0(): number {
+    const offset = 0;
+    return this.view.getUint8(offset);
+  }
+
+  set_reserved0(value: number): void {
+    const offset = 0;
+    this.view.setUint8(offset, value);
+  }
+
+  get reserved0(): number {
+    return this.get_reserved0();
+  }
+
+  set reserved0(value: number) {
+    this.set_reserved0(value);
+  }
+
+  get_owner_account_idx(): number {
+    const offset = 1;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_owner_account_idx(value: number): void {
+    const offset = 1;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get owner_account_idx(): number {
+    return this.get_owner_account_idx();
+  }
+
+  set owner_account_idx(value: number) {
+    this.set_owner_account_idx(value);
+  }
+
+  get_margin_account_idx(): number {
+    const offset = 3;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_margin_account_idx(value: number): void {
+    const offset = 3;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get margin_account_idx(): number {
+    return this.get_margin_account_idx();
+  }
+
+  set margin_account_idx(value: number) {
+    this.set_margin_account_idx(value);
+  }
+
+  get_vault_account_idx(): number {
+    const offset = 5;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_vault_account_idx(value: number): void {
+    const offset = 5;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get vault_account_idx(): number {
+    return this.get_vault_account_idx();
+  }
+
+  set vault_account_idx(value: number) {
+    this.set_vault_account_idx(value);
+  }
+
+  get_account_id(): number {
+    const offset = 7;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_account_id(value: number): void {
+    const offset = 7;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get account_id(): number {
+    return this.get_account_id();
+  }
+
+  set account_id(value: number) {
+    this.set_account_id(value);
+  }
+
+  get_proof_sz(): number {
+    const offset = 11;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_proof_sz(value: number): void {
+    const offset = 11;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get proof_sz(): number {
+    return this.get_proof_sz();
+  }
+
+  set proof_sz(value: number) {
+    this.set_proof_sz(value);
+  }
+
+  get_proof_length(): number {
+    return this.__tnResolveFieldRef("proof_sz");
+  }
+
+  get_proof_at(index: number): number {
+    const offset = 15;
+    return this.view.getUint8(offset + index * 1);
+  }
+
+  get_proof(): number[] {
+    const len = this.get_proof_length();
+    const result: number[] = [];
+    for (let i = 0; i < len; i++) {
+      result.push(this.get_proof_at(i));
+    }
+    return result;
+  }
+
+  set_proof_at(index: number, value: number): void {
+    const offset = 15;
+    this.view.setUint8((offset + index * 1), value);
+  }
+
+  set_proof(value: number[]): void {
+    const len = Math.min(this.get_proof_length(), value.length);
+    for (let i = 0; i < len; i++) {
+      this.set_proof_at(i, value[i]);
+    }
+  }
+
+  get proof(): number[] {
+    return this.get_proof();
+  }
+
+  set proof(value: number[]) {
+    this.set_proof(value);
+  }
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_MarginAccountCreateInstruction.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_MarginAccountCreateInstruction, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(proof_proof_sz: number | bigint): bigint {
+    const params = MarginAccountCreateInstruction.Params.fromValues({
+      proof_proof_sz: proof_proof_sz,
+    });
+    return this.footprintIrFromParams(params);
+  }
+
+  private static __tnPackParams(params: MarginAccountCreateInstruction.Params): Record<string, bigint> {
+    const record: Record<string, bigint> = Object.create(null);
+    record["proof.proof_sz"] = params.proof_proof_sz;
+    return record;
+  }
+
+  static footprintIrFromParams(params: MarginAccountCreateInstruction.Params): bigint {
+    const __tnParams = this.__tnPackParams(params);
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static footprintFromParams(params: MarginAccountCreateInstruction.Params): number {
+    const irResult = this.footprintIrFromParams(params);
+    const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for MarginAccountCreateInstruction');
+    return __tnBigIntToNumber(irResult, 'MarginAccountCreateInstruction::footprintFromParams');
+  }
+
+  static footprintFromValues(input: { proof_proof_sz: number | bigint }): number {
+    const params = MarginAccountCreateInstruction.params(input);
+    return this.footprintFromParams(params);
+  }
+
+  static footprint(params: MarginAccountCreateInstruction.Params): number {
+    return this.footprintFromParams(params);
+  }
+
+  static validate(buffer: Uint8Array, opts?: { params?: MarginAccountCreateInstruction.Params }): { ok: boolean; code?: string; consumed?: number; params?: MarginAccountCreateInstruction.Params } {
+    if (!buffer || buffer.length === undefined) {
+      return { ok: false, code: "tn.invalid_buffer" };
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    let params = opts?.params ?? null;
+    if (!params) {
+      const extracted = this.__tnExtractParams(view, buffer);
+      if (!extracted) return { ok: false, code: "tn.param_extraction_failed" };
+      params = extracted.params;
+    }
+    const __tnParamsRec = this.__tnPackParams(params);
+    const irResult = this.__tnValidateInternal(buffer, __tnParamsRec);
+    if (!irResult.ok) {
+      return { ok: false, code: irResult.code, consumed: irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'MarginAccountCreateInstruction::validate') : undefined, params };
+    }
+    const consumed = irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'MarginAccountCreateInstruction::validate') : undefined;
+    return { ok: true, consumed, params };
+  }
+
+  static from_array(buffer: Uint8Array, opts?: { params?: MarginAccountCreateInstruction.Params }): MarginAccountCreateInstruction | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    let params = opts?.params ?? null;
+    if (!params) {
+      const derived = this.__tnExtractParams(view, buffer);
+      if (!derived) return null;
+      params = derived.params;
+    }
+    const validation = this.validate(buffer, { params });
+    if (!validation.ok) {
+      return null;
+    }
+    const cached = validation.params ?? params;
+    const state = new MarginAccountCreateInstruction(buffer, cached);
+    return state;
+  }
+
+
+}
+
+export namespace MarginAccountCreateInstruction {
+  export type Params = {
+    /** ABI path: proof.proof_sz */
+    readonly proof_proof_sz: bigint;
+  };
+
+  export const ParamKeys = Object.freeze({
+    proof_proof_sz: "proof.proof_sz",
+  } as const);
+
+  export const Params = {
+    fromValues(input: { proof_proof_sz: number | bigint }): Params {
+      return {
+        proof_proof_sz: __tnToBigInt(input.proof_proof_sz),
+      };
+    },
+    fromBuilder(source: { dynamicParams(): Params } | { params: Params } | Params): Params {
+      if ((source as { dynamicParams?: () => Params }).dynamicParams) {
+        return (source as { dynamicParams(): Params }).dynamicParams();
+      }
+      if ((source as { params?: Params }).params) {
+        return (source as { params: Params }).params;
+      }
+      return source as Params;
+    }
+  };
+
+  export function params(input: { proof_proof_sz: number | bigint }): Params {
+    return Params.fromValues(input);
+  }
+}
+
+export class MarginAccountCreateInstructionBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+  private __tnCachedParams: MarginAccountCreateInstruction.Params | null = null;
+  private __tnLastBuffer: Uint8Array | null = null;
+  private __tnLastParams: MarginAccountCreateInstruction.Params | null = null;
+  private __tnFam_proof: Uint8Array | null = null;
+  private __tnFam_proofCount: number | null = null;
+  private __tnFamWriter_proof?: __TnFamWriterResult<MarginAccountCreateInstructionBuilder>;
+
+  constructor() {
+    this.buffer = new Uint8Array(15);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  private __tnInvalidate(): void {
+    this.__tnCachedParams = null;
+    this.__tnLastBuffer = null;
+    this.__tnLastParams = null;
+  }
+
+  set_reserved0(value: number): this {
+    this.view.setUint8(0, value);
+    this.__tnInvalidate();
+    return this;
+  }
+
+  set_owner_account_idx(value: number): this {
+    this.view.setUint16(1, value, true);
+    this.__tnInvalidate();
+    return this;
+  }
+
+  set_margin_account_idx(value: number): this {
+    this.view.setUint16(3, value, true);
+    this.__tnInvalidate();
+    return this;
+  }
+
+  set_vault_account_idx(value: number): this {
+    this.view.setUint16(5, value, true);
+    this.__tnInvalidate();
+    return this;
+  }
+
+  set_account_id(value: number): this {
+    this.view.setUint32(7, value, true);
+    this.__tnInvalidate();
+    return this;
+  }
+
+  set_proof_sz(value: number): this {
+    this.view.setUint32(11, value, true);
+    this.__tnInvalidate();
+    return this;
+  }
+
+  proof(): __TnFamWriterResult<MarginAccountCreateInstructionBuilder> {
+    if (!this.__tnFamWriter_proof) {
+      this.__tnFamWriter_proof = __tnCreateFamWriter(this, "proof", (payload) => {
+        const bytes = new Uint8Array(payload);
+        const elementCount = bytes.length;
+        this.__tnFam_proof = bytes;
+        this.__tnFam_proofCount = elementCount;
+        this.set_proof_sz(elementCount);
+        this.__tnInvalidate();
+      });
+    }
+    return this.__tnFamWriter_proof!;
+  }
+
+  build(): Uint8Array {
+    const params = this.__tnComputeParams();
+    const size = MarginAccountCreateInstruction.footprintFromParams(params);
+    const buffer = new Uint8Array(size);
+    this.__tnWriteInto(buffer);
+    this.__tnValidateOrThrow(buffer, params);
+    return buffer;
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    const params = this.__tnComputeParams();
+    const size = MarginAccountCreateInstruction.footprintFromParams(params);
+    if (target.length - offset < size) throw new Error("MarginAccountCreateInstructionBuilder: target buffer too small");
+    const slice = target.subarray(offset, offset + size);
+    this.__tnWriteInto(slice);
+    this.__tnValidateOrThrow(slice, params);
+    return target;
+  }
+
+  finish(): MarginAccountCreateInstruction {
+    const buffer = this.build();
+    const params = this.__tnLastParams ?? this.__tnComputeParams();
+    const view = MarginAccountCreateInstruction.from_array(buffer, { params });
+    if (!view) throw new Error("MarginAccountCreateInstructionBuilder: failed to finalize view");
+    return view;
+  }
+
+  finishView(): MarginAccountCreateInstruction {
+    return this.finish();
+  }
+
+  dynamicParams(): MarginAccountCreateInstruction.Params {
+    return this.__tnComputeParams();
+  }
+
+  private __tnComputeParams(): MarginAccountCreateInstruction.Params {
+    if (this.__tnCachedParams) return this.__tnCachedParams;
+    const params = MarginAccountCreateInstruction.Params.fromValues({
+      proof_proof_sz: (() => { if (this.__tnFam_proofCount === null) throw new Error("MarginAccountCreateInstructionBuilder: field 'proof' must be written before computing params"); return __tnToBigInt(this.__tnFam_proofCount); })(),
+    });
+    this.__tnCachedParams = params;
+    return params;
+  }
+
+  private __tnWriteInto(target: Uint8Array): void {
+    target.set(this.buffer, 0);
+    let cursor = this.buffer.length;
+    const __tnLocal_proof_bytes = this.__tnFam_proof;
+    if (!__tnLocal_proof_bytes) throw new Error("MarginAccountCreateInstructionBuilder: field 'proof' must be written before build");
+    target.set(__tnLocal_proof_bytes, cursor);
+    cursor += __tnLocal_proof_bytes.length;
+  }
+
+  private __tnValidateOrThrow(buffer: Uint8Array, params: MarginAccountCreateInstruction.Params): void {
+    const result = MarginAccountCreateInstruction.validate(buffer, { params });
+    if (!result.ok) {
+      throw new Error(`${ MarginAccountCreateInstruction }Builder: builder produced invalid buffer (code=${result.code ?? "unknown"})`);
+    }
+    this.__tnLastParams = result.params ?? params;
+    this.__tnLastBuffer = buffer;
+  }
+}
+
+__tnRegisterFootprint("MarginAccountCreateInstruction", (params) => MarginAccountCreateInstruction.__tnInvokeFootprint(params));
+__tnRegisterValidate("MarginAccountCreateInstruction", (buffer, params) => MarginAccountCreateInstruction.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("MarginAccountCreateInstruction", (buffer) => { const result = MarginAccountCreateInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
+/* ----- TYPE DEFINITION FOR MarginLinkInstruction ----- */
+
+const __tn_ir_MarginLinkInstruction = {
+  typeName: "MarginLinkInstruction",
+  root: { op: "const", value: 7n }
+} as const;
+
+export class MarginLinkInstruction {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MarginLinkInstruction {
+    if (!buffer || buffer.length === undefined) throw new Error("MarginLinkInstruction.__tnCreateView requires a Uint8Array");
+    return new MarginLinkInstruction(new Uint8Array(buffer));
+  }
+
+  static builder(): MarginLinkInstructionBuilder {
+    return new MarginLinkInstructionBuilder();
+  }
+
+  static fromBuilder(builder: MarginLinkInstructionBuilder): MarginLinkInstruction | null {
+    const buffer = builder.build();
+    return MarginLinkInstruction.from_array(buffer);
+  }
+
+  get_margin_record_idx(): number {
+    const offset = 0;
+    return this.view.getUint8(offset);
+  }
+
+  set_margin_record_idx(value: number): void {
+    const offset = 0;
+    this.view.setUint8(offset, value);
+  }
+
+  get margin_record_idx(): number {
+    return this.get_margin_record_idx();
+  }
+
+  set margin_record_idx(value: number) {
+    this.set_margin_record_idx(value);
+  }
+
+  get_market_record_idx(): number {
+    const offset = 1;
+    return this.view.getUint8(offset);
+  }
+
+  set_market_record_idx(value: number): void {
+    const offset = 1;
+    this.view.setUint8(offset, value);
+  }
+
+  get market_record_idx(): number {
+    return this.get_market_record_idx();
+  }
+
+  set market_record_idx(value: number) {
+    this.set_market_record_idx(value);
+  }
+
+  get_reserved0(): number[] {
+    const offset = 2;
+    const result: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      result.push(this.view.getUint8((offset + i * 1)));
+    }
+    return result;
+  }
+
+  set_reserved0(value: number[]): void {
+    const offset = 2;
+    if (value.length !== 5) {
+      throw new Error('Array length must be 5');
+    }
+    for (let i = 0; i < 5; i++) {
+      this.view.setUint8((offset + i * 1), value[i]);
+    }
+  }
+
+  get reserved0(): number[] {
+    return this.get_reserved0();
+  }
+
+  set reserved0(value: number[]) {
+    this.set_reserved0(value);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_MarginLinkInstruction.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_MarginLinkInstruction, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for MarginLinkInstruction');
+    }
+    return __tnBigIntToNumber(irResult, 'MarginLinkInstruction::footprint');
+  }
+
+  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    if (buffer.length < 7) return { ok: false, code: "tn.buffer_too_small", consumed: 7 };
+    return { ok: true, consumed: 7 };
+  }
+
+  static from_array(buffer: Uint8Array): MarginLinkInstruction | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new MarginLinkInstruction(buffer);
+  }
+
+}
+
+export class MarginLinkInstructionBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+
+  constructor() {
+    this.buffer = new Uint8Array(7);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  set_margin_record_idx(value: number): this {
+    this.view.setUint8(0, value);
+    return this;
+  }
+
+  set_market_record_idx(value: number): this {
+    this.view.setUint8(1, value);
+    return this;
+  }
+
+  set_reserved0(values: number[]): this {
+    if (values.length !== 5) throw new Error("reserved0 expects 5 elements");
+    for (let i = 0; i < values.length; i++) {
+      const byteOffset = 2 + i * 1;
+      this.view.setUint8(byteOffset, values[i]);
+    }
+    return this;
+  }
+
+  build(): Uint8Array {
+    return this.buffer.slice();
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    target.set(this.buffer, offset);
+    return target;
+  }
+
+  finish(): MarginLinkInstruction {
+    const view = MarginLinkInstruction.from_array(this.buffer.slice());
+    if (!view) throw new Error("failed to build MarginLinkInstruction");
+    return view;
+  }
+}
+
+__tnRegisterFootprint("MarginLinkInstruction", (params) => MarginLinkInstruction.__tnInvokeFootprint(params));
+__tnRegisterValidate("MarginLinkInstruction", (buffer, params) => MarginLinkInstruction.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("MarginLinkInstruction", (buffer) => { const result = MarginLinkInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
+/* ----- TYPE DEFINITION FOR MarginRecordEntry ----- */
+
+const __tn_ir_MarginRecordEntry = {
+  typeName: "MarginRecordEntry",
+  root: { op: "const", value: 4n }
+} as const;
+
+export class MarginRecordEntry {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MarginRecordEntry {
+    if (!buffer || buffer.length === undefined) throw new Error("MarginRecordEntry.__tnCreateView requires a Uint8Array");
+    return new MarginRecordEntry(new Uint8Array(buffer));
+  }
+
+  static builder(): MarginRecordEntryBuilder {
+    return new MarginRecordEntryBuilder();
+  }
+
+  static fromBuilder(builder: MarginRecordEntryBuilder): MarginRecordEntry | null {
+    const buffer = builder.build();
+    return MarginRecordEntry.from_array(buffer);
+  }
+
+  get_seat_arena_account_idx(): number {
+    const offset = 0;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_seat_arena_account_idx(value: number): void {
+    const offset = 0;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get seat_arena_account_idx(): number {
+    return this.get_seat_arena_account_idx();
+  }
+
+  set seat_arena_account_idx(value: number) {
+    this.set_seat_arena_account_idx(value);
+  }
+
+  get_oracle_feed_account_idx(): number {
+    const offset = 2;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_oracle_feed_account_idx(value: number): void {
+    const offset = 2;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get oracle_feed_account_idx(): number {
+    return this.get_oracle_feed_account_idx();
+  }
+
+  set oracle_feed_account_idx(value: number) {
+    this.set_oracle_feed_account_idx(value);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_MarginRecordEntry.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_MarginRecordEntry, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for MarginRecordEntry');
+    }
+    return __tnBigIntToNumber(irResult, 'MarginRecordEntry::footprint');
+  }
+
+  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    if (buffer.length < 4) return { ok: false, code: "tn.buffer_too_small", consumed: 4 };
+    return { ok: true, consumed: 4 };
+  }
+
+  static new(seat_arena_account_idx: number, oracle_feed_account_idx: number): MarginRecordEntry {
+    const buffer = new Uint8Array(4);
+    const view = new DataView(buffer.buffer);
+
+    let offset = 0;
+    view.setUint16(0, seat_arena_account_idx, true); /* seat_arena_account_idx (little-endian) */
+    view.setUint16(2, oracle_feed_account_idx, true); /* oracle_feed_account_idx (little-endian) */
+
+    return new MarginRecordEntry(buffer);
+  }
+
+  static from_array(buffer: Uint8Array): MarginRecordEntry | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new MarginRecordEntry(buffer);
+  }
+
+}
+
+export class MarginRecordEntryBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+
+  constructor() {
+    this.buffer = new Uint8Array(4);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  set_seat_arena_account_idx(value: number): this {
+    this.view.setUint16(0, value, true);
+    return this;
+  }
+
+  set_oracle_feed_account_idx(value: number): this {
+    this.view.setUint16(2, value, true);
+    return this;
+  }
+
+  build(): Uint8Array {
+    return this.buffer.slice();
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    target.set(this.buffer, offset);
+    return target;
+  }
+
+  finish(): MarginRecordEntry {
+    const view = MarginRecordEntry.from_array(this.buffer.slice());
+    if (!view) throw new Error("failed to build MarginRecordEntry");
+    return view;
+  }
+}
+
+__tnRegisterFootprint("MarginRecordEntry", (params) => MarginRecordEntry.__tnInvokeFootprint(params));
+__tnRegisterValidate("MarginRecordEntry", (buffer, params) => MarginRecordEntry.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("MarginRecordEntry", (buffer) => { const result = MarginRecordEntry.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
+/* ----- TYPE DEFINITION FOR MarginRecordInstruction ----- */
+
+const __tn_ir_MarginRecordInstruction = {
+  typeName: "MarginRecordInstruction",
+  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "add", left: { op: "align", alignment: 1, node: { op: "const", value: 1n } }, right: { op: "align", alignment: 2, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 1n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 1n } } }, right: { op: "align", alignment: 2, node: { op: "const", value: 2n } } }, right: { op: "align", alignment: 1, node: { op: "mul", left: { op: "field", param: "entries.link_cnt" }, right: { op: "const", value: 4n } } } }, right: { op: "align", alignment: 1, node: { op: "mul", left: { op: "mul", left: { op: "bitAnd", left: { op: "field", param: "padding.link_cnt" }, right: { op: "const", value: 1n } }, right: { op: "const", value: 4n } }, right: { op: "const", value: 1n } } } } }
+} as const;
+
+export class MarginRecordInstruction {
+  private view: DataView;
+  private __tnFieldContext: Record<string, number | bigint> | null = null;
+  private __tnParams: MarginRecordInstruction.Params;
+
+  private constructor(private buffer: Uint8Array, params?: MarginRecordInstruction.Params, fieldContext?: Record<string, number | bigint>) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    this.__tnFieldContext = fieldContext ?? null;
+    if (params) {
+      this.__tnParams = params;
+    } else {
+      const derived = MarginRecordInstruction.__tnExtractParams(this.view, buffer);
+      if (!derived) {
+        throw new Error("MarginRecordInstruction: failed to derive dynamic parameters");
+      }
+      this.__tnParams = derived.params;
+    }
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { params?: MarginRecordInstruction.Params, fieldContext?: Record<string, number | bigint> }): MarginRecordInstruction {
+    if (!buffer || buffer.length === undefined) throw new Error("MarginRecordInstruction.__tnCreateView requires a Uint8Array");
+    let params = opts?.params ?? null;
+    if (!params) {
+      const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+      const derived = MarginRecordInstruction.__tnExtractParams(view, buffer);
+      if (!derived) throw new Error("MarginRecordInstruction.__tnCreateView: failed to derive params");
+      params = derived.params;
+    }
+    const instance = new MarginRecordInstruction(new Uint8Array(buffer), params, opts?.fieldContext);
+    return instance;
+  }
+
+  dynamicParams(): MarginRecordInstruction.Params {
+    return this.__tnParams;
+  }
+
+  withFieldContext(context: Record<string, number | bigint>): this {
+    this.__tnFieldContext = context;
+    return this;
+  }
+
+  private __tnResolveFieldRef(path: string): number {
+    const getterName = `get_${path.replace(/[.]/g, '_')}`;
+    const getter = (this as any)[getterName];
+    if (typeof getter === "function") {
+      const value = getter.call(this);
+      return typeof value === "bigint" ? __tnBigIntToNumber(value, "MarginRecordInstruction::__tnResolveFieldRef") : value;
+    }
+    if (this.__tnFieldContext && Object.prototype.hasOwnProperty.call(this.__tnFieldContext, path)) {
+      const contextValue = this.__tnFieldContext[path];
+      return typeof contextValue === "bigint" ? __tnBigIntToNumber(contextValue, "MarginRecordInstruction::__tnResolveFieldRef") : contextValue;
+    }
+    throw new Error("MarginRecordInstruction: field reference '" + path + "' is not available; provide fieldContext when creating this view");
+  }
+
+  static __tnComputeSequentialLayout(view: DataView, buffer: Uint8Array): { params: Record<string, bigint> | null; offsets: Record<string, number> | null; derived: Record<string, bigint> | null } | null {
+    const offsets: Record<string, number> = Object.create(null);
+    const __tnLength = buffer.length;
+    let __tnFieldValue_margin_record_idx: number | null = null;
+    let __tnFieldValue_margin_account_idx: number | null = null;
+    let __tnFieldValue_link_cnt: number | null = null;
+    let __tnFieldValue_reserved0: number | null = null;
+    let __tnFieldValue_exchange_meta_account_idx: number | null = null;
+    let __tnCursorMutable = 0;
+    if (__tnCursorMutable + 1 > __tnLength) return null;
+    const __tnRead_margin_record_idx = view.getUint8(__tnCursorMutable);
+    __tnFieldValue_margin_record_idx = __tnRead_margin_record_idx;
+    __tnCursorMutable += 1;
+    if (__tnCursorMutable + 2 > __tnLength) return null;
+    const __tnRead_margin_account_idx = view.getUint16(__tnCursorMutable, true);
+    __tnFieldValue_margin_account_idx = __tnRead_margin_account_idx;
+    __tnCursorMutable += 2;
+    if (__tnCursorMutable + 1 > __tnLength) return null;
+    const __tnRead_link_cnt = view.getUint8(__tnCursorMutable);
+    __tnFieldValue_link_cnt = __tnRead_link_cnt;
+    __tnCursorMutable += 1;
+    if (__tnCursorMutable + 1 > __tnLength) return null;
+    const __tnRead_reserved0 = view.getUint8(__tnCursorMutable);
+    __tnFieldValue_reserved0 = __tnRead_reserved0;
+    __tnCursorMutable += 1;
+    if (__tnCursorMutable + 2 > __tnLength) return null;
+    const __tnRead_exchange_meta_account_idx = view.getUint16(__tnCursorMutable, true);
+    __tnFieldValue_exchange_meta_account_idx = __tnRead_exchange_meta_account_idx;
+    __tnCursorMutable += 2;
+    if (__tnFieldValue_link_cnt === null) return null;
+    const __tnArrayCount_entries = Math.trunc(Number(__tnFieldValue_link_cnt));
+    if (!Number.isFinite(__tnArrayCount_entries) || __tnArrayCount_entries < 0) return null;
+    const __tnArrayBytes_entries = __tnArrayCount_entries * 4;
+    if (__tnCursorMutable + __tnArrayBytes_entries > __tnLength) return null;
+    __tnCursorMutable += __tnArrayBytes_entries;
+    if (__tnFieldValue_link_cnt === null) return null;
+    const __tnArrayCount_padding = Math.trunc(((Number(__tnFieldValue_link_cnt) & 1) * 4));
+    if (!Number.isFinite(__tnArrayCount_padding) || __tnArrayCount_padding < 0) return null;
+    const __tnArrayBytes_padding = __tnArrayCount_padding * 1;
+    offsets["padding"] = __tnCursorMutable;
+    if (__tnCursorMutable + __tnArrayBytes_padding > __tnLength) return null;
+    __tnCursorMutable += __tnArrayBytes_padding;
+    return { params: null, offsets: offsets, derived: null };
+  }
+
+  private static __tnExtractParams(view: DataView, buffer: Uint8Array): { params: MarginRecordInstruction.Params; derived: Record<string, bigint> | null } | null {
+    if (buffer.length < 4) {
+      return null;
+    }
+    const __tnParam_entries_link_cnt = __tnToBigInt(view.getUint8(3));
+    if (buffer.length < 4) {
+      return null;
+    }
+    const __tnParam_padding_link_cnt = __tnToBigInt(view.getUint8(3));
+    const __tnExtractedParams = MarginRecordInstruction.Params.fromValues({
+      entries_link_cnt: __tnParam_entries_link_cnt,
+      padding_link_cnt: __tnParam_padding_link_cnt,
+    });
+    return { params: __tnExtractedParams, derived: null };
+  }
+
+  /* Dynamic offsets are derived once per view; mutating length fields later does not invalidate this cache. */
+  private __tnDynamicOffsetCache: Record<string, number> | null = null;
+  private __tnGetDynamicOffset(field: string): number {
+    if (!this.__tnDynamicOffsetCache) {
+      this.__tnDynamicOffsetCache = this.__tnComputeDynamicOffsets();
+    }
+    const offset = this.__tnDynamicOffsetCache[field];
+    if (offset === undefined) {
+      throw new Error("MarginRecordInstruction: field '" + field + "' does not have a dynamic offset");
+    }
+    return offset;
+  }
+
+  private __tnComputeDynamicOffsets(): Record<string, number> {
+    const layout = MarginRecordInstruction.__tnComputeSequentialLayout(this.view, this.buffer);
+    if (!layout || !layout.offsets) {
+      throw new Error("MarginRecordInstruction: failed to compute dynamic offsets");
+    }
+    return layout.offsets;
+  }
+
+  get_margin_record_idx(): number {
+    const offset = 0;
+    return this.view.getUint8(offset);
+  }
+
+  set_margin_record_idx(value: number): void {
+    const offset = 0;
+    this.view.setUint8(offset, value);
+  }
+
+  get margin_record_idx(): number {
+    return this.get_margin_record_idx();
+  }
+
+  set margin_record_idx(value: number) {
+    this.set_margin_record_idx(value);
+  }
+
+  get_margin_account_idx(): number {
+    const offset = 1;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_margin_account_idx(value: number): void {
+    const offset = 1;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get margin_account_idx(): number {
+    return this.get_margin_account_idx();
+  }
+
+  set margin_account_idx(value: number) {
+    this.set_margin_account_idx(value);
+  }
+
+  get_link_cnt(): number {
+    const offset = 3;
+    return this.view.getUint8(offset);
+  }
+
+  set_link_cnt(value: number): void {
+    const offset = 3;
+    this.view.setUint8(offset, value);
+  }
+
+  get link_cnt(): number {
+    return this.get_link_cnt();
+  }
+
+  set link_cnt(value: number) {
+    this.set_link_cnt(value);
+  }
+
+  get_reserved0(): number {
+    const offset = 4;
+    return this.view.getUint8(offset);
+  }
+
+  set_reserved0(value: number): void {
+    const offset = 4;
+    this.view.setUint8(offset, value);
+  }
+
+  get reserved0(): number {
+    return this.get_reserved0();
+  }
+
+  set reserved0(value: number) {
+    this.set_reserved0(value);
+  }
+
+  get_exchange_meta_account_idx(): number {
+    const offset = 5;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_exchange_meta_account_idx(value: number): void {
+    const offset = 5;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get exchange_meta_account_idx(): number {
+    return this.get_exchange_meta_account_idx();
+  }
+
+  set exchange_meta_account_idx(value: number) {
+    this.set_exchange_meta_account_idx(value);
+  }
+
+  get_entries_length(): number {
+    return this.__tnResolveFieldRef("link_cnt");
+  }
+
+  get_entries_at(index: number): MarginRecordEntry {
+    const offset = 7;
+    const slice = this.buffer.subarray((offset + index * 4), (offset + (index + 1) * 4));
+    return MarginRecordEntry.from_array(slice)!;
+  }
+
+  get_entries(): MarginRecordEntry[] {
+    const len = this.get_entries_length();
+    const result: MarginRecordEntry[] = [];
+    for (let i = 0; i < len; i++) {
+      result.push(this.get_entries_at(i));
+    }
+    return result;
+  }
+
+  set_entries_at(index: number, value: MarginRecordEntry): void {
+    const offset = 7;
+    const slice = this.buffer.subarray(offset + index * 4, offset + (index + 1) * 4);
+    slice.set(value['buffer']);
+  }
+
+  set_entries(value: MarginRecordEntry[]): void {
+    const len = Math.min(this.get_entries_length(), value.length);
+    for (let i = 0; i < len; i++) {
+      this.set_entries_at(i, value[i]);
+    }
+  }
+
+  get entries(): MarginRecordEntry[] {
+    return this.get_entries();
+  }
+
+  set entries(value: MarginRecordEntry[]) {
+    this.set_entries(value);
+  }
+
+  get_padding_length(): number {
+    return ((this.__tnResolveFieldRef("link_cnt") & 1) * 4);
+  }
+
+  get_padding_at(index: number): number {
+    const offset = this.__tnGetDynamicOffset("padding");
+    return this.view.getUint8(offset + index * 1);
+  }
+
+  get_padding(): number[] {
+    const len = this.get_padding_length();
+    const result: number[] = [];
+    for (let i = 0; i < len; i++) {
+      result.push(this.get_padding_at(i));
+    }
+    return result;
+  }
+
+  set_padding_at(index: number, value: number): void {
+    const offset = this.__tnGetDynamicOffset("padding");
+    this.view.setUint8((offset + index * 1), value);
+  }
+
+  set_padding(value: number[]): void {
+    const len = Math.min(this.get_padding_length(), value.length);
+    for (let i = 0; i < len; i++) {
+      this.set_padding_at(i, value[i]);
+    }
+  }
+
+  get padding(): number[] {
+    return this.get_padding();
+  }
+
+  set padding(value: number[]) {
+    this.set_padding(value);
+  }
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_MarginRecordInstruction.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_MarginRecordInstruction, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(entries_link_cnt: number | bigint, padding_link_cnt: number | bigint): bigint {
+    const params = MarginRecordInstruction.Params.fromValues({
+      entries_link_cnt: entries_link_cnt,
+      padding_link_cnt: padding_link_cnt,
+    });
+    return this.footprintIrFromParams(params);
+  }
+
+  private static __tnPackParams(params: MarginRecordInstruction.Params): Record<string, bigint> {
+    const record: Record<string, bigint> = Object.create(null);
+    record["entries.link_cnt"] = params.entries_link_cnt;
+    record["padding.link_cnt"] = params.padding_link_cnt;
+    return record;
+  }
+
+  static footprintIrFromParams(params: MarginRecordInstruction.Params): bigint {
+    const __tnParams = this.__tnPackParams(params);
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static footprintFromParams(params: MarginRecordInstruction.Params): number {
+    const irResult = this.footprintIrFromParams(params);
+    const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for MarginRecordInstruction');
+    return __tnBigIntToNumber(irResult, 'MarginRecordInstruction::footprintFromParams');
+  }
+
+  static footprintFromValues(input: { entries_link_cnt: number | bigint, padding_link_cnt: number | bigint }): number {
+    const params = MarginRecordInstruction.params(input);
+    return this.footprintFromParams(params);
+  }
+
+  static footprint(params: MarginRecordInstruction.Params): number {
+    return this.footprintFromParams(params);
+  }
+
+  static validate(buffer: Uint8Array, opts?: { params?: MarginRecordInstruction.Params }): { ok: boolean; code?: string; consumed?: number; params?: MarginRecordInstruction.Params } {
+    if (!buffer || buffer.length === undefined) {
+      return { ok: false, code: "tn.invalid_buffer" };
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    let params = opts?.params ?? null;
+    if (!params) {
+      const extracted = this.__tnExtractParams(view, buffer);
+      if (!extracted) return { ok: false, code: "tn.param_extraction_failed" };
+      params = extracted.params;
+    }
+    const __tnParamsRec = this.__tnPackParams(params);
+    const irResult = this.__tnValidateInternal(buffer, __tnParamsRec);
+    if (!irResult.ok) {
+      return { ok: false, code: irResult.code, consumed: irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'MarginRecordInstruction::validate') : undefined, params };
+    }
+    const consumed = irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'MarginRecordInstruction::validate') : undefined;
+    return { ok: true, consumed, params };
+  }
+
+  static from_array(buffer: Uint8Array, opts?: { params?: MarginRecordInstruction.Params }): MarginRecordInstruction | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    let params = opts?.params ?? null;
+    if (!params) {
+      const derived = this.__tnExtractParams(view, buffer);
+      if (!derived) return null;
+      params = derived.params;
+    }
+    const validation = this.validate(buffer, { params });
+    if (!validation.ok) {
+      return null;
+    }
+    const cached = validation.params ?? params;
+    const state = new MarginRecordInstruction(buffer, cached);
+    return state;
+  }
+
+
+}
+
+export namespace MarginRecordInstruction {
+  export type Params = {
+    /** ABI path: entries.link_cnt */
+    readonly entries_link_cnt: bigint;
+    /** ABI path: padding.link_cnt */
+    readonly padding_link_cnt: bigint;
+  };
+
+  export const ParamKeys = Object.freeze({
+    entries_link_cnt: "entries.link_cnt",
+    padding_link_cnt: "padding.link_cnt",
+  } as const);
+
+  export const Params = {
+    fromValues(input: { entries_link_cnt: number | bigint, padding_link_cnt: number | bigint }): Params {
+      return {
+        entries_link_cnt: __tnToBigInt(input.entries_link_cnt),
+        padding_link_cnt: __tnToBigInt(input.padding_link_cnt),
+      };
+    },
+    fromBuilder(source: { dynamicParams(): Params } | { params: Params } | Params): Params {
+      if ((source as { dynamicParams?: () => Params }).dynamicParams) {
+        return (source as { dynamicParams(): Params }).dynamicParams();
+      }
+      if ((source as { params?: Params }).params) {
+        return (source as { params: Params }).params;
+      }
+      return source as Params;
+    }
+  };
+
+  export function params(input: { entries_link_cnt: number | bigint, padding_link_cnt: number | bigint }): Params {
+    return Params.fromValues(input);
+  }
+}
+
+__tnRegisterFootprint("MarginRecordInstruction", (params) => MarginRecordInstruction.__tnInvokeFootprint(params));
+__tnRegisterValidate("MarginRecordInstruction", (buffer, params) => MarginRecordInstruction.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("MarginRecordInstruction", (buffer) => { const result = MarginRecordInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
+/* ----- TYPE DEFINITION FOR MarginTransferInstruction ----- */
+
+const __tn_ir_MarginTransferInstruction = {
+  typeName: "MarginTransferInstruction",
+  root: { op: "const", value: 15n }
+} as const;
+
+export class MarginTransferInstruction {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MarginTransferInstruction {
+    if (!buffer || buffer.length === undefined) throw new Error("MarginTransferInstruction.__tnCreateView requires a Uint8Array");
+    return new MarginTransferInstruction(new Uint8Array(buffer));
+  }
+
+  static builder(): MarginTransferInstructionBuilder {
+    return new MarginTransferInstructionBuilder();
+  }
+
+  static fromBuilder(builder: MarginTransferInstructionBuilder): MarginTransferInstruction | null {
+    const buffer = builder.build();
+    return MarginTransferInstruction.from_array(buffer);
+  }
+
+  get_margin_record_idx(): number {
+    const offset = 0;
+    return this.view.getUint8(offset);
+  }
+
+  set_margin_record_idx(value: number): void {
+    const offset = 0;
+    this.view.setUint8(offset, value);
+  }
+
+  get margin_record_idx(): number {
+    return this.get_margin_record_idx();
+  }
+
+  set margin_record_idx(value: number) {
+    this.set_margin_record_idx(value);
+  }
+
+  get_from_link(): number {
+    const offset = 1;
+    return this.view.getUint8(offset);
+  }
+
+  set_from_link(value: number): void {
+    const offset = 1;
+    this.view.setUint8(offset, value);
+  }
+
+  get from_link(): number {
+    return this.get_from_link();
+  }
+
+  set from_link(value: number) {
+    this.set_from_link(value);
+  }
+
+  get_to_link(): number {
+    const offset = 2;
+    return this.view.getUint8(offset);
+  }
+
+  set_to_link(value: number): void {
+    const offset = 2;
+    this.view.setUint8(offset, value);
+  }
+
+  get to_link(): number {
+    return this.get_to_link();
+  }
+
+  set to_link(value: number) {
+    this.set_to_link(value);
+  }
+
+  get_owner_account_idx(): number {
+    const offset = 3;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_owner_account_idx(value: number): void {
+    const offset = 3;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get owner_account_idx(): number {
+    return this.get_owner_account_idx();
+  }
+
+  set owner_account_idx(value: number) {
+    this.set_owner_account_idx(value);
+  }
+
+  get_reserved0(): number {
+    const offset = 5;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_reserved0(value: number): void {
+    const offset = 5;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get reserved0(): number {
+    return this.get_reserved0();
+  }
+
+  set reserved0(value: number) {
+    this.set_reserved0(value);
+  }
+
+  get_amount(): bigint {
+    const offset = 7;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_amount(value: bigint): void {
+    const offset = 7;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get amount(): bigint {
+    return this.get_amount();
+  }
+
+  set amount(value: bigint) {
+    this.set_amount(value);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_MarginTransferInstruction.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_MarginTransferInstruction, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for MarginTransferInstruction');
+    }
+    return __tnBigIntToNumber(irResult, 'MarginTransferInstruction::footprint');
+  }
+
+  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    if (buffer.length < 15) return { ok: false, code: "tn.buffer_too_small", consumed: 15 };
+    return { ok: true, consumed: 15 };
+  }
+
+  static new(margin_record_idx: number, from_link: number, to_link: number, owner_account_idx: number, reserved0: number, amount: bigint): MarginTransferInstruction {
+    const buffer = new Uint8Array(15);
+    const view = new DataView(buffer.buffer);
+
+    let offset = 0;
+    view.setUint8(0, margin_record_idx); /* margin_record_idx */
+    view.setUint8(1, from_link); /* from_link */
+    view.setUint8(2, to_link); /* to_link */
+    view.setUint16(3, owner_account_idx, true); /* owner_account_idx (little-endian) */
+    view.setUint16(5, reserved0, true); /* reserved0 (little-endian) */
+    view.setBigUint64(7, amount, true); /* amount (little-endian) */
+
+    return new MarginTransferInstruction(buffer);
+  }
+
+  static from_array(buffer: Uint8Array): MarginTransferInstruction | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new MarginTransferInstruction(buffer);
+  }
+
+}
+
+export class MarginTransferInstructionBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+
+  constructor() {
+    this.buffer = new Uint8Array(15);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  set_margin_record_idx(value: number): this {
+    this.view.setUint8(0, value);
+    return this;
+  }
+
+  set_from_link(value: number): this {
+    this.view.setUint8(1, value);
+    return this;
+  }
+
+  set_to_link(value: number): this {
+    this.view.setUint8(2, value);
+    return this;
+  }
+
+  set_owner_account_idx(value: number): this {
+    this.view.setUint16(3, value, true);
+    return this;
+  }
+
+  set_reserved0(value: number): this {
+    this.view.setUint16(5, value, true);
+    return this;
+  }
+
+  set_amount(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(7, cast, true);
+    return this;
+  }
+
+  build(): Uint8Array {
+    return this.buffer.slice();
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    target.set(this.buffer, offset);
+    return target;
+  }
+
+  finish(): MarginTransferInstruction {
+    const view = MarginTransferInstruction.from_array(this.buffer.slice());
+    if (!view) throw new Error("failed to build MarginTransferInstruction");
+    return view;
+  }
+}
+
+__tnRegisterFootprint("MarginTransferInstruction", (params) => MarginTransferInstruction.__tnInvokeFootprint(params));
+__tnRegisterValidate("MarginTransferInstruction", (buffer, params) => MarginTransferInstruction.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("MarginTransferInstruction", (buffer) => { const result = MarginTransferInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR MarketCreateInstruction ----- */
 
@@ -5246,21 +7222,57 @@ export class MarketRecordInstruction {
     this.set_oracle_feed_account_idx(value);
   }
 
-  get_reserved0(): number[] {
+  get_builder_seat_idx(): number {
     const offset = 25;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_builder_seat_idx(value: number): void {
+    const offset = 25;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get builder_seat_idx(): number {
+    return this.get_builder_seat_idx();
+  }
+
+  set builder_seat_idx(value: number) {
+    this.set_builder_seat_idx(value);
+  }
+
+  get_builder_fee_ppm(): number {
+    const offset = 27;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_builder_fee_ppm(value: number): void {
+    const offset = 27;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get builder_fee_ppm(): number {
+    return this.get_builder_fee_ppm();
+  }
+
+  set builder_fee_ppm(value: number) {
+    this.set_builder_fee_ppm(value);
+  }
+
+  get_reserved0(): number[] {
+    const offset = 29;
     const result: number[] = [];
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 2; i++) {
       result.push(this.view.getUint8((offset + i * 1)));
     }
     return result;
   }
 
   set_reserved0(value: number[]): void {
-    const offset = 25;
-    if (value.length !== 6) {
-      throw new Error('Array length must be 6');
+    const offset = 29;
+    if (value.length !== 2) {
+      throw new Error('Array length must be 2');
     }
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 2; i++) {
       this.view.setUint8((offset + i * 1), value[i]);
     }
   }
@@ -5390,10 +7402,20 @@ export class MarketRecordInstructionBuilder {
     return this;
   }
 
+  set_builder_seat_idx(value: number): this {
+    this.view.setUint16(25, value, true);
+    return this;
+  }
+
+  set_builder_fee_ppm(value: number): this {
+    this.view.setUint16(27, value, true);
+    return this;
+  }
+
   set_reserved0(values: number[]): this {
-    if (values.length !== 6) throw new Error("reserved0 expects 6 elements");
+    if (values.length !== 2) throw new Error("reserved0 expects 2 elements");
     for (let i = 0; i < values.length; i++) {
-      const byteOffset = 25 + i * 1;
+      const byteOffset = 29 + i * 1;
       this.view.setUint8(byteOffset, values[i]);
     }
     return this;
@@ -5419,6 +7441,193 @@ export class MarketRecordInstructionBuilder {
 __tnRegisterFootprint("MarketRecordInstruction", (params) => MarketRecordInstruction.__tnInvokeFootprint(params));
 __tnRegisterValidate("MarketRecordInstruction", (buffer, params) => MarketRecordInstruction.__tnInvokeValidate(buffer, params));
 __tnRegisterDynamicValidate("MarketRecordInstruction", (buffer) => { const result = MarketRecordInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
+/* ----- TYPE DEFINITION FOR MarketSetCrossInstruction ----- */
+
+const __tn_ir_MarketSetCrossInstruction = {
+  typeName: "MarketSetCrossInstruction",
+  root: { op: "const", value: 7n }
+} as const;
+
+export class MarketSetCrossInstruction {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MarketSetCrossInstruction {
+    if (!buffer || buffer.length === undefined) throw new Error("MarketSetCrossInstruction.__tnCreateView requires a Uint8Array");
+    return new MarketSetCrossInstruction(new Uint8Array(buffer));
+  }
+
+  static builder(): MarketSetCrossInstructionBuilder {
+    return new MarketSetCrossInstructionBuilder();
+  }
+
+  static fromBuilder(builder: MarketSetCrossInstructionBuilder): MarketSetCrossInstruction | null {
+    const buffer = builder.build();
+    return MarketSetCrossInstruction.from_array(buffer);
+  }
+
+  get_market_record_idx(): number {
+    const offset = 0;
+    return this.view.getUint8(offset);
+  }
+
+  set_market_record_idx(value: number): void {
+    const offset = 0;
+    this.view.setUint8(offset, value);
+  }
+
+  get market_record_idx(): number {
+    return this.get_market_record_idx();
+  }
+
+  set market_record_idx(value: number) {
+    this.set_market_record_idx(value);
+  }
+
+  get_reserved0(): number {
+    const offset = 1;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_reserved0(value: number): void {
+    const offset = 1;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get reserved0(): number {
+    return this.get_reserved0();
+  }
+
+  set reserved0(value: number) {
+    this.set_reserved0(value);
+  }
+
+  get_cross_upnl_haircut_bps(): number {
+    const offset = 3;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_cross_upnl_haircut_bps(value: number): void {
+    const offset = 3;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get cross_upnl_haircut_bps(): number {
+    return this.get_cross_upnl_haircut_bps();
+  }
+
+  set cross_upnl_haircut_bps(value: number) {
+    this.set_cross_upnl_haircut_bps(value);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_MarketSetCrossInstruction.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_MarketSetCrossInstruction, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for MarketSetCrossInstruction');
+    }
+    return __tnBigIntToNumber(irResult, 'MarketSetCrossInstruction::footprint');
+  }
+
+  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    if (buffer.length < 7) return { ok: false, code: "tn.buffer_too_small", consumed: 7 };
+    return { ok: true, consumed: 7 };
+  }
+
+  static new(market_record_idx: number, reserved0: number, cross_upnl_haircut_bps: number): MarketSetCrossInstruction {
+    const buffer = new Uint8Array(7);
+    const view = new DataView(buffer.buffer);
+
+    let offset = 0;
+    view.setUint8(0, market_record_idx); /* market_record_idx */
+    view.setUint16(1, reserved0, true); /* reserved0 (little-endian) */
+    view.setUint32(3, cross_upnl_haircut_bps, true); /* cross_upnl_haircut_bps (little-endian) */
+
+    return new MarketSetCrossInstruction(buffer);
+  }
+
+  static from_array(buffer: Uint8Array): MarketSetCrossInstruction | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new MarketSetCrossInstruction(buffer);
+  }
+
+}
+
+export class MarketSetCrossInstructionBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+
+  constructor() {
+    this.buffer = new Uint8Array(7);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  set_market_record_idx(value: number): this {
+    this.view.setUint8(0, value);
+    return this;
+  }
+
+  set_reserved0(value: number): this {
+    this.view.setUint16(1, value, true);
+    return this;
+  }
+
+  set_cross_upnl_haircut_bps(value: number): this {
+    this.view.setUint32(3, value, true);
+    return this;
+  }
+
+  build(): Uint8Array {
+    return this.buffer.slice();
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    target.set(this.buffer, offset);
+    return target;
+  }
+
+  finish(): MarketSetCrossInstruction {
+    const view = MarketSetCrossInstruction.from_array(this.buffer.slice());
+    if (!view) throw new Error("failed to build MarketSetCrossInstruction");
+    return view;
+  }
+}
+
+__tnRegisterFootprint("MarketSetCrossInstruction", (params) => MarketSetCrossInstruction.__tnInvokeFootprint(params));
+__tnRegisterValidate("MarketSetCrossInstruction", (buffer, params) => MarketSetCrossInstruction.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("MarketSetCrossInstruction", (buffer) => { const result = MarketSetCrossInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR MarketSetExchangeStatusInstruction ----- */
 
@@ -5654,6 +7863,289 @@ export class MarketSetExchangeStatusInstructionBuilder {
 __tnRegisterFootprint("MarketSetExchangeStatusInstruction", (params) => MarketSetExchangeStatusInstruction.__tnInvokeFootprint(params));
 __tnRegisterValidate("MarketSetExchangeStatusInstruction", (buffer, params) => MarketSetExchangeStatusInstruction.__tnInvokeValidate(buffer, params));
 __tnRegisterDynamicValidate("MarketSetExchangeStatusInstruction", (buffer) => { const result = MarketSetExchangeStatusInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
+/* ----- TYPE DEFINITION FOR MarketSetFeesInstruction ----- */
+
+const __tn_ir_MarketSetFeesInstruction = {
+  typeName: "MarketSetFeesInstruction",
+  root: { op: "const", value: 23n }
+} as const;
+
+export class MarketSetFeesInstruction {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MarketSetFeesInstruction {
+    if (!buffer || buffer.length === undefined) throw new Error("MarketSetFeesInstruction.__tnCreateView requires a Uint8Array");
+    return new MarketSetFeesInstruction(new Uint8Array(buffer));
+  }
+
+  static builder(): MarketSetFeesInstructionBuilder {
+    return new MarketSetFeesInstructionBuilder();
+  }
+
+  static fromBuilder(builder: MarketSetFeesInstructionBuilder): MarketSetFeesInstruction | null {
+    const buffer = builder.build();
+    return MarketSetFeesInstruction.from_array(buffer);
+  }
+
+  get_market_record_idx(): number {
+    const offset = 0;
+    return this.view.getUint8(offset);
+  }
+
+  set_market_record_idx(value: number): void {
+    const offset = 0;
+    this.view.setUint8(offset, value);
+  }
+
+  get market_record_idx(): number {
+    return this.get_market_record_idx();
+  }
+
+  set market_record_idx(value: number) {
+    this.set_market_record_idx(value);
+  }
+
+  get_reserved0(): number {
+    const offset = 1;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_reserved0(value: number): void {
+    const offset = 1;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get reserved0(): number {
+    return this.get_reserved0();
+  }
+
+  set reserved0(value: number) {
+    this.set_reserved0(value);
+  }
+
+  get_taker_fee_ppm(): number {
+    const offset = 3;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_taker_fee_ppm(value: number): void {
+    const offset = 3;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get taker_fee_ppm(): number {
+    return this.get_taker_fee_ppm();
+  }
+
+  set taker_fee_ppm(value: number) {
+    this.set_taker_fee_ppm(value);
+  }
+
+  get_maker_rebate_ppm(): number {
+    const offset = 7;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_maker_rebate_ppm(value: number): void {
+    const offset = 7;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get maker_rebate_ppm(): number {
+    return this.get_maker_rebate_ppm();
+  }
+
+  set maker_rebate_ppm(value: number) {
+    this.set_maker_rebate_ppm(value);
+  }
+
+  get_builder_fee_cap_ppm(): number {
+    const offset = 11;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_builder_fee_cap_ppm(value: number): void {
+    const offset = 11;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get builder_fee_cap_ppm(): number {
+    return this.get_builder_fee_cap_ppm();
+  }
+
+  set builder_fee_cap_ppm(value: number) {
+    this.set_builder_fee_cap_ppm(value);
+  }
+
+  get_fee_insurance_share_ppm(): number {
+    const offset = 15;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_fee_insurance_share_ppm(value: number): void {
+    const offset = 15;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get fee_insurance_share_ppm(): number {
+    return this.get_fee_insurance_share_ppm();
+  }
+
+  set fee_insurance_share_ppm(value: number) {
+    this.set_fee_insurance_share_ppm(value);
+  }
+
+  get_liq_insurance_share_ppm(): number {
+    const offset = 19;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_liq_insurance_share_ppm(value: number): void {
+    const offset = 19;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get liq_insurance_share_ppm(): number {
+    return this.get_liq_insurance_share_ppm();
+  }
+
+  set liq_insurance_share_ppm(value: number) {
+    this.set_liq_insurance_share_ppm(value);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_MarketSetFeesInstruction.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_MarketSetFeesInstruction, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for MarketSetFeesInstruction');
+    }
+    return __tnBigIntToNumber(irResult, 'MarketSetFeesInstruction::footprint');
+  }
+
+  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    if (buffer.length < 23) return { ok: false, code: "tn.buffer_too_small", consumed: 23 };
+    return { ok: true, consumed: 23 };
+  }
+
+  static new(market_record_idx: number, reserved0: number, taker_fee_ppm: number, maker_rebate_ppm: number, builder_fee_cap_ppm: number, fee_insurance_share_ppm: number, liq_insurance_share_ppm: number): MarketSetFeesInstruction {
+    const buffer = new Uint8Array(23);
+    const view = new DataView(buffer.buffer);
+
+    let offset = 0;
+    view.setUint8(0, market_record_idx); /* market_record_idx */
+    view.setUint16(1, reserved0, true); /* reserved0 (little-endian) */
+    view.setUint32(3, taker_fee_ppm, true); /* taker_fee_ppm (little-endian) */
+    view.setUint32(7, maker_rebate_ppm, true); /* maker_rebate_ppm (little-endian) */
+    view.setUint32(11, builder_fee_cap_ppm, true); /* builder_fee_cap_ppm (little-endian) */
+    view.setUint32(15, fee_insurance_share_ppm, true); /* fee_insurance_share_ppm (little-endian) */
+    view.setUint32(19, liq_insurance_share_ppm, true); /* liq_insurance_share_ppm (little-endian) */
+
+    return new MarketSetFeesInstruction(buffer);
+  }
+
+  static from_array(buffer: Uint8Array): MarketSetFeesInstruction | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new MarketSetFeesInstruction(buffer);
+  }
+
+}
+
+export class MarketSetFeesInstructionBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+
+  constructor() {
+    this.buffer = new Uint8Array(23);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  set_market_record_idx(value: number): this {
+    this.view.setUint8(0, value);
+    return this;
+  }
+
+  set_reserved0(value: number): this {
+    this.view.setUint16(1, value, true);
+    return this;
+  }
+
+  set_taker_fee_ppm(value: number): this {
+    this.view.setUint32(3, value, true);
+    return this;
+  }
+
+  set_maker_rebate_ppm(value: number): this {
+    this.view.setUint32(7, value, true);
+    return this;
+  }
+
+  set_builder_fee_cap_ppm(value: number): this {
+    this.view.setUint32(11, value, true);
+    return this;
+  }
+
+  set_fee_insurance_share_ppm(value: number): this {
+    this.view.setUint32(15, value, true);
+    return this;
+  }
+
+  set_liq_insurance_share_ppm(value: number): this {
+    this.view.setUint32(19, value, true);
+    return this;
+  }
+
+  build(): Uint8Array {
+    return this.buffer.slice();
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    target.set(this.buffer, offset);
+    return target;
+  }
+
+  finish(): MarketSetFeesInstruction {
+    const view = MarketSetFeesInstruction.from_array(this.buffer.slice());
+    if (!view) throw new Error("failed to build MarketSetFeesInstruction");
+    return view;
+  }
+}
+
+__tnRegisterFootprint("MarketSetFeesInstruction", (params) => MarketSetFeesInstruction.__tnInvokeFootprint(params));
+__tnRegisterValidate("MarketSetFeesInstruction", (buffer, params) => MarketSetFeesInstruction.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("MarketSetFeesInstruction", (buffer) => { const result = MarketSetFeesInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR MarketSetFundingInstruction ----- */
 
@@ -6250,6 +8742,217 @@ __tnRegisterFootprint("MarketSetOracleInstruction", (params) => MarketSetOracleI
 __tnRegisterValidate("MarketSetOracleInstruction", (buffer, params) => MarketSetOracleInstruction.__tnInvokeValidate(buffer, params));
 __tnRegisterDynamicValidate("MarketSetOracleInstruction", (buffer) => { const result = MarketSetOracleInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
+/* ----- TYPE DEFINITION FOR MarketSetRiskParamsInstruction ----- */
+
+const __tn_ir_MarketSetRiskParamsInstruction = {
+  typeName: "MarketSetRiskParamsInstruction",
+  root: { op: "const", value: 7n }
+} as const;
+
+export class MarketSetRiskParamsInstruction {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MarketSetRiskParamsInstruction {
+    if (!buffer || buffer.length === undefined) throw new Error("MarketSetRiskParamsInstruction.__tnCreateView requires a Uint8Array");
+    return new MarketSetRiskParamsInstruction(new Uint8Array(buffer));
+  }
+
+  static builder(): MarketSetRiskParamsInstructionBuilder {
+    return new MarketSetRiskParamsInstructionBuilder();
+  }
+
+  static fromBuilder(builder: MarketSetRiskParamsInstructionBuilder): MarketSetRiskParamsInstruction | null {
+    const buffer = builder.build();
+    return MarketSetRiskParamsInstruction.from_array(buffer);
+  }
+
+  get_market_record_idx(): number {
+    const offset = 0;
+    return this.view.getUint8(offset);
+  }
+
+  set_market_record_idx(value: number): void {
+    const offset = 0;
+    this.view.setUint8(offset, value);
+  }
+
+  get market_record_idx(): number {
+    return this.get_market_record_idx();
+  }
+
+  set market_record_idx(value: number) {
+    this.set_market_record_idx(value);
+  }
+
+  get_socialize_cap_bps(): number {
+    const offset = 1;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_socialize_cap_bps(value: number): void {
+    const offset = 1;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get socialize_cap_bps(): number {
+    return this.get_socialize_cap_bps();
+  }
+
+  set socialize_cap_bps(value: number) {
+    this.set_socialize_cap_bps(value);
+  }
+
+  get_if_epoch_budget_bps(): number {
+    const offset = 3;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_if_epoch_budget_bps(value: number): void {
+    const offset = 3;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get if_epoch_budget_bps(): number {
+    return this.get_if_epoch_budget_bps();
+  }
+
+  set if_epoch_budget_bps(value: number) {
+    this.set_if_epoch_budget_bps(value);
+  }
+
+  get_bankrupt_liq_reward_bps(): number {
+    const offset = 5;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_bankrupt_liq_reward_bps(value: number): void {
+    const offset = 5;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get bankrupt_liq_reward_bps(): number {
+    return this.get_bankrupt_liq_reward_bps();
+  }
+
+  set bankrupt_liq_reward_bps(value: number) {
+    this.set_bankrupt_liq_reward_bps(value);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_MarketSetRiskParamsInstruction.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_MarketSetRiskParamsInstruction, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for MarketSetRiskParamsInstruction');
+    }
+    return __tnBigIntToNumber(irResult, 'MarketSetRiskParamsInstruction::footprint');
+  }
+
+  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    if (buffer.length < 7) return { ok: false, code: "tn.buffer_too_small", consumed: 7 };
+    return { ok: true, consumed: 7 };
+  }
+
+  static new(market_record_idx: number, socialize_cap_bps: number, if_epoch_budget_bps: number, bankrupt_liq_reward_bps: number): MarketSetRiskParamsInstruction {
+    const buffer = new Uint8Array(7);
+    const view = new DataView(buffer.buffer);
+
+    let offset = 0;
+    view.setUint8(0, market_record_idx); /* market_record_idx */
+    view.setUint16(1, socialize_cap_bps, true); /* socialize_cap_bps (little-endian) */
+    view.setUint16(3, if_epoch_budget_bps, true); /* if_epoch_budget_bps (little-endian) */
+    view.setUint16(5, bankrupt_liq_reward_bps, true); /* bankrupt_liq_reward_bps (little-endian) */
+
+    return new MarketSetRiskParamsInstruction(buffer);
+  }
+
+  static from_array(buffer: Uint8Array): MarketSetRiskParamsInstruction | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new MarketSetRiskParamsInstruction(buffer);
+  }
+
+}
+
+export class MarketSetRiskParamsInstructionBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+
+  constructor() {
+    this.buffer = new Uint8Array(7);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  set_market_record_idx(value: number): this {
+    this.view.setUint8(0, value);
+    return this;
+  }
+
+  set_socialize_cap_bps(value: number): this {
+    this.view.setUint16(1, value, true);
+    return this;
+  }
+
+  set_if_epoch_budget_bps(value: number): this {
+    this.view.setUint16(3, value, true);
+    return this;
+  }
+
+  set_bankrupt_liq_reward_bps(value: number): this {
+    this.view.setUint16(5, value, true);
+    return this;
+  }
+
+  build(): Uint8Array {
+    return this.buffer.slice();
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    target.set(this.buffer, offset);
+    return target;
+  }
+
+  finish(): MarketSetRiskParamsInstruction {
+    const view = MarketSetRiskParamsInstruction.from_array(this.buffer.slice());
+    if (!view) throw new Error("failed to build MarketSetRiskParamsInstruction");
+    return view;
+  }
+}
+
+__tnRegisterFootprint("MarketSetRiskParamsInstruction", (params) => MarketSetRiskParamsInstruction.__tnInvokeFootprint(params));
+__tnRegisterValidate("MarketSetRiskParamsInstruction", (buffer, params) => MarketSetRiskParamsInstruction.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("MarketSetRiskParamsInstruction", (buffer) => { const result = MarketSetRiskParamsInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
 /* ----- TYPE DEFINITION FOR MarketSetStatusInstruction ----- */
 
 const __tn_ir_MarketSetStatusInstruction = {
@@ -6437,6 +9140,217 @@ export class MarketSetStatusInstructionBuilder {
 __tnRegisterFootprint("MarketSetStatusInstruction", (params) => MarketSetStatusInstruction.__tnInvokeFootprint(params));
 __tnRegisterValidate("MarketSetStatusInstruction", (buffer, params) => MarketSetStatusInstruction.__tnInvokeValidate(buffer, params));
 __tnRegisterDynamicValidate("MarketSetStatusInstruction", (buffer) => { const result = MarketSetStatusInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
+/* ----- TYPE DEFINITION FOR MarketSetVaultInstruction ----- */
+
+const __tn_ir_MarketSetVaultInstruction = {
+  typeName: "MarketSetVaultInstruction",
+  root: { op: "const", value: 7n }
+} as const;
+
+export class MarketSetVaultInstruction {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MarketSetVaultInstruction {
+    if (!buffer || buffer.length === undefined) throw new Error("MarketSetVaultInstruction.__tnCreateView requires a Uint8Array");
+    return new MarketSetVaultInstruction(new Uint8Array(buffer));
+  }
+
+  static builder(): MarketSetVaultInstructionBuilder {
+    return new MarketSetVaultInstructionBuilder();
+  }
+
+  static fromBuilder(builder: MarketSetVaultInstructionBuilder): MarketSetVaultInstruction | null {
+    const buffer = builder.build();
+    return MarketSetVaultInstruction.from_array(buffer);
+  }
+
+  get_market_record_idx(): number {
+    const offset = 0;
+    return this.view.getUint8(offset);
+  }
+
+  set_market_record_idx(value: number): void {
+    const offset = 0;
+    this.view.setUint8(offset, value);
+  }
+
+  get market_record_idx(): number {
+    return this.get_market_record_idx();
+  }
+
+  set market_record_idx(value: number) {
+    this.set_market_record_idx(value);
+  }
+
+  get_exchange_admin_account_idx(): number {
+    const offset = 1;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_exchange_admin_account_idx(value: number): void {
+    const offset = 1;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get exchange_admin_account_idx(): number {
+    return this.get_exchange_admin_account_idx();
+  }
+
+  set exchange_admin_account_idx(value: number) {
+    this.set_exchange_admin_account_idx(value);
+  }
+
+  get_new_vault_account_idx(): number {
+    const offset = 3;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_new_vault_account_idx(value: number): void {
+    const offset = 3;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get new_vault_account_idx(): number {
+    return this.get_new_vault_account_idx();
+  }
+
+  set new_vault_account_idx(value: number) {
+    this.set_new_vault_account_idx(value);
+  }
+
+  get_reserved0(): number {
+    const offset = 5;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_reserved0(value: number): void {
+    const offset = 5;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get reserved0(): number {
+    return this.get_reserved0();
+  }
+
+  set reserved0(value: number) {
+    this.set_reserved0(value);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_MarketSetVaultInstruction.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_MarketSetVaultInstruction, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for MarketSetVaultInstruction');
+    }
+    return __tnBigIntToNumber(irResult, 'MarketSetVaultInstruction::footprint');
+  }
+
+  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    if (buffer.length < 7) return { ok: false, code: "tn.buffer_too_small", consumed: 7 };
+    return { ok: true, consumed: 7 };
+  }
+
+  static new(market_record_idx: number, exchange_admin_account_idx: number, new_vault_account_idx: number, reserved0: number): MarketSetVaultInstruction {
+    const buffer = new Uint8Array(7);
+    const view = new DataView(buffer.buffer);
+
+    let offset = 0;
+    view.setUint8(0, market_record_idx); /* market_record_idx */
+    view.setUint16(1, exchange_admin_account_idx, true); /* exchange_admin_account_idx (little-endian) */
+    view.setUint16(3, new_vault_account_idx, true); /* new_vault_account_idx (little-endian) */
+    view.setUint16(5, reserved0, true); /* reserved0 (little-endian) */
+
+    return new MarketSetVaultInstruction(buffer);
+  }
+
+  static from_array(buffer: Uint8Array): MarketSetVaultInstruction | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new MarketSetVaultInstruction(buffer);
+  }
+
+}
+
+export class MarketSetVaultInstructionBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+
+  constructor() {
+    this.buffer = new Uint8Array(7);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  set_market_record_idx(value: number): this {
+    this.view.setUint8(0, value);
+    return this;
+  }
+
+  set_exchange_admin_account_idx(value: number): this {
+    this.view.setUint16(1, value, true);
+    return this;
+  }
+
+  set_new_vault_account_idx(value: number): this {
+    this.view.setUint16(3, value, true);
+    return this;
+  }
+
+  set_reserved0(value: number): this {
+    this.view.setUint16(5, value, true);
+    return this;
+  }
+
+  build(): Uint8Array {
+    return this.buffer.slice();
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    target.set(this.buffer, offset);
+    return target;
+  }
+
+  finish(): MarketSetVaultInstruction {
+    const view = MarketSetVaultInstruction.from_array(this.buffer.slice());
+    if (!view) throw new Error("failed to build MarketSetVaultInstruction");
+    return view;
+  }
+}
+
+__tnRegisterFootprint("MarketSetVaultInstruction", (params) => MarketSetVaultInstruction.__tnInvokeFootprint(params));
+__tnRegisterValidate("MarketSetVaultInstruction", (buffer, params) => MarketSetVaultInstruction.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("MarketSetVaultInstruction", (buffer) => { const result = MarketSetVaultInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR ModifyOrderEntryInstruction ----- */
 
@@ -7220,30 +10134,57 @@ export class OrderEntry {
     this.set_order_id(value);
   }
 
-  get_reserved0(): number[] {
+  get_builder_seat_idx(): number {
     const offset = 32;
-    const result: number[] = [];
-    for (let i = 0; i < 8; i++) {
-      result.push(this.view.getUint8((offset + i * 1)));
-    }
-    return result;
+    return this.view.getUint32(offset, true); /* little-endian */
   }
 
-  set_reserved0(value: number[]): void {
+  set_builder_seat_idx(value: number): void {
     const offset = 32;
-    if (value.length !== 8) {
-      throw new Error('Array length must be 8');
-    }
-    for (let i = 0; i < 8; i++) {
-      this.view.setUint8((offset + i * 1), value[i]);
-    }
+    this.view.setUint32(offset, value, true); /* little-endian */
   }
 
-  get reserved0(): number[] {
+  get builder_seat_idx(): number {
+    return this.get_builder_seat_idx();
+  }
+
+  set builder_seat_idx(value: number) {
+    this.set_builder_seat_idx(value);
+  }
+
+  get_builder_fee_ppm(): number {
+    const offset = 36;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_builder_fee_ppm(value: number): void {
+    const offset = 36;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get builder_fee_ppm(): number {
+    return this.get_builder_fee_ppm();
+  }
+
+  set builder_fee_ppm(value: number) {
+    this.set_builder_fee_ppm(value);
+  }
+
+  get_reserved0(): number {
+    const offset = 38;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_reserved0(value: number): void {
+    const offset = 38;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get reserved0(): number {
     return this.get_reserved0();
   }
 
-  set reserved0(value: number[]) {
+  set reserved0(value: number) {
     this.set_reserved0(value);
   }
 
@@ -7367,12 +10308,18 @@ export class OrderEntryBuilder {
     return this;
   }
 
-  set_reserved0(values: number[]): this {
-    if (values.length !== 8) throw new Error("reserved0 expects 8 elements");
-    for (let i = 0; i < values.length; i++) {
-      const byteOffset = 32 + i * 1;
-      this.view.setUint8(byteOffset, values[i]);
-    }
+  set_builder_seat_idx(value: number): this {
+    this.view.setUint32(32, value, true);
+    return this;
+  }
+
+  set_builder_fee_ppm(value: number): this {
+    this.view.setUint16(36, value, true);
+    return this;
+  }
+
+  set_reserved0(value: number): this {
+    this.view.setUint16(38, value, true);
     return this;
   }
 
@@ -7548,6 +10495,193 @@ export class PerpErrorBuilder {
 __tnRegisterFootprint("PerpError", (params) => PerpError.__tnInvokeFootprint(params));
 __tnRegisterValidate("PerpError", (buffer, params) => PerpError.__tnInvokeValidate(buffer, params));
 __tnRegisterDynamicValidate("PerpError", (buffer) => { const result = PerpError.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
+/* ----- TYPE DEFINITION FOR ResolveBadDebtInstruction ----- */
+
+const __tn_ir_ResolveBadDebtInstruction = {
+  typeName: "ResolveBadDebtInstruction",
+  root: { op: "const", value: 7n }
+} as const;
+
+export class ResolveBadDebtInstruction {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): ResolveBadDebtInstruction {
+    if (!buffer || buffer.length === undefined) throw new Error("ResolveBadDebtInstruction.__tnCreateView requires a Uint8Array");
+    return new ResolveBadDebtInstruction(new Uint8Array(buffer));
+  }
+
+  static builder(): ResolveBadDebtInstructionBuilder {
+    return new ResolveBadDebtInstructionBuilder();
+  }
+
+  static fromBuilder(builder: ResolveBadDebtInstructionBuilder): ResolveBadDebtInstruction | null {
+    const buffer = builder.build();
+    return ResolveBadDebtInstruction.from_array(buffer);
+  }
+
+  get_market_record_idx(): number {
+    const offset = 0;
+    return this.view.getUint8(offset);
+  }
+
+  set_market_record_idx(value: number): void {
+    const offset = 0;
+    this.view.setUint8(offset, value);
+  }
+
+  get market_record_idx(): number {
+    return this.get_market_record_idx();
+  }
+
+  set market_record_idx(value: number) {
+    this.set_market_record_idx(value);
+  }
+
+  get_reserved0(): number {
+    const offset = 1;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_reserved0(value: number): void {
+    const offset = 1;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get reserved0(): number {
+    return this.get_reserved0();
+  }
+
+  set reserved0(value: number) {
+    this.set_reserved0(value);
+  }
+
+  get_reserved1(): number {
+    const offset = 3;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_reserved1(value: number): void {
+    const offset = 3;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get reserved1(): number {
+    return this.get_reserved1();
+  }
+
+  set reserved1(value: number) {
+    this.set_reserved1(value);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_ResolveBadDebtInstruction.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_ResolveBadDebtInstruction, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for ResolveBadDebtInstruction');
+    }
+    return __tnBigIntToNumber(irResult, 'ResolveBadDebtInstruction::footprint');
+  }
+
+  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    if (buffer.length < 7) return { ok: false, code: "tn.buffer_too_small", consumed: 7 };
+    return { ok: true, consumed: 7 };
+  }
+
+  static new(market_record_idx: number, reserved0: number, reserved1: number): ResolveBadDebtInstruction {
+    const buffer = new Uint8Array(7);
+    const view = new DataView(buffer.buffer);
+
+    let offset = 0;
+    view.setUint8(0, market_record_idx); /* market_record_idx */
+    view.setUint16(1, reserved0, true); /* reserved0 (little-endian) */
+    view.setUint32(3, reserved1, true); /* reserved1 (little-endian) */
+
+    return new ResolveBadDebtInstruction(buffer);
+  }
+
+  static from_array(buffer: Uint8Array): ResolveBadDebtInstruction | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new ResolveBadDebtInstruction(buffer);
+  }
+
+}
+
+export class ResolveBadDebtInstructionBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+
+  constructor() {
+    this.buffer = new Uint8Array(7);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  set_market_record_idx(value: number): this {
+    this.view.setUint8(0, value);
+    return this;
+  }
+
+  set_reserved0(value: number): this {
+    this.view.setUint16(1, value, true);
+    return this;
+  }
+
+  set_reserved1(value: number): this {
+    this.view.setUint32(3, value, true);
+    return this;
+  }
+
+  build(): Uint8Array {
+    return this.buffer.slice();
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    target.set(this.buffer, offset);
+    return target;
+  }
+
+  finish(): ResolveBadDebtInstruction {
+    const view = ResolveBadDebtInstruction.from_array(this.buffer.slice());
+    if (!view) throw new Error("failed to build ResolveBadDebtInstruction");
+    return view;
+  }
+}
+
+__tnRegisterFootprint("ResolveBadDebtInstruction", (params) => ResolveBadDebtInstruction.__tnInvokeFootprint(params));
+__tnRegisterValidate("ResolveBadDebtInstruction", (buffer, params) => ResolveBadDebtInstruction.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("ResolveBadDebtInstruction", (buffer) => { const result = ResolveBadDebtInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR SeatArenaHeader ----- */
 
@@ -8374,22 +11508,22 @@ export class SeatEntry {
     this.set_funding_snapshot_hi(value);
   }
 
-  get_non_nullable_reserved(): bigint {
+  get_flags(): bigint {
     const offset = 120;
     return this.view.getBigUint64(offset, true); /* little-endian */
   }
 
-  set_non_nullable_reserved(value: bigint): void {
+  set_flags(value: bigint): void {
     const offset = 120;
     this.view.setBigUint64(offset, value, true); /* little-endian */
   }
 
-  get non_nullable_reserved(): bigint {
-    return this.get_non_nullable_reserved();
+  get flags(): bigint {
+    return this.get_flags();
   }
 
-  set non_nullable_reserved(value: bigint) {
-    this.set_non_nullable_reserved(value);
+  set flags(value: bigint) {
+    this.set_flags(value);
   }
 
   private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
@@ -8525,7 +11659,7 @@ export class SeatEntryBuilder {
     return this;
   }
 
-  set_non_nullable_reserved(value: bigint): this {
+  set_flags(value: bigint): this {
     const cast = __tnToBigInt(value);
     this.view.setBigUint64(120, cast, true);
     return this;
@@ -8551,6 +11685,380 @@ export class SeatEntryBuilder {
 __tnRegisterFootprint("SeatEntry", (params) => SeatEntry.__tnInvokeFootprint(params));
 __tnRegisterValidate("SeatEntry", (buffer, params) => SeatEntry.__tnInvokeValidate(buffer, params));
 __tnRegisterDynamicValidate("SeatEntry", (buffer) => { const result = SeatEntry.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
+/* ----- TYPE DEFINITION FOR SeatSetBuilderApprovalInstruction ----- */
+
+const __tn_ir_SeatSetBuilderApprovalInstruction = {
+  typeName: "SeatSetBuilderApprovalInstruction",
+  root: { op: "const", value: 7n }
+} as const;
+
+export class SeatSetBuilderApprovalInstruction {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): SeatSetBuilderApprovalInstruction {
+    if (!buffer || buffer.length === undefined) throw new Error("SeatSetBuilderApprovalInstruction.__tnCreateView requires a Uint8Array");
+    return new SeatSetBuilderApprovalInstruction(new Uint8Array(buffer));
+  }
+
+  static builder(): SeatSetBuilderApprovalInstructionBuilder {
+    return new SeatSetBuilderApprovalInstructionBuilder();
+  }
+
+  static fromBuilder(builder: SeatSetBuilderApprovalInstructionBuilder): SeatSetBuilderApprovalInstruction | null {
+    const buffer = builder.build();
+    return SeatSetBuilderApprovalInstruction.from_array(buffer);
+  }
+
+  get_market_record_idx(): number {
+    const offset = 0;
+    return this.view.getUint8(offset);
+  }
+
+  set_market_record_idx(value: number): void {
+    const offset = 0;
+    this.view.setUint8(offset, value);
+  }
+
+  get market_record_idx(): number {
+    return this.get_market_record_idx();
+  }
+
+  set market_record_idx(value: number) {
+    this.set_market_record_idx(value);
+  }
+
+  get_max_fee_ppm(): number {
+    const offset = 1;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_max_fee_ppm(value: number): void {
+    const offset = 1;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get max_fee_ppm(): number {
+    return this.get_max_fee_ppm();
+  }
+
+  set max_fee_ppm(value: number) {
+    this.set_max_fee_ppm(value);
+  }
+
+  get_builder_seat_idx(): number {
+    const offset = 3;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_builder_seat_idx(value: number): void {
+    const offset = 3;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get builder_seat_idx(): number {
+    return this.get_builder_seat_idx();
+  }
+
+  set builder_seat_idx(value: number) {
+    this.set_builder_seat_idx(value);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_SeatSetBuilderApprovalInstruction.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_SeatSetBuilderApprovalInstruction, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for SeatSetBuilderApprovalInstruction');
+    }
+    return __tnBigIntToNumber(irResult, 'SeatSetBuilderApprovalInstruction::footprint');
+  }
+
+  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    if (buffer.length < 7) return { ok: false, code: "tn.buffer_too_small", consumed: 7 };
+    return { ok: true, consumed: 7 };
+  }
+
+  static new(market_record_idx: number, max_fee_ppm: number, builder_seat_idx: number): SeatSetBuilderApprovalInstruction {
+    const buffer = new Uint8Array(7);
+    const view = new DataView(buffer.buffer);
+
+    let offset = 0;
+    view.setUint8(0, market_record_idx); /* market_record_idx */
+    view.setUint16(1, max_fee_ppm, true); /* max_fee_ppm (little-endian) */
+    view.setUint32(3, builder_seat_idx, true); /* builder_seat_idx (little-endian) */
+
+    return new SeatSetBuilderApprovalInstruction(buffer);
+  }
+
+  static from_array(buffer: Uint8Array): SeatSetBuilderApprovalInstruction | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new SeatSetBuilderApprovalInstruction(buffer);
+  }
+
+}
+
+export class SeatSetBuilderApprovalInstructionBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+
+  constructor() {
+    this.buffer = new Uint8Array(7);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  set_market_record_idx(value: number): this {
+    this.view.setUint8(0, value);
+    return this;
+  }
+
+  set_max_fee_ppm(value: number): this {
+    this.view.setUint16(1, value, true);
+    return this;
+  }
+
+  set_builder_seat_idx(value: number): this {
+    this.view.setUint32(3, value, true);
+    return this;
+  }
+
+  build(): Uint8Array {
+    return this.buffer.slice();
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    target.set(this.buffer, offset);
+    return target;
+  }
+
+  finish(): SeatSetBuilderApprovalInstruction {
+    const view = SeatSetBuilderApprovalInstruction.from_array(this.buffer.slice());
+    if (!view) throw new Error("failed to build SeatSetBuilderApprovalInstruction");
+    return view;
+  }
+}
+
+__tnRegisterFootprint("SeatSetBuilderApprovalInstruction", (params) => SeatSetBuilderApprovalInstruction.__tnInvokeFootprint(params));
+__tnRegisterValidate("SeatSetBuilderApprovalInstruction", (buffer, params) => SeatSetBuilderApprovalInstruction.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("SeatSetBuilderApprovalInstruction", (buffer) => { const result = SeatSetBuilderApprovalInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
+/* ----- TYPE DEFINITION FOR SeatSetFeeReceiverInstruction ----- */
+
+const __tn_ir_SeatSetFeeReceiverInstruction = {
+  typeName: "SeatSetFeeReceiverInstruction",
+  root: { op: "const", value: 7n }
+} as const;
+
+export class SeatSetFeeReceiverInstruction {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): SeatSetFeeReceiverInstruction {
+    if (!buffer || buffer.length === undefined) throw new Error("SeatSetFeeReceiverInstruction.__tnCreateView requires a Uint8Array");
+    return new SeatSetFeeReceiverInstruction(new Uint8Array(buffer));
+  }
+
+  static builder(): SeatSetFeeReceiverInstructionBuilder {
+    return new SeatSetFeeReceiverInstructionBuilder();
+  }
+
+  static fromBuilder(builder: SeatSetFeeReceiverInstructionBuilder): SeatSetFeeReceiverInstruction | null {
+    const buffer = builder.build();
+    return SeatSetFeeReceiverInstruction.from_array(buffer);
+  }
+
+  get_market_record_idx(): number {
+    const offset = 0;
+    return this.view.getUint8(offset);
+  }
+
+  set_market_record_idx(value: number): void {
+    const offset = 0;
+    this.view.setUint8(offset, value);
+  }
+
+  get market_record_idx(): number {
+    return this.get_market_record_idx();
+  }
+
+  set market_record_idx(value: number) {
+    this.set_market_record_idx(value);
+  }
+
+  get_reserved0(): number {
+    const offset = 1;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_reserved0(value: number): void {
+    const offset = 1;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get reserved0(): number {
+    return this.get_reserved0();
+  }
+
+  set reserved0(value: number) {
+    this.set_reserved0(value);
+  }
+
+  get_reserved1(): number {
+    const offset = 3;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_reserved1(value: number): void {
+    const offset = 3;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get reserved1(): number {
+    return this.get_reserved1();
+  }
+
+  set reserved1(value: number) {
+    this.set_reserved1(value);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_SeatSetFeeReceiverInstruction.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_SeatSetFeeReceiverInstruction, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for SeatSetFeeReceiverInstruction');
+    }
+    return __tnBigIntToNumber(irResult, 'SeatSetFeeReceiverInstruction::footprint');
+  }
+
+  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    if (buffer.length < 7) return { ok: false, code: "tn.buffer_too_small", consumed: 7 };
+    return { ok: true, consumed: 7 };
+  }
+
+  static new(market_record_idx: number, reserved0: number, reserved1: number): SeatSetFeeReceiverInstruction {
+    const buffer = new Uint8Array(7);
+    const view = new DataView(buffer.buffer);
+
+    let offset = 0;
+    view.setUint8(0, market_record_idx); /* market_record_idx */
+    view.setUint16(1, reserved0, true); /* reserved0 (little-endian) */
+    view.setUint32(3, reserved1, true); /* reserved1 (little-endian) */
+
+    return new SeatSetFeeReceiverInstruction(buffer);
+  }
+
+  static from_array(buffer: Uint8Array): SeatSetFeeReceiverInstruction | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new SeatSetFeeReceiverInstruction(buffer);
+  }
+
+}
+
+export class SeatSetFeeReceiverInstructionBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+
+  constructor() {
+    this.buffer = new Uint8Array(7);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  set_market_record_idx(value: number): this {
+    this.view.setUint8(0, value);
+    return this;
+  }
+
+  set_reserved0(value: number): this {
+    this.view.setUint16(1, value, true);
+    return this;
+  }
+
+  set_reserved1(value: number): this {
+    this.view.setUint32(3, value, true);
+    return this;
+  }
+
+  build(): Uint8Array {
+    return this.buffer.slice();
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    target.set(this.buffer, offset);
+    return target;
+  }
+
+  finish(): SeatSetFeeReceiverInstruction {
+    const view = SeatSetFeeReceiverInstruction.from_array(this.buffer.slice());
+    if (!view) throw new Error("failed to build SeatSetFeeReceiverInstruction");
+    return view;
+  }
+}
+
+__tnRegisterFootprint("SeatSetFeeReceiverInstruction", (params) => SeatSetFeeReceiverInstruction.__tnInvokeFootprint(params));
+__tnRegisterValidate("SeatSetFeeReceiverInstruction", (buffer, params) => SeatSetFeeReceiverInstruction.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("SeatSetFeeReceiverInstruction", (buffer) => { const result = SeatSetFeeReceiverInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR SettleFundingInstruction ----- */
 
@@ -10938,6 +14446,672 @@ __tnRegisterFootprint("ExchangeStatusEvent", (params) => ExchangeStatusEvent.__t
 __tnRegisterValidate("ExchangeStatusEvent", (buffer, params) => ExchangeStatusEvent.__tnInvokeValidate(buffer, params));
 __tnRegisterDynamicValidate("ExchangeStatusEvent", (buffer) => { const result = ExchangeStatusEvent.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
+/* ----- TYPE DEFINITION FOR FeeEvent ----- */
+
+const __tn_ir_FeeEvent = {
+  typeName: "FeeEvent",
+  root: { op: "const", value: 176n }
+} as const;
+
+export class FeeEvent {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): FeeEvent {
+    if (!buffer || buffer.length === undefined) throw new Error("FeeEvent.__tnCreateView requires a Uint8Array");
+    return new FeeEvent(new Uint8Array(buffer));
+  }
+
+  static builder(): FeeEventBuilder {
+    return new FeeEventBuilder();
+  }
+
+  static fromBuilder(builder: FeeEventBuilder): FeeEvent | null {
+    const buffer = builder.build();
+    return FeeEvent.from_array(buffer);
+  }
+
+  get_market(): Pubkey {
+    const offset = 0;
+    const slice = this.buffer.subarray(offset, offset + 32);
+    return Pubkey.from_array(slice)!;
+  }
+
+  set_market(value: Pubkey): void {
+    /* Copy bytes from source struct to this field */
+    const sourceBytes = (value as any).buffer as Uint8Array;
+    const offset = 0;
+    this.buffer.set(sourceBytes, offset);
+  }
+
+  get market(): Pubkey {
+    return this.get_market();
+  }
+
+  set market(value: Pubkey) {
+    this.set_market(value);
+  }
+
+  get_seat_idx(): number {
+    const offset = 32;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_seat_idx(value: number): void {
+    const offset = 32;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get seat_idx(): number {
+    return this.get_seat_idx();
+  }
+
+  set seat_idx(value: number) {
+    this.set_seat_idx(value);
+  }
+
+  get_builder_seat_idx(): number {
+    const offset = 36;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_builder_seat_idx(value: number): void {
+    const offset = 36;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get builder_seat_idx(): number {
+    return this.get_builder_seat_idx();
+  }
+
+  set builder_seat_idx(value: number) {
+    this.set_builder_seat_idx(value);
+  }
+
+  get_kind(): number {
+    const offset = 40;
+    return this.view.getUint8(offset);
+  }
+
+  set_kind(value: number): void {
+    const offset = 40;
+    this.view.setUint8(offset, value);
+  }
+
+  get kind(): number {
+    return this.get_kind();
+  }
+
+  set kind(value: number) {
+    this.set_kind(value);
+  }
+
+  get_fill_cnt(): number {
+    const offset = 41;
+    return this.view.getUint8(offset);
+  }
+
+  set_fill_cnt(value: number): void {
+    const offset = 41;
+    this.view.setUint8(offset, value);
+  }
+
+  get fill_cnt(): number {
+    return this.get_fill_cnt();
+  }
+
+  set fill_cnt(value: number) {
+    this.set_fill_cnt(value);
+  }
+
+  get_reserved0(): number[] {
+    const offset = 42;
+    const result: number[] = [];
+    for (let i = 0; i < 2; i++) {
+      result.push(this.view.getUint8((offset + i * 1)));
+    }
+    return result;
+  }
+
+  set_reserved0(value: number[]): void {
+    const offset = 42;
+    if (value.length !== 2) {
+      throw new Error('Array length must be 2');
+    }
+    for (let i = 0; i < 2; i++) {
+      this.view.setUint8((offset + i * 1), value[i]);
+    }
+  }
+
+  get reserved0(): number[] {
+    return this.get_reserved0();
+  }
+
+  set reserved0(value: number[]) {
+    this.set_reserved0(value);
+  }
+
+  get_taker_fee_ppm(): number {
+    const offset = 44;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_taker_fee_ppm(value: number): void {
+    const offset = 44;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get taker_fee_ppm(): number {
+    return this.get_taker_fee_ppm();
+  }
+
+  set taker_fee_ppm(value: number) {
+    this.set_taker_fee_ppm(value);
+  }
+
+  get_maker_rebate_ppm(): number {
+    const offset = 48;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_maker_rebate_ppm(value: number): void {
+    const offset = 48;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get maker_rebate_ppm(): number {
+    return this.get_maker_rebate_ppm();
+  }
+
+  set maker_rebate_ppm(value: number) {
+    this.set_maker_rebate_ppm(value);
+  }
+
+  get_builder_fee_ppm(): number {
+    const offset = 52;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_builder_fee_ppm(value: number): void {
+    const offset = 52;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get builder_fee_ppm(): number {
+    return this.get_builder_fee_ppm();
+  }
+
+  set builder_fee_ppm(value: number) {
+    this.set_builder_fee_ppm(value);
+  }
+
+  get_notional(): bigint {
+    const offset = 56;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_notional(value: bigint): void {
+    const offset = 56;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get notional(): bigint {
+    return this.get_notional();
+  }
+
+  set notional(value: bigint) {
+    this.set_notional(value);
+  }
+
+  get_taker_fee(): bigint {
+    const offset = 64;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_taker_fee(value: bigint): void {
+    const offset = 64;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get taker_fee(): bigint {
+    return this.get_taker_fee();
+  }
+
+  set taker_fee(value: bigint) {
+    this.set_taker_fee(value);
+  }
+
+  get_taker_fee_waived(): bigint {
+    const offset = 72;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_taker_fee_waived(value: bigint): void {
+    const offset = 72;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get taker_fee_waived(): bigint {
+    return this.get_taker_fee_waived();
+  }
+
+  set taker_fee_waived(value: bigint) {
+    this.set_taker_fee_waived(value);
+  }
+
+  get_maker_rebates(): bigint {
+    const offset = 80;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_maker_rebates(value: bigint): void {
+    const offset = 80;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get maker_rebates(): bigint {
+    return this.get_maker_rebates();
+  }
+
+  set maker_rebates(value: bigint) {
+    this.set_maker_rebates(value);
+  }
+
+  get_builder_fee(): bigint {
+    const offset = 88;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_builder_fee(value: bigint): void {
+    const offset = 88;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get builder_fee(): bigint {
+    return this.get_builder_fee();
+  }
+
+  set builder_fee(value: bigint) {
+    this.set_builder_fee(value);
+  }
+
+  get_builder_fee_waived(): bigint {
+    const offset = 96;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_builder_fee_waived(value: bigint): void {
+    const offset = 96;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get builder_fee_waived(): bigint {
+    return this.get_builder_fee_waived();
+  }
+
+  set builder_fee_waived(value: bigint) {
+    this.set_builder_fee_waived(value);
+  }
+
+  get_maker_builder_fees(): bigint {
+    const offset = 104;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_maker_builder_fees(value: bigint): void {
+    const offset = 104;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get maker_builder_fees(): bigint {
+    return this.get_maker_builder_fees();
+  }
+
+  set maker_builder_fees(value: bigint) {
+    this.set_maker_builder_fees(value);
+  }
+
+  get_protocol_fee(): bigint {
+    const offset = 112;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_protocol_fee(value: bigint): void {
+    const offset = 112;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get protocol_fee(): bigint {
+    return this.get_protocol_fee();
+  }
+
+  set protocol_fee(value: bigint) {
+    this.set_protocol_fee(value);
+  }
+
+  get_insurance(): bigint {
+    const offset = 120;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_insurance(value: bigint): void {
+    const offset = 120;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get insurance(): bigint {
+    return this.get_insurance();
+  }
+
+  set insurance(value: bigint) {
+    this.set_insurance(value);
+  }
+
+  get_fee_balance(): bigint {
+    const offset = 128;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_fee_balance(value: bigint): void {
+    const offset = 128;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get fee_balance(): bigint {
+    return this.get_fee_balance();
+  }
+
+  set fee_balance(value: bigint) {
+    this.set_fee_balance(value);
+  }
+
+  get_insurance_balance(): bigint {
+    const offset = 136;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_insurance_balance(value: bigint): void {
+    const offset = 136;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get insurance_balance(): bigint {
+    return this.get_insurance_balance();
+  }
+
+  set insurance_balance(value: bigint) {
+    this.set_insurance_balance(value);
+  }
+
+  get_waived_map(): bigint[] {
+    const offset = 144;
+    const result: bigint[] = [];
+    for (let i = 0; i < 2; i++) {
+      result.push(this.view.getBigUint64((offset + i * 8), true));
+    }
+    return result;
+  }
+
+  set_waived_map(value: bigint[]): void {
+    const offset = 144;
+    if (value.length !== 2) {
+      throw new Error('Array length must be 2');
+    }
+    for (let i = 0; i < 2; i++) {
+      this.view.setBigUint64((offset + i * 8), value[i], true);
+    }
+  }
+
+  get waived_map(): bigint[] {
+    return this.get_waived_map();
+  }
+
+  set waived_map(value: bigint[]) {
+    this.set_waived_map(value);
+  }
+
+  get_maker_fee_map(): bigint[] {
+    const offset = 160;
+    const result: bigint[] = [];
+    for (let i = 0; i < 2; i++) {
+      result.push(this.view.getBigUint64((offset + i * 8), true));
+    }
+    return result;
+  }
+
+  set_maker_fee_map(value: bigint[]): void {
+    const offset = 160;
+    if (value.length !== 2) {
+      throw new Error('Array length must be 2');
+    }
+    for (let i = 0; i < 2; i++) {
+      this.view.setBigUint64((offset + i * 8), value[i], true);
+    }
+  }
+
+  get maker_fee_map(): bigint[] {
+    return this.get_maker_fee_map();
+  }
+
+  set maker_fee_map(value: bigint[]) {
+    this.set_maker_fee_map(value);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_FeeEvent.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_FeeEvent, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for FeeEvent');
+    }
+    return __tnBigIntToNumber(irResult, 'FeeEvent::footprint');
+  }
+
+  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    if (buffer.length < 176) return { ok: false, code: "tn.buffer_too_small", consumed: 176 };
+    return { ok: true, consumed: 176 };
+  }
+
+  static from_array(buffer: Uint8Array): FeeEvent | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new FeeEvent(buffer);
+  }
+
+}
+
+export class FeeEventBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+
+  constructor() {
+    this.buffer = new Uint8Array(176);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  set_market(value: Uint8Array): this {
+    if (value.length !== 32) throw new Error("market expects 32 bytes");
+    this.buffer.set(value, 0);
+    return this;
+  }
+
+  set_seat_idx(value: number): this {
+    this.view.setUint32(32, value, true);
+    return this;
+  }
+
+  set_builder_seat_idx(value: number): this {
+    this.view.setUint32(36, value, true);
+    return this;
+  }
+
+  set_kind(value: number): this {
+    this.view.setUint8(40, value);
+    return this;
+  }
+
+  set_fill_cnt(value: number): this {
+    this.view.setUint8(41, value);
+    return this;
+  }
+
+  set_reserved0(values: number[]): this {
+    if (values.length !== 2) throw new Error("reserved0 expects 2 elements");
+    for (let i = 0; i < values.length; i++) {
+      const byteOffset = 42 + i * 1;
+      this.view.setUint8(byteOffset, values[i]);
+    }
+    return this;
+  }
+
+  set_taker_fee_ppm(value: number): this {
+    this.view.setUint32(44, value, true);
+    return this;
+  }
+
+  set_maker_rebate_ppm(value: number): this {
+    this.view.setUint32(48, value, true);
+    return this;
+  }
+
+  set_builder_fee_ppm(value: number): this {
+    this.view.setUint32(52, value, true);
+    return this;
+  }
+
+  set_notional(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(56, cast, true);
+    return this;
+  }
+
+  set_taker_fee(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(64, cast, true);
+    return this;
+  }
+
+  set_taker_fee_waived(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(72, cast, true);
+    return this;
+  }
+
+  set_maker_rebates(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(80, cast, true);
+    return this;
+  }
+
+  set_builder_fee(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(88, cast, true);
+    return this;
+  }
+
+  set_builder_fee_waived(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(96, cast, true);
+    return this;
+  }
+
+  set_maker_builder_fees(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(104, cast, true);
+    return this;
+  }
+
+  set_protocol_fee(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(112, cast, true);
+    return this;
+  }
+
+  set_insurance(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(120, cast, true);
+    return this;
+  }
+
+  set_fee_balance(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(128, cast, true);
+    return this;
+  }
+
+  set_insurance_balance(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(136, cast, true);
+    return this;
+  }
+
+  set_waived_map(values: bigint[]): this {
+    if (values.length !== 2) throw new Error("waived_map expects 2 elements");
+    for (let i = 0; i < values.length; i++) {
+      const byteOffset = 144 + i * 8;
+      this.view.setBigUint64(byteOffset, values[i], true);
+    }
+    return this;
+  }
+
+  set_maker_fee_map(values: bigint[]): this {
+    if (values.length !== 2) throw new Error("maker_fee_map expects 2 elements");
+    for (let i = 0; i < values.length; i++) {
+      const byteOffset = 160 + i * 8;
+      this.view.setBigUint64(byteOffset, values[i], true);
+    }
+    return this;
+  }
+
+  build(): Uint8Array {
+    return this.buffer.slice();
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    target.set(this.buffer, offset);
+    return target;
+  }
+
+  finish(): FeeEvent {
+    const view = FeeEvent.from_array(this.buffer.slice());
+    if (!view) throw new Error("failed to build FeeEvent");
+    return view;
+  }
+}
+
+__tnRegisterFootprint("FeeEvent", (params) => FeeEvent.__tnInvokeFootprint(params));
+__tnRegisterValidate("FeeEvent", (buffer, params) => FeeEvent.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("FeeEvent", (buffer) => { const result = FeeEvent.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
 /* ----- TYPE DEFINITION FOR FundingRoundEvent ----- */
 
 const __tn_ir_FundingRoundEvent = {
@@ -11260,6 +15434,269 @@ export class FundingRoundEventBuilder {
 __tnRegisterFootprint("FundingRoundEvent", (params) => FundingRoundEvent.__tnInvokeFootprint(params));
 __tnRegisterValidate("FundingRoundEvent", (buffer, params) => FundingRoundEvent.__tnInvokeValidate(buffer, params));
 __tnRegisterDynamicValidate("FundingRoundEvent", (buffer) => { const result = FundingRoundEvent.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
+/* ----- TYPE DEFINITION FOR InsuranceEvent ----- */
+
+const __tn_ir_InsuranceEvent = {
+  typeName: "InsuranceEvent",
+  root: { op: "const", value: 56n }
+} as const;
+
+export class InsuranceEvent {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): InsuranceEvent {
+    if (!buffer || buffer.length === undefined) throw new Error("InsuranceEvent.__tnCreateView requires a Uint8Array");
+    return new InsuranceEvent(new Uint8Array(buffer));
+  }
+
+  static builder(): InsuranceEventBuilder {
+    return new InsuranceEventBuilder();
+  }
+
+  static fromBuilder(builder: InsuranceEventBuilder): InsuranceEvent | null {
+    const buffer = builder.build();
+    return InsuranceEvent.from_array(buffer);
+  }
+
+  get_market(): Pubkey {
+    const offset = 0;
+    const slice = this.buffer.subarray(offset, offset + 32);
+    return Pubkey.from_array(slice)!;
+  }
+
+  set_market(value: Pubkey): void {
+    /* Copy bytes from source struct to this field */
+    const sourceBytes = (value as any).buffer as Uint8Array;
+    const offset = 0;
+    this.buffer.set(sourceBytes, offset);
+  }
+
+  get market(): Pubkey {
+    return this.get_market();
+  }
+
+  set market(value: Pubkey) {
+    this.set_market(value);
+  }
+
+  get_amount(): bigint {
+    const offset = 32;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_amount(value: bigint): void {
+    const offset = 32;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get amount(): bigint {
+    return this.get_amount();
+  }
+
+  set amount(value: bigint) {
+    this.set_amount(value);
+  }
+
+  get_balance_after(): bigint {
+    const offset = 40;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_balance_after(value: bigint): void {
+    const offset = 40;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get balance_after(): bigint {
+    return this.get_balance_after();
+  }
+
+  set balance_after(value: bigint) {
+    this.set_balance_after(value);
+  }
+
+  get_seat_idx(): number {
+    const offset = 48;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_seat_idx(value: number): void {
+    const offset = 48;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get seat_idx(): number {
+    return this.get_seat_idx();
+  }
+
+  set seat_idx(value: number) {
+    this.set_seat_idx(value);
+  }
+
+  get_kind(): number {
+    const offset = 52;
+    return this.view.getUint8(offset);
+  }
+
+  set_kind(value: number): void {
+    const offset = 52;
+    this.view.setUint8(offset, value);
+  }
+
+  get kind(): number {
+    return this.get_kind();
+  }
+
+  set kind(value: number) {
+    this.set_kind(value);
+  }
+
+  get_reserved0(): number[] {
+    const offset = 53;
+    const result: number[] = [];
+    for (let i = 0; i < 3; i++) {
+      result.push(this.view.getUint8((offset + i * 1)));
+    }
+    return result;
+  }
+
+  set_reserved0(value: number[]): void {
+    const offset = 53;
+    if (value.length !== 3) {
+      throw new Error('Array length must be 3');
+    }
+    for (let i = 0; i < 3; i++) {
+      this.view.setUint8((offset + i * 1), value[i]);
+    }
+  }
+
+  get reserved0(): number[] {
+    return this.get_reserved0();
+  }
+
+  set reserved0(value: number[]) {
+    this.set_reserved0(value);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_InsuranceEvent.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_InsuranceEvent, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for InsuranceEvent');
+    }
+    return __tnBigIntToNumber(irResult, 'InsuranceEvent::footprint');
+  }
+
+  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    if (buffer.length < 56) return { ok: false, code: "tn.buffer_too_small", consumed: 56 };
+    return { ok: true, consumed: 56 };
+  }
+
+  static from_array(buffer: Uint8Array): InsuranceEvent | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new InsuranceEvent(buffer);
+  }
+
+}
+
+export class InsuranceEventBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+
+  constructor() {
+    this.buffer = new Uint8Array(56);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  set_market(value: Uint8Array): this {
+    if (value.length !== 32) throw new Error("market expects 32 bytes");
+    this.buffer.set(value, 0);
+    return this;
+  }
+
+  set_amount(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(32, cast, true);
+    return this;
+  }
+
+  set_balance_after(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(40, cast, true);
+    return this;
+  }
+
+  set_seat_idx(value: number): this {
+    this.view.setUint32(48, value, true);
+    return this;
+  }
+
+  set_kind(value: number): this {
+    this.view.setUint8(52, value);
+    return this;
+  }
+
+  set_reserved0(values: number[]): this {
+    if (values.length !== 3) throw new Error("reserved0 expects 3 elements");
+    for (let i = 0; i < values.length; i++) {
+      const byteOffset = 53 + i * 1;
+      this.view.setUint8(byteOffset, values[i]);
+    }
+    return this;
+  }
+
+  build(): Uint8Array {
+    return this.buffer.slice();
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    target.set(this.buffer, offset);
+    return target;
+  }
+
+  finish(): InsuranceEvent {
+    const view = InsuranceEvent.from_array(this.buffer.slice());
+    if (!view) throw new Error("failed to build InsuranceEvent");
+    return view;
+  }
+}
+
+__tnRegisterFootprint("InsuranceEvent", (params) => InsuranceEvent.__tnInvokeFootprint(params));
+__tnRegisterValidate("InsuranceEvent", (buffer, params) => InsuranceEvent.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("InsuranceEvent", (buffer) => { const result = InsuranceEvent.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
 /* ----- TYPE DEFINITION FOR LiquidationEvent ----- */
 
@@ -11697,11 +16134,1057 @@ __tnRegisterFootprint("LiquidationEvent", (params) => LiquidationEvent.__tnInvok
 __tnRegisterValidate("LiquidationEvent", (buffer, params) => LiquidationEvent.__tnInvokeValidate(buffer, params));
 __tnRegisterDynamicValidate("LiquidationEvent", (buffer) => { const result = LiquidationEvent.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
+/* ----- TYPE DEFINITION FOR LossEvent ----- */
+
+const __tn_ir_LossEvent = {
+  typeName: "LossEvent",
+  root: { op: "const", value: 120n }
+} as const;
+
+export class LossEvent {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): LossEvent {
+    if (!buffer || buffer.length === undefined) throw new Error("LossEvent.__tnCreateView requires a Uint8Array");
+    return new LossEvent(new Uint8Array(buffer));
+  }
+
+  static builder(): LossEventBuilder {
+    return new LossEventBuilder();
+  }
+
+  static fromBuilder(builder: LossEventBuilder): LossEvent | null {
+    const buffer = builder.build();
+    return LossEvent.from_array(buffer);
+  }
+
+  get_market(): Pubkey {
+    const offset = 0;
+    const slice = this.buffer.subarray(offset, offset + 32);
+    return Pubkey.from_array(slice)!;
+  }
+
+  set_market(value: Pubkey): void {
+    /* Copy bytes from source struct to this field */
+    const sourceBytes = (value as any).buffer as Uint8Array;
+    const offset = 0;
+    this.buffer.set(sourceBytes, offset);
+  }
+
+  get market(): Pubkey {
+    return this.get_market();
+  }
+
+  set market(value: Pubkey) {
+    this.set_market(value);
+  }
+
+  get_deficit(): bigint {
+    const offset = 32;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_deficit(value: bigint): void {
+    const offset = 32;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get deficit(): bigint {
+    return this.get_deficit();
+  }
+
+  set deficit(value: bigint) {
+    this.set_deficit(value);
+  }
+
+  get_fee_cover(): bigint {
+    const offset = 40;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_fee_cover(value: bigint): void {
+    const offset = 40;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get fee_cover(): bigint {
+    return this.get_fee_cover();
+  }
+
+  set fee_cover(value: bigint) {
+    this.set_fee_cover(value);
+  }
+
+  get_ins_cover(): bigint {
+    const offset = 48;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_ins_cover(value: bigint): void {
+    const offset = 48;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get ins_cover(): bigint {
+    return this.get_ins_cover();
+  }
+
+  set ins_cover(value: bigint) {
+    this.set_ins_cover(value);
+  }
+
+  get_soc_cover(): bigint {
+    const offset = 56;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_soc_cover(value: bigint): void {
+    const offset = 56;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get soc_cover(): bigint {
+    return this.get_soc_cover();
+  }
+
+  set soc_cover(value: bigint) {
+    this.set_soc_cover(value);
+  }
+
+  get_residual(): bigint {
+    const offset = 64;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_residual(value: bigint): void {
+    const offset = 64;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get residual(): bigint {
+    return this.get_residual();
+  }
+
+  set residual(value: bigint) {
+    this.set_residual(value);
+  }
+
+  get_delta(): bigint {
+    const offset = 72;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_delta(value: bigint): void {
+    const offset = 72;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get delta(): bigint {
+    return this.get_delta();
+  }
+
+  set delta(value: bigint) {
+    this.set_delta(value);
+  }
+
+  get_oi_lots(): bigint {
+    const offset = 80;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_oi_lots(value: bigint): void {
+    const offset = 80;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get oi_lots(): bigint {
+    return this.get_oi_lots();
+  }
+
+  set oi_lots(value: bigint) {
+    this.set_oi_lots(value);
+  }
+
+  get_mark(): bigint {
+    const offset = 88;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_mark(value: bigint): void {
+    const offset = 88;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get mark(): bigint {
+    return this.get_mark();
+  }
+
+  set mark(value: bigint) {
+    this.set_mark(value);
+  }
+
+  get_bad_debt_after(): bigint {
+    const offset = 96;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_bad_debt_after(value: bigint): void {
+    const offset = 96;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get bad_debt_after(): bigint {
+    return this.get_bad_debt_after();
+  }
+
+  set bad_debt_after(value: bigint) {
+    this.set_bad_debt_after(value);
+  }
+
+  get_insurance_after(): bigint {
+    const offset = 104;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_insurance_after(value: bigint): void {
+    const offset = 104;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get insurance_after(): bigint {
+    return this.get_insurance_after();
+  }
+
+  set insurance_after(value: bigint) {
+    this.set_insurance_after(value);
+  }
+
+  get_epoch_id(): number {
+    const offset = 112;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_epoch_id(value: number): void {
+    const offset = 112;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get epoch_id(): number {
+    return this.get_epoch_id();
+  }
+
+  set epoch_id(value: number) {
+    this.set_epoch_id(value);
+  }
+
+  get_side(): number {
+    const offset = 116;
+    return this.view.getUint8(offset);
+  }
+
+  set_side(value: number): void {
+    const offset = 116;
+    this.view.setUint8(offset, value);
+  }
+
+  get side(): number {
+    return this.get_side();
+  }
+
+  set side(value: number) {
+    this.set_side(value);
+  }
+
+  get_cause(): number {
+    const offset = 117;
+    return this.view.getUint8(offset);
+  }
+
+  set_cause(value: number): void {
+    const offset = 117;
+    this.view.setUint8(offset, value);
+  }
+
+  get cause(): number {
+    return this.get_cause();
+  }
+
+  set cause(value: number) {
+    this.set_cause(value);
+  }
+
+  get_reserved0(): number[] {
+    const offset = 118;
+    const result: number[] = [];
+    for (let i = 0; i < 2; i++) {
+      result.push(this.view.getUint8((offset + i * 1)));
+    }
+    return result;
+  }
+
+  set_reserved0(value: number[]): void {
+    const offset = 118;
+    if (value.length !== 2) {
+      throw new Error('Array length must be 2');
+    }
+    for (let i = 0; i < 2; i++) {
+      this.view.setUint8((offset + i * 1), value[i]);
+    }
+  }
+
+  get reserved0(): number[] {
+    return this.get_reserved0();
+  }
+
+  set reserved0(value: number[]) {
+    this.set_reserved0(value);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_LossEvent.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_LossEvent, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for LossEvent');
+    }
+    return __tnBigIntToNumber(irResult, 'LossEvent::footprint');
+  }
+
+  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    if (buffer.length < 120) return { ok: false, code: "tn.buffer_too_small", consumed: 120 };
+    return { ok: true, consumed: 120 };
+  }
+
+  static from_array(buffer: Uint8Array): LossEvent | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new LossEvent(buffer);
+  }
+
+}
+
+export class LossEventBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+
+  constructor() {
+    this.buffer = new Uint8Array(120);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  set_market(value: Uint8Array): this {
+    if (value.length !== 32) throw new Error("market expects 32 bytes");
+    this.buffer.set(value, 0);
+    return this;
+  }
+
+  set_deficit(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(32, cast, true);
+    return this;
+  }
+
+  set_fee_cover(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(40, cast, true);
+    return this;
+  }
+
+  set_ins_cover(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(48, cast, true);
+    return this;
+  }
+
+  set_soc_cover(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(56, cast, true);
+    return this;
+  }
+
+  set_residual(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(64, cast, true);
+    return this;
+  }
+
+  set_delta(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(72, cast, true);
+    return this;
+  }
+
+  set_oi_lots(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(80, cast, true);
+    return this;
+  }
+
+  set_mark(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(88, cast, true);
+    return this;
+  }
+
+  set_bad_debt_after(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(96, cast, true);
+    return this;
+  }
+
+  set_insurance_after(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(104, cast, true);
+    return this;
+  }
+
+  set_epoch_id(value: number): this {
+    this.view.setUint32(112, value, true);
+    return this;
+  }
+
+  set_side(value: number): this {
+    this.view.setUint8(116, value);
+    return this;
+  }
+
+  set_cause(value: number): this {
+    this.view.setUint8(117, value);
+    return this;
+  }
+
+  set_reserved0(values: number[]): this {
+    if (values.length !== 2) throw new Error("reserved0 expects 2 elements");
+    for (let i = 0; i < values.length; i++) {
+      const byteOffset = 118 + i * 1;
+      this.view.setUint8(byteOffset, values[i]);
+    }
+    return this;
+  }
+
+  build(): Uint8Array {
+    return this.buffer.slice();
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    target.set(this.buffer, offset);
+    return target;
+  }
+
+  finish(): LossEvent {
+    const view = LossEvent.from_array(this.buffer.slice());
+    if (!view) throw new Error("failed to build LossEvent");
+    return view;
+  }
+}
+
+__tnRegisterFootprint("LossEvent", (params) => LossEvent.__tnInvokeFootprint(params));
+__tnRegisterValidate("LossEvent", (buffer, params) => LossEvent.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("LossEvent", (buffer) => { const result = LossEvent.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
+/* ----- TYPE DEFINITION FOR MarginEvent ----- */
+
+const __tn_ir_MarginEvent = {
+  typeName: "MarginEvent",
+  root: { op: "const", value: 152n }
+} as const;
+
+export class MarginEvent {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MarginEvent {
+    if (!buffer || buffer.length === undefined) throw new Error("MarginEvent.__tnCreateView requires a Uint8Array");
+    return new MarginEvent(new Uint8Array(buffer));
+  }
+
+  static builder(): MarginEventBuilder {
+    return new MarginEventBuilder();
+  }
+
+  static fromBuilder(builder: MarginEventBuilder): MarginEvent | null {
+    const buffer = builder.build();
+    return MarginEvent.from_array(buffer);
+  }
+
+  get_action(): number {
+    const offset = 0;
+    return this.view.getUint8(offset);
+  }
+
+  set_action(value: number): void {
+    const offset = 0;
+    this.view.setUint8(offset, value);
+  }
+
+  get action(): number {
+    return this.get_action();
+  }
+
+  set action(value: number) {
+    this.set_action(value);
+  }
+
+  get_link_cnt(): number {
+    const offset = 1;
+    return this.view.getUint8(offset);
+  }
+
+  set_link_cnt(value: number): void {
+    const offset = 1;
+    this.view.setUint8(offset, value);
+  }
+
+  get link_cnt(): number {
+    return this.get_link_cnt();
+  }
+
+  set link_cnt(value: number) {
+    this.set_link_cnt(value);
+  }
+
+  get_reserved0(): number[] {
+    const offset = 2;
+    const result: number[] = [];
+    for (let i = 0; i < 2; i++) {
+      result.push(this.view.getUint8((offset + i * 1)));
+    }
+    return result;
+  }
+
+  set_reserved0(value: number[]): void {
+    const offset = 2;
+    if (value.length !== 2) {
+      throw new Error('Array length must be 2');
+    }
+    for (let i = 0; i < 2; i++) {
+      this.view.setUint8((offset + i * 1), value[i]);
+    }
+  }
+
+  get reserved0(): number[] {
+    return this.get_reserved0();
+  }
+
+  set reserved0(value: number[]) {
+    this.set_reserved0(value);
+  }
+
+  get_seat_idx(): number {
+    const offset = 4;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_seat_idx(value: number): void {
+    const offset = 4;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get seat_idx(): number {
+    return this.get_seat_idx();
+  }
+
+  set seat_idx(value: number) {
+    this.set_seat_idx(value);
+  }
+
+  get_to_seat_idx(): number {
+    const offset = 8;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_to_seat_idx(value: number): void {
+    const offset = 8;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get to_seat_idx(): number {
+    return this.get_to_seat_idx();
+  }
+
+  set to_seat_idx(value: number) {
+    this.set_to_seat_idx(value);
+  }
+
+  get_account_id(): number {
+    const offset = 12;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_account_id(value: number): void {
+    const offset = 12;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get account_id(): number {
+    return this.get_account_id();
+  }
+
+  set account_id(value: number) {
+    this.set_account_id(value);
+  }
+
+  get_amount(): bigint {
+    const offset = 16;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_amount(value: bigint): void {
+    const offset = 16;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get amount(): bigint {
+    return this.get_amount();
+  }
+
+  set amount(value: bigint) {
+    this.set_amount(value);
+  }
+
+  get_margin_account(): Pubkey {
+    const offset = 24;
+    const slice = this.buffer.subarray(offset, offset + 32);
+    return Pubkey.from_array(slice)!;
+  }
+
+  set_margin_account(value: Pubkey): void {
+    /* Copy bytes from source struct to this field */
+    const sourceBytes = (value as any).buffer as Uint8Array;
+    const offset = 24;
+    this.buffer.set(sourceBytes, offset);
+  }
+
+  get margin_account(): Pubkey {
+    return this.get_margin_account();
+  }
+
+  set margin_account(value: Pubkey) {
+    this.set_margin_account(value);
+  }
+
+  get_owner(): Pubkey {
+    const offset = 56;
+    const slice = this.buffer.subarray(offset, offset + 32);
+    return Pubkey.from_array(slice)!;
+  }
+
+  set_owner(value: Pubkey): void {
+    /* Copy bytes from source struct to this field */
+    const sourceBytes = (value as any).buffer as Uint8Array;
+    const offset = 56;
+    this.buffer.set(sourceBytes, offset);
+  }
+
+  get owner(): Pubkey {
+    return this.get_owner();
+  }
+
+  set owner(value: Pubkey) {
+    this.set_owner(value);
+  }
+
+  get_market(): Pubkey {
+    const offset = 88;
+    const slice = this.buffer.subarray(offset, offset + 32);
+    return Pubkey.from_array(slice)!;
+  }
+
+  set_market(value: Pubkey): void {
+    /* Copy bytes from source struct to this field */
+    const sourceBytes = (value as any).buffer as Uint8Array;
+    const offset = 88;
+    this.buffer.set(sourceBytes, offset);
+  }
+
+  get market(): Pubkey {
+    return this.get_market();
+  }
+
+  set market(value: Pubkey) {
+    this.set_market(value);
+  }
+
+  get_to_market(): Pubkey {
+    const offset = 120;
+    const slice = this.buffer.subarray(offset, offset + 32);
+    return Pubkey.from_array(slice)!;
+  }
+
+  set_to_market(value: Pubkey): void {
+    /* Copy bytes from source struct to this field */
+    const sourceBytes = (value as any).buffer as Uint8Array;
+    const offset = 120;
+    this.buffer.set(sourceBytes, offset);
+  }
+
+  get to_market(): Pubkey {
+    return this.get_to_market();
+  }
+
+  set to_market(value: Pubkey) {
+    this.set_to_market(value);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_MarginEvent.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_MarginEvent, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for MarginEvent');
+    }
+    return __tnBigIntToNumber(irResult, 'MarginEvent::footprint');
+  }
+
+  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    if (buffer.length < 152) return { ok: false, code: "tn.buffer_too_small", consumed: 152 };
+    return { ok: true, consumed: 152 };
+  }
+
+  static from_array(buffer: Uint8Array): MarginEvent | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new MarginEvent(buffer);
+  }
+
+}
+
+export class MarginEventBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+
+  constructor() {
+    this.buffer = new Uint8Array(152);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  set_action(value: number): this {
+    this.view.setUint8(0, value);
+    return this;
+  }
+
+  set_link_cnt(value: number): this {
+    this.view.setUint8(1, value);
+    return this;
+  }
+
+  set_reserved0(values: number[]): this {
+    if (values.length !== 2) throw new Error("reserved0 expects 2 elements");
+    for (let i = 0; i < values.length; i++) {
+      const byteOffset = 2 + i * 1;
+      this.view.setUint8(byteOffset, values[i]);
+    }
+    return this;
+  }
+
+  set_seat_idx(value: number): this {
+    this.view.setUint32(4, value, true);
+    return this;
+  }
+
+  set_to_seat_idx(value: number): this {
+    this.view.setUint32(8, value, true);
+    return this;
+  }
+
+  set_account_id(value: number): this {
+    this.view.setUint32(12, value, true);
+    return this;
+  }
+
+  set_amount(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(16, cast, true);
+    return this;
+  }
+
+  set_margin_account(value: Uint8Array): this {
+    if (value.length !== 32) throw new Error("margin_account expects 32 bytes");
+    this.buffer.set(value, 24);
+    return this;
+  }
+
+  set_owner(value: Uint8Array): this {
+    if (value.length !== 32) throw new Error("owner expects 32 bytes");
+    this.buffer.set(value, 56);
+    return this;
+  }
+
+  set_market(value: Uint8Array): this {
+    if (value.length !== 32) throw new Error("market expects 32 bytes");
+    this.buffer.set(value, 88);
+    return this;
+  }
+
+  set_to_market(value: Uint8Array): this {
+    if (value.length !== 32) throw new Error("to_market expects 32 bytes");
+    this.buffer.set(value, 120);
+    return this;
+  }
+
+  build(): Uint8Array {
+    return this.buffer.slice();
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    target.set(this.buffer, offset);
+    return target;
+  }
+
+  finish(): MarginEvent {
+    const view = MarginEvent.from_array(this.buffer.slice());
+    if (!view) throw new Error("failed to build MarginEvent");
+    return view;
+  }
+}
+
+__tnRegisterFootprint("MarginEvent", (params) => MarginEvent.__tnInvokeFootprint(params));
+__tnRegisterValidate("MarginEvent", (buffer, params) => MarginEvent.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("MarginEvent", (buffer) => { const result = MarginEvent.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
+/* ----- TYPE DEFINITION FOR MarginLink ----- */
+
+const __tn_ir_MarginLink = {
+  typeName: "MarginLink",
+  root: { op: "const", value: 40n }
+} as const;
+
+export class MarginLink {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MarginLink {
+    if (!buffer || buffer.length === undefined) throw new Error("MarginLink.__tnCreateView requires a Uint8Array");
+    return new MarginLink(new Uint8Array(buffer));
+  }
+
+  static builder(): MarginLinkBuilder {
+    return new MarginLinkBuilder();
+  }
+
+  static fromBuilder(builder: MarginLinkBuilder): MarginLink | null {
+    const buffer = builder.build();
+    return MarginLink.from_array(buffer);
+  }
+
+  get_market(): Pubkey {
+    const offset = 0;
+    const slice = this.buffer.subarray(offset, offset + 32);
+    return Pubkey.from_array(slice)!;
+  }
+
+  set_market(value: Pubkey): void {
+    /* Copy bytes from source struct to this field */
+    const sourceBytes = (value as any).buffer as Uint8Array;
+    const offset = 0;
+    this.buffer.set(sourceBytes, offset);
+  }
+
+  get market(): Pubkey {
+    return this.get_market();
+  }
+
+  set market(value: Pubkey) {
+    this.set_market(value);
+  }
+
+  get_seat_idx(): number {
+    const offset = 32;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_seat_idx(value: number): void {
+    const offset = 32;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get seat_idx(): number {
+    return this.get_seat_idx();
+  }
+
+  set seat_idx(value: number) {
+    this.set_seat_idx(value);
+  }
+
+  get_reserved(): number {
+    const offset = 36;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_reserved(value: number): void {
+    const offset = 36;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get reserved(): number {
+    return this.get_reserved();
+  }
+
+  set reserved(value: number) {
+    this.set_reserved(value);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_MarginLink.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_MarginLink, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for MarginLink');
+    }
+    return __tnBigIntToNumber(irResult, 'MarginLink::footprint');
+  }
+
+  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    if (buffer.length < 40) return { ok: false, code: "tn.buffer_too_small", consumed: 40 };
+    return { ok: true, consumed: 40 };
+  }
+
+  static from_array(buffer: Uint8Array): MarginLink | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new MarginLink(buffer);
+  }
+
+}
+
+export class MarginLinkBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+
+  constructor() {
+    this.buffer = new Uint8Array(40);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  set_market(value: Uint8Array): this {
+    if (value.length !== 32) throw new Error("market expects 32 bytes");
+    this.buffer.set(value, 0);
+    return this;
+  }
+
+  set_seat_idx(value: number): this {
+    this.view.setUint32(32, value, true);
+    return this;
+  }
+
+  set_reserved(value: number): this {
+    this.view.setUint32(36, value, true);
+    return this;
+  }
+
+  build(): Uint8Array {
+    return this.buffer.slice();
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    target.set(this.buffer, offset);
+    return target;
+  }
+
+  finish(): MarginLink {
+    const view = MarginLink.from_array(this.buffer.slice());
+    if (!view) throw new Error("failed to build MarginLink");
+    return view;
+  }
+}
+
+__tnRegisterFootprint("MarginLink", (params) => MarginLink.__tnInvokeFootprint(params));
+__tnRegisterValidate("MarginLink", (buffer, params) => MarginLink.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("MarginLink", (buffer) => { const result = MarginLink.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
 /* ----- TYPE DEFINITION FOR MarketAccount ----- */
 
 const __tn_ir_MarketAccount = {
   typeName: "MarketAccount",
-  root: { op: "const", value: 448n }
+  root: { op: "const", value: 512n }
 } as const;
 
 export class MarketAccount {
@@ -11779,31 +17262,58 @@ export class MarketAccount {
     this.set_exchange_status_flags(value);
   }
 
-  get_reserved0(): number[] {
+  get_risk_flags(): number {
     const offset = 3;
-    const result: number[] = [];
-    for (let i = 0; i < 5; i++) {
-      result.push(this.view.getUint8((offset + i * 1)));
-    }
-    return result;
+    return this.view.getUint8(offset);
   }
 
-  set_reserved0(value: number[]): void {
+  set_risk_flags(value: number): void {
     const offset = 3;
-    if (value.length !== 5) {
-      throw new Error('Array length must be 5');
-    }
-    for (let i = 0; i < 5; i++) {
-      this.view.setUint8((offset + i * 1), value[i]);
-    }
+    this.view.setUint8(offset, value);
   }
 
-  get reserved0(): number[] {
-    return this.get_reserved0();
+  get risk_flags(): number {
+    return this.get_risk_flags();
   }
 
-  set reserved0(value: number[]) {
-    this.set_reserved0(value);
+  set risk_flags(value: number) {
+    this.set_risk_flags(value);
+  }
+
+  get_socialize_cap_bps(): number {
+    const offset = 4;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_socialize_cap_bps(value: number): void {
+    const offset = 4;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get socialize_cap_bps(): number {
+    return this.get_socialize_cap_bps();
+  }
+
+  set socialize_cap_bps(value: number) {
+    this.set_socialize_cap_bps(value);
+  }
+
+  get_if_epoch_budget_bps(): number {
+    const offset = 6;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_if_epoch_budget_bps(value: number): void {
+    const offset = 6;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get if_epoch_budget_bps(): number {
+    return this.get_if_epoch_budget_bps();
+  }
+
+  set if_epoch_budget_bps(value: number) {
+    this.set_if_epoch_budget_bps(value);
   }
 
   get_lot_size(): bigint {
@@ -12184,31 +17694,130 @@ export class MarketAccount {
     this.set_max_mark_age_ns(value);
   }
 
-  get_reserved2(): number[] {
+  get_taker_fee_ppm(): number {
     const offset = 296;
-    const result: number[] = [];
-    for (let i = 0; i < 24; i++) {
-      result.push(this.view.getUint8((offset + i * 1)));
-    }
-    return result;
+    return this.view.getUint32(offset, true); /* little-endian */
   }
 
-  set_reserved2(value: number[]): void {
+  set_taker_fee_ppm(value: number): void {
     const offset = 296;
-    if (value.length !== 24) {
-      throw new Error('Array length must be 24');
-    }
-    for (let i = 0; i < 24; i++) {
-      this.view.setUint8((offset + i * 1), value[i]);
-    }
+    this.view.setUint32(offset, value, true); /* little-endian */
   }
 
-  get reserved2(): number[] {
-    return this.get_reserved2();
+  get taker_fee_ppm(): number {
+    return this.get_taker_fee_ppm();
   }
 
-  set reserved2(value: number[]) {
-    this.set_reserved2(value);
+  set taker_fee_ppm(value: number) {
+    this.set_taker_fee_ppm(value);
+  }
+
+  get_maker_rebate_ppm(): number {
+    const offset = 300;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_maker_rebate_ppm(value: number): void {
+    const offset = 300;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get maker_rebate_ppm(): number {
+    return this.get_maker_rebate_ppm();
+  }
+
+  set maker_rebate_ppm(value: number) {
+    this.set_maker_rebate_ppm(value);
+  }
+
+  get_builder_fee_cap_ppm(): number {
+    const offset = 304;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_builder_fee_cap_ppm(value: number): void {
+    const offset = 304;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get builder_fee_cap_ppm(): number {
+    return this.get_builder_fee_cap_ppm();
+  }
+
+  set builder_fee_cap_ppm(value: number) {
+    this.set_builder_fee_cap_ppm(value);
+  }
+
+  get_fee_insurance_share_ppm(): number {
+    const offset = 308;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_fee_insurance_share_ppm(value: number): void {
+    const offset = 308;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get fee_insurance_share_ppm(): number {
+    return this.get_fee_insurance_share_ppm();
+  }
+
+  set fee_insurance_share_ppm(value: number) {
+    this.set_fee_insurance_share_ppm(value);
+  }
+
+  get_liq_insurance_share_ppm(): number {
+    const offset = 312;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_liq_insurance_share_ppm(value: number): void {
+    const offset = 312;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get liq_insurance_share_ppm(): number {
+    return this.get_liq_insurance_share_ppm();
+  }
+
+  set liq_insurance_share_ppm(value: number) {
+    this.set_liq_insurance_share_ppm(value);
+  }
+
+  get_bankrupt_liq_reward_bps(): number {
+    const offset = 316;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_bankrupt_liq_reward_bps(value: number): void {
+    const offset = 316;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get bankrupt_liq_reward_bps(): number {
+    return this.get_bankrupt_liq_reward_bps();
+  }
+
+  set bankrupt_liq_reward_bps(value: number) {
+    this.set_bankrupt_liq_reward_bps(value);
+  }
+
+  get_reserved3(): number {
+    const offset = 318;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_reserved3(value: number): void {
+    const offset = 318;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get reserved3(): number {
+    return this.get_reserved3();
+  }
+
+  set reserved3(value: number) {
+    this.set_reserved3(value);
   }
 
   get_funding_index_lo(): bigint {
@@ -12445,49 +18054,292 @@ export class MarketAccount {
     this.set_funding_sample_cnt(value);
   }
 
-  get_reserved3(): number {
+  get_cross_upnl_haircut_bps(): number {
     const offset = 404;
     return this.view.getUint32(offset, true); /* little-endian */
   }
 
-  set_reserved3(value: number): void {
+  set_cross_upnl_haircut_bps(value: number): void {
     const offset = 404;
     this.view.setUint32(offset, value, true); /* little-endian */
   }
 
-  get reserved3(): number {
-    return this.get_reserved3();
+  get cross_upnl_haircut_bps(): number {
+    return this.get_cross_upnl_haircut_bps();
   }
 
-  set reserved3(value: number) {
-    this.set_reserved3(value);
+  set cross_upnl_haircut_bps(value: number) {
+    this.set_cross_upnl_haircut_bps(value);
   }
 
-  get_reserved4(): number[] {
+  get_fee_balance(): bigint {
     const offset = 408;
-    const result: number[] = [];
-    for (let i = 0; i < 40; i++) {
-      result.push(this.view.getUint8((offset + i * 1)));
-    }
-    return result;
+    return this.view.getBigUint64(offset, true); /* little-endian */
   }
 
-  set_reserved4(value: number[]): void {
+  set_fee_balance(value: bigint): void {
     const offset = 408;
-    if (value.length !== 40) {
-      throw new Error('Array length must be 40');
-    }
-    for (let i = 0; i < 40; i++) {
-      this.view.setUint8((offset + i * 1), value[i]);
-    }
+    this.view.setBigUint64(offset, value, true); /* little-endian */
   }
 
-  get reserved4(): number[] {
-    return this.get_reserved4();
+  get fee_balance(): bigint {
+    return this.get_fee_balance();
   }
 
-  set reserved4(value: number[]) {
-    this.set_reserved4(value);
+  set fee_balance(value: bigint) {
+    this.set_fee_balance(value);
+  }
+
+  get_insurance_balance(): bigint {
+    const offset = 416;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_insurance_balance(value: bigint): void {
+    const offset = 416;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get insurance_balance(): bigint {
+    return this.get_insurance_balance();
+  }
+
+  set insurance_balance(value: bigint) {
+    this.set_insurance_balance(value);
+  }
+
+  get_epoch_if_drawn(): bigint {
+    const offset = 424;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_epoch_if_drawn(value: bigint): void {
+    const offset = 424;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get epoch_if_drawn(): bigint {
+    return this.get_epoch_if_drawn();
+  }
+
+  set epoch_if_drawn(value: bigint) {
+    this.set_epoch_if_drawn(value);
+  }
+
+  get_epoch_soc_ticks(): bigint {
+    const offset = 432;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_epoch_soc_ticks(value: bigint): void {
+    const offset = 432;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get epoch_soc_ticks(): bigint {
+    return this.get_epoch_soc_ticks();
+  }
+
+  set epoch_soc_ticks(value: bigint) {
+    this.set_epoch_soc_ticks(value);
+  }
+
+  get_bad_debt_both(): bigint {
+    const offset = 440;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_bad_debt_both(value: bigint): void {
+    const offset = 440;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get bad_debt_both(): bigint {
+    return this.get_bad_debt_both();
+  }
+
+  set bad_debt_both(value: bigint) {
+    this.set_bad_debt_both(value);
+  }
+
+  get_loss_offset_long_lo(): bigint {
+    const offset = 448;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_loss_offset_long_lo(value: bigint): void {
+    const offset = 448;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get loss_offset_long_lo(): bigint {
+    return this.get_loss_offset_long_lo();
+  }
+
+  set loss_offset_long_lo(value: bigint) {
+    this.set_loss_offset_long_lo(value);
+  }
+
+  get_loss_offset_long_hi(): bigint {
+    const offset = 456;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_loss_offset_long_hi(value: bigint): void {
+    const offset = 456;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get loss_offset_long_hi(): bigint {
+    return this.get_loss_offset_long_hi();
+  }
+
+  set loss_offset_long_hi(value: bigint) {
+    this.set_loss_offset_long_hi(value);
+  }
+
+  get_loss_offset_short_lo(): bigint {
+    const offset = 464;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_loss_offset_short_lo(value: bigint): void {
+    const offset = 464;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get loss_offset_short_lo(): bigint {
+    return this.get_loss_offset_short_lo();
+  }
+
+  set loss_offset_short_lo(value: bigint) {
+    this.set_loss_offset_short_lo(value);
+  }
+
+  get_loss_offset_short_hi(): bigint {
+    const offset = 472;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_loss_offset_short_hi(value: bigint): void {
+    const offset = 472;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get loss_offset_short_hi(): bigint {
+    return this.get_loss_offset_short_hi();
+  }
+
+  set loss_offset_short_hi(value: bigint) {
+    this.set_loss_offset_short_hi(value);
+  }
+
+  get_epoch_id(): number {
+    const offset = 480;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_epoch_id(value: number): void {
+    const offset = 480;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get epoch_id(): number {
+    return this.get_epoch_id();
+  }
+
+  set epoch_id(value: number) {
+    this.set_epoch_id(value);
+  }
+
+  get_reserved5(): number {
+    const offset = 484;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_reserved5(value: number): void {
+    const offset = 484;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get reserved5(): number {
+    return this.get_reserved5();
+  }
+
+  set reserved5(value: number) {
+    this.set_reserved5(value);
+  }
+
+  get_pending_taker_fee_ppm(): number {
+    const offset = 488;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_pending_taker_fee_ppm(value: number): void {
+    const offset = 488;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get pending_taker_fee_ppm(): number {
+    return this.get_pending_taker_fee_ppm();
+  }
+
+  set pending_taker_fee_ppm(value: number) {
+    this.set_pending_taker_fee_ppm(value);
+  }
+
+  get_pending_builder_fee_cap_ppm(): number {
+    const offset = 492;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_pending_builder_fee_cap_ppm(value: number): void {
+    const offset = 492;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get pending_builder_fee_cap_ppm(): number {
+    return this.get_pending_builder_fee_cap_ppm();
+  }
+
+  set pending_builder_fee_cap_ppm(value: number) {
+    this.set_pending_builder_fee_cap_ppm(value);
+  }
+
+  get_pending_activation_ns(): bigint {
+    const offset = 496;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_pending_activation_ns(value: bigint): void {
+    const offset = 496;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get pending_activation_ns(): bigint {
+    return this.get_pending_activation_ns();
+  }
+
+  set pending_activation_ns(value: bigint) {
+    this.set_pending_activation_ns(value);
+  }
+
+  get_reserved6(): bigint {
+    const offset = 504;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_reserved6(value: bigint): void {
+    const offset = 504;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get reserved6(): bigint {
+    return this.get_reserved6();
+  }
+
+  set reserved6(value: bigint) {
+    this.set_reserved6(value);
   }
 
   private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
@@ -12520,8 +18372,8 @@ export class MarketAccount {
   }
 
   static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
-    if (buffer.length < 448) return { ok: false, code: "tn.buffer_too_small", consumed: 448 };
-    return { ok: true, consumed: 448 };
+    if (buffer.length < 512) return { ok: false, code: "tn.buffer_too_small", consumed: 512 };
+    return { ok: true, consumed: 512 };
   }
 
   static from_array(buffer: Uint8Array): MarketAccount | null {
@@ -12543,7 +18395,7 @@ export class MarketAccountBuilder {
   private view: DataView;
 
   constructor() {
-    this.buffer = new Uint8Array(448);
+    this.buffer = new Uint8Array(512);
     this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
   }
 
@@ -12562,12 +18414,18 @@ export class MarketAccountBuilder {
     return this;
   }
 
-  set_reserved0(values: number[]): this {
-    if (values.length !== 5) throw new Error("reserved0 expects 5 elements");
-    for (let i = 0; i < values.length; i++) {
-      const byteOffset = 3 + i * 1;
-      this.view.setUint8(byteOffset, values[i]);
-    }
+  set_risk_flags(value: number): this {
+    this.view.setUint8(3, value);
+    return this;
+  }
+
+  set_socialize_cap_bps(value: number): this {
+    this.view.setUint16(4, value, true);
+    return this;
+  }
+
+  set_if_epoch_budget_bps(value: number): this {
+    this.view.setUint16(6, value, true);
     return this;
   }
 
@@ -12687,12 +18545,38 @@ export class MarketAccountBuilder {
     return this;
   }
 
-  set_reserved2(values: number[]): this {
-    if (values.length !== 24) throw new Error("reserved2 expects 24 elements");
-    for (let i = 0; i < values.length; i++) {
-      const byteOffset = 296 + i * 1;
-      this.view.setUint8(byteOffset, values[i]);
-    }
+  set_taker_fee_ppm(value: number): this {
+    this.view.setUint32(296, value, true);
+    return this;
+  }
+
+  set_maker_rebate_ppm(value: number): this {
+    this.view.setUint32(300, value, true);
+    return this;
+  }
+
+  set_builder_fee_cap_ppm(value: number): this {
+    this.view.setUint32(304, value, true);
+    return this;
+  }
+
+  set_fee_insurance_share_ppm(value: number): this {
+    this.view.setUint32(308, value, true);
+    return this;
+  }
+
+  set_liq_insurance_share_ppm(value: number): this {
+    this.view.setUint32(312, value, true);
+    return this;
+  }
+
+  set_bankrupt_liq_reward_bps(value: number): this {
+    this.view.setUint16(316, value, true);
+    return this;
+  }
+
+  set_reserved3(value: number): this {
+    this.view.setUint16(318, value, true);
     return this;
   }
 
@@ -12769,17 +18653,94 @@ export class MarketAccountBuilder {
     return this;
   }
 
-  set_reserved3(value: number): this {
+  set_cross_upnl_haircut_bps(value: number): this {
     this.view.setUint32(404, value, true);
     return this;
   }
 
-  set_reserved4(values: number[]): this {
-    if (values.length !== 40) throw new Error("reserved4 expects 40 elements");
-    for (let i = 0; i < values.length; i++) {
-      const byteOffset = 408 + i * 1;
-      this.view.setUint8(byteOffset, values[i]);
-    }
+  set_fee_balance(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(408, cast, true);
+    return this;
+  }
+
+  set_insurance_balance(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(416, cast, true);
+    return this;
+  }
+
+  set_epoch_if_drawn(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(424, cast, true);
+    return this;
+  }
+
+  set_epoch_soc_ticks(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(432, cast, true);
+    return this;
+  }
+
+  set_bad_debt_both(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(440, cast, true);
+    return this;
+  }
+
+  set_loss_offset_long_lo(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(448, cast, true);
+    return this;
+  }
+
+  set_loss_offset_long_hi(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(456, cast, true);
+    return this;
+  }
+
+  set_loss_offset_short_lo(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(464, cast, true);
+    return this;
+  }
+
+  set_loss_offset_short_hi(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(472, cast, true);
+    return this;
+  }
+
+  set_epoch_id(value: number): this {
+    this.view.setUint32(480, value, true);
+    return this;
+  }
+
+  set_reserved5(value: number): this {
+    this.view.setUint32(484, value, true);
+    return this;
+  }
+
+  set_pending_taker_fee_ppm(value: number): this {
+    this.view.setUint32(488, value, true);
+    return this;
+  }
+
+  set_pending_builder_fee_cap_ppm(value: number): this {
+    this.view.setUint32(492, value, true);
+    return this;
+  }
+
+  set_pending_activation_ns(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(496, cast, true);
+    return this;
+  }
+
+  set_reserved6(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(504, cast, true);
     return this;
   }
 
@@ -12808,7 +18769,7 @@ __tnRegisterDynamicValidate("MarketAccount", (buffer) => { const result = Market
 
 const __tn_ir_MarketAccountPayload = {
   typeName: "MarketAccountPayload",
-  root: { op: "const", value: 447n }
+  root: { op: "const", value: 511n }
 } as const;
 
 export class MarketAccountPayload {
@@ -12868,31 +18829,58 @@ export class MarketAccountPayload {
     this.set_exchange_status_flags(value);
   }
 
-  get_reserved0(): number[] {
+  get_risk_flags(): number {
     const offset = 2;
-    const result: number[] = [];
-    for (let i = 0; i < 5; i++) {
-      result.push(this.view.getUint8((offset + i * 1)));
-    }
-    return result;
+    return this.view.getUint8(offset);
   }
 
-  set_reserved0(value: number[]): void {
+  set_risk_flags(value: number): void {
     const offset = 2;
-    if (value.length !== 5) {
-      throw new Error('Array length must be 5');
-    }
-    for (let i = 0; i < 5; i++) {
-      this.view.setUint8((offset + i * 1), value[i]);
-    }
+    this.view.setUint8(offset, value);
   }
 
-  get reserved0(): number[] {
-    return this.get_reserved0();
+  get risk_flags(): number {
+    return this.get_risk_flags();
   }
 
-  set reserved0(value: number[]) {
-    this.set_reserved0(value);
+  set risk_flags(value: number) {
+    this.set_risk_flags(value);
+  }
+
+  get_socialize_cap_bps(): number {
+    const offset = 3;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_socialize_cap_bps(value: number): void {
+    const offset = 3;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get socialize_cap_bps(): number {
+    return this.get_socialize_cap_bps();
+  }
+
+  set socialize_cap_bps(value: number) {
+    this.set_socialize_cap_bps(value);
+  }
+
+  get_if_epoch_budget_bps(): number {
+    const offset = 5;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_if_epoch_budget_bps(value: number): void {
+    const offset = 5;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get if_epoch_budget_bps(): number {
+    return this.get_if_epoch_budget_bps();
+  }
+
+  set if_epoch_budget_bps(value: number) {
+    this.set_if_epoch_budget_bps(value);
   }
 
   get_lot_size(): bigint {
@@ -13273,31 +19261,130 @@ export class MarketAccountPayload {
     this.set_max_mark_age_ns(value);
   }
 
-  get_reserved2(): number[] {
+  get_taker_fee_ppm(): number {
     const offset = 295;
-    const result: number[] = [];
-    for (let i = 0; i < 24; i++) {
-      result.push(this.view.getUint8((offset + i * 1)));
-    }
-    return result;
+    return this.view.getUint32(offset, true); /* little-endian */
   }
 
-  set_reserved2(value: number[]): void {
+  set_taker_fee_ppm(value: number): void {
     const offset = 295;
-    if (value.length !== 24) {
-      throw new Error('Array length must be 24');
-    }
-    for (let i = 0; i < 24; i++) {
-      this.view.setUint8((offset + i * 1), value[i]);
-    }
+    this.view.setUint32(offset, value, true); /* little-endian */
   }
 
-  get reserved2(): number[] {
-    return this.get_reserved2();
+  get taker_fee_ppm(): number {
+    return this.get_taker_fee_ppm();
   }
 
-  set reserved2(value: number[]) {
-    this.set_reserved2(value);
+  set taker_fee_ppm(value: number) {
+    this.set_taker_fee_ppm(value);
+  }
+
+  get_maker_rebate_ppm(): number {
+    const offset = 299;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_maker_rebate_ppm(value: number): void {
+    const offset = 299;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get maker_rebate_ppm(): number {
+    return this.get_maker_rebate_ppm();
+  }
+
+  set maker_rebate_ppm(value: number) {
+    this.set_maker_rebate_ppm(value);
+  }
+
+  get_builder_fee_cap_ppm(): number {
+    const offset = 303;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_builder_fee_cap_ppm(value: number): void {
+    const offset = 303;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get builder_fee_cap_ppm(): number {
+    return this.get_builder_fee_cap_ppm();
+  }
+
+  set builder_fee_cap_ppm(value: number) {
+    this.set_builder_fee_cap_ppm(value);
+  }
+
+  get_fee_insurance_share_ppm(): number {
+    const offset = 307;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_fee_insurance_share_ppm(value: number): void {
+    const offset = 307;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get fee_insurance_share_ppm(): number {
+    return this.get_fee_insurance_share_ppm();
+  }
+
+  set fee_insurance_share_ppm(value: number) {
+    this.set_fee_insurance_share_ppm(value);
+  }
+
+  get_liq_insurance_share_ppm(): number {
+    const offset = 311;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_liq_insurance_share_ppm(value: number): void {
+    const offset = 311;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get liq_insurance_share_ppm(): number {
+    return this.get_liq_insurance_share_ppm();
+  }
+
+  set liq_insurance_share_ppm(value: number) {
+    this.set_liq_insurance_share_ppm(value);
+  }
+
+  get_bankrupt_liq_reward_bps(): number {
+    const offset = 315;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_bankrupt_liq_reward_bps(value: number): void {
+    const offset = 315;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get bankrupt_liq_reward_bps(): number {
+    return this.get_bankrupt_liq_reward_bps();
+  }
+
+  set bankrupt_liq_reward_bps(value: number) {
+    this.set_bankrupt_liq_reward_bps(value);
+  }
+
+  get_reserved3(): number {
+    const offset = 317;
+    return this.view.getUint16(offset, true); /* little-endian */
+  }
+
+  set_reserved3(value: number): void {
+    const offset = 317;
+    this.view.setUint16(offset, value, true); /* little-endian */
+  }
+
+  get reserved3(): number {
+    return this.get_reserved3();
+  }
+
+  set reserved3(value: number) {
+    this.set_reserved3(value);
   }
 
   get_funding_index_lo(): bigint {
@@ -13534,49 +19621,292 @@ export class MarketAccountPayload {
     this.set_funding_sample_cnt(value);
   }
 
-  get_reserved3(): number {
+  get_cross_upnl_haircut_bps(): number {
     const offset = 403;
     return this.view.getUint32(offset, true); /* little-endian */
   }
 
-  set_reserved3(value: number): void {
+  set_cross_upnl_haircut_bps(value: number): void {
     const offset = 403;
     this.view.setUint32(offset, value, true); /* little-endian */
   }
 
-  get reserved3(): number {
-    return this.get_reserved3();
+  get cross_upnl_haircut_bps(): number {
+    return this.get_cross_upnl_haircut_bps();
   }
 
-  set reserved3(value: number) {
-    this.set_reserved3(value);
+  set cross_upnl_haircut_bps(value: number) {
+    this.set_cross_upnl_haircut_bps(value);
   }
 
-  get_reserved4(): number[] {
+  get_fee_balance(): bigint {
     const offset = 407;
-    const result: number[] = [];
-    for (let i = 0; i < 40; i++) {
-      result.push(this.view.getUint8((offset + i * 1)));
-    }
-    return result;
+    return this.view.getBigUint64(offset, true); /* little-endian */
   }
 
-  set_reserved4(value: number[]): void {
+  set_fee_balance(value: bigint): void {
     const offset = 407;
-    if (value.length !== 40) {
-      throw new Error('Array length must be 40');
-    }
-    for (let i = 0; i < 40; i++) {
-      this.view.setUint8((offset + i * 1), value[i]);
-    }
+    this.view.setBigUint64(offset, value, true); /* little-endian */
   }
 
-  get reserved4(): number[] {
-    return this.get_reserved4();
+  get fee_balance(): bigint {
+    return this.get_fee_balance();
   }
 
-  set reserved4(value: number[]) {
-    this.set_reserved4(value);
+  set fee_balance(value: bigint) {
+    this.set_fee_balance(value);
+  }
+
+  get_insurance_balance(): bigint {
+    const offset = 415;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_insurance_balance(value: bigint): void {
+    const offset = 415;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get insurance_balance(): bigint {
+    return this.get_insurance_balance();
+  }
+
+  set insurance_balance(value: bigint) {
+    this.set_insurance_balance(value);
+  }
+
+  get_epoch_if_drawn(): bigint {
+    const offset = 423;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_epoch_if_drawn(value: bigint): void {
+    const offset = 423;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get epoch_if_drawn(): bigint {
+    return this.get_epoch_if_drawn();
+  }
+
+  set epoch_if_drawn(value: bigint) {
+    this.set_epoch_if_drawn(value);
+  }
+
+  get_epoch_soc_ticks(): bigint {
+    const offset = 431;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_epoch_soc_ticks(value: bigint): void {
+    const offset = 431;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get epoch_soc_ticks(): bigint {
+    return this.get_epoch_soc_ticks();
+  }
+
+  set epoch_soc_ticks(value: bigint) {
+    this.set_epoch_soc_ticks(value);
+  }
+
+  get_bad_debt_both(): bigint {
+    const offset = 439;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_bad_debt_both(value: bigint): void {
+    const offset = 439;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get bad_debt_both(): bigint {
+    return this.get_bad_debt_both();
+  }
+
+  set bad_debt_both(value: bigint) {
+    this.set_bad_debt_both(value);
+  }
+
+  get_loss_offset_long_lo(): bigint {
+    const offset = 447;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_loss_offset_long_lo(value: bigint): void {
+    const offset = 447;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get loss_offset_long_lo(): bigint {
+    return this.get_loss_offset_long_lo();
+  }
+
+  set loss_offset_long_lo(value: bigint) {
+    this.set_loss_offset_long_lo(value);
+  }
+
+  get_loss_offset_long_hi(): bigint {
+    const offset = 455;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_loss_offset_long_hi(value: bigint): void {
+    const offset = 455;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get loss_offset_long_hi(): bigint {
+    return this.get_loss_offset_long_hi();
+  }
+
+  set loss_offset_long_hi(value: bigint) {
+    this.set_loss_offset_long_hi(value);
+  }
+
+  get_loss_offset_short_lo(): bigint {
+    const offset = 463;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_loss_offset_short_lo(value: bigint): void {
+    const offset = 463;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get loss_offset_short_lo(): bigint {
+    return this.get_loss_offset_short_lo();
+  }
+
+  set loss_offset_short_lo(value: bigint) {
+    this.set_loss_offset_short_lo(value);
+  }
+
+  get_loss_offset_short_hi(): bigint {
+    const offset = 471;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_loss_offset_short_hi(value: bigint): void {
+    const offset = 471;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get loss_offset_short_hi(): bigint {
+    return this.get_loss_offset_short_hi();
+  }
+
+  set loss_offset_short_hi(value: bigint) {
+    this.set_loss_offset_short_hi(value);
+  }
+
+  get_epoch_id(): number {
+    const offset = 479;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_epoch_id(value: number): void {
+    const offset = 479;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get epoch_id(): number {
+    return this.get_epoch_id();
+  }
+
+  set epoch_id(value: number) {
+    this.set_epoch_id(value);
+  }
+
+  get_reserved5(): number {
+    const offset = 483;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_reserved5(value: number): void {
+    const offset = 483;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get reserved5(): number {
+    return this.get_reserved5();
+  }
+
+  set reserved5(value: number) {
+    this.set_reserved5(value);
+  }
+
+  get_pending_taker_fee_ppm(): number {
+    const offset = 487;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_pending_taker_fee_ppm(value: number): void {
+    const offset = 487;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get pending_taker_fee_ppm(): number {
+    return this.get_pending_taker_fee_ppm();
+  }
+
+  set pending_taker_fee_ppm(value: number) {
+    this.set_pending_taker_fee_ppm(value);
+  }
+
+  get_pending_builder_fee_cap_ppm(): number {
+    const offset = 491;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_pending_builder_fee_cap_ppm(value: number): void {
+    const offset = 491;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get pending_builder_fee_cap_ppm(): number {
+    return this.get_pending_builder_fee_cap_ppm();
+  }
+
+  set pending_builder_fee_cap_ppm(value: number) {
+    this.set_pending_builder_fee_cap_ppm(value);
+  }
+
+  get_pending_activation_ns(): bigint {
+    const offset = 495;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_pending_activation_ns(value: bigint): void {
+    const offset = 495;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get pending_activation_ns(): bigint {
+    return this.get_pending_activation_ns();
+  }
+
+  set pending_activation_ns(value: bigint) {
+    this.set_pending_activation_ns(value);
+  }
+
+  get_reserved6(): bigint {
+    const offset = 503;
+    return this.view.getBigUint64(offset, true); /* little-endian */
+  }
+
+  set_reserved6(value: bigint): void {
+    const offset = 503;
+    this.view.setBigUint64(offset, value, true); /* little-endian */
+  }
+
+  get reserved6(): bigint {
+    return this.get_reserved6();
+  }
+
+  set reserved6(value: bigint) {
+    this.set_reserved6(value);
   }
 
   private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
@@ -13609,8 +19939,8 @@ export class MarketAccountPayload {
   }
 
   static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
-    if (buffer.length < 447) return { ok: false, code: "tn.buffer_too_small", consumed: 447 };
-    return { ok: true, consumed: 447 };
+    if (buffer.length < 511) return { ok: false, code: "tn.buffer_too_small", consumed: 511 };
+    return { ok: true, consumed: 511 };
   }
 
   static from_array(buffer: Uint8Array): MarketAccountPayload | null {
@@ -13632,7 +19962,7 @@ export class MarketAccountPayloadBuilder {
   private view: DataView;
 
   constructor() {
-    this.buffer = new Uint8Array(447);
+    this.buffer = new Uint8Array(511);
     this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
   }
 
@@ -13646,12 +19976,18 @@ export class MarketAccountPayloadBuilder {
     return this;
   }
 
-  set_reserved0(values: number[]): this {
-    if (values.length !== 5) throw new Error("reserved0 expects 5 elements");
-    for (let i = 0; i < values.length; i++) {
-      const byteOffset = 2 + i * 1;
-      this.view.setUint8(byteOffset, values[i]);
-    }
+  set_risk_flags(value: number): this {
+    this.view.setUint8(2, value);
+    return this;
+  }
+
+  set_socialize_cap_bps(value: number): this {
+    this.view.setUint16(3, value, true);
+    return this;
+  }
+
+  set_if_epoch_budget_bps(value: number): this {
+    this.view.setUint16(5, value, true);
     return this;
   }
 
@@ -13771,12 +20107,38 @@ export class MarketAccountPayloadBuilder {
     return this;
   }
 
-  set_reserved2(values: number[]): this {
-    if (values.length !== 24) throw new Error("reserved2 expects 24 elements");
-    for (let i = 0; i < values.length; i++) {
-      const byteOffset = 295 + i * 1;
-      this.view.setUint8(byteOffset, values[i]);
-    }
+  set_taker_fee_ppm(value: number): this {
+    this.view.setUint32(295, value, true);
+    return this;
+  }
+
+  set_maker_rebate_ppm(value: number): this {
+    this.view.setUint32(299, value, true);
+    return this;
+  }
+
+  set_builder_fee_cap_ppm(value: number): this {
+    this.view.setUint32(303, value, true);
+    return this;
+  }
+
+  set_fee_insurance_share_ppm(value: number): this {
+    this.view.setUint32(307, value, true);
+    return this;
+  }
+
+  set_liq_insurance_share_ppm(value: number): this {
+    this.view.setUint32(311, value, true);
+    return this;
+  }
+
+  set_bankrupt_liq_reward_bps(value: number): this {
+    this.view.setUint16(315, value, true);
+    return this;
+  }
+
+  set_reserved3(value: number): this {
+    this.view.setUint16(317, value, true);
     return this;
   }
 
@@ -13853,17 +20215,94 @@ export class MarketAccountPayloadBuilder {
     return this;
   }
 
-  set_reserved3(value: number): this {
+  set_cross_upnl_haircut_bps(value: number): this {
     this.view.setUint32(403, value, true);
     return this;
   }
 
-  set_reserved4(values: number[]): this {
-    if (values.length !== 40) throw new Error("reserved4 expects 40 elements");
-    for (let i = 0; i < values.length; i++) {
-      const byteOffset = 407 + i * 1;
-      this.view.setUint8(byteOffset, values[i]);
-    }
+  set_fee_balance(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(407, cast, true);
+    return this;
+  }
+
+  set_insurance_balance(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(415, cast, true);
+    return this;
+  }
+
+  set_epoch_if_drawn(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(423, cast, true);
+    return this;
+  }
+
+  set_epoch_soc_ticks(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(431, cast, true);
+    return this;
+  }
+
+  set_bad_debt_both(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(439, cast, true);
+    return this;
+  }
+
+  set_loss_offset_long_lo(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(447, cast, true);
+    return this;
+  }
+
+  set_loss_offset_long_hi(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(455, cast, true);
+    return this;
+  }
+
+  set_loss_offset_short_lo(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(463, cast, true);
+    return this;
+  }
+
+  set_loss_offset_short_hi(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(471, cast, true);
+    return this;
+  }
+
+  set_epoch_id(value: number): this {
+    this.view.setUint32(479, value, true);
+    return this;
+  }
+
+  set_reserved5(value: number): this {
+    this.view.setUint32(483, value, true);
+    return this;
+  }
+
+  set_pending_taker_fee_ppm(value: number): this {
+    this.view.setUint32(487, value, true);
+    return this;
+  }
+
+  set_pending_builder_fee_cap_ppm(value: number): this {
+    this.view.setUint32(491, value, true);
+    return this;
+  }
+
+  set_pending_activation_ns(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(495, cast, true);
+    return this;
+  }
+
+  set_reserved6(value: bigint): this {
+    const cast = __tnToBigInt(value);
+    this.view.setBigUint64(503, cast, true);
     return this;
   }
 
@@ -16827,7 +23266,7 @@ __tnRegisterDynamicValidate("OrderPostedEvent", (buffer) => { const result = Ord
 
 const __tn_ir_PerpEvent = {
   typeName: "PerpEvent",
-  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "align", alignment: 8, node: { op: "const", value: 8n } }, right: { op: "align", alignment: 1, node: { op: "switch", tag: "PerpEvent::payload.event_type", cases: [{ value: 1, node: { op: "align", alignment: 1, node: { op: "const", value: 68n } } }, { value: 2, node: { op: "align", alignment: 1, node: { op: "const", value: 104n } } }, { value: 3, node: { op: "align", alignment: 1, node: { op: "const", value: 256n } } }, { value: 4, node: { op: "align", alignment: 1, node: { op: "const", value: 180n } } }, { value: 5, node: { op: "align", alignment: 1, node: { op: "const", value: 112n } } }, { value: 6, node: { op: "align", alignment: 1, node: { op: "const", value: 112n } } }, { value: 7, node: { op: "align", alignment: 1, node: { op: "const", value: 120n } } }, { value: 8, node: { op: "align", alignment: 1, node: { op: "const", value: 168n } } }, { value: 9, node: { op: "align", alignment: 1, node: { op: "const", value: 168n } } }, { value: 10, node: { op: "align", alignment: 1, node: { op: "const", value: 72n } } }, { value: 11, node: { op: "align", alignment: 1, node: { op: "const", value: 104n } } }, { value: 12, node: { op: "align", alignment: 1, node: { op: "const", value: 72n } } }, { value: 13, node: { op: "align", alignment: 1, node: { op: "const", value: 136n } } }, { value: 14, node: { op: "align", alignment: 1, node: { op: "const", value: 72n } } }, { value: 15, node: { op: "align", alignment: 1, node: { op: "const", value: 160n } } }, { value: 16, node: { op: "align", alignment: 1, node: { op: "const", value: 88n } } }] } } } }
+  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "align", alignment: 8, node: { op: "const", value: 8n } }, right: { op: "align", alignment: 1, node: { op: "switch", tag: "PerpEvent::payload.event_type", cases: [{ value: 1, node: { op: "align", alignment: 1, node: { op: "const", value: 68n } } }, { value: 2, node: { op: "align", alignment: 1, node: { op: "const", value: 104n } } }, { value: 3, node: { op: "align", alignment: 1, node: { op: "const", value: 256n } } }, { value: 4, node: { op: "align", alignment: 1, node: { op: "const", value: 180n } } }, { value: 5, node: { op: "align", alignment: 1, node: { op: "const", value: 112n } } }, { value: 6, node: { op: "align", alignment: 1, node: { op: "const", value: 112n } } }, { value: 7, node: { op: "align", alignment: 1, node: { op: "const", value: 120n } } }, { value: 8, node: { op: "align", alignment: 1, node: { op: "const", value: 168n } } }, { value: 9, node: { op: "align", alignment: 1, node: { op: "const", value: 168n } } }, { value: 10, node: { op: "align", alignment: 1, node: { op: "const", value: 72n } } }, { value: 11, node: { op: "align", alignment: 1, node: { op: "const", value: 104n } } }, { value: 12, node: { op: "align", alignment: 1, node: { op: "const", value: 72n } } }, { value: 13, node: { op: "align", alignment: 1, node: { op: "const", value: 136n } } }, { value: 14, node: { op: "align", alignment: 1, node: { op: "const", value: 72n } } }, { value: 15, node: { op: "align", alignment: 1, node: { op: "const", value: 160n } } }, { value: 16, node: { op: "align", alignment: 1, node: { op: "const", value: 88n } } }, { value: 17, node: { op: "align", alignment: 1, node: { op: "const", value: 152n } } }, { value: 18, node: { op: "align", alignment: 1, node: { op: "const", value: 176n } } }, { value: 19, node: { op: "align", alignment: 1, node: { op: "const", value: 120n } } }, { value: 20, node: { op: "align", alignment: 1, node: { op: "const", value: 56n } } }] } } } }
 } as const;
 
 export class PerpEvent_payload_Inner {
@@ -16928,6 +23367,26 @@ export class PerpEvent_payload_Inner {
   asFundingRound(): FundingRoundEvent | null {
     if (!this.descriptor || this.descriptor.tag !== 16) return null;
     return FundingRoundEvent.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMargin(): MarginEvent | null {
+    if (!this.descriptor || this.descriptor.tag !== 17) return null;
+    return MarginEvent.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asFee(): FeeEvent | null {
+    if (!this.descriptor || this.descriptor.tag !== 18) return null;
+    return FeeEvent.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asLoss(): LossEvent | null {
+    if (!this.descriptor || this.descriptor.tag !== 19) return null;
+    return LossEvent.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInsurance(): InsuranceEvent | null {
+    if (!this.descriptor || this.descriptor.tag !== 20) return null;
+    return InsuranceEvent.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
 }
@@ -17089,6 +23548,34 @@ export class PerpEvent {
       payloadSize: 88,
       payloadType: "PerpEvent::payload::funding_round",
       createPayloadBuilder: () => __tnMaybeCallBuilder(FundingRoundEvent),
+    },
+    {
+      name: "margin",
+      tag: 17,
+      payloadSize: 152,
+      payloadType: "PerpEvent::payload::margin",
+      createPayloadBuilder: () => __tnMaybeCallBuilder(MarginEvent),
+    },
+    {
+      name: "fee",
+      tag: 18,
+      payloadSize: 176,
+      payloadType: "PerpEvent::payload::fee",
+      createPayloadBuilder: () => __tnMaybeCallBuilder(FeeEvent),
+    },
+    {
+      name: "loss",
+      tag: 19,
+      payloadSize: 120,
+      payloadType: "PerpEvent::payload::loss",
+      createPayloadBuilder: () => __tnMaybeCallBuilder(LossEvent),
+    },
+    {
+      name: "insurance",
+      tag: 20,
+      payloadSize: 56,
+      payloadType: "PerpEvent::payload::insurance",
+      createPayloadBuilder: () => __tnMaybeCallBuilder(InsuranceEvent),
     },
   ] as const);
 
@@ -17497,6 +23984,76 @@ export class PerpInstruction_payload_Inner {
     return SettleFundingInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
+  asMarginAccountCreate(): MarginAccountCreateInstruction | null {
+    if (!this.descriptor || this.descriptor.tag !== 21) return null;
+    return MarginAccountCreateInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarginRecord(): MarginRecordInstruction | null {
+    if (!this.descriptor || this.descriptor.tag !== 22) return null;
+    return MarginRecordInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarginLink(): MarginLinkInstruction | null {
+    if (!this.descriptor || this.descriptor.tag !== 23) return null;
+    return MarginLinkInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarginUnlink(): MarginLinkInstruction | null {
+    if (!this.descriptor || this.descriptor.tag !== 24) return null;
+    return MarginLinkInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarginTransfer(): MarginTransferInstruction | null {
+    if (!this.descriptor || this.descriptor.tag !== 25) return null;
+    return MarginTransferInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarketSetVault(): MarketSetVaultInstruction | null {
+    if (!this.descriptor || this.descriptor.tag !== 26) return null;
+    return MarketSetVaultInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarketSetCross(): MarketSetCrossInstruction | null {
+    if (!this.descriptor || this.descriptor.tag !== 27) return null;
+    return MarketSetCrossInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarketSetFees(): MarketSetFeesInstruction | null {
+    if (!this.descriptor || this.descriptor.tag !== 28) return null;
+    return MarketSetFeesInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asFeeClaim(): FeeClaimInstruction | null {
+    if (!this.descriptor || this.descriptor.tag !== 29) return null;
+    return FeeClaimInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asInsuranceDeposit(): InsuranceDepositInstruction | null {
+    if (!this.descriptor || this.descriptor.tag !== 30) return null;
+    return InsuranceDepositInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asSeatSetFeeReceiver(): SeatSetFeeReceiverInstruction | null {
+    if (!this.descriptor || this.descriptor.tag !== 31) return null;
+    return SeatSetFeeReceiverInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asSeatSetBuilderApproval(): SeatSetBuilderApprovalInstruction | null {
+    if (!this.descriptor || this.descriptor.tag !== 32) return null;
+    return SeatSetBuilderApprovalInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asResolveBadDebt(): ResolveBadDebtInstruction | null {
+    if (!this.descriptor || this.descriptor.tag !== 33) return null;
+    return ResolveBadDebtInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarketSetRiskParams(): MarketSetRiskParamsInstruction | null {
+    if (!this.descriptor || this.descriptor.tag !== 34) return null;
+    return MarketSetRiskParamsInstruction.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
 }
 
 export class PerpInstruction {
@@ -17671,6 +24228,104 @@ export class PerpInstruction {
       payloadType: "PerpInstruction::payload::settle_funding",
       createPayloadBuilder: () => __tnMaybeCallBuilder(SettleFundingInstruction),
     },
+    {
+      name: "margin_account_create",
+      tag: 21,
+      payloadSize: null,
+      payloadType: "PerpInstruction::payload::margin_account_create",
+      createPayloadBuilder: () => __tnMaybeCallBuilder(MarginAccountCreateInstruction),
+    },
+    {
+      name: "margin_record",
+      tag: 22,
+      payloadSize: null,
+      payloadType: "PerpInstruction::payload::margin_record",
+      createPayloadBuilder: () => null,
+    },
+    {
+      name: "margin_link",
+      tag: 23,
+      payloadSize: 7,
+      payloadType: "PerpInstruction::payload::margin_link",
+      createPayloadBuilder: () => __tnMaybeCallBuilder(MarginLinkInstruction),
+    },
+    {
+      name: "margin_unlink",
+      tag: 24,
+      payloadSize: 7,
+      payloadType: "PerpInstruction::payload::margin_unlink",
+      createPayloadBuilder: () => __tnMaybeCallBuilder(MarginLinkInstruction),
+    },
+    {
+      name: "margin_transfer",
+      tag: 25,
+      payloadSize: 15,
+      payloadType: "PerpInstruction::payload::margin_transfer",
+      createPayloadBuilder: () => __tnMaybeCallBuilder(MarginTransferInstruction),
+    },
+    {
+      name: "market_set_vault",
+      tag: 26,
+      payloadSize: 7,
+      payloadType: "PerpInstruction::payload::market_set_vault",
+      createPayloadBuilder: () => __tnMaybeCallBuilder(MarketSetVaultInstruction),
+    },
+    {
+      name: "market_set_cross",
+      tag: 27,
+      payloadSize: 7,
+      payloadType: "PerpInstruction::payload::market_set_cross",
+      createPayloadBuilder: () => __tnMaybeCallBuilder(MarketSetCrossInstruction),
+    },
+    {
+      name: "market_set_fees",
+      tag: 28,
+      payloadSize: 23,
+      payloadType: "PerpInstruction::payload::market_set_fees",
+      createPayloadBuilder: () => __tnMaybeCallBuilder(MarketSetFeesInstruction),
+    },
+    {
+      name: "fee_claim",
+      tag: 29,
+      payloadSize: 15,
+      payloadType: "PerpInstruction::payload::fee_claim",
+      createPayloadBuilder: () => __tnMaybeCallBuilder(FeeClaimInstruction),
+    },
+    {
+      name: "insurance_deposit",
+      tag: 30,
+      payloadSize: 15,
+      payloadType: "PerpInstruction::payload::insurance_deposit",
+      createPayloadBuilder: () => __tnMaybeCallBuilder(InsuranceDepositInstruction),
+    },
+    {
+      name: "seat_set_fee_receiver",
+      tag: 31,
+      payloadSize: 7,
+      payloadType: "PerpInstruction::payload::seat_set_fee_receiver",
+      createPayloadBuilder: () => __tnMaybeCallBuilder(SeatSetFeeReceiverInstruction),
+    },
+    {
+      name: "seat_set_builder_approval",
+      tag: 32,
+      payloadSize: 7,
+      payloadType: "PerpInstruction::payload::seat_set_builder_approval",
+      createPayloadBuilder: () => __tnMaybeCallBuilder(SeatSetBuilderApprovalInstruction),
+    },
+    {
+      name: "resolve_bad_debt",
+      tag: 33,
+      payloadSize: 7,
+      payloadType: "PerpInstruction::payload::resolve_bad_debt",
+      createPayloadBuilder: () => __tnMaybeCallBuilder(ResolveBadDebtInstruction),
+    },
+    {
+      name: "market_set_risk_params",
+      tag: 34,
+      payloadSize: 7,
+      payloadType: "PerpInstruction::payload::market_set_risk_params",
+      createPayloadBuilder: () => __tnMaybeCallBuilder(MarketSetRiskParamsInstruction),
+    },
   ] as const);
 
   static __tnComputeSequentialLayout(view: DataView, buffer: Uint8Array): { params: Record<string, bigint> | null; offsets: Record<string, number> | null; derived: Record<string, bigint> | null } | null {
@@ -17704,6 +24359,20 @@ export class PerpInstruction {
       case 18: break;
       case 19: break;
       case 20: break;
+      case 21: break;
+      case 22: break;
+      case 23: break;
+      case 24: break;
+      case 25: break;
+      case 26: break;
+      case 27: break;
+      case 28: break;
+      case 29: break;
+      case 30: break;
+      case 31: break;
+      case 32: break;
+      case 33: break;
+      case 34: break;
       default: return null;
     }
     if (__tnCursorMutable > __tnLength) return null;
@@ -18016,11 +24685,988 @@ __tnRegisterFootprint("PerpInstruction", (params) => PerpInstruction.__tnInvokeF
 __tnRegisterValidate("PerpInstruction", (buffer, params) => PerpInstruction.__tnInvokeValidate(buffer, params));
 __tnRegisterDynamicValidate("PerpInstruction", (buffer) => { const result = PerpInstruction.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
 
+/* ----- TYPE DEFINITION FOR SeatArenaAccount ----- */
+
+const __tn_ir_SeatArenaAccount = {
+  typeName: "SeatArenaAccount",
+  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "add", left: { op: "align", alignment: 1, node: { op: "const", value: 512n } }, right: { op: "align", alignment: 1, node: { op: "const", value: 128n } } }, right: { op: "align", alignment: 1, node: { op: "mul", left: { op: "div", left: { op: "sub", left: { op: "field", param: "__buffer_size" }, right: { op: "const", value: 640n } }, right: { op: "const", value: 128n } }, right: { op: "const", value: 128n } } } } }
+} as const;
+
+export class SeatArenaAccount {
+  private view: DataView;
+  private __tnFieldContext: Record<string, number | bigint> | null = null;
+
+  private constructor(private buffer: Uint8Array, fieldContext?: Record<string, number | bigint>) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    this.__tnFieldContext = fieldContext ?? null;
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): SeatArenaAccount {
+    if (!buffer || buffer.length === undefined) throw new Error("SeatArenaAccount.__tnCreateView requires a Uint8Array");
+    return new SeatArenaAccount(new Uint8Array(buffer), opts?.fieldContext);
+  }
+
+  withFieldContext(context: Record<string, number | bigint>): this {
+    this.__tnFieldContext = context;
+    return this;
+  }
+
+  private __tnResolveFieldRef(path: string): number {
+    const getterName = `get_${path.replace(/[.]/g, '_')}`;
+    const getter = (this as any)[getterName];
+    if (typeof getter === "function") {
+      const value = getter.call(this);
+      return typeof value === "bigint" ? __tnBigIntToNumber(value, "SeatArenaAccount::__tnResolveFieldRef") : value;
+    }
+    if (this.__tnFieldContext && Object.prototype.hasOwnProperty.call(this.__tnFieldContext, path)) {
+      const contextValue = this.__tnFieldContext[path];
+      return typeof contextValue === "bigint" ? __tnBigIntToNumber(contextValue, "SeatArenaAccount::__tnResolveFieldRef") : contextValue;
+    }
+    throw new Error("SeatArenaAccount: field reference '" + path + "' is not available; provide fieldContext when creating this view");
+  }
+
+  get_market(): MarketAccount {
+    const offset = 0;
+    const slice = this.buffer.subarray(offset, offset + 512);
+    return MarketAccount.from_array(slice)!;
+  }
+
+  set_market(value: MarketAccount): void {
+    /* Copy bytes from source struct to this field */
+    const sourceBytes = (value as any).buffer as Uint8Array;
+    const offset = 0;
+    this.buffer.set(sourceBytes, offset);
+  }
+
+  get market(): MarketAccount {
+    return this.get_market();
+  }
+
+  set market(value: MarketAccount) {
+    this.set_market(value);
+  }
+
+  get_header(): SeatArenaHeader {
+    const offset = 512;
+    const slice = this.buffer.subarray(offset, offset + 128);
+    return SeatArenaHeader.from_array(slice)!;
+  }
+
+  set_header(value: SeatArenaHeader): void {
+    /* Copy bytes from source struct to this field */
+    const sourceBytes = (value as any).buffer as Uint8Array;
+    const offset = 512;
+    this.buffer.set(sourceBytes, offset);
+  }
+
+  get header(): SeatArenaHeader {
+    return this.get_header();
+  }
+
+  set header(value: SeatArenaHeader) {
+    this.set_header(value);
+  }
+
+  get_entries_length(): number {
+    return ((this.buffer.length - 640) / 128);
+  }
+
+  get_entries_at(index: number): SeatEntry {
+    const offset = 640;
+    const slice = this.buffer.subarray((offset + index * 128), (offset + (index + 1) * 128));
+    return SeatEntry.from_array(slice)!;
+  }
+
+  get_entries(): SeatEntry[] {
+    const len = this.get_entries_length();
+    const result: SeatEntry[] = [];
+    for (let i = 0; i < len; i++) {
+      result.push(this.get_entries_at(i));
+    }
+    return result;
+  }
+
+  set_entries_at(index: number, value: SeatEntry): void {
+    const offset = 640;
+    const slice = this.buffer.subarray(offset + index * 128, offset + (index + 1) * 128);
+    slice.set(value['buffer']);
+  }
+
+  set_entries(value: SeatEntry[]): void {
+    const len = Math.min(this.get_entries_length(), value.length);
+    for (let i = 0; i < len; i++) {
+      this.set_entries_at(i, value[i]);
+    }
+  }
+
+  get entries(): SeatEntry[] {
+    return this.get_entries();
+  }
+
+  set entries(value: SeatEntry[]) {
+    this.set_entries(value);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_SeatArenaAccount.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_SeatArenaAccount, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for SeatArenaAccount');
+    }
+    return __tnBigIntToNumber(irResult, 'SeatArenaAccount::footprint');
+  }
+
+  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    if (!buffer || buffer.length === undefined) return { ok: false, code: "tn.invalid_buffer" };
+    const irResult = this.__tnValidateInternal(buffer, Object.create(null));
+    if (!irResult.ok) {
+      return { ok: false, code: irResult.code, consumed: irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'SeatArenaAccount::validate') : undefined };
+    }
+    const consumed = irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'SeatArenaAccount::validate') : undefined;
+    if (consumed !== buffer.length) return { ok: false, code: "tn.trailing_bytes", consumed };
+    return { ok: true, consumed };
+  }
+
+  static from_array(buffer: Uint8Array): SeatArenaAccount | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new SeatArenaAccount(buffer);
+  }
+
+}
+
+__tnRegisterFootprint("SeatArenaAccount", (params) => SeatArenaAccount.__tnInvokeFootprint(params));
+__tnRegisterValidate("SeatArenaAccount", (buffer, params) => SeatArenaAccount.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("SeatArenaAccount", (buffer) => { const result = SeatArenaAccount.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
+/* ----- TYPE DEFINITION FOR MarginAccount ----- */
+
+const __tn_ir_MarginAccount = {
+  typeName: "MarginAccount",
+  root: { op: "const", value: 433n }
+} as const;
+
+export class MarginAccount {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MarginAccount {
+    if (!buffer || buffer.length === undefined) throw new Error("MarginAccount.__tnCreateView requires a Uint8Array");
+    return new MarginAccount(new Uint8Array(buffer));
+  }
+
+  static builder(): MarginAccountBuilder {
+    return new MarginAccountBuilder();
+  }
+
+  static fromBuilder(builder: MarginAccountBuilder): MarginAccount | null {
+    const buffer = builder.build();
+    return MarginAccount.from_array(buffer);
+  }
+
+  get_magic(): number {
+    const offset = 0;
+    return this.view.getUint8(offset);
+  }
+
+  set_magic(value: number): void {
+    const offset = 0;
+    this.view.setUint8(offset, value);
+  }
+
+  get magic(): number {
+    return this.get_magic();
+  }
+
+  set magic(value: number) {
+    this.set_magic(value);
+  }
+
+  get_version(): number {
+    const offset = 1;
+    return this.view.getUint8(offset);
+  }
+
+  set_version(value: number): void {
+    const offset = 1;
+    this.view.setUint8(offset, value);
+  }
+
+  get version(): number {
+    return this.get_version();
+  }
+
+  set version(value: number) {
+    this.set_version(value);
+  }
+
+  get_link_cnt(): number {
+    const offset = 2;
+    return this.view.getUint8(offset);
+  }
+
+  set_link_cnt(value: number): void {
+    const offset = 2;
+    this.view.setUint8(offset, value);
+  }
+
+  get link_cnt(): number {
+    return this.get_link_cnt();
+  }
+
+  set link_cnt(value: number) {
+    this.set_link_cnt(value);
+  }
+
+  get_reserved0(): number[] {
+    const offset = 3;
+    const result: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      result.push(this.view.getUint8((offset + i * 1)));
+    }
+    return result;
+  }
+
+  set_reserved0(value: number[]): void {
+    const offset = 3;
+    if (value.length !== 5) {
+      throw new Error('Array length must be 5');
+    }
+    for (let i = 0; i < 5; i++) {
+      this.view.setUint8((offset + i * 1), value[i]);
+    }
+  }
+
+  get reserved0(): number[] {
+    return this.get_reserved0();
+  }
+
+  set reserved0(value: number[]) {
+    this.set_reserved0(value);
+  }
+
+  get_account_id(): number {
+    const offset = 8;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_account_id(value: number): void {
+    const offset = 8;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get account_id(): number {
+    return this.get_account_id();
+  }
+
+  set account_id(value: number) {
+    this.set_account_id(value);
+  }
+
+  get_reserved1(): number {
+    const offset = 12;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_reserved1(value: number): void {
+    const offset = 12;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get reserved1(): number {
+    return this.get_reserved1();
+  }
+
+  set reserved1(value: number) {
+    this.set_reserved1(value);
+  }
+
+  get_owner(): Pubkey {
+    const offset = 16;
+    const slice = this.buffer.subarray(offset, offset + 32);
+    return Pubkey.from_array(slice)!;
+  }
+
+  set_owner(value: Pubkey): void {
+    /* Copy bytes from source struct to this field */
+    const sourceBytes = (value as any).buffer as Uint8Array;
+    const offset = 16;
+    this.buffer.set(sourceBytes, offset);
+  }
+
+  get owner(): Pubkey {
+    return this.get_owner();
+  }
+
+  set owner(value: Pubkey) {
+    this.set_owner(value);
+  }
+
+  get_vault(): Pubkey {
+    const offset = 48;
+    const slice = this.buffer.subarray(offset, offset + 32);
+    return Pubkey.from_array(slice)!;
+  }
+
+  set_vault(value: Pubkey): void {
+    /* Copy bytes from source struct to this field */
+    const sourceBytes = (value as any).buffer as Uint8Array;
+    const offset = 48;
+    this.buffer.set(sourceBytes, offset);
+  }
+
+  get vault(): Pubkey {
+    return this.get_vault();
+  }
+
+  set vault(value: Pubkey) {
+    this.set_vault(value);
+  }
+
+  get_links(): MarginLink[] {
+    const offset = 80;
+    const result: MarginLink[] = [];
+    for (let i = 0; i < 8; i++) {
+      const slice = this.buffer.subarray((offset + i * 40), (offset + (i + 1) * 40));
+      result.push(MarginLink.from_array(slice)!);
+    }
+    return result;
+  }
+
+  set_links(value: MarginLink[]): void {
+    const offset = 80;
+    if (value.length !== 8) {
+      throw new Error('Array length must be 8');
+    }
+    for (let i = 0; i < 8; i++) {
+      const slice = this.buffer.subarray(offset + i * 40, offset + (i + 1) * 40);
+      slice.set(value[i]['buffer']);
+    }
+  }
+
+  get links(): MarginLink[] {
+    return this.get_links();
+  }
+
+  set links(value: MarginLink[]) {
+    this.set_links(value);
+  }
+
+  get_reserved2(): bigint[] {
+    const offset = 400;
+    const result: bigint[] = [];
+    for (let i = 0; i < 4; i++) {
+      result.push(this.view.getBigUint64((offset + i * 8), true));
+    }
+    return result;
+  }
+
+  set_reserved2(value: bigint[]): void {
+    const offset = 400;
+    if (value.length !== 4) {
+      throw new Error('Array length must be 4');
+    }
+    for (let i = 0; i < 4; i++) {
+      this.view.setBigUint64((offset + i * 8), value[i], true);
+    }
+  }
+
+  get reserved2(): bigint[] {
+    return this.get_reserved2();
+  }
+
+  set reserved2(value: bigint[]) {
+    this.set_reserved2(value);
+  }
+
+  get_reserved3(): number {
+    const offset = 432;
+    return this.view.getUint8(offset);
+  }
+
+  set_reserved3(value: number): void {
+    const offset = 432;
+    this.view.setUint8(offset, value);
+  }
+
+  get reserved3(): number {
+    return this.get_reserved3();
+  }
+
+  set reserved3(value: number) {
+    this.set_reserved3(value);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_MarginAccount.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_MarginAccount, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for MarginAccount');
+    }
+    return __tnBigIntToNumber(irResult, 'MarginAccount::footprint');
+  }
+
+  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    if (buffer.length < 433) return { ok: false, code: "tn.buffer_too_small", consumed: 433 };
+    return { ok: true, consumed: 433 };
+  }
+
+  static from_array(buffer: Uint8Array): MarginAccount | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new MarginAccount(buffer);
+  }
+
+}
+
+export class MarginAccountBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+
+  constructor() {
+    this.buffer = new Uint8Array(433);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  set_magic(value: number): this {
+    this.view.setUint8(0, value);
+    return this;
+  }
+
+  set_version(value: number): this {
+    this.view.setUint8(1, value);
+    return this;
+  }
+
+  set_link_cnt(value: number): this {
+    this.view.setUint8(2, value);
+    return this;
+  }
+
+  set_reserved0(values: number[]): this {
+    if (values.length !== 5) throw new Error("reserved0 expects 5 elements");
+    for (let i = 0; i < values.length; i++) {
+      const byteOffset = 3 + i * 1;
+      this.view.setUint8(byteOffset, values[i]);
+    }
+    return this;
+  }
+
+  set_account_id(value: number): this {
+    this.view.setUint32(8, value, true);
+    return this;
+  }
+
+  set_reserved1(value: number): this {
+    this.view.setUint32(12, value, true);
+    return this;
+  }
+
+  set_owner(value: Uint8Array): this {
+    if (value.length !== 32) throw new Error("owner expects 32 bytes");
+    this.buffer.set(value, 16);
+    return this;
+  }
+
+  set_vault(value: Uint8Array): this {
+    if (value.length !== 32) throw new Error("vault expects 32 bytes");
+    this.buffer.set(value, 48);
+    return this;
+  }
+
+  set_links(values: MarginLink[]): this {
+    if (values.length !== 8) throw new Error("links expects 8 elements");
+    for (let i = 0; i < values.length; i++) {
+      const slice = this.buffer.subarray(80 + i * 40, 80 + (i + 1) * 40);
+      const source = values[i] as unknown as { buffer?: ArrayBufferLike; byteOffset?: number; byteLength?: number };
+      const raw = source.buffer ? new Uint8Array(source.buffer, source.byteOffset ?? 0, 40) : (values[i] as unknown as Uint8Array);
+      slice.set(raw);
+    }
+    return this;
+  }
+
+  set_reserved2(values: bigint[]): this {
+    if (values.length !== 4) throw new Error("reserved2 expects 4 elements");
+    for (let i = 0; i < values.length; i++) {
+      const byteOffset = 400 + i * 8;
+      this.view.setBigUint64(byteOffset, values[i], true);
+    }
+    return this;
+  }
+
+  set_reserved3(value: number): this {
+    this.view.setUint8(432, value);
+    return this;
+  }
+
+  build(): Uint8Array {
+    return this.buffer.slice();
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    target.set(this.buffer, offset);
+    return target;
+  }
+
+  finish(): MarginAccount {
+    const view = MarginAccount.from_array(this.buffer.slice());
+    if (!view) throw new Error("failed to build MarginAccount");
+    return view;
+  }
+}
+
+__tnRegisterFootprint("MarginAccount", (params) => MarginAccount.__tnInvokeFootprint(params));
+__tnRegisterValidate("MarginAccount", (buffer, params) => MarginAccount.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("MarginAccount", (buffer) => { const result = MarginAccount.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
+/* ----- TYPE DEFINITION FOR MarginAccountPayload ----- */
+
+const __tn_ir_MarginAccountPayload = {
+  typeName: "MarginAccountPayload",
+  root: { op: "const", value: 432n }
+} as const;
+
+export class MarginAccountPayload {
+  private view: DataView;
+
+  private constructor(private buffer: Uint8Array) {
+    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+  }
+
+  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): MarginAccountPayload {
+    if (!buffer || buffer.length === undefined) throw new Error("MarginAccountPayload.__tnCreateView requires a Uint8Array");
+    return new MarginAccountPayload(new Uint8Array(buffer));
+  }
+
+  static builder(): MarginAccountPayloadBuilder {
+    return new MarginAccountPayloadBuilder();
+  }
+
+  static fromBuilder(builder: MarginAccountPayloadBuilder): MarginAccountPayload | null {
+    const buffer = builder.build();
+    return MarginAccountPayload.from_array(buffer);
+  }
+
+  get_version(): number {
+    const offset = 0;
+    return this.view.getUint8(offset);
+  }
+
+  set_version(value: number): void {
+    const offset = 0;
+    this.view.setUint8(offset, value);
+  }
+
+  get version(): number {
+    return this.get_version();
+  }
+
+  set version(value: number) {
+    this.set_version(value);
+  }
+
+  get_link_cnt(): number {
+    const offset = 1;
+    return this.view.getUint8(offset);
+  }
+
+  set_link_cnt(value: number): void {
+    const offset = 1;
+    this.view.setUint8(offset, value);
+  }
+
+  get link_cnt(): number {
+    return this.get_link_cnt();
+  }
+
+  set link_cnt(value: number) {
+    this.set_link_cnt(value);
+  }
+
+  get_reserved0(): number[] {
+    const offset = 2;
+    const result: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      result.push(this.view.getUint8((offset + i * 1)));
+    }
+    return result;
+  }
+
+  set_reserved0(value: number[]): void {
+    const offset = 2;
+    if (value.length !== 5) {
+      throw new Error('Array length must be 5');
+    }
+    for (let i = 0; i < 5; i++) {
+      this.view.setUint8((offset + i * 1), value[i]);
+    }
+  }
+
+  get reserved0(): number[] {
+    return this.get_reserved0();
+  }
+
+  set reserved0(value: number[]) {
+    this.set_reserved0(value);
+  }
+
+  get_account_id(): number {
+    const offset = 7;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_account_id(value: number): void {
+    const offset = 7;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get account_id(): number {
+    return this.get_account_id();
+  }
+
+  set account_id(value: number) {
+    this.set_account_id(value);
+  }
+
+  get_reserved1(): number {
+    const offset = 11;
+    return this.view.getUint32(offset, true); /* little-endian */
+  }
+
+  set_reserved1(value: number): void {
+    const offset = 11;
+    this.view.setUint32(offset, value, true); /* little-endian */
+  }
+
+  get reserved1(): number {
+    return this.get_reserved1();
+  }
+
+  set reserved1(value: number) {
+    this.set_reserved1(value);
+  }
+
+  get_owner(): Pubkey {
+    const offset = 15;
+    const slice = this.buffer.subarray(offset, offset + 32);
+    return Pubkey.from_array(slice)!;
+  }
+
+  set_owner(value: Pubkey): void {
+    /* Copy bytes from source struct to this field */
+    const sourceBytes = (value as any).buffer as Uint8Array;
+    const offset = 15;
+    this.buffer.set(sourceBytes, offset);
+  }
+
+  get owner(): Pubkey {
+    return this.get_owner();
+  }
+
+  set owner(value: Pubkey) {
+    this.set_owner(value);
+  }
+
+  get_vault(): Pubkey {
+    const offset = 47;
+    const slice = this.buffer.subarray(offset, offset + 32);
+    return Pubkey.from_array(slice)!;
+  }
+
+  set_vault(value: Pubkey): void {
+    /* Copy bytes from source struct to this field */
+    const sourceBytes = (value as any).buffer as Uint8Array;
+    const offset = 47;
+    this.buffer.set(sourceBytes, offset);
+  }
+
+  get vault(): Pubkey {
+    return this.get_vault();
+  }
+
+  set vault(value: Pubkey) {
+    this.set_vault(value);
+  }
+
+  get_links(): MarginLink[] {
+    const offset = 79;
+    const result: MarginLink[] = [];
+    for (let i = 0; i < 8; i++) {
+      const slice = this.buffer.subarray((offset + i * 40), (offset + (i + 1) * 40));
+      result.push(MarginLink.from_array(slice)!);
+    }
+    return result;
+  }
+
+  set_links(value: MarginLink[]): void {
+    const offset = 79;
+    if (value.length !== 8) {
+      throw new Error('Array length must be 8');
+    }
+    for (let i = 0; i < 8; i++) {
+      const slice = this.buffer.subarray(offset + i * 40, offset + (i + 1) * 40);
+      slice.set(value[i]['buffer']);
+    }
+  }
+
+  get links(): MarginLink[] {
+    return this.get_links();
+  }
+
+  set links(value: MarginLink[]) {
+    this.set_links(value);
+  }
+
+  get_reserved2(): bigint[] {
+    const offset = 399;
+    const result: bigint[] = [];
+    for (let i = 0; i < 4; i++) {
+      result.push(this.view.getBigUint64((offset + i * 8), true));
+    }
+    return result;
+  }
+
+  set_reserved2(value: bigint[]): void {
+    const offset = 399;
+    if (value.length !== 4) {
+      throw new Error('Array length must be 4');
+    }
+    for (let i = 0; i < 4; i++) {
+      this.view.setBigUint64((offset + i * 8), value[i], true);
+    }
+  }
+
+  get reserved2(): bigint[] {
+    return this.get_reserved2();
+  }
+
+  set reserved2(value: bigint[]) {
+    this.set_reserved2(value);
+  }
+
+  get_reserved3(): number {
+    const offset = 431;
+    return this.view.getUint8(offset);
+  }
+
+  set_reserved3(value: number): void {
+    const offset = 431;
+    this.view.setUint8(offset, value);
+  }
+
+  get reserved3(): number {
+    return this.get_reserved3();
+  }
+
+  set reserved3(value: number) {
+    this.set_reserved3(value);
+  }
+
+  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
+    return __tnEvalFootprint(__tn_ir_MarginAccountPayload.root, { params: __tnParams });
+  }
+
+  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
+    return __tnValidateIrTree(__tn_ir_MarginAccountPayload, buffer, __tnParams);
+  }
+
+  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
+    return this.__tnFootprintInternal(__tnParams);
+  }
+
+  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
+    return this.__tnValidateInternal(buffer, __tnParams);
+  }
+
+  static footprintIr(): bigint {
+    return this.__tnFootprintInternal(Object.create(null));
+  }
+
+  static footprint(): number {
+    const irResult = this.footprintIr();
+      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
+    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
+      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for MarginAccountPayload');
+    }
+    return __tnBigIntToNumber(irResult, 'MarginAccountPayload::footprint');
+  }
+
+  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
+    if (buffer.length < 432) return { ok: false, code: "tn.buffer_too_small", consumed: 432 };
+    return { ok: true, consumed: 432 };
+  }
+
+  static from_array(buffer: Uint8Array): MarginAccountPayload | null {
+    if (!buffer || buffer.length === undefined) {
+      return null;
+    }
+    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
+    const validation = this.validate(buffer);
+    if (!validation.ok) {
+      return null;
+    }
+    return new MarginAccountPayload(buffer);
+  }
+
+}
+
+export class MarginAccountPayloadBuilder {
+  private buffer: Uint8Array;
+  private view: DataView;
+
+  constructor() {
+    this.buffer = new Uint8Array(432);
+    this.view = new DataView(this.buffer.buffer, this.buffer.byteOffset, this.buffer.byteLength);
+  }
+
+  set_version(value: number): this {
+    this.view.setUint8(0, value);
+    return this;
+  }
+
+  set_link_cnt(value: number): this {
+    this.view.setUint8(1, value);
+    return this;
+  }
+
+  set_reserved0(values: number[]): this {
+    if (values.length !== 5) throw new Error("reserved0 expects 5 elements");
+    for (let i = 0; i < values.length; i++) {
+      const byteOffset = 2 + i * 1;
+      this.view.setUint8(byteOffset, values[i]);
+    }
+    return this;
+  }
+
+  set_account_id(value: number): this {
+    this.view.setUint32(7, value, true);
+    return this;
+  }
+
+  set_reserved1(value: number): this {
+    this.view.setUint32(11, value, true);
+    return this;
+  }
+
+  set_owner(value: Uint8Array): this {
+    if (value.length !== 32) throw new Error("owner expects 32 bytes");
+    this.buffer.set(value, 15);
+    return this;
+  }
+
+  set_vault(value: Uint8Array): this {
+    if (value.length !== 32) throw new Error("vault expects 32 bytes");
+    this.buffer.set(value, 47);
+    return this;
+  }
+
+  set_links(values: MarginLink[]): this {
+    if (values.length !== 8) throw new Error("links expects 8 elements");
+    for (let i = 0; i < values.length; i++) {
+      const slice = this.buffer.subarray(79 + i * 40, 79 + (i + 1) * 40);
+      const source = values[i] as unknown as { buffer?: ArrayBufferLike; byteOffset?: number; byteLength?: number };
+      const raw = source.buffer ? new Uint8Array(source.buffer, source.byteOffset ?? 0, 40) : (values[i] as unknown as Uint8Array);
+      slice.set(raw);
+    }
+    return this;
+  }
+
+  set_reserved2(values: bigint[]): this {
+    if (values.length !== 4) throw new Error("reserved2 expects 4 elements");
+    for (let i = 0; i < values.length; i++) {
+      const byteOffset = 399 + i * 8;
+      this.view.setBigUint64(byteOffset, values[i], true);
+    }
+    return this;
+  }
+
+  set_reserved3(value: number): this {
+    this.view.setUint8(431, value);
+    return this;
+  }
+
+  build(): Uint8Array {
+    return this.buffer.slice();
+  }
+
+  buildInto(target: Uint8Array, offset = 0): Uint8Array {
+    if (target.length - offset < this.buffer.length) throw new Error("target buffer too small");
+    target.set(this.buffer, offset);
+    return target;
+  }
+
+  finish(): MarginAccountPayload {
+    const view = MarginAccountPayload.from_array(this.buffer.slice());
+    if (!view) throw new Error("failed to build MarginAccountPayload");
+    return view;
+  }
+}
+
+__tnRegisterFootprint("MarginAccountPayload", (params) => MarginAccountPayload.__tnInvokeFootprint(params));
+__tnRegisterValidate("MarginAccountPayload", (buffer, params) => MarginAccountPayload.__tnInvokeValidate(buffer, params));
+__tnRegisterDynamicValidate("MarginAccountPayload", (buffer) => { const result = MarginAccountPayload.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
+
 /* ----- TYPE DEFINITION FOR PerpProgramAccount ----- */
 
 const __tn_ir_PerpProgramAccount = {
   typeName: "PerpProgramAccount",
-  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "align", alignment: 1, node: { op: "const", value: 1n } }, right: { op: "align", alignment: 1, node: { op: "switch", tag: "PerpProgramAccount::payload.account_tag", cases: [{ value: 121, node: { op: "align", alignment: 1, node: { op: "const", value: 447n } } }, { value: 120, node: { op: "align", alignment: 1, node: { op: "const", value: 95n } } }] } } } }
+  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "align", alignment: 1, node: { op: "const", value: 1n } }, right: { op: "align", alignment: 1, node: { op: "switch", tag: "PerpProgramAccount::payload.account_tag", cases: [{ value: 121, node: { op: "align", alignment: 1, node: { op: "const", value: 511n } } }, { value: 120, node: { op: "align", alignment: 1, node: { op: "const", value: 95n } } }, { value: 122, node: { op: "align", alignment: 1, node: { op: "const", value: 432n } } }] } } } }
 } as const;
 
 export class PerpProgramAccount_payload_Inner {
@@ -18051,6 +25697,11 @@ export class PerpProgramAccount_payload_Inner {
   asExchangeMeta(): ExchangeMetaAccountPayload | null {
     if (!this.descriptor || this.descriptor.tag !== 120) return null;
     return ExchangeMetaAccountPayload.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
+  }
+
+  asMarginAccount(): MarginAccountPayload | null {
+    if (!this.descriptor || this.descriptor.tag !== 122) return null;
+    return MarginAccountPayload.__tnCreateView(new Uint8Array(this.buffer), { fieldContext: this.__tnFieldContext ?? undefined });
   }
 
 }
@@ -18104,7 +25755,7 @@ export class PerpProgramAccount {
     {
       name: "market",
       tag: 121,
-      payloadSize: 447,
+      payloadSize: 511,
       payloadType: "PerpProgramAccount::payload::market",
       createPayloadBuilder: () => __tnMaybeCallBuilder(MarketAccountPayload),
     },
@@ -18114,6 +25765,13 @@ export class PerpProgramAccount {
       payloadSize: 95,
       payloadType: "PerpProgramAccount::payload::exchange_meta",
       createPayloadBuilder: () => __tnMaybeCallBuilder(ExchangeMetaAccountPayload),
+    },
+    {
+      name: "margin_account",
+      tag: 122,
+      payloadSize: 432,
+      payloadType: "PerpProgramAccount::payload::margin_account",
+      createPayloadBuilder: () => __tnMaybeCallBuilder(MarginAccountPayload),
     },
   ] as const);
 
@@ -18404,210 +26062,3 @@ export class PerpProgramAccountBuilder {
 __tnRegisterFootprint("PerpProgramAccount", (params) => PerpProgramAccount.__tnInvokeFootprint(params));
 __tnRegisterValidate("PerpProgramAccount", (buffer, params) => PerpProgramAccount.__tnInvokeValidate(buffer, params));
 __tnRegisterDynamicValidate("PerpProgramAccount", (buffer) => { const result = PerpProgramAccount.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });
-
-/* ----- TYPE DEFINITION FOR SeatArenaAccount ----- */
-
-const __tn_ir_SeatArenaAccount = {
-  typeName: "SeatArenaAccount",
-  root: { op: "align", alignment: 1, node: { op: "add", left: { op: "add", left: { op: "add", left: { op: "align", alignment: 1, node: { op: "const", value: 448n } }, right: { op: "align", alignment: 1, node: { op: "const", value: 64n } } }, right: { op: "align", alignment: 1, node: { op: "const", value: 128n } } }, right: { op: "align", alignment: 1, node: { op: "mul", left: { op: "div", left: { op: "sub", left: { op: "field", param: "__buffer_size" }, right: { op: "const", value: 640n } }, right: { op: "const", value: 128n } }, right: { op: "const", value: 128n } } } } }
-} as const;
-
-export class SeatArenaAccount {
-  private view: DataView;
-  private __tnFieldContext: Record<string, number | bigint> | null = null;
-
-  private constructor(private buffer: Uint8Array, fieldContext?: Record<string, number | bigint>) {
-    this.view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-    this.__tnFieldContext = fieldContext ?? null;
-  }
-
-  static __tnCreateView(buffer: Uint8Array, opts?: { fieldContext?: Record<string, number | bigint> }): SeatArenaAccount {
-    if (!buffer || buffer.length === undefined) throw new Error("SeatArenaAccount.__tnCreateView requires a Uint8Array");
-    return new SeatArenaAccount(new Uint8Array(buffer), opts?.fieldContext);
-  }
-
-  withFieldContext(context: Record<string, number | bigint>): this {
-    this.__tnFieldContext = context;
-    return this;
-  }
-
-  private __tnResolveFieldRef(path: string): number {
-    const getterName = `get_${path.replace(/[.]/g, '_')}`;
-    const getter = (this as any)[getterName];
-    if (typeof getter === "function") {
-      const value = getter.call(this);
-      return typeof value === "bigint" ? __tnBigIntToNumber(value, "SeatArenaAccount::__tnResolveFieldRef") : value;
-    }
-    if (this.__tnFieldContext && Object.prototype.hasOwnProperty.call(this.__tnFieldContext, path)) {
-      const contextValue = this.__tnFieldContext[path];
-      return typeof contextValue === "bigint" ? __tnBigIntToNumber(contextValue, "SeatArenaAccount::__tnResolveFieldRef") : contextValue;
-    }
-    throw new Error("SeatArenaAccount: field reference '" + path + "' is not available; provide fieldContext when creating this view");
-  }
-
-  get_market(): MarketAccount {
-    const offset = 0;
-    const slice = this.buffer.subarray(offset, offset + 448);
-    return MarketAccount.from_array(slice)!;
-  }
-
-  set_market(value: MarketAccount): void {
-    /* Copy bytes from source struct to this field */
-    const sourceBytes = (value as any).buffer as Uint8Array;
-    const offset = 0;
-    this.buffer.set(sourceBytes, offset);
-  }
-
-  get market(): MarketAccount {
-    return this.get_market();
-  }
-
-  set market(value: MarketAccount) {
-    this.set_market(value);
-  }
-
-  get_reserved_market_padding(): number[] {
-    const offset = 448;
-    const result: number[] = [];
-    for (let i = 0; i < 64; i++) {
-      result.push(this.view.getUint8((offset + i * 1)));
-    }
-    return result;
-  }
-
-  set_reserved_market_padding(value: number[]): void {
-    const offset = 448;
-    if (value.length !== 64) {
-      throw new Error('Array length must be 64');
-    }
-    for (let i = 0; i < 64; i++) {
-      this.view.setUint8((offset + i * 1), value[i]);
-    }
-  }
-
-  get reserved_market_padding(): number[] {
-    return this.get_reserved_market_padding();
-  }
-
-  set reserved_market_padding(value: number[]) {
-    this.set_reserved_market_padding(value);
-  }
-
-  get_header(): SeatArenaHeader {
-    const offset = 512;
-    const slice = this.buffer.subarray(offset, offset + 128);
-    return SeatArenaHeader.from_array(slice)!;
-  }
-
-  set_header(value: SeatArenaHeader): void {
-    /* Copy bytes from source struct to this field */
-    const sourceBytes = (value as any).buffer as Uint8Array;
-    const offset = 512;
-    this.buffer.set(sourceBytes, offset);
-  }
-
-  get header(): SeatArenaHeader {
-    return this.get_header();
-  }
-
-  set header(value: SeatArenaHeader) {
-    this.set_header(value);
-  }
-
-  get_entries_length(): number {
-    return ((this.buffer.length - 640) / 128);
-  }
-
-  get_entries_at(index: number): SeatEntry {
-    const offset = 640;
-    const slice = this.buffer.subarray((offset + index * 128), (offset + (index + 1) * 128));
-    return SeatEntry.from_array(slice)!;
-  }
-
-  get_entries(): SeatEntry[] {
-    const len = this.get_entries_length();
-    const result: SeatEntry[] = [];
-    for (let i = 0; i < len; i++) {
-      result.push(this.get_entries_at(i));
-    }
-    return result;
-  }
-
-  set_entries_at(index: number, value: SeatEntry): void {
-    const offset = 640;
-    const slice = this.buffer.subarray(offset + index * 128, offset + (index + 1) * 128);
-    slice.set(value['buffer']);
-  }
-
-  set_entries(value: SeatEntry[]): void {
-    const len = Math.min(this.get_entries_length(), value.length);
-    for (let i = 0; i < len; i++) {
-      this.set_entries_at(i, value[i]);
-    }
-  }
-
-  get entries(): SeatEntry[] {
-    return this.get_entries();
-  }
-
-  set entries(value: SeatEntry[]) {
-    this.set_entries(value);
-  }
-
-  private static __tnFootprintInternal(__tnParams: Record<string, bigint>): bigint {
-    return __tnEvalFootprint(__tn_ir_SeatArenaAccount.root, { params: __tnParams });
-  }
-
-  private static __tnValidateInternal(buffer: Uint8Array, __tnParams: Record<string, bigint>): { ok: boolean; code?: string; consumed?: bigint } {
-    return __tnValidateIrTree(__tn_ir_SeatArenaAccount, buffer, __tnParams);
-  }
-
-  static __tnInvokeFootprint(__tnParams: Record<string, bigint>): bigint {
-    return this.__tnFootprintInternal(__tnParams);
-  }
-
-  static __tnInvokeValidate(buffer: Uint8Array, __tnParams: Record<string, bigint>): __TnValidateResult {
-    return this.__tnValidateInternal(buffer, __tnParams);
-  }
-
-  static footprintIr(): bigint {
-    return this.__tnFootprintInternal(Object.create(null));
-  }
-
-  static footprint(): number {
-    const irResult = this.footprintIr();
-      const maxSafe = __tnToBigInt(Number.MAX_SAFE_INTEGER);
-    if (__tnBigIntGreaterThan(irResult, maxSafe)) {
-      throw new Error('footprint exceeds Number.MAX_SAFE_INTEGER for SeatArenaAccount');
-    }
-    return __tnBigIntToNumber(irResult, 'SeatArenaAccount::footprint');
-  }
-
-  static validate(buffer: Uint8Array, _opts?: { params?: never }): { ok: boolean; code?: string; consumed?: number } {
-    if (!buffer || buffer.length === undefined) return { ok: false, code: "tn.invalid_buffer" };
-    const irResult = this.__tnValidateInternal(buffer, Object.create(null));
-    if (!irResult.ok) {
-      return { ok: false, code: irResult.code, consumed: irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'SeatArenaAccount::validate') : undefined };
-    }
-    const consumed = irResult.consumed ? __tnBigIntToNumber(irResult.consumed, 'SeatArenaAccount::validate') : undefined;
-    if (consumed !== buffer.length) return { ok: false, code: "tn.trailing_bytes", consumed };
-    return { ok: true, consumed };
-  }
-
-  static from_array(buffer: Uint8Array): SeatArenaAccount | null {
-    if (!buffer || buffer.length === undefined) {
-      return null;
-    }
-    const view = new DataView(buffer.buffer, buffer.byteOffset, buffer.byteLength);
-    const validation = this.validate(buffer);
-    if (!validation.ok) {
-      return null;
-    }
-    return new SeatArenaAccount(buffer);
-  }
-
-}
-
-__tnRegisterFootprint("SeatArenaAccount", (params) => SeatArenaAccount.__tnInvokeFootprint(params));
-__tnRegisterValidate("SeatArenaAccount", (buffer, params) => SeatArenaAccount.__tnInvokeValidate(buffer, params));
-__tnRegisterDynamicValidate("SeatArenaAccount", (buffer) => { const result = SeatArenaAccount.validate(buffer); const params = (result as { params?: Record<string, bigint> }).params; return { ok: result.ok, code: result.code, consumed: result.consumed === undefined ? undefined : __tnToBigInt(result.consumed), params }; });

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { watchRun } from './ci-fail-fast.mjs';
+import { POLL_INTERVAL_MS, watchRun } from './ci-fail-fast.mjs';
 
 const context = {
   repo: { owner: 'Unto-Labs', repo: 'thru-net' },
@@ -99,4 +99,15 @@ test('advisory nested failures do not cancel, but a similarly named required job
   ], { ignoredJobs });
   assert.equal(result.polls, 2);
   assert.deepEqual(result.cancellations, [42]);
+});
+
+test('polls every two minutes to stay within the shared API budget', async () => {
+  const sleeps = [];
+  const result = await watch([
+    [running('unit-test')],
+    [completed('check-status', 'success')],
+  ], { sleep: async ms => sleeps.push(ms) });
+  assert.equal(POLL_INTERVAL_MS, 120_000);
+  assert.deepEqual(sleeps, [POLL_INTERVAL_MS]);
+  assert.equal(result.polls, 2);
 });

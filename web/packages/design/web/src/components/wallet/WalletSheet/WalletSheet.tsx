@@ -1,7 +1,6 @@
 import * as React from "react";
 import { cn } from "../../../utils";
 import { Button } from "../../Button/Button";
-import { Spinner } from "../../Spinner/Spinner";
 import { Address } from "../../Address/Address";
 import { Frame, type FrameProps } from "../Frame/Frame";
 import { Screen } from "../Screen/Screen";
@@ -15,10 +14,8 @@ import { TxTree } from "../TxTree/TxTree";
 import { Collapsible } from "@base-ui/react/collapsible";
 import { useWaitStages, WaitHero, WALLET_SHEET_SLOW_MS, WALLET_SHEET_ESCALATE_MS } from "./wait";
 import { DepositScreens } from "./DepositScreens";
-import { PairScreens } from "./PairScreens";
 import "./WalletSheet.css";
 
-/* ── Icons ─────────────────────────────────────────────────────────── */
 const Check = (p: React.SVGProps<SVGSVGElement>) => (
   <svg viewBox="0 0 16 16" fill="none" aria-hidden {...p}>
     <path d="M3 8.5l3.5 3.5L13 4" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
@@ -40,7 +37,6 @@ const ArrowUpRight = (p: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
-/* ── Types ─────────────────────────────────────────────────────────── */
 export type WalletSheetScreen =
   | "signin"
   | "loading"
@@ -58,10 +54,7 @@ export type WalletSheetScreen =
   | "depositReview"
   | "depositVerify"
   | "depositPending"
-  | "depositDone"
-  | "pairIntro"
-  | "pairCode"
-  | "pairDone";
+  | "depositDone";
 
 export type WalletSheetFlow = "signin" | "signup";
 
@@ -72,10 +65,8 @@ export interface WalletSheetDetail {
 
 export { WALLET_SHEET_SLOW_MS, WALLET_SHEET_ESCALATE_MS } from "./wait";
 
-/* ── Root ──────────────────────────────────────────────────────────── */
 export type WalletSheetRootProps = FrameProps;
 
-/** The sheet chrome — `Frame` with the wallet-sheet hook class. */
 const Root = React.forwardRef<HTMLDivElement, WalletSheetRootProps>(function WalletSheetRoot(
   { className, ...props },
   ref,
@@ -83,7 +74,6 @@ const Root = React.forwardRef<HTMLDivElement, WalletSheetRootProps>(function Wal
   return <Frame ref={ref} className={cn("tds-wsheet", className)} {...props} />;
 });
 
-/* ── Sign in ───────────────────────────────────────────────────────── */
 export interface WalletSheetSignInProps {
   appName: React.ReactNode;
   description?: React.ReactNode;
@@ -127,7 +117,6 @@ function SignIn({
   );
 }
 
-/* ── Loading (creating account / waiting for passkey) ──────────────── */
 export interface WalletSheetLoadingProps {
   flow?: WalletSheetFlow;
   appName: React.ReactNode;
@@ -153,7 +142,7 @@ function Loading({
   steps,
   slowAfterMs = WALLET_SHEET_SLOW_MS,
   escalateAfterMs = WALLET_SHEET_ESCALATE_MS,
-  escalationMessage = "Still waiting. Passkey prompts can take a moment — check for a browser dialog.",
+  escalationMessage = "Still waiting. Look for a passkey prompt from your browser.",
   onRetry,
   onCancel,
   retryLabel = "Retry",
@@ -164,7 +153,7 @@ function Loading({
   const { slow, escalated } = useWaitStages(flow, slowAfterMs, escalateAfterMs, !!(onRetry || onCancel));
   const items: StepItem[] = steps ?? [
     { label: signup ? "Passkey created" : "Passkey verified", status: "done" },
-    { label: signup ? "Deploying account" : "Restoring account", status: "active" },
+    { label: signup ? "Setting up account" : "Restoring account", status: "active" },
     { label: <>Connecting to {appName}</>, status: "pending" },
   ];
   return (
@@ -186,12 +175,12 @@ function Loading({
             <div className="tds-wsheet__escalation-text">{escalationMessage}</div>
             <div className="tds-wsheet__escalation-actions">
               {onRetry && (
-                <Button variant="outline" size="sm" onClick={onRetry}>
+                <Button variant="outline" size="lg" onClick={onRetry}>
                   {retryLabel}
                 </Button>
               )}
               {onCancel && (
-                <Button variant="ghost" size="sm" onClick={onCancel}>
+                <Button variant="ghost" size="lg" onClick={onCancel}>
                   {cancelLabel}
                 </Button>
               )}
@@ -204,7 +193,6 @@ function Loading({
   );
 }
 
-/* ── Permissions ───────────────────────────────────────────────────── */
 export interface WalletSheetPermissionsProps {
   appName: React.ReactNode;
   /** Host shown in the subtitle ("meridian.xyz is asking to:"). */
@@ -267,7 +255,6 @@ function Permissions({
   );
 }
 
-/* ── Connected ─────────────────────────────────────────────────────── */
 export interface WalletSheetConnectedProps {
   appName: React.ReactNode;
   address: string;
@@ -293,7 +280,15 @@ function Connected({
   doneLabel = "Done",
 }: WalletSheetConnectedProps) {
   return (
-    <Screen bottomAction={{ label: doneLabel, onClick: onDone }}>
+    <Screen
+      footer={
+        <Screen.Actions>
+          <Button variant="primary" size="lg" onClick={onDone}>
+            {doneLabel}
+          </Button>
+        </Screen.Actions>
+      }
+    >
       <Screen.Header
         tone="success"
         icon={<Check width={18} height={18} />}
@@ -312,7 +307,6 @@ function Connected({
   );
 }
 
-/* ── Error ─────────────────────────────────────────────────────────── */
 export interface WalletSheetErrorProps {
   title?: React.ReactNode;
   description?: React.ReactNode;
@@ -356,7 +350,6 @@ function ErrorScreen({
   );
 }
 
-/* ── Approve transaction ───────────────────────────────────────────── */
 export interface WalletSheetTxField {
   label: React.ReactNode;
   value: React.ReactNode;
@@ -391,7 +384,7 @@ export interface WalletSheetTxInstruction {
   calls?: WalletSheetTxCall[];
   /** Extra decoded content shown under the calls (a value tree). */
   children?: React.ReactNode;
-  /** Open the instruction section by default (the design does). */
+  /** Open the instruction section by default. */
   defaultOpen?: boolean;
 }
 
@@ -407,9 +400,7 @@ export interface WalletSheetTxApproveProps {
   programName?: React.ReactNode;
   /** Extra label / value rows under the account + program. */
   summary?: WalletSheetDetail[];
-  /** A notice under the summary (a `Screen.Box`, e.g. no account selected).
-   *  It is in the body, inside its gutter, above Advanced, so an open tree
-   *  never pushes it down. */
+  /** A notice under the summary (a `Screen.Box`, e.g. no account selected). */
   notice?: React.ReactNode;
   /** Transaction-level parameters (nonce, version, network, …). */
   parameters?: WalletSheetTxField[];
@@ -428,6 +419,8 @@ export interface WalletSheetTxApproveProps {
   advancedLabel?: React.ReactNode;
   advancedOpenLabel?: React.ReactNode;
   defaultAdvancedOpen?: boolean;
+  /** Show program addresses, parameters, accounts, and raw transaction data. Default true. */
+  developerDetails?: boolean;
   onCancel?: () => void;
   onApprove?: () => void;
   cancelLabel?: React.ReactNode;
@@ -463,10 +456,11 @@ function TxApprove({
   advancedLabel = "Advanced",
   advancedOpenLabel = "Hide advanced",
   defaultAdvancedOpen = false,
+  developerDetails = true,
   onCancel,
   onApprove,
   cancelLabel = "Cancel",
-  approveLabel = "Sign and accept",
+  approveLabel = "Approve",
 }: WalletSheetTxApproveProps) {
   const [advancedOpen, setAdvancedOpen] = React.useState(defaultAdvancedOpen);
   const bytes = rawSize ?? (rawHex ? Math.ceil(rawHex.replace(/^0x/i, "").length / 2) : 0);
@@ -475,7 +469,7 @@ function TxApprove({
   const hasAccounts = !!accounts && accounts.length > 0;
   const hasInstruction = !!instruction;
   const hasRaw = !!rawHex;
-  const hasAdvanced = hasParameters || hasFees || hasAccounts || hasInstruction || hasRaw;
+  const hasAdvanced = !!program || hasParameters || hasFees || hasAccounts || hasInstruction || hasRaw;
   const calls = instruction?.calls ?? [];
 
   return (
@@ -503,14 +497,7 @@ function TxApprove({
           <span className="tds-wsheet__eyebrow">Account</span>
           <Address value={account} leading={8} trailing={6} className="tds-wsheet__mono" />
         </div>
-        <div className="tds-wsheet__srow">
-          <span className="tds-wsheet__eyebrow">Program</span>
-          <span className="tds-wsheet__program" title={program}>
-            {programName != null && <span className="tds-wsheet__program-name">{programName}</span>}
-            <Address value={program} leading={8} trailing={7} showTitle={false} className="tds-wsheet__mono" />
-          </span>
-        </div>
-        {summary?.map((row, i) => (
+        {[...(summary ?? []), ...(!developerDetails ? (fees ?? []) : [])].map((row, i) => (
           <div key={i} className="tds-wsheet__srow">
             <span className="tds-wsheet__eyebrow">{row.label}</span>
             <span className="tds-wsheet__mono tds-wsheet__srow-value">{row.value}</span>
@@ -518,7 +505,7 @@ function TxApprove({
         ))}
       </Screen.Box>
       {notice}
-      {hasAdvanced && (
+      {developerDetails && hasAdvanced && (
         <Collapsible.Root
           className="tds-wsheet__advanced"
           open={advancedOpen}
@@ -531,6 +518,17 @@ function TxApprove({
           <Collapsible.Panel className="tds-wsheet__advanced-panel">
             <div className="tds-wsheet__advanced-body">
               <TxTree>
+                {program && (
+                  <TxTree.Section label="Program" defaultOpen>
+                    <TxTree.Rows>
+                      {programName != null && <TxTree.Row label="Name" value={programName} />}
+                      <TxTree.Row
+                        label="Address"
+                        value={<Address value={program} leading={8} trailing={7} />}
+                      />
+                    </TxTree.Rows>
+                  </TxTree.Section>
+                )}
                 {hasParameters && (
                   <TxTree.Section label="Parameters" meta={plural(parameters!.length, "field")}>
                     <TxTree.Rows>
@@ -612,7 +610,6 @@ function TxApprove({
   );
 }
 
-/* ── Approving (pending) ───────────────────────────────────────────── */
 export interface WalletSheetTxPendingProps {
   title?: React.ReactNode;
   description?: React.ReactNode;
@@ -645,7 +642,6 @@ function TxPending({
   );
 }
 
-/* ── Approved (done) ───────────────────────────────────────────────── */
 export interface WalletSheetTxDoneProps {
   appName: React.ReactNode;
   signature: string;
@@ -667,7 +663,15 @@ function TxDone({
   doneLabel = "Done",
 }: WalletSheetTxDoneProps) {
   return (
-    <Screen bottomAction={{ label: doneLabel, onClick: onDone }}>
+    <Screen
+      footer={
+        <Screen.Actions>
+          <Button variant="primary" size="lg" onClick={onDone}>
+            {doneLabel}
+          </Button>
+        </Screen.Actions>
+      }
+    >
       <Screen.Header
         tone="success"
         icon={<Check width={18} height={18} />}
@@ -690,12 +694,8 @@ function TxDone({
  *     <WalletSheet.SignIn appName="Meridian" onSignIn={…} onCreateAccount={…} />
  *   </WalletSheet.Root>
  *
- * Screens: SignIn, Loading, Permissions, Connected, Error, TxApprove,
- * TxPending, TxDone, and the Add funds set — Deposit (chooser), DepositCrypto,
- * DepositCard, DepositVerify, DepositPending, DepositDone, and the pair-a-new-
- * device set — PairIntro, PairCode, PairDone. All presentational —
- * the host drives the state machine.
- * Pair with `WalletOverlay` for the top-center island presentation.
+ * The host drives the state machine. Pair with `WalletOverlay` for the
+ * top-center presentation.
  */
 export const WalletSheet = {
   Root,
@@ -708,6 +708,5 @@ export const WalletSheet = {
   TxPending,
   TxDone,
   ...DepositScreens,
-  ...PairScreens,
   PoweredBy,
 };

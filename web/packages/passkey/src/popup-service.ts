@@ -5,7 +5,7 @@ import type {
   PasskeySigningResult,
 } from './types';
 import { PASSKEY_POPUP_RESPONSE_EVENT } from './popup';
-import { bytesToBase64Url, base64UrlToBytes } from '@thru/programs/passkey-manager';
+import { bytesToBase64Url, base64UrlToBytes } from '@thru/programs/wallet';
 export function toPopupSigningResult(result: PasskeySigningResult): PasskeyPopupSigningResult {
   return {
     credentialJson: result.credentialJson,

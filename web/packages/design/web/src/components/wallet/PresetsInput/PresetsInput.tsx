@@ -21,7 +21,6 @@ export interface PresetOption {
 }
 
 export interface PresetsInputProps {
-  /** Selectable preset tiles. */
   presets: PresetOption[];
   /** Controlled value. */
   value?: string;
@@ -37,7 +36,7 @@ export interface PresetsInputProps {
 /**
  * PresetsInput — preset value tiles that flip into a free-text input via the
  * pencil toggle. Selection state is driven by Base UI's Radio `data-checked`
- * attribute (styled in CSS). Controlled or uncontrolled.
+ * attribute. Controlled or uncontrolled.
  */
 export const PresetsInput = React.forwardRef<HTMLDivElement, PresetsInputProps>(
   function PresetsInput(

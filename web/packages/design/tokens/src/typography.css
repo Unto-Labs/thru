@@ -1,10 +1,6 @@
-/* ============================================================
-   Thru Typography — canon: Unto-Labs/thru-web globals.css
-   Named, responsive type ramp. Headings/body in --font-sans,
-   ui-* (machine-facing) in --font-mono. Each has a -bold variant.
-   Breakpoints inlined (sm 600 / md 840 / lg 1200 / xl 1600) since
-   this package carries no Tailwind theme() context.
-   ============================================================ */
+/* Breakpoints are inlined (sm 600 / md 840 / lg 1200 / xl 1600): media
+   queries cannot read custom properties and this package has no Tailwind
+   theme() context. */
 
 .type-heading-1 {
   font-family: var(--font-sans);

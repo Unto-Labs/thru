@@ -6,7 +6,6 @@ pub mod bintrie_types;
 pub mod block_parser;
 pub mod crypto_utils;
 pub mod bootstrap_addresses;
-pub mod ratelimit;
 pub mod rpc_types;
 pub mod tn_account;
 pub mod tn_block_packet;

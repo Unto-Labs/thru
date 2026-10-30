@@ -1,26 +1,5 @@
-/**
- * Fluent column builder API for defining schemas.
- * Exports a global `t` object for concise schema definitions.
- *
- * @example
- * ```ts
- * import { t } from "@thru/indexer";
- *
- * const schema = {
- *   id: t.text().primaryKey(),
- *   slot: t.bigint().notNull().index(),
- *   amount: t.bigint().notNull(),
- *   timestamp: t.timestamp(),
- * };
- * ```
- */
-
 import type { PgTableWithColumns } from "drizzle-orm/pg-core";
 import type { ColumnDef, ColumnType } from "./types";
-
-// ============================================================
-// Column Definition Implementation
-// ============================================================
 
 interface ColumnState<T> {
   _type: T;
@@ -34,9 +13,6 @@ interface ColumnState<T> {
   _references?: { table: PgTableWithColumns<any>; column: string };
 }
 
-/**
- * Create a builder object from state with the given nullability type parameter.
- */
 function createBuilder<T, TNull extends boolean>(
   state: ColumnState<T>
 ): ColumnDef<T, TNull> {
@@ -95,9 +71,6 @@ function createBuilder<T, TNull extends boolean>(
   return builder;
 }
 
-/**
- * Creates a column definition with proper type tracking.
- */
 function createColumnDef<T>(type: ColumnType): ColumnDef<T, true> {
   const state: ColumnState<T> = {
     _type: undefined as T,
@@ -113,10 +86,6 @@ function createColumnDef<T>(type: ColumnType): ColumnDef<T, true> {
 
   return createBuilder<T, true>(state);
 }
-
-// ============================================================
-// Column Builder Interface
-// ============================================================
 
 /**
  * Interface for the column builder.
@@ -134,10 +103,6 @@ export interface ColumnBuilder {
   /** Timestamp column with timezone */
   timestamp(): ColumnDef<Date, true>;
 }
-
-// ============================================================
-// Global Column Builder
-// ============================================================
 
 /**
  * Global column builder for defining schemas.

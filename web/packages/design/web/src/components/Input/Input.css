@@ -1,7 +1,3 @@
-/* Input — Base UI Field behavior, thru-design look: mono + compact, strong
-   hairline, brick focus ring (inset), mono uppercase label. Matches the Field
-   styled-parts kit. */
-
 .tds-field {
   display: flex;
   flex-direction: column;
@@ -34,8 +30,7 @@
     box-shadow var(--duration-fast) var(--ease-standard);
 }
 
-/* Touch metric: 48px clears the 44px minimum hit target with the border
-   included, so an embedded surface does not have to re-pad the control. */
+/* 48px clears the 44px minimum hit target, border included. */
 .tds-input-wrap--lg {
   box-sizing: border-box;
   min-height: 48px;
@@ -43,14 +38,9 @@
 }
 
 .tds-input-wrap:focus-within {
-  border-color: var(--brick-400);
-  box-shadow: inset 0 0 0 1px var(--brick-400);
+  border-color: var(--color-border-primary);
+  box-shadow: inset 0 0 0 1px var(--color-border-primary);
 }
-
-/* No extra ring at touch size. The rule above already draws a 2px focus edge —
-   a 1px border with a 1px inset shadow flush against it, in one colour — so an
-   offset outline on top of that reads as two separate lines around the field
-   rather than one thicker one. */
 
 .tds-input-wrap[data-error] {
   border-color: var(--color-border-danger);
@@ -73,17 +63,12 @@
   color: var(--color-text-primary);
 }
 
-/* Machine-facing values stay mono (the default); prose the user typed reads
-   as body text. Mirrors the .type-ui-* / .type-body-* split. */
 .tds-input--body {
   font-family: var(--font-sans);
 }
 
-/* 16px, not the 14px the touch spec would suggest: iOS Safari auto-zooms the
-   page when a focused input is under 16px, and on a fixed-position sheet that
-   zoom pans the whole surface sideways and magnifies it. Raising the font is
-   the fix that keeps the page at scale 1 without disabling pinch-zoom via the
-   viewport meta, which would cost accessibility. */
+/* 16px: iOS Safari auto-zooms the page when a focused input is under 16px,
+   and disabling pinch-zoom in the viewport meta would cost accessibility. */
 .tds-input-wrap--lg .tds-input {
   font-size: 16px;
 }
@@ -99,9 +84,4 @@
 :where([data-theme="dark"], :root[data-theme="dark"]) .tds-input-wrap {
   background: var(--color-surface-primary);
   border-color: var(--color-border-secondary);
-}
-
-:where([data-theme="dark"], :root[data-theme="dark"]) .tds-input-wrap:focus-within {
-  border-color: var(--color-border-brand);
-  box-shadow: inset 0 0 0 1px var(--color-border-brand);
 }

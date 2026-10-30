@@ -3,7 +3,6 @@ import { cn } from "../../utils";
 import "./Stepper.css";
 
 export interface StepperProps extends React.HTMLAttributes<HTMLDivElement> {
-  /** How many steps the flow has. */
   count: number;
   /** Zero-based index of the step being shown. */
   active: number;
@@ -15,11 +14,8 @@ export interface StepperProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 /**
- * Stepper — the dot progress indicator for a short wizard: completed steps
- * dim, the current step widens into a pill, upcoming steps stay quiet.
- *
- * Renders nothing below two steps — a lone dot conveys no progress and just
- * adds a control to explain.
+ * Stepper — the dot progress indicator for a short wizard. Renders nothing
+ * below two steps.
  */
 export const Stepper = React.forwardRef<HTMLDivElement, StepperProps>(function Stepper(
   { count, active, label = "Progress", className, ...rest },

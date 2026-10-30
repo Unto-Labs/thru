@@ -1,5 +1,3 @@
-/* Popover / PreviewCard — ported from thru-design app.css, retargeted to tokens. */
-
 .tds-popover {
   background: var(--color-surface-higher);
   border: 1px solid var(--color-border-strong);
@@ -16,7 +14,6 @@
   opacity: 0;
   transform: scale(0.97);
 }
-/* Reduced motion: fade only, no zoom. */
 @media (prefers-reduced-motion: reduce) {
   .tds-popover {
     transition: opacity var(--duration-fast) var(--ease-standard);
@@ -27,9 +24,8 @@
   }
 }
 
-/* Panel variant — no chrome of its own (width / padding / border / background
-   are owned by the consumer). Only the shared entrance/exit fade so app-owned
-   popover panels animate in consistently. */
+/* No chrome: the consumer owns width, padding, border and background. Only
+   the shared entrance/exit fade lives here. */
 .tds-popover-panel {
   transition: opacity var(--duration-fast) var(--ease-standard);
 }

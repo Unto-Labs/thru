@@ -1,46 +1,7 @@
-/**
- * Hairline Grid — the design system's own geometry, animated.
- *
- * Leans only on kit primitives — `makeStyles`, the token scales and the brand
- * lockups — and keeps the kit's peer-dep discipline (see the driver note at
- * the bottom of this comment): RN `Animated` only, no reanimated.
- *
- * A full-bleed grid of 24pt cells stroked at 1px, running edge to edge (and
- * deliberately past the edges, so it reads as infinite under the safe areas).
- * A diagonal wave sweeps top-left → bottom-right filling cells; exactly one
- * cell — the wave's leading edge — is `accent` brick at a time, with a short
- * decay behind it. The brand mark is knocked out of the centre: the cells it
- * covers keep `bg` and their hairlines are suppressed, so the mark reads as a
- * hole punched in the grid rather than a badge sitting on top of it.
- *
- * `GridLoader`'s `mark` prop picks what sits in the hole. `"tile"` snaps a
- * square `BrandTile` to whole cells so the red lockup fills the punched
- * rectangle exactly, with no seam; `"wings"` centres a `WingsMark` in a hole
- * one step of air larger, keeping the paper-cutout read.
- *
- * Cheapness is the whole trick. A phone-sized grid is ~18×38 = 680 cells, and
- * 680 Views would drop frames, so this renders as ONE `react-native-svg` tree
- * of ~10 elements:
- *   - six nested fill strips (`Path`) at graded opacity — the same colour
- *     composited over itself is a no-op, so they stack into the leading
- *     opacity ramp and its mirrored trailing ramp;
- *   - two accent `Rect`s — the brick head, and the cell it just left decaying;
- *   - one stroked `Path` carrying every hairline in the grid.
- * Each strip is one rect per row (a diagonal staircase is row-decomposable),
- * so a repaint builds ~38 subpaths, not 680 — and the strings are memoised per
- * integer band index, so the loop is allocation-free after the first pass.
- * State only advances when that band index changes.
- *
- * Dependencies are react / react-native / react-native-svg only — no
- * reanimated, even though the app has it, so this stays promotable.
- * The wave is JS-driven (`useNativeDriver: false`) because it changes SVG path
- * geometry, which no natively-driven prop can express; the handoff fade and
- * the mark's settle transform are opacity/transform and run on the native
- * driver.
- */
+/* One react-native-svg tree of ~10 elements: a View per cell (~680 on a
+   phone) drops frames. */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
-  AccessibilityInfo,
   Animated,
   Easing,
   StyleSheet,
@@ -51,46 +12,30 @@ import {
 } from "react-native";
 import Svg, { Path, Rect } from "react-native-svg";
 import { font, radius, space, text } from "../tokens";
+import { useReduceMotion } from "../reduceMotion";
 import { makeStyles } from "../theme";
 import { BrandTile, WingsMark, WINGS_MARK_TRIM_ASPECT } from "../BrandTile";
 
-/** Default cell edge in pt — 24 = six steps of the kit's 4px grid. */
+/** Default cell edge in pt. */
 export const HAIRLINE_GRID_CELL = 24;
 
 /** One full sweep: the wave fills the grid and clears it again. */
 export const HAIRLINE_GRID_PERIOD_MS = 1400;
 
-/* Timing table (see the design spec):
-     wave period     1400ms   one sweep: the wave fills the grid, then clears it
-     fill ramp        180ms   per-cell opacity ramp at the wave's two edges
-     accent hold       90ms   the brick head sits on one cell this long
-     accent decay      90ms   the cell it left fades back to bgMuted
-     determinate      240ms   follow time when `progress` moves
-     handoff          240ms   grid fades to bg, mark settles to 0.96          */
 const FILL_RAMP_MS = 180;
 const ACCENT_HOLD_MS = 90;
 const DETERMINATE_FOLLOW_MS = 240;
 const HANDOFF_MS = 240;
 const HANDOFF_SCALE = 0.96;
 
-/* On a tall phone the head crosses ~54 bands in 700ms, so a literal 180ms
-   ramp would smear a quarter of the diagonal and the leading edge would stop
-   being locatable — which in turn makes the single brick cell look arbitrary
-   rather than like the wave's tip. Cap the ramp here so the edge stays a
-   legible step; small grids still get the full 180ms. */
 const MAX_RAMP_FRACTION = 0.15;
 
 const DEFAULT_MARK_SIZE = 96;
-/** Breathing room around the mark before the hole is snapped to whole cells. */
 const KNOCKOUT_PAD = space[2];
 
-/* Six strips stacked back-to-front. Because every strip paints the same fill
-   tone, the alphas compose to .18 / .41 / .65 / .84 / .96 / 1 — a smooth
-   six-step ramp with only six host elements. */
+/* The strips stack over each other, so these composite to .18 → 1. */
 const STRIP_ALPHA = [0.18, 0.28, 0.4, 0.55, 0.75, 1] as const;
 
-/* The cell the head just left starts here and decays to nothing over the next
-   hold, so exactly one cell is ever full-strength brick. */
 const ACCENT_GHOST_ALPHA = 0.5;
 
 /** A rectangle, in the grid's own coordinate space, to punch out of the grid. */
@@ -102,7 +47,7 @@ export interface HairlineGridKnockout {
 }
 
 export interface HairlineGridProps {
-  /** Cell edge in pt. Defaults to `HAIRLINE_GRID_CELL` (24). */
+  /** Cell edge in pt. Defaults to `HAIRLINE_GRID_CELL`. */
   cell?: number;
   /** 0–1. Omit for an indeterminate, looping wave. */
   progress?: number;
@@ -120,11 +65,8 @@ export interface HairlineGridProps {
 }
 
 /**
- * What sits in the knockout.
- *
- * `"tile"` — the red `BrandTile`, square and snapped to whole cells, so it
- * fills the punched rectangle exactly. `"wings"` — the monochrome `WingsMark`
- * on `bg`, floating in a hole one step of air larger than the glyph.
+ * What sits in the knockout: `"tile"` is a `BrandTile` snapped to whole
+ * cells; `"wings"` is a `WingsMark` in a padded hole.
  */
 export type GridLoaderMark = "tile" | "wings";
 
@@ -148,8 +90,6 @@ export interface GridLoaderProps {
   height?: number;
   style?: StyleProp<ViewStyle>;
 }
-
-/* ---------------------------------------------------------------- geometry */
 
 interface KnockoutCells {
   /** Half-open cell ranges: columns [c0, c1), rows [r0, r1). */
@@ -179,31 +119,26 @@ function clamp(value: number, lo: number, hi: number): number {
   return value < lo ? lo : value > hi ? hi : value;
 }
 
-/** Two decimals is well under a device pixel and keeps path strings short. */
 function fmt(value: number): string {
   const rounded = Math.round(value * 100) / 100;
   return Object.is(rounded, -0) ? "0" : String(rounded);
 }
 
 /**
- * Cell count and (non-positive) origin for one axis. One extra cell so the
- * grid always overhangs the box on both sides rather than ending in a half
- * cell at the bottom right. `GridLoader` calls this too, so the mark can be
- * snapped onto exactly the same lattice the grid is drawn on.
+ * Cell count and (non-positive) origin for one axis. `GridLoader` calls this
+ * too, so the mark snaps onto the same lattice the grid is drawn on.
  */
 function axis(extent: number, cell: number): { count: number; origin: number } {
   const count = Math.ceil(extent / cell) + 1;
   return { count, origin: (extent - count * cell) / 2 };
 }
 
-/** Snaps a coordinate onto the nearest grid line of `axis()`'s lattice. */
 function snapToLattice(value: number, origin: number, cell: number): number {
   return origin + Math.round((value - origin) / cell) * cell;
 }
 
-/* Absorbs float error when a caller hands us an already cell-aligned
-   knockout — without it, an exact boundary can land on 3.9999999 and floor to
-   the wrong cell, putting a one-cell sliver of grid under the mark. */
+/* Float error can floor an already cell-aligned edge (3.9999999) into the
+   wrong cell. */
 const SNAP_EPSILON = 1e-6;
 
 function buildGeometry(
@@ -248,12 +183,6 @@ function buildGeometry(
   };
 }
 
-/* Strip paths are a pure function of (geometry, lead, trail), so the memo
-   lives at module scope: nothing React owns gets mutated, and it stays warm
-   across remounts, so flipping away from the lab tab and back repaints
-   without rebuilding a single path string. Bounded, and cleared wholesale
-   when it overflows — the keys embed the geometry signature, so a resize
-   simply stops hitting the old entries. */
 const STRIP_CACHE_LIMIT = 2048;
 const stripCache = new Map<string, string>();
 
@@ -267,9 +196,9 @@ function stripPath(g: GridGeometry, lead: number, trail: number | null): string 
   return d;
 }
 
-/** How many bands a 180ms cell ramp spans at the wave's crossing speed. */
+/** How many bands the fill ramp spans at the wave's crossing speed. */
 function rampBands(g: GridGeometry): number {
-  const crossingMs = HAIRLINE_GRID_PERIOD_MS / 2; /* the head crosses in half a period */
+  const crossingMs = HAIRLINE_GRID_PERIOD_MS / 2;
   const wanted = Math.round((g.bands * FILL_RAMP_MS) / crossingMs);
   const cap = Math.max(1, Math.floor(g.bands * MAX_RAMP_FRACTION));
   return clamp(wanted, 1, Math.min(cap, Math.max(1, Math.floor((g.bands - 1) / 2))));
@@ -281,9 +210,6 @@ function stationCount(g: GridGeometry): number {
   return clamp(wanted, 2, Math.max(2, Math.min(g.cols, g.rows)));
 }
 
-/* Every hairline in one stroked path. Lines that would cross the knockout are
-   split around it — including the hole's own edges, so the mark reads as a
-   hole and not as a boxed-in badge. */
 function buildGridLines(g: GridGeometry): string {
   const parts: string[] = [];
   const k = g.knockout;
@@ -291,7 +217,7 @@ function buildGridLines(g: GridGeometry): string {
   const kx1 = k ? g.originX + k.c1 * g.cell : 0;
   const ky0 = k ? g.originY + k.r0 * g.cell : 0;
   const ky1 = k ? g.originY + k.r1 * g.cell : 0;
-  /* Half a cell of slop absorbs float error at the snapped hole edges. */
+  /* Absorbs float error at the snapped hole edges. */
   const eps = 0.01;
 
   for (let c = 0; c <= g.cols; c += 1) {
@@ -377,32 +303,6 @@ function stationCell(
   return { c, r };
 }
 
-/* -------------------------------------------------------------- reduce motion */
-
-/* Deliberately not exported: the loading kit has several sibling files and a
-   generically named hook would collide in the package barrel. */
-function useReduceMotion(): boolean {
-  const [reduce, setReduce] = useState(false);
-  useEffect(() => {
-    let alive = true;
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then((enabled) => {
-        if (alive) setReduce(enabled);
-      })
-      .catch(() => {
-        /* Older hosts can reject; a missing answer just means "animate". */
-      });
-    const sub = AccessibilityInfo.addEventListener("reduceMotionChanged", (enabled) => {
-      if (alive) setReduce(enabled);
-    });
-    return () => {
-      alive = false;
-      sub.remove();
-    };
-  }, []);
-  return reduce;
-}
-
 /** Measures a box once laid out, ignoring sub-pixel churn. */
 function useMeasuredBox(): [{ w: number; h: number }, (event: LayoutChangeEvent) => void] {
   const [box, setBox] = useState({ w: 0, h: 0 });
@@ -416,8 +316,6 @@ function useMeasuredBox(): [{ w: number; h: number }, (event: LayoutChangeEvent)
   }, []);
   return [box, onLayout];
 }
-
-/* ------------------------------------------------------------ HairlineGrid */
 
 export function HairlineGrid({
   cell = HAIRLINE_GRID_CELL,
@@ -436,8 +334,8 @@ export function HairlineGrid({
   const w = width ?? box.w;
   const h = height ?? box.h;
 
-  /* Depend on the knockout's numbers, not its identity, so an inline object
-     from a caller does not rebuild the geometry on every render. */
+  /* Depend on the numbers, not the identity, so an inline knockout object
+     does not rebuild the geometry every render. */
   const kx = knockout ? knockout.x : 0;
   const ky = knockout ? knockout.y : 0;
   const kw = knockout ? knockout.width : -1;
@@ -458,22 +356,13 @@ export function HairlineGrid({
   /* Lead value at which the last cell is fully solid. */
   const fillSpan = Math.max(1, bands - 1 + ramp);
 
-  /* DRIVER OWNERSHIP — `wave` is JS-driven for its entire lifetime. Both of
-     its start sites below pass `useNativeDriver: false`, and it is never put
-     in a style prop, so RN never moves it into the native graph. The handoff
-     in `GridLoader` deliberately uses a *separate* value (`settle`, always
-     native) instead of reusing this one: once RN moves a value to native it
-     can never be JS-driven again, and a later JS start throws
-     "Attempting to run JS driven animation on animated node that has been
-     moved to native". Never start `wave` with `useNativeDriver: true`. */
+  /* JS-driven only. Once RN moves a value to native it can never run a JS
+     animation again, so `GridLoader`'s handoff uses a separate value. */
   const [wave] = useState(() => new Animated.Value(0));
   const leadRef = useRef(0);
   const modeRef = useRef<boolean | null>(null);
   const [animatedLead, setAnimatedLead] = useState(0);
 
-  /* Reduce-motion's frame is a pure function of the props, so derive it rather
-     than pushing it through state from an effect — same picture, no cascading
-     render, and the animated path keeps sole ownership of `animatedLead`. */
   const lead = reduceMotion
     ? Math.round((determinate ? target : 0.5) * fillSpan)
     : animatedLead;
@@ -482,24 +371,20 @@ export function HairlineGrid({
     if (!geometry) return;
 
     if (reduceMotion) {
-      /* Static frame: a half-filled grid (or the real progress), no wave. The
-         mode is cleared so the animated path re-seeds if motion comes back. */
+      /* Cleared so the animated path re-seeds if motion comes back. */
       modeRef.current = null;
       return;
     }
 
     if (modeRef.current !== determinate) {
-      /* Crossing between modes rescales the value's meaning, so re-seed it
-         rather than animating through a nonsense intermediate frame. */
       modeRef.current = determinate;
       wave.setValue(determinate ? target : 0);
     }
 
     const listener = wave.addListener(({ value }) => {
-      /* Determinate: 0 → 1 maps onto -ramp → fillSpan, so progress 0 is a
-         truly empty grid. Indeterminate: 0 → 1 maps onto a lead that runs
-         clean off the far corner, with the trailing edge one grid behind, so
-         the loop restarts from an empty grid with no visible seam. */
+      /* Determinate maps 0 → 1 onto -ramp → fillSpan so 0 is empty.
+         Indeterminate runs the lead off the far corner so the loop restarts
+         from an empty grid. */
       const f = determinate ? value * (fillSpan + ramp) - ramp : value * 2 * bands;
       const next = Math.floor(f);
       if (next !== leadRef.current) {
@@ -533,8 +418,6 @@ export function HairlineGrid({
 
   const lines = useMemo(() => (geometry ? buildGridLines(geometry) : ""), [geometry]);
 
-  /* Six cached lookups per band change — see `stripPath`, which is where the
-     "allocation-free after the first pass" property actually lives. */
   const strips = useMemo(() => {
     if (!geometry) return [];
     const cumulative = determinate || reduceMotion;
@@ -552,15 +435,12 @@ export function HairlineGrid({
 
   const accents = useMemo(() => {
     if (!geometry) return [];
-    /* The head only exists while the wave's leading edge is on the grid. */
     const t = geometry.bands > 0 ? lead / geometry.bands : 0;
     if (t < 0 || t > 1) return [];
 
     const stations = stationCount(geometry);
     const position = t * stations;
     const index = clamp(Math.floor(position), 0, stations - 1);
-    /* How far through this cell's 90ms hold we are; the cell the head left
-       fades out across exactly that window. */
     const phase = clamp(position - index, 0, 1);
 
     const at = (i: number) => {
@@ -624,8 +504,6 @@ export function HairlineGrid({
   );
 }
 
-/* -------------------------------------------------------------- GridLoader */
-
 export function GridLoader({
   caption,
   progress,
@@ -644,17 +522,12 @@ export function GridLoader({
   const w = width ?? box.w;
   const h = height ?? box.h;
 
-  /* Where the mark sits, and what to punch out for it. The two variants want
-     different geometry, and the aspect ratio is not shared: BrandTile is
-     square, WingsMark is WINGS_MARK_TRIM_ASPECT (0.9005). */
   const layout = useMemo(() => {
     if (!(w > 0 && h > 0)) return null;
 
     if (mark === "tile") {
-      /* Round the tile to a whole number of cells and land it on the grid's
-         own lattice, so the hole and the tile are the SAME rectangle and the
-         red drops in with no seam. Snapping can move it up to half a cell off
-         true centre, which is under 12pt and reads as centred. */
+      /* Snapped to HairlineGrid's lattice so the hole and the tile are the
+         same rectangle. */
       const span = Math.max(cell, Math.round(markSize / cell) * cell);
       const rect = {
         x: snapToLattice(w / 2 - span / 2, axis(w, cell).origin, cell),
@@ -665,8 +538,6 @@ export function GridLoader({
       return { rect, knockout: rect };
     }
 
-    /* Wings: centred exactly, in a hole one step of air larger, which
-       HairlineGrid then snaps out to whole cells. */
     const markWidth = markSize * WINGS_MARK_TRIM_ASPECT;
     const rect = {
       x: (w - markWidth) / 2,
@@ -687,11 +558,8 @@ export function GridLoader({
 
   const knockout: HairlineGridKnockout | null = layout ? layout.knockout : null;
 
-  /* DRIVER OWNERSHIP — 0 = live, 1 = handed off. Opacity and transform only,
-     so `settle` is native-driven for its entire lifetime and is never handed
-     to a JS-driven animation. It is a different value from `HairlineGrid`'s
-     `wave` (always JS-driven) precisely so the two drivers can never meet on
-     one node. Never start `settle` with `useNativeDriver: false`. */
+  /* 0 = live, 1 = handed off. Native-driven only; never share it with
+     `HairlineGrid`'s JS-driven `wave`. */
   const [settle] = useState(() => new Animated.Value(0));
 
   useEffect(() => {
@@ -773,29 +641,9 @@ export function GridLoader({
   );
 }
 
-/**
- * The grid's three paints. `react-native-svg` takes plain colour strings
- * rather than styles, so they live in their own `makeStyles` sheet: every
- * per-theme decision still sits in one place at the bottom of the file and
- * still gets the hook's per-theme cache; the component just reads the strings
- * back off the sheet.
- *
- * `fill` is per-theme because the Stone ramp is not perceptually even. In
- * light, `bgMuted` over `bg` is ΔL* 3.6 — on a phone that simply does not
- * survive, and all a viewer saw was one brick square wandering graph paper,
- * which loses the entire idea of the direction; `bgInset` takes it to 10.1.
- * The same token in dark would be ΔL* 30.5, three times the light value and
- * a heavy teal wash, so dark keeps `bgMuted` at ΔL* 19.1. Equal token names
- * would look wildly unequal; these two look like the same wave.
- *
- * `line` is `borderStrong` in both, and it has to be: the ramp aliases the
- * two families, so `border` IS `bgInset` in light and IS `bgMuted` in dark —
- * i.e. the default hairline is exactly the fill colour in one theme or the
- * other, and cells dissolve into a wash the moment the wave covers them.
- * `borderStrong` is the contrastier neighbour of the fill in both directions
- * (darker in light, lighter in dark), which also keeps the hairlines the
- * loudest element and the fill the softer one, in both themes.
- */
+/* react-native-svg takes colour strings, not styles, so the paints live in
+   their own sheet. `line` cannot be `border`: it aliases the fill colour in
+   one theme or the other. */
 const useTones = makeStyles((c, theme) => ({
   fill: { color: theme.isDark ? c.bgMuted : c.bgInset },
   line: { color: c.borderStrong },

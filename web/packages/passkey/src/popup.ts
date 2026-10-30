@@ -15,9 +15,15 @@ export const PASSKEY_POPUP_REQUEST_EVENT = 'thru:passkey-popup-request';
 export const PASSKEY_POPUP_RESPONSE_EVENT = 'thru:passkey-popup-response';
 export const PASSKEY_POPUP_CHANNEL = 'thru:passkey-popup-channel';
 
+/** The WebAuthn `timeout` hint for create() and get(). Its clock starts when
+ *  the ceremony starts, not when the popup opens. */
+export const PASSKEY_CEREMONY_TIMEOUT_MS = 60000;
+
 /** How long the opener waits for a popup response, counted from when it
- *  opens the window. The popup page uses it to stay inside that window. */
-export const PASSKEY_POPUP_TIMEOUT_MS = 60000;
+ *  opens the window: a minute to start the ceremony plus the ceremony's own
+ *  timeout, so a slow passkey sheet is not closed mid-ceremony. The popup page
+ *  uses it to stay inside that window. */
+export const PASSKEY_POPUP_TIMEOUT_MS = 60000 + PASSKEY_CEREMONY_TIMEOUT_MS;
 
 export function closePopup(popup: Window | null | undefined): void {
   if (popup && !popup.closed) {

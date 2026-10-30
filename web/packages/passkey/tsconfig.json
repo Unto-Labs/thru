@@ -7,7 +7,7 @@
     "ignoreDeprecations": "6.0",
     "paths": {
       "@thru/sdk/helpers": ["../sdk/src/helpers/index.ts"],
-      "@thru/programs/passkey-manager": ["../programs/src/passkey-manager/index.ts"]
+      "@thru/programs/wallet": ["../programs/src/wallet/index.ts"]
     }
   },
   "include": ["src/**/*"],

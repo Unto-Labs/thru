@@ -3,7 +3,7 @@ import type { BatchTransport, UploadOutcome } from './buffered-queue';
 export type FetchLike = (
   input: RequestInfo | URL,
   init?: RequestInit,
-) => Promise<Pick<Response, 'ok'> & Partial<Pick<Response, 'status'>>>;
+) => Promise<Pick<Response, 'ok'> & Partial<Pick<Response, 'status' | 'body'>>>;
 export type BeaconLike = (url: string | URL, data?: BodyInit | null) => boolean;
 
 export interface HttpJsonTransportOptions {
@@ -51,6 +51,8 @@ export function createHttpJsonTransport(options: HttpJsonTransportOptions): Batc
           ...(signal ? { signal } : {}),
         };
         const response = await fetchImpl(endpoint, request);
+        // Release the document's keepalive budget even when the upload was rejected.
+        await response.body?.cancel().catch(() => {});
         if (response.ok) return 'success';
         return isPermanent(response.status) ? 'drop' : 'retry';
       } catch {

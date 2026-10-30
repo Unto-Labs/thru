@@ -1,26 +1,5 @@
-/**
- * Throughput Meter — the wait rendered as a link-quality readout.
- *
- * Instead of a spinner, each channel the app is actually blocked on gets a row:
- * a 72pt mono label, a bar of 24 discrete cells (1pt gaps, square, never a
- * continuous track), and a mono latency readout. Unknown latency prints an
- * em-dash — the meter never invents a number. `ChannelStatus` stacks the rows
- * under one plain-language phase line and over the endpoint caption.
- *
- * Motion is RN `Animated` only — the kit's peer deps are react / react-native /
- * react-native-svg, so importing react-native-reanimated here is off limits
- * even though the app ships it. Every animated property is `opacity` or
- * `translateX`, chosen so the whole file runs on the native driver: the
- * indeterminate sweep is one value driving one translated band, and the
- * completion flash is one value driving one overlay's opacity. The discrete
- * latch is a re-render, not an animated property, so it steps on a timer.
- *
- * Reduce Motion is honoured: no sweep, no flash, and indeterminate bars render
- * as a static 30% fill so the row still reads as "working, extent unknown".
- */
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
-  AccessibilityInfo,
   Animated,
   Easing,
   Text,
@@ -30,42 +9,30 @@ import {
   type ViewStyle,
 } from "react-native";
 import { font, space, text, touch } from "../tokens";
+import { useReduceMotion } from "../reduceMotion";
 import { makeStyles, useThemeColors } from "../theme";
 import { Button } from "../Button";
 import { BrandTile } from "../BrandTile";
 
-/* The kit compiles with `types: []` and no DOM lib (mobile/tsconfig.json), so
-   the timer globals React Native provides at runtime are not in the checker's
-   scope. Declaring the two we use module-locally keeps this file working under
-   both that config and an app config that does have them. */
+/* mobile/tsconfig.json has `types: []` and no DOM lib, so RN's timer globals
+   are not in scope. */
 declare function setInterval(handler: () => void, ms: number): number;
 declare function clearInterval(handle: number): void;
 
-/** Cells per bar. 24 is the spec'd width and what the label column is sized for. */
 const DEFAULT_SEGMENTS = 24;
-/** Cells lit by the indeterminate sweep band. */
 const DEFAULT_BAND = 5;
 const CELL_GAP = 1;
 const CELL_HEIGHT = 6;
-/** One full sweep, left edge to right edge. */
 const SWEEP_MS = 1100;
-/** Cadence of the determinate latch — one cell at a time. */
 const LATCH_MS = 40;
-/* 80 + 160 = the 240ms completion flash. */
 const FLASH_IN_MS = 80;
 const FLASH_OUT_MS = 160;
-/** Static stand-in for the sweep when Reduce Motion is on. */
 const REDUCED_FILL = 0.3;
 const LABEL_WIDTH = 72;
 const READOUT_WIDTH = 80;
-/** Shown until a real measurement exists. Never `0ms`. */
 const READOUT_PLACEHOLDER = "——";
 const PHASE_ENTER_MS = 220;
-/** Sweep offset between stacked rows, so they do not move as one object. */
 const SWEEP_STAGGER_MS = 140;
-/* Faceplate badge, not a splash logo: big enough to be the brand, small enough
-   that the phase line stays the first thing read. Square — `BrandTile` rounds
-   by default, and rounded corners next to hairline chrome look borrowed. */
 const MARK_SIZE = 44;
 /* Interpolation input ranges must be strictly increasing, so each step of the
    quantised sweep is a near-vertical ramp rather than a true discontinuity. */
@@ -75,29 +42,6 @@ export type MeterTone = "default" | "ok" | "error";
 
 function clamp(value: number, low: number, high: number): number {
   return Math.min(Math.max(value, low), high);
-}
-
-/** Live Reduce Motion state; starts optimistic and corrects on the first query. */
-function useReduceMotion(): boolean {
-  const [reduced, setReduced] = useState(false);
-  useEffect(() => {
-    let active = true;
-    AccessibilityInfo.isReduceMotionEnabled()
-      .then((value) => {
-        if (active) setReduced(value);
-      })
-      .catch(() => {
-        /* Best effort — if the query fails, motion stays on. */
-      });
-    const subscription = AccessibilityInfo.addEventListener("reduceMotionChanged", (value) => {
-      if (active) setReduced(value);
-    });
-    return () => {
-      active = false;
-      subscription.remove();
-    };
-  }, []);
-  return reduced;
 }
 
 export interface SegmentBarProps {
@@ -137,7 +81,6 @@ export function SegmentBar({
   const flash = useRef(new Animated.Value(0)).current;
   const previousTone = useRef<MeterTone>(tone);
 
-  /* No progress and nothing resolved yet: the band carries the motion. */
   const indeterminate = progress === undefined && tone === "default";
 
   const cellWidth = width > 0 ? Math.max((width - CELL_GAP * (segments - 1)) / segments, 1) : 0;
@@ -152,21 +95,19 @@ export function SegmentBar({
       setLatched(value);
     };
 
-    /* Indeterminate is also the reset point for a fresh attempt: cells go dark
-       and the sweep takes over, or hold a static fill under Reduce Motion. */
+    /* Indeterminate also resets the bar for a fresh attempt. */
     if (indeterminate) {
       commit(reduceMotion ? Math.round(segments * REDUCED_FILL) : 0);
       return;
     }
 
-    /* Resolved either way — the bar snaps, it does not crawl to full. */
     if (tone !== "default") {
       commit(segments);
       return;
     }
 
     const target = clamp(Math.round((progress ?? 0) * segments), 0, segments);
-    /* Cells latch. Within one attempt they never un-fill. */
+    /* Cells never un-fill within one attempt. */
     if (target <= latchedRef.current) return;
     if (reduceMotion) {
       commit(target);
@@ -201,8 +142,6 @@ export function SegmentBar({
   useEffect(() => {
     const previous = previousTone.current;
     previousTone.current = tone;
-    /* Only the transition into `ok` flashes — a bar mounted already-connected
-       stays quiet. */
     if (tone !== "ok" || previous === "ok" || reduceMotion) return;
     flash.setValue(0);
     const animation = Animated.sequence([
@@ -223,10 +162,6 @@ export function SegmentBar({
     return () => animation.stop();
   }, [flash, reduceMotion, tone]);
 
-  /* One value, quantised to the cell pitch: the band jumps cell to cell rather
-     than sliding between them, which is what keeps the bar reading as discrete
-     hardware segments. Positions run from fully off-left to fully off-right so
-     the loop restarts out of frame. */
   const sweepX = useMemo(() => {
     if (pitch <= 0) return null;
     const stops = segments + band + 1;
@@ -244,8 +179,6 @@ export function SegmentBar({
 
   const fill = tone === "error" ? colors.destructive : colors.fg;
   const showSweep = indeterminate && !reduceMotion && sweepX !== null;
-  /* The flash layer only exists in the `ok` state, so the extra cells are not
-     carried for the whole wait. */
   const showFlash = tone === "ok" && !reduceMotion;
 
   const handleLayout = (event: LayoutChangeEvent) => {
@@ -360,8 +293,7 @@ export function MeterRow({
   const colors = useThemeColors();
 
   const pending = readout === undefined || readout.length === 0;
-  /* A failed channel reports no value at all — the bar fills brick, but it did
-     not reach 100%, and announcing that it did would be a lie. */
+  /* A failed bar fills but did not reach 100%, so it announces no value. */
   const percent =
     tone === "ok"
       ? 100
@@ -398,8 +330,6 @@ export function MeterRow({
           {pending ? READOUT_PLACEHOLDER : readout}
         </Text>
       </View>
-      {/* Indented to the bar's left edge so the retry reads as belonging to
-          this channel and not to the block. */}
       {footer ? <View style={[styles.rowFooter, { marginLeft: labelWidth }]}>{footer}</View> : null}
     </View>
   );
@@ -427,18 +357,14 @@ export interface ChannelStatusProps {
   channels: readonly MeterChannel[];
   segments?: number;
   labelWidth?: number;
-  /**
-   * Opt-in brand beat: a square `BrandTile` above the phase line, on the same
-   * gutter as everything else. Off by default so the meter can be judged on
-   * its own.
-   */
+  /** Show a square `BrandTile` above the phase line. */
   mark?: boolean;
   /** Extra slot below the caption. */
   footer?: ReactNode;
   style?: StyleProp<ViewStyle>;
 }
 
-/** Phase sentence. Re-mounted by key on change, so the fade replays. */
+/** Re-mounted by key on change so the fade replays. */
 function PhaseLine({ children, reduceMotion }: { children: string; reduceMotion: boolean }) {
   const styles = useStyles();
   const enter = useRef(new Animated.Value(reduceMotion ? 1 : 0)).current;
@@ -486,8 +412,6 @@ export function ChannelStatus({
 
   return (
     <View style={[styles.status, style]}>
-      {/* Decorative: the phase line already names the product, so repeating it
-          to VoiceOver would be noise. */}
       {mark ? (
         <View
           accessible={false}
@@ -515,8 +439,6 @@ export function ChannelStatus({
             tone={channel.tone}
             segments={segments}
             labelWidth={labelWidth}
-            /* Staggered so two waiting channels read as two independent links
-               rather than one wide object. */
             sweepDelay={index * SWEEP_STAGGER_MS}
             footer={
               channel.onRetry ? (
@@ -582,8 +504,6 @@ const useStyles = makeStyles((c) => ({
   readout: {
     width: READOUT_WIDTH,
     textAlign: "right",
-    /* Medium once there is a real number to show — same advance width as the
-       regular cut, so nothing shifts when the placeholder resolves. */
     fontFamily: font.monoMedium,
     fontSize: text.sm,
     color: c.fgMuted,

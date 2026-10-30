@@ -5,12 +5,77 @@ use rand::TryRng;
 use rand::rngs::SysRng;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::path::PathBuf;
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+use std::path::{Path, PathBuf};
+use std::time::{SystemTime, UNIX_EPOCH};
 use thru_base::tn_tools::Pubkey;
 use thru_base::bootstrap_addresses as programs;
+use tokio::io::AsyncWriteExt;
 use url::Url;
 
 use crate::error::{CliError, ConfigError};
+
+pub(crate) async fn write_key_file(path: &Path, content: &str) -> Result<(), CliError> {
+    if let Some(directory) = path.parent() {
+        let mut builder = tokio::fs::DirBuilder::new();
+        builder.recursive(true);
+        #[cfg(unix)]
+        builder.mode(0o700);
+        builder
+            .create(directory)
+            .await
+            .map_err(ConfigError::DirectoryCreation)?;
+        #[cfg(unix)]
+        tokio::fs::set_permissions(directory, std::fs::Permissions::from_mode(0o700))
+            .await
+            .map_err(ConfigError::DirectoryCreation)?;
+    }
+
+    // Resolve symlinks so the atomic replacement preserves the config link.
+    let mut target = path.to_path_buf();
+    for hops in 0..=40 {
+        let metadata = match tokio::fs::symlink_metadata(&target).await {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => break,
+            Err(error) => return Err(error.into()),
+        };
+        if !metadata.file_type().is_symlink() {
+            break;
+        }
+        if hops == 40 {
+            return Err(std::io::Error::other("Config symlink chain exceeds 40 hops").into());
+        }
+        let link = tokio::fs::read_link(&target).await?;
+        target = target
+            .parent()
+            .unwrap_or_else(|| Path::new(""))
+            .join(link);
+    }
+    let nanos = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos();
+    let temp_path = target.with_extension(format!("{}.{nanos}.tmp", std::process::id()));
+
+    let mut options = tokio::fs::OpenOptions::new();
+    options.write(true).create_new(true);
+    #[cfg(unix)]
+    options.mode(0o600);
+    let mut file = options.open(&temp_path).await?;
+    let result = async {
+        file.write_all(content.as_bytes()).await?;
+        file.flush().await?;
+        file.sync_all().await?;
+        drop(file);
+        tokio::fs::rename(&temp_path, &target).await
+    }
+    .await;
+    if result.is_err() {
+        let _ = tokio::fs::remove_file(&temp_path).await;
+    }
+    result.map_err(Into::into)
+}
 
 /// Key management service for the Thru CLI
 #[derive(Debug, Clone)]
@@ -394,7 +459,7 @@ impl Config {
 
         // Save the updated config
         let updated_content = Self::generate_config_template(&config);
-        tokio::fs::write(config_path, &updated_content).await?;
+        write_key_file(config_path, &updated_content).await?;
 
         // Notify user about the migration
         if !added_fields.is_empty() {
@@ -412,7 +477,7 @@ impl Config {
     pub async fn save(&self) -> Result<(), CliError> {
         let config_path = Self::get_config_path()?;
         let config_content = Self::generate_config_template(self);
-        tokio::fs::write(&config_path, config_content).await?;
+        write_key_file(&config_path, &config_content).await?;
         Ok(())
     }
 
@@ -545,27 +610,19 @@ impl Config {
 
     /// Create the default configuration file
     pub async fn create_default_config() -> Result<(), CliError> {
-        let config_dir = Self::get_config_dir()?;
         let config_path = Self::get_config_path()?;
-
-        // Create directory if it doesn't exist
-        if !config_dir.exists() {
-            tokio::fs::create_dir_all(&config_dir)
-                .await
-                .map_err(ConfigError::DirectoryCreation)?;
-        }
 
         // Create default config
         let default_config = Config::default();
         let config_content = Self::generate_config_template(&default_config);
 
-        tokio::fs::write(&config_path, config_content).await?;
+        write_key_file(&config_path, &config_content).await?;
 
-        println!(
+        eprintln!(
             "Created default configuration at: {}",
             config_path.display()
         );
-        println!("Please edit the configuration file to set your private key and RPC endpoint.");
+        eprintln!("Please edit the configuration file to set your private key and RPC endpoint.");
 
         Ok(())
     }
@@ -695,6 +752,175 @@ impl Config {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn save_writes_through_symlinked_config() {
+        let directory = tempfile::tempdir().unwrap();
+        let real_directory = directory.path().join("real");
+        std::fs::create_dir(&real_directory).unwrap();
+        let real_path = real_directory.join("config.yaml");
+        std::fs::write(&real_path, "old\n").unwrap();
+        std::fs::set_permissions(&real_path, std::fs::Permissions::from_mode(0o644)).unwrap();
+        let cli_directory = directory.path().join("cli");
+        std::fs::create_dir(&cli_directory).unwrap();
+        let cli_link_path = cli_directory.join("config.yaml");
+        std::os::unix::fs::symlink(&real_path, &cli_link_path).unwrap();
+
+        write_key_file(&cli_link_path, "new\n").await.unwrap();
+
+        assert!(
+            std::fs::symlink_metadata(&cli_link_path)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert_eq!(std::fs::read_to_string(&real_path).unwrap(), "new\n");
+        assert_eq!(
+            std::fs::metadata(&real_path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        let entries: Vec<_> = std::fs::read_dir(&real_directory)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert_eq!(entries, vec![std::ffi::OsString::from("config.yaml")]);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn save_creates_missing_symlink_target() {
+        let directory = tempfile::tempdir().unwrap();
+        let real_directory = directory.path().join("real");
+        std::fs::create_dir(&real_directory).unwrap();
+        let real_path = real_directory.join("config.yaml");
+        let cli_link_path = directory.path().join("config.yaml");
+        std::os::unix::fs::symlink("real/config.yaml", &cli_link_path).unwrap();
+
+        write_key_file(&cli_link_path, "new\n").await.unwrap();
+
+        assert!(
+            std::fs::symlink_metadata(&cli_link_path)
+                .unwrap()
+                .file_type()
+                .is_symlink()
+        );
+        assert_eq!(std::fs::read_to_string(&real_path).unwrap(), "new\n");
+        assert_eq!(
+            std::fs::metadata(&real_path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        let entries: Vec<_> = std::fs::read_dir(&real_directory)
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert_eq!(entries, vec![std::ffi::OsString::from("config.yaml")]);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn failed_save_keeps_existing_config() {
+        if std::env::var_os("THRU_FAILED_SAVE_CHILD").is_some() {
+            // RLIMIT_FSIZE forces a write failure where an owner cannot force a chmod failure.
+            unsafe {
+                assert_ne!(libc::signal(libc::SIGXFSZ, libc::SIG_IGN), libc::SIG_ERR);
+                let limit = libc::rlimit {
+                    rlim_cur: 64,
+                    rlim_max: 64,
+                };
+                assert_eq!(libc::setrlimit(libc::RLIMIT_FSIZE, &limit), 0);
+            }
+            assert!(Config::default().save().await.is_err());
+            return;
+        }
+
+        let home = tempfile::tempdir().unwrap();
+        let path = home.path().join(".thru/cli/config.yaml");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(&path, "original keys\n").unwrap();
+
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "config::tests::failed_save_keeps_existing_config",
+                "--nocapture",
+                "--test-threads=1",
+            ])
+            .env("HOME", home.path())
+            .env("THRU_FAILED_SAVE_CHILD", "1")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "stdout: {}\nstderr: {}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(String::from_utf8_lossy(&output.stdout).contains("1 passed"));
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "original keys\n");
+        let entries: Vec<_> = std::fs::read_dir(path.parent().unwrap())
+            .unwrap()
+            .map(|entry| entry.unwrap().file_name())
+            .collect();
+        assert_eq!(entries, vec![std::ffi::OsString::from("config.yaml")]);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn test_config_file_permissions() {
+        use std::os::unix::fs::PermissionsExt;
+
+        if std::env::var_os("THRU_PERMISSIONS_CHILD").is_none() {
+            let home = tempfile::tempdir().unwrap();
+            let output = std::process::Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "config::tests::test_config_file_permissions",
+                    "--nocapture",
+                    "--test-threads=1",
+                ])
+                .env("HOME", home.path())
+                .env("THRU_PERMISSIONS_CHILD", "1")
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "stdout: {}\nstderr: {}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert!(String::from_utf8_lossy(&output.stdout).contains("1 passed"));
+            return;
+        }
+
+        Config::create_default_config().await.unwrap();
+        let directory = Config::get_config_dir().unwrap();
+        let path = Config::get_config_path().unwrap();
+        assert_eq!(
+            std::fs::metadata(&directory).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+        assert_eq!(
+            std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+
+        std::fs::set_permissions(&directory, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o644)).unwrap();
+        let config = Config::default();
+        let expected = Config::generate_config_template(&config);
+        std::fs::write(&path, format!("{}stale content", expected)).unwrap();
+        config.save().await.unwrap();
+        assert_eq!(
+            std::fs::metadata(&directory).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+        assert_eq!(
+            std::fs::metadata(&path).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), expected);
+    }
 
     #[test]
     fn system_test_program_requires_explicit_configuration() {

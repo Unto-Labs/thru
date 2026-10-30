@@ -22,18 +22,24 @@
       "types": "./web/src/index.ts",
       "import": "./web/src/index.ts"
     },
+    "./web/next-fonts": {
+      "types": "./web/src/next-fonts.ts",
+      "import": "./web/src/next-fonts.ts"
+    },
     "./web/styles.css": "./web/src/styles.css",
     "./mobile": {
       "types": "./mobile/src/index.ts",
       "import": "./mobile/src/index.ts"
     },
-    "./mobile/tokens.css": "./mobile/src/tokens.css"
+    "./assets/brand/*": "./assets/brand/*"
   },
   "files": [
     "tokens/src",
     "web/src",
     "mobile/src",
-    "assets/thrusd.svg"
+    "assets/thrusd.svg",
+    "assets/brand",
+    "fonts"
   ],
   "scripts": {
     "typecheck": "tsc --noEmit && tsc --noEmit -p mobile/tsconfig.json"

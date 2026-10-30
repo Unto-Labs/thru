@@ -1,24 +1,3 @@
-/**
- * @thru/indexer - Reusable blockchain indexing framework
- *
- * A flexible library for building backends that index Thru chain data.
- *
- * @example
- * ```ts
- * import {
- *   defineEventStream,
- *   defineAccountStream,
- *   t,
- *   Indexer,
- *   checkpointTable,
- * } from "@thru/indexer";
- * ```
- */
-
-// ============================================================
-// Schema Builder
-// ============================================================
-
 export {
   t,
   columnBuilder,
@@ -36,26 +15,13 @@ export type {
   DatabaseClient,
 } from "./schema";
 
-// Validation (for development/debugging)
 export { generateZodSchema, validateParsedData } from "./schema";
-
-// ============================================================
-// Event Streams
-// ============================================================
 
 export { defineEventStream } from "./streams";
 export type { EventStream, EventStreamDefinition } from "./streams";
 
-// ============================================================
-// Account Streams
-// ============================================================
-
 export { defineAccountStream } from "./accounts";
 export type { AccountStream, AccountStreamDefinition } from "./accounts";
-
-// ============================================================
-// Checkpoint
-// ============================================================
 
 export { checkpointTable, type Checkpoint } from "./checkpoint";
 export {
@@ -65,10 +31,6 @@ export {
   getAllCheckpoints,
   getSchemaExports,
 } from "./checkpoint";
-
-// ============================================================
-// Runtime
-// ============================================================
 
 export { Indexer, type IndexerResult } from "./runtime";
 export type {
@@ -80,8 +42,13 @@ export type {
   NormalizedIndexerError,
 } from "./runtime";
 
-// ============================================================
-// Shared Types
-// ============================================================
-
 export type { ApiConfig, StreamBatch, HookContext } from "./types";
+
+export * from "./projections/writer";
+export * from "./projections/define";
+
+export * from "./delivery/outbox";
+export { migrateProjectionStorage } from "./projections/migration";
+export { projectionStorage } from "./projections/schema";
+
+export { createPostgresClient } from "./postgres";

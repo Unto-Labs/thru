@@ -22,7 +22,6 @@ export interface ThruProviderProps {
   developerMode?: boolean;
 }
 
-/** Native wrapper around the shared wallet React controller. */
 export function ThruProvider({
   children,
   config,

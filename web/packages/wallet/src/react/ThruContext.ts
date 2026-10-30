@@ -102,6 +102,7 @@ const defaultContextValue: ThruContextValue = {
     },
     open: async () => ({ status: "cancelled" }),
     getProviders: async () => [],
+    getCryptoSources: async () => [],
     getAccountState: async () => {
       throw new Error("BrowserSDK not initialized");
     },

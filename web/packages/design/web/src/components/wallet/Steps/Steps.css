@@ -1,4 +1,3 @@
-/* Steps — progress ladder inside a quiet surface panel. */
 .tds-steps {
   display: flex;
   flex-direction: column;
@@ -54,8 +53,6 @@
   }
 }
 
-/* Reduced motion: no rotation; the ring pulses so the step still reads as
-   in progress. */
 @keyframes tds-steps-pulse {
   0%,
   100% {

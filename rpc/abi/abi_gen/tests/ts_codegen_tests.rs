@@ -1107,13 +1107,13 @@ fn test_ts_tail_typeref_struct_builders() {
 fn test_ts_fam_struct_with_trailing_typeref_builder_roundtrip() {
     let test_dir = setup_test_dir("passkey_validate_trailing_instruction_data");
     generate_ts_code_with_includes(
-        "rpc/abi/type-library/tn_passkey_manager.abi.yaml",
+        "rpc/abi/type-library/tn_wallet.abi.yaml",
         &["rpc/abi/type-library"],
         &test_dir,
     )
     .expect("Code generation failed");
 
-    let ts_file = test_dir.join("thru/program/passkey_manager/types.ts");
+    let ts_file = test_dir.join("thru/program/wallet/types.ts");
     let content = fs::read_to_string(&ts_file).expect("Failed to read passkey types.ts");
     assert!(
         content.contains("get_target_instruction(): InstructionData"),
@@ -1147,7 +1147,7 @@ import {
   PasskeyInstructionBuilder,
   ValidateArgs,
   ValidateArgsBuilder,
-} from "./thru/program/passkey_manager/types.js";
+} from "./thru/program/wallet/types.js";
 import { InstructionDataBuilder } from "./thru/common/primitives/types.js";
 
 const targetBuilder = new InstructionDataBuilder();

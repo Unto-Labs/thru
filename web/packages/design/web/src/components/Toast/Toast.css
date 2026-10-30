@@ -1,6 +1,3 @@
-/* Toast — ported from thru-design app.css, retargeted to tokens + the --space
-   scale. Dark inverse surface, accent bar by kind, animated timeout bar. */
-
 .tds-toast-viewport {
   position: fixed;
   bottom: var(--space-5);
@@ -107,8 +104,6 @@
   from { transform: scaleX(1); }
   to { transform: scaleX(0); }
 }
-/* Reduced motion: the bar stays full width and fades out over the timeout
-   instead of shrinking, so the countdown survives without movement. */
 @keyframes tds-toastbar-fade {
   from { opacity: 1; }
   to { opacity: 0; }

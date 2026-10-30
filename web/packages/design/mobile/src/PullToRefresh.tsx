@@ -1,29 +1,9 @@
-/**
- * Pull-to-refresh for a ScrollView, threshold 72 (the Activity handoff, §3).
- *
- * Native gets the platform's RefreshControl. React Native Web has no
- * RefreshControl, so on the web the hook watches touches on the scroll node
- * itself:
- * - a pull that starts at the very top moves the content down at half the
- *   finger's speed, with a spinner glyph turning in the gap above it; past
- *   72 it gives way more and more, up to 120;
- * - released past 72 it calls onRefresh, and the content holds 48 down
- *   under the kit Spinner (one turn in 1.2 s, where the platforms' sit:
- *   about 1 s on iOS, 1.33 s in Material; react-native-web's
- *   ActivityIndicator turns in 0.75 s) until `refreshing` goes back to
- *   false;
- * - released short of 72 it springs back.
- * The pull stops the browser's own overscroll for that gesture, so the page
- * neither bounces nor scrolls under it.
- *
- * The web pull writes the content's and the spinner's transforms straight
- * to their nodes, once a frame, and springs back with a CSS transition. React
- * renders only when the spinner comes and goes: an Animated value would
- * re-render the content on every touch move under react-native-web.
- *
- * The spinner goes beside the ScrollView, over its top edge, not inside the
- * content: iOS WebKit does not draw content above the start of a scroll area,
- * so a spinner hung above the content never showed there.
+/*
+ * React Native Web has no RefreshControl, so on the web the hook watches
+ * touches on the scroll node and writes transforms straight to the nodes: an
+ * Animated value would re-render the content on every touch move under RNW.
+ * The spinner sits beside the ScrollView because iOS WebKit does not draw
+ * content above the start of a scroll area.
  */
 import { useCallback, useEffect, useRef, useState, type ReactElement, type ReactNode } from "react";
 import { Platform, RefreshControl, View } from "react-native";
@@ -32,11 +12,8 @@ import { Spinner } from "./loading/MarkDrawOn";
 import { makeStyles, useThemeColors } from "./theme";
 
 export const PULL_TO_REFRESH_THRESHOLD = 72;
-/* Where the content rests while a refresh runs: the spinner's height. */
 const HOLD = 48;
 const MAX_PULL = 120;
-/* The content moves this much per point the finger moves, up to the
-   threshold. */
 const RESISTANCE = 0.5;
 const SETTLE_MS = 200;
 /* Easing.out(Easing.cubic), as CSS. */
@@ -131,7 +108,6 @@ export function usePullToRefresh({
     glyph.current = styledNode(node);
   }, []);
 
-  /* Puts the content `to` down, at once or with the settle transition. */
   const restTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const paint = useCallback((to: number, animate: boolean) => {
     const transition = animate ? `${SETTLE_MS}ms ${SETTLE_EASE}` : "";
@@ -174,7 +150,6 @@ export function usePullToRefresh({
     []
   );
 
-  /* The touch listeners for one scroll node; returns their removal. */
   const attach = useCallback(
     (node: ScrollNode) => {
       let startY: number | null = null;
@@ -238,9 +213,8 @@ export function usePullToRefresh({
     [paint]
   );
 
-  /* After every render: the ScrollView's node changes under the hook - it
-     mounts after the account restores, and a route change mounts the screen
-     anew - so the listeners follow whichever node is there now. */
+  /* After every render: the ScrollView's node changes under the hook, so the
+     listeners follow whichever node is there now. */
   const attached = useRef<{ node: ScrollNode; detach: () => void } | null>(null);
   useEffect(() => {
     const found = web && enabled
@@ -259,8 +233,6 @@ export function usePullToRefresh({
     []
   );
 
-  /* Let go once the refresh it started has finished, or straight away if it
-     never started one. */
   const sawRefreshing = useRef(false);
   useEffect(() => {
     if (!holding) {

@@ -1,13 +1,3 @@
-/**
- * Light/dark theming for the Thru Mobile kit.
- *
- * The two palettes are transcribed 1:1 from the `--tm-*` custom properties in
- * the imported Claude Design project (`design/thru-mobile.dc.html` and the
- * "Add Cash Flow" project's `CashScreen.dc.html`). `tokens.ts` keeps exporting
- * the flat light `color` object so existing call sites keep working; anything
- * that needs to follow the theme reads `useTheme()` or builds its stylesheet
- * with `makeStyles()`.
- */
 import {
   createContext,
   useContext,
@@ -29,22 +19,18 @@ export type ThemeName = "light" | "dark";
 export type ThemePreference = ThemeName | "system";
 
 export interface ThemeColors {
-  /* Surfaces */
   bg: string;
   bgMuted: string;
   bgInset: string;
   bgInverse: string;
-  /* Text */
   fg: string;
   fgMuted: string;
   fgSubtle: string;
   fgInverse: string;
   /** Pressed state for a primary (inverse) surface. */
   fgPress: string;
-  /* Lines */
   border: string;
   borderStrong: string;
-  /* Brand */
   accent: string;
   accentSoft: string;
   destructive: string;
@@ -54,16 +40,14 @@ export interface ThemeColors {
   onWarm: string;
   brickSoft: string;
   brickStrong: string;
-  /* Status */
   oceanSoft: string;
   ocean: string;
   forestSoft: string;
   forest: string;
   saffronSoft: string;
   saffron: string;
-  /** Validation red — the same bright red in both themes, per the design. */
+  /** Validation red, the same in both themes. */
   error: string;
-  /* Overlays */
   scrim: string;
   sheetShadow: string;
 }
@@ -150,8 +134,6 @@ export const themes: Record<ThemeName, Theme> = {
   dark: darkTheme,
 };
 
-/* Defaulting to light keeps components rendered outside a provider looking
-   exactly like they did before theming existed. */
 const ThemeContext = createContext<Theme>(lightTheme);
 
 export function ThemeProvider({

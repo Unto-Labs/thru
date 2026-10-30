@@ -1,8 +1,5 @@
-/**
- * Stroke icons matching the kit's style: 24-viewBox, 1.5 stroke, square caps.
- * Paths are copied from the imported design; an explicit `color` always wins,
- * otherwise the icon takes its tone from the active theme.
- */
+/* An explicit `color` always wins; otherwise an icon takes its tone from the
+   active theme. */
 import Svg, { Path, Rect, Circle } from "react-native-svg";
 import { useThemeColors } from "./theme";
 
@@ -61,7 +58,7 @@ export function IconSettings({ size = 21, color }: IconProps) {
   const c = useIconColor(color);
   return (
     <Svg {...base(size)}>
-      <Path d="M4 7h10M18 7h2M4 17h2M10 17h10" {...stroke(c)} />
+      <Path d="M3 7h11M19 7h2M3 17h2M10 17h11" {...stroke(c)} />
       <Circle cx={16} cy={7} r={2.4} {...stroke(c)} />
       <Circle cx={7} cy={17} r={2.4} {...stroke(c)} />
     </Svg>
@@ -141,7 +138,7 @@ export function IconCheck({ size = 18, color }: IconProps) {
   );
 }
 
-/** The heavier tick the design uses for confirmations and progress rows. */
+/** A heavier tick for confirmations and progress rows. */
 export function IconCheckBold({ size = 18, color }: IconProps) {
   const c = useIconColor(color, "forest");
   return (
@@ -176,7 +173,7 @@ export function IconArrowDown({ size = 18, color }: IconProps) {
   const c = useIconColor(color);
   return (
     <Svg {...base(size)}>
-      <Path d="M12 3v13M6 11l6 6 6-6" {...stroke(c)} />
+      <Path d="M12 5v13M6 13l6 6 6-6" {...stroke(c)} />
     </Svg>
   );
 }
@@ -186,7 +183,7 @@ export function IconSend({ size = 18, color }: IconProps) {
   const c = useIconColor(color);
   return (
     <Svg {...base(size)}>
-      <Path d="M7 17 17 7M8 7h9v9" {...stroke(c)} />
+      <Path d="M6 18 18 6M7 6h11v11" {...stroke(c)} />
     </Svg>
   );
 }
@@ -226,8 +223,8 @@ export function IconRefresh({ size = 16, color }: IconProps) {
   const c = useIconColor(color, "muted");
   return (
     <Svg {...base(size)}>
-      <Path d="M20 11a8 8 0 1 0-2.3 5.6" {...stroke(c, 1.8)} />
-      <Path d="M20 5v6h-6" {...stroke(c, 1.8)} />
+      <Path d="M20 12a8 8 0 1 0-2.3 5.6" {...stroke(c)} />
+      <Path d="M20 6v6h-6" {...stroke(c)} />
     </Svg>
   );
 }
@@ -252,7 +249,7 @@ export function IconWallet({ size = 21, color }: IconProps) {
   );
 }
 
-/** Card outline without the chip mark — the design's payment-method glyph. */
+/** Card outline without the chip mark: the payment-method glyph. */
 export function IconCard({ size = 18, color }: IconProps) {
   const c = useIconColor(color);
   return (
@@ -363,8 +360,7 @@ export function IconPlusSquare({ size = 21, color }: IconProps) {
   );
 }
 
-/* Receiving: the scan brackets on Home's Receive action. */
-
+/** Scanning a QR code: the viewfinder brackets. */
 export function IconScan({ size = 18, color }: IconProps) {
   const c = useIconColor(color);
   return (
@@ -375,8 +371,17 @@ export function IconScan({ size = 18, color }: IconProps) {
   );
 }
 
-/* Activity: one glyph per kind of event, from the Activity handoff
-   (design/History Row.dc.html). Each is a single stroked path. */
+/** No camera, or no access to one: the camera struck through. */
+export function IconCameraOff({ size = 18, color }: IconProps) {
+  const c = useIconColor(color);
+  return (
+    <Svg {...base(size)}>
+      <Path d="M3 7h4l2-3h6l2 3h4v13H3z" {...stroke(c)} />
+      <Circle cx={12} cy={13} r={3.5} {...stroke(c)} />
+      <Path d="M3 3l18 18" {...stroke(c)} />
+    </Svg>
+  );
+}
 
 function ActivityGlyph({ d, size, color }: IconProps & { d: string }) {
   const c = useIconColor(color);

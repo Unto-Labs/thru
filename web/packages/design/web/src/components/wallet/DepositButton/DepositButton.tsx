@@ -33,11 +33,9 @@ export interface DepositButtonProps
 
 /**
  * DepositButton — the funding entry point a host app drops next to its
- * ConnectButton (or inline, as `ghost`, next to a balance). Idle it reads
- * "Add funds" with a plus disc; while the wallet sheet is open it spins and
- * reads "Adding funds…". With `balance` the current balance trails the label
- * after a hairline. Metrics mirror ConnectButton / Button per size; the
- * reference caller is `thru.deposit({ to: account })`.
+ * ConnectButton (or inline, as `ghost`, next to a balance). Metrics mirror
+ * ConnectButton / Button per size; the reference caller is
+ * `thru.deposit({ to: account })`.
  */
 export const DepositButton = React.forwardRef<HTMLButtonElement, DepositButtonProps>(
   function DepositButton(

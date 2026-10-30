@@ -45,9 +45,7 @@ import type { TelemetryClient } from '../telemetry';
 
 export interface EmbeddedProviderConfig {
   iframeUrl?: string;
-  /** The host page's color scheme; the wallet frames draw to match. */
   theme?: WalletTheme;
-  /** The host's developer mode (see BrowserSDKConfig.developerMode). */
   developerMode?: boolean;
   addressTypes?: AddressTypeValue[];
   signingSessions?: SigningSessionDescriptorStore;
@@ -63,14 +61,9 @@ export interface ConnectOptions {
   passkeyName?: string;
   preferredAccountAddress?: string;
   intent?: ConnectRequestPayload['intent'];
-  /** The host-held restore record, for a wallet whose own store is empty. */
   restore?: WalletRestoreRecord;
 }
 
-/**
- * Main embedded provider class
- * Manages iframe lifecycle, connection state, and chain-specific interfaces
- */
 export class EmbeddedProvider {
   withNetworkOperation<T>(operation: () => Promise<T>): Promise<T> {
     return withNetworkOperation(this.iframeManager, window.location.origin, operation);
@@ -81,7 +74,6 @@ export class EmbeddedProvider {
   getNetwork() {
     return this.iframeManager.getNetwork();
   }
-  /** The provider outlives network switches, so its constructor network can be stale. */
   private depositNetwork(): ThruNetwork | undefined {
     return (this.iframeManager.getNetwork()?.id as ThruNetwork | undefined) ?? this.defaultNetwork;
   }
@@ -122,7 +114,6 @@ export class EmbeddedProvider {
       severity: 'debug',
     });
 
-    // Set up event forwarding from iframe
     this.iframeManager.onEvent = (eventType: string, payload: any) => {
       this.telemetry?.record(TELEMETRY_EVENTS.PROVIDER_EVENT_RECEIVED, {
         source: 'bridge',
@@ -167,7 +158,6 @@ export class EmbeddedProvider {
       }
     };
 
-    // Create chain instances
     const addressTypes = config.addressTypes || [AddressType.THRU];
     if (addressTypes.includes(AddressType.THRU)) {
       this._thruChain = new EmbeddedThruChain(
@@ -179,7 +169,6 @@ export class EmbeddedProvider {
     }
   }
 
-  /** Record the load-time correlation values already carried by the iframe URL. */
   primeTelemetryContext(
     appContextId: string | null,
     context: TelemetryAppContext | null,
@@ -187,20 +176,14 @@ export class EmbeddedProvider {
     this.iframeManager.primeTelemetryContext(appContextId, context);
   }
 
-  /** Set or clear the correlation label carried by wallet telemetry. */
   setTelemetryAppContextId(value: string | null): void {
     this.iframeManager.setTelemetryAppContextId(value);
   }
 
-  /** Set or clear the host-app dimensions carried by wallet telemetry. */
   setTelemetryContext(value: TelemetryAppContext | null): void {
     this.iframeManager.setTelemetryContext(value);
   }
 
-  /**
-   * Initialize the provider (must be called before use)
-   * Creates iframe and waits for it to be ready
-   */
   async initialize(): Promise<void> {
     await this.iframeManager.createIframe();
   }
@@ -209,20 +192,12 @@ export class EmbeddedProvider {
     return this.iframeManager.getWalletOrigin();
   }
 
-  /**
-   * Mount the wallet iframe inline in a container (for inline connect button).
-   */
   async mountInline(container: HTMLElement): Promise<void> {
     this.inlineMode = true;
     await this.iframeManager.mountInline(container);
   }
 
-  /**
-   * Connect to wallet
-   * Shows iframe modal and requests connection
-   */
   async connect(options?: ConnectOptions): Promise<ConnectResult & WalletRestoreEnvelope> {
-    // Emit connecting event
     this.emit(EMBEDDED_PROVIDER_EVENTS.CONNECT_START, {});
 
     try {
@@ -272,10 +247,8 @@ export class EmbeddedProvider {
         walletAddress: result.selectedAccount?.address,
       });
 
-      // Emit success event
       this.emit(EMBEDDED_PROVIDER_EVENTS.CONNECT, result);
 
-      // Hide iframe after successful connection
       if (!this.inlineMode) {
         this.iframeManager.hide();
       }
@@ -326,9 +299,6 @@ export class EmbeddedProvider {
     return state;
   }
 
-  /**
-   * Disconnect from wallet
-   */
   async disconnect(): Promise<void> {
     try {
       await this.iframeManager.sendMessage({
@@ -363,16 +333,10 @@ export class EmbeddedProvider {
     }
   }
 
-  /**
-   * Check if connected
-   */
   isConnected(): boolean {
     return this.connected;
   }
 
-  /**
-   * Get accounts
-   */
   getAccounts(): WalletAccount[] {
     return this.accounts;
   }
@@ -466,21 +430,14 @@ export class EmbeddedProvider {
     return this.iframeManager.getTheme();
   }
 
-  /** Restyle the wallet frames for a new host color scheme, without a reload. */
   setTheme(theme: WalletTheme): void {
     this.iframeManager.setTheme(theme);
   }
 
-  /** Tell the wallet frames the host's developer mode, without a reload. */
   setDeveloperMode(enabled: boolean): void {
     this.iframeManager.setDeveloperMode(enabled);
   }
 
-  /**
-   * Open the wallet's account menu inside its frame, anchored under the host's
-   * account chip. Resolves when the menu closes; a switch or an account
-   * manager run comes back with the resulting accounts.
-   */
   async openAccountMenu(
     payload: AccountMenuPayload,
   ): Promise<AccountMenuResult> {
@@ -523,10 +480,6 @@ export class EmbeddedProvider {
     }
   }
 
-  /**
-   * Derive the deposit destination inside the wallet iframe, where the selected
-   * wallet account is authoritative.
-   */
   async prepareDeposit(
     depositTargetOrPayload?:
       PrepareDepositPayload['depositTarget'] | PrepareDepositPayload,
@@ -545,12 +498,6 @@ export class EmbeddedProvider {
     return response.result;
   }
 
-  /**
-   * Open the wallet's Deposit ("Add funds") screen for a token account and
-   * resolve once the user completes or cancels the flow. The wallet runs the
-   * third-party deposit widget; crediting is authoritative on the server
-   * webhook, so the returned result only reports the terminal UX state.
-   */
   async deposit(payload: DepositRequestMessagePayload): Promise<DepositResult> {
     if (this.inlineMode) {
       this.iframeManager.showInline();
@@ -581,9 +528,6 @@ export class EmbeddedProvider {
     }
   }
 
-  /**
-   * Get Thru chain API
-   */
   get thru(): IThruChain {
     if (!this._thruChain) {
       throw new Error('Thru chain not enabled in provider config');
@@ -591,9 +535,6 @@ export class EmbeddedProvider {
     return this._thruChain;
   }
 
-  /**
-   * Event emitter: on
-   */
   on(event: string, callback: Function): void {
     if (!this.eventListeners.has(event)) {
       this.eventListeners.set(event, new Set());
@@ -601,16 +542,10 @@ export class EmbeddedProvider {
     this.eventListeners.get(event)!.add(callback);
   }
 
-  /**
-   * Event emitter: off
-   */
   off(event: string, callback: Function): void {
     this.eventListeners.get(event)?.delete(callback);
   }
 
-  /**
-   * Emit event to all listeners
-   */
   private emit(event: string, data?: any): void {
     this.eventListeners.get(event)?.forEach((callback) => {
       try {
@@ -621,17 +556,11 @@ export class EmbeddedProvider {
     });
   }
 
-  /**
-   * Get iframe manager (for chain implementations)
-   * @internal
-   */
+  /** @internal */
   getIframeManager(): IframeManager {
     return this.iframeManager;
   }
 
-  /**
-   * Destroy provider and cleanup
-   */
   destroy(): void {
     this.telemetry?.record(TELEMETRY_EVENTS.PROVIDER_DESTROYED, {
       source: 'sdk',

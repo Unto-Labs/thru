@@ -1,7 +1,3 @@
-/* Autocomplete — input with inline suggestions. Input + popup/item look
-   modeled on Select.css, ported from thru-design app.css (.input, .popup,
-   .item families), retargeted to the canonical tokens. */
-
 .tds-autocomplete-input {
   width: 320px;
   max-width: 100%;

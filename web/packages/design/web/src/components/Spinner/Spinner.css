@@ -1,6 +1,3 @@
-/* Spinner — CSS-only loading ring.
-   Ported from thru-design app.css .spinner, retargeted to canonical tokens. */
-
 .tds-spinner {
   display: inline-block;
   width: 18px;
@@ -27,8 +24,6 @@
   }
 }
 
-/* Reduced motion: no rotation; the ring breathes (a slow opacity pulse) so
-   it still reads as working. */
 @keyframes tds-spin-pulse {
   0%,
   100% {
@@ -44,7 +39,6 @@
   }
 }
 
-/* Inherit — rides on currentColor so it sits inside any button or label. */
 .tds-spinner--inherit {
   border-color: color-mix(in srgb, currentColor 28%, transparent);
   border-top-color: currentColor;

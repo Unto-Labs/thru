@@ -1,8 +1,3 @@
-/* ConnectButton — idle button rides on Button.css; the brick variant and the
-   loading cursor are the only additions. The connected chip follows the
-   Navbar status-chip recipe: mono, hairline, square. The account menu is
-   modelled on the Google account switcher, on Menu.css's item look. */
-
 .tds-connect {
   white-space: nowrap;
 }
@@ -15,7 +10,6 @@
   opacity: 1;
 }
 
-/* ── Connected chip ─────────────────────────────────────────────── */
 .tds-connect-chip {
   display: inline-flex;
   align-items: center;

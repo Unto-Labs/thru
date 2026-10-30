@@ -1,7 +1,3 @@
-/**
- * Checkpoint module exports.
- */
-
 export { checkpointTable, type Checkpoint } from "./table";
 export {
   getCheckpoint,

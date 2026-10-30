@@ -4,6 +4,7 @@ import * as React from "react";
 import { flushSync } from "react-dom";
 import { cn } from "../../utils";
 import type { ColorScheme } from "../wallet/ThemeSwitch/ThemeSwitch";
+import { THEME_MASK_IMAGE } from "./theme-mask";
 import "./ThemeToggle.css";
 
 const THEME_RETOKENIZE_MS = 1180;
@@ -80,7 +81,7 @@ export interface ColorSchemeControls {
 export function useColorScheme({
   storageKey,
   defaultScheme = "dark",
-  maskImage = "/theme-mask-placeholder-a.gif",
+  maskImage = THEME_MASK_IMAGE,
 }: UseColorSchemeOptions): ColorSchemeControls {
   const [theme, setTheme] = React.useState<ColorScheme>(defaultScheme);
   const transitionTimerRef = React.useRef<number | null>(null);
@@ -99,8 +100,9 @@ export function useColorScheme({
 
   React.useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    window.localStorage.setItem(storageKey, theme);
-  }, [storageKey, theme]);
+    // Persist only explicit toggles below: writing the default here can erase
+    // the saved choice when Strict Mode replays mount effects.
+  }, [theme]);
 
   React.useEffect(() => {
     return () => {
@@ -148,7 +150,7 @@ export function useColorScheme({
       const transitionId = transitionIdRef.current + 1;
       transitionIdRef.current = transitionId;
       root.dataset.themeTransition = "gif-mask";
-      /* The query string restarts the GIF on every switch. */
+      /* The unique URL restarts the GIF on every switch. */
       root.style.setProperty(
         "--theme-transition-mask-image",
         `url("${maskImage}?transition=${transitionId}")`,
@@ -188,10 +190,8 @@ export interface ThemeToggleProps
 }
 
 /**
- * ThemeToggle — the square Sun/Moon dark-mode switcher worn by every Thru web
- * surface. Presentational: pair it with `useColorScheme`, which owns the
- * scheme so a surface can also read it (themed assets) without a second source
- * of truth.
+ * ThemeToggle — the Sun/Moon dark-mode switcher. Presentational: pair it with
+ * `useColorScheme`, which owns the scheme.
  *
  *   const { theme, toggle } = useColorScheme({ storageKey: "thru-scan-theme" });
  *   <ThemeToggle theme={theme} onToggle={toggle} />

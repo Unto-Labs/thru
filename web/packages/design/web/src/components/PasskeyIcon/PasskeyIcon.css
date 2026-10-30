@@ -1,0 +1,8 @@
+/* PasskeyIcon — the FIDO passkey mark. Block-level so no inline baseline gap
+   pushes it off the label's centre, and never shrunk by a flex row: FIDO's
+   24 px minimum includes the file's built-in padding. */
+
+.tds-passkey-icon {
+  display: block;
+  flex: none;
+}

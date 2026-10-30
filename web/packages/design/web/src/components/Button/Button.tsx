@@ -14,13 +14,8 @@ export interface ButtonProps extends Omit<BaseButtonProps, "className"> {
 }
 
 /**
- * Button — built on Base UI's Button primitive.
- *
- * Base UI handles the behavior consistently (disabled semantics, keyboard
- * activation, `data-*` state attributes for styling, and the `render` prop
- * for polymorphism — e.g. render as a link while keeping button semantics).
- * The look is supplied by `Button.css` against the design tokens. The
- * variant/size API matches the legacy design-system so call sites migrate 1:1.
+ * Button — built on Base UI's Button primitive. Pass `render` to render as
+ * another element (e.g. a link) while keeping button semantics.
  */
 export const Button = React.forwardRef<HTMLElement, ButtonProps>(
   function Button({ variant = "primary", size = "md", className, ...props }, ref) {

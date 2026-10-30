@@ -44,6 +44,8 @@ message AccountFlags {
   bool is_deleted = 5 [(google.api.field_behavior) = REQUIRED];
   bool is_new = 6 [(google.api.field_behavior) = REQUIRED];
   bool is_compressed = 7 [(google.api.field_behavior) = REQUIRED];
+  // Raw native-receipt opt-in bit; EOAs can receive without this bit set.
+  bool is_native_receiver = 8 [(google.api.field_behavior) = REQUIRED];
 }
 
 // AccountMeta captures metadata associated with an account.

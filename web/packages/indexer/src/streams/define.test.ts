@@ -1,31 +1,23 @@
-/**
- * Unit tests for streams/define.ts
- */
-
 import { describe, it, expect, vi } from "vitest";
 import { getTableName, getTableColumns } from "drizzle-orm";
 import { defineEventStream } from "./define";
 import { t } from "../schema/builder";
 
-// Mock Filter type (simplified for testing)
 type MockFilter = { expression: string };
 
 describe("defineEventStream", () => {
-  // Basic schema for testing
   const testSchema = {
     id: t.text().primaryKey(),
     slot: t.bigint().notNull().index(),
     data: t.text(),
   };
 
-  // Mock parse function
   const mockParse = (event: any) => ({
     id: event.id,
     slot: event.slot,
     data: event.data ?? null,
   });
 
-  // Mock filter
   const mockFilter: MockFilter = { expression: "true" };
 
   describe("basic stream creation", () => {
@@ -71,7 +63,6 @@ describe("defineEventStream", () => {
         parse: mockParse,
       });
 
-      // pascalCase capitalizes each word
       expect(stream.description).toBe("TokenTransfers events");
     });
   });
@@ -160,15 +151,12 @@ describe("defineEventStream", () => {
         parse: mockParse,
       });
 
-      // Factory not called yet
       expect(factory).not.toHaveBeenCalled();
 
-      // First call
       const filter1 = stream.getFilter();
       expect(factory).toHaveBeenCalledTimes(1);
       expect(filter1).toBe(mockFilter);
 
-      // Second call uses cached value
       const filter2 = stream.getFilter();
       expect(factory).toHaveBeenCalledTimes(1);
       expect(filter2).toBe(mockFilter);

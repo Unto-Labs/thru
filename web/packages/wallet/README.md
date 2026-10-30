@@ -213,6 +213,15 @@ const config = {
 The setting is fixed for the SDK instance and propagated to the hosted wallet.
 RFC-8032 remains the default, and no automatic fallback is performed.
 
+## Breaking migration: passkey challenge signing
+
+`thru.signPasskeyChallenge` is removed from the browser and native SDKs. The
+hosted wallet also rejects raw `signPasskeyChallenge` messages from older SDKs.
+Use `thru.signTransaction(intent)` for transactions. Non-session requests show
+the transaction review sheet, and the wallet computes the passkey challenge.
+Active signing sessions continue to sign with their session key without a
+passkey prompt.
+
 ## Breaking native migration: one wallet sheet
 
 Native iOS and Android integrations now use `ThruWalletSheet` and `connect()`.

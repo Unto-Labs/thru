@@ -1,5 +1,4 @@
-/* Collapsible — ported from thru-design app.css .coll, retargeted to tokens.
-   Panel height animates via Base UI's --collapsible-panel-height. */
+/* Panel height animates via Base UI's --collapsible-panel-height. */
 
 .tds-coll__panel {
   overflow: hidden;
@@ -10,7 +9,6 @@
 .tds-coll__panel[data-ending-style] {
   height: 0;
 }
-/* Reduced motion: no height growth; the panel opens and closes at once. */
 @media (prefers-reduced-motion: reduce) {
   .tds-coll__panel {
     transition: none;

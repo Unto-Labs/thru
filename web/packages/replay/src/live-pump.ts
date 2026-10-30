@@ -12,7 +12,7 @@ export class LivePump<T> {
   private readonly keyOf: (item: T) => string;
   private readonly sourceIterator: AsyncIterator<T>;
   private readonly logger: ReplayLogger;
-  private mode: PumpMode;
+  private mode: PumpMode = "buffering";
   private minSlotSeen: Slot | null = null;
   private maxSlotSeen: Slot | null = null;
   private minEmitSlot: Slot | null = null;
@@ -26,8 +26,6 @@ export class LivePump<T> {
     slotOf: (item: T) => Slot;
     keyOf?: (item: T) => string;
     logger?: ReplayLogger;
-    startInStreamingMode?: boolean;
-    initialEmitFloor?: Slot;
   }) {
     this.maxBufferedItems = options.maxBufferedItems ?? Infinity;
     if (this.maxBufferedItems !== Infinity && (!Number.isSafeInteger(this.maxBufferedItems) || this.maxBufferedItems < 1)) throw new Error('Invalid replay buffer bound');
@@ -36,8 +34,6 @@ export class LivePump<T> {
     this.keyOf = options.keyOf ?? ((item) => options.slotOf(item).toString());
     this.logger = options.logger ?? NOOP_LOGGER;
     this.buffer = new DedupBuffer({ slotOf: this.slotOf, keyOf: this.keyOf });
-    this.mode = options.startInStreamingMode ? "streaming" : "buffering";
-    if (options.startInStreamingMode) this.minEmitSlot = options.initialEmitFloor ?? 0n;
     this.pumpPromise = this.start();
   }
 

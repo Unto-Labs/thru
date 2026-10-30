@@ -24,8 +24,8 @@ export const Popover = {
   Positioner: Base.Positioner,
   Popup: styledPart(Base.Popup, "tds-popover"),
   /* Chrome-free Popup for large bespoke panels (e.g. selectors): the consumer
-     supplies width / padding / border / background; only the shared entrance
-     fade is baked in, so app-owned panels animate in consistently. */
+     supplies width / padding / border / background; only the entrance fade is
+     baked in. */
   PanelPopup: styledPart(Base.Popup, "tds-popover-panel"),
   Title: styledPart(Base.Title, "tds-popover__title"),
   Description: styledPart(Base.Description, "tds-popover__desc"),

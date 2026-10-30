@@ -2,6 +2,8 @@ import { hexToBytes, toUint8Array } from "./utils/bytes";
 import { isNodeRuntime } from "./utils/runtime";
 import type { FormattedReflection } from "./types";
 
+const INVALID_PAYLOAD_MESSAGE = 'Invalid payload type: expected { type: "binary" | "hex", value }';
+
 type WasmReflectBindings = {
   reflect: (abi: string, typeName: string, buffer: Uint8Array) => string;
   reflect_instruction: (abi: string, buffer: Uint8Array) => string;
@@ -342,63 +344,45 @@ async function callReflectEvent(
 
 export type BinaryLike = Uint8Array | ArrayBuffer | ArrayBufferView | number[];
 
+export type ReflectRootPayload = {type: 'binary', value: BinaryLike} | {type: 'hex', value: string };
+
+function payloadBytes(payload: ReflectRootPayload): Uint8Array {
+  if (payload?.type === 'binary') return toUint8Array(payload.value);
+  if (payload?.type === 'hex') return hexToBytes(payload.value);
+  throw new Error(INVALID_PAYLOAD_MESSAGE);
+}
+
 export async function reflect(
   abiYaml: string,
   typeName: string,
-  payload: {type: 'binary', value: BinaryLike} | {type: 'hex', value: string },
+  payload: ReflectRootPayload,
 ): Promise<JsonValue> {
-  if (payload.type === 'binary') {
-    return callReflect(abiYaml, typeName, toUint8Array(payload.value));
-  }
-  if (payload.type === 'hex') {
-    return callReflect(abiYaml, typeName, hexToBytes(payload.value));
-  }
-  throw new Error(`Invalid payload type`);
+  return callReflect(abiYaml, typeName, payloadBytes(payload));
 }
 
 export async function buildLayoutIr(abiYaml: string): Promise<JsonValue> {
   return callLayoutIr(abiYaml);
 }
 
-export type ReflectRootPayload = {type: 'binary', value: BinaryLike} | {type: 'hex', value: string };
-
 export async function reflectInstruction(
   abiYaml: string,
   payload: ReflectRootPayload,
 ): Promise<JsonValue> {
-  if (payload.type === 'binary') {
-    return callReflectInstruction(abiYaml, toUint8Array(payload.value));
-  }
-  if (payload.type === 'hex') {
-    return callReflectInstruction(abiYaml, hexToBytes(payload.value));
-  }
-  throw new Error(`Invalid payload type`);
+  return callReflectInstruction(abiYaml, payloadBytes(payload));
 }
 
 export async function reflectAccount(
   abiYaml: string,
   payload: ReflectRootPayload,
 ): Promise<JsonValue> {
-  if (payload.type === 'binary') {
-    return callReflectAccount(abiYaml, toUint8Array(payload.value));
-  }
-  if (payload.type === 'hex') {
-    return callReflectAccount(abiYaml, hexToBytes(payload.value));
-  }
-  throw new Error(`Invalid payload type`);
+  return callReflectAccount(abiYaml, payloadBytes(payload));
 }
 
 export async function reflectEvent(
   abiYaml: string,
   payload: ReflectRootPayload,
 ): Promise<JsonValue> {
-  if (payload.type === 'binary') {
-    return callReflectEvent(abiYaml, toUint8Array(payload.value));
-  }
-  if (payload.type === 'hex') {
-    return callReflectEvent(abiYaml, hexToBytes(payload.value));
-  }
-  throw new Error(`Invalid payload type`);
+  return callReflectEvent(abiYaml, payloadBytes(payload));
 }
 
 export async function ensureWasmLoaded(): Promise<void> {
@@ -498,13 +482,7 @@ export async function reflectWithManifest(
   typeName: string,
   payload: ReflectRootPayload,
 ): Promise<JsonValue> {
-  if (payload.type === 'binary') {
-    return callReflectWithManifest(manifest, rootPackage, typeName, toUint8Array(payload.value));
-  }
-  if (payload.type === 'hex') {
-    return callReflectWithManifest(manifest, rootPackage, typeName, hexToBytes(payload.value));
-  }
-  throw new Error(`Invalid payload type`);
+  return callReflectWithManifest(manifest, rootPackage, typeName, payloadBytes(payload));
 }
 
 /**
@@ -515,13 +493,7 @@ export async function reflectInstructionWithManifest(
   rootPackage: string,
   payload: ReflectRootPayload,
 ): Promise<JsonValue> {
-  if (payload.type === 'binary') {
-    return callReflectInstructionWithManifest(manifest, rootPackage, toUint8Array(payload.value));
-  }
-  if (payload.type === 'hex') {
-    return callReflectInstructionWithManifest(manifest, rootPackage, hexToBytes(payload.value));
-  }
-  throw new Error(`Invalid payload type`);
+  return callReflectInstructionWithManifest(manifest, rootPackage, payloadBytes(payload));
 }
 
 /**
@@ -532,13 +504,7 @@ export async function reflectAccountWithManifest(
   rootPackage: string,
   payload: ReflectRootPayload,
 ): Promise<JsonValue> {
-  if (payload.type === 'binary') {
-    return callReflectAccountWithManifest(manifest, rootPackage, toUint8Array(payload.value));
-  }
-  if (payload.type === 'hex') {
-    return callReflectAccountWithManifest(manifest, rootPackage, hexToBytes(payload.value));
-  }
-  throw new Error(`Invalid payload type`);
+  return callReflectAccountWithManifest(manifest, rootPackage, payloadBytes(payload));
 }
 
 /**
@@ -549,13 +515,7 @@ export async function reflectEventWithManifest(
   rootPackage: string,
   payload: ReflectRootPayload,
 ): Promise<JsonValue> {
-  if (payload.type === 'binary') {
-    return callReflectEventWithManifest(manifest, rootPackage, toUint8Array(payload.value));
-  }
-  if (payload.type === 'hex') {
-    return callReflectEventWithManifest(manifest, rootPackage, hexToBytes(payload.value));
-  }
-  throw new Error(`Invalid payload type`);
+  return callReflectEventWithManifest(manifest, rootPackage, payloadBytes(payload));
 }
 
 /**

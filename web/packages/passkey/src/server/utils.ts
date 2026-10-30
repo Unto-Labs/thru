@@ -1,3 +1,4 @@
+import { StateProofType } from '@thru/sdk/proto';
 import { encodeAddress, encodeSignature } from '@thru/sdk/helpers';
 import type {
   ThruClient,
@@ -25,7 +26,7 @@ function getFeePayerQueues(): Map<string, Promise<void>> {
 export async function getStateProof(
   client: ThruClient,
   address: string,
-  proofType: number = 1,
+  proofType: number = StateProofType.CREATING,
   targetSlot?: bigint
 ): Promise<Uint8Array> {
   const proofRequest: {

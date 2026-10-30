@@ -12,7 +12,6 @@
   overflow: hidden;
   word-break: break-word;
 }
-/* The link hugs its label instead of stretching across the panel. */
 .tds-errbox__copy {
   align-self: flex-start;
 }

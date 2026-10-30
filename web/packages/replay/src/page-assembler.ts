@@ -6,7 +6,7 @@
  * for a given sequence number are received.
  */
 
-import type { AccountMeta, AccountPage } from "@thru/sdk/proto";
+import type { AccountMeta } from "@thru/sdk/proto";
 import type { AccountUpdate } from "@thru/sdk/proto";
 
 /** Standard page size for account data (4KB) */

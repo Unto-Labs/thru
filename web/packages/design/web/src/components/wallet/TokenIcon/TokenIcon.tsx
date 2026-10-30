@@ -18,10 +18,6 @@ export interface TokenIconProps {
   className?: string;
 }
 
-/**
- * TokenIcon — a circular token badge. Looks up `symbol` in the built-in
- * registry (muted Thru-palette colors); pass `color`/`glyph` to override.
- */
 export function TokenIcon({
   symbol,
   color,

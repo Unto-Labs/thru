@@ -41,7 +41,6 @@ function DetailsItem({ label, value }: DetailsItemProps) {
 /**
  * Details — a collapsible info panel of label/value rows, built on Base UI's
  * Collapsible for the open/close behavior. Use `Details.Item` for rows.
- * Presentational; data comes in via children/props.
  */
 function DetailsRoot({
   children,

@@ -1,7 +1,3 @@
-/**
- * Build Drizzle tables from schema definitions.
- */
-
 import {
   pgTable,
   text,
@@ -15,7 +11,7 @@ import {
   type ExtraConfigColumn,
   type PgTableExtraConfigValue,
 } from "drizzle-orm/pg-core";
-import type { AnyColumnDef, ColumnType, SchemaDefinition } from "./types";
+import type { ColumnType, SchemaDefinition } from "./types";
 
 export interface TableIndexDefinition<TSchema extends SchemaDefinition> {
   /** Optional database index name. A deterministic name is generated when omitted. */
@@ -43,10 +39,6 @@ export type TableExtraConfig<TSchema extends SchemaDefinition> = (
   table: { [K in keyof TSchema]: ExtraConfigColumn }
 ) => PgTableExtraConfigValue[];
 
-// ============================================================
-// Internal Types
-// ============================================================
-
 interface ColumnDefInternal {
   _type: unknown;
   _columnType: ColumnType;
@@ -59,47 +51,16 @@ interface ColumnDefInternal {
   _references?: { table: PgTableWithColumns<any>; column: string };
 }
 
-// ============================================================
-// Utilities
-// ============================================================
-
-/**
- * Convert camelCase to snake_case for database column names.
- */
 function camelToSnake(str: string): string {
   return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`);
 }
 
-// ============================================================
-// Table Builder
-// ============================================================
-
-/**
- * Build a Drizzle pgTable from a schema definition object.
- *
- * @param tableName - The database table name
- * @param schema - Schema definition object with column definitions
- * @param compositeIndexes - Multi-column indexes over plain columns
- * @param extraConfig - Checks and other extra table config, see TableExtraConfig
- * @returns A Drizzle table with proper types
- *
- * @example
- * ```ts
- * const schema = {
- *   id: t.text().primaryKey(),
- *   slot: t.bigint().notNull().index(),
- * };
- *
- * const table = buildDrizzleTable("my_events", schema);
- * ```
- */
 export function buildDrizzleTable<TSchema extends SchemaDefinition>(
   tableName: string,
   schema: TSchema,
   compositeIndexes: readonly TableIndexDefinition<TSchema>[] = [],
   extraConfig?: TableExtraConfig<TSchema>
 ): PgTableWithColumns<any> {
-  // Build column definitions
   const columns: Record<string, PgColumnBuilderBase> = {};
   const indices: Array<(table: any) => any> = [];
 
@@ -107,7 +68,6 @@ export function buildDrizzleTable<TSchema extends SchemaDefinition>(
     const internal = def as ColumnDefInternal;
     const snakeName = camelToSnake(name);
 
-    // Create the base column
     let col: PgColumnBuilderBase;
     switch (internal._columnType) {
       case "text":
@@ -129,7 +89,6 @@ export function buildDrizzleTable<TSchema extends SchemaDefinition>(
         throw new Error(`Unknown column type: ${internal._columnType}`);
     }
 
-    // Apply modifiers
     if (internal._primary) {
       col = (col as any).primaryKey();
     }
@@ -152,7 +111,6 @@ export function buildDrizzleTable<TSchema extends SchemaDefinition>(
 
     columns[name] = col;
 
-    // Track indices
     if (internal._indexed) {
       indices.push((table: any) =>
         index(`${tableName}_${snakeName}_idx`).on(table[name])
@@ -179,7 +137,6 @@ export function buildDrizzleTable<TSchema extends SchemaDefinition>(
     });
   }
 
-  // Create the table
   if (indices.length > 0 || extraConfig) {
     return pgTable(tableName, columns, (table) => [
       ...indices.map((fn) => fn(table)),

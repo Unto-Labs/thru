@@ -1,6 +1,6 @@
 import { programResources } from '@thru/programs/resources';
 import {
-  PASSKEY_MANAGER_PROGRAM_ADDRESS,
+  WALLET_PROGRAM_ADDRESS,
   base64UrlToBytes,
   buildAccountContext,
   createAuthorityRecord,
@@ -10,7 +10,7 @@ import {
   deriveWalletAddress,
   encodeCreateInstruction,
   encodeRegisterCredentialInstruction,
-} from '@thru/programs/passkey-manager';
+} from '@thru/programs/wallet';
 import {
   toThruAddress,
   getStateProof,
@@ -47,7 +47,7 @@ export async function createPasskeyWallet(opts: {
   const seed = await createWalletSeed(walletName, opts.pubkeyX, opts.pubkeyY);
   const walletBytes = await deriveWalletAddress(
     seed,
-    PASSKEY_MANAGER_PROGRAM_ADDRESS,
+    WALLET_PROGRAM_ADDRESS,
   );
   const walletAddress = toThruAddress(walletBytes);
 
@@ -68,7 +68,7 @@ export async function createPasskeyWallet(opts: {
       readWriteAccounts: [],
       readOnlyAccounts: [],
       feePayerAddress: opts.adminAddress,
-      programAddress: PASSKEY_MANAGER_PROGRAM_ADDRESS,
+      programAddress: WALLET_PROGRAM_ADDRESS,
     });
 
     const createIx = encodeCreateInstruction({
@@ -84,7 +84,7 @@ export async function createPasskeyWallet(opts: {
 
     const transaction = await opts.client.transactions.build({
       feePayer: { publicKey: opts.adminPublicKey },
-      program: PASSKEY_MANAGER_PROGRAM_ADDRESS,
+      program: WALLET_PROGRAM_ADDRESS,
       instructionData: createIx,
       accounts: {
         readWrite: accountCtx.readWriteAddresses,
@@ -116,7 +116,7 @@ export async function createPasskeyWallet(opts: {
     const credentialIdBytes = base64UrlToBytes(opts.credentialId);
     const lookupAddressBytes = await deriveCredentialLookupAddress(
       credentialIdBytes,
-      PASSKEY_MANAGER_PROGRAM_ADDRESS,
+      WALLET_PROGRAM_ADDRESS,
     );
     const lookupAddress = toThruAddress(lookupAddressBytes);
 
@@ -141,7 +141,7 @@ export async function createPasskeyWallet(opts: {
           readWriteAccounts: [lookupAddressBytes],
           readOnlyAccounts: [],
           feePayerAddress: opts.adminAddress,
-          programAddress: PASSKEY_MANAGER_PROGRAM_ADDRESS,
+          programAddress: WALLET_PROGRAM_ADDRESS,
         });
 
         const registerIx = encodeRegisterCredentialInstruction({
@@ -153,7 +153,7 @@ export async function createPasskeyWallet(opts: {
 
         const transaction = await opts.client.transactions.build({
           feePayer: { publicKey: opts.adminPublicKey },
-          program: PASSKEY_MANAGER_PROGRAM_ADDRESS,
+          program: WALLET_PROGRAM_ADDRESS,
           instructionData: registerIx,
           accounts: {
             readWrite: accountCtx.readWriteAddresses,

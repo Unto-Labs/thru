@@ -1,4 +1,3 @@
-// Main exports
 export {
   BrowserSDK,
   type BrowserSDKConfig,
@@ -35,6 +34,7 @@ export type { ActiveWalletAccounts, WalletAccountResult } from './interfaces';
 export { ErrorCode } from './protocol';
 export * from './protocol';
 export type {
+  CryptoDepositSource,
   DepositAccountState,
   DepositsApi,
   EnsureDepositAccountParams,
@@ -42,6 +42,10 @@ export type {
   WaitForDepositParams,
 } from './deposit';
 export {
+  CRYPTO_DEPOSIT_KEYS_BY_SYMBOL,
+  CRYPTO_DEPOSIT_PREFERRED_KEY,
+  CRYPTO_DEPOSIT_SOURCES,
+  CRYPTO_DEPOSIT_SYMBOLS,
   DEFAULT_DEPOSIT_SYMBOL,
   LEGACY_DEPOSIT_SYMBOL,
   normalizeDepositSymbol,

@@ -370,6 +370,7 @@ fn format_account_flags_json(
         "is_deleted": flags.is_deleted,
         "is_new": flags.is_new,
         "is_compressed": flags.is_compressed,
+        "is_native_receiver": flags.is_native_receiver,
     })
 }
 
@@ -1033,6 +1034,7 @@ mod tests {
                         is_deleted: false,
                         is_new: true,
                         is_compressed: false,
+                        is_native_receiver: false,
                     }),
                     data_size: 8,
                     seq: 9,

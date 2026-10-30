@@ -13,9 +13,6 @@ export interface UseAccountsOptions {
   onAccountSelect?: (account: WalletAccount) => void;
 }
 
-/**
- * useAccounts - Exposes connected wallet accounts and selection helpers.
- */
 export function useAccounts(options?: UseAccountsOptions): UseAccountsResult {
   const { accounts, selectedAccount, isConnected, isConnecting } = useThru();
   const externalOnSelect = options?.onAccountSelect;

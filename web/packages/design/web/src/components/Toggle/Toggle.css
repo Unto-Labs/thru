@@ -1,7 +1,5 @@
-/* Toggle + ToggleGroup — ported from thru-design app.css .toggle / .seg,
-   retargeted to tokens. State via Base UI [data-pressed]. */
+/* State via Base UI [data-pressed]. */
 
-/* ── Standalone toggle ─────────────────────────────────────── */
 .tds-toggle {
   display: inline-flex;
   align-items: center;
@@ -38,7 +36,6 @@
   cursor: not-allowed;
 }
 
-/* ── Segmented group ───────────────────────────────────────── */
 .tds-seg {
   display: inline-flex;
   border: 1px solid var(--color-border-strong);

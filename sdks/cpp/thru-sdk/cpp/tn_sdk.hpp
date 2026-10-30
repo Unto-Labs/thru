@@ -67,6 +67,8 @@ constexpr uchar TSDK_ACCOUNT_FLAG_EPHEMERAL      = 0x08U;
 constexpr uchar TSDK_ACCOUNT_FLAG_DELETED        = 0x10U;
 constexpr uchar TSDK_ACCOUNT_FLAG_NEW            = 0x20U;
 constexpr uchar TSDK_ACCOUNT_FLAG_COMPRESSED     = 0x40U;
+// Opt in to native credits; this grants no authority to spend the balance.
+constexpr uchar TSDK_ACCOUNT_FLAG_RECEIVE_NATIVE = 0x80U;
 
 // C-compatible function declarations
 extern "C" {

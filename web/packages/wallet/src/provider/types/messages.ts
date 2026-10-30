@@ -24,7 +24,6 @@ export {
   type DisconnectRequestMessage,
   type SignMessageRequestMessage,
   type SignTransactionRequestMessage,
-  type SignPasskeyChallengeRequestMessage,
   type GetAccountsRequestMessage,
   type GetSigningContextRequestMessage,
   type ManageAccountsRequestMessage,
@@ -53,7 +52,5 @@ export {
   type SignMessageResult,
   type SignTransactionPayload,
   type SignTransactionResult,
-  type SignPasskeyChallengePayload,
-  type SignPasskeyChallengeResult,
   type SigningSessionDescriptorPayload,
 } from "../../protocol";

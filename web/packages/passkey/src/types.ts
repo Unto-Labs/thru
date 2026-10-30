@@ -3,7 +3,7 @@ import type {
   PasskeySigningResult as ProgramSigningResult,
   PasskeyDiscoverableSigningResult as ProgramDiscoverableSigningResult,
   PasskeyMetadata,
-} from '@thru/programs/passkey-manager';
+} from '@thru/programs/wallet';
 import type { PasskeyCeremonyResult, PasskeyReportingOptions } from './reporter';
 
 export type PasskeyRegistrationResult = ProgramRegistrationResult & PasskeyCeremonyResult;
@@ -11,8 +11,7 @@ export type PasskeySigningResult = ProgramSigningResult & PasskeyCeremonyResult;
 export type PasskeyDiscoverableSigningResult = ProgramDiscoverableSigningResult &
   PasskeyCeremonyResult;
 
-// Re-export platform-agnostic types for backward compatibility
-export type { PasskeyMetadata } from '@thru/programs/passkey-manager';
+export type { PasskeyMetadata } from '@thru/programs/wallet';
 
 /**
  * Signing result with stored passkey metadata attached.
@@ -85,13 +84,14 @@ export interface PasskeyPopupAccount {
   publicKeyRawBase64?: string;
 }
 
-// Popup types
 export type PasskeyPopupAction = 'get' | 'create' | 'getStored';
 
 export interface PasskeyPopupGetRequestPayload {
   credentialId: string;
   challengeBase64Url: string;
   rpId: string;
+  /** Lead the popup's prompt with the hybrid (phone QR) option. */
+  preferHybrid?: boolean;
 }
 
 export interface PasskeyPopupCreateRequestPayload {

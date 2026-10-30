@@ -30,7 +30,6 @@ export interface FrameSite {
   /** Site identity mark shown before the label (a `Disc`, an `<img>`, …).
    *  Defaults to the brick Thru circle. */
   icon?: React.ReactNode;
-  /** Show a verified check badge. */
   verified?: boolean;
   /** Optional chip text, e.g. "mainnet". */
   tag?: string;
@@ -38,18 +37,10 @@ export interface FrameSite {
 
 export type FrameAnimate = "in" | "out" | false;
 
-/* How long the frame takes to ease to a new size (mirrors Frame.css). */
-const RESIZE_MS = 280;
-
 /**
- * Ease the frame between sizes when its content changes, for a frame that
- * stays mounted while screens swap inside it. The content is watched with a
- * MutationObserver (a microtask after the DOM changes, before paint), the
- * frame's height is pinned to the old value and then set to the new one so
- * the CSS transition runs; `auto` itself never animates. A ResizeObserver
- * keeps the "old" value fresh between swaps (a collapsible opening, the
- * viewport changing) and mutates nothing, so it never trips the observer
- * loop error.
+ * CSS never transitions `height: auto`, so the frame is pinned to its old
+ * height and then set to the new one. The ResizeObserver only records the
+ * height and mutates nothing, so it never trips the observer loop error.
  */
 function useAnimatedResize(
   frameRef: React.RefObject<HTMLDivElement | null>,
@@ -69,9 +60,8 @@ function useAnimatedResize(
     let settle = 0;
 
     /* WebKit keeps a scroll container's size from the pinned layout once the
-       pin is released if its content changed while pinned: the funded
-       screen, whose rows fill in mid-swap, stayed 21px short and squeezed
-       its Done button. Toggling overflow makes WebKit size it again. */
+       pin is released if its content changed while pinned. Toggling overflow
+       makes WebKit size it again. */
     const refreshScrollers = () => {
       for (const el of content.querySelectorAll<HTMLElement>("*")) {
         const overflowY = getComputedStyle(el).overflowY;
@@ -127,7 +117,7 @@ function useAnimatedResize(
       frame.style.height = `${to}px`;
       pinned = true;
       window.clearTimeout(settle);
-      settle = window.setTimeout(unpin, RESIZE_MS + 120);
+      settle = window.setTimeout(unpin, parseFloat(getComputedStyle(frame).transitionDuration) * 1000 + 120);
     };
 
     const onTransitionEnd = (event: TransitionEvent) => {
@@ -173,18 +163,15 @@ export interface FrameProps {
   /** Ease the frame to its new size when the content changes — for a frame
    *  that stays mounted while screens swap inside it. */
   animateResize?: boolean;
-  /** Active network, e.g. "Alphanet": a status line under the screens. It
-   *  sits the same distance under every screen; see Frame.css. */
+  /** Active network, e.g. "Alphanet": a status line under the screens. */
   network?: React.ReactNode;
   children: React.ReactNode;
   className?: string;
 }
 
 /**
- * Frame — the wallet chrome: a top bar with the site identity (mark, label,
- * optional verified badge + tag) and a close button, wrapping the screen
- * content and, optionally, the network status under it. Self-contained light
- * surface so it reads over a dark stage.
+ * Frame — the wallet chrome: a top bar with the site identity and a close
+ * button, wrapping the screen content.
  */
 export const Frame = React.forwardRef<HTMLDivElement, FrameProps>(
   function Frame(

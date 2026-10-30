@@ -11,7 +11,6 @@ const ChevronRight = (p: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
-/* Nesting depth drives the indent (18px per level past the first). */
 const DepthContext = React.createContext(0);
 
 function useIndent(depth: number) {
@@ -23,9 +22,7 @@ function useIndent(depth: number) {
   } as React.CSSProperties;
 }
 
-/* ── Section ──────────────────────────────────────────────────────── */
 export interface TxTreeSectionProps {
-  /** Row label (mono). */
   label: React.ReactNode;
   /** Right-aligned meta, e.g. "7 fields", "64 B". */
   meta?: React.ReactNode;
@@ -46,8 +43,7 @@ export interface TxTreeSectionProps {
 }
 
 /**
- * A collapsible node. Nest freely: each level indents 18px further and the
- * chevron turns as it opens. Built on Base UI `Collapsible`.
+ * A collapsible node; nest freely. Built on Base UI `Collapsible`.
  */
 function Section({
   label,
@@ -90,14 +86,13 @@ function Section({
   );
 }
 
-/* ── Leaf rows ────────────────────────────────────────────────────── */
 export interface TxTreeRowProps {
   label: React.ReactNode;
   value: React.ReactNode;
   className?: string;
 }
 
-/** A key / value leaf (mono 11px): dim label on the left, value on the right. */
+/** A key / value leaf: label on the left, value on the right. */
 function Row({ label, value, className }: TxTreeRowProps) {
   return (
     <div className={cn("tds-txtree__row", className)}>
@@ -107,7 +102,6 @@ function Row({ label, value, className }: TxTreeRowProps) {
   );
 }
 
-/** A group of leaf rows with the design's 5px rhythm. */
 function Rows({ children, className }: { children: React.ReactNode; className?: string }) {
   return <div className={cn("tds-txtree__rows", className)}>{children}</div>;
 }
@@ -165,8 +159,7 @@ export interface TxTreePreProps {
 }
 
 /**
- * Preformatted decoded data in a box that scrolls sideways (never wraps):
- * the thin scrollbar is the affordance for wide rows.
+ * Preformatted decoded data in a box that scrolls sideways (never wraps).
  */
 function Pre({ children, className }: TxTreePreProps) {
   return (
@@ -192,7 +185,6 @@ function Bytes({ hex, copyLabel = "Copy raw bytes" }: TxTreeBytesProps) {
   );
 }
 
-/* ── Root ─────────────────────────────────────────────────────────── */
 export interface TxTreeProps {
   children: React.ReactNode;
   className?: string;

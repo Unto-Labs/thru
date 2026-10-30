@@ -1,9 +1,3 @@
-/* Chain / token registry — muted, on-brand Thru-palette colors (from
-   thru-design). ChainIcon, TokenIcon, and Balance look up here so badges read
-   on-palette by default; callers can still override color/glyph per instance.
-   Chains that ship a brand logo carry it as `logo` (a data URI) and ChainIcon
-   draws that instead of the glyph disc. */
-
 import { NETWORK_LOGOS } from "./assets/logos";
 
 export interface AssetMeta {

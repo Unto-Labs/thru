@@ -5,8 +5,8 @@
  * A scrim that does what the close button does is a second control with the
  * same name, so it is hidden: pointer users still tap it, everyone else uses
  * the close button, Escape or the system back. A scrim that does something
- * the close button does not (Send keeps the draft; its X discards it) is a
- * named button so screen-reader users can reach that action.
+ * the close button does not is a named button so screen-reader users can
+ * reach that action.
  *
  * Hiding has to differ per platform:
  * - react-native-web drops `accessible`, `importantForAccessibility` and

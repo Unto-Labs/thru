@@ -1,5 +1,4 @@
-/* NavigationMenu — ported from thru-design app.css .navmenu, retargeted to tokens.
-   Popup enter/exit via Base UI's [data-starting-style] / [data-ending-style]. */
+/* Popup enter/exit via Base UI's [data-starting-style] / [data-ending-style]. */
 
 .tds-navmenu__list {
   display: flex;
@@ -47,7 +46,6 @@
   opacity: 0;
   transform: translateY(-4px);
 }
-/* Reduced motion: fade only, no drop. */
 @media (prefers-reduced-motion: reduce) {
   .tds-navmenu__popup {
     transition: opacity var(--duration-fast) var(--ease-standard);

@@ -1,26 +1,8 @@
-/**
- * The sheet with detents, and the parts it is built from (the Activity sheet
- * handoff; design/Activity Detail Sheet.dc.html, spec §03 and §04):
- * - DetentSheet: a bottom sheet that rests at half or full height. It is the
- *   Sheet's detents variant.
- *   - Dragging the grabber, the header, or the body (clipped at half) moves
- *     it 1:1, and at 0.3× past full.
- *   - Letting go snaps it in 320 ms or dismisses it (sheetDetents.ts).
- *   - The scrim follows the sheet, from 40 % at half to 64 % at full.
- *   - The footer stays pinned at the bottom of the screen at every detent.
- *   - From 840 wide on the web it is the kit Sheet's centred 480 dialog
- *     instead, with no detents.
- * - SheetHeader, IconButton, SheetFooter: its pieces; the grabber is its
- *   own.
- * - DetailPanel: the same content as a 440 column at the right of a wide
- *   web layout. It is not modal.
- */
 import { useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
 import {
   Animated,
   Easing,
   Modal,
-  PanResponder,
   Platform,
   Pressable,
   ScrollView,
@@ -38,7 +20,7 @@ import { IconTile, type IconTileTone } from "./Activity";
 import { Skeleton } from "./Bits";
 import { safeAreaBottomInset } from "./Chrome";
 import type { IconProps } from "./Icons";
-import { useReduceMotion } from "./motion";
+import { isReduceMotionEnabled, useReduceMotion } from "./reduceMotion";
 import { SHEET_DURATION_MS, Sheet, isSheetDialog } from "./Sheet";
 import { scrimAccessibilityProps } from "./scrimAccessibilityProps";
 import {
@@ -49,10 +31,11 @@ import {
   releaseTarget,
   sheetGeometry,
   type SheetDetent,
-  type SheetGeometry,
 } from "./sheetDetents";
 import { font, radius, text, touch } from "./tokens";
 import { makeStyles, useThemeColors } from "./theme";
+import { useSheetGesture } from "./useSheetGesture";
+import { SheetGrabberBar, useSheetGrabberStyles } from "./SheetGrabber";
 
 const IS_WEB = Platform.OS === "web";
 const CURVE = Easing.bezier(0.2, 0.8, 0.2, 1);
@@ -60,6 +43,7 @@ const FADE_MS = 200;
 
 export interface DetentSheetProps {
   visible: boolean;
+  swipeDismissible?: boolean;
   /** One sentence for assistive tech: "Sent, −$10.00, Completed". */
   accessibilityLabel: string;
   detent: SheetDetent;
@@ -83,6 +67,7 @@ export interface DetentSheetProps {
 
 export function DetentSheet({
   visible,
+  swipeDismissible = true,
   accessibilityLabel,
   detent,
   onDetentChange,
@@ -97,18 +82,16 @@ export function DetentSheet({
   const styles = useStyles();
   const { width, height } = useWindowDimensions();
   const isDialog = isSheetDialog(width, "adaptive", dialogMinWidth);
-  /* The status bar's height. The web reads env(safe-area-inset-top) off an
-     empty view that tall (rendered below), since a drag needs it as a
-     number; native takes it from the caller, as the kit Sheet does. */
+  /* The web reads env(safe-area-inset-top) off an empty view that tall
+     (rendered below), since a drag needs it as a number. */
   const [webSafeTop, setWebSafeTop] = useState(0);
   const safeTop = IS_WEB ? webSafeTop : (topInset ?? 0);
   const geometry = useMemo(() => sheetGeometry(height, safeTop), [height, safeTop]);
   const reduceMotion = useReduceMotion();
-  /* For the drag's handlers, which are made once. */
-  const reduceMotionRef = useRef(reduceMotion);
-  reduceMotionRef.current = reduceMotion;
 
   const [mounted, setMounted] = useState(visible);
+  const panelRef = useRef<View>(null);
+  const dismiss = () => { if (visible) onDismiss(); };
   const top = useRef(new Animated.Value(geometry.closedTop)).current;
   /* Opacity: the reduce-motion fades in and out. */
   const fade = useRef(new Animated.Value(0)).current;
@@ -117,8 +100,6 @@ export function DetentSheet({
   geometryRef.current = geometry;
   const detentRef = useRef(detent);
   detentRef.current = detent;
-  const callbacks = useRef({ onDetentChange, onDismiss });
-  callbacks.current = { onDetentChange, onDismiss };
 
   const run = (animation: Animated.CompositeAnimation, done?: () => void) => {
     animation.start(({ finished }) => {
@@ -128,7 +109,6 @@ export function DetentSheet({
   const slide = (to: number, ms: number, done?: () => void) =>
     run(Animated.timing(top, { toValue: to, duration: ms, easing: CURVE, useNativeDriver: false }), done);
 
-  /* Open and close. */
   useEffect(() => {
     if (visible) setMounted(true);
   }, [visible]);
@@ -158,9 +138,8 @@ export function DetentSheet({
     /* Open and close only; the effect below moves it between detents. */
   }, [isDialog, mounted, visible]);
 
-  /* The window resized (rotation, a browser bar) or the web inset arrived:
-     move to where the detent now sits. Only when that moved: setValue stops
-     a running animation, so a no-op here would cut the open slide short. */
+  /* Only when the detent moved: setValue stops a running animation, so a
+     no-op here would cut the open slide short. */
   const lastGeometry = useRef(geometry);
   useEffect(() => {
     const before = lastGeometry.current;
@@ -170,71 +149,54 @@ export function DetentSheet({
     if (target !== detentTop(detentRef.current, before)) top.setValue(target);
   }, [geometry]);
 
-  /* Moves between detents: a 320 ms slide, or at once under Reduce Motion. */
   const snapTo = (target: SheetDetent) => {
     const to = detentTop(target, geometryRef.current);
-    if (reduceMotionRef.current) top.setValue(to);
+    if (isReduceMotionEnabled()) top.setValue(to);
     else slide(to, SHEET_SNAP_MS);
   };
 
-  /* Snaps to `target` and reports a new detent: a drag's release, and the
-     grabber's tap, so expanding never needs a drag. */
   const lastDetent = useRef(detent);
   const settleAt = (target: SheetDetent) => {
     snapTo(target);
     if (target !== detentRef.current) {
       lastDetent.current = target;
-      callbacks.current.onDetentChange(target);
+      onDetentChange(target);
     }
   };
 
-  /* A detent set from outside: the Transaction details row raising it.
-     settleAt has already moved to the detents it reports. */
+  /* A detent set from outside. settleAt has already moved to the detents it
+     reports. */
   useEffect(() => {
     const moved = lastDetent.current !== detent;
     lastDetent.current = detent;
     if (moved && mounted && visible) snapTo(detent);
   }, [detent]);
 
-  /* The drag. */
   const scrollY = useRef(0);
-  const drag = useRef({ start: 0, from: "half" as SheetDetent });
-  const responder = (surface: "handle" | "body") =>
-    PanResponder.create({
-      onMoveShouldSetPanResponderCapture: (_event, g) => {
-        const vertical = Math.abs(g.dy) > 6 && Math.abs(g.dy) > Math.abs(g.dx);
-        if (!vertical) return false;
-        if (surface === "handle" || detentRef.current === "half") return true;
-        /* At full, the body scrolls; only a pull down from its top moves the
-           sheet. */
-        return g.dy > 0 && scrollY.current <= 0;
-      },
-      onPanResponderGrant: () => {
-        top.stopAnimation((start) => {
-          drag.current = { start, from: detentRef.current };
-        });
-      },
-      onPanResponderMove: (_event, g) => {
-        top.setValue(dragTop(drag.current.start, g.dy, geometryRef.current));
-      },
-      onPanResponderRelease: (_event, g) => {
-        const target = releaseTarget({
-          top: dragTop(drag.current.start, g.dy, geometryRef.current),
-          velocity: g.vy,
-          from: drag.current.from,
-          geometry: geometryRef.current,
-        });
-        if (target === "dismiss") callbacks.current.onDismiss();
-        else settleAt(target);
-      },
-      onPanResponderTerminate: () => {
-        snapTo(detentRef.current);
-      },
-      onPanResponderTerminationRequest: () => false,
-    });
-  /* Made once: everything they read is a ref or the stable `top`. */
-  const handleResponder = useMemo(() => responder("handle"), []);
-  const bodyResponder = useMemo(() => responder("body"), []);
+  const gesture = useSheetGesture({
+    position: top,
+    panelRef,
+    enabled: swipeDismissible,
+    active: mounted && visible && !isDialog,
+    canClaim: (surface, g) => {
+      if (surface === "header" || detentRef.current === "half") return true;
+      /* At full, the body scrolls; only a pull down from its top moves the sheet. */
+      return g.dy > 0 && scrollY.current <= 0;
+    },
+    snapshot: (start) => ({ start, from: detentRef.current }),
+    dragPosition: (drag, dy) => dragTop(drag.start, dy, geometryRef.current),
+    releaseTarget: (drag, g) => releaseTarget({
+      top: dragTop(drag.start, g.dy, geometryRef.current),
+      velocity: g.vy,
+      from: drag.from,
+      geometry: geometryRef.current,
+    }),
+    settle: settleAt,
+    cancel: () => snapTo(detentRef.current),
+    onDismiss: dismiss,
+  });
+
+  useEffect(() => { gesture.cancel(); }, [geometry, detent, reduceMotion, gesture]);
 
   const [footerHeight, setFooterHeight] = useState(0);
   const onFooterLayout = (event: LayoutChangeEvent) => setFooterHeight(event.nativeEvent.layout.height);
@@ -246,6 +208,7 @@ export function DetentSheet({
     return (
       <Sheet
         visible={visible}
+        swipeDismissible={swipeDismissible}
         title={accessibilityLabel}
         accessibilityLabel={accessibilityLabel}
         headerContent={header}
@@ -277,7 +240,7 @@ export function DetentSheet({
   });
 
   return (
-    <Modal visible transparent animationType="none" onRequestClose={onDismiss}>
+    <Modal visible transparent animationType="none" onRequestClose={dismiss}>
       {IS_WEB ? (
         <View
           pointerEvents="none"
@@ -285,22 +248,21 @@ export function DetentSheet({
           onLayout={(event) => setWebSafeTop(event.nativeEvent.layout.height)}
         />
       ) : null}
-      <Animated.View style={[styles.scrim, { opacity: scrimOpacity }]}>
+      <Animated.View style={[styles.scrim, { opacity: reduceMotion ? Animated.multiply(scrimOpacity, fade) : scrimOpacity }]}>
         {/* It does what the header's Close does, so it is hidden from
             assistive tech and the keyboard; pointers still tap it. */}
-        <Pressable {...scrimAccessibilityProps(IS_WEB)} style={styles.fill} onPress={onDismiss} />
+        <Pressable {...scrimAccessibilityProps(IS_WEB)} style={styles.fill} onPress={dismiss} />
       </Animated.View>
-      {/* The dialog holds the panel and its pinned footer together, so
-          VoiceOver's modal scope and the web's aria-modal both reach "View
-          on ThruScan". It passes touches on to the scrim where it has
-          nothing. */}
+      {/* Holds the panel and its pinned footer together so VoiceOver's modal
+          scope and aria-modal both reach the footer. */}
       <View
+        ref={panelRef}
         accessibilityLabel={accessibilityLabel}
         accessibilityViewIsModal
-        onAccessibilityEscape={onDismiss}
+        onAccessibilityEscape={dismiss}
         aria-modal
         role="dialog"
-        pointerEvents="box-none"
+        pointerEvents={visible ? "box-none" : "none"}
         style={styles.dialogLayer}
       >
       <Animated.View
@@ -310,18 +272,18 @@ export function DetentSheet({
             top: geometry.fullTop,
             height: panelHeight,
             opacity: fade,
-            transform: [{ translateY: Animated.subtract(top, geometry.fullTop) }],
+            transform: [{ translateY: reduceMotion ? detentTop(detent, geometry) - geometry.fullTop : Animated.subtract(top, geometry.fullTop) }],
           },
         ]}
       >
-        <View style={styles.handle} {...handleResponder.panHandlers}>
+        <View style={styles.handle} {...gesture.header.panHandlers}>
           <SheetGrabber
             expanded={detent === "full"}
             onPress={() => settleAt(detent === "full" ? "half" : "full")}
           />
           {header}
         </View>
-        <View style={styles.fill} {...bodyResponder.panHandlers}>
+        <View style={styles.fill} {...gesture.body.panHandlers}>
           <ScrollView
             scrollEnabled={detent === "full"}
             onScroll={onScroll}
@@ -336,7 +298,7 @@ export function DetentSheet({
       </Animated.View>
       <Animated.View
         onLayout={onFooterLayout}
-        style={[styles.footerLayer, { opacity: fade, transform: [{ translateY: footerShift }] }]}
+        style={[styles.footerLayer, { opacity: fade, transform: [{ translateY: reduceMotion ? 0 : footerShift }] }]}
       >
         {footer}
       </Animated.View>
@@ -345,53 +307,25 @@ export function DetentSheet({
   );
 }
 
-/** The 36×4 pill in its 16 zone over the header, and a button that
-    expands or collapses the sheet: on a short phone the body's own expand
-    row can sit behind the pinned footer at half height, and assistive tech
-    cannot drag. */
+/** The grabber, also a button that expands or collapses the sheet:
+    assistive tech cannot drag. */
 function SheetGrabber({ expanded, onPress }: { expanded: boolean; onPress: () => void }) {
-  const styles = useStyles();
+  const styles = useSheetGrabberStyles();
   return (
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={expanded ? "Collapse" : "Expand"}
-      accessibilityState={{ expanded }}
+      aria-expanded={expanded}
       hitSlop={{ top: 8, bottom: 8 }}
       onPress={onPress}
       style={styles.grabberZone}
     >
-      <View style={styles.grabber} />
+      <SheetGrabberBar />
     </Pressable>
   );
 }
 
-/** A plain 44 icon button, as in the kit's sheet headers. */
-export function IconButton({
-  icon: Icon,
-  accessibilityLabel,
-  onPress,
-  color,
-}: {
-  icon: ComponentType<IconProps>;
-  accessibilityLabel: string;
-  onPress: () => void;
-  color?: string;
-}) {
-  const styles = useStyles();
-  const colors = useThemeColors();
-  return (
-    <Pressable
-      accessibilityLabel={accessibilityLabel}
-      accessibilityRole="button"
-      onPress={onPress}
-      style={({ pressed }) => [styles.iconButton, pressed ? { backgroundColor: colors.bgMuted } : null]}
-    >
-      <Icon size={20} color={color ?? colors.fgMuted} />
-    </Pressable>
-  );
-}
-
-/** A detail sheet's 52 header: the kind's tile and name, then its actions,
+/** A detail sheet's header: the kind's tile and name, then its actions,
     over a hairline. `loading` draws the tile and title as skeletons. */
 export function SheetHeader({
   icon,
@@ -429,8 +363,8 @@ export function SheetHeader({
   );
 }
 
-/** The action row pinned under a sheet's body: a hairline, 12 above, 16 at
-    the sides, then the safe area (16 in a panel or dialog). */
+/** The action row pinned under a sheet's body, then the safe area, or a
+    fixed inset in a panel or dialog. */
 export function SheetFooter({ children, inset = "safe-area" }: { children: ReactNode; inset?: "safe-area" | "panel" }) {
   const styles = useStyles();
   return (
@@ -441,10 +375,9 @@ export function SheetFooter({ children, inset = "safe-area" }: { children: React
   );
 }
 
-/** The detail as a 440 column at the right of a wide web layout: header,
-    a scrolling body and a pinned footer, a hairline at its left. Opening and
-    closing animate its width over 320 ms, so the column beside it gives way
-    and comes back. */
+/** The detail as a column at the right of a wide web layout. Opening and
+    closing animate its width, so the column beside it gives way and comes
+    back. */
 export function DetailPanel({
   open,
   closing = false,
@@ -470,11 +403,17 @@ export function DetailPanel({
   style?: StyleProp<ViewStyle>;
 }) {
   const styles = useStyles();
+  const reduceMotion = useReduceMotion();
   const width = useRef(
     new Animated.Value(closing || (open && !opening) ? DETAIL_PANEL_WIDTH : 0),
   ).current;
   const [shown, setShown] = useState(open || closing);
   useEffect(() => {
+    if (reduceMotion) {
+      width.setValue(open ? DETAIL_PANEL_WIDTH : 0);
+      setShown(open);
+      return;
+    }
     if (open) setShown(true);
     const animation = Animated.timing(width, {
       toValue: open ? DETAIL_PANEL_WIDTH : 0,
@@ -486,7 +425,7 @@ export function DetailPanel({
       if (finished && !open) setShown(false);
     });
     return () => animation.stop();
-  }, [open, width]);
+  }, [open, reduceMotion, width]);
   if (!shown) return null;
   return (
     <Animated.View style={[styles.panelColumn, { width }, style]}>
@@ -529,9 +468,6 @@ const useStyles = makeStyles((c) => ({
   /* The drag surface: a mouse drag must not select the title. */
   handle: { userSelect: "none" } as object,
   dialogLayer: { ...StyleSheet.absoluteFillObject },
-  grabberZone: { height: 16, alignItems: "center", justifyContent: "center" },
-  grabber: { width: 36, height: 4, borderRadius: 2, backgroundColor: c.borderStrong },
-  iconButton: { width: touch.hitMin, height: touch.hitMin, alignItems: "center", justifyContent: "center" },
   header: {
     height: touch.navH,
     flexDirection: "row",

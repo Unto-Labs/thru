@@ -26,8 +26,6 @@ export type {
   IThruChain,
   SignMessageParams,
   SignMessageResult,
-  ThruPasskeyChallengeIntent,
-  ThruPasskeyChallengeSignature,
   ThruSigningContext,
   ThruSigningSession,
   ThruSigningSessionCreateOptions,

@@ -173,6 +173,7 @@ message StreamBlocksResponse {
 //   snapshot.meta.flags.is_uncompressable (bool), snapshot.meta.flags.is_ephemeral (bool),
 //   snapshot.meta.flags.is_deleted (bool), snapshot.meta.flags.is_new (bool),
 //   snapshot.meta.flags.is_compressed (bool),
+//   snapshot.meta.flags.is_native_receiver (bool),
 //   snapshot.meta.owner, snapshot.meta.owner.value (bytes)
 //
 // Available account_update fields (AccountUpdate):
@@ -185,6 +186,7 @@ message StreamBlocksResponse {
 //   account_update.meta.flags.is_uncompressable (bool), account_update.meta.flags.is_ephemeral (bool),
 //   account_update.meta.flags.is_deleted (bool), account_update.meta.flags.is_new (bool),
 //   account_update.meta.flags.is_compressed (bool),
+//   account_update.meta.flags.is_native_receiver (bool),
 //   account_update.meta.owner, account_update.meta.owner.value (bytes)
 //
 // Available unified fields (work for both snapshot and update messages):
@@ -300,10 +302,10 @@ message BlockFinished {
   // Increments when accounts are deleted or compressed.
   uint64 global_deactivated_state_counter = 3 [(google.api.field_behavior) = REQUIRED];
   // Fees credited to the absent-block-producer fee receiver this block
-  // because the block producer account was not live (UNTO-1293). Field
-  // number unchanged (4).
+  // because no eligible producer exists (absent/non-live or live but
+  // receipt-ineligible). Field number unchanged (4).
   uint64 absent_block_producer_fees = 4 [(google.api.field_behavior) = REQUIRED];
-  // Fees credited to a live block-producer account this block. Disjoint from
+  // Fees credited to an eligible block-producer account this block. Disjoint from
   // absent_block_producer_fees by destination; total block fees =
   // absent_block_producer_fees + claimed_fees.
   uint64 claimed_fees = 5 [(google.api.field_behavior) = REQUIRED];
@@ -670,8 +672,8 @@ message StreamSlotMetricsResponse {
   // Global counter tracking total deactivated state across all accounts.
   uint64 global_deactivated_state_counter = 3 [(google.api.field_behavior) = REQUIRED];
   // Fees credited to the absent-block-producer fee receiver this block
-  // because the block producer account was not live (UNTO-1293). Field
-  // number unchanged (4).
+  // because no eligible producer exists (absent/non-live or live but
+  // receipt-ineligible). Field number unchanged (4).
   uint64 absent_block_producer_fees = 4 [(google.api.field_behavior) = REQUIRED];
   // Block timestamp.
   google.protobuf.Timestamp block_timestamp = 5 [(google.api.field_behavior) = REQUIRED];
@@ -679,7 +681,7 @@ message StreamSlotMetricsResponse {
   uint64 consumed_compute_units = 6 [(google.api.field_behavior) = REQUIRED];
   // Total state units consumed across all transactions in this block.
   uint32 consumed_state_units = 7 [(google.api.field_behavior) = REQUIRED];
-  // Fees credited to a live block-producer account this block. Disjoint from
+  // Fees credited to an eligible block-producer account this block. Disjoint from
   // absent_block_producer_fees by destination; total block fees =
   // absent_block_producer_fees + claimed_fees.
   uint64 claimed_fees = 8 [(google.api.field_behavior) = REQUIRED];

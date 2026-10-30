@@ -1,5 +1,3 @@
-/* Tooltip — dark inverse surface, mono, ported from thru-design app.css. */
-
 .tds-tooltip {
   background: var(--color-surface-lower-inverse);
   color: var(--color-text-primary-inverse);

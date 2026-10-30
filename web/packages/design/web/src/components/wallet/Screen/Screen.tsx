@@ -23,24 +23,19 @@ export type ScreenHeaderSize = "md" | "lg";
 export interface ScreenHeaderProps {
   /** Centered badge glyph; defaults to an info icon. */
   icon?: React.ReactNode;
-  /**
-   * Badge treatment. `neutral` is the quiet surface pill, `success` the
-   * grass pill, `danger` the brick-tint pill. `plain` drops the pill so a
-   * self-contained mark (the Thru disc, the dove) sits directly in the hero.
-   */
+  /** `plain` drops the pill so a self-contained mark (the Thru disc, the dove) sits directly in the hero. */
   tone?: ScreenHeaderTone;
-  /** Title text. */
   title: React.ReactNode;
   /** Optional subtitle / supporting content. */
   content?: React.ReactNode;
-  /** `lg`: 48px badge, 20px title, 14px subtitle. Default `md`. */
+  /** Default `md`. */
   size?: ScreenHeaderSize;
   className?: string;
 }
 
 /**
  * ScreenHeader — a centered badge, title, and optional subtitle for the top of
- * a wallet Screen. Presentational; also available as `Screen.Header`.
+ * a wallet Screen. Also available as `Screen.Header`.
  */
 export function ScreenHeader({
   icon,
@@ -74,18 +69,38 @@ export interface ScreenProps {
   footer?: React.ReactNode;
   /** Cap the body height and let it scroll (long review screens). */
   scroll?: boolean;
+  /** Fade the bottom edge while more body content is available below. */
+  scrollHint?: boolean;
   className?: string;
 }
 
 /**
  * Screen — the body of a wallet flow: scrollable content plus an optional
  * footer / bottom action row. Pair with `Screen.Header`, `Screen.Box` (a quiet
- * info panel) and `Screen.Actions` (a two-button footer). Presentational.
+ * info panel) and `Screen.Actions` (a two-button footer).
  */
-function ScreenRoot({ children, bottomAction, footer, scroll = false, className }: ScreenProps) {
+function ScreenRoot({ children, bottomAction, footer, scroll = false, scrollHint = false, className }: ScreenProps) {
+  const bodyRef = React.useRef<HTMLDivElement>(null);
+  const [hasMore, setHasMore] = React.useState(false);
+
+  React.useLayoutEffect(() => {
+    const body = bodyRef.current;
+    if (!scrollHint || !body) return;
+    const update = () => setHasMore(body.scrollHeight - body.clientHeight - body.scrollTop > 1);
+    update();
+    body.addEventListener("scroll", update, { passive: true });
+    const observer = typeof ResizeObserver === "undefined" ? undefined : new ResizeObserver(update);
+    observer?.observe(body);
+    for (const child of body.children) observer?.observe(child);
+    return () => {
+      body.removeEventListener("scroll", update);
+      observer?.disconnect();
+    };
+  }, [children, scrollHint]);
+
   return (
     <div className={cn("tds-screen", className)}>
-      <div className={cn("tds-screen__body", scroll && "tds-screen__body--scroll")}>{children}</div>
+      <div ref={bodyRef} className={cn("tds-screen__body", scroll && "tds-screen__body--scroll", scrollHint && hasMore && "tds-screen__body--more")}>{children}</div>
       {footer}
       {bottomAction && (
         <button type="button" className="tds-screen__bottom" onClick={bottomAction.onClick}>

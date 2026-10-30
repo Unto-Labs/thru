@@ -72,7 +72,7 @@ function DepositKit({
           key={snackbarKey}
           message="$50.00 added."
           onDismiss={() => setSnackbarKey((key) => key + 1)}
-          title="Added"
+          title="Money added"
           tone="success"
         />
       </View>

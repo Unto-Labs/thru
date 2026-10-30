@@ -8,11 +8,8 @@ export interface TagProps extends React.HTMLAttributes<HTMLSpanElement> {
 }
 
 /**
- * Tag (a.k.a. Chip) — a solid-fill mono label. A Thru house component, not a
- * Base UI primitive. Square by default (never a rounded pill).
- *
- * `tone` selects the fill/text pair. thru-design's accent tones map onto our
- * canonical accent families: ocean→sky, forest→grass, saffron→yellow.
+ * Tag (a.k.a. Chip) — a solid-fill mono label. `tone` selects the fill/text
+ * pair.
  */
 export const Tag = React.forwardRef<HTMLSpanElement, TagProps>(function Tag(
   { tone = "neutral", className, ...props },

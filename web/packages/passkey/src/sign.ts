@@ -20,9 +20,9 @@ import {
   base64UrlToBytes,
   parseDerSignature,
   normalizeLowS,
-} from '@thru/programs/passkey-manager';
+} from '@thru/programs/wallet';
 import { runPasskeyCeremony } from './ceremony';
-import { requestPasskeyPopup } from './popup';
+import { PASSKEY_CEREMONY_TIMEOUT_MS, requestPasskeyPopup } from './popup';
 
 /**
  * Sign a challenge with an existing passkey (by credential ID).
@@ -85,7 +85,6 @@ export async function signWithStoredPasskey(
       );
     },
     async (opened, signal) => {
-      // Preserve the selected signing credential; a popup must not switch accounts.
       if (preferredPasskey && !options.preferDiscoverable) {
         const signed = await signWithPasskeyViaPopup(
           preferredPasskey.credentialId,
@@ -216,8 +215,6 @@ async function signWithDiscoverablePasskeyInline(
   };
 }
 
-// Internal helpers
-
 async function signWithPasskeyInline(
   credentialId: string,
   challenge: Uint8Array,
@@ -248,10 +245,12 @@ async function signWithPasskeyAssertion(
     challenge: challengeBytes,
     rpId,
     userVerification: 'required',
-    timeout: 60000,
+    timeout: PASSKEY_CEREMONY_TIMEOUT_MS,
   };
   if (options.preferHybrid) {
-    getOptions.hints = ['hybrid'];
+    /* Chrome reads only the first hint. 'security-key' is there for 1Password,
+       whose extension leaves a request to the browser only when it is listed. */
+    getOptions.hints = ['hybrid', 'security-key'];
   }
 
   if (credentialId) {
@@ -284,10 +283,8 @@ async function signWithPasskeyAssertion(
       let { r, s } = parseDerSignature(signature);
       s = normalizeLowS(s);
 
-      /* `authenticatorAttachment` distinguishes a same-device passkey
-     ('platform') from a cross-device one signed via QR / hybrid
-     transport ('cross-platform'). Drives the wallet's add-device
-     prompt. Browsers may report null. */
+      /* `authenticatorAttachment` is 'platform' for a same-device passkey and
+         'cross-platform' for QR / hybrid. Browsers may report null. */
       const rawAttachment =
         (
           assertion as PublicKeyCredential & {
@@ -322,6 +319,7 @@ async function signWithPasskeyViaPopup(
       credentialId,
       challengeBase64Url: bytesToBase64Url(challenge),
       rpId,
+      ...(options.preferHybrid ? { preferHybrid: true } : {}),
     },
     preopenedPopup,
     options

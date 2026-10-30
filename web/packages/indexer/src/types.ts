@@ -1,10 +1,5 @@
-/**
- * Shared types for the indexer library.
- */
-
 import type { DatabaseClient } from "./schema/types";
 
-// Re-export database client type
 export type { DatabaseClient } from "./schema/types";
 
 /**
@@ -25,7 +20,7 @@ export interface ApiConfig {
  * Used by the stream processor for batching before database writes.
  */
 export interface StreamBatch<T = unknown> {
-  /** The slot these events belong to */
+  /** Slot of the last event; a batch can span several slots */
   slot: bigint;
   /** The parsed events in this batch */
   events: T[];

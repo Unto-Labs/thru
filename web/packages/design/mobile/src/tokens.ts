@@ -1,8 +1,4 @@
-/**
- * Thru Mobile design tokens — transcribed 1:1 from the imported Claude Design
- * project (design/thru-mobile.dc.html + thru-mobile-tokens.css). Units are
- * pt (RN dp). Square radii everywhere except the pill.
- */
+/* Units are pt (RN dp). */
 
 export const palette = {
   stone: {
@@ -35,7 +31,6 @@ export const color = {
   error: palette.red.bright,
 } as const;
 
-/* Mobile type ramp (px = pt). Buttons/labels/meta are MONO per the kit. */
 export const text = {
   xxs: 11, xs: 12, sm: 13, base: 15, md: 17, lg: 20, xl: 24, xxl: 28, xxxl: 34, display: 44,
 } as const;

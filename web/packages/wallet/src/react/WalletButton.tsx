@@ -1,12 +1,5 @@
 'use client';
 
-/* WalletButton — the dapp's sign-in button / account chip, drawn by the
- * wallet inside a small iframe so the control is wallet-owned end to end.
- * This wrapper sizes the frame from what the wallet reports, feeds it the
- * connection state, hands an idle click to the host's connect flow, and
- * opens the wallet-drawn account menu (anchored to the frame) on a chip
- * click. It has no look of its own. */
-
 import type { CSSProperties } from 'react';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { ThruContext } from './ThruContext';
@@ -98,7 +91,6 @@ export function WalletButton({
   const frameId = useMemo(() => createRequestId('btn'), []);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
   const [ready, setReady] = useState(false);
-  /* Reloads of the button frame forced by the ready watchdog (see below). */
   const [reloadAttempt, setReloadAttempt] = useState(0);
   const [frameSize, setFrameSize] = useState<FrameSize | null>(null);
   const [menuOpen, setMenuOpen] = useState(false);
@@ -187,7 +179,6 @@ export function WalletButton({
     [buttonOrigin, frameId]
   );
 
-  /* Keep the frame's picture in step with the host. */
   useEffect(() => {
     if (ready) postState(state);
   }, [ready, state, postState]);
@@ -281,8 +272,6 @@ export function WalletButton({
     margin: 0,
     padding: 0,
     background: 'transparent',
-    /* Chrome paints a cross-origin frame opaque when its color scheme differs
-       from the document inside; the wallet page follows `theme`. */
     colorScheme: theme,
     overflow: 'hidden',
     ...style,

@@ -1,9 +1,3 @@
-/**
- * Kit buttons: JetBrains Mono 600 15, square corners, 48pt default (56 CTA,
- * 36 compact). Variants from the Actions sheet: primary (stone-800), brand
- * (brick), outline (stone-300 border), danger-outline (brick-200 border,
- * brick text), ghost. Colors follow the active theme.
- */
 import type { ReactNode } from "react";
 import { Pressable, Text, type ViewStyle } from "react-native";
 import { Spinner } from "./Spinner";
@@ -25,17 +19,19 @@ export interface ButtonProps {
   /** Tick on iOS web when pressed (see TapHaptic). Pass it only when a press
       should buzz; a busy button never does. */
   tapHaptic?: boolean;
-  /** A 16pt glyph beside the label, coloured by the caller. */
+  /** A glyph beside the label, coloured by the caller. */
   icon?: ReactNode;
   iconPosition?: "start" | "end";
+  /** Set when the button opens and closes a disclosure. */
+  expanded?: boolean;
 }
 
 const HEIGHTS: Record<ButtonSize, number> = { lg: touch.controlLg, md: touch.controlMd, sm: touch.controlSm };
 
 type VariantStyle = { container: ViewStyle; text: { color: string } };
 
-/* Two themes, so a keyed cache keeps the variant objects referentially stable
-   across renders instead of rebuilding six style objects each time. */
+/* Keyed by theme so the variant objects stay referentially stable across
+   renders. */
 const variantCache = new WeakMap<ThemeColors, Record<ButtonVariant, VariantStyle>>();
 
 function variants(c: ThemeColors): Record<ButtonVariant, VariantStyle> {
@@ -73,6 +69,7 @@ export function Button({
   tapHaptic,
   icon,
   iconPosition = "start",
+  expanded,
 }: ButtonProps) {
   const styles = useStyles();
   const v = variants(useThemeColors())[variant];
@@ -80,7 +77,8 @@ export function Button({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityState={{ busy: Boolean(loading), disabled: busy }}
+      aria-busy={Boolean(loading)}
+      aria-expanded={expanded}
       disabled={busy}
       hitSlop={size === "sm" ? (touch.hitMin - touch.controlSm) / 2 : undefined}
       onPress={onPress}

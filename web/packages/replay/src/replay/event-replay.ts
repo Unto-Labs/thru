@@ -2,13 +2,10 @@ import { create } from "@bufbuild/protobuf";
 import {
   type Filter,
   FilterSchema,
-  type PageRequest,
   PageRequestSchema,
   type Event,
   EventSchema,
-  type ListEventsRequest,
   ListEventsRequestSchema,
-  type StreamEventsRequest,
   StreamEventsRequestSchema,
   type StreamEventsResponse,
 } from "@thru/sdk/proto";
@@ -17,8 +14,10 @@ import { ReplayStream } from "../replay-stream";
 import type { ReplayLogger, Slot } from "../types";
 import { closeIfCloseable, resolveClient } from "../types";
 import { backfillPage, combineFilters, mapAsyncIterable, slotLiteralFilter } from "./helpers";
+import { createParallelHistory } from "./parallel-history";
 
 export interface EventReplayOptions {
+  /** Live events buffered during backfill; also how many history events parallel readers hold before hand-off (default 100,000). */
   maxBufferedItems?: number;
   maxEventBytes?: number;
   /** Client instance for initial connection. Optional if clientFactory provided. */
@@ -37,9 +36,12 @@ export interface EventReplayOptions {
   logger?: ReplayLogger;
   resubscribeOnEnd?: boolean;
   signal?: AbortSignal;
+  /** Connections for a parallel slot-range backfill (default 1, sequential). Needs clientFactory. */
+  historyConnections?: number;
 }
 
 const DEFAULT_PAGE_SIZE = 512;
+const HISTORY_MAX_BUFFERED_EVENTS = 100_000;
 const DEFAULT_SAFETY_MARGIN = 64n;
 const PAGE_ORDER_ASC = "slot asc";
 
@@ -51,6 +53,10 @@ export function createEventReplay(options: EventReplayOptions): ReplayStream<Eve
 
   // Resolve initial client - either from options or from factory
   let currentClient = resolveClient(options, "EventReplayOptions");
+
+  const checkPage = (events: Event[]) => {
+    if(options.maxEventBytes!==undefined&&events.some(e=>(e.payload?.byteLength??0)>options.maxEventBytes!))throw new Error('Event payload exceeds replay byte bound');
+  };
 
   const createFetchBackfill = (client: EventSource) => async ({
     startSlot,
@@ -74,7 +80,7 @@ export function createEventReplay(options: EventReplayOptions): ReplayStream<Eve
       }),
     );
 
-    if(options.maxEventBytes!==undefined&&response.events.some(e=>(e.payload?.byteLength??0)>options.maxEventBytes!))throw new Error('Event payload exceeds replay byte bound');
+    checkPage(response.events);
     return backfillPage(response.events, response.page);
   };
 
@@ -87,7 +93,7 @@ export function createEventReplay(options: EventReplayOptions): ReplayStream<Eve
       filter: mergedFilter,
     });
     return mapAsyncIterable(
-      client.streamEvents(request),
+      client.streamEvents(request, { signal: options.signal }),
       (resp: StreamEventsResponse) => {
         if(options.maxEventBytes!==undefined&&(resp.payload?.byteLength??0)>options.maxEventBytes)throw new Error('Event payload exceeds replay byte bound');
         const event = streamResponseToEvent(resp);
@@ -96,7 +102,8 @@ export function createEventReplay(options: EventReplayOptions): ReplayStream<Eve
     );
   };
 
-  // Reconnection handler - creates fresh client and returns new data source functions
+  // Reconnection handler - creates fresh client and returns new data source functions.
+  // Its mini-backfill stays sequential: a quiet stream's gap to head holds few events.
   const onReconnect = options.clientFactory
     ? () => {
         const newClient = options.clientFactory!();
@@ -109,11 +116,31 @@ export function createEventReplay(options: EventReplayOptions): ReplayStream<Eve
       }
     : undefined;
 
+  const connections = options.historyConnections ?? 1;
+  const history = options.clientFactory && connections > 1
+    ? createParallelHistory({
+        client: currentClient,
+        clientFactory: options.clientFactory,
+        connections,
+        maxBuffered: options.maxBufferedItems ?? HISTORY_MAX_BUFFERED_EVENTS,
+        rangeFilter: (lo, hi) => combineFilters(
+          combineFilters(
+            eventBackfillFilter(lo, options.resumeAfter),
+            create(FilterSchema, { expression: `event.slot < uint(${hi.toString()})` }),
+          ),
+          options.filter,
+        ),
+        sequential: createFetchBackfill(currentClient),
+        checkPage,
+        signal: options.signal,
+        logger: options.logger,
+      })
+    : null;
   return new ReplayStream<Event, string>({
     maxBufferedItems: options.maxBufferedItems,
     startSlot: options.startSlot,
     safetyMargin,
-    fetchBackfill: createFetchBackfill(currentClient),
+    fetchBackfill: history?.fetchBackfill ?? createFetchBackfill(currentClient),
     subscribeLive: createSubscribeLive(currentClient),
     extractSlot: (event) => event.slot ?? 0n,
     extractKey: eventKey,
@@ -122,7 +149,10 @@ export function createEventReplay(options: EventReplayOptions): ReplayStream<Eve
     signal: options.signal,
     onReconnect,
     dispose: options.clientFactory
-      ? () => closeIfCloseable(currentClient)
+      ? () => {
+          history?.close();
+          closeIfCloseable(currentClient);
+        }
       : undefined,
   });
 }

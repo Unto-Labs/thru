@@ -13,11 +13,9 @@
   display: inline-flex;
   transition: color var(--duration-fast) var(--ease-standard);
 }
-/* light: sun lit */
 .tds-theme-switch[data-unchecked] .tds-theme-switch__icon:first-child {
   color: var(--yellow-400);
 }
-/* dark: inverted chrome + moon lit */
 .tds-theme-switch[data-checked] {
   background: var(--steel-700);
   border-color: var(--steel-600);

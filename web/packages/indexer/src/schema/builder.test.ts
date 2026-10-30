@@ -1,7 +1,3 @@
-/**
- * Unit tests for schema/builder.ts
- */
-
 import { describe, it, expect } from "vitest";
 import { t, columnBuilder } from "./builder";
 
@@ -24,7 +20,7 @@ describe("column builder", () => {
     it("supports primaryKey modifier", () => {
       const col = t.text().primaryKey();
       expect(col._primary).toBe(true);
-      expect(col._nullable).toBe(false); // primary key implies not null
+      expect(col._nullable).toBe(false);
     });
 
     it("supports index modifier", () => {

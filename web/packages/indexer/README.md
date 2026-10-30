@@ -1,13 +1,13 @@
 # @thru/indexer
 
-Open-source TypeScript framework for indexing Thru chain data into Postgres: event and account streams, checkpointed resume, and an auto-generated REST API.
+Open-source TypeScript framework for indexing Thru chain data into Postgres: event and account streams, checkpointed resume, transactional projections and durable delivery.
 
 ## Features
 
 - **Event Streams** - Index historical, immutable event data
 - **Account Streams** - Track current on-chain account state with slot-aware upserts
 - **Type-Safe Schema Builder** - Fluent API with full TypeScript inference
-- **Auto-Generated REST API** - Hono + OpenAPI routes with pagination
+- **Composable APIs** - pair domain queries with the private `@thru/indexer-api` workspace package, or your own HTTP server
 - **Resumable Indexing** - Checkpoint-based recovery after restarts
 - **Drizzle ORM** - PostgreSQL with type-safe queries and migrations
 
@@ -203,28 +203,16 @@ indexer.start().then((result) => {
 
 ### 5. Create API Server
 
-```typescript
-// src/api.ts
-import { serve } from "@hono/node-server";
-import { OpenAPIHono } from "@hono/zod-openapi";
-import { mountStreamRoutes } from "@thru/indexer";
-import { db } from "./db";
-import transfers from "./streams/transfers";
-import tokenAccounts from "./account-streams/token-accounts";
+The indexer SDK does not mount HTTP routes. In this monorepo, use the existing
+private workspace package `@thru/indexer-api` for `createIndexerApi`,
+`startNodeServer`, and `IndexerSse`. Define domain queries and OpenAPI routes in
+an API application; see [`token/apps/api`](../../indexers/token/apps/api) and
+[`perps/apps/api`](../../indexers/perps/apps/api). The database credentials must
+be read-only. Queries, calculations and streaming belong in the API; access
+policies belong in an explicitly configured external layer.
 
-const app = new OpenAPIHono();
-
-mountStreamRoutes(app, {
-  db,
-  basePath: "/api/v1",
-  eventStreams: [transfers],
-  accountStreams: [tokenAccounts],
-});
-
-serve({ fetch: app.fetch, port: 3000 }, (info) => {
-  console.log(`API server running on http://localhost:${info.port}`);
-});
-```
+Outside this workspace, build an HTTP server using your framework of choice;
+`@thru/indexer-api` is not a published package.
 
 ### 6. Run
 
@@ -443,10 +431,6 @@ export type { EventStream, AccountStream } from "@thru/indexer";
 
 // Checkpoint
 export { checkpointTable, getCheckpoint, updateCheckpoint, getSchemaExports } from "@thru/indexer";
-
-// API
-export { mountStreamRoutes, generateSchemas } from "@thru/indexer";
-export { paginate, parseCursor, paginationQuerySchema } from "@thru/indexer";
 
 // Runtime
 export { Indexer } from "@thru/indexer";

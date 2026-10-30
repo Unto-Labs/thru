@@ -1,4 +1,4 @@
-import { create } from "@bufbuild/protobuf";
+import { create, type MessageInitShape } from "@bufbuild/protobuf";
 import {
   type CallOptions,
   createClient,
@@ -13,7 +13,6 @@ import {
   QueryService,
   StreamingService,
   type GetChainInfoResponse,
-  type GetHeightRequest,
   type GetChainInfoRequest,
   GetChainInfoRequestSchema,
   GetHeightRequestSchema,
@@ -21,7 +20,8 @@ import {
   type GetAccountRequest,
   GetAccountRequestSchema,
   type Account,
-  type ListAccountsRequest,
+  BatchGetRawAccountsRequestSchema,
+  type BatchGetRawAccountsResponse,
   ListAccountsRequestSchema,
   type ListAccountsResponse,
   type ListBlocksRequest,
@@ -65,7 +65,7 @@ export type ChainClientFactory = () => ChainClient;
 
 export interface BlockSource {
   listBlocks(request: Partial<ListBlocksRequest>): Promise<ListBlocksResponse>;
-  streamBlocks(request: Partial<StreamBlocksRequest>): AsyncIterable<StreamBlocksResponse>;
+  streamBlocks(request: Partial<StreamBlocksRequest>, options?: Pick<CallOptions, "signal">): AsyncIterable<StreamBlocksResponse>;
 }
 
 export interface TransactionSource {
@@ -74,6 +74,7 @@ export interface TransactionSource {
   ): Promise<ListTransactionsResponse>;
   streamTransactions(
     request: Partial<StreamTransactionsRequest>,
+    options?: Pick<CallOptions, "signal">,
   ): AsyncIterable<StreamTransactionsResponse>;
 }
 
@@ -84,12 +85,14 @@ export interface EventSource {
   ): Promise<ListEventsResponse>;
   streamEvents(
     request: Partial<StreamEventsRequest>,
+    options?: Pick<CallOptions, "signal">,
   ): AsyncIterable<StreamEventsResponse>;
 }
 
 export interface AccountSource {
   getAccount(request: Partial<GetAccountRequest>, options?: Pick<CallOptions, "signal">): Promise<Account>;
-  listAccounts(request: Partial<ListAccountsRequest>): Promise<ListAccountsResponse>;
+  batchGetRawAccounts(request: MessageInitShape<typeof BatchGetRawAccountsRequestSchema>): Promise<BatchGetRawAccountsResponse>;
+  listAccounts(request: MessageInitShape<typeof ListAccountsRequestSchema>): Promise<ListAccountsResponse>;
   streamAccountUpdates(
     request: Partial<StreamAccountUpdatesRequest>,
   ): AsyncIterable<StreamAccountUpdatesResponse>;
@@ -139,14 +142,14 @@ export class ChainClient implements ReplayDataSource {
   }
 
   getAccount(request: Partial<GetAccountRequest>, options?: Pick<CallOptions, "signal">): Promise<Account> {
-    const defaultSignal = this.callOptions?.signal;
-    const signal = defaultSignal && options?.signal
-      ? AbortSignal.any([defaultSignal, options.signal])
-      : options?.signal ?? defaultSignal;
-    return this.query.getAccount(create(GetAccountRequestSchema, request), { ...this.callOptions, signal });
+    return this.query.getAccount(create(GetAccountRequestSchema, request), this.callOptionsWith(options?.signal));
   }
 
-  listAccounts(request: Partial<ListAccountsRequest>): Promise<ListAccountsResponse> {
+  batchGetRawAccounts(request: MessageInitShape<typeof BatchGetRawAccountsRequestSchema>): Promise<BatchGetRawAccountsResponse> {
+    return this.query.batchGetRawAccounts(create(BatchGetRawAccountsRequestSchema, request), this.callOptions);
+  }
+
+  listAccounts(request: MessageInitShape<typeof ListAccountsRequestSchema>): Promise<ListAccountsResponse> {
     return this.query.listAccounts(create(ListAccountsRequestSchema, request), this.callOptions);
   }
 
@@ -156,8 +159,9 @@ export class ChainClient implements ReplayDataSource {
 
   streamBlocks(
     request: Partial<StreamBlocksRequest>,
+    options?: Pick<CallOptions, "signal">,
   ): AsyncIterable<StreamBlocksResponse> {
-    return this.streaming.streamBlocks(create(StreamBlocksRequestSchema, request), this.callOptions);
+    return this.streaming.streamBlocks(create(StreamBlocksRequestSchema, request), this.callOptionsWith(options?.signal));
   }
 
   listTransactions(
@@ -168,29 +172,33 @@ export class ChainClient implements ReplayDataSource {
 
   streamTransactions(
     request: Partial<StreamTransactionsRequest>,
+    options?: Pick<CallOptions, "signal">,
   ): AsyncIterable<StreamTransactionsResponse> {
-    return this.streaming.streamTransactions(create(StreamTransactionsRequestSchema, request), this.callOptions);
+    return this.streaming.streamTransactions(create(StreamTransactionsRequestSchema, request), this.callOptionsWith(options?.signal));
   }
 
   listEvents(
     request: Partial<ListEventsRequest>,
     options?: Pick<CallOptions, "signal" | "timeoutMs">,
   ): Promise<ListEventsResponse> {
-    const defaultSignal = this.callOptions?.signal;
-    const signal = defaultSignal && options?.signal
-      ? AbortSignal.any([defaultSignal, options.signal])
-      : options?.signal ?? defaultSignal;
     return this.query.listEvents(create(ListEventsRequestSchema, request), {
-      ...this.callOptions,
-      signal,
+      ...this.callOptionsWith(options?.signal),
       timeoutMs: options?.timeoutMs ?? this.callOptions?.timeoutMs,
     });
   }
 
   streamEvents(
     request: Partial<StreamEventsRequest>,
+    options?: Pick<CallOptions, "signal">,
   ): AsyncIterable<StreamEventsResponse> {
-    return this.streaming.streamEvents(create(StreamEventsRequestSchema, request), this.callOptions);
+    return this.streaming.streamEvents(create(StreamEventsRequestSchema, request), this.callOptionsWith(options?.signal));
+  }
+
+  /* A per-call signal adds to, never replaces, the client's default signal. */
+  private callOptionsWith(signal?: AbortSignal): CallOptions | undefined {
+    const defaultSignal = this.callOptions?.signal;
+    if (!signal) return this.callOptions;
+    return { ...this.callOptions, signal: defaultSignal ? AbortSignal.any([defaultSignal, signal]) : signal };
   }
 
   private createOwnedTransport(): {

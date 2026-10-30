@@ -187,7 +187,6 @@ function parseConnectionHint(raw: string): ConnectionHint | null {
 
 export class ConnectionHintStore {
   private readonly storage: ConnectionStorage;
-  /** The adapter as given, for the synchronous peek. */
   private readonly rawStorage: ConnectionStorage;
   constructor(
     storage: ConnectionStorage,

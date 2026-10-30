@@ -1,10 +1,5 @@
-/* Deposit helpers for the wallet "Add funds" lifecycle.
- *
- * The wallet derives and optionally creates the user's configured token account;
- * the backend mints after a verified Unifold webhook. DApps should use the SDK
- * methods exposed by BrowserSDK/NativeSDK/useWallet. The explicit `ForWallet`
- * helpers are kept for the embedded wallet app, where the selected wallet
- * account is already known inside the iframe. */
+/* DApps use the BrowserSDK/NativeSDK deposit methods; the `ForWallet` helpers
+   serve the embedded wallet, where the selected account is already known. */
 
 import { readWalletAccount, isAccountNotFound, type ArchivedAccountState } from '../internal/accounts';
 import { decodeAddress } from "@thru/sdk/helpers";
@@ -12,7 +7,7 @@ import type { Thru } from "@thru/sdk/client";
 import {
   buildWalletAccountContext,
   bytesToBase64,
-} from "@thru/programs/passkey-manager";
+} from "@thru/programs/wallet";
 import {
   bytesToHex,
   createInitializeAccountInstruction,
@@ -22,6 +17,7 @@ import {
 } from "@thru/programs/token";
 import { BOOTSTRAP_PROGRAM_ADDRESSES } from "@thru/programs/bootstrap-addresses";
 import { base64ToBytes } from "../encoding";
+import { CRYPTO_DEPOSIT_SOURCES, type CryptoDepositSource } from "./sources";
 import type { IThruChain, ThruTransactionReviewPayload } from "../interfaces";
 import {
   DepositTarget,
@@ -45,6 +41,8 @@ declare const process:
     }
   | undefined;
 
+export * from "./sources";
+
 export const DEFAULT_DEPOSIT_SYMBOL = "$";
 /** The deposit token's former name, still present in older deployed config. */
 export const LEGACY_DEPOSIT_SYMBOL = "CREDITS";
@@ -57,11 +55,8 @@ export const CREDITS_TICKER = THRUSD_TICKER;
 /** @deprecated Use THRUSD_DECIMALS. */
 export const CREDITS_DECIMALS = THRUSD_DECIMALS;
 
-/* The deposit token was renamed from CREDITS / THRUSD to $ at the display layer
-   only: the on-chain ticker and the config target key are unchanged, and
-   deployed config may still carry a legacy name. Normalize here so every surface that
-   reads a prepared destination shows the current name regardless of which
-   config value it was built from. */
+/* Display-only name: the on-chain ticker and config target keep the legacy
+   names, which deployed config may still carry. */
 export function normalizeDepositSymbol(symbol: string | undefined): string {
   if (!symbol || /^(?:credits|thrusd|thru\s*usd)$/i.test(symbol))
     return DEFAULT_DEPOSIT_SYMBOL;
@@ -189,9 +184,7 @@ export function getValidatedDepositDestination(
   actual: DepositDestination,
   expected: Readonly<DepositDestination>,
 ): DepositDestination {
-  /* Either side may come from an older wallet or a cached snapshot. Compare
-     legacy display symbols in their canonical form without relaxing identity
-     checks for the mint, token account, or network. */
+  /* Either side may come from an older wallet, so compare symbols canonically. */
   const canonical: DepositDestination = {
     ...expected,
     symbol: normalizeDepositSymbol(expected.symbol),
@@ -239,6 +232,10 @@ export interface DepositsApi {
   open(payload: DepositRequestPayload): Promise<DepositResult>;
   /** Return every deposit provider enabled by this SDK instance. */
   getProviders(): Promise<string[]>;
+  /** The networks the wallet's crypto rail takes deposits from, in its
+      order; empty where the active network offers no crypto rail. Pass one
+      as `open({ providerId: "unifold", source })` to open the rail on it. */
+  getCryptoSources(): Promise<readonly CryptoDepositSource[]>;
   getAccountState(
     params?: GetDepositAccountStateParams,
   ): Promise<DepositAccountState>;
@@ -263,6 +260,8 @@ export function createDepositsApi(delegate: DepositsApiDelegate): DepositsApi {
     ensureAccount: delegate.ensureAccount.bind(delegate),
     open: delegate.open.bind(delegate),
     getProviders: delegate.getProviders.bind(delegate),
+    getCryptoSources: async () =>
+      (await delegate.getProviders()).includes("unifold") ? CRYPTO_DEPOSIT_SOURCES : [],
     getAccountState: delegate.getAccountState.bind(delegate),
     waitForDeposit: delegate.waitForDeposit.bind(delegate),
     formatAmount: delegate.formatAmount.bind(delegate),
@@ -405,9 +404,6 @@ function readPublicEnv(name: PublicDepositEnvName): string | undefined {
 function resolveDepositConfigSource(
   runtimeConfig?: DepositRuntimeConfig,
 ): DepositRuntimeConfig {
-  /* A supplied runtime object is authoritative, including an empty object.
-     Environment fallback is source-level only so runtime and build-time
-     configuration can never be mixed field-by-field. */
   if (runtimeConfig !== undefined) return runtimeConfig;
   return {
     networkConfigJson:

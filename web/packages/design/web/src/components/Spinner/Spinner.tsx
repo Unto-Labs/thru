@@ -8,8 +8,7 @@ export interface SpinnerProps extends React.HTMLAttributes<HTMLSpanElement> {
 }
 
 /**
- * Spinner — a subdued loading indicator (CSS only). A Thru house component,
- * not a Base UI primitive: a single rotating ring driven by CSS keyframes.
+ * Spinner — a subdued loading indicator (CSS only).
  *
  * Size, thickness, and speed are tunable via inline style
  * (`width`/`height`, `borderWidth`, `animationDuration`).

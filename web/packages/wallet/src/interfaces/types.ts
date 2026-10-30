@@ -79,19 +79,6 @@ export interface ThruSigningSession extends ThruSigningSessionDescriptor {
   toJSON(): ThruSigningSessionDescriptor;
 }
 
-export interface ThruPasskeyChallengeIntent {
-  /** base64url-encoded passkey-manager challenge bytes. */
-  challenge: string;
-  walletAddress?: string;
-}
-
-export interface ThruPasskeyChallengeSignature {
-  signatureR: string;
-  signatureS: string;
-  authenticatorData: string;
-  clientDataJSON: string;
-}
-
 export interface ConnectedApp {
   accountId: number;
   appId: string;

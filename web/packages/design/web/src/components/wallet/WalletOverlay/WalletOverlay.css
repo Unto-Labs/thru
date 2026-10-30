@@ -1,7 +1,6 @@
-/* WalletOverlay — scrim + top-center island popup. Enter / exit ride on
-   Base UI's [data-open] / [data-ending-style] hooks with keyframes (which
-   always fire animationend, so the unmount never stalls). The z-index sits
-   well under the hosted wallet iframe (999999) on purpose. */
+/* Enter/exit run as keyframes on Base UI's [data-open] / [data-ending-style]
+   hooks, which always fire animationend, so the unmount never stalls. The
+   z-index sits under the hosted wallet iframe (999999) on purpose. */
 
 .tds-woverlay__scrim {
   position: fixed;
@@ -18,9 +17,8 @@
   position: absolute;
 }
 
-/* Centered by layout (auto margins on a fit-content box) rather than a
-   translate, so the sheet sits on whole pixels and stays crisp while the
-   clip-path animates. */
+/* Centered by auto margins rather than a translate, so the sheet sits on whole
+   pixels and stays crisp while the clip-path animates. */
 .tds-woverlay {
   position: fixed;
   top: 12px;
@@ -41,9 +39,6 @@
   position: absolute;
 }
 
-/* A popup taller than the window (the Add funds accordion with a rail
-   unfolded) is capped to the viewport and its screen body scrolls, the way
-   the mobile sheet already does; the bar and any action row stay put. */
 .tds-woverlay .tds-frame {
   max-height: calc(100vh - 24px);
   max-height: calc(100dvh - 24px);
@@ -60,12 +55,6 @@
   overflow-x: hidden;
   overscroll-behavior: contain;
 }
-
-/* ── Mobile: bottom sheet ───────────────────────────────────────────────────
-   Below 640px the island stops being a popup and becomes a sheet anchored to
-   the bottom edge, full width. Values are from the "Wallet Bottom Sheet"
-   design; the scrim darkens to rgba(24,27,27,0.64) because the sheet covers
-   the host rather than floating over it. */
 
 @keyframes tds-wsheet-slide-in {
   from {
@@ -106,10 +95,8 @@
   }
 }
 
-/* ── Dark theme ─────────────────────────────────────────────────────────────
-   Over a dark host a teal-gray wash would lighten the page, so the scrim
-   deepens instead. Kept last so it wins over the equal-specificity light
-   rules above at both widths. */
+/* Dark theme. Kept last so it wins over the equal-specificity light rules
+   above at both widths. */
 
 :where([data-theme="dark"]) .tds-woverlay__scrim {
   background: rgba(0, 0, 0, 0.4);
@@ -121,13 +108,10 @@
   }
 }
 
-/* ── Reduced motion ─────────────────────────────────────────────────────────
-   No travel: the island's clip-path growth (desktop) and the sheet's slide
-   (phone) both become a short opacity fade, and the scrim fades just as
-   quickly. Exits still run as keyframes, so Base UI's unmount and the
-   renderer's fixed exit hold both see them finish. Kept last on purpose:
-   the ≤640px block above uses the `animation` shorthand, which would reset
-   any earlier duration override at the same specificity. */
+/* Reduced motion. Exits still run as keyframes, so Base UI's unmount and the
+   renderer's fixed exit hold both see them finish. Kept last: the ≤640px
+   block's `animation` shorthand would reset an earlier duration override at
+   the same specificity. */
 
 @media (prefers-reduced-motion: reduce) {
   .tds-woverlay,

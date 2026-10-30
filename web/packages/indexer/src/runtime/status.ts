@@ -1,7 +1,3 @@
-/**
- * Runtime status and health types for the indexer supervisor.
- */
-
 export type IndexerStreamKind = "event" | "account";
 
 export type IndexerStreamState =
@@ -54,6 +50,8 @@ export interface IndexerStreamStatus {
   kind: IndexerStreamKind;
   state: IndexerStreamState;
   checkpointSlot: string | null;
+  /** Fully consumed source block marker, independent of the persisted checkpoint. */
+  consumedSlot?: string | null;
   lastProcessedSlot: string | null;
   lastEventAt: string | null;
   stale: boolean;
@@ -96,12 +94,13 @@ export interface ProcessorStatusObserver {
   onBatchCommitted?(info: {
     slot: bigint;
     count: number;
+    insertedCount?: number;
   }): void;
   onCheckpoint?(info: {
     slot: bigint;
   }): void;
+  onProgress?(info: { slot: bigint }): void;
   onError?(phase: IndexerErrorPhase, error: unknown): void;
-  /** A batch entered a phase, or (phase null) its commit finished. */
   onPhase?(info: {
     phase: IndexerStreamPhase | null;
     slot?: bigint;

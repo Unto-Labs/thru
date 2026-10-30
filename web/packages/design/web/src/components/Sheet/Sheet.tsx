@@ -8,8 +8,7 @@ import "./Sheet.css";
  *
  * Presentational only: it draws the panel, not the presentation. On web,
  * wrap it in `Sheet.Scrim`; inside a native host sheet, render `Sheet.Root`
- * with `size="full"` and let the OS own the scrim and the drag. Keeping that
- * out of the component is what lets one anatomy serve both.
+ * with `size="full"` and let the OS own the scrim and the drag.
  *
  *     <Sheet.Scrim>
  *       <Sheet.Root size="half">

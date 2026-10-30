@@ -4,11 +4,6 @@ import type { ConnectOptions } from "../../NativeSDK";
 import { useThru } from "./useThru";
 import { waitForWallet } from "./waitForWallet";
 
-/**
- * useWallet - mirror of @thru/wallet/react's useWallet. The `wallet` field
- * exposes the chain interface (`provider.thru`); `connect` /
- * `disconnect` proxy through the SDK.
- */
 export function useWallet() {
   const {
     wallet,

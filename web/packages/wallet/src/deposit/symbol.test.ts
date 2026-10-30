@@ -9,8 +9,6 @@ import {
 } from "./index";
 import { DepositTarget, ThruNetwork } from "../protocol/postMessage";
 
-/* The deposit token was renamed at the display layer only. Deployed config may
-   still carry the old symbol; every destination built from it must say $. */
 describe("deposit symbol normalization", () => {
   it("prefixes dollar amounts while preserving signs, precision, and other tokens", () => {
     expect(formatTokenAmountLabel("1,250.00", "THRUSD")).toBe("$1,250.00");

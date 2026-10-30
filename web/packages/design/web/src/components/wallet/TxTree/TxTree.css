@@ -1,5 +1,5 @@
-/* TxTree — nested collapsible review tree. Indent per level rides on two
-   custom properties set by each Section from its depth. */
+/* Indent per level rides on two custom properties each Section sets from its
+   depth. */
 
 .tds-txtree {
   display: flex;
@@ -14,7 +14,6 @@
   flex: none;
 }
 
-/* ── Sections ───────────────────────────────────────────────────── */
 .tds-txtree__section--root {
   border: 1px solid var(--color-border-tertiary);
   background: var(--color-surface-higher);
@@ -94,7 +93,6 @@
 .tds-txtree__panel[data-ending-style] {
   height: 0;
 }
-/* Reduced motion: sections open and close at once, the chevron snaps. */
 @media (prefers-reduced-motion: reduce) {
   .tds-txtree__chev,
   .tds-txtree__panel {
@@ -108,7 +106,6 @@
   gap: 5px;
   font-size: 11px;
 }
-/* A root section's body sits under a rule, indented past the chevron. */
 .tds-txtree__section--root > .tds-txtree__panel > .tds-txtree__body {
   border-top: 1px solid var(--color-border-tertiary);
   padding: var(--space-2) var(--space-2) var(--space-2) var(--tds-txtree-body-left, 26px);
@@ -119,7 +116,6 @@
 .tds-txtree__section--bare > .tds-txtree__panel > .tds-txtree__body {
   padding: 0;
 }
-/* Account rows fill the section edge to edge (their own rules + indent). */
 .tds-txtree__section--root > .tds-txtree__panel > .tds-txtree__body:has(> .tds-txtree__account),
 .tds-txtree__section--root > .tds-txtree__panel > .tds-txtree__body:has(> .tds-txtree__section) {
   border-top: none;
@@ -127,7 +123,6 @@
   gap: 0;
 }
 
-/* ── Leaves ─────────────────────────────────────────────────────── */
 .tds-txtree__rows {
   display: flex;
   flex-direction: column;
@@ -195,7 +190,6 @@
   padding: 2px 5px;
 }
 
-/* Decoded data: a box that scrolls sideways, never wraps. */
 .tds-txtree__prebox {
   margin: 3px 0 2px;
   background: var(--color-surface-primary);
@@ -217,7 +211,6 @@
   min-width: 100%;
 }
 
-/* Raw bytes */
 .tds-txtree__bytes {
   display: flex;
   flex-direction: column;

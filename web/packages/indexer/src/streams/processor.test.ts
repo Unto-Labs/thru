@@ -246,10 +246,6 @@ describe("runEventStreamProcessor", () => {
     }
   });
 
-  /* Replay yields slot 10 then slot 20, then waits for `release`. Taking the
-     slot-20 event returns the slot-10 batch for commit, and its filterBatch
-     blocks until the test resolves it; meanwhile the slot-20 batch sits in
-     the batcher until the timer flush picks it up. */
   function overlappingBatches() {
     let release: () => void = () => {};
     const released = new Promise<void>((resolve) => {
@@ -258,6 +254,8 @@ describe("runEventStreamProcessor", () => {
     replayMocks.createEventReplay.mockImplementation(() => ({
       [Symbol.asyncIterator]: async function* () {
         yield { eventId: "event-10", slot: 10n };
+        // Far enough apart that the slot change flushes event-10 on its own.
+        await new Promise((resolve) => setTimeout(resolve, 300));
         yield { eventId: "event-20", slot: 20n };
         await released;
       },
@@ -288,7 +286,6 @@ describe("runEventStreamProcessor", () => {
       });
 
       await vi.advanceTimersByTimeAsync(6000);
-      /* The timer flushed slot 20, but it waits behind slot 10. */
       expect(filterBatch).toHaveBeenCalledTimes(1);
       expect(checkpointedSlots()).toEqual([]);
 
@@ -299,7 +296,6 @@ describe("runEventStreamProcessor", () => {
       release();
       await promise;
 
-      /* Never backwards: 10 then 20. */
       expect(checkpointedSlots()).toEqual([10n, 20n]);
     } finally {
       vi.useRealTimers();
@@ -323,9 +319,53 @@ describe("runEventStreamProcessor", () => {
       await vi.advanceTimersByTimeAsync(2000);
       await rejection;
 
-      /* A durable slot-20 checkpoint would make the restart skip slot 10. */
       expect(filterBatch).toHaveBeenCalledTimes(1);
       expect(checkpointedSlots()).toEqual([]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("commits a batch cut while an older commit runs before a newer timer-flushed batch", async () => {
+    vi.useFakeTimers();
+    try {
+      let release: () => void = () => {};
+      const released = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      replayMocks.createEventReplay.mockImplementation(() => ({
+        [Symbol.asyncIterator]: async function* () {
+          yield { eventId: "event-10", slot: 10n };
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          yield { eventId: "event-20", slot: 20n };
+          await new Promise((resolve) => setTimeout(resolve, 300));
+          yield { eventId: "event-30", slot: 30n };
+          await released;
+        },
+      }));
+      let finishSlot10: () => void = () => {};
+      const filterBatch = vi.fn((events: Array<{ slot: bigint }>) =>
+        events[0]!.slot === 10n
+          ? new Promise<never[]>((resolve) => {
+              finishSlot10 = () => resolve([]);
+            })
+          : Promise.resolve([])
+      );
+      const promise = runEventStreamProcessor(createStream({ filterBatch }), {
+        clientFactory: vi.fn(),
+        db: { transaction: vi.fn() } as any,
+        defaultStartSlot: 0n,
+        logLevel: "error",
+      });
+
+      // Slot 20's batch is cut while slot 10 commits; slot 30 then goes stale and the timer flushes it.
+      await vi.advanceTimersByTimeAsync(7000);
+      finishSlot10();
+      await vi.advanceTimersByTimeAsync(0);
+      release();
+      await promise;
+
+      expect(checkpointedSlots()).toEqual([10n, 20n, 30n]);
     } finally {
       vi.useRealTimers();
     }
@@ -359,8 +399,6 @@ describe("runEventStreamProcessor", () => {
       });
       const rejection = expect(promise).rejects.toThrow("database unavailable");
 
-      /* The timer takes the slot-7 batch; the replay loop then ends with
-         nothing left to flush while that commit is still in flight. */
       await vi.advanceTimersByTimeAsync(6000);
       expect(filterBatch).toHaveBeenCalledTimes(1);
       release();
@@ -374,6 +412,84 @@ describe("runEventStreamProcessor", () => {
     }
   });
 
+  function recordingDb() {
+    const inserted: number[] = [];
+    const insert = vi.fn(() => ({
+      values: vi.fn((rows: unknown[]) => {
+        inserted.push(rows.length);
+        return { onConflictDoNothing: () => ({ returning: async () => rows }) };
+      }),
+    }));
+    return { inserted, db: { transaction: vi.fn(async (callback) => callback({ insert })) } as any };
+  }
+
+  it("batches back-to-back events across slots", async () => {
+    vi.useFakeTimers();
+    try {
+      replayMocks.events = Array.from({ length: 2500 }, (_, i) => ({
+        eventId: `event-${i + 1}`,
+        slot: BigInt(i + 1),
+      }));
+      const { inserted, db } = recordingDb();
+
+      await runEventStreamProcessor(createStream(), {
+        clientFactory: vi.fn(),
+        db,
+        defaultStartSlot: 0n,
+        logLevel: "error",
+      });
+
+      expect(inserted).toEqual([1000, 1000, 500]);
+      expect(checkpointMocks.updateCheckpoint.mock.calls.map((call) => [call[2], call[3]])).toEqual([
+        [1000n, "event-1000"],
+        [2000n, "event-2000"],
+        [2500n, "event-2500"],
+      ]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("still commits one slot per batch when events arrive a second apart", async () => {
+    vi.useFakeTimers();
+    try {
+      replayMocks.createEventReplay.mockImplementation(() => ({
+        [Symbol.asyncIterator]: async function* () {
+          for (const slot of [1n, 2n, 3n]) {
+            yield { eventId: `event-${slot}`, slot };
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          }
+        },
+      }));
+      const { inserted, db } = recordingDb();
+
+      const promise = runEventStreamProcessor(createStream(), {
+        clientFactory: vi.fn(),
+        db,
+        defaultStartSlot: 0n,
+        logLevel: "error",
+      });
+      await vi.advanceTimersByTimeAsync(3000);
+      await promise;
+
+      expect(inserted).toEqual([1, 1, 1]);
+      expect(checkpointedSlots()).toEqual([1n, 2n, 3n]);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+
+  it("reports actual inserted rows and closes the DB phase before post-commit hooks", async () => {
+    replayMocks.events = [{ eventId: "event-1", slot: 7n }, { eventId: "event-2", slot: 7n }];
+    const onPhase = vi.fn();
+    const onBatchCommitted = vi.fn();
+    const onCommit = vi.fn(async () => { expect(onPhase).toHaveBeenLastCalledWith({ phase: null }); });
+    const insert = () => ({ values: () => ({ onConflictDoNothing: () => ({ returning: async () => [{ id: "event-2" }] }) }) });
+    await runEventStreamProcessor(createStream({ onCommit }), { clientFactory: vi.fn(), db: { transaction: async (callback: any) => callback({ insert }) } as any, defaultStartSlot: 0n, logLevel: "error", observer: { onPhase, onBatchCommitted } });
+    expect(onBatchCommitted).toHaveBeenCalledWith({ slot: 7n, count: 2, insertedCount: 1 });
+    expect(onCommit).toHaveBeenCalledTimes(1);
+  });
   it("reports each batch phase to the status observer", async () => {
     replayMocks.events = [{ eventId: "event-1", slot: 7n }];
     const returning = vi.fn(async () => [{ id: "event-1", slot: 7n }]);
@@ -434,4 +550,19 @@ describe("runEventStreamProcessor", () => {
       "event-2"
     );
   });
+});
+
+
+it('does not report committed progress when the database transaction rejects', async () => {
+  checkpointMocks.getCheckpoint.mockResolvedValue(null);
+  replayMocks.createEventReplay.mockImplementation(() => ({ [Symbol.asyncIterator]: async function* () { yield* replayMocks.events; } }));
+  replayMocks.events = [{ eventId: 'event-1', slot: 7n }];
+  const onBatchCommitted = vi.fn();
+  const onCheckpoint = vi.fn();
+  await expect(runEventStreamProcessor({ name: 'events', schema: {}, table: {}, getFilter: () => ({}), parse: (event: any) => ({ id: event.eventId, slot: event.slot }) } as any, {
+    clientFactory: vi.fn(), db: { transaction: vi.fn(async () => { throw new Error('db unavailable'); }) } as any,
+    defaultStartSlot: 0n, logLevel: 'error', observer: { onBatchCommitted, onCheckpoint },
+  })).rejects.toThrow('db unavailable');
+  expect(onBatchCommitted).not.toHaveBeenCalled();
+  expect(onCheckpoint).not.toHaveBeenCalled();
 });

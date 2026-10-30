@@ -1,9 +1,6 @@
 /**
- * A read-only address shown in full: the mono string wraps inside a 1pt
- * bordered box, with the kit's copy button beside it. `AddressField` is the
- * input; this is for a value the user only reads and copies, such as a
- * token's mint on its screen. The caller owns the clipboard and how long
- * `copied` stays true, as with `CopyButton`.
+ * A read-only address shown in full; `AddressField` is the input. The caller
+ * owns the clipboard and how long `copied` stays true.
  */
 
 import { Text, View, type StyleProp, type ViewStyle } from "react-native";
@@ -40,7 +37,7 @@ export function AddressRow({ address, copied, onCopy, label, style }: AddressRow
 }
 
 const useStyles = makeStyles((c) => ({
-  row: { alignItems: "stretch", flexDirection: "row", gap: space[2] },
+  row: { alignItems: "center", flexDirection: "row", gap: space[2] },
   box: {
     borderColor: c.border,
     borderWidth: 1,

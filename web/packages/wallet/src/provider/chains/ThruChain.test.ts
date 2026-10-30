@@ -26,6 +26,11 @@ describe("EmbeddedThruChain signing-session refresh", () => {
     vi.unstubAllGlobals();
   });
 
+  it("does not expose raw passkey challenge signing", () => {
+    const chain = new EmbeddedThruChain({} as never, {} as never);
+    expect(chain).not.toHaveProperty("signPasskeyChallenge");
+  });
+
   it("shows the wallet when a retained signing session has expired locally", async () => {
     vi.stubGlobal("window", {
       location: { origin: "https://app.example" },
@@ -102,7 +107,7 @@ describe("EmbeddedThruChain signing-session refresh", () => {
         return {
           result: {
             session: wireSession,
-            programAddress: "thru_passkey_manager",
+            programAddress: "wallet_program",
             instructionData: "AQID",
           },
         };

@@ -595,7 +595,7 @@ fn parse_validator_table(data: &[u8], attestor_table: [u8; 32], current_slot: u6
     let base_weights_start = base_sm_off.saturating_add(base_weights_off);
     let total_weights_start = base_sm_off.saturating_add(total_weights_off);
     let weight_updates_start = base_sm_off.saturating_add(weight_updates_off);
-    let total_weights_capacity = usize::try_from(delta1.saturating_add(delta2).saturating_add(1)).map_err(|_| {
+    let total_weights_capacity = usize::try_from(delta1.saturating_add(delta2).saturating_add(2)).map_err(|_| {
         CliError::Validation("Validator table total-weights capacity is too large".to_string())
     })?;
 
@@ -1811,7 +1811,7 @@ mod tests {
         let base_sm_off = CONSENSUS_VALIDATOR_STATE_HEADER_SIZE;
         let stake_slots_off = CONSENSUS_STATE_BASE_HEADER_SIZE;
         let base_weights_off = stake_slots_off + server_count * CONSENSUS_ATTESTOR_SEAT_SIZE;
-        let total_weights_capacity = 25usize;
+        let total_weights_capacity = 26usize;
         let total_weights_off = base_weights_off + server_count * 8;
         let weight_updates_off = total_weights_off + total_weights_capacity * 8;
         let metadata_off =

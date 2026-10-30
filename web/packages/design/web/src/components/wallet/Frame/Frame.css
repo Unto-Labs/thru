@@ -1,5 +1,3 @@
-/* Self-contained light surface so the wallet chrome reads correctly even when
-   placed over a dark demo stage (a popup over a dapp). */
 .tds-frame {
   box-sizing: border-box;
   position: relative;
@@ -21,7 +19,7 @@
 /* Content swaps inside a mounted frame (`animateResize`): the box eases to
    its new size instead of jumping. Frame.tsx pins the height from the old
    value to the new one so the transition has two lengths to run between;
-   width follows the mode class (dialog ↔ full). 280ms mirrors RESIZE_MS. */
+   width follows the mode class (dialog ↔ full). */
 .tds-frame--resize {
   transition:
     height 280ms var(--ease-standard),
@@ -41,7 +39,6 @@
   animation: tds-island-out 480ms var(--ease-standard) both;
   pointer-events: none;
 }
-/* Reduced motion: no pill-to-sheet growth, only a short fade either way. */
 @media (prefers-reduced-motion: reduce) {
   .tds-frame--in {
     animation: tds-island-fade-in var(--duration-fast) var(--ease-standard) both;
@@ -68,8 +65,6 @@
   font-size: 12px;
   color: var(--color-text-primary);
 }
-/* A long host truncates in the middle of the bar rather than wrapping into
-   the close button. */
 .tds-frame__label {
   min-width: 0;
   overflow: hidden;
@@ -139,15 +134,10 @@
   outline-offset: 2px;
 }
 
-/* Without a site identity the bar is just controls (back, close): no rule
-   under it, so the screen's own header reads as the top of the sheet. */
 .tds-frame__bar--plain {
   border-bottom-color: transparent;
 }
 
-/* With neither a site nor a back button the bar holds only the close button.
-   It floats over the top right so the screen's centred header starts right
-   under the top edge instead of under an empty row. */
 .tds-frame__bar--float {
   position: absolute;
   top: 0;
@@ -156,8 +146,6 @@
   border-bottom: none;
 }
 
-/* Back button in place of the site identity: a ghost Button nudged so its
-   icon lines up with the content's left edge. */
 .tds-frame__back {
   margin: -4px 0 -4px calc(-1 * var(--space-2));
 }
@@ -167,20 +155,9 @@
   flex-direction: column;
 }
 
-/* ── Mobile: sheet chrome ───────────────────────────────────────────────────
-   The frame is a 360px floating panel on a desktop. Below 640px it is the
-   sheet itself: full width, only its top corners rounded, and a grabber above
-   the bar. Metrics are the design's - 52px bar, 24px mark, mono 13 label,
-   16px verified badge, 44px close target, 4px 16px 16px body.
-
-   The grabber is a pseudo-element so the sheet needs no different markup, and
-   so no caller has to know which presentation it is in. */
-
 @media (max-width: 640px) {
   .tds-frame {
     width: 100%;
-    /* Bound to the container, not unbounded: the width follows the viewport
-       and can never overrun it. */
     max-width: 100%;
     border-width: 0;
     border-radius: 12px 12px 0 0;
@@ -247,10 +224,8 @@
   }
 }
 
-/* A sheet is anchored to the bottom edge, so content taller than the viewport
-   would push the bar - and its close button - off the top with no way to
-   scroll back to it. Cap the sheet; the screen body scrolls inside it (see
-   Screen.css) so the bar and the action row both stay pinned. */
+/* A bottom-anchored sheet taller than the viewport pushes its bar off the top
+   with no way to scroll back, so cap it; the body scrolls (Screen.css). */
 @media (max-width: 640px) {
   .tds-frame {
     max-height: 92vh;
@@ -266,17 +241,8 @@
   }
 }
 
-/* ── Network status ─────────────────────────────────────────────────────────
-   The active network, centred under the screens in a band of its own: the
-   same space above and below it (--space-3), on every screen. So the block
-   that ends the sheet gives its own trailing space up - the last band of the
-   last Screen (body or action row), or PoweredBy - and the space above is
-   measured from what is drawn there: a button's edge, or a label. A
-   borderless last control (ghost button, bottom row) keeps its whole box; the
-   status line moves up by the control's padding instead. PoweredBy and the
-   status are one two-line caption footer, so they share its --space-2. The
-   status line sits outside the content, so a body that scrolls never runs
-   into it, and lets taps through to a control it overlaps. */
+/* The status sits outside the content, so a scrolling body never runs into
+   it, and lets taps through to a control it overlaps. */
 
 .tds-frame__network {
   --tds-network-space: var(--space-3);

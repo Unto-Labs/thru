@@ -1,10 +1,19 @@
 import { deriveManagedProgramAddresses } from '../manager/derivation.js';
-import { deriveRatelimitPolicyAddress } from '../ratelimit/derivation.js';
 import { deriveAddress, deriveProgramAddress, Pubkey } from '@thru/sdk';
+
+function withDeprecatedPasskeyManagerAlias<T extends { wallet: string }>(values: T) {
+  return Object.freeze(Object.defineProperty(values, 'passkey_manager', {
+    value: values.wallet,
+    enumerable: false,
+  }) as T & {
+    /** @deprecated Use wallet. This alias is intentionally non-enumerable. */
+    readonly passkey_manager: T['wallet'];
+  });
+}
 
 /** Permanent seeds used by programs/bootstrap. Changing a seed changes every
  * managed program and ABI address derived from it. */
-export const BOOTSTRAP_PROGRAM_SEEDS = Object.freeze({
+export const BOOTSTRAP_PROGRAM_SEEDS = withDeprecatedPasskeyManagerAlias({
   noop: 'thru-program:22654259',
   faucet: 'thru-program:310129',
   name_service: 'thru-program:2236909',
@@ -16,14 +25,13 @@ export const BOOTSTRAP_PROGRAM_SEEDS = Object.freeze({
   clob: 'thru-program:79287062',
   thru_registrar: 'thru-program:449594',
   wthru: 'thru-program:1687299648',
-  passkey_manager: 'thru-program:1746189',
+  wallet: 'thru-program:1746189',
   nft: 'thru-program:1654635',
   block_producer: 'thru-program:8222',
   consensus_validator: 'thru-program:35555736',
   eoa: 'thru-program:207434',
   uploader: 'thru-program:1073768',
   compression: 'thru-compression:v1',
-  ratelimit: 'thru-program:1697627',
 } as const);
 
 function managedProgramAddress(seed: string): string {
@@ -35,7 +43,7 @@ export const GENESIS_EOA_PROGRAM_SEED = BOOTSTRAP_PROGRAM_SEEDS.eoa;
 export const GENESIS_EOA_PROGRAM_ADDRESS = managedProgramAddress(GENESIS_EOA_PROGRAM_SEED);
 
 /** Canonical application-facing addresses for bootstrap-managed programs. */
-export const BOOTSTRAP_PROGRAM_ADDRESSES = Object.freeze({
+export const BOOTSTRAP_PROGRAM_ADDRESSES = withDeprecatedPasskeyManagerAlias({
   noop: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.noop),
   faucet: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.faucet),
   name_service: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.name_service),
@@ -47,8 +55,8 @@ export const BOOTSTRAP_PROGRAM_ADDRESSES = Object.freeze({
   clob: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.clob),
   thru_registrar: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.thru_registrar),
   wthru: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.wthru),
-  passkey_manager: managedProgramAddress(
-    BOOTSTRAP_PROGRAM_SEEDS.passkey_manager,
+  wallet: managedProgramAddress(
+    BOOTSTRAP_PROGRAM_SEEDS.wallet,
   ),
   nft: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.nft),
   block_producer: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.block_producer),
@@ -58,7 +66,6 @@ export const BOOTSTRAP_PROGRAM_ADDRESSES = Object.freeze({
   eoa: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.eoa),
   uploader: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.uploader),
   compression: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.compression),
-  ratelimit: managedProgramAddress(BOOTSTRAP_PROGRAM_SEEDS.ratelimit),
 } as const);
 
 function stateAddress(program: string, label: string): string {
@@ -70,15 +77,6 @@ function stateAddress(program: string, label: string): string {
 const wthruSeed = new Uint8Array(32);
 /** Created by Faucet initialization after deployment, never by genesis. */
 export const BOOTSTRAP_FAUCET_VAULT_ADDRESS = stateAddress(BOOTSTRAP_PROGRAM_ADDRESSES.faucet, 'vault');
-
-/** VERIFIED rate limiter policy 0 for the faucet, created by bootstrap
- * ratelimit setup. Its address depends only on the rate limiter, the faucet
- * and policy_id, so it is the same on every network. */
-export const BOOTSTRAP_FAUCET_RATE_LIMIT_POLICY_ID = 0n;
-export const BOOTSTRAP_FAUCET_RATE_LIMIT_POLICY_ADDRESS = deriveRatelimitPolicyAddress(
-  BOOTSTRAP_PROGRAM_ADDRESSES.ratelimit,
-  { target: BOOTSTRAP_PROGRAM_ADDRESSES.faucet, policyId: BOOTSTRAP_FAUCET_RATE_LIMIT_POLICY_ID, verified: true },
-).address;
 
 wthruSeed.set(new TextEncoder().encode('wthru'));
 const wthruMintSeed = deriveAddress([

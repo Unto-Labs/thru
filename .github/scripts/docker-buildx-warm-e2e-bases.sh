@@ -32,8 +32,8 @@ case "$scope" in
       ts)
         images+=(
           "golang:1.26-bookworm"
-          "node:26-bookworm"
-          "node:26-slim"
+          "node:26.12.1-bookworm"
+          "node:26.12.1-slim"
         )
         ;;
       "")
@@ -47,7 +47,7 @@ case "$scope" in
     esac
     ;;
   bridge)
-    images+=("node:26-bookworm")
+    images+=("node:26.12.1-bookworm")
     ;;
   *)
     echo "unknown image scope: $scope" >&2

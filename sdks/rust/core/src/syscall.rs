@@ -437,6 +437,8 @@ mod imp {
 
     /// Set flags on an account.
     ///
+    /// Pass the complete flags byte, preserving unrelated current flags.
+    ///
     /// # Safety
     ///
     /// This syscall modifies the account's metadata flags in the VM.
@@ -541,6 +543,7 @@ pub enum SyscallCode {
     InvalidSignature = -44,
     AccountUncompressable = -45,
     EventIsZeroSize = -46,
+    NativeReceiveDisabled = -47,
     ProgramInCallStack = -49,
 
     // Fallback
@@ -592,6 +595,7 @@ impl SyscallCode {
             -44 => Self::InvalidSignature,
             -45 => Self::AccountUncompressable,
             -46 => Self::EventIsZeroSize,
+            -47 => Self::NativeReceiveDisabled,
             -49 => Self::ProgramInCallStack,
             _ => Self::UnknownCode,
         }

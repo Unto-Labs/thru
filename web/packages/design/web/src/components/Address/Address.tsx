@@ -22,7 +22,7 @@ export interface AddressProps {
   /** Plain link target. For framework routing, pass `render` instead. */
   href?: string;
   /** A link element to wrap the value (e.g. a Next `<Link/>`), cloned with the
-   *  value as its children — keeps framework coupling in the consumer. */
+   *  value as its children. */
   render?: React.ReactElement;
   className?: string;
   /** Class applied to the value text (e.g. a hover-highlight from the consumer). */
@@ -37,9 +37,7 @@ function truncate(v: string, leading: number, trailing: number): string {
 
 /**
  * Address — a middle-truncated, mono identifier (address / hash / signature)
- * with an inline copy icon and an optional link. Presentational and
- * framework-agnostic: pass `render` to use a routing `<Link/>`, or `href` for a
- * plain anchor. The full value is exposed via the native title on hover.
+ * with an inline copy icon and an optional link.
  */
 export function Address({
   value,

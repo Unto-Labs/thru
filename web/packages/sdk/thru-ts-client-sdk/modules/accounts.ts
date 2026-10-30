@@ -14,6 +14,7 @@ import {
     ConsensusStatus,
     VersionContext,
     AccountView,
+    AccountStateFilter,
     DataSlice,
     RawAccount,
     StateProofType,
@@ -49,6 +50,8 @@ export interface RawAccountQueryOptions {
 }
 
 export interface ListAccountsOptions {
+    /** Defaults to ALL, including live and compressed accounts. */
+    state?: AccountStateFilter;
     view?: AccountView;
     versionContext?: VersionContext;
     filter?: Filter;
@@ -93,6 +96,7 @@ export function listAccounts(
     options: ListAccountsOptions,
 ): Promise<AccountList> {
     const request = create(ListAccountsRequestSchema, {
+        state: options.state ?? AccountStateFilter.ALL,
         view: options.view ?? DEFAULT_ACCOUNT_VIEW,
         versionContext: options.versionContext ?? DEFAULT_VERSION_CONTEXT,
         filter: options.filter?.toProto(),

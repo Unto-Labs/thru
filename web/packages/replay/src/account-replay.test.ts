@@ -1,21 +1,27 @@
 import { create } from "@bufbuild/protobuf";
+import { Code, ConnectError } from "@connectrpc/connect";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import {
   AccountDataSchema,
+  AccountStateFilter,
   AccountMetaSchema,
+  AccountView,
   AccountPageSchema,
   AccountSchema,
   AccountUpdateSchema,
+  BatchGetRawAccountsResponseSchema,
   BlockFinishedSchema,
   ListAccountsResponseSchema,
   PubkeySchema,
+  RawAccountSchema,
   StreamAccountUpdatesResponseSchema,
   VersionContextMetadataSchema,
   type Account,
+  type BatchGetRawAccountsResponse,
   type ListAccountsResponse,
   type StreamAccountUpdatesResponse,
 } from "@thru/sdk/proto";
-import { createAccountsByOwnerReplay, AccountSeqTracker } from "./account-replay";
+import { createAccountsByOwnerReplay, AccountSeqTracker, type AccountReplayEvent } from "./account-replay";
 import { PAGE_SIZE } from "./page-assembler";
 import type { AccountSource } from "./chain-client";
 import type { RetryConfig } from "./retry";
@@ -25,6 +31,13 @@ const TEST_RETRY_CONFIG: RetryConfig = {
   initialDelayMs: 5,
   maxDelayMs: 5,
   connectionTimeoutMs: 20,
+};
+
+/* Reconnects quickly after a stream error, but never on idleness. */
+const QUIET_LIVE_RETRY_CONFIG: RetryConfig = {
+  initialDelayMs: 5,
+  maxDelayMs: 5,
+  connectionTimeoutMs: 60_000,
 };
 
 const SLOW_BACKOFF_RETRY_CONFIG: RetryConfig = {
@@ -49,7 +62,7 @@ describe("account-owner replay reconnect cleanup", () => {
     const freshStream = createSnapshotThenClosableStream(makeSnapshot(bytes(2), owner, 42n));
     const client1 = createMockClient(staleStream.iterable);
     const client2 = createMockClient(freshStream.iterable);
-    const clients = [client1, client2];
+    const clients = [client1, createCompressedWalkClient(), client2];
     const clientFactory = vi.fn(() => clients.shift() ?? client2);
     const logger = createMockLogger();
 
@@ -80,7 +93,7 @@ describe("account-owner replay reconnect cleanup", () => {
       },
     });
 
-    expect(clientFactory).toHaveBeenCalledTimes(2);
+    expect(clientFactory).toHaveBeenCalledTimes(3);
     expect(client1.streamAccountUpdates).toHaveBeenCalledTimes(1);
     expect(client2.streamAccountUpdates).toHaveBeenCalledTimes(1);
     expect(staleStream.return).toHaveBeenCalledTimes(1);
@@ -128,385 +141,541 @@ describe("account-owner replay reconnect cleanup", () => {
     await vi.advanceTimersByTimeAsync(7);
   });
 
-  test("catch-up yields accounts updated while reconnecting", async () => {
+  test("catch-up reads changed accounts unpinned, including ones the stream already delivered", async () => {
     const owner = bytes(3);
-    const firstAccount = makeAccount(bytes(4), owner, 100n, 1n);
-    const catchUpAccount = makeAccount(bytes(5), owner, 101n, 2n);
-    const staleStream = createSnapshotThenHangingStream(accountToSnapshot(firstAccount));
-    const freshStream = createHangingStream();
-    const client1 = createMockClient(staleStream.iterable);
-    const client2 = createMockClient(freshStream.iterable);
+    const streamed = makeAccount(bytes(4), owner, 100n, 1n);
+    const changedDuringOutage = makeAccount(bytes(4), owner, 101n, 2n);
+    const updatedDuringOutage = makeAccount(bytes(5), owner, 101n, 1n);
+    const client1 = createMockClient(createSequenceThenFailingStream([accountToSnapshot(streamed)]).iterable);
+    const client2 = createMockClient(createHangingStream().iterable);
     client2.listAccounts.mockResolvedValue(
-      create(ListAccountsResponseSchema, { accounts: [catchUpAccount] })
+      create(ListAccountsResponseSchema, { accounts: [changedDuringOutage, updatedDuringOutage] })
     );
-    client2.getAccount.mockResolvedValue(catchUpAccount);
-    const clients = [client1, client2];
-    const clientFactory = vi.fn(() => clients.shift() ?? client2);
+    client2.batchGetRawAccounts.mockResolvedValue(batchOf(changedDuringOutage, updatedDuringOutage));
+    const clients = [client1, createCompressedWalkClient(), client2];
     const logger = createMockLogger();
+    const controller = new AbortController();
 
-    const replay = createAccountsByOwnerReplay({
-      clientFactory,
+    const replay = collectEvents(createAccountsByOwnerReplay({
+      clientFactory: () => clients.shift() ?? client2,
       owner,
       logger,
-      retryConfig: SLOW_BACKOFF_RETRY_CONFIG,
-      reconnectCleanupTimeoutMs: 1000,
-      cleanupInterval: 1000,
-    });
-    const iterator = replay[Symbol.asyncIterator]();
+      readConnections: 1,
+      retryConfig: QUIET_LIVE_RETRY_CONFIG,
+      signal: controller.signal,
+    }));
+    await vi.advanceTimersByTimeAsync(100);
 
-    const firstEvent = iterator.next();
-    await vi.advanceTimersByTimeAsync(0);
-    await vi.advanceTimersByTimeAsync(10);
-    await expect(firstEvent).resolves.toMatchObject({
-      done: false,
-      value: {
-        type: "account",
-        account: {
-          addressHex: "04",
-          slot: 100n,
-          source: "stream",
-        },
-      },
-    });
-
-    const nextEvent = iterator.next();
-    await vi.advanceTimersByTimeAsync(SLOW_BACKOFF_RETRY_CONFIG.connectionTimeoutMs + 11);
-    await vi.advanceTimersByTimeAsync(0);
-
-    await expect(nextEvent).resolves.toMatchObject({
-      done: false,
-      value: {
-        type: "account",
-        account: {
-          addressHex: "05",
-          slot: 101n,
-          source: "backfill",
-        },
-      },
-    });
-
-    expect(clientFactory).toHaveBeenCalledTimes(2);
-    expect(client2.streamAccountUpdates).toHaveBeenCalledTimes(1);
+    expect(replay.events).toEqual(["04@100", "04@101", "05@101"]);
+    expect(replay.sources).toEqual(["stream", "backfill", "backfill"]);
     expect(client2.listAccounts).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filter: expect.objectContaining({
-          params: expect.objectContaining({
-            min_updated_slot: expect.objectContaining({
-              kind: { case: "uintValue", value: 100n },
-            }),
-          }),
-        }),
-      })
+      expect.objectContaining({ state: AccountStateFilter.LIVE })
     );
-    expect(client2.getAccount).toHaveBeenCalledWith(
-      expect.objectContaining({
-        versionContext: expect.objectContaining({
-          version: { case: "slot", value: 101n },
-        }),
-      })
-    );
+    expect(minUpdatedSlot(client2.listAccounts.mock.calls[0][0])).toBe(100n);
+    expect(client2.batchGetRawAccounts.mock.calls).toEqual([[{
+      view: AccountView.FULL,
+      items: [{ address: { value: bytes(4) } }, { address: { value: bytes(5) } }],
+    }]]);
     expect(logger.info).toHaveBeenCalledWith(
       "Replay stream reconnect catch-up completed",
       expect.objectContaining({
         event: "replay.stream.reconnect.catch_up_completed",
         from_slot: "100",
-        accounts_queued: 1,
+        accounts_queued: 2,
+        accounts_skipped: 0,
       })
     );
 
-    const close = iterator.return?.();
+    controller.abort();
     await vi.advanceTimersByTimeAsync(5000);
-    await close;
+    await replay.done;
   });
 
-  test("catch-up getAccount failures still emit readable deferred accounts", async () => {
-    const owner = bytes(33);
-    const firstAccount = makeAccount(bytes(34), owner, 100n, 1n);
-    const failedCatchUpAccount = makeAccount(bytes(35), owner, 101n, 2n);
-    const readableCatchUpAccount = makeAccount(bytes(36), owner, 102n, 3n);
-    const staleStream = createSnapshotThenHangingStream(accountToSnapshot(firstAccount));
-    const freshStream = createHangingStream();
-    const client1 = createMockClient(staleStream.iterable);
-    const client2 = createMockClient(freshStream.iterable);
+  test("catch-up skips an account read below the catch-up slot", async () => {
+    const owner = bytes(13);
+    const streamed = makeAccount(bytes(14), owner, 100n, 1n);
+    const belowCatchUp = makeAccount(bytes(15), owner, 99n, 1n);
+    const updatedDuringOutage = makeAccount(bytes(16), owner, 101n, 1n);
+    const client1 = createMockClient(createSequenceThenFailingStream([accountToSnapshot(streamed)]).iterable);
+    const client2 = createMockClient(createHangingStream().iterable);
     client2.listAccounts.mockResolvedValue(
-      create(ListAccountsResponseSchema, { accounts: [failedCatchUpAccount, readableCatchUpAccount] })
+      create(ListAccountsResponseSchema, { accounts: [belowCatchUp, updatedDuringOutage] })
     );
-    client2.getAccount.mockImplementation(async (request) => {
-      if (request.address?.value[0] === 35) throw new Error("seq mismatch");
-      return readableCatchUpAccount;
-    });
-    const clients = [client1, client2];
-    const clientFactory = vi.fn(() => clients.shift() ?? client2);
+    client2.batchGetRawAccounts.mockResolvedValue(batchOf(belowCatchUp, updatedDuringOutage));
+    const clients = [client1, createCompressedWalkClient(), client2];
     const logger = createMockLogger();
+    const controller = new AbortController();
 
-    const replay = createAccountsByOwnerReplay({
-      clientFactory,
+    const replay = collectEvents(createAccountsByOwnerReplay({
+      clientFactory: () => clients.shift() ?? client2,
       owner,
       logger,
-      retryConfig: SLOW_BACKOFF_RETRY_CONFIG,
-      maxRetries: 2,
-      reconnectCleanupTimeoutMs: 1000,
-      healthLogIntervalMs: 50,
-      cleanupInterval: 1000,
-    });
-    const iterator = replay[Symbol.asyncIterator]();
-
-    const firstEvent = iterator.next();
-    await vi.advanceTimersByTimeAsync(0);
-    await vi.advanceTimersByTimeAsync(10);
-    await expect(firstEvent).resolves.toMatchObject({
-      done: false,
-      value: {
-        type: "account",
-        account: {
-          addressHex: "22",
-          slot: 100n,
-          source: "stream",
-        },
-      },
-    });
-
-    const readableCatchUpEvent = iterator.next();
-    await vi.advanceTimersByTimeAsync(SLOW_BACKOFF_RETRY_CONFIG.connectionTimeoutMs + 11);
+      readConnections: 1,
+      retryConfig: QUIET_LIVE_RETRY_CONFIG,
+      signal: controller.signal,
+    }));
     await vi.advanceTimersByTimeAsync(100);
 
-    await expect(readableCatchUpEvent).resolves.toMatchObject({
-      done: false,
-      value: {
-        type: "account",
-        account: {
-          addressHex: "24",
-          slot: 102n,
-          source: "backfill",
-        },
-      },
-    });
-
-    expect(client2.getAccount).toHaveBeenCalledTimes(3);
-    expect(logger.error).toHaveBeenCalledWith(
-      "Replay account fetch failed",
-      expect.objectContaining({
-        event: "replay.account.fetch_failed",
-        phase: "catch_up",
-        address: "23",
-        slot: "101",
-        attempts: 2,
-        error: expect.any(Error),
-      })
+    expect(replay.events).toEqual(["0e@100", "10@101"]);
+    expect(logger.info).toHaveBeenCalledWith(
+      "Replay stream reconnect catch-up completed",
+      expect.objectContaining({ from_slot: "100", accounts_queued: 1, accounts_skipped: 1 })
     );
+
+    controller.abort();
+    await vi.advanceTimersByTimeAsync(5000);
+    await replay.done;
+  });
+
+  test("catch-up read failures still emit readable accounts and deferred stream events", async () => {
+    const owner = bytes(33);
+    const streamed = makeAccount(bytes(34), owner, 100n, 1n);
+    const unreadable = makeAccount(bytes(35), owner, 101n, 2n);
+    const readable = makeAccount(bytes(36), owner, 102n, 3n);
+    const liveDuringCatchUp = makeAccount(bytes(37), owner, 103n, 1n);
+    const client1 = createMockClient(createSequenceThenFailingStream([accountToSnapshot(streamed)]).iterable);
+    const client2 = createMockClient(createSequenceThenHangingStream([accountToSnapshot(liveDuringCatchUp)]).iterable);
+    client2.listAccounts.mockResolvedValue(
+      create(ListAccountsResponseSchema, { accounts: [unreadable, readable] })
+    );
+    // The node refuses the pair as over budget, then fails one of the halves.
+    client2.batchGetRawAccounts.mockImplementation(async (request) => {
+      if (request.items!.length > 1) throw new ConnectError("over budget", Code.ResourceExhausted);
+      if (request.items![0].address!.value![0] === 35) throw new Error("seq mismatch");
+      return batchOf(readable);
+    });
+    const clients = [client1, createCompressedWalkClient(), client2];
+    const logger = createMockLogger();
+    const controller = new AbortController();
+
+    const replay = collectEvents(createAccountsByOwnerReplay({
+      clientFactory: () => clients.shift() ?? client2,
+      owner,
+      logger,
+      readConnections: 1,
+      retryConfig: QUIET_LIVE_RETRY_CONFIG,
+      healthLogIntervalMs: 50,
+      signal: controller.signal,
+    }));
+    await vi.advanceTimersByTimeAsync(20_000);
+
+    expect(replay.events).toEqual(["22@100", "24@102", "25@103"]);
+    expect(client2.batchGetRawAccounts.mock.calls[0][0]).toEqual({
+      view: AccountView.FULL,
+      items: [{ address: { value: bytes(35) } }, { address: { value: bytes(36) } }],
+    });
     expect(logger.warn).toHaveBeenCalledWith(
       "Replay stream reconnect catch-up failed",
       expect.objectContaining({
         event: "replay.stream.reconnect.catch_up_failed",
-        error: expect.objectContaining({ name: "DeferredAccountFetchError" }),
+        from_slot: "100",
+        error: expect.objectContaining({
+          name: "DeferredAccountFetchError",
+          message: "Replay stream reconnect catch-up failed to fetch 1 account",
+          failures: [{ addressHex: "23", error: expect.objectContaining({ message: "seq mismatch" }) }],
+        }),
       })
     );
-
-    await vi.advanceTimersByTimeAsync(50);
     expect(logger.info).toHaveBeenCalledWith(
       "Replay health summary",
-      expect.objectContaining({
-        event: "replay.health",
-        fetch_failures_total: 1,
-      })
+      expect.objectContaining({ event: "replay.health", fetch_failures_total: 1 })
     );
 
-    const close = iterator.return?.();
+    controller.abort();
     await vi.advanceTimersByTimeAsync(5000);
-    await close;
+    await replay.done;
   });
 
   test("catch-up list failures retry through reconnect instead of ending replay", async () => {
     const owner = bytes(6);
-    const firstAccount = makeAccount(bytes(7), owner, 100n, 1n);
+    const streamed = makeAccount(bytes(7), owner, 100n, 1n);
     const catchUpAccount = makeAccount(bytes(8), owner, 101n, 2n);
     const liveAccountAfterGap = makeAccount(bytes(9), owner, 200n, 3n);
-    const initialStream = createSnapshotThenHangingStream(accountToSnapshot(firstAccount));
-    const failedCatchUpStream = createSequenceThenHangingStream([
+    const liveAfterGap = () => createSequenceThenHangingStream([
       accountToSnapshot(liveAccountAfterGap),
       makeBlockFinished(200n),
-    ]);
-    const successfulCatchUpStream = createSequenceThenHangingStream([
-      accountToSnapshot(liveAccountAfterGap),
-      makeBlockFinished(200n),
-    ]);
-    const client1 = createMockClient(initialStream.iterable);
-    const client2 = createMockClient(failedCatchUpStream.iterable);
-    const client3 = createMockClient(successfulCatchUpStream.iterable);
+    ]).iterable;
+    const client1 = createMockClient(createSequenceThenFailingStream([accountToSnapshot(streamed)]).iterable);
+    const client2 = createMockClient(liveAfterGap());
+    const client3 = createMockClient(liveAfterGap());
     client2.listAccounts.mockRejectedValue(new Error("list boom"));
     client3.listAccounts.mockResolvedValue(
       create(ListAccountsResponseSchema, { accounts: [catchUpAccount] })
     );
-    client3.getAccount.mockResolvedValue(catchUpAccount);
-    const clients = [client1, client2, client3];
-    const clientFactory = vi.fn(() => clients.shift() ?? client3);
+    client3.batchGetRawAccounts.mockResolvedValue(batchOf(catchUpAccount));
+    const clients = [client1, createCompressedWalkClient(), client2, createCompressedWalkClient(), client3];
     const logger = createMockLogger();
+    const controller = new AbortController();
 
-    const replay = createAccountsByOwnerReplay({
-      clientFactory,
+    const replay = collectEvents(createAccountsByOwnerReplay({
+      clientFactory: () => clients.shift() ?? client3,
       owner,
       logger,
-      retryConfig: SLOW_BACKOFF_RETRY_CONFIG,
-      maxRetries: 2,
-      reconnectCleanupTimeoutMs: 1000,
-      cleanupInterval: 1000,
-    });
-    const iterator = replay[Symbol.asyncIterator]();
+      readConnections: 1,
+      retryConfig: QUIET_LIVE_RETRY_CONFIG,
+      signal: controller.signal,
+    }));
+    await vi.advanceTimersByTimeAsync(20_000);
 
-    const firstEvent = iterator.next();
-    await vi.advanceTimersByTimeAsync(0);
-    await vi.advanceTimersByTimeAsync(10);
-    await expect(firstEvent).resolves.toMatchObject({
-      done: false,
-      value: {
-        type: "account",
-        account: {
-          addressHex: "07",
-          slot: 100n,
-          source: "stream",
-        },
-      },
-    });
-
-    const recoveredCatchUpEvent = iterator.next();
-    await vi.advanceTimersByTimeAsync(SLOW_BACKOFF_RETRY_CONFIG.connectionTimeoutMs + 11);
-    await vi.advanceTimersByTimeAsync(100);
-    await vi.advanceTimersByTimeAsync(SLOW_BACKOFF_RETRY_CONFIG.initialDelayMs);
-    await vi.advanceTimersByTimeAsync(0);
-
-    await expect(recoveredCatchUpEvent).resolves.toMatchObject({
-      done: false,
-      value: {
-        type: "account",
-        account: {
-          addressHex: "08",
-          slot: 101n,
-          source: "backfill",
-        },
-      },
-    });
-
-    const liveEventAfterGap = iterator.next();
-    await expect(liveEventAfterGap).resolves.toMatchObject({
-      done: false,
-      value: {
-        type: "account",
-        account: {
-          addressHex: "09",
-          slot: 200n,
-          source: "stream",
-        },
-      },
-    });
-
-    const blockFinishedAfterGap = iterator.next();
-    await expect(blockFinishedAfterGap).resolves.toMatchObject({
-      done: false,
-      value: {
-        type: "blockFinished",
-        block: {
-          slot: 200n,
-        },
-      },
-    });
-
-    expect(clientFactory).toHaveBeenCalledTimes(3);
-    expect(client2.listAccounts).toHaveBeenCalledTimes(2);
-    expect(client3.listAccounts).toHaveBeenCalledTimes(1);
-    expect(client3.listAccounts).toHaveBeenCalledWith(
-      expect.objectContaining({
-        filter: expect.objectContaining({
-          params: expect.objectContaining({
-            min_updated_slot: expect.objectContaining({
-              kind: { case: "uintValue", value: 100n },
-            }),
-          }),
-        }),
-      })
-    );
-    expect(logger.error).toHaveBeenCalledWith(
-      "Replay stream reconnect catch-up list accounts failed",
-      expect.objectContaining({
-        event: "replay.stream.reconnect.catch_up_list_failed",
-        attempts: 2,
-      })
-    );
+    expect(replay.events).toEqual(["07@100", "08@101", "09@200", "block@200"]);
     expect(logger.warn).toHaveBeenCalledWith(
       "Replay stream reconnect catch-up failed",
       expect.objectContaining({
         event: "replay.stream.reconnect.catch_up_failed",
+        from_slot: "100",
+        error: expect.objectContaining({ message: "list boom" }),
       })
     );
+    expect(client3.listAccounts.mock.calls[0][0]).toMatchObject({ state: AccountStateFilter.LIVE });
+    expect(minUpdatedSlot(client3.listAccounts.mock.calls[0][0])).toBe(100n);
 
-    const close = iterator.return?.();
+    controller.abort();
     await vi.advanceTimersByTimeAsync(5000);
-    await close;
+    await replay.done;
   });
 
-  test("backfill getAccount failures reject after readable accounts are emitted", async () => {
+  test("backfill reads listed accounts unpinned and skips addresses missing from the response", async () => {
     const owner = bytes(30);
-    const failedAccount = makeAccount(bytes(31), owner, 50n, 1n);
-    const readableAccount = makeAccount(bytes(32), owner, 51n, 1n);
+    const [first, missing, last] = [31, 32, 33].map((value, index) =>
+      makeAccount(bytes(value), owner, BigInt(50 + index), 1n)
+    );
     const client = createMockClient(createEndingStream().iterable);
     client.listAccounts.mockResolvedValue(
-      create(ListAccountsResponseSchema, { accounts: [failedAccount, readableAccount] })
+      create(ListAccountsResponseSchema, { accounts: [first, missing, last] })
     );
-    client.getAccount.mockImplementation(async (request) => {
-      if (request.address?.value[0] === 31) throw new Error("seq mismatch");
-      return readableAccount;
-    });
-    const logger = createMockLogger();
+    client.batchGetRawAccounts.mockResolvedValue(batchOf(last, first));
 
-    const replay = createAccountsByOwnerReplay({
+    const iterator = createAccountsByOwnerReplay({ client, owner })[Symbol.asyncIterator]();
+
+    await expect(iterator.next()).resolves.toMatchObject({
+      value: { type: "account", account: { addressHex: "21", slot: 52n, source: "backfill", data: new Uint8Array([7]) } },
+    });
+    await expect(iterator.next()).resolves.toMatchObject({
+      value: { type: "account", account: { addressHex: "1f", slot: 50n, source: "backfill" } },
+    });
+    expect(client.batchGetRawAccounts).toHaveBeenCalledTimes(1);
+    expect(client.batchGetRawAccounts.mock.calls[0][0].items).toEqual([
+      { address: { value: bytes(31) } },
+      { address: { value: bytes(32) } },
+      { address: { value: bytes(33) } },
+    ]);
+    expect(client.getAccount).not.toHaveBeenCalled();
+    await iterator.return?.();
+  });
+
+  test("backfill yields read batches in completion order, not listed order", async () => {
+    const owner = bytes(30);
+    const accounts = Array.from({ length: 1_001 }, (_, i) =>
+      makeAccount(new Uint8Array([i >> 8, i & 0xff]), owner, 50n + BigInt(i), 1n)
+    );
+    const client = createMockClient(createEndingStream().iterable);
+    client.listAccounts.mockResolvedValue(create(ListAccountsResponseSchema, { accounts }));
+    client.batchGetRawAccounts.mockImplementation(async (request) => {
+      if (request.items!.length === 1) return batchOf(accounts[1_000]);
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      return batchOf(...accounts.slice(0, 1_000));
+    });
+
+    const iterator = createAccountsByOwnerReplay({ client, owner, readConnections: 8 })[Symbol.asyncIterator]();
+    await expect(iterator.next()).resolves.toMatchObject({
+      value: { type: "account", account: { addressHex: "03e8", slot: 1_050n } },
+    });
+    const listedFirst = iterator.next();
+    await vi.advanceTimersByTimeAsync(50);
+    await expect(listedFirst).resolves.toMatchObject({
+      value: { type: "account", account: { addressHex: "0000", slot: 50n } },
+    });
+    await iterator.return?.();
+  });
+
+  test("backfill skips accounts the stream already delivered, without an empty batch", async () => {
+    const owner = bytes(35);
+    const listed = makeAccount(bytes(36), owner, 40n, 1n);
+    const stream = createSnapshotThenHangingStream(makeSnapshot(bytes(36), owner, 45n));
+    const client = createMockClient(stream.iterable);
+    client.listAccounts.mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return create(ListAccountsResponseSchema, { accounts: [listed] });
+    });
+
+    const onBackfillComplete = vi.fn();
+    const controller = new AbortController();
+    const iterator = createAccountsByOwnerReplay({
       client,
       owner,
-      logger,
-      maxRetries: 2,
-      cleanupInterval: 1000,
+      onBackfillComplete,
+      signal: controller.signal,
+      reconnectCleanupTimeoutMs: 10,
+    })[Symbol.asyncIterator]();
+    const first = iterator.next();
+    await vi.advanceTimersByTimeAsync(20);
+
+    await expect(first).resolves.toMatchObject({
+      value: { type: "account", account: { addressHex: "24", slot: 45n, source: "stream" } },
     });
-    const iterator = replay[Symbol.asyncIterator]();
+    const live = iterator.next();
+    await vi.advanceTimersByTimeAsync(50);
+    expect(onBackfillComplete).toHaveBeenCalledWith(45n, 45n);
+    expect(client.batchGetRawAccounts).not.toHaveBeenCalled();
+    controller.abort();
+    await vi.advanceTimersByTimeAsync(20);
+    await expect(live).resolves.toMatchObject({ done: true });
+  });
 
-    const readableEvent = iterator.next();
-    await vi.advanceTimersByTimeAsync(100);
+  test("aborting mid-batch stops the backfill before the next account", async () => {
+    const owner = bytes(37);
+    const accounts = [38, 39, 40].map((value) => makeAccount(bytes(value), owner, 40n, 1n));
+    const client = createMockClient(createEndingStream().iterable);
+    client.listAccounts.mockResolvedValue(create(ListAccountsResponseSchema, { accounts }));
+    client.batchGetRawAccounts.mockResolvedValue(batchOf(...accounts));
+    const controller = new AbortController();
 
-    await expect(readableEvent).resolves.toMatchObject({
-      done: false,
-      value: {
-        type: "account",
-        account: {
-          addressHex: "20",
-          slot: 51n,
-          source: "backfill",
-        },
-      },
+    const iterator = createAccountsByOwnerReplay({ client, owner, signal: controller.signal })[Symbol.asyncIterator]();
+    await expect(iterator.next()).resolves.toMatchObject({ value: { account: { addressHex: "26" } } });
+    controller.abort();
+
+    await expect(iterator.next()).resolves.toEqual({ done: true, value: undefined });
+  });
+
+  test("backfill reads in chunks of 1,000 and rejects after the readable chunks are emitted", async () => {
+    const owner = bytes(30);
+    const accounts = Array.from({ length: 1_001 }, (_, i) =>
+      makeAccount(new Uint8Array([i >> 8, i & 0xff]), owner, 50n + BigInt(i), 1n)
+    );
+    const client = createMockClient(createEndingStream().iterable);
+    client.listAccounts.mockResolvedValue(create(ListAccountsResponseSchema, { accounts }));
+    client.batchGetRawAccounts.mockImplementation(async (request) => {
+      if (request.items!.length === 1) throw new Error("unavailable");
+      return batchOf(...accounts.slice(0, 1_000));
     });
 
+    const iterator = createAccountsByOwnerReplay({ client, owner, maxRetries: 2 })[Symbol.asyncIterator]();
+    const slots: bigint[] = [];
+    for (let i = 0; i < 1_000; i++) {
+      slots.push(((await iterator.next()).value as { account: { slot: bigint } }).account.slot);
+    }
+    expect(slots).toEqual(accounts.slice(0, 1_000).map((account) => account.meta!.lastUpdatedSlot));
     const deferredFailure = expect(iterator.next()).rejects.toThrow("Backfill failed to fetch 1 account");
-    await vi.advanceTimersByTimeAsync(100);
+    await vi.advanceTimersByTimeAsync(60_000);
     await deferredFailure;
 
-    expect(client.getAccount).toHaveBeenCalledTimes(3);
-    expect(client.getAccount).toHaveBeenCalledWith(
-      expect.objectContaining({
-        address: expect.objectContaining({ value: bytes(32) }),
-        versionContext: expect.objectContaining({
-          version: { case: "slot", value: 51n },
-        }),
-      })
+    expect(new Set(client.batchGetRawAccounts.mock.calls.map(([request]) => request.items!.length))).toEqual(
+      new Set([1_000, 1])
     );
-    expect(logger.error).toHaveBeenCalledWith(
-      "Replay account fetch failed",
-      expect.objectContaining({
-        event: "replay.account.fetch_failed",
-        phase: "backfill",
-        address: "1f",
-        slot: "50",
-        attempts: 2,
-        error: expect.any(Error),
-      })
-    );
-
     await iterator.return?.();
+  });
+
+  test("backfill splits a batch the node rejects as over its size budget", async () => {
+    const owner = bytes(40);
+    const accounts = [41, 42, 43].map((value) => makeAccount(bytes(value), owner, 60n, 1n));
+    const client = createMockClient(createEndingStream().iterable);
+    client.listAccounts.mockResolvedValue(create(ListAccountsResponseSchema, { accounts }));
+    client.batchGetRawAccounts.mockImplementation(async (request) => {
+      if (request.items!.length > 1) throw new ConnectError("over budget", Code.ResourceExhausted);
+      return batchOf(accounts[request.items![0].address!.value![0] - 41]);
+    });
+
+    const iterator = createAccountsByOwnerReplay({ client, owner })[Symbol.asyncIterator]();
+    const addresses: string[] = [];
+    for (let i = 0; i < 3; i++) {
+      addresses.push(((await iterator.next()).value as { account: { addressHex: string } }).account.addressHex);
+    }
+
+    expect(addresses.sort()).toEqual(["29", "2a", "2b"]);
+    expect(client.batchGetRawAccounts.mock.calls.map(([request]) => request.items!.length)).toEqual([3, 2, 1, 1, 1]);
+    await iterator.return?.();
+  });
+
+  test("backfill retries a transient read failure after a backoff", async () => {
+    const owner = bytes(50);
+    const account = makeAccount(bytes(51), owner, 70n, 1n);
+    const client = createMockClient(createEndingStream().iterable);
+    client.listAccounts.mockResolvedValue(create(ListAccountsResponseSchema, { accounts: [account] }));
+    client.batchGetRawAccounts
+      .mockRejectedValueOnce(new Error("unavailable"))
+      .mockRejectedValueOnce(new Error("unavailable"))
+      .mockResolvedValue(batchOf(account));
+
+    const iterator = createAccountsByOwnerReplay({ client, owner })[Symbol.asyncIterator]();
+    const event = iterator.next();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(client.batchGetRawAccounts).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(10_000);
+    expect(client.batchGetRawAccounts).toHaveBeenCalledTimes(3);
+
+    await expect(event).resolves.toMatchObject({
+      value: { type: "account", account: { addressHex: "33", slot: 70n } },
+    });
+    await iterator.return?.();
+  });
+
+  test("closing the replay stops a backfill read that is still retrying", async () => {
+    const owner = bytes(55);
+    const accounts = Array.from({ length: 1_001 }, (_, i) =>
+      makeAccount(new Uint8Array([i >> 8, i & 0xff]), owner, 80n, 1n)
+    );
+    const client = createMockClient(createEndingStream().iterable);
+    client.listAccounts.mockResolvedValue(create(ListAccountsResponseSchema, { accounts }));
+    client.batchGetRawAccounts.mockImplementation(async (request) => {
+      if (request.items!.length === 1) throw new Error("unavailable");
+      return batchOf(...accounts.slice(0, 1_000));
+    });
+
+    const iterator = createAccountsByOwnerReplay({ client, owner })[Symbol.asyncIterator]();
+    await expect(iterator.next()).resolves.toMatchObject({ value: { account: { addressHex: "0000" } } });
+    const callsAtClose = client.batchGetRawAccounts.mock.calls.length;
+    await iterator.return?.();
+    await vi.advanceTimersByTimeAsync(60_000);
+
+    expect(callsAtClose).toBe(2);
+    expect(client.batchGetRawAccounts).toHaveBeenCalledTimes(callsAtClose);
+    await expect(iterator.next()).resolves.toEqual({ done: true, value: undefined });
+  });
+
+  test("a stream drop during backfill catches up from the stream's slot, not the latest backfill read", async () => {
+    const owner = bytes(60);
+    const streamed = makeAccount(bytes(61), owner, 5_000n, 1n);
+    const latest = makeAccount(bytes(62), owner, 9_000n, 1n);
+    const stale = makeAccount(bytes(63), owner, 3_900n, 1n);
+    const updatedAfterDrop = makeAccount(bytes(63), owner, 6_000n, 2n);
+    const client1 = createMockClient(createSequenceThenFailingStream([accountToSnapshot(streamed)]).iterable);
+    client1.listAccounts.mockImplementation(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return create(ListAccountsResponseSchema, { accounts: [latest, stale] });
+    });
+    client1.batchGetRawAccounts.mockResolvedValue(batchOf(latest, stale));
+    const client2 = createMockClient(createHangingStream().iterable);
+    client2.listAccounts.mockImplementation(async (request) =>
+      create(ListAccountsResponseSchema, { accounts: (minUpdatedSlot(request) ?? 0n) <= 6_000n ? [updatedAfterDrop] : [] })
+    );
+    client2.batchGetRawAccounts.mockResolvedValue(batchOf(updatedAfterDrop));
+    const clients = [client1, createCompressedWalkClient(), client2];
+    const onBackfillComplete = vi.fn();
+    const controller = new AbortController();
+
+    const replay = collectEvents(createAccountsByOwnerReplay({
+      clientFactory: () => clients.shift() ?? client2,
+      owner,
+      readConnections: 1,
+      retryConfig: QUIET_LIVE_RETRY_CONFIG,
+      onBackfillComplete,
+      signal: controller.signal,
+    }));
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(onBackfillComplete).toHaveBeenCalledWith(9_000n, 5_000n);
+    expect(replay.events).toEqual(["3d@5000", "3e@9000", "3f@3900", "3f@6000"]);
+    expect(client2.listAccounts.mock.calls[0][0]).toMatchObject({ state: AccountStateFilter.LIVE });
+    expect(minUpdatedSlot(client2.listAccounts.mock.calls[0][0])).toBe(5_000n);
+    expect(client2.streamAccountUpdates.mock.calls[0][0].filter.params.min_slot.kind.value).toBe(5_000n);
+    controller.abort();
+    await vi.advanceTimersByTimeAsync(100);
+    await replay.done;
+  });
+
+  /* Without a height floor (no getHeight, or a chain younger than 10,000
+     slots), a backfill read covers only its own account, so a reconnect has
+     no safe resume point and ends the replay for the supervisor to restart. */
+  test.each([
+    { name: "no getHeight", finalized: undefined },
+    { name: "a chain younger than the floor margin", finalized: 7_000n },
+  ])("a cold-start reconnect before the stream delivers anything ends the replay ($name)", async ({ finalized }) => {
+    const owner = bytes(64);
+    const read = makeAccount(bytes(65), owner, 9_000n, 1n);
+    const client1 = createMockClient(createSequenceThenFailingStream([]).iterable);
+    if (finalized !== undefined) Object.assign(client1, { getHeight: vi.fn().mockResolvedValue({ finalized }) });
+    client1.listAccounts.mockResolvedValue(create(ListAccountsResponseSchema, { accounts: [read] }));
+    client1.batchGetRawAccounts.mockResolvedValue(batchOf(read));
+    const client2 = createMockClient(createHangingStream().iterable);
+    const clients = [client1, createCompressedWalkClient(), client2];
+    const onBackfillComplete = vi.fn();
+
+    const replay = collectEvents(createAccountsByOwnerReplay({
+      clientFactory: () => clients.shift() ?? client2,
+      owner,
+      readConnections: 1,
+      retryConfig: QUIET_LIVE_RETRY_CONFIG,
+      onBackfillComplete,
+    }));
+    const outcome = replay.done.then(() => "ended", (error: Error) => error.message);
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(onBackfillComplete).toHaveBeenCalledWith(9_000n, 0n);
+    expect(replay.events).toEqual(["41@9000"]);
+    await expect(outcome).resolves.toBe("Replay stream dropped before covering any slot; restarting the account replay");
+    expect(client2.listAccounts).not.toHaveBeenCalled();
+    expect(client2.streamAccountUpdates).not.toHaveBeenCalled();
+  });
+
+  /* The floor trails finalized by 10,000 slots. */
+  test.each([
+    { finalized: 20_000n, streamSlot: 10_000n, catchUpFrom: 10_000n },
+  ])("a quiet stream checkpoints and catches up 10,000 slots below finalized $finalized read before subscribing", async ({ finalized, streamSlot, catchUpFrom }) => {
+    const owner = bytes(66);
+    const read = makeAccount(bytes(67), owner, 9_000n, 1n);
+    const client1 = Object.assign(createMockClient(createSequenceThenFailingStream([]).iterable), {
+      getHeight: vi.fn().mockResolvedValue({ finalized }),
+    });
+    client1.listAccounts.mockResolvedValue(create(ListAccountsResponseSchema, { accounts: [read] }));
+    client1.batchGetRawAccounts.mockResolvedValue(batchOf(read));
+    const client2 = createMockClient(createHangingStream().iterable);
+    const clients = [client1, createCompressedWalkClient(), client2];
+    const onBackfillComplete = vi.fn();
+    const controller = new AbortController();
+
+    const replay = collectEvents(createAccountsByOwnerReplay({
+      clientFactory: () => clients.shift() ?? client2,
+      owner,
+      readConnections: 1,
+      retryConfig: QUIET_LIVE_RETRY_CONFIG,
+      onBackfillComplete,
+      signal: controller.signal,
+    }));
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(onBackfillComplete).toHaveBeenCalledWith(9_000n, streamSlot);
+    expect(replay.events).toEqual(["43@9000"]);
+    expect(minUpdatedSlot(client2.listAccounts.mock.calls[0][0])).toBe(catchUpFrom);
+    controller.abort();
+    await vi.advanceTimersByTimeAsync(100);
+    await replay.done;
+  });
+
+  test("stream events received after the last backfill batch are yielded before onBackfillComplete", async () => {
+    const owner = bytes(68);
+    const accounts = Array.from({ length: 1_000 }, (_, i) =>
+      makeAccount(new Uint8Array([i >> 8, i & 0xff]), owner, 9_000n, 1n)
+    );
+    const stream = createPushableStream();
+    const client = createMockClient(stream.iterable);
+    // One full read batch, then a slow, empty last listing page; the compressed walk lists nothing.
+    client.listAccounts.mockImplementation(async (request) => {
+      if (request.state === AccountStateFilter.COMPRESSED) return create(ListAccountsResponseSchema, {});
+      if (!request.page?.pageToken) {
+        return create(ListAccountsResponseSchema, { accounts, page: { nextPageToken: "page-2" } });
+      }
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      return create(ListAccountsResponseSchema, {});
+    });
+    client.batchGetRawAccounts.mockResolvedValue(batchOf(...accounts));
+    const controller = new AbortController();
+
+    const replay = collectEvents(createAccountsByOwnerReplay({
+      client,
+      owner,
+      onBackfillComplete: (highestSlot, streamSlot) => replay.events.push(`complete ${highestSlot}/${streamSlot}`),
+      signal: controller.signal,
+    }));
+    await vi.advanceTimersByTimeAsync(20);
+    expect(replay.events).toHaveLength(1_000);
+    stream.push(makeSnapshot(bytes(69), owner, 5_000n));
+    await vi.advanceTimersByTimeAsync(100);
+
+    expect(replay.events).toHaveLength(1_002);
+    expect(replay.events.slice(-2)).toEqual(["45@5000", "complete 9000/5000"]);
+    controller.abort();
+    await vi.advanceTimersByTimeAsync(100);
+    await replay.done;
   });
 
   test("stream-ended reconnect increments attempts until a stream message arrives", async () => {
@@ -515,7 +684,7 @@ describe("account-owner replay reconnect cleanup", () => {
     const client1 = createMockClient(createEndingStream().iterable);
     const client2 = createMockClient(createEndingStream().iterable);
     const client3 = createMockClient(liveStream.iterable);
-    const clients = [client1, client2, client3];
+    const clients = [client1, createCompressedWalkClient(), client2, client3];
     const clientFactory = vi.fn(() => clients.shift() ?? client3);
     const logger = createMockLogger();
 
@@ -572,7 +741,7 @@ describe("account-owner replay reconnect cleanup", () => {
     const freshStream = createHangingStream();
     const client1 = createMockClient(staleStream.iterable);
     const client2 = createMockClient(freshStream.iterable);
-    const clients = [client1, client2];
+    const clients = [client1, createCompressedWalkClient(), client2];
     const clientFactory = vi.fn(() => clients.shift() ?? client2);
     const logger = createMockLogger();
 
@@ -591,7 +760,7 @@ describe("account-owner replay reconnect cleanup", () => {
     await vi.advanceTimersByTimeAsync(0);
     await vi.advanceTimersByTimeAsync(TEST_RETRY_CONFIG.connectionTimeoutMs + 11);
     expect(staleStream.return).toHaveBeenCalledTimes(1);
-    expect(clientFactory).toHaveBeenCalledTimes(2);
+    expect(clientFactory).toHaveBeenCalledTimes(3);
 
     controller.abort();
 
@@ -600,7 +769,7 @@ describe("account-owner replay reconnect cleanup", () => {
     expect(client2.streamAccountUpdates).toHaveBeenCalledTimes(1);
 
     await vi.advanceTimersByTimeAsync(5000);
-    expect(clientFactory).toHaveBeenCalledTimes(2);
+    expect(clientFactory).toHaveBeenCalledTimes(3);
     expect(client2.streamAccountUpdates).toHaveBeenCalledTimes(1);
   });
 });
@@ -727,7 +896,6 @@ describe("account replay operational logging", () => {
           dirty_accounts: 0,
           stream_queue_size: 0,
           deferred_queue_size: 0,
-          fetch_queue_size: 0,
           evictions_total: 0,
           dirty_evictions_total: 0,
           resync_failures_total: 0,
@@ -888,7 +1056,7 @@ describe("page-delta overlay (live tail)", () => {
     client.listAccounts.mockResolvedValue(
       create(ListAccountsResponseSchema, { accounts: [metaOnly(account)] })
     );
-    client.getAccount.mockResolvedValue(account);
+    client.batchGetRawAccounts.mockResolvedValue(batchOf(account));
 
     const replay = createAccountsByOwnerReplay({ client, owner, retryConfig: OVERLAY_RETRY_CONFIG });
     const iterator = replay[Symbol.asyncIterator]();
@@ -921,7 +1089,8 @@ describe("page-delta overlay (live tail)", () => {
     });
 
     /* No resync was needed — backfill seeded the cache. */
-    expect(client.getAccount).toHaveBeenCalledTimes(1);
+    expect(client.batchGetRawAccounts).toHaveBeenCalledTimes(1);
+    expect(client.getAccount).not.toHaveBeenCalled();
 
     await iterator.return?.();
   });
@@ -1367,17 +1536,26 @@ function createMockLogger(): ReplayLogger {
 function createMockClient(
   stream: AsyncIterable<StreamAccountUpdatesResponse>
 ): AccountSource & {
+  batchGetRawAccounts: ReturnType<typeof vi.fn<AccountSource["batchGetRawAccounts"]>>;
   getAccount: ReturnType<typeof vi.fn>;
   listAccounts: ReturnType<typeof vi.fn>;
   streamAccountUpdates: ReturnType<typeof vi.fn>;
 } {
   return {
+    batchGetRawAccounts: vi.fn<AccountSource["batchGetRawAccounts"]>(async () =>
+      create(BatchGetRawAccountsResponseSchema, {})
+    ),
     getAccount: vi.fn<() => Promise<Account>>(),
     listAccounts: vi.fn<() => Promise<ListAccountsResponse>>(() =>
       Promise.resolve(create(ListAccountsResponseSchema, { accounts: [] }))
     ),
     streamAccountUpdates: vi.fn(() => stream),
   };
+}
+
+/* The connection the backfill opens for its COMPRESSED listing walk; it lists nothing. */
+function createCompressedWalkClient(): ReturnType<typeof createMockClient> {
+  return createMockClient(createHangingStream().iterable);
 }
 
 function createSnapshotThenHangingStream(
@@ -1561,6 +1739,34 @@ function makeAccount(
   });
 }
 
+/* The BatchGetRawAccounts answer for these accounts; the node keys the map by
+   encoded address, which the replay does not rely on. */
+function batchOf(...accounts: Account[]): BatchGetRawAccountsResponse {
+  return create(BatchGetRawAccountsResponseSchema, {
+    accounts: Object.fromEntries(
+      accounts.map((account, index) => {
+        const meta = account.meta!;
+        const rawMeta = new Uint8Array(64);
+        const view = new DataView(rawMeta.buffer);
+        view.setUint16(0, 0xc7a3, true);
+        rawMeta[2] = 1;
+        view.setUint32(4, meta.dataSize, true);
+        view.setBigUint64(8, meta.seq, true);
+        rawMeta.set(meta.owner!.value, 16);
+        return [
+          String(index),
+          create(RawAccountSchema, {
+            address: account.address,
+            rawMeta,
+            rawData: account.data?.data,
+            versionContext: { slot: meta.lastUpdatedSlot },
+          }),
+        ];
+      })
+    ),
+  });
+}
+
 function accountToSnapshot(account: Account): StreamAccountUpdatesResponse {
   return create(StreamAccountUpdatesResponseSchema, {
     message: {
@@ -1581,4 +1787,44 @@ function makeBlockFinished(slot: bigint): StreamAccountUpdatesResponse {
 
 function bytes(value: number): Uint8Array {
   return new Uint8Array([value]);
+}
+
+function createSequenceThenFailingStream(responses: StreamAccountUpdatesResponse[]): {
+  iterable: AsyncIterable<StreamAccountUpdatesResponse>;
+} {
+  const pending = [...responses];
+  return {
+    iterable: {
+      [Symbol.asyncIterator]() {
+        return {
+          async next(): Promise<IteratorResult<StreamAccountUpdatesResponse>> {
+            const value = pending.shift();
+            if (value) return { done: false, value };
+            throw new ConnectError("stream reset", Code.Unavailable);
+          },
+          async return(): Promise<IteratorResult<StreamAccountUpdatesResponse>> {
+            return { done: true, value: undefined };
+          },
+        };
+      },
+    },
+  };
+}
+
+/* Consumes a replay in the background, recording each event as "address@slot"
+   and each account event's source. */
+function collectEvents(replay: AsyncIterable<AccountReplayEvent>): { events: string[]; sources: string[]; done: Promise<void> } {
+  const events: string[] = [];
+  const sources: string[] = [];
+  const done = (async () => {
+    for await (const event of replay) {
+      events.push(event.type === "account" ? `${event.account.addressHex}@${event.account.slot}` : `block@${event.block.slot}`);
+      if (event.type === "account") sources.push(event.account.source);
+    }
+  })();
+  return { events, sources, done };
+}
+
+function minUpdatedSlot(request: { filter: { params: Record<string, { kind: { value: unknown } }> } }): bigint | undefined {
+  return request.filter.params.min_updated_slot?.kind.value as bigint | undefined;
 }

@@ -1,8 +1,6 @@
-// Provider and context
 export type { ThruContextValue } from "./ThruContext";
 export { ThruProvider, type ThruProviderProps } from "./ThruProvider";
 
-// Hooks
 export {
   useAccounts,
   type UseAccountsOptions,

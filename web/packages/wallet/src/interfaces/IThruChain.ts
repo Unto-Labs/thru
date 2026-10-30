@@ -3,17 +3,9 @@ import type {
   ThruSigningSession,
   ThruSigningSessionCreateOptions,
   ThruSigningSessionRenewOptions,
-  ThruPasskeyChallengeIntent,
-  ThruPasskeyChallengeSignature,
   ThruTransactionIntent,
 } from "./types";
 
-/**
- * Minimal Thru chain interface exposed to SDK consumers.
- * The concrete implementation will evolve as the Thru transaction
- * flow is fleshed out, but maintaining a dedicated contract now
- * keeps the Surface area aligned with other chain adapters.
- */
 export interface IThruChain {
   /** Indicates whether the wallet has approved a Thru connection. */
   readonly connected: boolean;
@@ -24,7 +16,6 @@ export interface IThruChain {
    */
   connect(): Promise<{ publicKey: string }>;
 
-  /** Disconnect the currently connected Thru account. */
   disconnect(): Promise<void>;
 
   /**
@@ -44,14 +35,6 @@ export interface IThruChain {
   signTransaction(transaction: ThruTransactionIntent): Promise<string>;
 
   /**
-   * Sign a backend-prepared passkey-manager challenge with the wallet-owned
-   * selected passkey and return submit-ready signature fields.
-   */
-  signPasskeyChallenge(
-    challenge: ThruPasskeyChallengeIntent,
-  ): Promise<ThruPasskeyChallengeSignature>;
-
-  /**
    * Create a temporary wallet-owned signing session. The SDK stores the
    * returned descriptor in app-local storage; the wallet stores the private key.
    */
@@ -59,7 +42,13 @@ export interface IThruChain {
     options: ThruSigningSessionCreateOptions,
   ): Promise<ThruSigningSession>;
 
-  /** Renew a signing session non-interactively, including its on-chain update. */
+  /**
+   * Renew a signing session non-interactively, including its on-chain update.
+   * The current session authorizes the replacement, so the wallet caps the
+   * renewed session at the current session's expiry and the on-chain 24-hour
+   * renewal limit; read `expiresAt` from the result. A longer session needs
+   * `createSigningSession`.
+   */
   renewSession(
     options: ThruSigningSessionRenewOptions,
   ): Promise<ThruSigningSession>;

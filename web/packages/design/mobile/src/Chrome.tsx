@@ -1,11 +1,5 @@
-/**
- * Screen chrome: Screen wrapper, NavBar (52pt, 44/1fr/44 grid, hairline; on
- * web it starts lower under an overlaid status bar, see NAV_TOP_GAP),
- * TabBar (56pt items, icon + 10pt mono label, brick indicator when active).
- */
 import { useEffect, useRef, type ComponentType, type ReactNode } from "react";
 import {
-  AccessibilityInfo,
   Animated,
   Easing,
   Platform,
@@ -17,6 +11,7 @@ import {
 } from "react-native";
 import { TapHaptic } from "./TapHaptic";
 import { font, text, touch } from "./tokens";
+import { isReduceMotionEnabled } from "./reduceMotion";
 import { makeStyles, useThemeColors } from "./theme";
 
 export function Screen({
@@ -75,16 +70,8 @@ export function NavBar({ title, left, right, large }: NavBarProps) {
 function CollapsingBar({ collapsed, children }: { collapsed: boolean; children: ReactNode }) {
   const styles = useStyles();
   const opacity = useRef(new Animated.Value(collapsed ? 1 : 0)).current;
-  const reduceMotion = useRef(false);
   useEffect(() => {
-    void AccessibilityInfo.isReduceMotionEnabled()
-      .then((reduce) => {
-        reduceMotion.current = reduce;
-      })
-      .catch(() => {});
-  }, []);
-  useEffect(() => {
-    if (reduceMotion.current) {
+    if (isReduceMotionEnabled()) {
       opacity.setValue(collapsed ? 1 : 0);
       return;
     }
@@ -115,12 +102,10 @@ export interface TabItem<K extends string = string> {
   Icon: ComponentType<{ size?: number; color?: string }>;
 }
 
-/* react-native-web implements SafeAreaView as padding on the container -
-   including paddingBottom: env(safe-area-inset-bottom). With the tab bar inside
-   that container the bar gets pushed up by the home indicator and the inset
-   shows as dead space beneath it. A bottom bar should instead reach the edge
-   and pad its own content, so on web the screen drops that bottom padding and
-   the bar takes it. Native keeps SafeAreaView's behaviour untouched. */
+/* react-native-web implements SafeAreaView as padding on the container,
+   including env(safe-area-inset-bottom), which pushes a contained tab bar up
+   off the edge. On web the screen drops that bottom padding and the bar
+   takes it. */
 const IS_WEB = Platform.OS === "web";
 /* RN style types want a number; react-native-web passes a string through. */
 const SAFE_AREA_BOTTOM = "env(safe-area-inset-bottom)" as unknown as number;
@@ -176,7 +161,7 @@ export function TabBar<K extends string>({
   const styles = useStyles();
   const colors = useThemeColors();
   return (
-    <View style={styles.tabBar}>
+    <View accessibilityRole="tablist" style={styles.tabBar}>
       {items.map(({ key, label, Icon }) => {
         const isActive = key === active;
         const tint = isActive ? colors.accent : colors.fgSubtle;
@@ -185,7 +170,7 @@ export function TabBar<K extends string>({
             key={key}
             accessibilityLabel={label}
             accessibilityRole="tab"
-            accessibilityState={{ selected: isActive }}
+            aria-selected={isActive}
             style={styles.tabItem}
             onPress={() => onChange(key)}
           >

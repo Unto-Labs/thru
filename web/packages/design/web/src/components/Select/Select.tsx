@@ -29,14 +29,6 @@ const Check = (p: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
-/**
- * Select — reference for the "Base UI earns its keep" tier.
- *
- * Wraps @base-ui/react/select for all the hard behavior (keyboard nav,
- * type-ahead, focus, collision-aware positioning, ARIA) and supplies only
- * token-driven plain CSS for the look. This is the shape every interactive
- * component in @thru/design-web should follow.
- */
 export function Select({
   value,
   onValueChange,
@@ -63,8 +55,7 @@ export function Select({
       </BaseSelect.Trigger>
       <BaseSelect.Portal>
         {/* alignItemWithTrigger defaults to true, which overlays the popup on
-            the trigger (macOS-native style) and ignores sideOffset/align —
-            every other @thru/design popup drops below its anchor. */}
+            the trigger and ignores sideOffset/align. */}
         <BaseSelect.Positioner sideOffset={4} align="start" alignItemWithTrigger={false}>
           <BaseSelect.Popup className="tds-select-popup">
             {items.map((it) => (

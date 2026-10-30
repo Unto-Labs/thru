@@ -1,5 +1,5 @@
-/* ThemeToggle — square Sun/Moon switcher, plus the theme-switch animation the
-   `useColorScheme` hook drives through `data-theme-transition` on <html>. */
+/* Also holds the theme-switch animation that `useColorScheme` drives through
+   `data-theme-transition` on <html>. */
 
 .tds-theme-toggle {
   position: relative;
@@ -51,7 +51,6 @@
   opacity: 1;
   transform: scale(1) rotate(0deg);
 }
-/* Reduced motion: the Sun and Moon cross-fade quickly, with no spin or zoom. */
 @media (prefers-reduced-motion: reduce) {
   .tds-theme-toggle__icon {
     transform: none;
@@ -59,11 +58,9 @@
   }
 }
 
-/* `gif-mask`: the new theme is revealed through the animated wing GIF mask via
-   the View Transition API. `retokenize`: the no-VT fallback — surfaces
-   re-tokenize with staggered color transitions. Reduced motion switches
-   instantly (the hook sets no data attribute). Surfaces extend the retokenize
-   selector list below with their own app-local classes. */
+/* `gif-mask` reveals the new theme through the wing GIF mask via the View
+   Transition API; `retokenize` is the no-VT fallback. Surfaces extend the
+   retokenize selector list below with their own app-local classes. */
 html[data-theme-transition="gif-mask"]::view-transition-old(root),
 html[data-theme-transition="gif-mask"]::view-transition-new(root) {
   animation-duration: 1180ms;

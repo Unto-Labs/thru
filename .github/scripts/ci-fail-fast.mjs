@@ -1,5 +1,12 @@
 import { setTimeout } from 'node:timers/promises';
 
+// Each poll costs about three REST calls (job pages plus the run), and every
+// workflow in the repository shares one hourly API budget. At 15 s, a
+// restacked PR series kept enough watchers alive to exhaust it, which failed
+// the API-bound summary and commit checks. Two minutes is ample for
+// cancelling runs that last 20+ minutes.
+export const POLL_INTERVAL_MS = 120_000;
+
 // Runs in a separate trusted workflow. Inspect the triggering run's leaf
 // jobs rather than waiting for a reusable call to finish.
 export async function watchRun({ github, context, core, ignoredJobs = [], sleep = setTimeout }) {
@@ -40,6 +47,6 @@ export async function watchRun({ github, context, core, ignoredJobs = [], sleep 
       core.info('CI gate finished; stopping fail-fast watcher.');
       return;
     }
-    await sleep(15000);
+    await sleep(POLL_INTERVAL_MS);
   }
 }

@@ -27,10 +27,7 @@ const Check = (p: React.SVGProps<SVGSVGElement>) => (
 );
 
 /**
- * Checkbox — Base UI behavior, token-driven look. Closed wrapper with a label.
- *
- * Boolean + indeterminate states are exposed via Base UI's [data-checked] /
- * [data-indeterminate] / [data-disabled] hooks; all styling lives in CSS.
+ * Checkbox — closed wrapper with a label.
  */
 export const Checkbox = React.forwardRef<HTMLButtonElement, CheckboxProps>(
   function Checkbox(

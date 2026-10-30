@@ -15,6 +15,7 @@ import {
 } from "../../interfaces";
 import {
   EMBEDDED_PROVIDER_EVENTS,
+  ErrorCode,
   POST_MESSAGE_REQUEST_TYPES,
   createRequestId,
   type ConnectMetadataInput,
@@ -46,29 +47,20 @@ const DEFAULT_WALLET_URL = "https://app.tid.sh/embedded/native";
 const DEFAULT_ORIGIN = "thru-mobile://app";
 
 export interface NativeProviderConfig {
-  /** app.tid.sh/embedded/native URL to load. */
   walletUrl?: string;
-  /** Share privacy-safe operational diagnostics with Thru. Default: true. */
   telemetryEnabled?: boolean;
   telemetrySessionId?: string;
-  /** Opaque host-app-provided correlation label forwarded to the wallet. */
   telemetryAppContextId?: string;
-  /** Bounded host-app-provided dimensions forwarded to the wallet. */
   telemetryContext?: TelemetryAppContext;
   telemetry?: NativeTelemetryRecorder;
-  /** Caller-supplied dapp origin. Stamped on every postMessage so
-      wallet's ConnectedAppsStorage can scope per-host. */
   origin?: string;
-  /** Default app metadata used by connection requests. */
   metadata?: ConnectMetadataInput;
   addressTypes?: AddressTypeValue[];
   signingSessions?: SigningSessionDescriptorStore;
   broadcastTransaction?: (signedTransaction: string) => Promise<unknown>;
   network?: ThruNetwork;
   depositUiConfig?: DepositUiConfig;
-  /** The host's resolved color scheme the wallet draws for (default light). */
   theme?: WalletTheme;
-  /** The host's developer mode (default off). */
   developerMode?: boolean;
 }
 
@@ -82,13 +74,6 @@ export interface ConnectOptions {
 export type NativeProviderEvent = EmbeddedProviderEvent;
 export type NativeProviderEventCallback = (data?: unknown) => void;
 
-/**
- * RN-side analog of `web/packages/embedded-provider/src/EmbeddedProvider.ts`.
- * Same public surface (connect/disconnect/sign/getAccounts/etc.) over a
- * WebView+iframe bridge instead of a same-origin iframe. Visibility is
- * delegated to the host (ThruWalletSheet) via `requestShow` /
- * `requestHide` callbacks - bottom sheet logic stays in the React layer.
- */
 export class NativeProvider {
   withNetworkOperation<T>(operation: () => Promise<T>): Promise<T> {
     return withNetworkOperation(this.bridge, this.origin, operation);
@@ -132,7 +117,6 @@ export class NativeProvider {
     Set<NativeProviderEventCallback>
   >();
 
-  /** Set by the host bottom sheet to react to UI_SHOW / completion. */
   public onShowRequested?: (reason?: string) => void;
   public onHideRequested?: (reason?: string) => void;
 
@@ -204,12 +188,10 @@ export class NativeProvider {
     }
   }
 
-  /** Set or clear the correlation label carried by later WebView loads. */
   setTelemetryAppContextId(value: string | null): void {
     this.bridge.setTelemetryAppContextId(value);
   }
 
-  /** Set or clear the host-app dimensions carried by later WebView loads. */
   setTelemetryContext(value: TelemetryAppContext | null): void {
     this.bridge.setTelemetryContext(value);
   }
@@ -218,12 +200,10 @@ export class NativeProvider {
     return this.bridge.getTheme();
   }
 
-  /** Restyle the wallet WebView for a new host color scheme, without a reload. */
   setTheme(theme: WalletTheme): void {
     this.bridge.setTheme(theme);
   }
 
-  /** Tell the wallet WebView the host's developer mode, without a reload. */
   setDeveloperMode(enabled: boolean): void {
     this.bridge.setDeveloperMode(enabled);
   }
@@ -256,12 +236,10 @@ export class NativeProvider {
     this.bridge.recordWebViewContentProcessTerminated();
   }
 
-  /** Mark a direct top-level WebView wallet document as ready. */
   markWebViewReady(): void {
     this.bridge.markReady();
   }
 
-  /** Pass through the WebView's `onMessage` event handler. */
   onMessage = (event: WebViewMessageEventLike): void => {
     this.bridge.onMessage(event);
   };
@@ -278,7 +256,6 @@ export class NativeProvider {
     return this.bridge.walletOrigin;
   }
 
-  /** Wait for the iframe's IFRAME_READY_EVENT handshake. */
   async initialize(): Promise<void> {
     await this.bridge.awaitReady();
   }
@@ -326,9 +303,9 @@ export class NativeProvider {
   }
 
   /** Reject pending requests after a user-driven sheet dismiss, invalidating old leases. */
-  rejectPendingRequests(message?: string): void {
+  rejectPendingRequests(message?: string, code?: ErrorCode): void {
     this.closeSurface("user-dismissed");
-    this.bridge.rejectPendingRequests(message);
+    this.bridge.rejectPendingRequests(message, code);
   }
 
   async connect(options?: ConnectOptions): Promise<ConnectResult> {
@@ -524,14 +501,6 @@ export class NativeProvider {
     return response.result;
   }
 
-  /**
-   * Open the wallet's Deposit ("Add funds") screen for a token account and
-   * resolve once the user completes or cancels. The wallet site runs the
-   * third-party deposit widget (Unifold); crediting is authoritative on the
-   * server webhook, so the result only reports the terminal UX state. Shows the
-   * standard wallet sheet for the duration of the flow, like
-   * manageAccounts().
-   */
   async deposit(payload: DepositRequestPayload): Promise<DepositResult> {
     const surface = await this.requestShow("deposit-open");
     try {
@@ -573,7 +542,6 @@ export class NativeProvider {
     this.eventListeners.get(event)?.delete(cb);
   }
 
-  /** Internal: used by NativeThruChain. */
   getBridge(): WebViewBridge {
     return this.bridge;
   }
@@ -590,7 +558,6 @@ export class NativeProvider {
       try {
         cb(data);
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.error(`[NativeProvider] listener error for ${event}:`, err);
       }
     });

@@ -1,5 +1,3 @@
-/* Select — token-driven look over Base UI behavior. */
-
 .tds-select-trigger {
   display: inline-flex;
   align-items: center;
@@ -29,9 +27,6 @@
   color: var(--color-text-tertiary);
 }
 
-/* Popup recipe matches the other anchored popups (Menu/Combobox/
-   Autocomplete): strong border + md shadow to read as elevated, and
-   viewport-capped height so long lists scroll instead of overflowing. */
 .tds-select-popup {
   min-width: var(--anchor-width, 12rem);
   max-height: var(--available-height);

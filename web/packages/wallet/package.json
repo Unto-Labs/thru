@@ -95,24 +95,21 @@
   },
   "devDependencies": {
     "@svgr/core": "^8.1.0",
+    "@thru/design": "workspace:*",
     "@types/node": "^24.7.0",
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "esbuild-plugin-svgr": "^3.1.1",
-    "expo-brightness": "~55.0.13",
-    "react-native-qrcode-styled": "^0.4.0",
     "react-native-svg": "^15.15.5"
   },
   "peerDependencies": {
     "@gorhom/bottom-sheet": ">=5",
     "expo": "*",
-    "expo-brightness": "*",
     "expo-modules-core": "*",
     "react": "^18.0.0 || ^19.0.0",
     "react-dom": "^18.0.0 || ^19.0.0",
     "react-native": "*",
     "react-native-gesture-handler": "*",
-    "react-native-qrcode-styled": "*",
     "react-native-reanimated": "*",
     "react-native-safe-area-context": "*",
     "react-native-svg": "*",
@@ -125,9 +122,6 @@
     "expo": {
       "optional": true
     },
-    "expo-brightness": {
-      "optional": true
-    },
     "expo-modules-core": {
       "optional": true
     },
@@ -135,9 +129,6 @@
       "optional": true
     },
     "react-native-gesture-handler": {
-      "optional": true
-    },
-    "react-native-qrcode-styled": {
       "optional": true
     },
     "react-native-reanimated": {

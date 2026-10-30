@@ -1,5 +1,3 @@
-/* Field — ported from thru-design app.css .field (+ .input), retargeted to tokens. */
-
 .tds-field {
   display: flex;
   flex-direction: column;

@@ -1,11 +1,11 @@
 import { programResources } from '@thru/programs/resources';
 import {
-  PASSKEY_MANAGER_PROGRAM_ADDRESS,
+  WALLET_PROGRAM_ADDRESS,
   decodeAddress,
   encodeValidateInstruction,
   hexToBytes,
-} from '@thru/programs/passkey-manager';
-import type { AccountContext } from '@thru/programs/passkey-manager';
+} from '@thru/programs/wallet';
+import type { AccountContext } from '@thru/programs/wallet';
 import { sendAndTrackTransaction, withSerializedFeePayer } from './utils';
 import type {
   BuiltPasskeyTransaction,
@@ -37,7 +37,7 @@ function base64ToBytes(base64: string): Uint8Array {
 }
 
 /**
- * Builds and signs a passkey-manager transaction without submitting it.
+ * Builds and signs a wallet transaction without submitting it.
  *
  * Callers that override the transaction nonce are responsible for coordinating
  * fee-payer nonce allocation before calling this helper. Use
@@ -72,7 +72,7 @@ export async function buildPasskeyTransaction(opts: {
 
   const transaction = await opts.client.transactions.build({
     feePayer: { publicKey: opts.adminPublicKey },
-    program: PASSKEY_MANAGER_PROGRAM_ADDRESS,
+    program: WALLET_PROGRAM_ADDRESS,
     instructionData: validateIx,
     accounts: {
       readWrite: opts.accountCtx.readWriteAddresses,

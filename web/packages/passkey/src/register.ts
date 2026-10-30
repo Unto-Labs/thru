@@ -3,10 +3,10 @@ import type {
   PasskeyRegistrationResult,
   PasskeyPopupRegistrationResult,
 } from './types';
-import { arrayBufferToBase64Url, bytesToHex } from '@thru/programs/passkey-manager';
+import { arrayBufferToBase64Url, bytesToHex } from '@thru/programs/wallet';
 import { runPasskeyCeremony } from './ceremony';
 import { reportPasskeyCeremony, serializePasskeyCredential } from './reporter';
-import { requestPasskeyPopup } from './popup';
+import { PASSKEY_CEREMONY_TIMEOUT_MS, requestPasskeyPopup } from './popup';
 
 /**
  * Register a new passkey for a profile.
@@ -58,7 +58,7 @@ async function registerPasskeyInline(
       requireResidentKey: true,
     },
     attestation: 'none',
-    timeout: 60000,
+    timeout: PASSKEY_CEREMONY_TIMEOUT_MS,
   };
 
   return reportPasskeyCeremony(
@@ -110,8 +110,6 @@ async function registerPasskeyViaPopup(
   );
   return result;
 }
-
-// Key extraction helpers
 
 function extractP256PublicKey(response: AuthenticatorAttestationResponse): {
   x: Uint8Array;

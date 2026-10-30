@@ -33,10 +33,6 @@ export interface DiscProps {
 
 /**
  * Disc — the circular avatar primitive that underpins ChainIcon and TokenIcon.
- *
- * Presentational and self-contained: it knows nothing about chains or tokens —
- * callers pass `color` / `glyph` / `src` directly. An `src` renders through
- * Base UI's Avatar (with `fallback`), otherwise a centered monogram glyph.
  */
 export const Disc = React.forwardRef<HTMLSpanElement, DiscProps>(function Disc(
   { size = "medium", border = false, title, color, glyph, src, fallback, className, style },

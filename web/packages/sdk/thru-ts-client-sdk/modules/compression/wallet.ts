@@ -1,16 +1,18 @@
 import { decodeAddress, decodeBase64 } from '@thru/sdk/helpers';
-import { PASSKEY_MANAGER_PROGRAM_ADDRESS } from '../../../src/core-program-addresses';
+import { WALLET_PROGRAM_ADDRESS } from '../../../src/core-program-addresses';
 import type { ThruClientContext } from '../../core/client';
 import { Transaction } from '../../domain/transactions/Transaction';
 import { Pubkey } from '../../domain/primitives';
-import { buildWalletAccountContext, assertWalletFeePayerCompatible } from '../../domain/programs/passkey-manager/context';
-import { PasskeyInstruction, ValidateArgs } from '../../domain/programs/passkey-manager/abi/thru/program/passkey_manager/types';
+import { buildWalletAccountContext, assertWalletFeePayerCompatible } from '../../domain/programs/wallet/context';
+import { PasskeyInstruction, ValidateArgs } from '../../domain/programs/wallet/abi/thru/program/wallet/types';
 import { bytesEqual } from '../../domain/programs/helpers/bytes';
 import { getChainId } from '../chain';
 import { CompressionError, type CompressionTransaction, type WalletCompressionOptions } from './types';
 
 function intentContext(request: CompressionTransaction, options: WalletCompressionOptions) {
-  const programAddress = options.programAddresses?.passkeyManager ?? PASSKEY_MANAGER_PROGRAM_ADDRESS;
+  const programAddress = options.programAddresses?.wallet
+    ?? options.programAddresses?.passkeyManager
+    ?? WALLET_PROGRAM_ADDRESS;
   const params = { walletAddress: options.walletAddress, programAddress,
     readWriteAccounts: request.readWrite.map(decodeAddress),
     readOnlyAccounts: [request.program, ...(request.readOnly ?? [])].map(decodeAddress) };

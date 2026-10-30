@@ -129,7 +129,6 @@ describe('BufferedEventQueue', () => {
     nowMs = 2_000;
     await queue.flush();
     expect(send).toHaveBeenCalledTimes(2);
-    /* The retry delay doubles after the second failure. */
     nowMs = 4_000;
     await queue.flush();
     expect(send).toHaveBeenCalledTimes(2);
@@ -242,6 +241,62 @@ describe('BufferedEventQueue', () => {
 });
 
 describe('createHttpJsonTransport', () => {
+  it.each([
+    [200, 'success'],
+    [400, 'drop'],
+    [500, 'retry'],
+  ] as const)('releases the response body for HTTP %s', async (status, outcome) => {
+    const cancel = vi.fn();
+    const response = new Response(new ReadableStream({ cancel }), { status });
+    const transport = createHttpJsonTransport({
+      endpoint: '/v1/telemetry',
+      fetch: async () => response,
+    });
+
+    expect(await transport.send('{}', undefined)).toBe(outcome);
+    expect(cancel).toHaveBeenCalledOnce();
+    expect(response.bodyUsed).toBe(true);
+  });
+
+  it.each([
+    [200, 'success'],
+    [400, 'drop'],
+    [500, 'retry'],
+  ] as const)(
+    'preserves HTTP %s classification without a response body',
+    async (status, outcome) => {
+      const transport = createHttpJsonTransport({
+        endpoint: '/v1/telemetry',
+        fetch: async () => new Response(null, { status }),
+      });
+
+      expect(await transport.send('{}', undefined)).toBe(outcome);
+    }
+  );
+
+  it.each([
+    [200, 'success'],
+    [400, 'drop'],
+    [500, 'retry'],
+  ] as const)(
+    'preserves HTTP %s classification if body cancellation fails',
+    async (status, outcome) => {
+      const response = new Response(
+        new ReadableStream({
+          cancel: () => Promise.reject(new Error('body cancellation failed')),
+        }),
+        { status }
+      );
+      const transport = createHttpJsonTransport({
+        endpoint: '/v1/telemetry',
+        fetch: async () => response,
+      });
+
+      expect(await transport.send('{}', undefined)).toBe(outcome);
+      expect(response.bodyUsed).toBe(true);
+    }
+  );
+
   it('classifies responses into success, retry, and drop', async () => {
     const statuses = [200, 500, 400, 429];
     const fetchMock = vi.fn(async () => {
@@ -266,6 +321,7 @@ describe('createHttpJsonTransport', () => {
       expect.objectContaining({
         method: 'POST',
         credentials: 'omit',
+        keepalive: true,
         headers: { 'content-type': 'application/json' },
         body: '{"a":1}',
       }),

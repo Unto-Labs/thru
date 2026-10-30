@@ -13,7 +13,7 @@ describe("Account domain model", () => {
             balance: 500n,
             nonce: 7n,
             owner: { value: generateTestPubkey(0xaa) },
-            flags: createMockAccountFlags({ isProgram: true, isCompressed: true }),
+            flags: createMockAccountFlags({ isProgram: true, isCompressed: true, isNativeReceiver: true }),
         });
         const dataProto = create(AccountDataSchema, {
             data: new Uint8Array([1, 2, 3]),
@@ -39,6 +39,7 @@ describe("Account domain model", () => {
         expect(account.meta?.flags).toBeInstanceOf(AccountFlags);
         expect(account.meta?.flags.isProgram).toBe(true);
         expect(account.meta?.flags.isCompressed).toBe(true);
+        expect(account.meta?.flags.isNativeReceiver).toBe(true);
         expect(account.meta?.balance).toBe(500n);
         expect(account.data).toBeInstanceOf(AccountData);
         expect(account.data?.compressed).toBe(true);
@@ -46,6 +47,11 @@ describe("Account domain model", () => {
         expect(account.versionContext?.slot).toBe(99n);
         expect(account.versionContext?.blockTimestampNs).toBe(2n * 1_000_000_000n + 5n);
         expect(account.consensusStatus).toBe(ConsensusStatus.FINALIZED);
+    });
+
+    it("defaults native receipt opt-in to false", () => {
+        expect(new AccountFlags().isNativeReceiver).toBe(false);
+        expect(AccountFlags.fromProto(createMockAccountFlags()).isNativeReceiver).toBe(false);
     });
 
     it("handles missing optional fields gracefully", () => {

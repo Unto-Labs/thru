@@ -55,3 +55,9 @@
   font-size: 12px;
   padding: var(--space-1) 0;
 }
+
+@media (max-width: 640px) {
+  .tds-details__trigger {
+    min-height: 44px;
+  }
+}

@@ -9,7 +9,7 @@ export type {
 
 export { classifyPasskeyError, type PasskeyErrorKind } from './errors';
 
-export { bytesToBase64 } from '@thru/programs/passkey-manager';
+export { bytesToBase64 } from '@thru/programs/wallet';
 
 export {
   storePasskeyMetadata,

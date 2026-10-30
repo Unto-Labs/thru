@@ -66,6 +66,15 @@ const hasWasmArtifacts = existsSync(
 
 const describeWasm = hasWasmArtifacts ? describe : describe.skip;
 
+it("reflectInstruction rejects a raw byte array with the expected payload shape", async () => {
+  await expect(reflectInstruction(minimalAbi, testBytes as never)).rejects.toThrow(
+    'Invalid payload type: expected { type: "binary" | "hex", value }',
+  );
+  await expect(reflect(minimalAbi, "TestInstruction", undefined as never)).rejects.toThrow(
+    'Invalid payload type: expected { type: "binary" | "hex", value }',
+  );
+});
+
 describeWasm("WASM bridge exports", () => {
   beforeAll(async () => {
     await ensureWasmLoaded();

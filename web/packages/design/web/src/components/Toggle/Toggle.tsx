@@ -7,8 +7,6 @@ import "./Toggle.css";
  * Toggle — a single pressable two-state button, exposed as a styled part.
  *
  *   <Toggle pressed={on} onPressedChange={setOn}>Watch</Toggle>
- *
- * Pressed state is styled in CSS via Base UI's [data-pressed] hook.
  */
 export const Toggle = styledPart(BaseToggle, "tds-toggle");
 
@@ -20,9 +18,6 @@ export const Toggle = styledPart(BaseToggle, "tds-toggle");
  *     <Toggle.Item value="bold">B</Toggle.Item>
  *     <Toggle.Item value="italic">I</Toggle.Item>
  *   </Toggle.Group>
- *
- * The group enforces square-first borders; each item styles its pressed state
- * via [data-pressed].
  */
 export const ToggleGroup = {
   Group: styledPart(BaseToggleGroup, "tds-seg"),

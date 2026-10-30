@@ -32,11 +32,9 @@ import {
 } from '../../internal/telemetry-fields';
 import { sanitizeTelemetryMessage } from '../../telemetry';
 
-/* RN-side analog of `web/packages/embedded-provider/src/IframeManager.ts`.
-   The wallet ships unchanged. The shell HTML (src/shell.html) hosts an
-   <iframe src="app.tid.sh/embedded/native"> and forwards
-   iframe<->ReactNativeWebView postMessage traffic. This bridge only
-   speaks the RN side: webView.injectJavaScript out, onMessage in. */
+/* The shell HTML hosts the wallet <iframe> and relays its postMessage
+   traffic; this bridge speaks only the RN side (injectJavaScript out,
+   onMessage in). */
 
 const TRUSTED_WALLET_ORIGINS = [
   'https://app.tid.sh',
@@ -122,8 +120,6 @@ function isNativeEmbeddedWalletPath(pathname: string): boolean {
   );
 }
 
-/* Minimal contract for a react-native-webview ref. We accept both refs
-   ({ current: WebView }) and direct WebView instances. */
 export interface WebViewRefLike {
   injectJavaScript: (script: string) => void;
 }
@@ -140,7 +136,6 @@ const SLOW_REQUEST_TYPES: ReadonlySet<string> = new Set([
   POST_MESSAGE_REQUEST_TYPES.CONNECT,
   POST_MESSAGE_REQUEST_TYPES.SIGN_MESSAGE,
   POST_MESSAGE_REQUEST_TYPES.SIGN_TRANSACTION,
-  POST_MESSAGE_REQUEST_TYPES.SIGN_PASSKEY_CHALLENGE,
   POST_MESSAGE_REQUEST_TYPES.MANAGE_ACCOUNTS,
   POST_MESSAGE_REQUEST_TYPES.DEPOSIT,
   POST_MESSAGE_REQUEST_TYPES.CREATE_SIGNING_SESSION,
@@ -152,9 +147,7 @@ export interface WebViewBridgeOptions {
   walletUrl: string;
   telemetryEnabled?: boolean;
   telemetrySessionId?: string;
-  /** Opaque host-app-provided correlation label forwarded to the wallet. */
   telemetryAppContextId?: string;
-  /** Bounded host-app-provided dimensions forwarded to the wallet. */
   telemetryContext?: TelemetryAppContext;
   telemetry?: NativeTelemetryRecorder;
   /** The host's resolved color scheme the wallet draws for (default light). */
@@ -244,7 +237,6 @@ export class WebViewBridge {
     (response: PostMessageResponse) => void
   >();
 
-  /* Event broadcasts from the iframe (type === 'event'). */
   public onEvent?: (eventType: string, payload: unknown) => void;
 
   constructor(options: WebViewBridgeOptions) {
@@ -265,10 +257,6 @@ export class WebViewBridge {
     });
   }
 
-  /**
-   * Compose the URL to load inside the shell <iframe>. The host
-   * (ThruWalletSheet) calls this when building the shell HTML.
-   */
   getIframeSrc(): string {
     const url = new URL(this.walletUrl);
     if (!isNativeEmbeddedWalletPath(url.pathname)) {
@@ -299,10 +287,6 @@ export class WebViewBridge {
     return url.toString();
   }
 
-  /**
-   * Turn the host's developer mode on or off. A loaded wallet hears it by
-   * message (never a reload); a later load carries it on the URL.
-   */
   setDeveloperMode(enabled: boolean): void {
     if (enabled === this.developerMode) return;
     this.developerMode = enabled;
@@ -325,10 +309,6 @@ export class WebViewBridge {
     return this.theme;
   }
 
-  /**
-   * Restyle the wallet for a new host color scheme. A loaded wallet hears it
-   * by message (never a reload); a later load carries it on the URL.
-   */
   setTheme(theme: WalletTheme): void {
     if (theme === this.theme) return;
     this.theme = theme;
@@ -347,7 +327,6 @@ export class WebViewBridge {
     this.injectControlMessage(message);
   }
 
-  /* Fire-and-forget host -> wallet message, through the shell when present. */
   private injectControlMessage(
     message: TelemetryContextMessage | WalletThemeMessage | WalletDeveloperModeMessage,
   ): void {
@@ -367,14 +346,12 @@ export class WebViewBridge {
     }
   }
 
-  /** Set or clear the correlation label carried by wallet telemetry. */
   setTelemetryAppContextId(value: string | null): void {
     this.telemetryAppContextId = value ?? undefined;
     this.telemetryContextUpdated = true;
     this.sendTelemetryContext();
   }
 
-  /** Set or clear the host-app dimensions carried by wallet telemetry. */
   setTelemetryContext(value: TelemetryAppContext | null): void {
     this.telemetryContext = value ?? undefined;
     this.telemetryContextUpdated = true;
@@ -552,10 +529,6 @@ export class WebViewBridge {
     return this.readyPromise;
   }
 
-  /**
-   * Send a request to the iframe (via injectJavaScript -> shell ->
-   * iframe.postMessage) and resolve with the matching response.
-   */
   async sendMessage<TRequest extends PostMessageRequest>(
     request: TRequest,
   ): Promise<InferSuccessfulPostMessageResponse<TRequest>> {
@@ -727,18 +700,14 @@ export class WebViewBridge {
     });
   }
 
-  /**
-   * Reject all in-flight wallet requests when the native host dismisses the
-   * WebView without waiting for a wallet-side response.
-   */
   rejectPendingRequests(
     message = 'User rejected the request',
     code: ErrorCode = ErrorCode.USER_REJECTED,
   ): void {
     this.recordTelemetry(TELEMETRY_EVENTS.BRIDGE_REQUESTS_REJECTED, {
       severity: 'warn',
-      outcome: 'user_rejected',
-      errorCode: ErrorCode.USER_REJECTED,
+      outcome: code === ErrorCode.USER_REJECTED ? 'user_rejected' : 'error',
+      errorCode: code,
       message,
     });
     for (const [id, handler] of Array.from(this.messageHandlers.entries())) {
@@ -753,10 +722,6 @@ export class WebViewBridge {
     }
   }
 
-  /**
-   * Hook this into <WebView onMessage>. The shell forwards iframe
-   * postMessage payloads to ReactNativeWebView; we route them here.
-   */
   onMessage(event: WebViewMessageEventLike): void {
     let data: unknown;
     try {
@@ -781,8 +746,6 @@ export class WebViewBridge {
     }
     const msg = data as Record<string, unknown>;
 
-    /* Frame-id check matches the iframe model: ignore traffic that
-       isn't tagged for this bridge instance. */
     if (msg.frameId !== this.frameId) {
       this.recordTelemetry(TELEMETRY_EVENTS.BRIDGE_MESSAGE_IGNORED, {
         severity: 'debug',
@@ -797,14 +760,12 @@ export class WebViewBridge {
       return;
     }
 
-    /* Response to a specific request (has `id`). */
     if (typeof msg.id === 'string' && this.messageHandlers.has(msg.id)) {
       const handler = this.messageHandlers.get(msg.id)!;
       handler(msg as unknown as PostMessageResponse);
       return;
     }
 
-    /* Event broadcast (no id). */
     if (msg.type === POST_MESSAGE_EVENT_TYPE) {
       const evt = msg as unknown as PostMessageEvent;
       this.recordTelemetry(TELEMETRY_EVENTS.BRIDGE_EVENT_RECEIVED, {
@@ -823,10 +784,6 @@ export class WebViewBridge {
     });
   }
 
-  /**
-   * Drop pending handlers and clear ready promise. Call when the host
-   * unmounts the WebView.
-   */
   destroy(): void {
     if (this.destroyed) return;
     this.destroyed = true;

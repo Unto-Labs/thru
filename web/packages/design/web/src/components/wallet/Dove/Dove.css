@@ -1,5 +1,4 @@
-/* Dove — the Thru mark in flight. Color rides on a custom property so the
-   caller can pass `currentColor`; every motion is CSS keyframes. */
+/* Color rides on a custom property so the caller can pass `currentColor`. */
 .tds-dove {
   position: relative;
   display: inline-grid;
@@ -32,7 +31,6 @@
   transform-origin: 80px 72px;
 }
 
-/* Draw-on entrance: outline strokes on over 1.4s, then the fill fades in. */
 .tds-dove--draw .tds-dove__body,
 .tds-dove--draw .tds-dove__wing {
   fill-opacity: 0;
@@ -41,7 +39,6 @@
     tds-dove-fill 0.6s ease 1.15s forwards;
 }
 
-/* Flight: tilt on the outer wrapper, bob on the inner, wing on its hinge. */
 .tds-dove--fly .tds-dove__tilt {
   animation: tds-dove-tilt 1.6s ease-in-out infinite;
 }

@@ -1,12 +1,7 @@
 /**
- * Thru design tokens as a platform-neutral TypeScript object.
- *
- * This is the same source of truth as `tokens.css`, but expressed as plain
- * values so non-CSS targets (React Native / `StyleSheet`) can consume them —
- * RN cannot resolve CSS custom properties, so semantic tokens are pre-resolved
- * to concrete hex here.
- *
- * Canon: Unto-Labs/thru-web. Keep this file and `tokens.css` in lockstep.
+ * Mirror of `tokens.css` for React Native, which cannot resolve CSS custom
+ * properties, so semantic tokens are pre-resolved to hex. Keep the two in
+ * lockstep.
  */
 
 export const palette = {

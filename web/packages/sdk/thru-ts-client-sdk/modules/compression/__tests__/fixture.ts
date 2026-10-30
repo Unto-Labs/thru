@@ -8,11 +8,11 @@ import { createThruClient } from '../../../client';
 import { Pubkey, Signature } from '../../../domain/primitives';
 import { Transaction } from '../../../domain/transactions/Transaction';
 import { fromPrivateKey } from '../../keys';
-import { COMPRESSION_PROGRAM_ADDRESS, MULTICALL_PROGRAM_ADDRESS, UPLOADER_PROGRAM_ADDRESS, PASSKEY_MANAGER_PROGRAM_ADDRESS, NOOP_PROGRAM_ADDRESS } from '../../../../src/core-program-addresses';
+import { COMPRESSION_PROGRAM_ADDRESS, MULTICALL_PROGRAM_ADDRESS, UPLOADER_PROGRAM_ADDRESS, WALLET_PROGRAM_ADDRESS, NOOP_PROGRAM_ADDRESS } from '../../../../src/core-program-addresses';
 import { MulticallArgs } from '../../../domain/programs/multicall/abi/thru/program/multicall/types';
-import { ValidateArgs, ValidateArgsBuilder, PasskeyInstructionBuilder } from '../../../domain/programs/passkey-manager/abi/thru/program/passkey_manager/types';
-import { InstructionDataBuilder } from '../../../domain/programs/passkey-manager/abi/thru/common/primitives/types';
-import { buildWalletAccountContext } from '../../../domain/programs/passkey-manager/context';
+import { ValidateArgs, ValidateArgsBuilder, PasskeyInstructionBuilder } from '../../../domain/programs/wallet/abi/thru/program/wallet/types';
+import { InstructionDataBuilder } from '../../../domain/programs/wallet/abi/thru/common/primitives/types';
+import { buildWalletAccountContext } from '../../../domain/programs/wallet/context';
 import type { PendingCompressionTransaction } from '../types';
 import type { ThruTransactionIntent } from '../../../domain/transactions/intent';
 
@@ -52,7 +52,7 @@ export async function fixture(sizes: Record<string, number> = { [address(10)]: 1
       active.add(publicKey);
       return;
     }
-    if (program === PASSKEY_MANAGER_PROGRAM_ADDRESS) {
+    if (program === WALLET_PROGRAM_ADDRESS) {
       const target = ValidateArgs.from_array(bytes.subarray(1))!.get_target_instruction();
       execute(keys[target.get_program_idx()]!, Uint8Array.from(target.get_data()), tx); return;
     }
@@ -95,7 +95,7 @@ export async function fixture(sizes: Record<string, number> = { [address(10)]: 1
       const buffer = keys[v.getUint16(4, true)]!; const meta = keys[v.getUint16(6, true)]!;
       if (kind === 'create') {
         const args = CreateArgs.from_array(bytes.subarray(4))!;
-        const wallet = tx.program.toThruFmt() === PASSKEY_MANAGER_PROGRAM_ADDRESS;
+        const wallet = tx.program.toThruFmt() === WALLET_PROGRAM_ADDRESS;
         expect(keys[args.get_authority_account_idx()]).toBe(wallet ? address(20) : publicKey);
         buffers.set(buffer, new Uint8Array(args.get_buffer_account_sz()));
         active.add(buffer); active.add(meta);
@@ -156,7 +156,7 @@ export async function fixture(sizes: Record<string, number> = { [address(10)]: 1
       .set_signature_r(new Uint8Array(32)).set_signature_s(new Uint8Array(32)).set_target_instruction(target.build());
     args.authenticator_data().write(new Uint8Array(37)).finish(); args.client_data().write(new Uint8Array(150)).finish();
     const wrapper = new PasskeyInstructionBuilder().payload().select('validate').writePayload(args).finish().build();
-    const result = await sdk.transactions.buildAndSign({ feePayer, program: PASSKEY_MANAGER_PROGRAM_ADDRESS,
+    const result = await sdk.transactions.buildAndSign({ feePayer, program: WALLET_PROGRAM_ADDRESS,
       accounts: { readWrite: context.readWriteAddresses, readOnly: context.readOnlyAddresses },
       header: { fee: 0n, stateUnits: intent.stateUnits }, instructionData: wrapper });
     return Buffer.from(result.rawTransaction).toString('base64');

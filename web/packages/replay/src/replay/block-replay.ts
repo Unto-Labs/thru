@@ -1,14 +1,11 @@
 import { create } from "@bufbuild/protobuf";
 import {
   type Filter,
-  type PageRequest,
   PageRequestSchema,
   type ConsensusStatus,
   type Block,
   type BlockView,
-  type ListBlocksRequest,
   ListBlocksRequestSchema,
-  type StreamBlocksRequest,
   StreamBlocksRequestSchema,
   type StreamBlocksResponse,
 } from "@thru/sdk/proto";
@@ -89,7 +86,7 @@ export function createBlockReplay(options: BlockReplayOptions): ReplayStream<Blo
       minConsensus: options.minConsensus,
     });
     return mapAsyncIterable(
-      options.client.streamBlocks(request),
+      options.client.streamBlocks(request, { signal: options.signal }),
       (resp: StreamBlocksResponse) => resp.block,
     );
   };

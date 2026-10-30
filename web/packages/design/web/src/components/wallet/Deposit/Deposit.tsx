@@ -15,8 +15,6 @@ const Check = (p: React.SVGProps<SVGSVGElement>) => (
   </svg>
 );
 
-/* deterministic faux-QR — a 7×7 module grid with finder squares in three
-   corners. No encoder; purely decorative. */
 function qrCells(seed: number): boolean[] {
   const cells: boolean[] = [];
   let s = seed;
@@ -31,7 +29,6 @@ function isFinderModule(r: number, c: number): boolean {
   if (!inFinder) return false;
   const lr = r > 3 ? r - 4 : r;
   const lc = c > 3 ? c - 4 : c;
-  // ring + center dot of a 3×3 finder
   return lr === 0 || lr === 2 || lc === 0 || lc === 2 || (lr === 1 && lc === 1);
 }
 
@@ -64,7 +61,7 @@ export interface DepositProps {
 
 /**
  * Deposit — a faux-QR + address row for receiving funds, with a copy button.
- * The QR is a deterministic decorative grid (no encoder). Presentational.
+ * The QR is a deterministic decorative grid (no encoder).
  */
 export const Deposit = React.forwardRef<HTMLDivElement, DepositProps>(
   function Deposit({ address, label = "Deposit crypto", seed, className }, ref) {

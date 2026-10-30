@@ -1,6 +1,6 @@
 "use client";
 
-import { type ReactNode, useCallback, useEffect, useMemo } from "react";
+import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { BrowserSDK, type BrowserSDKConfig } from "../BrowserSDK";
 import type {
   AccountMenuPayload,
@@ -27,29 +27,25 @@ export interface ThruProviderProps {
   developerMode?: boolean;
 }
 
-/** Browser wrapper around the shared wallet React controller. */
 export function ThruProvider({ children, config, theme, developerMode }: ThruProviderProps) {
   const requestedTheme = theme ?? config.theme ?? "light";
   const requestedDeveloperMode = developerMode ?? config.developerMode ?? false;
   /* Built with the requested theme and developer mode so the wallet frame's
      first load already has them. */
-  const sdk = useMemo(
+  const [sdk] = useState(
     () =>
       new BrowserSDK({
         ...config,
         theme: requestedTheme,
         developerMode: requestedDeveloperMode,
       }),
-    [],
   );
   const controller = useWalletSDKController(sdk);
 
   useEffect(() => {
     void sdk.initialize().catch(controller.captureError);
     return () => sdk.destroy();
-    /* SDK configuration is intentionally fixed for the provider lifetime. */
-    /* eslint-disable-next-line react-hooks/exhaustive-deps */
-  }, []);
+  }, [sdk, controller.captureError]);
 
   /* The one live setting: keyed on the requested string, so a new config
      object identity alone never re-applies it. Also re-arms the `system`

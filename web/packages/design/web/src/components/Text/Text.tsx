@@ -3,9 +3,7 @@ import { cn } from "../../utils";
 
 /**
  * Typography components — thin wrappers that apply the `.type-*` classes shipped
- * by @thru/design/tokens (typography.css). No Base UI primitive exists for text,
- * so these stay plain elements. API matches the legacy design-system's Text 1:1
- * (`as`, `bold`, `className`, pass-through props).
+ * by @thru/design/tokens (typography.css).
  *
  * The foundation stylesheet (`@thru/design/web/styles.css` or
  * `@thru/design/tokens/theme.css`) must be imported once per app so the

@@ -191,7 +191,6 @@ function isKnownWebKit(): boolean {
   return /AppleWebKit/i.test(ua) && !/(Chrome|Chromium|Edg|OPR|Android)\//i.test(ua);
 }
 
-/** Synchronous and independent of asynchronous authenticator capability probes. */
 export function getPasskeyRestriction(
   action: PasskeyPromptAction
 ): PasskeyIframeRestrictionError | null {
@@ -210,22 +209,8 @@ export function getPasskeyRestriction(
   return null;
 }
 
-export async function getPasskeyPromptMode(
-  action: PasskeyPromptAction
-): Promise<'inline' | 'popup'> {
-  return getPasskeyRestriction(action) ? 'popup' : 'inline';
-}
-
 export async function shouldUsePasskeyPopup(action: PasskeyPromptAction): Promise<boolean> {
   return Boolean(getPasskeyRestriction(action));
-}
-
-/** Compatibility helper: implicit routing must never open speculative windows. */
-export function maybePreopenPopup(
-  _action: PasskeyPromptAction,
-  _openPopupFn: () => Window
-): Window | null {
-  return null;
 }
 
 export function classifyIframeRestriction(

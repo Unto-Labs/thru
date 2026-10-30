@@ -77,7 +77,9 @@ export function delay(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-export function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> {
+/* keepAlive leaves the timer referenced: a foreground wait must keep a
+   standalone process alive, while background retries must not. */
+export function abortableDelay(ms: number, signal?: AbortSignal, { keepAlive = false } = {}): Promise<void> {
   if (ms <= 0 || signal?.aborted) {
     return Promise.resolve();
   }
@@ -87,7 +89,7 @@ export function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> 
   return new Promise((resolve) => {
     if (!abortSignal) {
       const timer = setTimeout(resolve, ms);
-      timer.unref?.();
+      if (!keepAlive) timer.unref?.();
       return;
     }
 
@@ -101,7 +103,7 @@ export function abortableDelay(ms: number, signal?: AbortSignal): Promise<void> 
       abortSignal.removeEventListener("abort", onAbort);
       resolve();
     }, ms)
-    timer.unref?.();
+    if (!keepAlive) timer.unref?.();
 
     abortSignal.addEventListener("abort", onAbort, { once: true })
   });

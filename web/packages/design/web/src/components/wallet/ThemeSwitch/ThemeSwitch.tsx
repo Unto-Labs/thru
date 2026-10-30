@@ -5,7 +5,6 @@ import "./ThemeSwitch.css";
 export type ColorScheme = "light" | "dark";
 
 export interface ThemeSwitchProps {
-  /** Current color scheme. */
   colorScheme: ColorScheme;
   /** Called with the next scheme when toggled. */
   onChange: (scheme: ColorScheme) => void;
@@ -16,11 +15,6 @@ export interface ThemeSwitchProps {
   className?: string;
 }
 
-/**
- * ThemeSwitch — a sun/moon color-scheme toggle. State (`data-checked` when dark,
- * `data-unchecked` when light) drives which glyph lights up, all in CSS.
- * Pass `lightIcon` / `darkIcon` nodes so the component stays icon-set agnostic.
- */
 export function ThemeSwitch({
   colorScheme,
   onChange,

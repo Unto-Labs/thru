@@ -1,7 +1,5 @@
-/* DepositButton — the host's "Add funds" control. Same metrics per size as
-   Button / ConnectButton (padding, 13/12/11px labels, space-2 gap), the
-   plus disc idle, a spin ring loading, and an optional mono balance after a
-   hairline. `ghost` collapses to an inline brand-colored text link. */
+/* Same per-size metrics as Button / ConnectButton (padding, 13/12/11px
+   labels, space-2 gap). */
 
 .tds-deposit-btn {
   display: inline-flex;
@@ -35,12 +33,10 @@
   cursor: progress;
 }
 
-/* Sizes */
 .tds-deposit-btn--md { padding: var(--space-2) var(--space-4); font-size: 13px; --tds-deposit-sep: 14px; }
 .tds-deposit-btn--sm { padding: var(--space-2) var(--space-3); font-size: 12px; --tds-deposit-sep: 12px; }
 .tds-deposit-btn--xs { padding: var(--space-1) var(--space-2); font-size: 11px; gap: 5px; --tds-deposit-sep: 10px; }
 
-/* Variants */
 .tds-deposit-btn--primary {
   background: var(--color-surface-lower-inverse);
   color: var(--color-text-primary-inverse);
@@ -82,7 +78,6 @@
   text-underline-offset: 3px;
 }
 
-/* Balance segment */
 .tds-deposit-btn__sep {
   width: 1px;
   height: var(--tds-deposit-sep, 14px);
@@ -107,7 +102,6 @@
 @keyframes tds-deposit-spin {
   to { transform: rotate(360deg); }
 }
-/* Reduced motion: no rotation; the ring pulses instead. */
 @keyframes tds-deposit-pulse {
   0%,
   100% {

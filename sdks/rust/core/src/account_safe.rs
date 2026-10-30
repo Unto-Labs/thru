@@ -237,6 +237,14 @@ impl<'a> AccountRef<'a> {
         }
     }
 
+    /// Get the account flags.
+    pub fn flags(&self) -> u8 {
+        match &self.inner {
+            AccountRefInner::Mutable { account, .. } => account.meta.flags,
+            AccountRefInner::Immutable { account, .. } => account.meta.flags,
+        }
+    }
+
     /// Check if this account can be modified.
     pub fn is_mutable(&self) -> bool {
         matches!(self.inner, AccountRefInner::Mutable { .. })
@@ -746,6 +754,8 @@ impl<const NUM_ACCOUNTS: usize> AccountManager<NUM_ACCOUNTS> {
     }
 
     /// Set flags on an account.
+    ///
+    /// Pass the complete flags byte, preserving unrelated current flags.
     ///
     /// # Panics
     /// Panics if the account is currently borrowed.

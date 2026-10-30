@@ -24,7 +24,7 @@ tracking = "UNTO-1818"
 index = 2
 name = "max_compute_units_per_txn"
 kind = "chain-param"
-description = "Reserved consensus-critical runtime parameter encoded as a u64."
+description = "Reserved consensus-critical runtime parameter encoded as a u64. Zero means no enforced per-transaction compute-unit limit."
 category = "consensus-critical"
 type = "u64"
 tracking = "UNTO-1818"
@@ -64,3 +64,12 @@ description = "Active-state increment that halves the non-owner compression age 
 category = "consensus-critical"
 type = "u64"
 tracking = "UNTO-1818"
+
+[[entry]]
+index = 7
+name = "state_reference_lag"
+kind = "chain-param"
+description = "Distance, in slots, from a block back to the finished slot whose settled state counters and state clock it starts from. 1 is serial execution; at most 32. Absent means 1."
+category = "consensus-critical"
+type = "u32"
+tracking = "UNTO-3083"

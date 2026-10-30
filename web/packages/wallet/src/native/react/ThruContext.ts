@@ -30,7 +30,6 @@ export interface ThruContextValue {
   ): Promise<ResolvedWalletNetwork>;
   /** Initialized NativeSDK instance, or null while still constructing. */
   wallet: NativeSDK | null;
-  /** Lazily-instantiated Thru chain client. */
   thru: Thru | null;
   isConnected: boolean;
   isConnecting: boolean;

@@ -20,6 +20,14 @@ Import paths: web components from `@thru/design/web`, mobile components from
 foundation CSS via `@thru/design/web/styles.css`
 (or `@thru/design/tokens/css` for tokens alone).
 
+## Fonts
+
+Next.js apps import `interTight` and `jetbrainsMono` from
+`@thru/design/web/next-fonts`. This subpath loads the shared Inter Tight and
+JetBrains Mono variable fonts from `fonts/`, with normal and italic styles.
+It sets `--font-inter-tight` and `--font-jetbrains-mono` through each export's
+`variable` class. The `@thru/design/web` entry does not load Next.js fonts.
+
 ## Principles
 
 - **Tokens are the only shared artifact.** Components cannot be shared across web
@@ -98,3 +106,21 @@ The web wallet iframe design, as composable parts (see the gallery's
   that calls `thru.deposit()`.
 - `Dove` — the animated mark that replaces a spinner after a 2 s wait;
   `ThruDisc`, `ThruWordmark`, `PoweredBy` brand marks.
+
+## Brand assets (`assets/brand/`)
+
+Files from the Thru Brand Guidelines (July 2025, v1.0), imported as
+`@thru/design/assets/brand/<path>`. Names follow the guideline's color
+labels. `brick` is `brick-400`. The guideline's `stone-*` ramp is close to
+the `teal-*` tokens but not identical (stone-600 `#436465` vs teal-600
+`#456063`).
+
+- `avatars/` — the four approved social avatars (guidelines §2.8): the dove
+  logomark on a disc. `avatar-brick` (800 px), `avatar-stone-0-brick`,
+  `avatar-stone-600`, `avatar-stone-0-stone-600` (320 px). Use them only at
+  small sizes, such as social profile icons. They are not for posters or
+  banners.
+- `logotype-outline.svg` — the outline logotype (§2.6): a brick wordmark with a
+  stone-0 keyline. It is a secondary mark for large, expressive placements,
+  such as banners, event posters and slide titles. It never replaces the
+  primary logotype.

@@ -1,4 +1,4 @@
-import { arrayBufferToBase64Url } from '@thru/programs/passkey-manager';
+import { arrayBufferToBase64Url } from '@thru/programs/wallet';
 
 /** Original WebAuthn response, before wallet-specific signature conversion. */
 export interface PasskeyCeremonyCredentialJson {

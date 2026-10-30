@@ -1,74 +1,45 @@
-/**
- * Account stream processor.
- *
- * Processes account state from @thru/replay and commits to the database
- * with slot-aware upserts and checkpointing.
- */
-
-import { and, eq, lt, lte, or } from "drizzle-orm";
+import { eq, getTableColumns } from "drizzle-orm";
 import type { ChainClientFactory, ReplayLogger } from "@thru/replay";
 import { createAccountsByOwnerReplay, AccountView } from "@thru/replay";
 import { encodeAddress } from "@thru/sdk/helpers";
 import type { DatabaseClient } from "../schema/types";
 import { validateParsedData } from "../schema/validation";
+import { bulkInsert } from "../schema/bulk-insert";
+import { flushWhenIdle } from "./flush-when-idle";
 import { getCheckpoint, updateCheckpoint } from "../checkpoint";
 import type { AccountStream } from "./types";
 import type { ProcessorStatusObserver } from "../runtime/status";
 import { createScopedLogger } from "../runtime/logger";
 
-// ============================================================
-// Types
-// ============================================================
-
 export interface AccountProcessorOptions {
-  /** Factory to create fresh chain clients for reconnection */
   clientFactory: ChainClientFactory;
-  /** Database client */
   db: DatabaseClient;
-  /** Log level */
   logLevel?: "debug" | "info" | "warn" | "error";
-  /** Structured logger for processor and replay lifecycle logs */
   logger?: ReplayLogger;
-  /** Validate parse output with Zod (useful for development) */
   validateParse?: boolean;
-  /** Runtime status observer */
   observer?: ProcessorStatusObserver;
 }
 
 export interface AccountProcessorStats {
-  /** Total accounts processed */
   accountsProcessed: number;
-  /** Total accounts inserted/updated */
   accountsUpdated: number;
-  /** Total accounts deleted */
   accountsDeleted: number;
 }
 
-function versionIsAtMost(table: any, row: any) {
-  if (table.seq && row.seq !== undefined) {
-    return or(
-      lt(table.slot, row.slot),
-      and(eq(table.slot, row.slot), lte(table.seq, row.seq))
-    );
-  }
-  return lte(table.slot, row.slot);
+const WRITE_BATCH = 1_000;
+const LIVE_FLUSH_IDLE_MS = 250;
+
+/* Per stream, for listing and for reads. 2 streams x (8 + 8) + 16 history
+   connections ran clean on betanet; 96 in total overloaded its RPC proxy. */
+const BACKFILL_CONNECTIONS = 8;
+
+/* Highest slot among rows (0n for none). */
+function maxSlot(rows: Record<string, unknown>[]): bigint {
+  let max = 0n;
+  for (const row of rows) if ((row.slot as bigint) > max) max = row.slot as bigint;
+  return max;
 }
 
-// ============================================================
-// Processor
-// ============================================================
-
-/**
- * Run an account stream processor.
- *
- * Backfills all accounts via ListAccounts, then streams live updates.
- * Supports resumable indexing via checkpoint persistence.
- *
- * @param stream - The account stream to process
- * @param options - Processor configuration
- * @param abortSignal - Optional signal to stop processing
- * @returns Processor statistics
- */
 export async function runAccountStreamProcessor(
   stream: AccountStream,
   options: AccountProcessorOptions,
@@ -100,7 +71,6 @@ export async function runAccountStreamProcessor(
     accountsDeleted: 0,
   };
 
-  // Load checkpoint for resumable backfill
   const checkpoint = await getCheckpoint(db, checkpointName);
   const minUpdatedSlot = checkpoint?.slot;
   observer?.onStart?.({
@@ -116,16 +86,13 @@ export async function runAccountStreamProcessor(
     log("info", `Expected data size: ${stream.expectedSize} bytes`);
   }
 
-  // Track highest slot seen for checkpoint persistence
   let lastProcessedSlot = minUpdatedSlot ?? 0n;
+  /* Highest slot the live stream has delivered. Backfill reads run ahead of
+     it, so a checkpoint past it could skip updates the stream had not sent. */
+  let streamSlot = 0n;
+  const checkpointSlot = () => (lastProcessedSlot < streamSlot ? lastProcessedSlot : streamSlot);
   let handledAnyAccount = false;
-  // Backfill visits accounts in address order, not slot order, while live
-  // updates interleave with it. A checkpoint written before it drains could
-  // sit above accounts it has not reached yet, and a restart resuming from
-  // that slot would never load them. Nothing is checkpointed until it drains.
   let backfillDrained = false;
-  // Write started when the backfill drains; later writes wait for it so a
-  // slower backfill write can never land after (and regress) a newer one.
   let backfillCheckpoint: Promise<void> | null = null;
   const settleBackfillCheckpoint = async () => {
     if (!backfillCheckpoint) return;
@@ -134,48 +101,95 @@ export async function runAccountStreamProcessor(
     await pending;
   };
 
+  /* Rows are written in multi-row upserts: during backfill every 1,000 rows,
+     live at each block marker (before its checkpoint) or once the stream has
+     been quiet for LIVE_FLUSH_IDLE_MS. The replay emits only strictly newer
+     versions per address, so a later row replaces an earlier buffered one. */
+  const table = stream.table as any;
+  const idField = stream.api?.idField ?? "address";
+  const buffered = new Map<unknown, Record<string, unknown>>();
+  const flushBuffered = async () => {
+    if (buffered.size === 0) return;
+    const rows = [...buffered.values()];
+    buffered.clear();
+    const columns = getTableColumns(stream.table as any);
+    const set = Object.keys(rows[0]).filter((key) => key in columns);
+    observer?.onPhase?.({ phase: "commit", slot: maxSlot(rows) });
+    try {
+      const { rows: upserted } = await bulkInsert(
+        db,
+        stream.table,
+        rows,
+        { kind: "versioned-update", target: table[idField], set, slot: table.slot, seq: table.seq },
+        [table.slot],
+      );
+      if (upserted.length > 0) {
+        stats.accountsUpdated += upserted.length;
+        handledAnyAccount = true;
+        const writtenSlot = maxSlot(upserted);
+        if (writtenSlot > lastProcessedSlot) lastProcessedSlot = writtenSlot;
+        observer?.onBatchCommitted?.({ slot: writtenSlot, count: upserted.length });
+      }
+    } catch (err) {
+      observer?.onError?.("commit", err);
+      log("error", `Failed to upsert ${rows.length} accounts: ${err}`);
+      throw err;
+    } finally {
+      observer?.onPhase?.({ phase: null });
+    }
+  };
+
+  /* A failed final flush stops the replay, so the loop rethrows the failure
+     even on a quiet chain where no further event would wake it. */
+  const replayAbort = new AbortController();
+  const stopReplay = () => replayAbort.abort();
+  abortSignal?.addEventListener("abort", stopReplay, { once: true });
+  if (abortSignal?.aborted) stopReplay();
+
   try {
-    // Use createAccountsByOwnerReplay for hybrid backfill + streaming
     const replay = createAccountsByOwnerReplay({
       clientFactory,
+      listPartitions: BACKFILL_CONNECTIONS,
+      readConnections: BACKFILL_CONNECTIONS,
       owner: stream.getOwnerProgram(),
       view: AccountView.FULL,
       dataSizes: stream.dataSizes ?? (stream.expectedSize ? [stream.expectedSize] : undefined),
       minUpdatedSlot,
       logger,
-      signal: abortSignal,
-      onBackfillComplete: (highestSlot) => {
+      signal: replayAbort.signal,
+      onBackfillComplete: (highestSlot, streamCoveredSlot) => {
         log(
           "info",
-          `Backfill complete. Highest slot: ${highestSlot}, accounts processed: ${stats.accountsProcessed}`
+          `Backfill complete. Highest slot: ${highestSlot}, stream slot: ${streamCoveredSlot}, accounts processed: ${stats.accountsProcessed}`
         );
         backfillDrained = true;
-        // Every account the backfill handled is committed by now. Persist that
-        // progress instead of waiting for the next live update: a quiet stream
-        // may not see one for a long time, and readers take the checkpoint as
-        // the sign that the backfill finished. Like every other checkpoint it
-        // is the last handled account slot, never the high-water mark.
-        if (handledAnyAccount) {
-          const slot = lastProcessedSlot;
-          backfillCheckpoint = updateCheckpoint(db, checkpointName, slot, null).then(
-            () => {
-              observer?.onCheckpoint?.({ slot });
-              log("info", `Backfill checkpoint saved: slot ${slot}`);
-            },
-            (err) => {
-              /* Not fatal: the next block boundary writes it again. */
-              log("warn", `Failed to save backfill checkpoint at slot ${slot}: ${err}`);
-            }
-          );
-        }
+        if (streamCoveredSlot > streamSlot) streamSlot = streamCoveredSlot;
+        /* The loop is suspended in next() here, so this flush is the only writer. */
+        backfillCheckpoint = flushBuffered().then(async () => {
+          if (!handledAnyAccount) return;
+          const slot = checkpointSlot();
+          try {
+            await updateCheckpoint(db, checkpointName, slot, null);
+            observer?.onCheckpoint?.({ slot });
+            log("info", `Backfill checkpoint saved: slot ${slot}`);
+          } catch (err) {
+            log("warn", `Failed to save backfill checkpoint at slot ${slot}: ${err}`);
+          }
+        });
+        backfillCheckpoint.catch(stopReplay);
       },
     });
 
-    for await (const event of replay) {
+    /* Live rows wait for their block's marker; the idle flush bounds that wait
+       when a stream drops between an update and its marker. */
+    const events = flushWhenIdle(replay, LIVE_FLUSH_IDLE_MS, () => backfillDrained && buffered.size > 0, flushBuffered);
+    for await (const event of events) {
       if (abortSignal?.aborted) {
         log("info", "Abort signal received, stopping");
         break;
       }
+      /* Live writes wait for the final flush, so its INSERT cannot undo a live delete. */
+      if (backfillCheckpoint) await settleBackfillCheckpoint();
 
       if (event.type === "account") {
         const account = event.account;
@@ -185,7 +199,6 @@ export async function runAccountStreamProcessor(
           id: account.addressHex,
         });
 
-        // Log first few accounts for debugging
         if (stats.accountsProcessed <= 3) {
           log(
             "info",
@@ -193,20 +206,16 @@ export async function runAccountStreamProcessor(
           );
         }
 
-        const table = stream.table as any;
-        const idField = stream.api?.idField ?? "address";
-
-        // Handle account deletions before parsing — deleted accounts have
-        // zeroed data so parse() would return null and the delete would be
-        // silently skipped.
         if (account.isDelete) {
           log("debug", `Account deleted: ${account.addressHex}`);
           const idValue = encodeAddress(account.address);
+          buffered.delete(idValue);
+          observer?.onPhase?.({ phase: "commit", slot: account.slot });
           try {
             await db.delete(stream.table).where(eq(table[idField], idValue));
             stats.accountsDeleted++;
+            observer?.onBatchCommitted?.({ slot: account.slot, count: 1 });
             handledAnyAccount = true;
-            if (backfillDrained) observer?.onCheckpoint?.({ slot: account.slot });
             log("info", `Deleted row for account ${account.addressHex}`);
             if (account.slot > lastProcessedSlot) {
               lastProcessedSlot = account.slot;
@@ -215,11 +224,10 @@ export async function runAccountStreamProcessor(
             observer?.onError?.("commit", err);
             log("error", `Failed to delete account ${account.addressHex}: ${err}`);
             throw err;
-          }
+          } finally { observer?.onPhase?.({ phase: null }); }
           continue;
         }
 
-        // Parse using stream's parser.
         let parsed;
         try {
           parsed = stream.parse(account);
@@ -237,7 +245,6 @@ export async function runAccountStreamProcessor(
           continue;
         }
 
-        // Validate parse output if enabled
         if (validateParse) {
           const validation = validateParsedData(stream.schema, parsed, stream.name);
           if (!validation.success) {
@@ -247,46 +254,8 @@ export async function runAccountStreamProcessor(
           }
         }
 
-        let upserted = false;
-        try {
-          const upsertedRows = await db
-            .insert(stream.table)
-            .values(parsed)
-            .onConflictDoUpdate({
-              target: table[idField],
-              set: parsed,
-              where: versionIsAtMost(table, parsed),
-            })
-            .returning();
-
-          upserted = upsertedRows.length > 0;
-          if (upserted) {
-            stats.accountsUpdated++;
-          }
-
-          if (upserted && stats.accountsUpdated <= 3) {
-            log(
-              "info",
-              `Successfully inserted account ${stats.accountsUpdated}`
-            );
-          }
-        } catch (err) {
-          observer?.onError?.("commit", err);
-          log(
-            "error",
-            `Failed to upsert account ${account.addressHex}: ${err}`
-          );
-          throw err;
-        }
-
-        // Track highest slot for checkpoint
-        if (upserted) {
-          handledAnyAccount = true;
-          if (account.slot > lastProcessedSlot) {
-            lastProcessedSlot = account.slot;
-          }
-        }
-        // Progress logging
+        buffered.set((parsed as Record<string, unknown>)[idField], parsed as Record<string, unknown>);
+        if (buffered.size >= WRITE_BATCH) await flushBuffered();
         if (stats.accountsProcessed % 100 === 0) {
           log(
             "info",
@@ -294,18 +263,21 @@ export async function runAccountStreamProcessor(
           );
         }
       } else if (event.type === "blockFinished") {
-        // Persist at block boundaries, but do not advance the checkpoint to
-        // the block slot unless an account update was actually handled.
         const slot = event.block.slot;
+        if (slot > streamSlot) streamSlot = slot;
         if (!backfillDrained) {
           log("debug", `Block finished: slot ${slot}, backfill still running; no checkpoint`);
-        } else if (handledAnyAccount) {
-          await settleBackfillCheckpoint();
-          await updateCheckpoint(db, checkpointName, lastProcessedSlot, null);
-          observer?.onCheckpoint?.({ slot: lastProcessedSlot });
+          continue;
+        }
+        /* The block's rows are written before its checkpoint. */
+        await flushBuffered();
+        if (handledAnyAccount) {
+          const checkpoint = checkpointSlot();
+          await updateCheckpoint(db, checkpointName, checkpoint, null);
+          observer?.onCheckpoint?.({ slot: checkpoint });
           log(
             "debug",
-            `Block finished: slot ${slot}, checkpoint saved at account slot ${lastProcessedSlot}`
+            `Block finished: slot ${slot}, checkpoint saved at account slot ${checkpoint}`
           );
         } else {
           log(
@@ -313,18 +285,21 @@ export async function runAccountStreamProcessor(
             `Block finished: slot ${slot}, no checkpoint yet (no accounts handled)`
           );
         }
+        observer?.onProgress?.({ slot });
       }
     }
 
-    // Final checkpoint save
     await settleBackfillCheckpoint();
+    await flushBuffered();
     if (backfillDrained && handledAnyAccount) {
-      await updateCheckpoint(db, checkpointName, lastProcessedSlot, null);
-      observer?.onCheckpoint?.({ slot: lastProcessedSlot });
-      log("info", `Final checkpoint saved: slot ${lastProcessedSlot}`);
+      const checkpoint = checkpointSlot();
+      await updateCheckpoint(db, checkpointName, checkpoint, null);
+      observer?.onCheckpoint?.({ slot: checkpoint });
+      log("info", `Final checkpoint saved: slot ${checkpoint}`);
     }
   } catch (err) {
-    await settleBackfillCheckpoint();
+    /* A flush failure was already logged; the error being handled wins. */
+    await settleBackfillCheckpoint().catch(() => {});
     if (abortSignal?.aborted) {
       log("info", "Stream aborted");
     } else {
@@ -334,6 +309,10 @@ export async function runAccountStreamProcessor(
       );
       throw err;
     }
+  } finally {
+    abortSignal?.removeEventListener("abort", stopReplay);
+    /* Ends a replay still waiting on its stream, e.g. after a failed idle flush. */
+    stopReplay();
   }
 
   log(

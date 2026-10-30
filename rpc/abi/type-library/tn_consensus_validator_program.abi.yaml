@@ -310,7 +310,7 @@ types:
     kind:
       struct:
         packed: true
-        comment: Error codes are the TN_CONSENSUS_VALIDATOR_ERR_* values (0x01-0x4A).
+        comment: Error codes are the TN_CONSENSUS_VALIDATOR_ERR_* values (0x01-0x53).
         fields:
           - name: code
             field-type: { primitive: u64 }

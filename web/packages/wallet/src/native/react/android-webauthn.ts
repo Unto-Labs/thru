@@ -30,7 +30,6 @@ export async function enableWebAuthnSupport(viewTag?: number | null): Promise<bo
   try {
     return await Native.enableWebAuthnSupport(viewTag);
   } catch (err) {
-    // eslint-disable-next-line no-console
     console.warn('[@thru/wallet/native/react] enableWebAuthnSupport failed:', err);
     return false;
   }

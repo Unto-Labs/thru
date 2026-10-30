@@ -1,34 +1,4 @@
-/**
- * Indexer runtime class.
- *
- * Orchestrates running multiple event and account streams concurrently
- * with graceful shutdown support.
- *
- * @example
- * ```ts
- * import { Indexer } from "@thru/indexer";
- * import { ChainClient } from "@thru/replay";
- * import { transfers } from "./streams/transfers";
- * import { tokenAccounts } from "./account-streams/token-accounts";
- *
- * const indexer = new Indexer({
- *   db,
- *   clientFactory: () => new ChainClient({ baseUrl: RPC_URL }),
- *   eventStreams: [transfers],
- *   accountStreams: [tokenAccounts],
- *   defaultStartSlot: 0n,
- *   safetyMargin: 64,
- * });
- *
- * // Handle graceful shutdown
- * process.on("SIGINT", () => indexer.stop());
- * process.on("SIGTERM", () => indexer.stop());
- *
- * // Start indexing
- * await indexer.start();
- * ```
- */
-
+import { FatalProjectionError } from "../projections/writer";
 import { sql } from "drizzle-orm";
 import type { IndexerConfig } from "./config";
 import { runEventStreamProcessor, type ProcessorStats } from "../streams/processor";
@@ -47,10 +17,6 @@ import type { EventStream } from "../streams/types";
 import type { AccountStream } from "../accounts/types";
 import type { ReplayLogger } from "@thru/replay";
 
-// ============================================================
-// Types
-// ============================================================
-
 export interface IndexerResult {
   /** Results from event stream processors */
   eventStreams: Array<{
@@ -67,10 +33,6 @@ export interface IndexerResult {
     error?: Error;
   }>;
 }
-
-// ============================================================
-// Indexer Class
-// ============================================================
 
 /**
  * Indexer runtime that orchestrates event and account streams.
@@ -108,13 +70,9 @@ export class Indexer {
     this.initializeStreamStatuses();
   }
 
-  /**
-   * Check if the checkpoint table exists in the database.
-   * Logs a warning if it doesn't exist (user may have forgotten to export it in schema).
-   */
   private async checkCheckpointTable(): Promise<void> {
+    if (!this.config.db) throw new Error("db is required for ordinary indexer streams");
     try {
-      // Try to query the checkpoint table
       await this.config.db.execute(
         sql`SELECT 1 FROM indexer_checkpoints LIMIT 1`
       );
@@ -124,7 +82,6 @@ export class Indexer {
       const message = err instanceof Error
         ? (err.cause instanceof Error ? err.cause.message : err.message)
         : String(err);
-      // Check if error is about missing table
       if (message.includes("does not exist") || message.includes("relation")) {
         this.logger.warn(
           `Checkpoint table "indexer_checkpoints" not found.
@@ -137,7 +94,6 @@ Then run: pnpm drizzle-kit push (or generate + migrate)
 `
         );
       }
-      // Re-throw so startup fails
       throw err;
     }
   }
@@ -155,8 +111,8 @@ Then run: pnpm drizzle-kit push (or generate + migrate)
       throw new Error("Indexer is already running");
     }
 
-    // Check that checkpoint table exists before starting
-    await this.checkCheckpointTable();
+    if (!this.config.projections?.length || this.config.eventStreams?.length || this.config.accountStreams?.length)
+      await this.checkCheckpointTable();
 
     this.running = true;
     this.shutdownRequested = false;
@@ -196,7 +152,7 @@ Then run: pnpm drizzle-kit push (or generate + migrate)
       const eventSupervisors = eventStreams.map((stream) =>
         this.runEventStreamSupervisor(stream, {
           clientFactory,
-          db,
+          db: db!,
           defaultStartSlot: defaultStartSlot!,
           safetyMargin,
           pageSize,
@@ -209,14 +165,26 @@ Then run: pnpm drizzle-kit push (or generate + migrate)
       const accountSupervisors = accountStreams.map((stream) =>
         this.runAccountStreamSupervisor(stream, {
           clientFactory,
-          db,
+          db: db!,
           logLevel,
           logger,
           validateParse,
         }, supervisorOptions)
       );
 
-      await Promise.all([...eventSupervisors, ...accountSupervisors]);
+      const projectionSupervisors = (this.config.projections ?? []).map(projection =>
+        this.runStreamSupervisor(projection.kind, projection.name, supervisorOptions, async observer => {
+          await projection.run(clientFactory, this.abortController!.signal, observer);
+          return "projection stopped";
+        })
+      );
+      const supervisors = [...eventSupervisors, ...accountSupervisors, ...projectionSupervisors];
+      try { await Promise.all(supervisors); }
+      catch (error) {
+        this.abortController!.abort();
+        await Promise.allSettled(supervisors);
+        throw error;
+      }
 
       const result: IndexerResult = {
         eventStreams: eventStreams.map((stream) => this.resultForStream(stream.name)),
@@ -300,6 +268,9 @@ Then run: pnpm drizzle-kit push (or generate + migrate)
   private initializeStreamStatuses(): void {
     this.streamStatuses = new Map();
     this.streamHealthStates = new Map();
+    for (const projection of this.config.projections ?? []) {
+      this.streamStatuses.set(this.statusKey(projection.kind, projection.name), this.createInitialStreamStatus(projection.kind, projection.name));
+    }
     for (const stream of this.config.eventStreams ?? []) {
       this.streamStatuses.set(this.statusKey("event", stream.name), this.createInitialStreamStatus("event", stream.name));
     }
@@ -314,6 +285,7 @@ Then run: pnpm drizzle-kit push (or generate + migrate)
       kind,
       state: "idle",
       checkpointSlot: null,
+      consumedSlot: null,
       lastProcessedSlot: null,
       lastEventAt: null,
       stale: false,
@@ -455,8 +427,15 @@ Then run: pnpm drizzle-kit push (or generate + migrate)
     }
   }
 
+  private metric(name: Parameters<NonNullable<IndexerConfig["telemetry"]>["record"]>[0], attrs: Record<string, unknown>, value = 1): void {
+    try { this.config.telemetry?.record(name, attrs, value); } catch { /* Observability is best effort. */ }
+  }
+
   private createObserver(kind: IndexerStreamKind, name: string, endpointLabel?: string): ProcessorStatusObserver {
     const status = this.statusFor(kind, name);
+    const attrs = { stream: name, kind };
+    let phaseStartedAt = 0;
+    let phaseFailed = false;
     let startSlot: bigint | null = null;
     let checkpointSlot: bigint | null = null;
 
@@ -478,6 +457,13 @@ Then run: pnpm drizzle-kit push (or generate + migrate)
           status.lastProcessedSlot = info.slot.toString();
         }
       },
+      onProgress: (info) => {
+        if (status.consumedSlot === null || status.consumedSlot === undefined || info.slot > BigInt(status.consumedSlot)) {
+          status.consumedSlot = info.slot.toString();
+          this.metric("apps.indexer.consumed", attrs, Number(info.slot));
+          this.metric("apps.indexer.last_progress_timestamp", attrs, Date.now() / 1000);
+        }
+      },
       onParserNull: () => {
         status.counters.parserNulls++;
       },
@@ -490,19 +476,34 @@ Then run: pnpm drizzle-kit push (or generate + migrate)
       onBatchCommitted: (info) => {
         status.counters.batchesCommitted++;
         status.counters.recordsProcessed += info.count;
+        this.metric("apps.indexer.records", attrs, info.insertedCount ?? info.count);
         status.lastProcessedSlot = info.slot.toString();
         status.lastEventAt = new Date().toISOString();
       },
       onCheckpoint: (info) => {
+        if (checkpointSlot === null || info.slot > checkpointSlot) {
+          checkpointSlot = info.slot;
+          this.metric("apps.indexer.last_progress_timestamp", attrs, Date.now() / 1000);
+        }
+        this.metric("apps.indexer.checkpoint", attrs, Number(info.slot));
         status.checkpointSlot = info.slot.toString();
         status.lastProcessedSlot = info.slot.toString();
       },
       onPhase: (info) => {
+        if (status.activePhase === "commit" && phaseStartedAt) {
+          const depAttrs = { dependency: "db", operation: "commit", outcome: phaseFailed ? "error" : "success" };
+          this.metric("apps.dependency.requests", depAttrs);
+          if (phaseFailed) this.metric("apps.dependency.errors", depAttrs);
+          this.metric("apps.dependency.duration", depAttrs, (performance.now() - phaseStartedAt) / 1000);
+          phaseStartedAt = 0;
+        }
+        if (info.phase === "commit") { phaseStartedAt = performance.now(); phaseFailed = false; }
         status.activePhase = info.phase;
         status.activePhaseSince = info.phase === null ? null : new Date().toISOString();
         status.activeBatchSlot = info.phase === null || info.slot === undefined ? null : info.slot.toString();
       },
       onError: (phase, error) => {
+        if (phase === "commit") phaseFailed = true;
         if (phase === "commit") status.counters.commitErrors++;
         if (phase === "filterBatch") status.counters.filterBatchErrors++;
         if (phase === "onCommit") status.counters.onCommitErrors++;
@@ -581,7 +582,16 @@ Then run: pnpm drizzle-kit push (or generate + migrate)
           return;
         }
 
+        if (error instanceof FatalProjectionError) {
+          status.lastErrorAt = new Date().toISOString();
+          status.lastError = { ...normalizeIndexerError({ error, phase: "supervisor",
+            streamName: name, streamKind: kind, endpointLabel: options.endpointLabel }), retryable: false };
+          this.logger.error("Indexer projection stopped", { event: "indexer.projection.fatal", stream: name, error });
+          this.setStreamState(status, "stopped");
+          throw error;
+        }
         status.restartCount++;
+        this.metric("apps.indexer.retries", { stream: name, kind });
         this.setStreamState(status, "retrying", {
           restart_count: status.restartCount,
         });

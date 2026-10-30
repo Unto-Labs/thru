@@ -1,10 +1,3 @@
-/**
- * The parts Deposit adds to Send's.
- *
- * `PresetChips` are the quick amounts under the amount, one selected when the
- * typed amount equals it. `QuoteLine` is the single line under the amount
- * that says what it gets, or why it can't go on yet.
- */
 import { Pressable, Text, View } from "react-native";
 import { font, space, text, touch } from "./tokens";
 import { makeStyles, useThemeColors } from "./theme";
@@ -37,7 +30,7 @@ export function PresetChips({
           <Pressable
             accessibilityLabel={`Amount ${option.label}`}
             accessibilityRole="button"
-            accessibilityState={{ disabled, selected }}
+            accessibilityState={{ selected }}
             disabled={disabled}
             key={option.key}
             onPress={() => onSelect(option.key)}
@@ -87,7 +80,7 @@ export function QuoteLine({
           onPress={onRetry}
           style={styles.retry}
         >
-          <Text style={styles.retryLabel}>Retry</Text>
+          <Text style={styles.retryLabel}>Try again</Text>
         </Pressable>
       ) : null}
     </View>

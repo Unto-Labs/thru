@@ -1656,15 +1656,15 @@ pub enum AuthCommands {
     Logout,
 }
 
-/// Native THRU and test THRUSD faucet commands
+/// THRU and test THRUSD faucet commands
 #[derive(Subcommand)]
 pub enum FaucetCommands {
-    /// Deposit native THRU into the on-chain faucet
+    /// Deposit THRU into the on-chain faucet
     Deposit {
         /// Account identifier (key name or ta.../hex pubkey) to use as depositor (must match fee payer)
         account: String,
 
-        /// Amount to deposit in raw native balance units
+        /// Amount to deposit in raw THRU balance units
         amount: u64,
 
         /// Fee payer account name (defaults to 'default')
@@ -1672,7 +1672,7 @@ pub enum FaucetCommands {
         fee_payer: Option<String>,
     },
 
-    /// Withdraw native THRU or test THRUSD
+    /// Withdraw THRU or test THRUSD
     Withdraw {
         #[command(subcommand)]
         subcommand: FaucetWithdrawCommands,
@@ -1681,17 +1681,14 @@ pub enum FaucetCommands {
 
 #[derive(Subcommand)]
 pub enum FaucetWithdrawCommands {
-    /// Withdraw native THRU from the on-chain faucet using a local signing key
-    Native {
+    /// Fund an existing account with THRU through Thru Developers
+    #[command(alias = "native")]
+    Thru {
         /// Account identifier (key name or ta.../hex pubkey) to use as recipient
         account: String,
 
-        /// Amount in raw native balance units (max 10000 per transaction)
+        /// Amount in raw THRU balance units (max 10000 per request)
         amount: u64,
-
-        /// Fee payer account name (defaults to 'default')
-        #[arg(long)]
-        fee_payer: Option<String>,
     },
 
     /// Fund an existing test THRUSD token account through Thru Developers

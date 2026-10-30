@@ -26,8 +26,8 @@ it("bounds the live consumer queue as well as bootstrap capture", async () => {
     source,
     slotOf: (x) => x.slot,
     maxBufferedItems: 2,
-    startInStreamingMode: true,
   });
+  pump.enableStreaming(-1n);
   await new Promise((resolve) => setTimeout(resolve, 0));
   await expect(pump.next()).rejects.toThrow("capacity");
   await pump.close();
@@ -44,7 +44,8 @@ it("allows buffered duplicates when capture is at capacity", async () => {
 
 it("discards below-floor overlap even when the consumer queue is full", async () => {
   const source = { async *[Symbol.asyncIterator]() { yield 10n; yield 11n; yield 9n; } };
-  const pump = new LivePump({ source, slotOf: slot => slot, maxBufferedItems: 2, startInStreamingMode: true, initialEmitFloor: 10n });
+  const pump = new LivePump({ source, slotOf: slot => slot, maxBufferedItems: 2 });
+  pump.enableStreaming(10n);
   await new Promise(resolve => setTimeout(resolve, 0));
   expect((await pump.next()).value).toBe(10n);
   expect((await pump.next()).value).toBe(11n);

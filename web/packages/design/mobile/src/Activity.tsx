@@ -1,21 +1,6 @@
-/**
- * The Activity feed's parts, from the Activity handoff
- * (design/History.dc.html, section 07 maps each to the kit):
- * - IconTile: a 32 or 48 square that carries a kind's glyph in a soft tone.
- * - ActivityRow (and its skeleton): the 56pt feed row.
- * - EmptyState and InlineError: a list with nothing to show, and a failed
- *   refresh above rows that stay.
- * - Disclosure: a 56pt header that opens a body, closed by default.
- * - DetailHero: the detail screen's header.
- * - LargeTitle: a screen's 28pt title, above its content.
- * Colours follow the active theme. Sublines, times and labels use fgMuted
- * (fgSubtle is 2.5:1 on light); failure uses brick, not the validation red.
- */
-import { useEffect, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { useState, type ComponentType, type ReactNode } from "react";
 import {
-  AccessibilityInfo,
   Animated,
-  Easing,
   Platform,
   Pressable,
   Text,
@@ -28,13 +13,14 @@ import Svg, { Path } from "react-native-svg";
 import { Badge, Skeleton } from "./Bits";
 import { Button } from "./Button";
 import { IconAlert, IconChevronDown, IconClock, IconClose, type IconProps } from "./Icons";
-import { font, text, touch } from "./tokens";
+import { font, space, text, touch } from "./tokens";
+import { CollapseBody, useCollapse } from "./Collapse";
 import { makeStyles, useThemeColors, type ThemeColors } from "./theme";
 
 export type IconTileTone = "neutral" | "incoming" | "pending" | "failed";
 export type ActivityRowStatus = "done" | "pending" | "failed";
-/** How an amount reads: money in (forest), money out (fg), or not settled
-    (fgMuted: pending or failed, never struck through). */
+/** How an amount reads: money in, money out, or not settled (pending or
+    failed). */
 export type ActivityAmountTone = "in" | "out" | "muted";
 
 function tileColors(c: ThemeColors, tone: IconTileTone): { bg: string; fg: string } {
@@ -59,7 +45,7 @@ function amountColor(c: ThemeColors, tone: ActivityAmountTone): string {
 export interface IconTileProps {
   icon: ComponentType<IconProps>;
   tone?: IconTileTone;
-  /** 32 with an 18 glyph in rows; 48 with a 24 glyph in the hero. */
+  /** `sm` in rows, `lg` in the hero. */
   size?: "sm" | "lg";
 }
 
@@ -93,9 +79,9 @@ export interface ActivityRowProps {
   /** The whole row as one sentence; its children are hidden from readers. */
   accessibilityLabel: string;
   onPress?: () => void;
-  /** The hairline under the row, inset 16. */
+  /** The hairline under the row. */
   separator?: boolean;
-  /** Its detail is open: bgMuted with a 2 pt brick bar at the left. */
+  /** Its detail is open. */
   selected?: boolean;
 }
 
@@ -160,33 +146,6 @@ export function ActivityRow({
   );
 }
 
-/* An opacity pulse, 1 → 0.55 over 1.4s, unless the reader asked for less
-   motion. */
-export function usePulse(): Animated.Value {
-  const opacity = useRef(new Animated.Value(1)).current;
-  useEffect(() => {
-    let loop: Animated.CompositeAnimation | null = null;
-    let cancelled = false;
-    void AccessibilityInfo.isReduceMotionEnabled()
-      .catch(() => false)
-      .then((reduce) => {
-        if (cancelled || reduce) return;
-        loop = Animated.loop(
-          Animated.sequence([
-            Animated.timing(opacity, { toValue: 0.55, duration: 700, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-            Animated.timing(opacity, { toValue: 1, duration: 700, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-          ]),
-        );
-        loop.start();
-      });
-    return () => {
-      cancelled = true;
-      loop?.stop();
-    };
-  }, [opacity]);
-  return opacity;
-}
-
 /** A loading row: tile, two lines, and the amount and time column. */
 export function ActivityRowSkeleton() {
   const styles = useStyles();
@@ -212,14 +171,8 @@ export function ActivityRowSkeleton() {
     once as "Loading activity". */
 export function ActivitySkeleton({ groups = 2, rows = 3 }: { groups?: number; rows?: number }) {
   const styles = useStyles();
-  const opacity = usePulse();
   return (
-    <Animated.View
-      accessible
-      accessibilityLabel="Loading activity"
-      accessibilityState={{ busy: true }}
-      style={{ opacity }}
-    >
+    <View accessible accessibilityLabel="Loading activity" accessibilityRole="progressbar" aria-busy>
       {Array.from({ length: groups }, (_, group) => (
         <View key={group}>
           <View style={styles.skeletonLabel}>
@@ -232,7 +185,7 @@ export function ActivitySkeleton({ groups = 2, rows = 3 }: { groups?: number; ro
           </View>
         </View>
       ))}
-    </Animated.View>
+    </View>
   );
 }
 
@@ -243,19 +196,19 @@ export interface EmptyStateProps {
   action?: { label: string; onPress: () => void };
   /** `error` is announced as an alert; `empty` politely. */
   variant?: "empty" | "error";
+  /** Inside a section, under other content, instead of filling the list. */
+  compact?: boolean;
   style?: StyleProp<ViewStyle>;
 }
 
-/** A list with nothing to show: title, one line of body, an optional action.
-    Centred in the list area above a 96 foot, so it sits a little high, as
-    the design's `padding: 0 32px 96px` places it. */
-export function EmptyState({ title, body, action, variant = "empty", style }: EmptyStateProps) {
+/** A list with nothing to show: title, one line of body, an optional action. */
+export function EmptyState({ title, body, action, variant = "empty", compact = false, style }: EmptyStateProps) {
   const styles = useStyles();
   return (
     <View
       accessibilityRole={variant === "error" ? "alert" : undefined}
       accessibilityLiveRegion="polite"
-      style={[styles.empty, style]}
+      style={[compact ? styles.emptyCompact : styles.empty, style]}
     >
       <Text style={styles.emptyTitle}>{title}</Text>
       {body ? <Text style={styles.emptyBody}>{body}</Text> : null}
@@ -272,17 +225,14 @@ export interface InlineErrorProps {
   onAction?: () => void;
 }
 
-/** One 44pt line above rows that stay: brick alert and text, and a mono
-    RETRY in a full hit target. */
-export function InlineError({ message, actionLabel = "Retry", onAction }: InlineErrorProps) {
+/** A failed refresh, as one line above rows that stay, with a retry. */
+export function InlineError({ message, actionLabel = "Try again", onAction }: InlineErrorProps) {
   const styles = useStyles();
   const colors = useThemeColors();
   return (
     <View accessibilityRole="alert" style={styles.inline}>
       <IconAlert size={16} color={colors.accent} />
-      <Text style={styles.inlineText} numberOfLines={1}>
-        {message}
-      </Text>
+      <Text style={styles.inlineText}>{message}</Text>
       {onAction ? (
         <Pressable
           accessibilityRole="button"
@@ -307,33 +257,13 @@ export interface DisclosureProps {
   onToggle?: (open: boolean) => void;
 }
 
-/** A 56pt header whose chevron turns 180° (200ms) as its body opens. */
+/** A header whose chevron turns as its body opens. */
 export function Disclosure({ title, children, defaultOpen = false, open: controlled, onToggle }: DisclosureProps) {
   const styles = useStyles();
   const colors = useThemeColors();
   const [inner, setInner] = useState(defaultOpen);
   const open = controlled ?? inner;
-  const turn = useRef(new Animated.Value(open ? 1 : 0)).current;
-  const reduceMotion = useRef(false);
-  useEffect(() => {
-    void AccessibilityInfo.isReduceMotionEnabled()
-      .then((reduce) => {
-        reduceMotion.current = reduce;
-      })
-      .catch(() => {});
-  }, []);
-  useEffect(() => {
-    if (reduceMotion.current) {
-      turn.setValue(open ? 1 : 0);
-      return;
-    }
-    Animated.timing(turn, {
-      toValue: open ? 1 : 0,
-      duration: 200,
-      easing: Easing.out(Easing.cubic),
-      useNativeDriver: true,
-    }).start();
-  }, [open, turn]);
+  const { turn, shown } = useCollapse(open);
   const toggle = () => {
     const next = !open;
     if (controlled === undefined) setInner(next);
@@ -344,7 +274,7 @@ export function Disclosure({ title, children, defaultOpen = false, open: control
     <View style={styles.disclosure}>
       <Pressable
         accessibilityRole="button"
-        accessibilityState={{ expanded: open }}
+        aria-expanded={open}
         onPress={toggle}
         style={({ pressed }) => [styles.disclosureHeader, pressed ? { backgroundColor: colors.bgMuted } : null]}
       >
@@ -353,7 +283,11 @@ export function Disclosure({ title, children, defaultOpen = false, open: control
           <IconChevronDown size={18} color={colors.fgMuted} />
         </Animated.View>
       </Pressable>
-      {open ? <View style={styles.disclosureBody}>{children}</View> : null}
+      {shown ? (
+        <CollapseBody open={open} turn={turn} style={styles.disclosureBody}>
+          {children}
+        </CollapseBody>
+      ) : null}
     </View>
   );
 }
@@ -386,12 +320,12 @@ export interface DetailHeroProps {
   /** The plain-words reason under a pending or failed status. */
   reason?: string | null;
   /** The detail sheet's hero: the kind is in the sheet's header, so this is
-      the amount and the status alone (padding 20 16 16; 16 with no amount). */
+      the amount and the status alone. */
   compact?: boolean;
 }
 
-/** The detail screen's header: 48 tile, title, the amount large, and the
-    status with its glyph, then the reason in plain words. */
+/** The detail screen's header: tile, title, the amount, and the status,
+    then the reason in plain words. */
 export function DetailHero({
   icon,
   tone = "neutral",
@@ -447,15 +381,13 @@ export function DetailHero({
   );
 }
 
-/* JetBrains Mono advances 0.6em: 7.2 a character at 12. Keys line up in one
-   column as wide as the longest, up to 42 % of the grid; a longer key breaks
-   after a dot or an underscore rather than mid-word. */
+/* JetBrains Mono advances 0.6em: 7.2 a character at 12. Long keys break
+   after a dot or an underscore. */
 const MONO_12_ADVANCE = 7.2;
 const breakableKey = (key: string) => key.replace(/([._])/g, "$1\u200B");
-/* Long base58 and hex values break anywhere rather than run off the card. */
 const wrapAnywhere = Platform.OS === "web" ? ({ wordBreak: "break-all" } as unknown as TextStyle) : null;
 
-/** Decoded data as key/value rows: mono 12/18, keys fgMuted, values fg. */
+/** Decoded data as key/value rows. */
 export function KeyValueGrid({ rows }: { rows: readonly (readonly [string, string])[] }) {
   const styles = useStyles();
   const longest = rows.reduce((width, [key]) => Math.max(width, key.length), 0);
@@ -477,9 +409,9 @@ export function KeyValueGrid({ rows }: { rows: readonly (readonly [string, strin
 }
 
 export interface DataCardProps {
-  /** "transfer", "Raw instruction bytes": mono 13/500. */
+  /** "transfer", "Raw instruction bytes". */
   title: string;
-  /** "PasskeyInstruction", "1 instruction · 164 bytes": mono 11 fgMuted. */
+  /** "PasskeyInstruction", "1 instruction · 164 bytes". */
   meta?: string | null;
   defaultOpen?: boolean;
   /** An action at the header's end, after a hairline: Copy. */
@@ -487,21 +419,24 @@ export interface DataCardProps {
   children?: ReactNode;
 }
 
-/** A card of decoded data under Transaction details: a 1 pt border, a 44
-    header on bgMuted that opens and closes it on its own, and its body. A
-    card with nothing in it is a plain header. */
+/** A card of decoded data under Transaction details, with a header that
+    opens and closes it on its own. A card with nothing in it is a plain
+    header. */
 export function DataCard({ title, meta, defaultOpen = false, action, children }: DataCardProps) {
   const styles = useStyles();
   const colors = useThemeColors();
   const [open, setOpen] = useState(defaultOpen);
   const expandable = children !== undefined && children !== null;
+  const expanded = open && expandable;
+  const { turn, shown } = useCollapse(expanded);
+  const rotate = turn.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "180deg"] });
   return (
     <View style={styles.dataCard}>
       <View style={styles.dataHeader}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={title}
-          accessibilityState={expandable ? { expanded: open } : undefined}
+          aria-expanded={expandable ? open : undefined}
           disabled={!expandable}
           onPress={() => setOpen((value) => !value)}
           style={({ pressed }) => [styles.dataToggle, pressed ? { backgroundColor: colors.bgInset } : null]}
@@ -516,9 +451,9 @@ export function DataCard({ title, meta, defaultOpen = false, action, children }:
           ) : null}
           <View style={styles.flexSpacer} />
           {expandable ? (
-            <View style={[styles.chevron, open ? styles.chevronOpen : null]}>
+            <Animated.View style={[styles.chevron, { transform: [{ rotate }] }]}>
               <IconChevronDown size={16} color={colors.fgMuted} />
-            </View>
+            </Animated.View>
           ) : null}
         </Pressable>
         {action ? (
@@ -532,18 +467,21 @@ export function DataCard({ title, meta, defaultOpen = false, action, children }:
           </Pressable>
         ) : null}
       </View>
-      {open && expandable ? <View style={styles.dataBody}>{children}</View> : null}
+      {shown ? (
+        <CollapseBody open={expanded} turn={turn} style={styles.dataBody}>
+          {children}
+        </CollapseBody>
+      ) : null}
     </View>
   );
 }
 
-/** The detail's body while it loads: the amount and status, then four rows,
-    pulsing. Pair it with SheetHeader's `loading`. */
+/** The detail's body while it loads: the amount and status, then four rows.
+    Pair it with SheetHeader's `loading`. */
 export function DetailSkeleton() {
   const styles = useStyles();
-  const opacity = usePulse();
   return (
-    <Animated.View accessible accessibilityLabel="Loading transaction" accessibilityState={{ busy: true }} style={{ opacity }}>
+    <View accessible accessibilityLabel="Loading transaction" accessibilityRole="progressbar" aria-busy>
       <View style={styles.skeletonHero}>
         <Skeleton height={30} width={160} />
         <Skeleton height={12} width={96} />
@@ -556,11 +494,11 @@ export function DetailSkeleton() {
           </View>
         ))}
       </View>
-    </Animated.View>
+    </View>
   );
 }
 
-/** A screen's 28pt title, left-aligned above its content: the large-title
+/** A screen's title, left-aligned above its content: the large-title
     variant of NavBar, which lays the compact bar over it once it has
     scrolled under (NavBar `large`). */
 export function LargeTitle({
@@ -622,6 +560,16 @@ const useStyles = makeStyles((c) => ({
     textAlign: "center",
     maxWidth: 280,
   },
+  /* No flex: under react-native-web, flex 0 over the base flex 1 is a zero-height
+     box, and the centred text spills over whatever sits above it. */
+  emptyCompact: {
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingHorizontal: 32,
+    paddingTop: space[4],
+    paddingBottom: space[4],
+  },
   emptyAction: { marginTop: 12 },
   inline: {
     flexDirection: "row",
@@ -676,13 +624,10 @@ const useStyles = makeStyles((c) => ({
   dataCard: { borderWidth: 1, borderColor: c.border },
   dataHeader: { height: touch.hitMin, flexDirection: "row", alignItems: "center", backgroundColor: c.bgMuted },
   dataToggle: { flex: 1, minWidth: 0, height: touch.hitMin, flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 12 },
-  /* A long title ellipsizes rather than pushing the chevron and the Copy
-     action out of the card; the decoded type beside it gives way first. */
   dataTitle: { flexShrink: 1, minWidth: 0, fontFamily: font.monoMedium, fontSize: 13, color: c.fg },
   dataMeta: { flexShrink: 3, minWidth: 0, fontFamily: font.mono, fontSize: text.xxs, color: c.fgMuted },
   chevron: { flexShrink: 0 },
   flexSpacer: { flex: 1 },
-  chevronOpen: { transform: [{ rotate: "180deg" }] },
   dataAction: {
     height: touch.hitMin,
     paddingHorizontal: 12,

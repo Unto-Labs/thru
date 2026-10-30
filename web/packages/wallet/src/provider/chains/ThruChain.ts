@@ -7,12 +7,10 @@ import {
   type ThruSigningSessionCreateOptions,
   type ThruSigningSessionDescriptor,
   type ThruSigningSessionRenewOptions,
-  type ThruPasskeyChallengeIntent,
-  type ThruPasskeyChallengeSignature,
   type ThruTransactionIntent,
 } from "../../interfaces";
 import { POST_MESSAGE_REQUEST_TYPES, createRequestId } from "../../protocol";
-import { buildWalletAccountContext } from "@thru/programs/passkey-manager";
+import { buildWalletAccountContext } from "@thru/programs/wallet";
 import type { EmbeddedProvider } from "../EmbeddedProvider";
 import type { IframeManager } from "../IframeManager";
 import {
@@ -39,9 +37,6 @@ function descriptorFromWire(session: {
   };
 }
 
-/**
- * EmbeddedThruChain - postMessage-backed Thru chain adapter.
- */
 export class EmbeddedThruChain implements IThruChain {
   private readonly iframeManager: IframeManager;
   private readonly provider: EmbeddedProvider;
@@ -146,30 +141,6 @@ export class EmbeddedThruChain implements IThruChain {
       if (walletShown) {
         this.iframeManager.hide();
       }
-    }
-  }
-
-  async signPasskeyChallenge(
-    challenge: ThruPasskeyChallengeIntent,
-  ): Promise<ThruPasskeyChallengeSignature> {
-    if (!this.provider.isConnected()) {
-      throw new Error("Wallet not connected");
-    }
-
-    this.iframeManager.show();
-    try {
-      const response = await this.iframeManager.sendMessage({
-        id: createRequestId(),
-        type: POST_MESSAGE_REQUEST_TYPES.SIGN_PASSKEY_CHALLENGE,
-        payload: {
-          challenge: challenge.challenge,
-          walletAddress: challenge.walletAddress,
-        },
-        origin: window.location.origin,
-      });
-      return response.result;
-    } finally {
-      this.iframeManager.hide();
     }
   }
 

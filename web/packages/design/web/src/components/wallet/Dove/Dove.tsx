@@ -2,8 +2,7 @@ import * as React from "react";
 import { cn } from "../../../utils";
 import "./Dove.css";
 
-/* The Thru dove, split into body and wing so the wing can flap on its own
-   hinge. Path lengths drive the draw-on stroke animation. */
+/* Path lengths drive the draw-on stroke animation. */
 const ASPECT = 117.402 / 145.999;
 const BODY_LEN = 1036;
 const WING_LEN = 458;

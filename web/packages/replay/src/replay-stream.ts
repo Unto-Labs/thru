@@ -17,6 +17,8 @@ const DEFAULT_METRICS: ReplayMetrics = {
   discardedDuplicates: 0,
 };
 const RECONNECT_STUCK_THRESHOLD_MS = 30_000;
+const MAX_CATCH_UP_READS = 5;
+const CATCH_UP_RETRY_DELAY_MS = 500;
 
 function compareBigint(a: Slot, b: Slot): number {
   if (a === b) return 0;
@@ -91,15 +93,13 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
     let currentFetchBackfill: BackfillFetcher<T, Cursor> = fetchBackfill;
     let currentDispose = dispose ?? (() => {});
 
-    const createLivePump = (slot: Slot, startStreaming = false, emitFloor?: Slot) =>
+    const createLivePump = (slot: Slot) =>
       new LivePump<T>({
       maxBufferedItems: this.config.maxBufferedItems,
         source: currentSubscribeLive(slot),
         slotOf: extractSlot,
         keyOf,
         logger: this.logger,
-        startInStreamingMode: startStreaming,
-        initialEmitFloor: emitFloor,
       });
     let livePump = createLivePump(startSlot);
 
@@ -159,9 +159,38 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
       pendingOrderedPage = null;
     };
 
+    /* Switches the live pump from buffering to streaming, emitting the buffered
+       items above cutoffSlot that nothing has emitted yet. */
+    const drainLive = async function* (
+      self: ReplayStream<T, Cursor>,
+      cutoffSlot: Slot,
+    ): AsyncGenerator<T> {
+      const { drained, discarded } = livePump.enableStreaming(cutoffSlot);
+      self.metrics.bufferedItems = drained.length;
+      self.metrics.discardedDuplicates += discarded;
+
+      for (const item of drained) {
+        const slot = extractSlot(item);
+        const key = keyOf(item);
+        if (seenItem(slot, key)) {
+          self.metrics.discardedDuplicates += 1;
+          continue;
+        }
+        currentSlot = slot;
+        recordEmission(slot, key);
+        self.metrics.emittedLive += 1;
+        yield item;
+        livePump.updateEmitFloor(currentSlot);
+      }
+      livePump.updateEmitFloor(currentSlot);
+    };
+
     let emptyPageRetries = 0;
     const MAX_EMPTY_PAGE_RETRIES = 10;
 
+    // A quiet live stream would otherwise hold the STREAMING read until connectionTimeoutMs.
+    const closeLivePumpOnAbort = () => void livePump.close();
+    signal?.addEventListener("abort", closeLivePumpOnAbort, { once: true });
     try {
       while (!backfillDone) {
         if (shouldStop()) return;
@@ -239,26 +268,10 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
 
       this.logger.info(`replay entering SWITCHING state (currentSlot=${currentSlot})`);
 
-      const { drained, discarded } = livePump.enableStreaming(currentSlot);
-      this.metrics.bufferedItems = drained.length;
-      this.metrics.discardedDuplicates += discarded;
-
-      for (const item of drained) {
+      for await (const item of drainLive(this, currentSlot)) {
         if (shouldStop()) return;
-
-        const slot = extractSlot(item);
-        const key = keyOf(item);
-        if (seenItem(slot, key)) {
-          this.metrics.discardedDuplicates += 1;
-          continue;
-        }
-        currentSlot = slot;
-        recordEmission(slot, key);
-        this.metrics.emittedLive += 1;
         yield item;
-        livePump.updateEmitFloor(currentSlot);
       }
-      if (!drained.length) livePump.updateEmitFloor(currentSlot);
 
       this.logger.info("replay entering STREAMING state");
       const retryConfig = DEFAULT_RETRY_CONFIG;
@@ -268,6 +281,17 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
         attempt: number;
         resumeSlot: Slot;
       } | null = null;
+      const noteReconnectCompleted = (slot: Slot): void => {
+        if (!waitingFirstReconnectEvent) return;
+        this.logger.info("Replay stream reconnect completed", {
+          event: "replay.stream.reconnect.completed",
+          attempt: waitingFirstReconnectEvent.attempt,
+          resume_slot: waitingFirstReconnectEvent.resumeSlot.toString(),
+          first_event_slot: slot.toString(),
+          duration_ms: Date.now() - waitingFirstReconnectEvent.startedAtMs,
+        });
+        waitingFirstReconnectEvent = null;
+      };
       while (true) {
         if (shouldStop()) return;
 
@@ -283,16 +307,7 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
             throw new Error("stream ended");
           }
           const slot = extractSlot(next.value);
-          if (waitingFirstReconnectEvent) {
-            this.logger.info("Replay stream reconnect completed", {
-              event: "replay.stream.reconnect.completed",
-              attempt: waitingFirstReconnectEvent.attempt,
-              resume_slot: waitingFirstReconnectEvent.resumeSlot.toString(),
-              first_event_slot: slot.toString(),
-              duration_ms: Date.now() - waitingFirstReconnectEvent.startedAtMs,
-            });
-            waitingFirstReconnectEvent = null;
-          }
+          noteReconnectCompleted(slot);
           const key = keyOf(next.value);
           if (seenItem(slot, key)) {
             this.metrics.discardedDuplicates += 1;
@@ -371,7 +386,30 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
             }
           }
 
-          if (onReconnect && currentSlot > 0n) {
+          /* Subscribe, wait, then read. The server sends nothing when it
+             accepts a subscription, so the wait gives it time to open and lets
+             the List* read see items published before it did. The wait is fixed,
+             not the growing backoff (which ran before subscribing), so the live
+             items buffered here don't grow with retries. */
+          const resumeSlot = currentSlot;
+          livePump = createLivePump(resumeSlot);
+          waitingFirstReconnectEvent = {
+            startedAtMs: reconnectStartedAtMs,
+            attempt,
+            resumeSlot,
+          };
+          this.logger.info("Replay stream waiting for first event", {
+            event: "replay.stream.waiting_first_event",
+            attempt,
+            resume_slot: resumeSlot.toString(),
+          });
+          await abortableDelay(retryConfig.initialDelayMs, signal);
+          if (shouldStop()) return;
+          /* Read until history reaches the first slot the new subscription saw,
+             so the two overlap. List* can lag the stream past the wait above.
+             With nothing live yet, the reads run out the cap: a timing bound
+             on that lag, not proof that history caught up. */
+          for (let read = 1; currentSlot > 0n; read += 1) {
             for await (const item of this.miniBackfill(
               currentSlot,
               currentFetchBackfill,
@@ -389,23 +427,33 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
               }
               yield item;
             }
+            const firstLiveSlot = livePump.minSlot();
+            if (firstLiveSlot !== null && currentSlot >= firstLiveSlot) break;
+            if (read >= MAX_CATCH_UP_READS) {
+              if (firstLiveSlot !== null) {
+                this.logger.warn("Replay stream catch-up did not reach the live stream", {
+                  event: "replay.stream.reconnect.catch_up_short",
+                  attempt,
+                  current_slot: currentSlot.toString(),
+                  first_live_slot: firstLiveSlot.toString(),
+                });
+              }
+              break;
+            }
+            await abortableDelay(CATCH_UP_RETRY_DELAY_MS, signal);
+            if (shouldStop()) return;
           }
 
-          const resumeSlot = currentSlot > 0n ? currentSlot : 0n;
-          livePump = createLivePump(resumeSlot, true, currentSlot);
-          waitingFirstReconnectEvent = {
-            startedAtMs: reconnectStartedAtMs,
-            attempt,
-            resumeSlot,
-          };
-          this.logger.info("Replay stream waiting for first event", {
-            event: "replay.stream.waiting_first_event",
-            attempt,
-            resume_slot: resumeSlot.toString(),
-          });
+          /* Below resumeSlot, so items in its own slot go through the key check. */
+          for await (const item of drainLive(this, resumeSlot - 1n)) {
+            if (shouldStop()) return;
+            noteReconnectCompleted(extractSlot(item));
+            yield item;
+          }
         }
       }
     } finally {
+      signal?.removeEventListener("abort", closeLivePumpOnAbort);
       currentDispose();
       await safeClose(livePump, signal);
     }

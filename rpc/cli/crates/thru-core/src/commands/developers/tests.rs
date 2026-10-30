@@ -104,7 +104,7 @@ impl Respond for Sequence {
 }
 
 #[test]
-fn parser_routes_native_and_thrusd_withdrawals_separately() {
+fn parser_routes_thru_and_thrusd_withdrawals_separately() {
     let parsed = Cli::try_parse_from(["thru", "auth", "login", "--no-browser"]).unwrap();
     assert!(matches!(
         parsed.command,
@@ -132,26 +132,28 @@ fn parser_routes_native_and_thrusd_withdrawals_separately() {
             subcommand: FaucetWithdrawCommands::Thrusd { account, amount }
         }
     } if account == "ta-example" && amount == "0.000001"));
-    let parsed = Cli::try_parse_from([
-        "thru",
-        "faucet",
-        "withdraw",
-        "native",
-        "recipient",
-        "42",
-        "--fee-payer",
-        "signer",
-    ])
-    .unwrap();
-    assert!(matches!(parsed.command, Commands::Faucet {
-        subcommand: FaucetCommands::Withdraw {
-            subcommand: FaucetWithdrawCommands::Native { account, amount: 42, fee_payer }
-        }
-    } if account == "recipient" && fee_payer.as_deref() == Some("signer")));
+    /* `native` is a hidden alias kept for scripts written against earlier releases. */
+    for name in ["thru", "native"] {
+        let parsed =
+            Cli::try_parse_from(["thru", "faucet", "withdraw", name, "recipient", "42"]).unwrap();
+        assert!(matches!(parsed.command, Commands::Faucet {
+            subcommand: FaucetCommands::Withdraw {
+                subcommand: FaucetWithdrawCommands::Thru { account, amount: 42 }
+            }
+        } if account == "recipient"));
+    }
+    let mut command = <Cli as clap::CommandFactory>::command();
+    let help = command
+        .find_subcommand_mut("faucet")
+        .and_then(|faucet| faucet.find_subcommand_mut("withdraw"))
+        .unwrap()
+        .render_help()
+        .to_string();
+    assert!(help.contains("thru") && !help.contains("native"));
     assert!(Cli::try_parse_from(["thru", "faucet", "deposit", "existing-key", "42"]).is_ok());
     for args in [
         vec!["thru", "faucet", "withdraw", "thrusd", "ta-example"],
-        vec!["thru", "faucet", "withdraw", "native", "recipient", "0.001"],
+        vec!["thru", "faucet", "withdraw", "thru", "recipient", "0.001"],
         vec!["thru", "faucet", "withdraw", "recipient", "42"],
         vec![
             "thru",
@@ -822,7 +824,7 @@ async fn transport_and_confirmation_errors_report_unknown_results_and_known_sign
     assert!(
         matches!(error,CliError::Developers{signature:Some(ref signature),..} if signature=="known-signature")
     );
-    assert!(error.to_string().contains("Check your token balance"));
+    assert!(error.to_string().contains("Check your account balance"));
     let (_listener, developers) = unavailable_target();
     assert_eq!(
         code(
@@ -966,5 +968,44 @@ async fn rotated_token_storage_failure_revokes_the_new_installation_and_reports_
                 .unwrap()
         )["refresh_token"],
         "new-refresh"
+    );
+}
+
+#[tokio::test]
+async fn thru_funding_uses_the_hosted_contract_without_replaying_unknown_results() {
+    let server = MockServer::start().await;
+    let developers = Developers::new(&server.uri()).unwrap();
+    let payload = json!({"asset":"thru","network":"betanet","recipientAddress":"ta-existing","amount":"10000"});
+    Mock::given(method("POST")).and(path("/api/faucet/fund"))
+        .and(header("authorization", "Bearer automation-key"))
+        .respond_with(ResponseTemplate::new(504).set_body_json(json!({"success":false,"transactionSignature":"ts_known","error":{"code":"CONFIRMATION_TIMEOUT"}})))
+        .expect(1).mount(&server).await;
+    let error = submit_funding(&developers, "automation-key", &payload)
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(error, CliError::Developers { signature: Some(ref value), .. } if value == "ts_known")
+    );
+    let requests = server.received_requests().await.unwrap();
+    assert_eq!(
+        serde_json::from_slice::<Value>(&requests[0].body).unwrap(),
+        payload
+    );
+}
+
+#[test]
+fn hosted_thru_has_no_local_fee_payer_flag() {
+    assert!(
+        Cli::try_parse_from([
+            "thru",
+            "faucet",
+            "withdraw",
+            "thru",
+            "recipient",
+            "42",
+            "--fee-payer",
+            "signer"
+        ])
+        .is_err()
     );
 }

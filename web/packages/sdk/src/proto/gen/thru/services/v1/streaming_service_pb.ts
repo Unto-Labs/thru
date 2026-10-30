@@ -221,6 +221,7 @@ export const StreamBlocksResponseSchema: GenMessage<StreamBlocksResponse> = /*@_
  *   snapshot.meta.flags.is_uncompressable (bool), snapshot.meta.flags.is_ephemeral (bool),
  *   snapshot.meta.flags.is_deleted (bool), snapshot.meta.flags.is_new (bool),
  *   snapshot.meta.flags.is_compressed (bool),
+ *   snapshot.meta.flags.is_native_receiver (bool),
  *   snapshot.meta.owner, snapshot.meta.owner.value (bytes)
  *
  * Available account_update fields (AccountUpdate):
@@ -233,6 +234,7 @@ export const StreamBlocksResponseSchema: GenMessage<StreamBlocksResponse> = /*@_
  *   account_update.meta.flags.is_uncompressable (bool), account_update.meta.flags.is_ephemeral (bool),
  *   account_update.meta.flags.is_deleted (bool), account_update.meta.flags.is_new (bool),
  *   account_update.meta.flags.is_compressed (bool),
+ *   account_update.meta.flags.is_native_receiver (bool),
  *   account_update.meta.owner, account_update.meta.owner.value (bytes)
  *
  * Available unified fields (work for both snapshot and update messages):
@@ -418,15 +420,15 @@ export type BlockFinished = Message<"thru.services.v1.BlockFinished"> & {
 
   /**
    * Fees credited to the absent-block-producer fee receiver this block
-   * because the block producer account was not live (UNTO-1293). Field
-   * number unchanged (4).
+   * because no eligible producer exists (absent/non-live or live but
+   * receipt-ineligible). Field number unchanged (4).
    *
    * @generated from field: uint64 absent_block_producer_fees = 4;
    */
   absentBlockProducerFees: bigint;
 
   /**
-   * Fees credited to a live block-producer account this block. Disjoint from
+   * Fees credited to an eligible block-producer account this block. Disjoint from
    * absent_block_producer_fees by destination; total block fees =
    * absent_block_producer_fees + claimed_fees.
    *
@@ -1015,8 +1017,8 @@ export type StreamSlotMetricsResponse = Message<"thru.services.v1.StreamSlotMetr
 
   /**
    * Fees credited to the absent-block-producer fee receiver this block
-   * because the block producer account was not live (UNTO-1293). Field
-   * number unchanged (4).
+   * because no eligible producer exists (absent/non-live or live but
+   * receipt-ineligible). Field number unchanged (4).
    *
    * @generated from field: uint64 absent_block_producer_fees = 4;
    */
@@ -1044,7 +1046,7 @@ export type StreamSlotMetricsResponse = Message<"thru.services.v1.StreamSlotMetr
   consumedStateUnits: number;
 
   /**
-   * Fees credited to a live block-producer account this block. Disjoint from
+   * Fees credited to an eligible block-producer account this block. Disjoint from
    * absent_block_producer_fees by destination; total block fees =
    * absent_block_producer_fees + claimed_fees.
    *

@@ -7,12 +7,10 @@ import {
   type ThruSigningSessionCreateOptions,
   type ThruSigningSessionDescriptor,
   type ThruSigningSessionRenewOptions,
-  type ThruPasskeyChallengeIntent,
-  type ThruPasskeyChallengeSignature,
   type ThruTransactionIntent,
 } from "../../../interfaces";
 import { POST_MESSAGE_REQUEST_TYPES, createRequestId } from "../../../protocol";
-import { buildWalletAccountContext } from "@thru/programs/passkey-manager";
+import { buildWalletAccountContext } from "@thru/programs/wallet";
 import type { NativeProvider } from "../NativeProvider";
 import type { WebViewBridge } from "../WebViewBridge";
 import {
@@ -39,11 +37,6 @@ function descriptorFromWire(session: {
   };
 }
 
-/**
- * NativeThruChain - mirror of EmbeddedThruChain over the WebView bridge.
- * Sign moments toggle the host bottom sheet via provider.requestShow /
- * requestHide instead of iframe.show / hide.
- */
 export class NativeThruChain implements IThruChain {
   private readonly bridge: WebViewBridge;
   private readonly provider: NativeProvider;
@@ -148,31 +141,6 @@ export class NativeThruChain implements IThruChain {
       if (surface !== undefined) {
         this.provider.requestHide("sign-transaction-settled", surface);
       }
-    }
-  }
-
-  async signPasskeyChallenge(
-    challenge: ThruPasskeyChallengeIntent,
-  ): Promise<ThruPasskeyChallengeSignature> {
-    if (!this.provider.isConnected()) {
-      throw new Error("Wallet not connected");
-    }
-    const surface = await this.provider.requestShow(
-      "sign-passkey-challenge-open",
-    );
-    try {
-      const response = await this.bridge.sendMessage({
-        id: createRequestId(),
-        type: POST_MESSAGE_REQUEST_TYPES.SIGN_PASSKEY_CHALLENGE,
-        payload: {
-          challenge: challenge.challenge,
-          walletAddress: challenge.walletAddress,
-        },
-        origin: this.origin,
-      });
-      return response.result;
-    } finally {
-      this.provider.requestHide("sign-passkey-challenge-settled", surface);
     }
   }
 

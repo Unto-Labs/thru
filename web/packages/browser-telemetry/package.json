@@ -1,0 +1,23 @@
+{
+  "name": "@thru/browser-telemetry",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./react": "./src/react.tsx",
+    "./server": "./src/server.mjs"
+  },
+  "scripts": {
+    "test:run": "node --experimental-transform-types --test src/*.test.mjs"
+  },
+  "peerDependencies": {
+    "react": "^19.0.0"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.7",
+    "typescript": "^6.0.3",
+    "@types/react": "^19.0.0",
+    "@thru/server-telemetry": "workspace:*"
+  }
+}

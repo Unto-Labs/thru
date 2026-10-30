@@ -1,16 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
-import type { AccountContext } from '@thru/programs/passkey-manager';
+import type { AccountContext } from '@thru/programs/wallet';
 import { encodeSignature } from '@thru/sdk/helpers';
 import type { ThruClient } from './types';
 
-const passkeyManagerMocks = vi.hoisted(() => ({
-  PASSKEY_MANAGER_PROGRAM_ADDRESS: 'passkey-program',
+const walletMocks = vi.hoisted(() => ({
+  WALLET_PROGRAM_ADDRESS: 'passkey-program',
   decodeAddress: vi.fn(() => new Uint8Array(32).fill(7)),
   encodeValidateInstruction: vi.fn(() => new Uint8Array([1, 2])),
   hexToBytes: (value: string) => new Uint8Array(Buffer.from(value, 'hex')),
 }));
 
-vi.mock('@thru/programs/passkey-manager', () => passkeyManagerMocks);
+vi.mock('@thru/programs/wallet', () => walletMocks);
 
 import { buildPasskeyTransaction, submitPasskeyTransaction } from './submit';
 
@@ -100,8 +100,8 @@ describe('passkey submit', () => {
       },
       instructionData: new Uint8Array([1, 2]),
     }));
-    expect(passkeyManagerMocks.decodeAddress).toHaveBeenCalledWith('target-program');
-    expect(passkeyManagerMocks.encodeValidateInstruction).toHaveBeenCalledWith(
+    expect(walletMocks.decodeAddress).toHaveBeenCalledWith('target-program');
+    expect(walletMocks.encodeValidateInstruction).toHaveBeenCalledWith(
       expect.objectContaining({
         walletAccountIdx: 3,
         authIdx: 0,

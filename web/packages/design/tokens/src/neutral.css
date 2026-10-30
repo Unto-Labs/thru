@@ -1,37 +1,13 @@
-/* ============================================================
-   @thru/design — neutral skin layer.
+/* Neutral skin. Opt in with `data-tds-skin` (light) or `data-tds-skin="dark"`
+   on a container; nothing outside it changes.
 
-   A brand-neutral default for embedded surfaces: system type, neutral
-   grays, ink accent, soft radii. Opt in by putting `data-tds-skin` on a
-   container; everything inside renders neutral, and nothing outside it
-   changes.
-
-       <div data-tds-skin>          light
-       <div data-tds-skin="dark">   dark
-
-   Two layers live here:
-
-   1. The `--tds-*` ROLE tokens — the contract. Names describe role
-      (surface, foreground, accent, danger), never material or brand, so
-      an embedder can recolor the surface without knowing what it wraps.
-      A host overrides by setting the same custom properties inline; an
-      absent property falls through to the neutral default rather than
-      blanking it.
-
-   2. A REMAP of the tokens `web/src` components already read, expressed
-      in terms of those roles. This is why no component CSS had to change:
-      `.tds-btn` still reads `--color-surface-lower-inverse`, which inside
-      the skin resolves to `--tds-accent`. Components that reach past the
-      semantic layer into the raw palette (Input's brick focus ring, Tag's
-      accents) are covered too, so no brand color leaks in.
-
-   Keep this file the ONLY place the two vocabularies meet.
-   ============================================================ */
+   The `--tds-*` role tokens are the contract: a host recolors by setting them
+   inline, and an unset one falls through to the neutral default. The rest of
+   the file remaps the tokens `web/src` components read, including raw-palette
+   reaches (Input's focus ring, Tag's accents), onto those roles. Keep this
+   file the only place the two vocabularies meet. */
 
 [data-tds-skin] {
-  /* ─── Role tokens — light ─────────────────────────────────── */
-
-  /* Surfaces, back to front. */
   --tds-background: #fafafa;
   --tds-surface: #ffffff;
   --tds-surface-muted: #f4f4f5;
@@ -57,7 +33,6 @@
   --tds-accent-foreground: #ffffff;
   --tds-accent-soft: #ececef;
 
-  /* Status. */
   --tds-success: #147347;
   --tds-success-soft: #e3f5eb;
   --tds-warning: #8a5a00;
@@ -65,8 +40,6 @@
   --tds-danger: #d7232a;
   --tds-danger-soft: #fdeceb;
 
-  /* Shape. Neutral is softly rounded; the square-first look is a Thru
-     choice and stays in the brand theme. */
   --tds-radius-control: 6px;
   --tds-radius-field: 6px;
   --tds-radius-surface: 10px;
@@ -74,11 +47,8 @@
   /* Scrim behind a sheet or dialog. */
   --tds-overlay: rgba(23, 23, 26, 0.48);
 
-  /* Type. System stacks — no webfont dependency in an embedded surface. */
   --tds-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --tds-font-mono: ui-monospace, "SF Mono", Menlo, monospace;
-
-  /* ─── Remap: semantic tokens the components read ──────────── */
 
   --color-text-primary: var(--tds-foreground);
   --color-text-secondary: var(--tds-foreground-body);
@@ -106,7 +76,6 @@
   --color-surface-primary: var(--tds-surface-muted);
   --color-surface-lower: var(--tds-surface-sunken);
   --color-surface-disabled: var(--tds-surface-muted);
-  /* The primary button fills with the accent, not with brand ink. */
   --color-surface-lower-inverse: var(--tds-accent);
   --color-surface-higher-inverse: var(--tds-foreground-body);
   --color-surface-primary-inverse: var(--tds-foreground-body);
@@ -117,8 +86,6 @@
   --color-surface-tan: var(--tds-surface-muted);
   --color-surface-sand: var(--tds-surface-muted);
   --color-golden: var(--tds-warning-soft);
-
-  /* ─── Remap: raw palette reached past the semantic layer ──── */
 
   --brick-100: var(--tds-accent-soft);
   --brick-200: var(--tds-accent-soft);
@@ -157,8 +124,6 @@
   --red-bright: var(--tds-danger);
   --red-hot: var(--tds-danger);
 
-  /* ─── Remap: type and shape ───────────────────────────────── */
-
   --font-sans: var(--tds-font-sans);
   --font-mono: var(--tds-font-mono);
 
@@ -175,11 +140,6 @@
   color: var(--tds-foreground);
   font-family: var(--tds-font-sans);
 }
-
-/* ─── Role tokens — dark ─────────────────────────────────────
-   Re-derived rather than inverted: the light ramp's contrast steps do not
-   survive a straight flip. Only the values change; every remap above is
-   written against the roles, so it follows automatically. */
 
 [data-tds-skin="dark"] {
   --tds-background: #131316;

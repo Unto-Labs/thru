@@ -1,28 +1,14 @@
-/* ============================================================
-   @thru/design — Tailwind v4 @theme bridge.
-
-   Drop-in replacement for `the legacy design-system/tailwind.css`. Import in an
-   app's globals.css AFTER `@import "tailwindcss"`:
+/* Tailwind v4 @theme bridge. Import after `@import "tailwindcss"`:
 
        @import "tailwindcss";
        @import "@thru/design/tokens/theme.css";
 
-   It brings every design token as a real :root custom property (via tokens.css,
-   so `var(--color-surface-lower)` etc. resolve and our plain-CSS components work)
-   AND registers the color/breakpoint/font tokens with Tailwind so the utilities
-   apps already use keep generating (bg-surface-*, text-text-*, font-sans, …).
-   The `.type-*` classes come from typography.css; the animations below are
-   carried over verbatim from the old design-system stylesheet.
-
-   Mirrors thru-web's globals.css architecture: raw palette in :root, semantic
-   tokens registered with `@theme inline` referencing the raw vars.
-   ============================================================ */
+   It defines every token as a :root custom property (via tokens.css) and
+   registers the color, breakpoint and font tokens with Tailwind. */
 
 @import "./tokens.css";
 @import "./typography.css";
 
-/* Back-compat: the old design-system aliased `stone` → teal. Keep it so any app
-   still using stone utilities or var(--color-stone-*) migrates without changes. */
 :root {
   --color-stone-0: var(--teal-0);
   --color-stone-100: var(--teal-100);
@@ -35,17 +21,15 @@
 }
 
 @theme inline {
-  /* Breakpoints */
   --breakpoint-sm: 600px;
   --breakpoint-md: 840px;
   --breakpoint-lg: 1200px;
   --breakpoint-xl: 1600px;
 
-  /* Fonts — apps set --font-inter-tight / --font-jetbrains-mono via next/font */
+  /* Apps set --font-inter-tight / --font-jetbrains-mono via next/font. */
   --font-sans: var(--font-inter-tight, "Inter Tight", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif);
   --font-mono: var(--font-jetbrains-mono, "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace);
 
-  /* Raw color scales → color utilities (bg-steel-400, text-brick-400, …) */
   --color-steel-0: var(--steel-0);
   --color-steel-100: var(--steel-100);
   --color-steel-200: var(--steel-200);
@@ -66,7 +50,6 @@
   --color-teal-700: var(--teal-700);
   --color-teal-800: var(--teal-800);
 
-  /* stone alias (back-compat) */
   --color-stone-0: var(--teal-0);
   --color-stone-100: var(--teal-100);
   --color-stone-200: var(--teal-200);
@@ -81,7 +64,6 @@
   --color-brick-300: var(--brick-300);
   --color-brick-400: var(--brick-400);
 
-  /* legacy brick aliases (back-compat with old design-system) */
   --color-brick: var(--brick-200);
   --color-thru-brick: var(--brick-200);
   --color-thru-brick-alt: var(--brick-100);
@@ -113,7 +95,6 @@
 
   --color-golden: var(--golden);
 
-  /* Semantic tokens → bg-surface-*, text-text-*, border-* utilities */
   --color-text-primary: var(--tn-color-text-primary);
   --color-text-secondary: var(--tn-color-text-secondary);
   --color-text-tertiary: var(--tn-color-text-tertiary);
@@ -131,7 +112,6 @@
   --color-border-brand: var(--tn-color-border-brand);
   --color-border-disabled: var(--tn-color-border-disabled);
 
-  /* Signal reds + danger semantics */
   --color-red-bright: var(--red-bright);
   --color-red-hot: var(--red-hot);
   --color-text-danger: var(--tn-color-text-danger);
@@ -155,7 +135,6 @@
   --color-golden: var(--tn-color-golden);
 }
 
-/* ── Utilities + animations carried over from the legacy design-system ── */
 .scrollbar-hide {
   -ms-overflow-style: none;
   scrollbar-width: none;
@@ -196,8 +175,6 @@
   animation: bounce-slow 3s ease-in-out infinite;
 }
 
-/* Reduced motion: the gauge rests at its final angle; the nudge and bounce
-   loops stop. */
 @media (prefers-reduced-motion: reduce) {
   .pressure-gauge {
     animation: none;

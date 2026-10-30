@@ -1,3 +1,4 @@
+/* eslint-disable no-console -- console is this sink's output. */
 import { ReplaySink, ReplaySinkContext, ReplaySinkMeta } from "./replay-sink";
 
 

@@ -1,4 +1,4 @@
-import { bytesToHex } from '@thru/programs/passkey-manager';
+import { bytesToHex } from '@thru/programs/wallet';
 import { create } from 'zustand';
 import { classifyPasskeyError } from '../mobile/errors';
 import {

@@ -1,7 +1,3 @@
-/**
- * Unit tests for schema/table.ts
- */
-
 import { describe, it, expect } from "vitest";
 import { getTableColumns, getTableName, SQL, sql } from "drizzle-orm";
 import { check, getTableConfig, index } from "drizzle-orm/pg-core";
@@ -77,7 +73,6 @@ describe("buildDrizzleTable", () => {
       const table = buildDrizzleTable("users", schema);
       const columns = getTableColumns(table);
 
-      // Drizzle column objects have a `name` property with the DB column name
       expect((columns.userId as any).name).toBe("user_id");
       expect((columns.createdAt as any).name).toBe("created_at");
       expect((columns.isActive as any).name).toBe("is_active");
@@ -189,12 +184,8 @@ describe("buildDrizzleTable", () => {
 
   describe("error handling", () => {
     it("handles unknown column type gracefully", () => {
-      // The column builder uses getters, preventing direct modification
-      // of _columnType. TypeScript provides compile-time safety.
-      // This test verifies the column definition is immutable.
       const col = t.text();
 
-      // Verify we can't modify the column type directly
       expect(() => {
         (col as any)._columnType = "invalid";
       }).toThrow();

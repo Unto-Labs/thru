@@ -12,6 +12,7 @@ export {
     TOKEN_PROGRAM_ADDRESS,
     MULTICALL_PROGRAM_ADDRESS,
     COMPRESSION_PROGRAM_ADDRESS,
+    WALLET_PROGRAM_ADDRESS,
     PASSKEY_MANAGER_PROGRAM_ADDRESS,
 } from "../src/core-program-addresses";
 
@@ -38,7 +39,7 @@ export * as eoa from "./domain/programs/eoa";
 // ============================================================================
 // Value Exports (classes, enums, functions)
 // ============================================================================
-export { Account } from "./domain/accounts";
+export { Account, rawAccountToAccount } from "./domain/accounts";
 export { Block } from "./domain/blocks";
 export { ChainEvent } from "./domain/events";
 export { Filter, FilterParamValue } from "./domain/filters";
@@ -63,6 +64,7 @@ export {
   FilterParamValueSchema,
   FilterSchema,
   AccountView,
+  AccountStateFilter,
   BlockView,
   ExecutionStatus,
   SubmissionStatus,

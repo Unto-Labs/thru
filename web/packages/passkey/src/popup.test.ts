@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
+  PASSKEY_CEREMONY_TIMEOUT_MS,
   PASSKEY_POPUP_READY_EVENT,
   PASSKEY_POPUP_REQUEST_EVENT,
   PASSKEY_POPUP_RESPONSE_EVENT,
+  PASSKEY_POPUP_TIMEOUT_MS,
   requestPasskeyPopup,
   setPasskeyPopupErrorDetails,
 } from './popup';
@@ -104,7 +106,7 @@ describe('popup ceremony reporting', () => {
     harness.popup.closed = true;
     await vi.advanceTimersByTimeAsync(250);
     await rejected;
-    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.advanceTimersByTimeAsync(PASSKEY_POPUP_TIMEOUT_MS);
 
     expect(harness.reporter.failed).toHaveBeenCalledOnce();
     expect(harness.reporter.finished).not.toHaveBeenCalled();
@@ -121,7 +123,7 @@ describe('popup ceremony reporting', () => {
     });
     const rejected = expect(pending).rejects.toThrow(message);
     if (ready) harness.ready();
-    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.advanceTimersByTimeAsync(PASSKEY_POPUP_TIMEOUT_MS);
     await rejected;
 
     expect(harness.reporter.failed).toHaveBeenCalledExactlyOnceWith({
@@ -130,6 +132,22 @@ describe('popup ceremony reporting', () => {
     });
     expect(harness.reporter.finished).not.toHaveBeenCalled();
     expect(harness.popup.close).toHaveBeenCalledOnce();
+    harness.expectCleanedUp();
+  });
+
+  it('lets a ceremony started a minute after the popup opened use its whole timeout', async () => {
+    const harness = createHarness();
+    const pending = requestPasskeyPopup('get', GET_PAYLOAD);
+    const request = harness.ready();
+    await vi.advanceTimersByTimeAsync(60_000 + PASSKEY_CEREMONY_TIMEOUT_MS - 1);
+    const result = { signatureBase64Url: 'late' };
+    harness.emit({
+      type: PASSKEY_POPUP_RESPONSE_EVENT,
+      requestId: request.requestId,
+      success: true,
+      result,
+    });
+    await expect(pending).resolves.toBe(result);
     harness.expectCleanedUp();
   });
 
@@ -189,7 +207,7 @@ describe('popup ceremony reporting', () => {
     harness.emit(response);
 
     await expect(pending).resolves.toBe(result);
-    await vi.advanceTimersByTimeAsync(60_000);
+    await vi.advanceTimersByTimeAsync(PASSKEY_POPUP_TIMEOUT_MS);
     expect(harness.reporter.finished).toHaveBeenCalledExactlyOnceWith({
       ...GET_INFO,
       credential: result.credentialJson,

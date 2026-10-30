@@ -1,20 +1,7 @@
-/* ============================================================
-   Thru Design Tokens
-   Canon: Unto-Labs/thru-web  src/app/globals.css
-   Raw palette + semantic layer are lifted verbatim from thru-web
-   (which the legacy design-system already matched byte-for-byte).
-   Structural primitives (space/radius/motion/type-detail) are
-   adopted from the thru-design Base UI gallery.
-
-   No Tailwind: every value is a plain CSS custom property so it
-   works under Base UI + hand-written CSS, and can be mirrored to
-   a TS object for the future React Native target (see index.ts).
-   ============================================================ */
+/* Plain CSS custom properties, no Tailwind. index.ts mirrors these values
+   for React Native; keep the two in lockstep. */
 
 :root {
-  /* ─── Raw palette ─────────────────────────────────────────── */
-
-  /* Steel — cool neutral gray */
   --steel-0:   #f7f8f8;
   --steel-100: #eaeef0;
   --steel-200: #cdd5db;
@@ -25,7 +12,6 @@
   --steel-700: #2b353b;
   --steel-800: #151b1e;
 
-  /* Teal — warm neutral */
   --teal-0:   #f9fbfb;
   --teal-100: #eaf2f2;
   --teal-200: #d1e1e1;
@@ -42,7 +28,6 @@
   --brick-300: #ed787e;
   --brick-400: #d33c43;
 
-  /* Accents */
   --sky-100: #cfeffc;
   --sky-200: #8cd4f2;
   --sky-300: #28a3d7;
@@ -75,7 +60,6 @@
   --red-bright: #ff4750;
   --red-hot:    #ff3d3d;
 
-  /* ─── Semantic color tokens (light) ───────────────────────── */
   --color-text-primary:            var(--steel-800);
   --color-text-secondary:          var(--teal-600);
   --color-text-tertiary:           var(--steel-400);
@@ -89,13 +73,11 @@
   --color-border-primary:    var(--teal-800);
   --color-border-secondary:  var(--teal-400);
   --color-border-tertiary:   var(--teal-200);
-  /* Strong, soft hairline — the standard form-control outline
-     (matches thru-design's --border-strong = stone-300). */
+  /* The standard form-control outline. */
   --color-border-strong:     var(--teal-300);
   --color-border-brand:      var(--brick-400);
   --color-border-disabled:   var(--steel-300);
 
-  /* Danger / error (signal red) */
   --color-text-danger:    var(--red-hot);
   --color-border-danger:  var(--red-bright);
   --color-surface-danger: var(--red-bright);
@@ -156,14 +138,10 @@
   --tn-color-surface-sand:            var(--color-surface-sand);
   --tn-color-golden:                  var(--color-golden);
 
-  /* ─── Type families ───────────────────────────────────────── */
   /* Set by next/font (or @font-face) in the host app; fall back to system. */
   --font-sans: var(--font-inter-tight, "Inter Tight", "Inter", system-ui, -apple-system, "Segoe UI", sans-serif);
   --font-mono: var(--font-jetbrains-mono, "JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, monospace);
 
-  /* ─── Structural primitives (adopted from thru-design) ────── */
-
-  /* Spacing — 4px base */
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -175,40 +153,35 @@
   --space-9: 80px;
   --space-10: 120px;
 
-  /* Radius */
   --radius-none: 0;
   --radius-xs:   2px;
   --radius-sm:   4px;
   --radius-md:   8px;
   --radius-pill: 999px;
 
-  /* Font weights */
   --fw-regular:   400;
   --fw-medium:    500;
   --fw-semibold:  600;
   --fw-bold:      700;
   --fw-extrabold: 800;
 
-  /* Line heights */
   --lh-tight: 1.0;
   --lh-snug:  1.1;
   --lh-body:  1.4;
   --lh-loose: 1.6;
 
-  /* Letter spacing */
   --tracking-display: -0.5px;
   --tracking-tight:   -0.25px;
   --tracking-normal:  0;
   --tracking-utility: 0.02em;
 
-  /* Motion */
   --duration-fast: 120ms;
   --duration-med:  200ms;
   --duration-slow: 320ms;
   --ease-standard: cubic-bezier(0.2, 0.8, 0.2, 1);
   --ease-out:      cubic-bezier(0, 0, 0.2, 1);
 
-  /* Elevation — used sparingly (overlays only; the system favors hairlines) */
+  /* Elevation: overlays only. */
   --shadow-sm: 0 1px 2px rgba(21, 30, 30, 0.08);
   --shadow-md: 0 4px 12px rgba(21, 30, 30, 0.12);
   --shadow-lg: 0 12px 32px rgba(21, 30, 30, 0.18);
@@ -218,7 +191,6 @@
 [data-theme="light"] [data-theme="dark"] {
   color-scheme: dark;
 
-  /* Semantic color tokens (dark) */
   --color-text-primary:            var(--teal-0);
   --color-text-secondary:          var(--teal-100);
   --color-text-tertiary:           var(--teal-300);
@@ -265,7 +237,6 @@
 [data-theme="dark"] [data-theme="light"] {
   color-scheme: light;
 
-  /* Semantic color tokens (light) */
   --color-text-primary:            var(--steel-800);
   --color-text-secondary:          var(--teal-600);
   --color-text-tertiary:           var(--steel-400);

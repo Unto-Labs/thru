@@ -43,7 +43,6 @@ export interface ConnectButtonProps {
   address?: string;
   /** Formatted balance shown after the address (the current account's). */
   balance?: React.ReactNode;
-  /** Hide the balance segment of the chip. */
   showBalance?: boolean;
   /** Account avatar in the chip; defaults to a sky disc. */
   avatar?: React.ReactNode;
@@ -80,7 +79,6 @@ export interface ConnectButtonProps {
   onAddAccount?: () => void;
   /** Menu "Add funds"; omit to hide the item. */
   onAddFunds?: () => void;
-  /** Menu "Sign out". */
   onDisconnect?: () => void;
   /** Label of the sign-out item (default "Sign out"). */
   disconnectLabel?: React.ReactNode;
@@ -102,17 +100,8 @@ export interface ConnectButtonProps {
 }
 
 /**
- * ConnectButton — one drop-in for every dapp. Idle shows the brand disc and
- * "Sign in with Thru"; while the wallet sheet is open it spins and reads
- * "Signing in…"; once connected it becomes the account chip (address ·
- * balance) with the account menu (`AccountMenuPopup`): manage the wallet on
- * app.tid.sh, switch accounts in one click, add one, open the explorer, or
- * sign out. With `onOpenMenu` the chip only reports its rect and the wallet
- * iframe draws the menu.
- *
- * The chip reuses the Navbar status-chip recipe (mono, hairline, square) and
- * the idle button is the design-system `Button`, so it sits naturally in any
- * host nav. The menu is Base UI `Menu` via the styled `Menu` parts.
+ * ConnectButton — the dapp sign-in button. Once connected it becomes the
+ * account chip (address · balance) with the account menu (`AccountMenuPopup`).
  */
 export const ConnectButton = React.forwardRef<HTMLElement, ConnectButtonProps>(
   function ConnectButton(
@@ -218,7 +207,6 @@ export const ConnectButton = React.forwardRef<HTMLElement, ConnectButtonProps>(
       </>
     );
 
-    /* The wallet draws the menu: the chip just hands over its rect. */
     if (onOpenMenu) {
       return (
         <button

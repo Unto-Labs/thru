@@ -59,6 +59,15 @@ const FEATURE_GATE_TX_MEMORY_UNITS: u16 = 10_000;
 const FEATURE_GATE_GLOBAL_ACCOUNT_IDX: u16 = 2;
 const FEATURE_GATE_AUTHORITY_ACCOUNT_IDX: u16 = 0;
 
+// Chain-param registry indices the CLI validates beyond their encoded width.
+// They mirror src/thru/runtime/tn_feature_gate_registry.h.
+const MAX_STATE_UNITS_PER_BLOCK_INDEX: u32 = 3;
+const MAX_ACTIVE_STATE_UNITS_INDEX: u32 = 4;
+const COMPRESS_BASELINE_UNITS_INDEX: u32 = 5;
+const STATE_REFERENCE_LAG_INDEX: u32 = 7;
+// TN_STATE_REFERENCE_LAG_MAX in src/thru/runtime/tn_feature_gate_abi.h.
+const STATE_REFERENCE_LAG_MAX: u64 = 32;
+
 /// Handle feature gate / chain param subcommands.
 pub async fn handle_feature_gates_command(
     config: &Config,
@@ -81,9 +90,8 @@ pub async fn handle_feature_gates_command(
             validate_registry_account_alignment(&registry, &live_account)?;
             show_registry_entry(&registry, &live_account, &target, json_format)
         }
-        // create-entry is allowed when the registry is exactly one entry ahead
-        // of the on-chain table, so it uses a custom append-only check instead
-        // of the read-path equality check.
+        // create-entry additionally requires the target to be the next
+        // append-only index, rather than just accepting a registry prefix.
         FeatureGatesCommands::CreateEntry {
             target,
             value,
@@ -273,13 +281,15 @@ fn decode_live_feature_gate_account(
     decode_feature_gate_account(&data)
 }
 
-// Read/update operations expect every registry entry to already exist on chain.
-// create-entry handles the one permitted mismatch separately.
+// The live account may be a prefix of the registry: an entry the registry
+// already lists but create-entry has not appended yet keeps its absent meaning
+// on chain (for state_reference_lag, 1). An account with entries the registry
+// does not know is a mismatch.
 fn validate_registry_account_alignment(
     registry: &FeatureGateRegistry,
     account: &DecodedFeatureGateAccount,
 ) -> Result<(), CliError> {
-    if registry.entries().len() != account.entries.len() {
+    if account.entries.len() > registry.entries().len() {
         return Err(CliError::Validation(format!(
             "feature gate registry/account entry count mismatch: registry has {}, account has {}",
             registry.entries().len(),
@@ -287,6 +297,75 @@ fn validate_registry_account_alignment(
         )));
     }
     Ok(())
+}
+
+// Decodes a canonical little-endian unsigned value of the given byte width.
+fn decode_le_u64(value: &[u8; FEATURE_GATE_VALUE_SIZE], width: usize) -> Option<u64> {
+    if value[width..].iter().any(|byte| *byte != 0) {
+        return None;
+    }
+    let mut out = 0u64;
+    for (i, byte) in value[..width].iter().enumerate() {
+        out |= (*byte as u64) << (i * 8);
+    }
+    Some(out)
+}
+
+// Rejects a state_reference_lag outside [1, STATE_REFERENCE_LAG_MAX]; every node
+// decodes it at each block start and fails on a malformed value (UNTO-3083).
+fn validate_state_reference_lag(value: &[u8; FEATURE_GATE_VALUE_SIZE]) -> Result<u64, CliError> {
+    match decode_le_u64(value, 4) {
+        Some(lag) if (1..=STATE_REFERENCE_LAG_MAX).contains(&lag) => Ok(lag),
+        _ => Err(CliError::Validation(format!(
+            "state_reference_lag must be a u32 in [1, {}]",
+            STATE_REFERENCE_LAG_MAX
+        ))),
+    }
+}
+
+// Returns a warning when in-flight admission reservations, up to
+// (lag - 1) * max_state_units_per_block, would exceed a quarter of the room
+// between the compression baseline and max_active_state_units. That is never
+// unsafe (the cap stays hard), but generous requests can then starve state
+// growth. The chain does not reject it (decided for UNTO-3083).
+fn lag_reservation_warning(
+    account: &DecodedFeatureGateAccount,
+    candidate_index: u32,
+    candidate: &[u8; FEATURE_GATE_VALUE_SIZE],
+) -> Option<String> {
+    let value = |index: u32, width: usize| -> Option<u64> {
+        if index == candidate_index {
+            return decode_le_u64(candidate, width);
+        }
+        account
+            .entries
+            .get(index as usize)
+            .and_then(|entry| decode_le_u64(&entry.current_value, width))
+    };
+    let lag = if candidate_index == STATE_REFERENCE_LAG_INDEX
+        || account.entries.len() > STATE_REFERENCE_LAG_INDEX as usize
+    {
+        value(STATE_REFERENCE_LAG_INDEX, 4)?
+    } else {
+        1
+    };
+    let block_cap = value(MAX_STATE_UNITS_PER_BLOCK_INDEX, 4)?;
+    let total_cap = value(MAX_ACTIVE_STATE_UNITS_INDEX, 8)?;
+    let baseline = value(COMPRESS_BASELINE_UNITS_INDEX, 8)?;
+    let reserved = (lag.saturating_sub(1) as u128) * (block_cap as u128);
+    let room = (total_cap.saturating_sub(baseline) as u128) / 4;
+    if reserved > room {
+        Some(format!(
+            "warning: state_reference_lag {} lets in-flight blocks reserve up to {} state units, \
+             more than a quarter of the {} units between compress_baseline_units and \
+             max_active_state_units; generous requests can starve state growth",
+            lag,
+            reserved,
+            total_cap.saturating_sub(baseline)
+        ))
+    } else {
+        None
+    }
 }
 
 async fn create_entry(
@@ -325,6 +404,12 @@ async fn create_entry(
     }
 
     let initial_value = encode_registry_value(entry, value)?;
+    if entry.index == STATE_REFERENCE_LAG_INDEX {
+        validate_state_reference_lag(&initial_value)?;
+    }
+    if let Some(warning) = lag_reservation_warning(live_account, entry.index, &initial_value) {
+        eprintln!("{}", warning);
+    }
     let instruction = encode_create_gate_instruction(&initial_value, next_change_lead_slots);
     let state_units = create_gate_state_units(live_account.entries.len())?;
     let details =
@@ -362,6 +447,12 @@ async fn arm_entry(
     }
     let live_entry = live_entry(live_account, entry)?;
     let armed_value = encode_registry_value(entry, value)?;
+    if entry.index == STATE_REFERENCE_LAG_INDEX {
+        validate_state_reference_lag(&armed_value)?;
+    }
+    if let Some(warning) = lag_reservation_warning(live_account, entry.index, &armed_value) {
+        eprintln!("{}", warning);
+    }
     if armed_value == live_entry.current_value {
         return Err(CliError::Validation(format!(
             "armed value for '{}' matches current value",
@@ -946,10 +1037,8 @@ fn list_registry_entries(
                 "feature_gates": {
                     "entries": entries
                         .iter()
-                        .map(|entry| {
-                            live_entry(live_account, entry).map(|live| entry_json(entry, live))
-                        })
-                        .collect::<Result<Vec<_>, CliError>>()?,
+                        .map(|entry| entry_json(entry, created_entry(live_account, entry)))
+                        .collect::<Vec<_>>(),
                     "account": account_json(live_account),
                 }
             }),
@@ -962,7 +1051,19 @@ fn list_registry_entries(
             "Index", "Name", "Kind", "Current", "Armed", "Activation", "Last Change"
         );
         for entry in entries {
-            let live = live_entry(live_account, entry)?;
+            let Some(live) = created_entry(live_account, entry) else {
+                println!(
+                    "{:<6} {:<34} {:<14} {:<18} {:<18} {:<12} {}",
+                    entry.index,
+                    entry.name,
+                    kind_label(&entry.kind),
+                    NOT_CREATED_LABEL,
+                    "-",
+                    "not armed",
+                    "never",
+                );
+                continue;
+            };
             println!(
                 "{:<6} {:<34} {:<14} {:<18} {:<18} {:<12} {}",
                 entry.index,
@@ -986,7 +1087,7 @@ fn show_registry_entry(
     json_format: bool,
 ) -> Result<(), CliError> {
     let entry = find_registry_entry(registry, target)?;
-    let live_entry = live_entry(live_account, entry)?;
+    let live_entry = created_entry(live_account, entry);
 
     if json_format {
         output::print_output(
@@ -1011,6 +1112,11 @@ fn show_registry_entry(
         if let Some(value_type) = &entry.value_type {
             println!("  Type:        {}", type_label(value_type));
         }
+        let Some(live_entry) = live_entry else {
+            println!("  Current:     {}", NOT_CREATED_LABEL);
+            println!("  Tracking:    {}", entry.tracking);
+            return Ok(());
+        };
         println!(
             "  Current:     {}",
             value_label(entry, &live_entry.current_value)
@@ -1061,34 +1167,41 @@ fn kind_matches(entry: &FeatureGateRegistryEntry, kind_filter: FeatureGateListKi
 }
 
 // JSON output keeps registry metadata and live account fields together so
-// automation does not have to merge them itself.
-fn entry_json(entry: &FeatureGateRegistryEntry, live_entry: &DecodedFeatureGateEntry) -> Value {
+// automation does not have to merge them itself. An entry the registry lists
+// but create-entry has not appended yet has `created: false` and no live fields.
+fn entry_json(
+    entry: &FeatureGateRegistryEntry,
+    live_entry: Option<&DecodedFeatureGateEntry>,
+) -> Value {
     let mut object = serde_json::Map::new();
     object.insert("index".to_string(), json!(entry.index));
     object.insert("name".to_string(), json!(entry.name));
     object.insert("kind".to_string(), json!(kind_label(&entry.kind)));
     object.insert("description".to_string(), json!(entry.description));
     object.insert("tracking".to_string(), json!(entry.tracking));
-    object.insert(
-        "current_value".to_string(),
-        value_json(entry, &live_entry.current_value),
-    );
-    object.insert(
-        "armed_value".to_string(),
-        value_json(entry, &live_entry.armed_value),
-    );
-    object.insert(
-        "transition_slot".to_string(),
-        json!(live_entry.transition_slot),
-    );
-    object.insert(
-        "last_change_slot".to_string(),
-        json!(live_entry.last_change_slot),
-    );
-    object.insert(
-        "next_change_lead_slots".to_string(),
-        json!(live_entry.next_change_lead_slots),
-    );
+    object.insert("created".to_string(), json!(live_entry.is_some()));
+    if let Some(live_entry) = live_entry {
+        object.insert(
+            "current_value".to_string(),
+            value_json(entry, &live_entry.current_value),
+        );
+        object.insert(
+            "armed_value".to_string(),
+            value_json(entry, &live_entry.armed_value),
+        );
+        object.insert(
+            "transition_slot".to_string(),
+            json!(live_entry.transition_slot),
+        );
+        object.insert(
+            "last_change_slot".to_string(),
+            json!(live_entry.last_change_slot),
+        );
+        object.insert(
+            "next_change_lead_slots".to_string(),
+            json!(live_entry.next_change_lead_slots),
+        );
+    }
 
     if let Some(status) = &entry.status {
         object.insert("status".to_string(), json!(status_label(status)));
@@ -1121,19 +1234,30 @@ fn account_json(account: &DecodedFeatureGateAccount) -> Value {
     })
 }
 
+// Shown in place of the live values of a registry entry that create-entry has
+// not appended to the live account yet.
+const NOT_CREATED_LABEL: &str = "not created";
+
+// Returns the live entry, or None while the live account is a shorter prefix
+// of the registry (see validate_registry_account_alignment). The read-only
+// list and show commands display such an entry as not created.
+fn created_entry<'a>(
+    account: &'a DecodedFeatureGateAccount,
+    registry_entry: &FeatureGateRegistryEntry,
+) -> Option<&'a DecodedFeatureGateEntry> {
+    account.entries.get(registry_entry.index as usize)
+}
+
 fn live_entry<'a>(
     account: &'a DecodedFeatureGateAccount,
     registry_entry: &FeatureGateRegistryEntry,
 ) -> Result<&'a DecodedFeatureGateEntry, CliError> {
-    account
-        .entries
-        .get(registry_entry.index as usize)
-        .ok_or_else(|| {
-            CliError::Validation(format!(
-                "feature gate registry entry '{}' at index {} is missing from the live account",
-                registry_entry.name, registry_entry.index
-            ))
-        })
+    created_entry(account, registry_entry).ok_or_else(|| {
+        CliError::Validation(format!(
+            "feature gate registry entry '{}' at index {} is missing from the live account",
+            registry_entry.name, registry_entry.index
+        ))
+    })
 }
 
 fn validate_disarm_target<'a>(
@@ -1351,6 +1475,80 @@ tracking = "UNTO-1818"
         }
     }
 
+    fn encoded(value: u64, width: usize) -> [u8; FEATURE_GATE_VALUE_SIZE] {
+        let mut out = [0u8; FEATURE_GATE_VALUE_SIZE];
+        out[..width].copy_from_slice(&value.to_le_bytes()[..width]);
+        out
+    }
+
+    // A live account with the seven pre-UNTO-3083 entries: block cap B, total
+    // cap T and baseline as given, no state_reference_lag entry.
+    fn state_param_account(
+        block_cap: u64,
+        total_cap: u64,
+        baseline: u64,
+    ) -> DecodedFeatureGateAccount {
+        let mut account = test_live_account();
+        let blank = account.entries[0].clone();
+        account.entries = vec![blank; 7];
+        account.entries[MAX_STATE_UNITS_PER_BLOCK_INDEX as usize].current_value =
+            encoded(block_cap, 4);
+        account.entries[MAX_ACTIVE_STATE_UNITS_INDEX as usize].current_value =
+            encoded(total_cap, 8);
+        account.entries[COMPRESS_BASELINE_UNITS_INDEX as usize].current_value =
+            encoded(baseline, 8);
+        account.entry_count = 7;
+        account
+    }
+
+    #[test]
+    fn validates_state_reference_lag_range() {
+        assert_eq!(validate_state_reference_lag(&encoded(1, 4)).unwrap(), 1);
+        assert_eq!(validate_state_reference_lag(&encoded(32, 4)).unwrap(), 32);
+        assert!(validate_state_reference_lag(&encoded(0, 4)).is_err());
+        assert!(validate_state_reference_lag(&encoded(33, 4)).is_err());
+        // Non-canonical: a byte above the u32 width.
+        let mut wide = encoded(2, 4);
+        wide[4] = 1;
+        assert!(validate_state_reference_lag(&wide).is_err());
+    }
+
+    #[test]
+    fn warns_when_lag_reservations_crowd_the_cap() {
+        // T - baseline = 4000, a quarter is 1000.
+        let account = state_param_account(100, 5000, 1000);
+        // Lag 11: (11 - 1) * 100 = 1000, not above a quarter.
+        assert!(
+            lag_reservation_warning(&account, STATE_REFERENCE_LAG_INDEX, &encoded(11, 4)).is_none()
+        );
+        // Lag 12: 1100 > 1000.
+        assert!(
+            lag_reservation_warning(&account, STATE_REFERENCE_LAG_INDEX, &encoded(12, 4)).is_some()
+        );
+        // Without the entry the lag is 1 and nothing is reserved, whatever B is.
+        assert!(
+            lag_reservation_warning(&account, MAX_STATE_UNITS_PER_BLOCK_INDEX, &encoded(4000, 4))
+                .is_none()
+        );
+        // With the entry at 12, raising B to 200 warns; lowering T warns too.
+        let mut with_lag = account.clone();
+        let mut lag_entry = with_lag.entries[0].clone();
+        lag_entry.current_value = encoded(12, 4);
+        with_lag.entries.push(lag_entry);
+        assert!(
+            lag_reservation_warning(&with_lag, MAX_STATE_UNITS_PER_BLOCK_INDEX, &encoded(50, 4))
+                .is_none()
+        );
+        assert!(
+            lag_reservation_warning(&with_lag, MAX_STATE_UNITS_PER_BLOCK_INDEX, &encoded(200, 4))
+                .is_some()
+        );
+        assert!(
+            lag_reservation_warning(&with_lag, MAX_ACTIVE_STATE_UNITS_INDEX, &encoded(2000, 8))
+                .is_some()
+        );
+    }
+
     #[test]
     fn finds_registry_entry_by_index_or_name() {
         let registry = test_registry();
@@ -1374,8 +1572,15 @@ tracking = "UNTO-1818"
         let live_account = test_live_account();
         assert!(validate_registry_account_alignment(&registry, &live_account).is_ok());
 
+        // A live account may lag the registry (an entry not yet created).
+        let mut prefix_account = live_account.clone();
+        prefix_account.entries.pop();
+        assert!(validate_registry_account_alignment(&registry, &prefix_account).is_ok());
+
+        // An account with entries the registry does not know is a mismatch.
         let mut mismatched_account = live_account;
-        mismatched_account.entries.pop();
+        let extra = mismatched_account.entries[0].clone();
+        mismatched_account.entries.push(extra);
         assert!(validate_registry_account_alignment(&registry, &mismatched_account).is_err());
     }
 
@@ -1432,16 +1637,59 @@ tracking = "UNTO-1818"
         let registry = test_registry();
         let live_account = test_live_account();
         let entry = registry.get_by_name("max_compute_units_per_txn").unwrap();
-        let value = entry_json(entry, live_entry(&live_account, entry).unwrap());
+        let value = entry_json(entry, created_entry(&live_account, entry));
 
         assert_eq!(value["index"], json!(1));
         assert_eq!(value["name"], json!("max_compute_units_per_txn"));
         assert_eq!(value["kind"], json!("chain-param"));
+        assert_eq!(value["created"], json!(true));
         assert_eq!(value["current_value"], json!("42"));
         assert_eq!(value["armed_value"], json!("84"));
         assert_eq!(value["transition_slot"], json!(123));
         assert_eq!(value["last_change_slot"], json!(9));
         assert_eq!(value["next_change_lead_slots"], json!(5));
+    }
+
+    // Between the upgrade and create-entry the live account is a prefix of the
+    // registry: list and show report the missing entry as not created, while
+    // commands that change an entry still require it.
+    #[test]
+    fn lists_entries_not_created_yet() {
+        let registry = test_registry();
+        let mut prefix_account = test_live_account();
+        prefix_account.entries.pop();
+        prefix_account.entry_count = 1;
+        assert!(validate_registry_account_alignment(&registry, &prefix_account).is_ok());
+
+        let entry = registry.get_by_name("max_compute_units_per_txn").unwrap();
+        assert!(created_entry(&prefix_account, entry).is_none());
+        let value = entry_json(entry, None);
+        assert_eq!(value["index"], json!(1));
+        assert_eq!(value["created"], json!(false));
+        assert!(value.get("current_value").is_none());
+        assert!(value.get("armed_value").is_none());
+        assert!(live_entry(&prefix_account, entry).is_err());
+
+        for json_format in [false, true] {
+            assert!(
+                list_registry_entries(
+                    &registry,
+                    &prefix_account,
+                    FeatureGateListKind::All,
+                    json_format
+                )
+                .is_ok()
+            );
+            assert!(
+                show_registry_entry(
+                    &registry,
+                    &prefix_account,
+                    "max_compute_units_per_txn",
+                    json_format
+                )
+                .is_ok()
+            );
+        }
     }
 
     #[test]

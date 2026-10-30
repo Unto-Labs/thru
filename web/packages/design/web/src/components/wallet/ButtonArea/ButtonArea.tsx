@@ -9,7 +9,7 @@ export interface ButtonAreaProps extends React.ButtonHTMLAttributes<HTMLButtonEl
 
 /**
  * ButtonArea — a bare tap-target with only interaction styling (press, focus
- * ring, disabled). You supply the content; pass `filled` for a solid block.
+ * ring, disabled).
  */
 export const ButtonArea = React.forwardRef<HTMLButtonElement, ButtonAreaProps>(
   function ButtonArea({ className, filled = false, children, type = "button", ...rest }, ref) {

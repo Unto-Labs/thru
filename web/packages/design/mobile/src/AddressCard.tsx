@@ -1,9 +1,6 @@
 /**
- * An address to hand to someone: the full string in mono, centred in a 1pt
- * strong-bordered box, with a 44pt row attached below - Copy address, and
- * Share when the caller can share. After a copy the first action reads
- * "Copied" with a forest check, as a polite live region. The caller owns the
- * clipboard, the share sheet, and how long `copied` stays true.
+ * The caller owns the clipboard, the share sheet, and how long `copied`
+ * stays true.
  */
 
 import { Pressable, Text, View, type StyleProp, type ViewStyle } from "react-native";

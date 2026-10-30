@@ -1,4 +1,3 @@
-/* Checklist — bordered capability list with hairline separators. */
 .tds-checklist {
   list-style: none;
   margin: 0;
@@ -33,7 +32,6 @@
   margin: 0 var(--space-3);
 }
 
-/* Box: surface panel, 40px rows, hairlines inset by the panel padding. */
 .tds-checklist--box {
   border: none;
   background: var(--color-surface-primary);

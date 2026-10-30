@@ -1,5 +1,3 @@
-/* Timestamp — absolute line + optional relative line. */
-
 .tds-timestamp {
   display: inline-flex;
   flex-direction: column;

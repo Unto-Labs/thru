@@ -1,16 +1,3 @@
-/**
- * Checkpoint table schema.
- *
- * Users should export this from their Drizzle schema for migrations.
- *
- * @example
- * ```ts
- * // db/schema.ts
- * import { checkpointTable } from "@thru/indexer";
- * export { checkpointTable };
- * ```
- */
-
 import {
   pgTable,
   text,

@@ -11,9 +11,6 @@ export interface SeparatorProps extends Omit<BaseSeparatorProps, "className"> {
 
 /**
  * Separator — a hairline divider, built on Base UI's Separator primitive.
- *
- * Base UI supplies the correct ARIA orientation; the look is plain CSS over
- * tokens. Sections are divided by rules, not shadows.
  */
 export const Separator = React.forwardRef<HTMLDivElement, SeparatorProps>(
   function Separator({ orientation = "horizontal", className, ...props }, ref) {

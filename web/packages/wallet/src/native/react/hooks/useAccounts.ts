@@ -7,11 +7,7 @@ export interface UseAccountsOptions {
   onAccountSelect?: (account: WalletAccount) => void;
 }
 
-/**
- * useAccounts - mirror of @thru/wallet/react's useAccounts. Subscribes to
- * `selectedAccount` flips and invokes the consumer's callback on real
- * changes (deduped against the previous address).
- */
+/** Calls `onAccountSelect` only when the selected address actually changes. */
 export function useAccounts({ onAccountSelect }: UseAccountsOptions = {}) {
   const { accounts, selectedAccount, isConnected, isConnecting } = useThru();
   const lastSeen = useRef<string | null>(null);

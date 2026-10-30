@@ -408,3 +408,45 @@ function createMockLogger() {
     error: vi.fn(),
   };
 }
+
+
+it('emits progress only for advancing checkpoints, committed work and retry boundaries', async () => {
+  processorState.eventProcessorMode = 'throw-once';
+  processorState.eventProcessorCalls = 0;
+  const record = vi.fn();
+  const indexer = new Indexer({ db: createDb() as any, clientFactory: vi.fn() as any, eventStreams: [createEventStream('events')], telemetry: { record }, supervisorInitialBackoffMs: 1, supervisorMaxBackoffMs: 1 });
+  const started = indexer.start();
+  await waitFor(() => processorState.eventProcessorCalls >= 2);
+  const observer = processorState.latestObserver;
+  observer.onRecord({ slot: 500n, id: 'PRIVATE_SIGNATURE' });
+  expect(record.mock.calls.some(call => call[0] === 'apps.indexer.last_progress_timestamp')).toBe(false);
+  observer.onBatchCommitted({ slot: 10n, count: 3 });
+  observer.onCheckpoint({ slot: 10n });
+  observer.onCheckpoint({ slot: 10n });
+  expect(record.mock.calls.filter(call => call[0] === 'apps.indexer.last_progress_timestamp')).toHaveLength(1);
+  expect(record).toHaveBeenCalledWith('apps.indexer.records', { stream: 'events', kind: 'event' }, 3);
+  expect(record).toHaveBeenCalledWith('apps.indexer.retries', { stream: 'events', kind: 'event' }, 1);
+  expect(JSON.stringify(record.mock.calls)).not.toContain('PRIVATE_SIGNATURE');
+  indexer.stop();
+  await started;
+});
+
+
+it('advances on consumed empty blocks but leaves stalled work visibly stalled', async () => {
+  processorState.eventProcessorMode = 'hang';
+  processorState.eventProcessorCalls = 0;
+  const record = vi.fn();
+  const indexer = new Indexer({ db: createDb() as any, clientFactory: vi.fn() as any, eventStreams: [createEventStream('events')], telemetry: { record }, streamPhaseStallMs: 1 });
+  const started = indexer.start();
+  await waitFor(() => processorState.eventProcessorCalls === 1);
+  processorState.latestObserver.onProgress({ slot: 100n });
+  processorState.latestObserver.onProgress({ slot: 101n });
+  expect(indexer.getStatus().streams[0].consumedSlot).toBe('101');
+  expect(record.mock.calls.filter(call => call[0] === 'apps.indexer.last_progress_timestamp')).toHaveLength(2);
+  processorState.latestObserver.onPhase({ phase: 'commit', slot: 102n });
+  await new Promise(resolve => setTimeout(resolve, 5));
+  expect(indexer.getStatus().streams[0].stalled).toBe(true);
+  expect(indexer.getStatus().streams[0].consumedSlot).toBe('101');
+  expect(record.mock.calls.filter(call => call[0] === 'apps.indexer.last_progress_timestamp')).toHaveLength(2);
+  indexer.stop(); await started;
+});

@@ -1,20 +1,5 @@
-/**
- * Bottom sheet per the kit: scrim rgba(24,27,27,.64), panel radius 12 top,
- * 360ms slide, title row with close.
- *
- * Two headers: the default leading title with a close button, and a centred
- * title between a back slot and the close button, ruled off with a hairline,
- * for a sheet that steps through pages. Two heights: the content's own, and
- * `fixed`, which runs from just under the status bar to the bottom of the
- * screen so the header never moves between pages. A page that ends in an
- * action row puts what is above the row in a `SheetBody`, which scrolls when
- * the sheet is too short for it, so the row stays on screen.
- *
- * The dialog is named after the title. The scrim is hidden from
- * accessibility unless it does something the close button does not; then
- * `dismissLabel` names it (see scrimAccessibilityProps).
- */
 import {
+  type ComponentType,
   createContext,
   type ReactNode,
   useContext,
@@ -39,30 +24,31 @@ import {
 } from "react-native";
 import { font, radius, space, text, touch } from "./tokens";
 import { makeStyles, useThemeColors } from "./theme";
-import { IconChevronLeft, IconClose } from "./Icons";
+import { IconChevronLeft, IconClose, type IconProps } from "./Icons";
 import { safeAreaBottomInset } from "./Chrome";
 import { scrimAccessibilityProps } from "./scrimAccessibilityProps";
 import { REDUCED_MOTION_MS, useReduceMotion } from "./reduceMotion";
+import { sheetDragPosition, singleSheetReleaseTarget } from "./sheetGesture";
+import { useSheetGesture } from "./useSheetGesture";
+import { SheetGrabberBar, useSheetGrabberStyles } from "./SheetGrabber";
 
-/* The sheet reaches the screen edge, so its own spacer clears the home
-   indicator: the environment inset on web, the iPhone value natively. */
+/* Clears the home indicator: the environment inset on web, the iPhone value
+   natively. */
 const DEFAULT_BOTTOM_INSET = safeAreaBottomInset(space[3], 34);
 
 const IS_WEB = Platform.OS === "web";
 
-/** The kit's sheet motion: 360ms on the standard curve. Under reduced
-    motion the sheet fades in REDUCED_MOTION_MS instead of sliding. */
+/** The sheet's slide duration. Under reduced motion the sheet fades in
+    REDUCED_MOTION_MS instead of sliding. */
 export const SHEET_DURATION_MS = 360;
 
-/* How far past its own height a bottom sheet travels, so its top shadow
-   is off screen too. */
 const SHADOW_ROOM = 48;
 
-/** Gap between the status bar and the top of a fixed-height sheet. */
 const FIXED_SHEET_GAP = space[2];
 
 /* A keyboard is taller than this; a browser toolbar sliding away is not. */
 const KEYBOARD_MIN_HEIGHT = 120;
+const EDITABLE_SELECTOR = "input, textarea, select, [contenteditable]:not([contenteditable='false'])";
 
 export interface SheetLayout {
   /** Drawn as a centred dialog rather than a bottom sheet. */
@@ -92,12 +78,9 @@ export function isSheetDialog(
 
 /**
  * The part of a sheet page above its action row. It fills the room the row
- * leaves, so content in it can grow with `flex: 1`, and scrolls when the
- * sheet is too short for it - a small phone, a dialog in a short window, the
- * keyboard up - so the row stays on screen. It needs a bounded page around
- * it: a `fixed` sheet's page is `flex: 1, minHeight: 0`, and in the dialog
- * or a content-height sheet the page takes `flexShrink: 1, minHeight: 0`,
- * so it gives way once the sheet reaches the window's height.
+ * leaves and scrolls when the sheet is too short for it. It needs a bounded
+ * page around it: `flex: 1, minHeight: 0` in a `fixed` sheet, otherwise
+ * `flexShrink: 1, minHeight: 0`.
  */
 export function SheetBody({ children }: { children: ReactNode }) {
   const styles = useStyles();
@@ -159,21 +142,69 @@ interface BrowserViewport {
   addEventListener(type: "resize" | "scroll", listener: () => void): void;
   removeEventListener(type: "resize" | "scroll", listener: () => void): void;
 }
+interface BrowserElement {
+  parentElement: BrowserElement | null;
+  clientHeight: number;
+  scrollHeight: number;
+  children: ArrayLike<BrowserElement>;
+  contains(element: BrowserElement): boolean;
+  closest(selector: string): BrowserElement | null;
+  querySelector(selector: string): BrowserElement | null;
+  getAttribute(name: string): string | null;
+  setAttribute(name: string, value: string): void;
+  removeAttribute(name: string): void;
+}
 const browser = globalThis as unknown as {
   visualViewport?: BrowserViewport;
-  document?: { documentElement: { clientHeight: number } };
+  getComputedStyle?: (element: BrowserElement) => { overflowY: string };
+  getSelection?: () => { isCollapsed: boolean } | null;
+  document?: {
+    documentElement: { clientHeight: number };
+    body: BrowserElement & { children: ArrayLike<BrowserElement> };
+  };
+  MutationObserver?: new (callback: () => void) => {
+    observe(
+      element: BrowserElement,
+      options: {
+        childList: boolean;
+        subtree: boolean;
+        attributes: boolean;
+        attributeFilter: string[];
+      }
+    ): void;
+    disconnect(): void;
+  };
 };
 
-/* Where the visible area is, for a sheet pinned to the layout viewport. On
-   iOS web the layout viewport keeps its height when the keyboard opens; the
-   visual viewport shrinks to what is above the keyboard and is panned down
-   the layout viewport to keep the focused field in view. So the sheet's top
-   follows the pan and its height is what is visible. The height is taken
-   from the visual viewport rather than worked out from the layout
-   viewport's: in an installed iOS web app the box a fixed element fills is
-   sometimes the layout viewport and sometimes the whole screen. Natively a
-   KeyboardAvoidingView does the moving, and only whether the keyboard is up
-   is reported. */
+/* Only the top sheet is accessible, including when a second sheet opens. */
+const sheetPanels = new Set<BrowserElement>();
+const sheetBackgrounds = new Set<BrowserElement>();
+
+function updateSheetBackgrounds(): void {
+  sheetBackgrounds.forEach((element) => element.removeAttribute("aria-hidden"));
+  sheetBackgrounds.clear();
+  /* The SDK makes our portal inert when its wallet iframe takes over. */
+  const top = Array.from(sheetPanels).reverse().find((panel) => !panel.closest("[inert]"));
+  if (top && browser.document) hideOutside(browser.document.body, top);
+}
+
+/* Hides each branch holding neither the top sheet nor a live region; walks into
+   branches that hold a live region so announcements still read. */
+function hideOutside(parent: BrowserElement, top: BrowserElement): void {
+  for (const element of Array.from(parent.children)) {
+    if (element.contains(top) || element.closest("[aria-live]")) continue;
+    if (element.querySelector("[aria-live]")) { hideOutside(element, top); continue; }
+    if (element.getAttribute("aria-hidden") === "true") continue;
+    element.setAttribute("aria-hidden", "true");
+    sheetBackgrounds.add(element);
+  }
+}
+
+/* On iOS web the layout viewport keeps its height when the keyboard opens;
+   the visual viewport shrinks and is panned down it. The height comes from
+   the visual viewport because in an installed iOS web app a fixed element
+   fills sometimes the layout viewport and sometimes the whole screen.
+   Natively a KeyboardAvoidingView does the moving. */
 function useKeyboardFrame(active: boolean): KeyboardFrame {
   const [frame, setFrame] = useState<KeyboardFrame>(NO_KEYBOARD);
 
@@ -246,11 +277,38 @@ export function sheetTravel({
   return (panelHeight > 0 ? panelHeight : windowHeight) + SHADOW_ROOM;
 }
 
+/** A plain icon button for sheet headers. */
+export function IconButton({
+  icon: Icon,
+  accessibilityLabel,
+  onPress,
+  color,
+}: {
+  icon: ComponentType<IconProps>;
+  accessibilityLabel: string;
+  onPress: () => void;
+  color?: string;
+}) {
+  const styles = useStyles();
+  const colors = useThemeColors();
+  return (
+    <Pressable
+      accessibilityLabel={accessibilityLabel}
+      accessibilityRole="button"
+      onPress={onPress}
+      style={({ pressed }) => [styles.iconButton, pressed ? { backgroundColor: colors.bgMuted } : null]}
+    >
+      <Icon size={20} color={color ?? colors.fgMuted} />
+    </Pressable>
+  );
+}
+
 export function Sheet({
   visible,
   title,
   onClose,
   onDismiss,
+  swipeDismissible = true,
   dismissLabel,
   onBack,
   backLabel = "Back",
@@ -266,6 +324,8 @@ export function Sheet({
   dialogMinWidth = 840,
   dialogWidth = 480,
   headerContent,
+  headerOverContent = false,
+  titleIcon,
   accessibilityLabel,
 }: {
   visible: boolean;
@@ -276,11 +336,12 @@ export function Sheet({
       Separate so a sheet can keep what was entered when it is only put
       away, and discard it on the close button. */
   onDismiss?: () => void;
+  /** Allow downward drag dismissal from the header and, on web, fitting content. */
+  swipeDismissible?: boolean;
   /** Names the scrim, only while `onDismiss` does something the close
-      button does not (Send keeps the draft; its X discards it). Without it
-      the scrim is hidden from accessibility, since it would be a second
-      "Close <title>". A tap, Escape and the system back dismiss either way.
-      Ignored without `onDismiss`. */
+      button does not. Without it the scrim is hidden from accessibility,
+      since it would be a second "Close <title>". A tap, Escape and the
+      system back dismiss either way. Ignored without `onDismiss`. */
   dismissLabel?: string;
   /** The centred header's back button; hidden when absent. */
   onBack?: () => void;
@@ -313,39 +374,117 @@ export function Sheet({
   presentation?: "sheet" | "adaptive";
   /** Window width from which an adaptive sheet is a dialog. */
   dialogMinWidth?: number;
-  /** The dialog's width. */
   dialogWidth?: number;
   /** Replaces the title row, for a sheet that draws its own header with
       its own close. */
   headerContent?: ReactNode;
+  /** Draws the grabber and `headerContent` over the content instead of
+      above it, for content that fills the sheet edge to edge (a camera). */
+  headerOverContent?: boolean;
+  /** Centred header only: a mark before the title, such as a logo. */
+  titleIcon?: ReactNode;
   /** Names the panel as a modal dialog for assistive tech. */
   accessibilityLabel?: string;
 }) {
   const styles = useStyles();
+  const grabberStyles = useSheetGrabberStyles();
   const colors = useThemeColors();
   const { width, height: windowHeight } = useWindowDimensions();
   const reduceMotion = useReduceMotion();
   const isDialog = isSheetDialog(width, presentation, dialogMinWidth);
   const isFixed = height === "fixed" && !isDialog;
   const [mounted, setMounted] = useState(visible);
-  const progress = useRef(new Animated.Value(visible && !animateIn ? 1 : 0)).current;
+  const panelRef = useRef<View>(null);
+  const sheetRef = useRef<View>(null);
+  const position = useRef(new Animated.Value(visible && !animateIn ? 0 : sheetTravel({
+    reduceMotion: false, dialog: isDialog, panelHeight: 0, windowHeight,
+  }))).current;
+  const fade = useRef(new Animated.Value(visible && !animateIn ? 1 : 0)).current;
   const keyboard = useKeyboardFrame(mounted && isFixed);
-  const dismiss = onDismiss ?? onClose;
-  /* The panel's own height, so it slides exactly off screen: a constant
-     left part of a tall sheet on screen at both ends of the slide. */
+  const dismiss = () => { if (visible) (onDismiss ?? onClose)(); };
+  const close = () => { if (visible) onClose(); };
   const [panelHeight, setPanelHeight] = useState(0);
   const onExitedRef = useRef(onExited);
   onExitedRef.current = onExited;
+
+  const travel = sheetTravel({ reduceMotion: false, dialog: isDialog, panelHeight, windowHeight });
+  const progress = position.interpolate({
+    inputRange: [0, travel], outputRange: [1, 0], extrapolate: "clamp",
+  });
+  const springOpen = () => {
+    if (reduceMotion) position.setValue(0);
+    else Animated.spring(position, {
+      toValue: 0, stiffness: 300, damping: 30, mass: 1,
+      overshootClamping: true, useNativeDriver: true,
+    }).start();
+  };
+  const gesture = useSheetGesture({
+    position,
+    panelRef: sheetRef,
+    active: mounted && visible && !isDialog && panelHeight > 0,
+    enabled: swipeDismissible && !keyboard.open,
+    canStart: (event, surface) => {
+      /* shortcut: native body drags stay with content until fit can be measured at the touch target. */
+      if (!IS_WEB) return surface === "header";
+      const panel = sheetRef.current as unknown as BrowserElement | null;
+      if (browser.getSelection?.()?.isCollapsed === false) return false;
+      if (event.nativeEvent.pageX < 24 || event.nativeEvent.pageX > width - 24) return false;
+      const target = event.nativeEvent.target as unknown as BrowserElement;
+      if (target.closest(EDITABLE_SELECTOR)) return false;
+      if (surface === "header") return true;
+      if (target.closest("button, a, [role='button'], [role='slider'], [role='checkbox'], [role='radio'], [role='switch'], video, audio, iframe")) return false;
+      for (let node: BrowserElement | null = target; node && node !== panel; node = node.parentElement) {
+        const overflow = browser.getComputedStyle?.(node).overflowY;
+        if ((overflow === "auto" || overflow === "scroll") && node.clientHeight === 0) return false;
+        if (node.clientHeight > 0 && node.scrollHeight > node.clientHeight) return false;
+      }
+      return true;
+    },
+    canClaim: () => true,
+    snapshot: (start) => ({ start, height: panelHeight }),
+    dragPosition: (drag, dy) => sheetDragPosition(drag.start, dy),
+    releaseTarget: (drag, g) => singleSheetReleaseTarget({ dy: g.dy, velocity: g.vy, height: drag.height }),
+    settle: springOpen,
+    cancel: springOpen,
+    onDismiss: dismiss,
+  });
+
+  useEffect(() => {
+    gesture.cancel();
+  }, [panelHeight, windowHeight, width, isDialog, reduceMotion, gesture]);
 
   useEffect(() => {
     if (visible) setMounted(true);
   }, [visible]);
 
   useEffect(() => {
+    if (!IS_WEB || !mounted || !panelRef.current || !browser.document) return;
+    const panel = panelRef.current as unknown as BrowserElement;
+    sheetPanels.add(panel);
+    updateSheetBackgrounds();
+    const observer = browser.MutationObserver
+      ? new browser.MutationObserver(updateSheetBackgrounds)
+      : null;
+    observer?.observe(browser.document.body, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      attributeFilter: ["inert", "aria-live"],
+    });
+    return () => {
+      observer?.disconnect();
+      sheetPanels.delete(panel);
+      updateSheetBackgrounds();
+    };
+  }, [mounted]);
+
+  useEffect(() => {
     if (!mounted) return;
 
-    const animation = Animated.timing(progress, {
-      toValue: visible ? 1 : 0,
+    if (!reduceMotion) fade.setValue(1);
+    if (reduceMotion && visible) position.setValue(0);
+    const animation = Animated.timing(reduceMotion ? fade : position, {
+      toValue: reduceMotion ? (visible ? 1 : 0) : (visible ? 0 : travel),
       duration: reduceMotion ? REDUCED_MOTION_MS : SHEET_DURATION_MS,
       easing: Easing.bezier(0.2, 0.8, 0.2, 1),
       useNativeDriver: true,
@@ -357,13 +496,9 @@ export function Sheet({
       }
     });
     return () => animation.stop();
-  }, [mounted, progress, reduceMotion, visible]);
+  }, [mounted, position, fade, reduceMotion, visible, travel]);
 
-  const travel = sheetTravel({ reduceMotion, dialog: isDialog, panelHeight, windowHeight });
-  const translateY = progress.interpolate({
-    inputRange: [0, 1],
-    outputRange: [travel, 0],
-  });
+  const translateY = reduceMotion ? 0 : position;
 
   /* On web the fixed sheet follows the visible area: its top stays just under
      the status bar even when iOS pans the page for the keyboard, and its
@@ -383,8 +518,53 @@ export function Sheet({
       : null;
 
   const centered = header === "centered";
+  const closeButton = <IconButton icon={IconClose} accessibilityLabel={`Close ${title}`} onPress={close} />;
+  const chrome = (
+    <>
+      {!isDialog && swipeDismissible ? (
+        <View
+          testID="sheet-grabber"
+          accessible={false}
+          accessibilityElementsHidden
+          importantForAccessibility="no-hide-descendants"
+          aria-hidden
+          style={[grabberStyles.grabberZone, styles.headerDrag, styles.dragArea]}
+          {...gesture.header.panHandlers}
+        >
+          <SheetGrabberBar />
+        </View>
+      ) : null}
+      {headerContent != null ? (isDialog ? headerContent : (
+        <View style={[styles.headerDrag, styles.dragArea]} {...gesture.header.panHandlers}>
+          {headerContent}
+        </View>
+      )) : (centered ? (
+        <View style={[styles.centeredHeader, !isDialog ? styles.headerDrag : null]} {...gesture.header.panHandlers}>
+          <View style={styles.headerSlot}>
+            {onBack ? (
+              <IconButton icon={IconChevronLeft} accessibilityLabel={backLabel} onPress={onBack} color={colors.fg} />
+            ) : null}
+          </View>
+          <View style={[styles.centeredTitleSlot, !isDialog ? styles.dragArea : null]}>
+            {titleIcon}
+            <Text accessibilityRole="header" numberOfLines={1} style={styles.centeredTitle}>
+              {title}
+            </Text>
+          </View>
+          {closeButton}
+        </View>
+      ) : (
+        <View style={[styles.header, !isDialog ? styles.headerDrag : null]} {...gesture.header.panHandlers}>
+          <Text style={[styles.title, !isDialog ? styles.dragArea : null]}>{title}</Text>
+          {closeButton}
+        </View>
+      ))}
+    </>
+  );
   const panel = (
     <Animated.View
+      ref={sheetRef}
+      pointerEvents={visible ? "auto" : "none"}
       onLayout={(event) => setPanelHeight(event.nativeEvent.layout.height)}
       style={[
         styles.panel,
@@ -397,8 +577,10 @@ export function Sheet({
             : keyboardAvoiding
               ? styles.keyboardPanel
               : styles.absolutePanel,
+        /* Edge-to-edge content takes the sheet's rounded top. */
+        headerOverContent ? styles.clip : null,
         {
-          opacity: isDialog || reduceMotion ? progress : 1,
+          opacity: reduceMotion ? fade : isDialog ? progress : 1,
           transform: [{ translateY }],
         },
       ]}
@@ -406,50 +588,13 @@ export function Sheet({
         ? { accessibilityLabel, accessibilityViewIsModal: true, "aria-modal": true, role: "dialog" as const }
         : null)}
     >
-      {headerContent ?? (centered ? (
-        <View style={styles.centeredHeader}>
-          <View style={styles.headerSlot}>
-            {onBack ? (
-              <Pressable
-                accessibilityLabel={backLabel}
-                accessibilityRole="button"
-                style={styles.headerButton}
-                onPress={onBack}
-              >
-                <IconChevronLeft size={20} />
-              </Pressable>
-            ) : null}
-          </View>
-          <Text accessibilityRole="header" numberOfLines={1} style={styles.centeredTitle}>
-            {title}
-          </Text>
-          <View style={styles.headerSlot}>
-            <Pressable
-              accessibilityLabel={`Close ${title}`}
-              accessibilityRole="button"
-              style={styles.headerButton}
-              onPress={onClose}
-            >
-              <IconClose color={colors.fgMuted} />
-            </Pressable>
-          </View>
-        </View>
-      ) : (
-        <View style={styles.header}>
-          <Text style={styles.title}>{title}</Text>
-          <Pressable
-            accessibilityLabel={`Close ${title}`}
-            accessibilityRole="button"
-            style={styles.close}
-            onPress={onClose}
-            hitSlop={8}
-          >
-            <IconClose />
-          </Pressable>
-        </View>
-      ))}
+      {headerOverContent ? (
+        <View pointerEvents="box-none" style={styles.headerOver}>{chrome}</View>
+      ) : chrome}
       <SheetLayoutContext.Provider value={{ dialog: isDialog, keyboardOpen: keyboard.open }}>
-        {isFixed ? <View style={styles.fixedBody}>{children}</View> : children}
+        {IS_WEB || isFixed ? <View style={isFixed ? styles.fixedBody : styles.contentBody} {...(IS_WEB ? gesture.body.panHandlers : null)}>
+          {children}
+        </View> : children}
       </SheetLayoutContext.Provider>
       {(height === "fixed" && isDialog) || keyboard.open ? null : (
         <View style={{ height: bottomInset }} />
@@ -472,7 +617,7 @@ export function Sheet({
       animationType="none"
       onRequestClose={dismiss}
     >
-      <Animated.View style={[styles.scrim, { opacity: progress }]}>
+      <Animated.View ref={panelRef} style={[styles.scrim, { opacity: reduceMotion ? Animated.multiply(progress, fade) : progress }]}>
         <Pressable
           {...scrimAccessibilityProps(IS_WEB, onDismiss ? dismissLabel : undefined)}
           style={styles.scrimPressable}
@@ -523,9 +668,6 @@ const useStyles = makeStyles((c) => ({
     left: 0,
     right: 0,
     bottom: 0,
-    /* On web a content-height sheet stops where a fixed one starts, just
-       under the status bar: in a short window its SheetBody scrolls instead
-       of the header and close button running off the top. */
     ...(IS_WEB
       ? {
           maxHeight: `calc(100dvh - env(safe-area-inset-top, 0px) - ${FIXED_SHEET_GAP}px)` as unknown as number,
@@ -551,6 +693,11 @@ const useStyles = makeStyles((c) => ({
     shadowRadius: 24,
   },
   fixedBody: { flex: 1, minHeight: 0 },
+  contentBody: { flexShrink: 1, minHeight: 0 },
+  headerOver: { position: "absolute", top: 0, left: 0, right: 0, zIndex: 1 },
+  clip: { overflow: "hidden" },
+  headerDrag: IS_WEB ? { userSelect: "none" } as never : {},
+  dragArea: IS_WEB ? { touchAction: "pan-x pinch-zoom" } as never : {},
   /* react-native-web puts every ScrollView on its own layer
      (translateZ(0)), and text in it can land a pixel off where the sheet
      would draw it. The body stays on the sheet's layer. */
@@ -593,24 +740,26 @@ const useStyles = makeStyles((c) => ({
     paddingRight: 6,
   },
   title: { flex: 1, fontFamily: font.sansSemiBold, fontSize: text.md, color: c.fg },
-  close: { width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   centeredHeader: {
     alignItems: "center",
     borderBottomColor: c.border,
     borderBottomWidth: 1,
     flexDirection: "row",
     height: touch.navH,
-    paddingHorizontal: space[1],
+    paddingHorizontal: 6,
   },
   headerSlot: { width: touch.hitMin, height: touch.hitMin },
-  headerButton: {
-    width: touch.hitMin,
-    height: touch.hitMin,
+  iconButton: { width: touch.hitMin, height: touch.hitMin, alignItems: "center", justifyContent: "center" },
+  centeredTitleSlot: {
     alignItems: "center",
+    flex: 1,
+    flexDirection: "row",
+    gap: space[2],
     justifyContent: "center",
+    minWidth: 0,
   },
   centeredTitle: {
-    flex: 1,
+    flexShrink: 1,
     color: c.fg,
     fontFamily: font.sansSemiBold,
     fontSize: text.md,

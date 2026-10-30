@@ -11,8 +11,7 @@ export interface BannerProps extends React.HTMLAttributes<HTMLDivElement> {
 
 /**
  * Banner — the Thru "wing" bar: a full-width brick strip whose right end is
- * sheared into the diagonal wing (the RedHeader motif; same slant as the Tabs
- * hat). Decorative; pass children to overlay content.
+ * sheared into the diagonal wing. Decorative; pass children to overlay content.
  */
 export const Banner = React.forwardRef<HTMLDivElement, BannerProps>(function Banner(
   { height = 24, slant = 20, className, style, children, ...rest },

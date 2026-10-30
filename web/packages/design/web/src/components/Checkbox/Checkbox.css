@@ -1,5 +1,4 @@
-/* Checkbox — ported from thru-design app.css .check, retargeted to tokens.
-   State via Base UI [data-checked] / [data-indeterminate] / [data-disabled]. */
+/* State via Base UI [data-checked] / [data-indeterminate] / [data-disabled]. */
 
 .tds-check {
   display: inline-flex;

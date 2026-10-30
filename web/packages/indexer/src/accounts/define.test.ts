@@ -1,28 +1,21 @@
-/**
- * Unit tests for accounts/define.ts
- */
-
 import { describe, it, expect, vi } from "vitest";
 import { getTableName, getTableColumns } from "drizzle-orm";
 import { defineAccountStream } from "./define";
 import { t } from "../schema/builder";
 
 describe("defineAccountStream", () => {
-  // Basic schema for testing
   const testSchema = {
     address: t.text().primaryKey(),
     slot: t.bigint().notNull(),
     data: t.text(),
   };
 
-  // Mock parse function
   const mockParse = (account: any) => ({
     address: account.address,
     slot: account.slot,
     data: account.data ?? null,
   });
 
-  // Mock owner program (32 bytes)
   const mockOwnerProgram = new Uint8Array(32).fill(1);
 
   describe("basic stream creation", () => {
@@ -59,7 +52,6 @@ describe("defineAccountStream", () => {
         parse: mockParse,
       });
 
-      // pascalCase capitalizes each word
       expect(stream.description).toBe("TokenAccounts accounts");
     });
 
@@ -71,7 +63,6 @@ describe("defineAccountStream", () => {
         parse: mockParse,
       });
 
-      // pascalCase capitalizes each word
       expect(stream.description).toBe("UserProfiles accounts");
     });
   });
@@ -147,15 +138,12 @@ describe("defineAccountStream", () => {
         parse: mockParse,
       });
 
-      // Factory not called yet
       expect(factory).not.toHaveBeenCalled();
 
-      // First call
       const program1 = stream.getOwnerProgram();
       expect(factory).toHaveBeenCalledTimes(1);
       expect(program1).toBe(mockOwnerProgram);
 
-      // Second call uses cached value
       const program2 = stream.getOwnerProgram();
       expect(factory).toHaveBeenCalledTimes(1);
       expect(program2).toBe(mockOwnerProgram);
@@ -320,7 +308,7 @@ describe("defineAccountStream", () => {
       };
 
       const tokenProgramId = new Uint8Array(32);
-      tokenProgramId[0] = 6; // Token program identifier
+      tokenProgramId[0] = 6;
 
       const stream = defineAccountStream({
         name: "token-accounts",

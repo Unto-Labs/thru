@@ -1,6 +1,3 @@
-/* Meter — static measurement within a known range, secondary hue.
-   Ported from thru-design app.css .bar (+ .bar__ind--forest), retargeted. */
-
 .tds-meter {
   width: 100%;
   max-width: 260px;
@@ -36,7 +33,6 @@
   background: var(--grass-400);
   transition: width var(--duration-med) var(--ease-standard);
 }
-/* Reduced motion: the fill jumps to its new value instead of growing. */
 @media (prefers-reduced-motion: reduce) {
   .tds-meter__ind {
     transition: none;

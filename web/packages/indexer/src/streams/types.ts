@@ -1,7 +1,3 @@
-/**
- * Event stream type definitions.
- */
-
 import type { Event, Filter } from "@thru/replay";
 import type { PgTableWithColumns } from "drizzle-orm/pg-core";
 import type { SchemaDefinition, InferRow, Columns } from "../schema/types";

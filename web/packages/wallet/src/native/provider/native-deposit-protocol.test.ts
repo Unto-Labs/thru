@@ -12,10 +12,6 @@ import type {
   PostMessageRequest,
 } from "../../protocol";
 
-/* RN mirror of provider/deposit-protocol.test.ts. The wallet WebView/iframe is
-   never created because WebViewBridge.sendMessage is stubbed; we only assert the
-   provider wires the DEPOSIT request and surfaces/hides the wallet around it. */
-
 const WALLET_URL = "https://app.tid.sh/embedded/native";
 const APP_ORIGIN = "thru-mobile://app";
 const DESTINATION: DepositDestination = {
@@ -277,29 +273,25 @@ describe("native deposit protocol round-trip", () => {
       providerId: "unifold",
       destination: DESTINATION,
     });
-    const signingPromise = provider.thru.signPasskeyChallenge({
-      challenge: "challenge_base64url",
+    const signingPromise = provider.thru.signTransaction({
+      programAddress: "thru_program",
+      instructionData: "AQID",
       walletAddress: "thru_test_address",
     });
 
     await vi.waitFor(() => {
       expect(pending.has(POST_MESSAGE_REQUEST_TYPES.DEPOSIT)).toBe(true);
-      expect(
-        pending.has(POST_MESSAGE_REQUEST_TYPES.SIGN_PASSKEY_CHALLENGE),
-      ).toBe(true);
+      expect(pending.has(POST_MESSAGE_REQUEST_TYPES.SIGN_TRANSACTION)).toBe(true);
     });
 
-    pending.get(POST_MESSAGE_REQUEST_TYPES.SIGN_PASSKEY_CHALLENGE)?.({
+    pending.get(POST_MESSAGE_REQUEST_TYPES.SIGN_TRANSACTION)?.({
       id: "sign-response",
       success: true,
       result: {
-        signatureR: "01",
-        signatureS: "02",
-        authenticatorData: "authenticator_data_base64",
-        clientDataJSON: "client_data_json_base64",
+        signedTransaction: "signed_transaction",
       },
     });
-    await signingPromise;
+    await expect(signingPromise).resolves.toBe("signed_transaction");
     expect(surface).toEqual(["show:deposit-open"]);
 
     pending.get(POST_MESSAGE_REQUEST_TYPES.DEPOSIT)?.({

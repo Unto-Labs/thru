@@ -13,6 +13,16 @@
   max-height: 460px;
   overflow: auto;
 }
+.tds-screen__body--more {
+  -webkit-mask-image: linear-gradient(to bottom, black calc(100% - var(--space-6)), transparent);
+  mask-image: linear-gradient(to bottom, black calc(100% - var(--space-6)), transparent);
+}
+
+@media (max-height: 480px) {
+  .tds-screen--compact-header .tds-screen__badge {
+    display: none;
+  }
+}
 
 .tds-screen__header {
   display: flex;
@@ -124,10 +134,7 @@
   background: var(--color-surface-primary);
 }
 
-/* ── Mobile: inside a bottom sheet ──────────────────────────────────────────
-   The frame is height-capped (Frame.css), so the body is the only scroller:
-   the sheet's bar keeps its close button and the action row keeps its primary
-   CTA on screen no matter how long the content is. */
+/* The frame is height-capped (Frame.css), so the body is the only scroller. */
 
 @media (max-width: 640px) {
   .tds-screen {
@@ -153,5 +160,9 @@
 
   .tds-screen__actions {
     flex: none;
+  }
+
+  .tds-screen__actions > .tds-btn {
+    min-height: 48px;
   }
 }

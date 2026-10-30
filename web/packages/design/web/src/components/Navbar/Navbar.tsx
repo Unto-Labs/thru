@@ -5,10 +5,7 @@ import "./Navbar.css";
 
 /**
  * Navbar — the Thru "scan" top bar, exposed as styled parts (compose freely).
- * Dark Ink ground, italic `thru` wordmark + a mono tag, mono section items with
- * a brick active-underline, and a status chip with a pulsing live dot. Parts
- * take a `render` element so the consumer can supply routing links / an
- * interactive switcher button without the component owning that coupling.
+ * Parts take a `render` element for routing links or an interactive button.
  *
  *   <Navbar.Root>
  *     <Navbar.Brand tag="scan" render={<Link href="/" />} />
@@ -132,9 +129,8 @@ export interface NavbarDrawerProps {
   /** Menu content, stacked (typically the same `Navbar.Item`s as the bar). */
   children?: React.ReactNode;
 }
-/** Mobile nav menu — a full-width panel that slides down from under the bar
- *  (thru.org's mobile dropdown pattern), built on the design-system `Dialog`
- *  (focus-trap, scrim, `Esc`, and scroll-lock come from Base UI). */
+/** Mobile nav menu — a full-width panel that slides down from under the bar,
+ *  built on `Dialog` (focus-trap, scrim, `Esc`, and scroll-lock come from Base UI). */
 function Drawer({
   open,
   onOpenChange,

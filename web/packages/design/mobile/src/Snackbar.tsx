@@ -1,12 +1,6 @@
 /**
- * The kit's snackbar: a short confirmation on the inverse surface - a 3 pt
- * bar down its left edge in the tone's colour, a tinted glyph disc, a mono
- * caps title over a line of detail, a dismiss button, and a 2 pt bar along
- * the bottom that runs out over its time on screen. It fades in over 200 ms
- * and dismisses itself when the bar runs out.
- *
- * Where it sits is the caller's: the kit's reference floats it 12 pt in from
- * the sides above the tab bar.
+ * A short confirmation that dismisses itself when its bar runs out. Where it
+ * sits is the caller's.
  */
 import { useEffect, useRef } from "react";
 import { Animated, Easing, Pressable, Text, View } from "react-native";
@@ -42,7 +36,7 @@ export function Snackbar({
   onDismiss,
 }: {
   tone: SnackbarTone;
-  /** Set in mono caps: "ADDED". */
+  /** Set in mono caps: "MONEY ADDED". */
   title: string;
   message?: string;
   durationMs?: number;

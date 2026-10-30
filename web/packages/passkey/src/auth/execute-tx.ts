@@ -1,4 +1,4 @@
-import { base64UrlToBytes, bytesToBase64, bytesToHex } from '@thru/programs/passkey-manager';
+import { base64UrlToBytes, bytesToBase64, bytesToHex } from '@thru/programs/wallet';
 import { signWithPasskey } from '../mobile/passkey';
 import { touchPasskeyLastUsedAt } from '../mobile/storage';
 

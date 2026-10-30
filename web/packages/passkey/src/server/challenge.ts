@@ -3,8 +3,8 @@ import {
   createValidateChallenge,
   decodeAddress,
   fetchWalletNonce,
-} from '@thru/programs/passkey-manager';
-import type { AccountContext } from '@thru/programs/passkey-manager';
+} from '@thru/programs/wallet';
+import type { AccountContext } from '@thru/programs/wallet';
 import type { PasskeyChallengeResult, ThruClient } from './types';
 
 export async function createPasskeyChallenge(opts: {

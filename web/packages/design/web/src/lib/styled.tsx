@@ -4,8 +4,6 @@ import { cn } from "../utils";
 /**
  * Wrap a Base UI part with a default `tds-` class, preserving Base UI's
  * `className` contract (string OR function-of-state) and forwarding ref + props.
- * The styled-parts building block for compound components — keeps the
- * compositional API Base UI intends while baking in our look.
  */
 export function styledPart<C extends React.ElementType>(Part: C, base: string) {
   type P = React.ComponentPropsWithoutRef<C>;

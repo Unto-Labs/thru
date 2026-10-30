@@ -1,72 +1,44 @@
-/**
- * Event stream processor.
- *
- * Processes events from @thru/replay and commits them to the database
- * with batching and checkpointing.
- */
-
 import type { ChainClientFactory, ReplayLogger } from "@thru/replay";
 import { createEventReplay } from "@thru/replay";
 import type { PgTable } from "drizzle-orm/pg-core";
 import type { DatabaseClient } from "../schema/types";
 import { validateParsedData } from "../schema/validation";
+import { bulkInsert } from "../schema/bulk-insert";
 import { getCheckpoint, updateCheckpoint } from "../checkpoint";
 import type { EventStream } from "./types";
 import type { StreamBatch } from "../types";
 import type { ProcessorStatusObserver } from "../runtime/status";
 import { createScopedLogger } from "../runtime/logger";
 
-// ============================================================
-// Types
-// ============================================================
-
 export interface ProcessorOptions {
-  /** Factory to create fresh chain clients for reconnection */
   clientFactory: ChainClientFactory;
-  /** Database client */
   db: DatabaseClient;
-  /** Start slot if no checkpoint exists */
   defaultStartSlot: bigint;
-  /** Safety margin for finality (in slots) */
   safetyMargin?: number;
-  /** Page size for fetching events */
   pageSize?: number;
-  /** Log level */
   logLevel?: "debug" | "info" | "warn" | "error";
-  /** Structured logger for processor and replay lifecycle logs */
   logger?: ReplayLogger;
-  /** Validate parse output with Zod (useful for development) */
   validateParse?: boolean;
-  /** Runtime status observer */
   observer?: ProcessorStatusObserver;
 }
 
 export interface ProcessorStats {
-  /** Total events processed */
   eventsProcessed: number;
-  /** Total batches committed */
   batchesCommitted: number;
-  /** Last slot processed */
   lastSlot: bigint | null;
 }
 
-// ============================================================
-// Batcher
-// ============================================================
+// A slot change flushes only after this long, so a backfill's dense history batches across slots.
+const SLOT_FLUSH_MIN_MS = 250;
 
-/**
- * Generic batcher that collects events by slot and flushes on slot change
- * or when thresholds are reached.
- */
 class StreamBatcher {
   private currentSlot: bigint | null = null;
   private pendingEvents: unknown[] = [];
   private lastFlushTime = Date.now();
-  private maxPendingCount = 100;
+  private maxPendingCount = 1000;
   private maxPendingMs = 5000;
 
   addEvent(event: unknown, slot: bigint): StreamBatch | null {
-    // If slot changed or thresholds reached, flush pending
     if (this.shouldFlush(slot)) {
       const batch = this.flush();
       this.currentSlot = slot;
@@ -81,7 +53,13 @@ class StreamBatcher {
 
   private shouldFlush(newSlot: bigint): boolean {
     if (this.pendingEvents.length === 0) return false;
-    if (this.currentSlot !== null && newSlot !== this.currentSlot) return true;
+    if (
+      this.currentSlot !== null &&
+      newSlot !== this.currentSlot &&
+      Date.now() - this.lastFlushTime >= SLOT_FLUSH_MIN_MS
+    ) {
+      return true;
+    }
     if (this.pendingEvents.length >= this.maxPendingCount) return true;
     if (Date.now() - this.lastFlushTime >= this.maxPendingMs) return true;
     return false;
@@ -104,10 +82,6 @@ class StreamBatcher {
     return this.pendingEvents.length;
   }
 
-  /**
-   * Flush if the timeout has elapsed since last flush.
-   * Called by background timer to ensure events don't sit in buffer indefinitely.
-   */
   flushIfStale(): StreamBatch | null {
     if (
       this.pendingEvents.length > 0 &&
@@ -119,21 +93,6 @@ class StreamBatcher {
   }
 }
 
-// ============================================================
-// Processor
-// ============================================================
-
-/**
- * Run an event stream processor.
- *
- * Fetches events from the chain using @thru/replay, parses them,
- * batches by slot, and commits to the database with checkpointing.
- *
- * @param stream - The event stream to process
- * @param options - Processor configuration
- * @param abortSignal - Optional signal to stop processing
- * @returns Processor statistics
- */
 export async function runEventStreamProcessor(
   stream: EventStream,
   options: ProcessorOptions,
@@ -169,12 +128,7 @@ export async function runEventStreamProcessor(
 
   log("info", `Starting stream processor: ${stream.description}`);
 
-  // Get checkpoint for this stream
   const checkpoint = await getCheckpoint(db, stream.name);
-  // Resume from the checkpoint slot rather than slot + 1. Checkpoints store
-  // lastEventId, but this processor only filters by slot; replaying the
-  // checkpoint slot and relying on idempotent inserts avoids skipping
-  // unprocessed events from the same slot after partial commits.
   const startSlot = checkpoint ? checkpoint.slot : defaultStartSlot;
   observer?.onStart?.({
     startSlot,
@@ -186,9 +140,10 @@ export async function runEventStreamProcessor(
     `Starting from slot ${startSlot}${checkpoint ? " (resuming)" : " (fresh start)"}`
   );
 
-  // Create replay stream with factory for robust reconnection
   const replay = createEventReplay({
     clientFactory,
+    /* Parallel history backfill; see BACKFILL_CONNECTIONS in accounts/processor.ts. */
+    historyConnections: 16,
     startSlot,
     resumeAfter: checkpoint?.eventId
       ? { slot: checkpoint.slot, eventId: checkpoint.eventId }
@@ -211,12 +166,18 @@ export async function runEventStreamProcessor(
   let lastLogTime = Date.now();
   let eventsReceivedSinceLastLog = 0;
 
-  // Commit a batch to the database
+  let phaseActive = false;
+  const observePhase: NonNullable<ProcessorStatusObserver["onPhase"]> = (info) => {
+    if (info.phase === null && !phaseActive) return;
+    phaseActive = info.phase !== null;
+    observer?.onPhase?.(info);
+  };
+
   const commitBatch = async (batch: StreamBatch): Promise<void> => {
     try {
       await commitBatchPhases(batch);
     } finally {
-      observer?.onPhase?.({ phase: null });
+      observePhase({ phase: null });
     }
   };
 
@@ -227,9 +188,8 @@ export async function runEventStreamProcessor(
     const lastSeenEventId = lastSeenEvent?.id ?? null;
     let eventsToCommit = batch.events as Record<string, unknown>[];
 
-    // Apply filterBatch hook if defined
     if (stream.filterBatch) {
-      observer?.onPhase?.({ phase: "filterBatch", slot: batch.slot });
+      observePhase({ phase: "filterBatch", slot: batch.slot });
       try {
         eventsToCommit = (await stream.filterBatch(
           eventsToCommit as any,
@@ -242,6 +202,7 @@ export async function runEventStreamProcessor(
           );
           await updateCheckpoint(db, stream.name, batch.slot, lastSeenEventId);
           stats.lastSlot = batch.slot;
+          observer?.onCheckpoint?.({ slot: batch.slot });
           return;
         }
         if (eventsToCommit.length < batch.events.length) {
@@ -265,17 +226,15 @@ export async function runEventStreamProcessor(
       | undefined;
     const lastEventToCommitId = lastEventToCommit?.id ?? null;
     let committedEvents = eventsToCommit;
-    observer?.onPhase?.({ phase: "commit", slot: batch.slot });
+    let insertedCount = 0;
+    observePhase({ phase: "commit", slot: batch.slot });
     try {
       await db.transaction(async (tx) => {
-        // Insert events (skip duplicates)
-        committedEvents = (await tx
-          .insert(stream.table as PgTable)
-          .values(eventsToCommit)
-          .onConflictDoNothing()
-          .returning()) as Record<string, unknown>[];
+        /* Only onCommit reads the written rows; otherwise the count is enough. */
+        const written = await bulkInsert(tx, stream.table as PgTable, eventsToCommit, { kind: "nothing" }, stream.onCommit ? "all" : []);
+        committedEvents = written.rows;
+        insertedCount = written.count;
 
-        // Update checkpoint
         await updateCheckpoint(
           tx as unknown as DatabaseClient,
           stream.name,
@@ -286,18 +245,18 @@ export async function runEventStreamProcessor(
     } catch (commitErr) {
       observer?.onError?.("commit", commitErr);
       throw commitErr;
-    }
+    } finally { observePhase({ phase: null }); }
 
     stats.batchesCommitted++;
     stats.lastSlot = batch.slot;
     observer?.onBatchCommitted?.({
       slot: batch.slot,
       count: eventsToCommit.length,
+      insertedCount,
     });
     observer?.onCheckpoint?.({ slot: batch.slot });
 
-    // Call onCommit hook if defined
-    if (stream.onCommit && committedEvents.length > 0) {
+    if (stream.onCommit && insertedCount > 0) {
       try {
         await stream.onCommit({ ...batch, events: committedEvents }, { db });
       } catch (hookErr) {
@@ -306,18 +265,10 @@ export async function runEventStreamProcessor(
           "error",
           `onCommit hook failed: ${hookErr instanceof Error ? hookErr.message : String(hookErr)}`
         );
-        // Don't rethrow - hooks should not block indexing
       }
     }
   };
 
-  /* Commits run one at a time, in the order their batches left the batcher,
-     which is slot order. Both the main loop and the timer flush take batches
-     from the batcher. Without this, the timer could commit a newer batch while
-     an older one was still in filterBatch. The older commit's checkpoint upsert
-     would then move the checkpoint backwards; or, if the older commit failed,
-     the newer checkpoint would already be durable and a restart would skip the
-     failed batch. Once a commit fails, every later one rejects without running. */
   let commitTail: Promise<void> = Promise.resolve();
   const commitInOrder = (batch: StreamBatch): Promise<void> => {
     const run = commitTail.then(() => commitBatch(batch));
@@ -330,9 +281,6 @@ export async function runEventStreamProcessor(
     rejectFlushFailure = reject;
   });
 
-  // Background timer to flush pending events that exceed the timeout.
-  // Failures here must reject the processor so the supervisor can restart
-  // from the last durable checkpoint instead of silently dropping the batch.
   const flushInterval = setInterval(async () => {
     const batch = batcher.flushIfStale();
     if (batch) {
@@ -353,6 +301,7 @@ export async function runEventStreamProcessor(
     }
   }, 1000);
 
+  let inFlightCommit: Promise<void> = Promise.resolve();
   const processReplay = async () => {
     for await (const event of replay) {
       if (abortSignal?.aborted) {
@@ -366,7 +315,6 @@ export async function runEventStreamProcessor(
         id: event.eventId ?? null,
       });
 
-      // Parse the event
       let parsed: Record<string, unknown> | null;
       try {
         parsed = stream.parse(event) as Record<string, unknown> | null;
@@ -380,29 +328,30 @@ export async function runEventStreamProcessor(
         continue;
       }
 
-      // Validate parse output if enabled
       if (validateParse) {
         const validation = validateParsedData(stream.schema, parsed, stream.name);
         if (!validation.success) {
           observer?.onParseValidationError?.(validation.error);
           log("error", validation.error);
-          continue; // Skip invalid events
+          continue;
         }
       }
 
       stats.eventsProcessed++;
 
-      // Add to batcher
       const batch = batcher.addEvent(parsed, event.slot!);
       if (batch) {
-        await commitInOrder(batch);
-        log(
-          "info",
-          `Committed ${batch.events.length} event(s) at slot ${batch.slot} (total: ${stats.eventsProcessed})`
+        /* Queue this batch before waiting, so a timer flush of newer events
+           cannot commit ahead of it. One commit stays in flight while the next batch fills. */
+        const previousCommit = inFlightCommit;
+        const total = stats.eventsProcessed;
+        inFlightCommit = commitInOrder(batch).then(() =>
+          log("info", `Committed ${batch.events.length} event(s) at slot ${batch.slot} (total: ${total})`)
         );
+        inFlightCommit.catch(() => {});
+        await previousCommit;
       }
 
-      // Heartbeat logging
       const now = Date.now();
       if (now - lastLogTime >= 30000) {
         log(
@@ -414,7 +363,6 @@ export async function runEventStreamProcessor(
       }
     }
 
-    // Flush any remaining events
     const finalBatch = batcher.flush();
     if (finalBatch) {
       await commitInOrder(finalBatch);
@@ -436,14 +384,9 @@ export async function runEventStreamProcessor(
   } finally {
     clearInterval(flushInterval);
     rejectFlushFailure = () => {};
-    /* Let an in-flight commit settle before returning, so the next supervisor
-       generation does not read the checkpoint while this one still writes it. */
     await commitTail.catch(() => {});
   }
 
-  /* The replay loop ended cleanly, but a timer-flushed commit that was still in
-     flight may have failed after rejectFlushFailure was disarmed. Report that
-     failure instead of success. */
   await commitTail.catch((err) => {
     log(
       "error",

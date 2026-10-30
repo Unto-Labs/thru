@@ -63,7 +63,7 @@ export interface ConnectAccount {
   avatar?: React.ReactNode;
 }
 
-export const DEFAULT_MANAGE_HREF = "https://app.tid.sh";
+export const DEFAULT_MANAGE_HREF = "https://wallet.tid.sh";
 export const DEFAULT_MANAGE_ACCOUNTS_HREF = "https://app.tid.sh/accounts";
 const COPIED_MS = 1200;
 
@@ -122,10 +122,7 @@ export interface AccountMenuPopupProps {
 }
 
 /**
- * AccountMenuPopup — the wallet's account menu, modelled on the Google
- * account switcher: the current account (address + copy, name · passkey,
- * balance), "Manage your Thru Wallet", the other accounts to switch to,
- * Add account, Manage accounts, View on explorer, Sign out.
+ * AccountMenuPopup — the wallet's account menu.
  *
  * It is the `Menu.Popup` of a Base UI `Menu`: mount it inside a
  * `Menu.Root` / `Menu.Portal` / `Menu.Positioner` of your own — anchored to

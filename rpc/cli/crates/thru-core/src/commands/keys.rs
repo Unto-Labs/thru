@@ -3,7 +3,7 @@
 use anyhow::Result;
 
 use crate::cli::KeysCommands;
-use crate::config::{Config, KeyManager};
+use crate::config::{Config, KeyManager, write_key_file};
 use crate::error::CliError;
 use crate::output;
 
@@ -148,7 +148,7 @@ async fn save_config(config: &Config) -> Result<(), CliError> {
         message: format!("Failed to serialize config: {}", e),
     })?;
 
-    tokio::fs::write(&config_path, config_content)
+    write_key_file(&config_path, &config_content)
         .await
         .map_err(|e| CliError::Generic {
             message: format!("Failed to write config file: {}", e),

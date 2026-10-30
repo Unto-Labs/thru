@@ -11,21 +11,16 @@
  */
 
 import { create } from "@bufbuild/protobuf";
-import type { Account, AccountMeta, GetAccountRequest } from "@thru/sdk/proto";
+import type { Account, AccountMeta } from "@thru/sdk/proto";
 import {
   AccountView,
   FilterSchema,
   FilterParamValueSchema,
-  PageRequestSchema,
   PubkeySchema,
-  VersionContextSchema,
 } from "@thru/sdk/proto";
 import type {
   StreamAccountUpdatesRequest,
   StreamAccountUpdatesResponse,
-  ListAccountsRequest,
-  ListAccountsResponse,
-  BlockFinished,
   Filter,
   FilterParamValue,
 } from "@thru/sdk/proto";
@@ -42,8 +37,11 @@ import {
 import type { ReplayLogger } from "./types";
 import { closeIfCloseable, resolveClient } from "./types";
 import { NOOP_LOGGER } from "./logger";
+import { readAllAccounts, type BackfillPoolFailure } from "./backfill-pool";
 
 const DEFAULT_RECONNECT_CLEANUP_TIMEOUT_MS = 30_000;
+/* ~30 min of slots: well past how far the node's durable view trails finalized. */
+const STREAM_FLOOR_MARGIN_SLOTS = 10_000n;
 const DEFAULT_QUEUE_WARNING_THRESHOLD = 1_000;
 const DEFAULT_HEALTH_LOG_INTERVAL_MS = 300_000;
 const REPLAY_IDLE_TIMEOUT_ERROR = "ReplayIdleTimeoutError";
@@ -257,7 +255,7 @@ export interface AccountState {
   data: Uint8Array;
   /** Whether this is a deletion */
   isDelete: boolean;
-  /** Source: "backfill" for GetAccount during backfill, "stream" for live updates */
+  /** Source: "backfill" for the initial backfill read, "stream" for live updates */
   source: "backfill" | "stream";
 }
 
@@ -310,7 +308,7 @@ export interface AccountReplayOptions {
 
 /**
  * Options for replaying accounts by owner with backfill + streaming.
- * Uses ListAccounts (META_ONLY) + GetAccount for backfill, then StreamAccountUpdates for live updates.
+ * Uses ListAccounts (META_ONLY) + BatchGetRawAccounts for backfill, then StreamAccountUpdates for live updates.
  */
 export interface AccountsByOwnerReplayOptions {
   /** Account source (typically ChainClient). Optional if clientFactory provided. */
@@ -331,11 +329,17 @@ export interface AccountsByOwnerReplayOptions {
   /** Minimum last_updated_slot for resumable backfill (resume from checkpoint) */
   minUpdatedSlot?: bigint;
 
-  /** Page size for ListAccounts pagination (default: 100) */
+  /** @deprecated Unused: backfill and catch-up list at the node's page cap. */
   pageSize?: number;
 
-  /** Max retries for GetAccount failures (default: 3) */
+  /** Max attempts per backfill batch or GetAccount call (default: 3) */
   maxRetries?: number;
+
+  /** Concurrent address partitions for backfill listing (default: 1, sequential). */
+  listPartitions?: number;
+
+  /** Concurrent backfill read connections (default: 1). */
+  readConnections?: number;
 
   /** @deprecated Unused since streamed page deltas are overlaid onto cached
       full data instead of assembled into complete page sets. */
@@ -353,8 +357,11 @@ export interface AccountsByOwnerReplayOptions {
   /** Retry timings for live stream reconnects (default: DEFAULT_RETRY_CONFIG). */
   retryConfig?: RetryConfig;
 
-  /** Called when backfill queue is drained. Returns the highest slot seen during backfill. */
-  onBackfillComplete?: (highestSlot: bigint) => void;
+  /** Called when backfill queue is drained, with the highest slot seen (backfill
+      reads included) and the highest slot the live stream itself delivered.
+      Backfill reads run ahead of the stream, so a checkpoint must not pass
+      `streamSlot`. */
+  onBackfillComplete?: (highestSlot: bigint, streamSlot: bigint) => void;
 
   /** Logger for debug/info/warn/error messages (default: NOOP_LOGGER) */
   logger?: ReplayLogger;
@@ -510,8 +517,9 @@ export async function* createAccountsByOwnerReplay(
     view = AccountView.FULL,
     dataSizes,
     minUpdatedSlot,
-    pageSize = 100,
     maxRetries = 3,
+    listPartitions = 1,
+    readConnections = 1,
     reconnectCleanupTimeoutMs = DEFAULT_RECONNECT_CLEANUP_TIMEOUT_MS,
     retryConfig = DEFAULT_RETRY_CONFIG,
     onBackfillComplete,
@@ -522,7 +530,6 @@ export async function* createAccountsByOwnerReplay(
     signal,
   } = options;
   const shouldStop = (err?: unknown): boolean => signal?.aborted === true || isAbortError(err);
-
   // Resolve initial client - either from options or from factory
   let client = resolveClient(options, "AccountsByOwnerReplayOptions");
   const ownsClient = Boolean(clientFactory);
@@ -530,11 +537,11 @@ export async function* createAccountsByOwnerReplay(
   // Track addresses seen from stream (these win - skip GetAccount)
   const seenFromStream = new Set<string>();
 
-  // Queue of addresses to fetch via GetAccount
-  const fetchQueue: Array<{ address: Uint8Array; slot?: bigint }> = [];
-
   // Highest slot seen (for checkpoint callback)
   let highestSlotSeen = minUpdatedSlot ?? 0n;
+  /* Highest slot the live stream delivered. Unpinned backfill reads and
+     catch-up rows do not count: the stream may not have covered their slots. */
+  let streamSlotSeen = minUpdatedSlot ?? 0n;
   const lastEmittedAccounts = new Map<string, AccountVersionMark>();
 
   /* Delta overlay cache for streamed page updates. The server streams only
@@ -564,13 +571,10 @@ export async function* createAccountsByOwnerReplay(
     normalizedQueueWarningThreshold,
     logger
   );
-  let fetchQueueProcessed = 0;
   let resyncFailuresTotal = 0;
   let fetchFailuresTotal = 0;
   let healthTimer: ReturnType<typeof setInterval> | null = null;
   let healthAbortListener: (() => void) | null = null;
-
-  const fetchQueueSize = (): number => fetchQueue.length - fetchQueueProcessed;
 
   const logHealth = (): void => {
     const cacheStats = pageCache.getStats();
@@ -583,7 +587,6 @@ export async function* createAccountsByOwnerReplay(
       dirty_accounts: cacheStats.dirtyAccounts,
       stream_queue_size: streamBuffer.length,
       deferred_queue_size: deferredStreamBuffer.length,
-      fetch_queue_size: fetchQueueSize(),
       evictions_total: cacheStats.evictionsTotal,
       dirty_evictions_total: cacheStats.dirtyEvictionsTotal,
       resync_failures_total: resyncFailuresTotal,
@@ -707,13 +710,21 @@ export async function* createAccountsByOwnerReplay(
   };
 
   const getReconnectFromSlot = (): bigint => {
-    if (pendingCatchUpFromSlot === null) {
-      return highestSlotSeen;
+    /* A backfill read covers its own account only, so after reads with no
+       slot the stream covered (no height floor, nothing streamed), no resume
+       point is safe. Ending the replay restarts it from its checkpoint, which
+       the processor never moves past the stream's slot. */
+    if (streamSlotSeen <= 0n && highestSlotSeen > 0n) {
+      throw new Error("Replay stream dropped before covering any slot; restarting the account replay");
     }
-    if (highestSlotSeen <= 0n) {
+    const coveredSlot = streamSlotSeen;
+    if (pendingCatchUpFromSlot === null) {
+      return coveredSlot;
+    }
+    if (coveredSlot <= 0n) {
       return pendingCatchUpFromSlot;
     }
-    return pendingCatchUpFromSlot < highestSlotSeen ? pendingCatchUpFromSlot : highestSlotSeen;
+    return pendingCatchUpFromSlot < coveredSlot ? pendingCatchUpFromSlot : coveredSlot;
   };
 
   const markCatchUpPending = (fromSlot: bigint): bigint => {
@@ -877,6 +888,8 @@ export async function* createAccountsByOwnerReplay(
             scheduleResync(resyncAddress);
           }
           for (const event of result.events) {
+            const slot = event.type === "account" ? event.account.slot : event.block.slot;
+            if (slot > streamSlotSeen) streamSlotSeen = slot;
             queueStreamEvent(event);
           }
         }
@@ -894,6 +907,33 @@ export async function* createAccountsByOwnerReplay(
     activeStreamProcessor = newProcessor;
   };
 
+  /* Lists `filter` and reads every match through the pool (backfill-pool.ts);
+     backfill and reconnect catch-up share it. Reads that still fail after
+     their retries are added to `fetchFailures` once the pool drains. */
+  const readListedAccounts = async function* (
+    filter: Filter,
+    skip: (address: Uint8Array) => boolean,
+    fetchFailures: DeferredAccountFetchFailure[],
+  ): AsyncGenerator<Account[]> {
+    const poolFailures: BackfillPoolFailure[] = [];
+    yield* readAllAccounts({
+      primary: client,
+      clientFactory,
+      owner,
+      filter,
+      partitions: listPartitions,
+      readers: readConnections,
+      maxRetries,
+      skip,
+      logger,
+      signal,
+    }, poolFailures);
+    for (const { address, error } of poolFailures) {
+      fetchFailuresTotal++;
+      fetchFailures.push({ addressHex: bytesToHex(address), error });
+    }
+  };
+
   const queueCatchUpAccounts = async (
     fromSlot: bigint,
     reason: "stream_error" | "stream_ended"
@@ -903,7 +943,6 @@ export async function* createAccountsByOwnerReplay(
     }
 
     const startedAtMs = Date.now();
-    let accountsListed = 0;
     let accountsFetched = 0;
     let accountsQueued = 0;
     let accountsSkipped = 0;
@@ -915,107 +954,14 @@ export async function* createAccountsByOwnerReplay(
       from_slot: fromSlot.toString(),
     });
 
+    /* The node scans the owner's whole account set to apply the slot filter,
+       so catch-up lists and reads through the same pool as the backfill.
+       Nothing is skipped: an address the stream delivered may have changed
+       during the outage. */
     const catchUpFilter = buildListAccountsOwnerFilter(owner, dataSizes, fromSlot);
-    let pageToken: string | undefined;
-
-    do {
-      if (shouldStop()) return accountsQueued;
-
-      const request: Partial<ListAccountsRequest> = {
-        view: AccountView.META_ONLY,
-        filter: catchUpFilter,
-        page: create(PageRequestSchema, {
-          pageSize,
-          pageToken,
-        }),
-      };
-
-      let response: ListAccountsResponse | null = null;
-      for (let attempt = 0; attempt < maxRetries; attempt++) {
-        try {
-          response = await client.listAccounts(request);
-          break;
-        } catch (err) {
-          if (shouldStop(err)) return accountsQueued;
-          if (attempt === maxRetries - 1) {
-            logger.error("Replay stream reconnect catch-up list accounts failed", {
-              event: "replay.stream.reconnect.catch_up_list_failed",
-              reason,
-              from_slot: fromSlot.toString(),
-              page_token: pageToken,
-              attempts: maxRetries,
-              error: err,
-            });
-            throw err;
-          }
-
-          logger.warn("Replay stream reconnect catch-up list accounts retrying", {
-            event: "replay.stream.reconnect.catch_up_list_retry",
-            reason,
-            from_slot: fromSlot.toString(),
-            page_token: pageToken,
-            attempt: attempt + 1,
-            max_retries: maxRetries,
-            error: err,
-          });
-          await abortableDelay(100 * (attempt + 1), signal);
-        }
-      }
-
-      if (!response) {
-        return accountsQueued;
-      }
-
-      for (const listedAccount of response.accounts) {
+    for await (const accounts of readListedAccounts(catchUpFilter, () => false, fetchFailures)) {
+      for (const account of accounts) {
         if (shouldStop()) return accountsQueued;
-        const address = listedAccount.address?.value;
-        if (!address) {
-          accountsSkipped++;
-          continue;
-        }
-
-        accountsListed++;
-        const addressHex = bytesToHex(address);
-        let account: Account | null = null;
-        for (let attempt = 0; attempt < maxRetries; attempt++) {
-          try {
-            account = await client.getAccount({
-              address: create(PubkeySchema, { value: address }),
-              view: AccountView.FULL,
-              versionContext: listedAccount.meta?.lastUpdatedSlot !== undefined
-                ? create(VersionContextSchema, {
-                    version: {
-                      case: "slot",
-                      value: listedAccount.meta.lastUpdatedSlot,
-                    },
-                  })
-                : undefined,
-            });
-            break;
-          } catch (err) {
-            if (shouldStop(err)) return accountsQueued;
-            if (attempt === maxRetries - 1) {
-              fetchFailuresTotal++;
-              logger.error("Replay account fetch failed", {
-                event: "replay.account.fetch_failed",
-                phase: "catch_up",
-                address: addressHex,
-                slot: (listedAccount.meta?.lastUpdatedSlot ?? fromSlot).toString(),
-                attempts: maxRetries,
-                error: err,
-              });
-              fetchFailures.push({ addressHex, error: err });
-            } else {
-              await abortableDelay(100 * (attempt + 1), signal);
-            }
-          }
-        }
-
-        if (!account) {
-          accountsSkipped++;
-          continue;
-        }
-
         accountsFetched++;
         const state = getAccountToState(account);
         if (!state || state.slot < fromSlot) {
@@ -1030,9 +976,8 @@ export async function* createAccountsByOwnerReplay(
           accountsSkipped++;
         }
       }
-
-      pageToken = response.page?.nextPageToken;
-    } while (pageToken);
+    }
+    if (shouldStop()) return accountsQueued;
 
     if (fetchFailures.length > 0) {
       throw new DeferredAccountFetchError("Replay stream reconnect catch-up", fetchFailures);
@@ -1043,7 +988,6 @@ export async function* createAccountsByOwnerReplay(
       reason,
       from_slot: fromSlot.toString(),
       duration_ms: Date.now() - startedAtMs,
-      accounts_listed: accountsListed,
       accounts_fetched: accountsFetched,
       accounts_queued: accountsQueued,
       accounts_skipped: accountsSkipped,
@@ -1084,6 +1028,18 @@ export async function* createAccountsByOwnerReplay(
   try {
     if (shouldStop()) return;
 
+    /* Updates well below the finalized height read before subscribing are
+       visible to every backfill read that follows, and later ones reach the
+       stream or those reads, so that height is a safe checkpoint floor even
+       when a quiet stream delivers nothing. Reads use the node's durable
+       view, which trails finalized, hence the margin. */
+    const height = await (client as AccountSource & { getHeight?: () => Promise<{ finalized?: bigint }> })
+      .getHeight?.()
+      .catch(() => undefined);
+    if (shouldStop()) return;
+    const floor = height?.finalized !== undefined ? height.finalized - STREAM_FLOOR_MARGIN_SLOTS : 0n;
+    if (floor > streamSlotSeen) streamSlotSeen = floor;
+
     // Start streaming FIRST (concurrent with backfill)
     createStreamProcessor();
 
@@ -1096,104 +1052,20 @@ export async function* createAccountsByOwnerReplay(
       }
     };
 
-    // ListAccounts with META_ONLY view to get addresses (no data)
+    /* Partitioned listing plus pooled latest-version reads (backfill-pool.ts).
+       Stream events win: they are drained before each account, and an
+       address the stream delivered is dropped. */
     const backfillFilter = buildListAccountsOwnerFilter(owner, dataSizes, minUpdatedSlot);
-    let pageToken: string | undefined;
     const fetchFailures: DeferredAccountFetchFailure[] = [];
-
-    do {
+    const seenOnStream = (address: Uint8Array) => seenFromStream.has(bytesToHex(address));
+    for await (const accounts of readListedAccounts(backfillFilter, seenOnStream, fetchFailures)) {
       if (shouldStop()) return;
-
-      const request: Partial<ListAccountsRequest> = {
-        view: AccountView.META_ONLY, // Address + metadata only, no data
-        filter: backfillFilter,
-        page: create(PageRequestSchema, {
-          pageSize,
-          pageToken,
-        }),
-      };
-
-      let response;
-      try {
-        response = await client.listAccounts(request);
-      } catch (err) {
-        if (shouldStop(err)) return;
-        throw err;
-      }
-
-      // Queue addresses for GetAccount
-      for (const account of response.accounts) {
-        if (account.address?.value) {
-          fetchQueue.push({
-            address: account.address.value,
-            slot: account.meta?.lastUpdatedSlot,
-          });
-          queueGrowthLogger.observe("fetch", fetchQueueSize());
-        }
-      }
-
-      pageToken = response.page?.nextPageToken;
-
-      // Yield any buffered stream events between pages
-      yield* yieldStreamBuffer();
-    } while (pageToken);
-
-    // Process fetch queue with GetAccount (sequential)
-    for (const { address, slot } of fetchQueue) {
-      if (shouldStop()) return;
-      fetchQueueProcessed++;
-      queueGrowthLogger.observe("fetch", fetchQueueSize());
-
-      const addressHex = bytesToHex(address);
-
-      // Skip if already seen from stream
-      if (seenFromStream.has(addressHex)) {
-        continue;
-      }
-
-      // Yield any buffered stream events first
-      yield* yieldStreamBuffer();
-
-      // Check again after processing buffer (stream may have delivered this address)
-      if (seenFromStream.has(addressHex)) {
-        continue;
-      }
-
-      // Fetch with retry
-      let account: Account | null = null;
-      for (let attempt = 0; attempt < maxRetries; attempt++) {
-        try {
-          account = await client.getAccount({
-            address: create(PubkeySchema, { value: address }),
-            view: AccountView.FULL,
-            versionContext: slot !== undefined
-              ? create(VersionContextSchema, {
-                  version: { case: "slot", value: slot },
-                })
-              : undefined,
-          });
-          break;
-        } catch (err) {
-          if (shouldStop(err)) return;
-          if (attempt === maxRetries - 1) {
-            fetchFailuresTotal++;
-            logger.error("Replay account fetch failed", {
-              event: "replay.account.fetch_failed",
-              phase: "backfill",
-              address: addressHex,
-              slot: slot?.toString() ?? "unknown",
-              attempts: maxRetries,
-              error: err,
-            });
-            fetchFailures.push({ addressHex, error: err });
-          } else {
-            // Brief delay before retry
-            await abortableDelay(100 * (attempt + 1), signal);
-          }
-        }
-      }
-
-      if (account) {
+      for (const account of accounts) {
+        if (shouldStop()) return;
+        yield* yieldStreamBuffer();
+        if (!account.address?.value) continue;
+        const addressHex = bytesToHex(account.address.value);
+        if (seenFromStream.has(addressHex)) continue;
         const state = getAccountToState(account);
         if (state) {
           pageCache.seed(state);
@@ -1202,7 +1074,9 @@ export async function* createAccountsByOwnerReplay(
           }
         }
       }
+      yield* yieldStreamBuffer();
     }
+    if (shouldStop()) return;
 
     if (fetchFailures.length > 0) {
       yield* yieldStreamBuffer();
@@ -1211,7 +1085,10 @@ export async function* createAccountsByOwnerReplay(
 
     // Signal backfill queue drained
     if (onBackfillComplete) {
-      onBackfillComplete(highestSlotSeen);
+      /* streamSlotSeen counts events on receipt, so yield every received
+         event first; a checkpoint must not pass an event not yet written. */
+      yield* yieldStreamBuffer();
+      onBackfillComplete(highestSlotSeen, streamSlotSeen);
     }
 
     // Streaming phase with reconnection

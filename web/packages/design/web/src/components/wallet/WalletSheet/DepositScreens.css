@@ -1,8 +1,3 @@
-/* WalletSheet — the Add funds screens: chooser, crypto rail, card rail,
-   Coinbase verification, pending, funded. Field labels are the Input recipe
-   (mono 11px uppercase); selects wear the Menu popup look. */
-
-/* Left-aligned rail header (no badge) */
 .tds-dep__rail-title {
   font-size: 16px;
   font-weight: var(--fw-semibold);
@@ -16,7 +11,6 @@
   margin-top: 4px;
 }
 
-/* Chooser rows */
 .tds-dep__methods {
   display: flex;
   flex-direction: column;
@@ -100,10 +94,8 @@
   color: var(--color-text-tertiary);
   flex: none;
 }
-/* Accordion rows (chooser `open` set): the row is a collapsible trigger and
-   the rail unfolds in a panel under it. The item carries the row's surface
-   so the unfolded panel reads as one card; the panel rides Base UI's height
-   var so it eases open and shut (the frame follows). */
+/* The panel rides Base UI's height var, so it eases open and shut and the
+   frame follows. */
 .tds-dep__item {
   background: var(--color-surface-primary);
   border: 1px solid transparent;
@@ -180,7 +172,6 @@
   margin-top: calc(-0.25 * 11px);
 }
 
-/* Field + label */
 .tds-dep__field {
   display: flex;
   flex-direction: column;
@@ -195,7 +186,6 @@
   color: var(--color-text-tertiary);
 }
 
-/* Select (network / pay with) */
 .tds-dep__select {
   box-sizing: border-box;
   display: flex;
@@ -304,7 +294,6 @@
   visibility: hidden;
 }
 
-/* QR */
 .tds-dep__qr-row {
   display: flex;
   justify-content: center;
@@ -344,7 +333,6 @@
   box-sizing: content-box;
 }
 
-/* Address + attached copy */
 .tds-dep__addr {
   padding: var(--space-3);
   background: var(--color-surface-higher);
@@ -364,12 +352,10 @@
   color: var(--grass-400);
 }
 
-/* Back link: a ghost Button, centred under the form. */
 .tds-dep__back {
   align-self: center;
 }
 
-/* Amount presets: a design ToggleGroup stretched across the field. */
 .tds-dep__presets {
   display: flex;
   width: 100%;
@@ -377,18 +363,15 @@
 .tds-dep__preset {
   flex: 1;
 }
-/* A stepped rail's header: the stepper over the title. */
 .tds-dep__step-head {
   display: flex;
   flex-direction: column;
   gap: var(--space-3);
 }
-/* Square, like everything else in the wallet sheet. */
 .tds-dep__step-head .tds-stepper__dot {
   border-radius: var(--radius-none);
 }
 
-/* Confirm order: where Coinbase's receipt goes, with Edit. */
 .tds-dep__receipt {
   display: flex;
   align-items: flex-start;
@@ -411,7 +394,6 @@
   overflow-wrap: anywhere;
 }
 
-/* Contact asked for inline on the card form. */
 .tds-dep__card-contact {
   gap: 10px;
 }
@@ -430,7 +412,6 @@
   font-weight: var(--fw-semibold);
 }
 
-/* Coinbase terms */
 .tds-dep__terms {
   font-size: 11px;
   line-height: 1.5;
@@ -446,7 +427,6 @@
   color: var(--color-text-primary);
 }
 
-/* Coinbase frame chrome */
 .tds-dep__cb {
   border: 1px solid var(--color-border-strong);
   background: var(--color-surface-higher);
@@ -481,14 +461,12 @@
   border: 0;
 }
 
-/* The frame slot without the chrome (the popup carries it) */
 .tds-dep__cb-bare {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-/* While the payment runs in Coinbase's own window */
 .tds-dep__popup-note {
   display: flex;
   flex-direction: column;
@@ -498,7 +476,6 @@
   text-wrap: pretty;
 }
 
-/* Verify footer */
 .tds-dep__verify-foot {
   display: flex;
   align-items: center;
@@ -516,7 +493,6 @@
   color: var(--color-text-tertiary);
 }
 
-/* Pending footer */
 .tds-dep__pending-foot {
   display: flex;
   align-items: center;
@@ -528,7 +504,6 @@
   color: var(--color-text-tertiary);
 }
 
-/* Funded */
 .tds-dep__done-head .tds-screen__title {
   font-family: var(--font-mono);
   font-size: 22px;
@@ -563,7 +538,6 @@
   font-weight: var(--fw-semibold);
 }
 
-/* Your details (Coinbase guest checkout contact) */
 .tds-dep__contact-form {
   display: flex;
   flex-direction: column;

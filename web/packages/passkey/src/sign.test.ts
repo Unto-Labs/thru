@@ -35,8 +35,6 @@ describe('passkey signing', () => {
     expect(get).toHaveBeenCalledTimes(1);
   });
 
-  /* A wallet iframe whose browser can run the ceremony: the module's prompt-mode
-     cache is per import, so each case loads a fresh copy. */
   async function loadFramedSigner(
     credentialsGet: ReturnType<typeof vi.fn>,
     open: ReturnType<typeof vi.fn>
@@ -81,8 +79,6 @@ describe('passkey signing', () => {
     expect(result.passkey.rpId).toBe('wallet.example');
   });
 
-  /* The account switch depends on these two cases differing: a stored
-     credential id pins the OS to one passkey, an omitted one shows the picker. */
   const STORED_PASSKEY = {
     credentialId: 'stored-cred',
     publicKeyX: '00'.repeat(32),
@@ -111,7 +107,6 @@ describe('passkey signing', () => {
       publicKey: PublicKeyCredentialRequestOptions;
     };
     expect(request.publicKey.allowCredentials ?? []).toHaveLength(0);
-    /* The credential the user actually picked, not the one we came in with. */
     expect(result.passkey.credentialId).toBe('AQID');
   });
 
@@ -131,8 +126,40 @@ describe('passkey signing', () => {
     const [hybrid, plain] = credentialsGet.mock.calls.map(
       ([request]) => (request as { publicKey: { hints?: string[] } }).publicKey
     );
-    expect(hybrid.hints).toEqual(['hybrid']);
+    expect(hybrid.hints).toEqual(['hybrid', 'security-key']);
     expect(plain.hints).toBeUndefined();
+  });
+
+  it('keeps the phone preference when a pinned prompt runs in the popup', async () => {
+    vi.resetModules();
+    const requestPasskeyPopup = vi.fn().mockRejectedValue(new Error('stop'));
+    vi.doMock('./popup', async (importOriginal) => ({
+      ...(await importOriginal<typeof import('./popup')>()),
+      openPasskeyPopupWindow: () => ({ closed: false, close: vi.fn() }),
+      requestPasskeyPopup,
+    }));
+    vi.stubGlobal('window', {
+      PublicKeyCredential: function () {},
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+    });
+    vi.stubGlobal('navigator', { credentials: { get: vi.fn() } });
+    const { signWithPasskey: sign } = await import('./sign');
+
+    await expect(
+      sign('AQID', new Uint8Array(32), 'wallet.example', {
+        promptMode: 'popup',
+        preferHybrid: true,
+      })
+    ).rejects.toThrow('stop');
+
+    expect(requestPasskeyPopup).toHaveBeenCalledWith(
+      'get',
+      expect.objectContaining({ credentialId: 'AQID', preferHybrid: true }),
+      expect.anything(),
+      expect.anything()
+    );
+    vi.doUnmock('./popup');
   });
 
   it('pins the stored credential when the picker is not forced', async () => {

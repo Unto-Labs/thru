@@ -19,10 +19,8 @@ export interface ChainIconProps {
 }
 
 /**
- * ChainIcon — a circular network badge. Looks up `chainId` in the built-in
- * registry: chains with a brand logo (Ethereum, Base, Solana, Arbitrum,
- * Bitcoin) draw it, the rest draw the muted Thru-palette glyph disc. Pass
- * `color`/`glyph`/`src` to override, or `logo={false}` to force the disc.
+ * ChainIcon — a circular network badge. Registry chains with a brand logo draw
+ * it, the rest draw the glyph disc. Pass `logo={false}` to force the disc.
  */
 export function ChainIcon({
   chainId,
