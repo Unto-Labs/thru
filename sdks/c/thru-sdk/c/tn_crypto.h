@@ -5,7 +5,7 @@
 
 /* Detect smart contract build via THRU_VM flag set by thruvm.mk */
 #ifdef THRU_VM
-#include "tn_sdk_base.h"
+#include "tn_sdk_types.h"
 #define LIKELY TSDK_LIKELY
 #define UNLIKELY TSDK_UNLIKELY
 #define FN_CONST TSDK_FN_CONST
@@ -14,6 +14,7 @@
 #endif
 #else
 #include "../../../firedancer/src/util/fd_util.h"
+#include "../../../sdks/c/thru-sdk/c/tn_sdk_types.h"
 #define LIKELY FD_LIKELY
 #define UNLIKELY FD_UNLIKELY
 #define FN_CONST FD_FN_CONST
@@ -79,6 +80,9 @@
 #define TN_CRYPTO_ERR_SIGNATURE_ACC_SIGNATURE_IS_NULL           (-56)
 #define TN_CRYPTO_ERR_SIGNATURE_ACC_OUTPUT_IS_NULL              (-57)
 #define TN_CRYPTO_ERR_PUBKEY_ACC_BATCH_COUNT                    (-58)
+#define TN_CRYPTO_ERR_POP_PUBKEY_NOT_IN_G1                      (-59)
+#define TN_CRYPTO_ERR_POP_SIGNATURE_NOT_IN_G2                   (-60)
+#define TN_CRYPTO_ERR_POP_PAIRING_MISMATCH                      (-61)
 
 /* BLS types for certificates - use actual blst types */
 typedef blst_scalar    tn_bls_private_key_t;
@@ -107,6 +111,7 @@ typedef blst_p2 tn_bls_signature_acc_t;
 #define TN_CRYPTO_PUBKEY_BATCH_MAX (256UL)
 
 /* Serialized point sizes for wire format */
+#define TN_CRYPTO_G1_COMPRESSED_SIZE (sizeof(blst_fp))
 #define TN_CRYPTO_G1_UNCOMPRESSED_SIZE (96UL)  /* G1 uncompressed: x (48) + y (48) */
 #define TN_CRYPTO_G2_UNCOMPRESSED_SIZE (192UL) /* G2 uncompressed: x (96) + y (96) */
 
@@ -247,6 +252,21 @@ int tn_crypto_verify_aggregate( tn_bls_signature_t const * aggregate_sig,
 
 /* tn_crypto_pubkey_on_curve verifies a pubkey lies on the BLS12-381 curve */
 int tn_crypto_pubkey_on_curve( tn_bls_pubkey_t const * pubkey );
+
+/* tn_crypto_prove_possession signs the canonical compressed BLS key
+   followed by the 32-byte registering Ed25519 identity under the PoP tag. */
+int
+tn_crypto_prove_possession( tn_bls_signature_t *         pop,
+                            tn_bls_private_key_t const * private_key,
+                            uchar const                 identity[ TN_TXN_PUBKEY_SZ ] );
+
+/* tn_crypto_verify_possession accepts non-identity subgroup points iff pop
+   signs the compressed pubkey followed by identity under the PoP tag.
+   A proof for another identity is rejected. */
+int
+tn_crypto_verify_possession( tn_bls_signature_t const * pop,
+                             tn_bls_pubkey_t const *    pubkey,
+                             uchar const               identity[ TN_TXN_PUBKEY_SZ ] );
 
 /* tn_crypto_derive_pubkey derives a BLS public key from a private key */
 int

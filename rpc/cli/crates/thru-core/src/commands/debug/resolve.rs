@@ -100,7 +100,7 @@ async fn fetch_via_grpc(config: &Config, signature_str: &str) -> Result<Response
         .insecure(config.insecure)
         .http_endpoint(rpc_url)
         .timeout(Duration::from_secs(config.timeout_seconds))
-        .auth_token(config.auth_token.clone())
+        .auth_token(config.rpc_auth_token())
         .build()?;
 
     let proto_resp = client

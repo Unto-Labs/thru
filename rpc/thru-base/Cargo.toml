@@ -10,6 +10,7 @@ keywords = ["thru", "blockchain", "risc-v", "sdk", "transactions"]
 categories = ["cryptography::cryptocurrencies", "api-bindings"]
 
 [dependencies]
+blst = "0.3"
 rand = "0.10.1"
 ed25519-dalek = { version = "2.2.0", features = ["hazmat"] }
 bytemuck = { version = "1.25.0", features = ["derive"] }

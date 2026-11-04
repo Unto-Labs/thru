@@ -8,6 +8,7 @@ use std::collections::HashMap;
 #[cfg(unix)]
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+use std::sync::{Arc, OnceLock};
 use std::time::{SystemTime, UNIX_EPOCH};
 use thru_base::tn_tools::Pubkey;
 use thru_base::bootstrap_addresses as programs;
@@ -241,6 +242,107 @@ fn default_bp_program_public_key() -> String {
     programs::BLOCK_PRODUCER_PROGRAM_ADDRESS.to_string()
 }
 
+/// Hostnames of the official Thru RPC endpoints. This is the single source of
+/// truth for which endpoints may receive a developer API key the user did not
+/// configure for that network: the environment key (`THRU_API_KEY` /
+/// `THRU_DEVELOPERS_API_KEY`) or the key `thru auth login` provisioned.
+/// Matching is exact: no wildcards, no subdomains.
+pub const OFFICIAL_RPC_HOSTS: &[&str] = &["rpc.alphanet.thru.org", "rpc.betanet.thru.org"];
+
+/// Whether `rpc_base_url` is an official Thru RPC endpoint reached over HTTPS:
+/// scheme `https`, host exactly one of [`OFFICIAL_RPC_HOSTS`], default port
+/// 443, and no userinfo. Anything that fails to parse is untrusted.
+pub fn is_official_rpc_endpoint(rpc_base_url: &str) -> bool {
+    let Ok(url) = Url::parse(rpc_base_url) else {
+        return false;
+    };
+    url.scheme() == "https"
+        && url.username().is_empty()
+        && url.password().is_none()
+        && url.port_or_known_default() == Some(443)
+        && matches!(url.host(), Some(url::Host::Domain(host)) if OFFICIAL_RPC_HOSTS.contains(&host))
+}
+
+/// Whether an API key the user did not configure for this network may be sent:
+/// only to an official endpoint (see [`is_official_rpc_endpoint`]) with TLS
+/// verification on.
+pub fn api_key_eligible_endpoint(rpc_base_url: &str, insecure: bool) -> bool {
+    !insecure && is_official_rpc_endpoint(rpc_base_url)
+}
+
+/// Bearer token to send to the RPC endpoint. Precedence: an explicitly
+/// configured token (any endpoint), else, only for an official endpoint with
+/// TLS verification on, the environment API key, else the key provisioned by
+/// `thru auth login`, else none. `provisioned_key` is called only when its
+/// key would be sent, so the OS keychain is not touched otherwise.
+pub fn resolve_rpc_auth_token(
+    configured: Option<&str>,
+    env_api_key: Option<&str>,
+    provisioned_key: impl FnOnce() -> Option<String>,
+    rpc_base_url: &str,
+    insecure: bool,
+) -> Option<String> {
+    if let Some(token) = configured {
+        return Some(token.to_string());
+    }
+    if !api_key_eligible_endpoint(rpc_base_url, insecure) {
+        return None;
+    }
+    match env_api_key {
+        Some(key) => Some(key.to_string()),
+        None => provisioned_key(),
+    }
+}
+
+/// Where the API key provisioned by `thru auth login` comes from.
+pub trait ProvisionedKeySource: Send + Sync {
+    /// Whether a provisioned key is recorded. Must not read the secret (and so
+    /// must not touch the OS keychain).
+    fn present(&self) -> bool;
+    /// Reads the secret. May touch the OS keychain; called at most once.
+    fn load(&self) -> Option<String>;
+}
+
+/// Runtime-only handle to the provisioned API key, read on first use. Never
+/// serialized, and its `Debug` output never contains the secret.
+#[derive(Clone, Default)]
+pub struct ProvisionedApiKey {
+    source: Option<Arc<dyn ProvisionedKeySource>>,
+    loaded: Arc<OnceLock<Option<String>>>,
+}
+
+impl ProvisionedApiKey {
+    pub fn new(source: Arc<dyn ProvisionedKeySource>) -> Self {
+        Self {
+            source: Some(source),
+            loaded: Arc::default(),
+        }
+    }
+
+    /// Whether a provisioned key is recorded, without reading the secret.
+    pub fn is_present(&self) -> bool {
+        match self.loaded.get() {
+            Some(loaded) => loaded.is_some(),
+            None => self.source.as_ref().is_some_and(|source| source.present()),
+        }
+    }
+
+    /// The secret, loaded from its source on first call.
+    pub fn get(&self) -> Option<String> {
+        let source = self.source.as_ref()?;
+        self.loaded.get_or_init(|| source.load()).clone()
+    }
+}
+
+impl std::fmt::Debug for ProvisionedApiKey {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("ProvisionedApiKey")
+            .field("configured", &self.source.is_some())
+            .finish_non_exhaustive()
+    }
+}
+
 /// Named network profile
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct NetworkConfig {
@@ -341,6 +443,19 @@ pub struct Config {
     /// `run` (enabled outside `--json`/`--quiet`); never persisted to disk.
     #[serde(skip)]
     pub announce_pending_signature: bool,
+
+    /// Runtime-only: developer API key read from the environment. Never
+    /// serialized, so no `save()` path can persist it. Only sent to official
+    /// endpoints; read it through [`Config::rpc_auth_token`].
+    #[serde(skip)]
+    pub env_api_key: Option<String>,
+
+    /// Runtime-only: org API key provisioned by `thru auth login`, read from the
+    /// OS keychain (or its owner-only file fallback) only when it would be sent.
+    /// Never serialized, so no `save()` path can persist it. Only sent to
+    /// official endpoints; read it through [`Config::rpc_auth_token`].
+    #[serde(skip)]
+    pub provisioned_api_key: ProvisionedApiKey,
 }
 
 impl Default for Config {
@@ -374,6 +489,8 @@ impl Default for Config {
             default_network: None,
             insecure: false,
             announce_pending_signature: false,
+            env_api_key: None,
+            provisioned_api_key: ProvisionedApiKey::default(),
         }
     }
 }
@@ -741,6 +858,35 @@ impl Config {
             .map_err(|e| ConfigError::InvalidPublicKey(e.to_string()).into())
     }
 
+    /// Bearer token for RPC requests; see [`resolve_rpc_auth_token`].
+    pub fn rpc_auth_token(&self) -> Option<String> {
+        resolve_rpc_auth_token(
+            self.auth_token.as_deref(),
+            self.env_api_key.as_deref(),
+            || self.provisioned_api_key.get(),
+            &self.rpc_base_url,
+            self.insecure,
+        )
+    }
+
+    /// Whether an environment API key is present but withheld because the
+    /// endpoint is not trusted and no token is configured for it.
+    pub fn env_api_key_withheld(&self) -> bool {
+        self.auth_token.is_none()
+            && self.env_api_key.is_some()
+            && !api_key_eligible_endpoint(&self.rpc_base_url, self.insecure)
+    }
+
+    /// Whether the key provisioned by `thru auth login` is recorded but
+    /// withheld because the endpoint is not trusted, and no configured token or
+    /// environment key would have been used instead. Never reads the secret.
+    pub fn provisioned_api_key_withheld(&self) -> bool {
+        self.auth_token.is_none()
+            && self.env_api_key.is_none()
+            && !api_key_eligible_endpoint(&self.rpc_base_url, self.insecure)
+            && self.provisioned_api_key.is_present()
+    }
+
     /// List all configured network profile names (sorted)
     pub fn list_network_names(&self) -> Vec<String> {
         let mut names: Vec<String> = self.networks.keys().cloned().collect();
@@ -949,6 +1095,283 @@ mod tests {
         assert_eq!(loaded.token_program_public_key, "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAKqq");
         assert_eq!(loaded.bp_program_public_key, "taAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAADQEO");
         assert_eq!(loaded.rpc_base_url, config.rpc_base_url);
+    }
+
+    #[test]
+    fn official_rpc_endpoint_predicate() {
+        for url in [
+            "https://rpc.alphanet.thru.org",
+            "https://rpc.alphanet.thru.org/",
+            "https://rpc.alphanet.thru.org:443",
+            "https://RPC.Betanet.Thru.Org",
+            "https://rpc.betanet.thru.org",
+        ] {
+            assert!(is_official_rpc_endpoint(url), "{url} should be trusted");
+        }
+        for url in [
+            "http://rpc.alphanet.thru.org",
+            "http://rpc.betanet.thru.org:443",
+            "https://rpc.alphanet.thru.org:8443",
+            "https://other.example",
+            "https://thru.org",
+            "https://dev.thru.org",
+            "https://evil.thru.org",
+            "https://x.rpc.alphanet.thru.org",
+            "https://rpc.alphanet.thru.org.evil.com",
+            "https://rpc.alphanet.thru.org.",
+            "https://rpc-alphanet.thru.org",
+            "https://rpc.alphanet.thru.org@evil.com",
+            "https://user@rpc.alphanet.thru.org",
+            "https://user:pass@rpc.alphanet.thru.org",
+            "https://evil.com#@rpc.alphanet.thru.org",
+            "https://evil.com\\@rpc.alphanet.thru.org",
+            "https://127.0.0.1",
+            "https://[::1]",
+            "https://34.120.0.1:443",
+            "rpc.alphanet.thru.org",
+            "not a url",
+            "",
+        ] {
+            assert!(!is_official_rpc_endpoint(url), "{url} should be untrusted");
+        }
+    }
+
+    #[test]
+    fn rpc_auth_token_precedence() {
+        let no_key = || None;
+        let official = "https://rpc.alphanet.thru.org";
+        let other = "https://other.example";
+        // Configured token wins for any endpoint, even with an env key present.
+        for url in [official, other, "http://localhost:8472"] {
+            assert_eq!(
+                resolve_rpc_auth_token(Some("configured"), Some("env"), no_key, url, false)
+                    .as_deref(),
+                Some("configured")
+            );
+            assert_eq!(
+                resolve_rpc_auth_token(Some("configured"), None, no_key, url, true).as_deref(),
+                Some("configured")
+            );
+        }
+        // Env key only for a trusted endpoint with TLS verification on.
+        assert_eq!(
+            resolve_rpc_auth_token(None, Some("env"), no_key, official, false).as_deref(),
+            Some("env")
+        );
+        assert_eq!(
+            resolve_rpc_auth_token(None, Some("env"), no_key, other, false),
+            None
+        );
+        assert_eq!(
+            resolve_rpc_auth_token(
+                None,
+                Some("env"),
+                no_key,
+                "http://rpc.alphanet.thru.org",
+                false
+            ),
+            None
+        );
+        assert_eq!(
+            resolve_rpc_auth_token(None, Some("env"), no_key, official, true),
+            None
+        );
+        assert_eq!(
+            resolve_rpc_auth_token(None, None, no_key, official, false),
+            None
+        );
+
+        let mut config = Config {
+            env_api_key: Some("env".into()),
+            rpc_base_url: other.into(),
+            ..Config::default()
+        };
+        assert_eq!(config.rpc_auth_token(), None);
+        assert!(config.env_api_key_withheld());
+        config.rpc_base_url = official.into();
+        assert_eq!(config.rpc_auth_token().as_deref(), Some("env"));
+        assert!(!config.env_api_key_withheld());
+        config.rpc_base_url = other.into();
+        config.auth_token = Some("configured".into());
+        assert_eq!(config.rpc_auth_token().as_deref(), Some("configured"));
+        assert!(!config.env_api_key_withheld());
+    }
+
+    #[test]
+    fn saving_never_writes_env_api_key() {
+        let config = Config {
+            rpc_base_url: "https://rpc.alphanet.thru.org".into(),
+            env_api_key: Some("tk_env_secret_value".into()),
+            ..Config::default()
+        };
+        assert_eq!(
+            config.rpc_auth_token().as_deref(),
+            Some("tk_env_secret_value")
+        );
+
+        let saved = Config::generate_config_template(&config);
+        assert!(!saved.contains("tk_env_secret_value"), "{saved}");
+        assert!(!saved.contains("env_api_key"), "{saved}");
+        let loaded: Config = serde_yaml::from_str(&saved).unwrap();
+        assert_eq!(loaded.auth_token, None);
+        assert_eq!(loaded.env_api_key, None);
+        assert_eq!(loaded.rpc_auth_token(), None);
+    }
+
+    /// Provisioned-key source that records how often each method is called.
+    #[derive(Default)]
+    struct CountingSource {
+        key: Option<&'static str>,
+        present_calls: std::sync::atomic::AtomicUsize,
+        load_calls: std::sync::atomic::AtomicUsize,
+    }
+
+    impl ProvisionedKeySource for CountingSource {
+        fn present(&self) -> bool {
+            self.present_calls
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            self.key.is_some()
+        }
+        fn load(&self) -> Option<String> {
+            self.load_calls
+                .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            self.key.map(str::to_string)
+        }
+    }
+
+    fn with_provisioned(key: Option<&'static str>) -> (Arc<CountingSource>, Config) {
+        let source = Arc::new(CountingSource {
+            key,
+            ..CountingSource::default()
+        });
+        let config = Config {
+            provisioned_api_key: ProvisionedApiKey::new(source.clone()),
+            ..Config::default()
+        };
+        (source, config)
+    }
+
+    fn loads(source: &CountingSource) -> usize {
+        source.load_calls.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    #[test]
+    fn provisioned_key_precedence() {
+        let official = "https://rpc.alphanet.thru.org";
+        let provisioned = || Some("thru_provisioned".to_string());
+        // Configured token > env key > provisioned key, for an official endpoint.
+        assert_eq!(
+            resolve_rpc_auth_token(
+                Some("configured"),
+                Some("env"),
+                provisioned,
+                official,
+                false
+            )
+            .as_deref(),
+            Some("configured")
+        );
+        assert_eq!(
+            resolve_rpc_auth_token(None, Some("env"), provisioned, official, false).as_deref(),
+            Some("env")
+        );
+        assert_eq!(
+            resolve_rpc_auth_token(None, None, provisioned, official, false).as_deref(),
+            Some("thru_provisioned")
+        );
+        // Never to an untrusted, plain-HTTP, non-443 or --insecure endpoint.
+        for (url, insecure) in [
+            ("https://other.example", false),
+            ("http://rpc.alphanet.thru.org", false),
+            ("https://rpc.alphanet.thru.org:8443", false),
+            ("http://localhost:8472", false),
+            (official, true),
+        ] {
+            let called = std::cell::Cell::new(false);
+            let token = resolve_rpc_auth_token(
+                None,
+                None,
+                || {
+                    called.set(true);
+                    Some("thru_provisioned".to_string())
+                },
+                url,
+                insecure,
+            );
+            assert_eq!(token, None, "{url} insecure={insecure}");
+            assert!(!called.get(), "keychain read for {url}");
+        }
+    }
+
+    #[test]
+    fn provisioned_key_is_loaded_lazily_once_and_only_when_sent() {
+        // Official endpoint, nothing configured: loaded once, then cached.
+        let (source, config) = with_provisioned(Some("thru_provisioned"));
+        assert_eq!(loads(&source), 0);
+        assert_eq!(config.rpc_auth_token().as_deref(), Some("thru_provisioned"));
+        assert_eq!(config.rpc_auth_token().as_deref(), Some("thru_provisioned"));
+        assert_eq!(loads(&source), 1);
+        assert!(!config.provisioned_api_key_withheld());
+
+        // A configured token or env key wins without touching the keychain.
+        let (source, mut config) = with_provisioned(Some("thru_provisioned"));
+        config.auth_token = Some("configured".into());
+        assert_eq!(config.rpc_auth_token().as_deref(), Some("configured"));
+        config.auth_token = None;
+        config.env_api_key = Some("env".into());
+        assert_eq!(config.rpc_auth_token().as_deref(), Some("env"));
+        assert_eq!(loads(&source), 0);
+
+        // Untrusted endpoints never read the secret, but report it withheld.
+        for (url, insecure) in [
+            ("https://other.example", false),
+            ("http://rpc.alphanet.thru.org", false),
+            ("https://rpc.betanet.thru.org:8443", false),
+            ("https://rpc.alphanet.thru.org", true),
+        ] {
+            let (source, mut config) = with_provisioned(Some("thru_provisioned"));
+            config.rpc_base_url = url.into();
+            config.insecure = insecure;
+            assert_eq!(config.rpc_auth_token(), None, "{url}");
+            assert!(config.provisioned_api_key_withheld(), "{url}");
+            assert!(!config.env_api_key_withheld(), "{url}");
+            assert_eq!(loads(&source), 0, "{url}");
+            // Withheld only matters if the provisioned key would have been used.
+            config.env_api_key = Some("env".into());
+            assert!(!config.provisioned_api_key_withheld());
+            assert!(config.env_api_key_withheld());
+            config.env_api_key = None;
+            config.auth_token = Some("configured".into());
+            assert!(!config.provisioned_api_key_withheld());
+        }
+
+        // No provisioned key: nothing to withhold.
+        let (_source, mut config) = with_provisioned(None);
+        config.rpc_base_url = "https://other.example".into();
+        assert!(!config.provisioned_api_key_withheld());
+        assert!(!Config::default().provisioned_api_key_withheld());
+        assert_eq!(Config::default().rpc_auth_token(), None);
+    }
+
+    #[test]
+    fn saving_never_writes_provisioned_api_key() {
+        let (source, config) = with_provisioned(Some("thru_provisioned_secret_value"));
+        assert_eq!(
+            config.rpc_auth_token().as_deref(),
+            Some("thru_provisioned_secret_value")
+        );
+        let saved = Config::generate_config_template(&config);
+        assert!(!saved.contains("thru_provisioned_secret_value"), "{saved}");
+        assert!(!saved.contains("provisioned"), "{saved}");
+        let yaml = serde_yaml::to_string(&config).unwrap();
+        assert!(!yaml.contains("thru_provisioned_secret_value"), "{yaml}");
+        let json = serde_json::to_string(&config).unwrap();
+        assert!(!json.contains("thru_provisioned_secret_value"), "{json}");
+        assert!(!format!("{config:?}").contains("thru_provisioned_secret_value"));
+        let loaded: Config = serde_yaml::from_str(&saved).unwrap();
+        assert!(!loaded.provisioned_api_key.is_present());
+        assert_eq!(loaded.rpc_auth_token(), None);
+        assert_eq!(loads(&source), 1);
     }
 
     #[test]

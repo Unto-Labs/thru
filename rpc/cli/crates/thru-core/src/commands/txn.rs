@@ -744,7 +744,7 @@ fn create_rpc_client(config: &Config) -> Result<Client, CliError> {
         .insecure(config.insecure)
         .http_endpoint(rpc_url)
         .timeout(Duration::from_secs(config.timeout_seconds))
-        .auth_token(config.auth_token.clone())
+        .auth_token(config.rpc_auth_token())
         .announce_pending_signature(config.announce_pending_signature)
         .build()
         .map_err(|e| e.into())

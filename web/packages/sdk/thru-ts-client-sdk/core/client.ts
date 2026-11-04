@@ -2,6 +2,7 @@ import { CallOptions, Interceptor, Transport, createClient } from "@connectrpc/c
 import { GrpcWebTransportOptions, createGrpcWebTransport } from "@connectrpc/connect-web";
 
 import { DEFAULT_HOST } from "../defaults";
+import { thruApiKeyHeader } from "./api-key";
 import {
     resolveTransactionSigningScheme,
     TransactionSigningScheme,
@@ -16,6 +17,13 @@ export interface ThruClientConfig {
     transportOptions?: PartialTransportOptions;
     interceptors?: Interceptor[];
     callOptions?: CallOptions;
+    /**
+     * Thru developer API key (`thru_` + 32 alphanumerics). When set, every RPC
+     * carries `Authorization: Bearer <apiKey>` via the default call options,
+     * which also applies when a custom `transport` is supplied. Leave unset for
+     * unkeyed requests.
+     */
+    apiKey?: string;
     transactionSigningScheme?: TransactionSigningScheme;
 }
 
@@ -55,10 +63,26 @@ export function createThruClientContext(config: ThruClientConfig = {}): ThruClie
         query: createClient(QueryService, transport),
         command: createClient(CommandService, transport),
         streaming: createClient(StreamingService, transport),
-        callOptions: config.callOptions,
+        callOptions: withApiKey(config.callOptions, config.apiKey),
         transactionSigningScheme: resolveTransactionSigningScheme(
             config.transactionSigningScheme,
         ),
+    };
+}
+
+function withApiKey(callOptions: CallOptions | undefined, apiKey: string | undefined): CallOptions | undefined {
+    // Treat unset and blank the same way so `apiKey: process.env.THRU_API_KEY`
+    // is safe to write before any key exists.
+    const trimmed = apiKey?.trim();
+    if (!trimmed) {
+        return callOptions;
+    }
+    // The apiKey header goes first so an explicit Authorization in
+    // callOptions.headers replaces it rather than the other way round.
+    const authHeader = thruApiKeyHeader(trimmed);
+    return {
+        ...callOptions,
+        headers: mergeHeaders([authHeader], callOptions?.headers),
     };
 }
 
@@ -83,34 +107,43 @@ function mergeCallOptions(defaults?: CallOptions, overrides?: CallOptions): Call
     };
 }
 
+/* Later entries replace earlier ones with the same (case-insensitive) header
+   name. connect's Headers constructor joins duplicate names with ", ", so
+   appending would turn an apiKey default plus a per-call Authorization into
+   "Bearer a, Bearer b". */
 function mergeHeaders(a?: HeadersInit, b?: HeadersInit): HeadersInit | undefined {
-    const entries: [string, string][] = [];
+    const entries = new Map<string, [string, string]>();
+    const put = (key: string, value: string) => {
+        const name = key.toLowerCase();
+        entries.delete(name);
+        entries.set(name, [key, value]);
+    };
     const add = (init?: HeadersInit) => {
         if (!init) {
             return;
         }
         if (init instanceof Headers) {
             init.forEach((value, key) => {
-                entries.push([key, value]);
+                put(key, value);
             });
             return;
         }
         if (Array.isArray(init)) {
             for (const [key, value] of init) {
-                entries.push([key, value]);
+                put(key, value);
             }
             return;
         }
         for (const [key, value] of Object.entries(init)) {
             if (value !== undefined) {
-                entries.push([key, String(value)]);
+                put(key, String(value));
             }
         }
     };
     add(a);
     add(b);
-    if (entries.length === 0) {
+    if (entries.size === 0) {
         return undefined;
     }
-    return entries;
+    return [...entries.values()];
 }

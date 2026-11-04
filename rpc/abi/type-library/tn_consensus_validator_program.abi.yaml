@@ -107,6 +107,8 @@ types:
             field-type: { primitive: u16 }
           - name: bls_pk
             field-type: { type-ref: { name: BlsPubkey } }
+          - name: bls_pop
+            field-type: { type-ref: { name: BlsSignature } }
           - name: claim_authority
             field-type:
               type-ref:

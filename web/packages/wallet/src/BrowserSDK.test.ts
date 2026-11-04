@@ -1169,6 +1169,37 @@ describe("BrowserSDK restore record", () => {
     expect(sdk.hasRememberedConnection()).toBe(false);
   });
 
+  it("runs the wallet's Add funds flow when the menu answers deposit", async () => {
+    const sdk = createSdk(new MockStorage());
+    const provider = providerInstances[0];
+    provider.connectionState = { ...AUTHORIZED_B, restore: RESTORE_B };
+    await sdk.initialize();
+    const source = { chainType: "ethereum", chainId: "8453", symbol: "USDC" };
+    const steps: string[] = [];
+    provider.openAccountMenu = vi.fn().mockResolvedValue({ action: "deposit" });
+    const ensure = vi.spyOn(sdk, "ensureDepositAccount").mockImplementation(async () => {
+      steps.push("ensure");
+      return {} as never;
+    });
+    provider.deposit = vi.fn(async () => {
+      steps.push("deposit");
+      return { status: "completed" };
+    });
+    const anchor = { x: 0, y: 0, width: 0, height: 0 };
+
+    const result = await sdk.openAccountMenu({ anchor, deposit: { source } });
+
+    expect(provider.openAccountMenu).toHaveBeenCalledExactlyOnceWith({ anchor });
+    expect(steps).toEqual(["ensure", "deposit"]);
+    expect(provider.deposit).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({ source }));
+    expect(result).toEqual({ action: "deposit" });
+
+    provider.openAccountMenu = vi.fn().mockResolvedValue({ action: "closed" });
+    await expect(sdk.openAccountMenu({ anchor, deposit: { source } })).resolves.toEqual({ action: "closed" });
+    expect(ensure).toHaveBeenCalledOnce();
+    expect(provider.deposit).toHaveBeenCalledOnce();
+  });
+
   it("keeps the record the wallet issues with a menu switch and drops it without one", async () => {
     const storage = new MockStorage();
     const sdk = createSdk(storage);

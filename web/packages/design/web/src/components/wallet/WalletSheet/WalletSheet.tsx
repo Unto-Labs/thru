@@ -169,7 +169,7 @@ function Loading({
               : "Confirm with Touch ID, Face ID or your security key.")
           }
         />
-        <Steps items={items} />
+        {items.length > 0 && <Steps items={items} />}
         {escalated && (
           <div className="tds-wsheet__escalation">
             <div className="tds-wsheet__escalation-text">{escalationMessage}</div>

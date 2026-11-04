@@ -164,5 +164,6 @@
 
   .tds-screen__actions > .tds-btn {
     min-height: 48px;
+    font-size: 17px;
   }
 }

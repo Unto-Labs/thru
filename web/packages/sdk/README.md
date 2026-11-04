@@ -99,6 +99,16 @@ const thru = createThruClient({
 - `transportOptions` are passed to `createGrpcWebTransport`. Provide custom fetch implementations, JSON/binary options, or merge additional interceptors.
 - `interceptors` let you append cross-cutting logic (auth, metrics) without re-implementing transports.
 - `callOptions` act as defaults for **every** RPC. You can set timeouts, headers, or a shared `AbortSignal`, and each module call merges in per-request overrides.
+- `apiKey` is a Thru developer API key (`thru_` + 32 alphanumerics). When set, every RPC carries `Authorization: Bearer <key>`; this also applies when you supply your own `transport`. Leave it unset for unkeyed requests. `resolveThruApiKey(env)` reads `THRU_API_KEY`, then `NEXT_PUBLIC_THRU_API_KEY`, then `EXPO_PUBLIC_THRU_API_KEY` from an env object you pass in:
+
+```ts
+import { createThruClient, resolveThruApiKey } from "@thru/sdk";
+
+const thru = createThruClient({
+  baseUrl: "https://rpc.alphanet.thru.org",
+  apiKey: resolveThruApiKey(process.env),
+});
+```
 
 ### Legacy transaction signing
 

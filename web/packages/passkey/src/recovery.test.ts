@@ -1,6 +1,8 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest';
 import {
   runPasskeyCeremony,
+  preopenPasskeyPopup,
+  releasePreopenedPasskeyPopup,
   setPasskeyRecoveryHandler,
   type PasskeyRecoveryRequest,
 } from './ceremony';
@@ -10,10 +12,15 @@ import { signWithPasskey, signWithStoredPasskey, signWithDiscoverablePasskey } f
 
 let dispose: (() => void) | undefined;
 let request: PasskeyRecoveryRequest | null;
-let opened: { close: ReturnType<typeof vi.fn>; closed: boolean };
+let opened: {
+  close: ReturnType<typeof vi.fn>;
+  closed: boolean;
+  location: { replace: ReturnType<typeof vi.fn> };
+};
 let open: ReturnType<typeof vi.fn>;
+let recovery: Mock<(next: PasskeyRecoveryRequest | null) => void>;
 function setup(policy = true) {
-  opened = { close: vi.fn(), closed: false };
+  opened = { close: vi.fn(), closed: false, location: { replace: vi.fn() } };
   open = vi.fn(() => opened);
   const parent: any = { location: { origin: 'https://wallet.tid.sh' } };
   parent.parent = parent;
@@ -34,15 +41,17 @@ function setup(policy = true) {
   });
   vi.stubGlobal('document', { permissionsPolicy: { allowsFeature: () => policy } });
   request = null;
-  dispose = setPasskeyRecoveryHandler((next) => {
+  recovery = vi.fn((next: PasskeyRecoveryRequest | null) => {
     request = next;
   });
+  dispose = setPasskeyRecoveryHandler(recovery);
 }
 beforeEach(() => {
   resetInlinePasskeyRefusal();
   setup();
 });
 afterEach(() => {
+  releasePreopenedPasskeyPopup();
   dispose?.();
   dispose = undefined;
   vi.unstubAllGlobals();
@@ -57,6 +66,75 @@ const frameError = () =>
   );
 
 describe('explicit ceremony recovery', () => {
+  it('uses a restricted create window preopened by the original click without recovery', async () => {
+    vi.stubGlobal('document', { permissionsPolicy: { allowsFeature: () => false } });
+    preopenPasskeyPopup('create');
+    expect(open).toHaveBeenCalledOnce();
+    const inline = vi.fn();
+    const popup = vi.fn().mockResolvedValue('created');
+    await expect(runPasskeyCeremony('create', inline, popup)).resolves.toBe('created');
+    expect(popup).toHaveBeenCalledExactlyOnceWith(opened, expect.any(AbortSignal));
+    expect(inline).not.toHaveBeenCalled();
+    expect(open).toHaveBeenCalledOnce();
+    expect(recovery.mock.calls).toEqual([[null]]);
+    expect(opened.close).toHaveBeenCalledOnce();
+    releasePreopenedPasskeyPopup();
+    expect(opened.close).toHaveBeenCalledOnce();
+  });
+  it('releases a preopened window no ceremony took', () => {
+    vi.stubGlobal('document', { permissionsPolicy: { allowsFeature: () => false } });
+    preopenPasskeyPopup('create');
+    releasePreopenedPasskeyPopup();
+    releasePreopenedPasskeyPopup();
+    expect(opened.close).toHaveBeenCalledOnce();
+  });
+  it('releases an earlier preopened window before opening its replacement', () => {
+    vi.stubGlobal('document', { permissionsPolicy: { allowsFeature: () => false } });
+    const abandoned = { close: vi.fn(), closed: false, location: { replace: vi.fn() } };
+    open.mockReturnValueOnce(abandoned);
+    preopenPasskeyPopup('create');
+    preopenPasskeyPopup('create');
+    expect(abandoned.close).toHaveBeenCalledOnce();
+    expect(open).toHaveBeenCalledTimes(2);
+    expect(opened.close).not.toHaveBeenCalled();
+  });
+  it('falls back to recovery when preopening was blocked', async () => {
+    vi.stubGlobal('document', { permissionsPolicy: { allowsFeature: () => false } });
+    open.mockReturnValueOnce(null);
+    expect(() => preopenPasskeyPopup('create')).not.toThrow();
+    const popup = vi.fn().mockResolvedValue('created');
+    const result = runPasskeyCeremony('create', vi.fn(), popup);
+    expect(request?.route).toBe('popup');
+    expect(popup).not.toHaveBeenCalled();
+    request!.retry();
+    await expect(result).resolves.toBe('created');
+    expect(open).toHaveBeenCalledTimes(2);
+  });
+  it('does not preopen without a restriction', () => {
+    preopenPasskeyPopup('create');
+    expect(open).not.toHaveBeenCalled();
+  });
+  it.each(['closed', 'different action'])('ignores a preopened window with %s', async (reason) => {
+    vi.stubGlobal('document', { permissionsPolicy: { allowsFeature: () => false } });
+    preopenPasskeyPopup(reason === 'different action' ? 'get' : 'create');
+    if (reason === 'closed') opened.closed = true;
+    const popup = vi.fn().mockResolvedValue('created');
+    const result = runPasskeyCeremony('create', vi.fn(), popup);
+    expect(opened.close).toHaveBeenCalledTimes(reason === 'closed' ? 0 : 1);
+    expect(popup).not.toHaveBeenCalled();
+    expect(request?.route).toBe('popup');
+    request!.retry();
+    await expect(result).resolves.toBe('created');
+  });
+  it('rejects a preopened popup failure without showing recovery', async () => {
+    vi.stubGlobal('document', { permissionsPolicy: { allowsFeature: () => false } });
+    preopenPasskeyPopup('create');
+    await expect(
+      runPasskeyCeremony('create', vi.fn(), vi.fn().mockRejectedValue(new Error('Popup closed')))
+    ).rejects.toThrow('Popup closed');
+    expect(recovery.mock.calls).toEqual([[null]]);
+    expect(opened.close).toHaveBeenCalledOnce();
+  });
   it('calls inline immediately without capability waits or windows', async () => {
     const inline = vi.fn().mockResolvedValue('signed');
     const result = runPasskeyCeremony('get', inline, vi.fn());
@@ -183,6 +261,8 @@ describe('explicit ceremony recovery', () => {
     expect(open).not.toHaveBeenCalled();
   });
   it('explicit popup mode opens synchronously but respects popup prohibition', async () => {
+    const allowsFeature = vi.fn(() => false);
+    vi.stubGlobal('document', { permissionsPolicy: { allowsFeature } });
     const result = runPasskeyCeremony('get', vi.fn(), async () => 'ok', { promptMode: 'popup' });
     expect(open).toHaveBeenCalledOnce();
     await result;
@@ -193,6 +273,7 @@ describe('explicit ceremony recovery', () => {
       })
     ).rejects.toThrow('disabled');
     expect(open).toHaveBeenCalledOnce();
+    expect(allowsFeature).not.toHaveBeenCalled();
   });
   it.each(['NotAllowedError', 'SecurityError', 'AbortError'])(
     'does not recover generic %s with a popup',

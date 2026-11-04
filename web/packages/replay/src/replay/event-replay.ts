@@ -34,6 +34,8 @@ export interface EventReplayOptions {
   pageSize?: number;
   filter?: Filter;
   logger?: ReplayLogger;
+  /** Called once history is read and the replay switches to live delivery. */
+  onStreaming?: () => void;
   resubscribeOnEnd?: boolean;
   signal?: AbortSignal;
   /** Connections for a parallel slot-range backfill (default 1, sequential). Needs clientFactory. */
@@ -145,6 +147,7 @@ export function createEventReplay(options: EventReplayOptions): ReplayStream<Eve
     extractSlot: (event) => event.slot ?? 0n,
     extractKey: eventKey,
     logger: options.logger,
+    onStreaming: options.onStreaming,
     resubscribeOnEnd: options.resubscribeOnEnd,
     signal: options.signal,
     onReconnect,

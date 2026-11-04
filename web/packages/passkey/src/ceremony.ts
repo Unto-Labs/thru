@@ -33,6 +33,32 @@ let routeReporter: RouteReporter | undefined;
 type RecoveryHandler = (request: PasskeyRecoveryRequest | null) => void;
 let recoveryHandler: RecoveryHandler | null = null;
 let activeCeremony: AbortController | null = null;
+let preopenedPopup: { action: PasskeyPromptAction; window: Window } | null = null;
+
+/** Close a window preopenPasskeyPopup opened that no ceremony took. */
+export function releasePreopenedPasskeyPopup(): void {
+  closePopup(preopenedPopup?.window);
+  preopenedPopup = null;
+}
+
+/** Call synchronously from the click, while window.open is still permitted. */
+export function preopenPasskeyPopup(action: PasskeyPromptAction): void {
+  releasePreopenedPasskeyPopup();
+  if (activeCeremony || !getPasskeyRestriction(action)) return;
+  try {
+    preopenedPopup = { action, window: openPasskeyPopupWindow() };
+  } catch {
+    /* A blocked window can still recover through the interstitial's click. */
+  }
+}
+
+function takePreopenedPopup(action: PasskeyPromptAction): Window | null {
+  const preopened = preopenedPopup;
+  preopenedPopup = null;
+  if (preopened?.action === action && !preopened.window.closed) return preopened.window;
+  closePopup(preopened?.window);
+  return null;
+}
 
 /** Install the hosted wallet's recovery UI. Unmounting cancels pending work. */
 export function setPasskeyRecoveryHandler(
@@ -89,8 +115,16 @@ export async function runPasskeyCeremony<T>(
   try {
     signal.throwIfAborted();
     report('started');
-    if (options.promptMode === 'popup') {
-      const opened = openPasskeyPopupWindow();
+    const restriction =
+      options.promptMode !== 'popup' && allowPopup ? getPasskeyRestriction(action) : null;
+    const opened =
+      options.promptMode === 'popup'
+        ? openPasskeyPopupWindow()
+        : restriction
+          ? takePreopenedPopup(action)
+          : null;
+    if (opened) {
+      route = 'popup';
       try {
         const result = await popup(opened, signal);
         signal.throwIfAborted();
@@ -100,7 +134,6 @@ export async function runPasskeyCeremony<T>(
         closePopup(opened);
       }
     }
-    const restriction = allowPopup ? getPasskeyRestriction(action) : null;
     if (restriction) return await recover('popup', restriction);
     // Async account/challenge preparation may have consumed the original tap.
     // A fresh click in the frame calls create immediately, without redoing that work.

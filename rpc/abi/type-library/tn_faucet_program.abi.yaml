@@ -8,7 +8,8 @@ abi:
     derived under this program with ASCII vault padded to 32 bytes. It has
     no account data. Initialize creates it and transfers a positive amount
     from transaction fee payer index zero atomically; it rejects existing
-    vaults. Deposit is an explicit top-up. Withdraw (tag 1) transfers up to
+    vaults. Deposit is an explicit top-up; it also enables native receipt on
+    a vault created before Initialize did. Withdraw (tag 1) transfers up to
     10000 base units to an existing recipient. Hosted clients authenticate
     through Developers; direct calls remain permissionless. Not a production
     treasury.

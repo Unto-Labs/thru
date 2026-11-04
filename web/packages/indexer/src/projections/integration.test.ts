@@ -180,6 +180,18 @@ describe.skipIf(!url)('projection ownership and commits (real Postgres)', () => 
     expect((await new OutboxReader(sql, namespace).head()).ns!.batch_seq).toBe(rows.at(-1)!.batch_seq);
     await close(w);
   });
+  it('reads the outbox in numeric batch order across a digit boundary, so a page never reorders or skips', async () => {
+    const namespace = crypto.randomUUID();
+    for (const seq of [8, 9, 10, 11, 98, 99, 100, 101])
+      await sql`INSERT INTO indexer_outbox(namespace_id,batch_seq,generation,payload) VALUES(${namespace},${seq},1,${sql.json({ batchSeq: String(seq), messages: [] })})`;
+    const reader = new OutboxReader(sql, namespace);
+    try {
+      expect((await reader.outbox('7')).map(r => r.batch_seq)).toEqual(['8', '9', '10', '11', '98', '99', '100', '101']);
+      expect((await reader.outbox('97', 3)).map(r => r.batch_seq)).toEqual(['98', '99', '100']);
+    } finally {
+      await sql`DELETE FROM indexer_outbox WHERE namespace_id=${namespace}`;
+    }
+  });
   it('flushes staged rows before each publication and before commit, at the revision of their messages, all or none', async () => {
     const w = await writer();
     const namespace = w.namespace;

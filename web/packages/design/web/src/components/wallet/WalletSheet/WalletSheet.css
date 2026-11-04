@@ -201,6 +201,12 @@
   .tds-wsheet__cta {
     height: 48px;
     padding: 0 20px;
+    font-size: 17px;
+  }
+
+  /* Ghost CTAs are the quiet alternatives; they keep the small label. */
+  .tds-wsheet__cta.tds-btn--ghost {
+    font-size: 13px;
   }
 
   .tds-dep__crypto .tds-wsheet__cta {

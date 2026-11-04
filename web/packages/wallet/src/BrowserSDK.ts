@@ -28,7 +28,7 @@ import {
   type GetConnectionStateResult,
   type WalletRestoreRecord,
   type ManageAccountsResult,
-  type AccountMenuPayload,
+  type AccountMenuOptions,
   type AccountMenuResult,
   type WalletTheme,
   type WalletThemePreference,
@@ -135,6 +135,11 @@ export interface BrowserSDKConfig {
    * proxy (e.g. /api/grpc) is only an SDK transport; use walletNetwork to
    * select its underlying network, or retain the wallet deployment default. */
   rpcUrl?: string;
+  /** Thru developer API key (`thru_` + 32 alphanumerics), sent as
+   * `Authorization: Bearer` on the SDK's own RPC calls. Typically read from
+   * NEXT_PUBLIC_THRU_API_KEY / EXPO_PUBLIC_THRU_API_KEY by the host app. It is
+   * never sent to a user-selected custom network endpoint. */
+  apiKey?: string;
   walletNetwork?: WalletNetworkSelection;
   network?: ThruNetwork;
   depositUiConfig?: DepositUiConfig;
@@ -244,6 +249,8 @@ export class BrowserSDK implements WalletSDK {
     this.thruClient = createThruClient({
       baseUrl: network.transportUrl ?? network.rpcUrl,
       transactionSigningScheme: network.transactionSigningScheme,
+      /* The app's key must not leak to a user-chosen custom endpoint. */
+      apiKey: network.custom ? undefined : this.apiKey,
     });
     this.setWalletAvailability(disconnectedWalletAvailability());
     if (previous) this.emit('disconnect', { reason: 'network_changed' });
@@ -255,6 +262,7 @@ export class BrowserSDK implements WalletSDK {
   private eventListeners = new Map<SDKEvent, Set<EventCallback>>();
   private initialized = false;
   private thruClient: Thru;
+  private readonly apiKey?: string;
   private defaultNetwork?: ThruNetwork;
   private depositProviders: ReadonlySet<string>;
   private connectInFlight: Promise<ConnectResult> | null = null;
@@ -427,9 +435,11 @@ export class BrowserSDK implements WalletSDK {
           defaultStorage ??
           getDefaultBrowserConnectionStorage());
 
+    this.apiKey = config.apiKey?.trim() || undefined;
     this.thruClient = createThruClient({
       baseUrl: rpcUrl,
       transactionSigningScheme: config.transactionSigningScheme,
+      apiKey: this.apiKey,
     });
 
     this.themePreference = normalizeWalletThemePreference(config.theme);
@@ -840,16 +850,18 @@ export class BrowserSDK implements WalletSDK {
   /**
    * Open the wallet's own account menu, drawn inside its frame under the
    * host's account chip. The wallet handles switching, adding accounts, and
-   * signing out; the cached accounts follow the result.
+   * signing out; the cached accounts follow the result. "Add funds" runs the
+   * wallet's Add funds flow before this resolves, preset by `options.deposit`.
    */
   async openAccountMenu(
-    options: AccountMenuPayload,
+    options: AccountMenuOptions,
   ): Promise<AccountMenuResult> {
     const startedAt = Date.now();
     this.telemetry.record(TELEMETRY_EVENTS.SDK_ACCOUNT_MANAGEMENT_STARTED, {
       operation: 'account_menu',
     });
-    const { restore, ...result } = await this.provider.openAccountMenu(options);
+    const { deposit: depositPreset, ...payload } = options;
+    const { restore, ...result } = await this.provider.openAccountMenu(payload);
     if (result.action === 'signed-out') {
       /* The wallet's disconnect event clears this too, but not before the
          menu's response arrives; a host quit in between would otherwise
@@ -869,6 +881,12 @@ export class BrowserSDK implements WalletSDK {
       durationMs: Date.now() - startedAt,
       walletAddress: result.selectedAccount?.address,
     });
+    if (result.action === 'deposit') {
+      /* A fresh account has no deposit token account yet, and the Add funds
+         sheet refuses to run without one. */
+      await this.ensureDepositAccount();
+      await this.deposit(depositPreset);
+    }
     return result;
   }
 

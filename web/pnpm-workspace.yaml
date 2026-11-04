@@ -18,6 +18,7 @@ packages:
   - 'wallet-keypair-manager'
   - 'chain-indexer'
   - 'compression-service'
+  - 'edge-policy'
   - 'wallet-app'
   - 'wallet'
   - 'wallet/admin'

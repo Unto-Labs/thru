@@ -192,6 +192,7 @@ export {
   WALLET_SHEET_SLOW_MS,
   WALLET_SHEET_ESCALATE_MS,
 } from "./components/wallet/WalletSheet/WalletSheet";
+export { useWaitStages, WaitHero } from "./components/wallet/WalletSheet/wait";
 export type {
   WalletSheetScreen,
   WalletSheetFlow,
@@ -241,14 +242,6 @@ export type {
   DepositPayMethodOption,
   DepositQrProps,
 } from "./components/wallet/WalletSheet/DepositScreens";
-export { PasskeyPopup } from "./components/wallet/PasskeyPopup/PasskeyPopup";
-export type {
-  PasskeyPopupProps,
-  PasskeyPopupState,
-  PasskeyPopupFlow,
-  PasskeyPopupSite,
-  PasskeyPopupAccount,
-} from "./components/wallet/PasskeyPopup/PasskeyPopup";
 export { WalletOverlay } from "./components/wallet/WalletOverlay/WalletOverlay";
 export type { WalletOverlayProps } from "./components/wallet/WalletOverlay/WalletOverlay";
 

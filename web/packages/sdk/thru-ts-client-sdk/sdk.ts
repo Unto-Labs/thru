@@ -57,7 +57,15 @@ export {
   deriveAddress,
   deriveProgramAddress
 } from "./modules/helpers";
-export { createThruClient } from "./client";
+export {
+  createThruClient,
+  THRU_API_KEY_ENV_VARS,
+  THRU_API_KEY_PATTERN,
+  assertValidThruApiKey,
+  isValidThruApiKey,
+  resolveThruApiKey,
+  thruApiKeyHeader,
+} from "./client";
 export { collectStream, firstStreamValue, forEachStreamValue } from "./modules/streaming";
 export {
   ConsensusStatus,
@@ -95,7 +103,7 @@ export * as legacySigning from "./domain/transactions/domain-signing-legacy";
 // Type Exports - Common Types
 // ============================================================================
 export type { PageRequestParams, PageResponseParams } from "./domain/pagination";
-export type { Thru, ThruClientConfig } from "./client";
+export type { Thru, ThruApiKeyEnv, ThruClientConfig } from "./client";
 export type { PubkeyInput, SignatureInput } from "./domain/primitives";
 export type { VersionContextInput } from "./modules/consensus";
 // ============================================================================

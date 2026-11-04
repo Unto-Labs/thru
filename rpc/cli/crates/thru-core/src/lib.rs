@@ -99,6 +99,31 @@ pub async fn run() -> anyhow::Result<()> {
         );
     }
 
+    // A network without a configured auth token falls back to the Thru
+    // developer API key from the environment, then to the key `thru auth login`
+    // provisioned, but only for official Thru RPC endpoints over verified HTTPS
+    // (see `Config::rpc_auth_token`). Both are held in non-serialized fields so
+    // no `config.save()` can persist them; the provisioned key is read from the
+    // OS keychain only when an official endpoint would receive it.
+    if !auth_only {
+        config.env_api_key = env_api_key();
+        config.provisioned_api_key =
+            commands::developers::provisioned_rpc_key(!cli.quiet && !cli.json);
+        if !cli.quiet && !cli.json && !developers_only {
+            if config.env_api_key_withheld() {
+                eprintln!(
+                    "warning: THRU_API_KEY/THRU_DEVELOPERS_API_KEY was not sent to {} because it is \
+                     not an official Thru RPC endpoint over verified HTTPS; to authenticate, configure \
+                     a token for this network with `thru network add|set <name> --auth-token <token>`.",
+                    config.rpc_base_url
+                );
+            }
+            // The key from `thru auth login` is withheld from non-official
+            // endpoints silently: local and custom nodes are routine, and the
+            // user never asked for that key to go anywhere in particular.
+        }
+    }
+
     // Execute the command
     let result: Result<(), CliError> = match cli.command {
         Commands::GetVersion => commands::rpc::get_version(&config, cli.json).await,
@@ -230,6 +255,18 @@ pub async fn run() -> anyhow::Result<()> {
 }
 
 /// Format a [`CliError`] as a JSON [`Value`] for structured output.
+/// Thru developer API key from the environment, used as the RPC auth token
+/// when the selected network has none configured and the endpoint is an
+/// official Thru RPC endpoint. `THRU_API_KEY` wins over
+/// `THRU_DEVELOPERS_API_KEY`; blank values count as unset.
+fn env_api_key() -> Option<String> {
+    ["THRU_API_KEY", "THRU_DEVELOPERS_API_KEY"]
+        .iter()
+        .filter_map(|name| std::env::var(name).ok())
+        .map(|value| value.trim().to_string())
+        .find(|value| !value.is_empty())
+}
+
 pub fn format_error_json(err: &CliError) -> Value {
     match err {
         CliError::TransactionFailed {

@@ -3,6 +3,9 @@
 /* Domain separation tag for consensus signatures */
 static uchar const TN_CONSENSUS_DST[] = "TN_CONSENSUS_V1";
 
+/* Proofs bind the compressed BLS key to the registering identity. */
+static uchar const TN_POP_DST[] = "BLS_POP_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_";
+
 // WARNING: THIS IS NOT SECURE PLEASE DO NOT USE THIS OUTSIDE OF TESTING CODE
 int
 tn_crypto_generate_keypair( tn_bls_pubkey_t * pubkey,
@@ -456,6 +459,43 @@ tn_crypto_pubkey_on_curve( tn_bls_pubkey_t const * pubkey ) {
   }
   if( UNLIKELY( blst_p1_affine_is_inf( pubkey ) ) ) {
     return TN_CRYPTO_ERR_PUBKEY_IS_INFINITY;
+  }
+
+  return TN_CRYPTO_SUCCESS;
+}
+
+int
+tn_crypto_prove_possession( tn_bls_signature_t *         pop,
+                            tn_bls_private_key_t const * private_key,
+                            uchar const                 identity[ TN_TXN_PUBKEY_SZ ] ) {
+  blst_p1 pubkey;
+  blst_sk_to_pk_in_g1( &pubkey, private_key );
+
+  uchar message[ TN_CRYPTO_G1_COMPRESSED_SIZE + TN_TXN_PUBKEY_SZ ];
+  blst_p1_compress( message, &pubkey );
+  memcpy( message + TN_CRYPTO_G1_COMPRESSED_SIZE, identity, TN_TXN_PUBKEY_SZ );
+  return tn_crypto_sign_message_with_dst( pop, message, sizeof message, private_key,
+                                          TN_POP_DST, sizeof( TN_POP_DST ) - 1 );
+}
+
+int
+tn_crypto_verify_possession( tn_bls_signature_t const * pop,
+                             tn_bls_pubkey_t const *    pubkey,
+                             uchar const               identity[ TN_TXN_PUBKEY_SZ ] ) {
+  if( UNLIKELY( !blst_p1_affine_on_curve( pubkey ) || !blst_p1_affine_in_g1( pubkey ) ) ) {
+    return TN_CRYPTO_ERR_POP_PUBKEY_NOT_IN_G1;
+  }
+  if( UNLIKELY( !blst_p2_affine_on_curve( pop ) || !blst_p2_affine_in_g2( pop ) ) ) {
+    return TN_CRYPTO_ERR_POP_SIGNATURE_NOT_IN_G2;
+  }
+
+  uchar message[ TN_CRYPTO_G1_COMPRESSED_SIZE + TN_TXN_PUBKEY_SZ ];
+  blst_p1_affine_compress( message, pubkey );
+  memcpy( message + TN_CRYPTO_G1_COMPRESSED_SIZE, identity, TN_TXN_PUBKEY_SZ );
+  /* The pairing check rejects the identity pubkey. */
+  if( UNLIKELY( !tn_crypto_pairing_check( pop, pubkey, message, sizeof message,
+                                          TN_POP_DST, sizeof( TN_POP_DST ) - 1 ) ) ) {
+    return TN_CRYPTO_ERR_POP_PAIRING_MISMATCH;
   }
 
   return TN_CRYPTO_SUCCESS;

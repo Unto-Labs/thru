@@ -137,7 +137,7 @@ const useStyles = makeStyles((c) => ({
     paddingHorizontal: 20,
   },
   bar: { position: "absolute", left: 0, top: 0, bottom: 0, width: 2, backgroundColor: c.accent },
-  label: { fontFamily: font.sansMedium, fontSize: text.base },
+  label: { fontFamily: font.monoMedium, fontSize: text.base },
   account: {
     marginTop: "auto",
     height: 64,

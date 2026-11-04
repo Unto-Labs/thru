@@ -91,6 +91,8 @@ export interface ReplayConfig<T, Cursor = unknown> {
   extractSlot: (item: T) => Slot;
   extractKey?: (item: T) => string;
   logger?: ReplayLogger;
+  /** Called once history is read and the stream switches to live delivery. */
+  onStreaming?: () => void;
   resubscribeOnEnd?: boolean;
   signal?: AbortSignal;
   dispose?: () => void;

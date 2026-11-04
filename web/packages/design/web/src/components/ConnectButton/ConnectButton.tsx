@@ -52,12 +52,8 @@ export interface ConnectButtonProps {
    * here win over the top-level props for their account.
    */
   accounts?: ConnectAccount[];
-  /** Wallet name in the menu header (default "Thru Wallet"). */
+  /** Wallet name in the manage button (default "Thru Wallet"). */
   walletName?: React.ReactNode;
-  /** Network name shown opposite the wallet name, e.g. "mainnet". */
-  network?: React.ReactNode;
-  /** Sub-line auth method after the account name (default "passkey"). */
-  authLabel?: React.ReactNode;
   /** "Manage your Thru Wallet" target; `null` hides it. */
   manageHref?: string | null;
   /** "Manage accounts" target; `null` hides it. */
@@ -117,8 +113,6 @@ export const ConnectButton = React.forwardRef<HTMLElement, ConnectButtonProps>(
       avatar,
       accounts,
       walletName = "Thru Wallet",
-      network,
-      authLabel = "passkey",
       manageHref = DEFAULT_MANAGE_HREF,
       manageAccountsHref = DEFAULT_MANAGE_ACCOUNTS_HREF,
       explorerHref,
@@ -250,8 +244,6 @@ export const ConnectButton = React.forwardRef<HTMLElement, ConnectButtonProps>(
               accounts={menuAccounts}
               currentAddress={currentAddress}
               walletName={walletName}
-              network={network}
-              authLabel={authLabel}
               manageHref={manageHref}
               manageAccountsHref={manageAccountsHref}
               explorerHref={explorerHref}

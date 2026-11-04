@@ -85,8 +85,6 @@ export function WalletButton({
     isConnecting,
     selectedAccount,
     openAccountMenu,
-    deposit,
-    ensureDepositAccount,
   } = useContext(ThruContext);
   const frameId = useMemo(() => createRequestId('btn'), []);
   const iframeRef = useRef<HTMLIFrameElement | null>(null);
@@ -189,7 +187,7 @@ export function WalletButton({
       if (!frameRect) return;
       setMenuOpen(true);
       try {
-        const result = await openAccountMenu({
+        await openAccountMenu({
           anchor: {
             x: frameRect.x + rect.x,
             y: frameRect.y + rect.y,
@@ -204,17 +202,6 @@ export function WalletButton({
              inherits the wallet document's theme and follows it live. */
           ...(themeProp ? { theme: themeProp } : {}),
         });
-        /* "Add funds" in the wallet's menu: open the deposit sheet through the
-           regular request so the host sees deposit:* events and the outcome.
-           A fresh account has no deposit token account yet, and the sheet
-           refuses to run without one, so create it first (the wallet asks the
-           user to approve that transaction) — the same order a host's own
-           Add funds button follows. */
-        if (result.action === 'deposit') {
-          setMenuOpen(false);
-          await ensureDepositAccount();
-          await deposit({ to: address || undefined });
-        }
       } catch (error) {
         onError?.(error);
       } finally {
@@ -224,8 +211,6 @@ export function WalletButton({
     [
       address,
       balance,
-      deposit,
-      ensureDepositAccount,
       explorerUrl,
       menuAlign,
       network,

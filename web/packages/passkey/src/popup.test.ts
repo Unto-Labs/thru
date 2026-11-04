@@ -24,7 +24,13 @@ const GET_INFO = {
 
 function createHarness(blocked = false) {
   const listeners = new Set<(event: MessageEvent) => void>();
-  const popup = { closed: false, close: vi.fn(), postMessage: vi.fn() };
+  const popup = {
+    closed: false,
+    close: vi.fn(),
+    postMessage: vi.fn(),
+    document: { open: vi.fn(), write: vi.fn(), close: vi.fn() },
+    location: { replace: vi.fn() },
+  };
   popup.close.mockImplementation(() => {
     popup.closed = true;
   });
@@ -78,6 +84,30 @@ describe('popup ceremony reporting', () => {
     await rejected;
     expect(harness.popup.closed).toBe(true);
     harness.expectCleanedUp();
+  });
+
+  it('paints the launch splash into the new window, then navigates it', async () => {
+    const harness = createHarness();
+    const controller = new AbortController();
+    const pending = requestPasskeyPopup('get', GET_PAYLOAD, undefined, {
+      signal: controller.signal,
+    });
+    expect(harness.browser.open).toHaveBeenCalledExactlyOnceWith(
+      '',
+      'thru_passkey_popup',
+      'popup=yes,width=440,height=640'
+    );
+    expect(harness.popup.document.write).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining('background:#181B1B')
+    );
+    expect(harness.popup.location.replace).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining(`${ORIGIN}/passkey/popup?`)
+    );
+    expect(harness.popup.document.write.mock.invocationCallOrder[0]).toBeLessThan(
+      harness.popup.location.replace.mock.invocationCallOrder[0]
+    );
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
   });
 
   it('reports a blocked popup once and releases its listeners', async () => {

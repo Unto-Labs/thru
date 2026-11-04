@@ -3,7 +3,7 @@
 import { type ReactNode, useCallback, useEffect, useState } from "react";
 import { BrowserSDK, type BrowserSDKConfig } from "../BrowserSDK";
 import type {
-  AccountMenuPayload,
+  AccountMenuOptions,
   AccountMenuResult,
   WalletThemePreference,
 } from "../protocol";
@@ -59,7 +59,7 @@ export function ThruProvider({ children, config, theme, developerMode }: ThruPro
   }, [sdk, requestedDeveloperMode]);
 
   const openAccountMenu = useCallback(
-    async (options: AccountMenuPayload): Promise<AccountMenuResult> => {
+    async (options: AccountMenuOptions): Promise<AccountMenuResult> => {
       try {
         const result = await sdk.openAccountMenu(options);
         if (result.accounts) {

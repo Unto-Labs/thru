@@ -381,7 +381,7 @@ impl ProgramManager {
             .insecure(config.insecure)
             .http_endpoint(rpc_url)
             .timeout(Duration::from_secs(config.timeout_seconds))
-            .auth_token(config.auth_token.clone())
+            .auth_token(config.rpc_auth_token())
             .announce_pending_signature(config.announce_pending_signature)
             .build()?;
 
@@ -1981,7 +1981,7 @@ async fn get_program_status(
         .insecure(config.insecure)
         .http_endpoint(rpc_url.clone())
         .timeout(Duration::from_secs(config.timeout_seconds))
-        .auth_token(config.auth_token.clone())
+        .auth_token(config.rpc_auth_token())
         .announce_pending_signature(config.announce_pending_signature)
         .build()?;
 

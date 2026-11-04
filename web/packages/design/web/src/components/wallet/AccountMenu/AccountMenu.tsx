@@ -1,5 +1,6 @@
 import * as React from "react";
 import { cn } from "../../../utils";
+import { styledDiv } from "../../../lib/styled";
 import { Menu } from "../../Menu/Menu";
 import { Disc } from "../Disc/Disc";
 import { useCopy } from "../CopyButton/CopyButton";
@@ -82,12 +83,10 @@ export interface AccountMenuPopupProps {
   /** Every account; the one matching `currentAddress` heads the menu. */
   accounts: ConnectAccount[];
   currentAddress: string;
-  /** Wallet name in the label row and the manage button (default "Thru Wallet"). */
+  /** Wallet name in the manage button (default "Thru Wallet"). */
   walletName?: React.ReactNode;
-  /** Network name shown opposite the wallet name, e.g. "mainnet". */
-  network?: React.ReactNode;
-  /** Sub-line auth method after the account name (default "passkey"). */
-  authLabel?: React.ReactNode;
+  /** "menu" (default) inside a Base UI `Menu`; "sheet" as plain rows in a bottom sheet. */
+  presentation?: "menu" | "sheet";
   /** "Manage your Thru Wallet" target; `null` hides it. */
   manageHref?: string | null;
   /** "Manage accounts" target; `null` hides it (unless `onManageAccounts` is set). */
@@ -121,12 +120,48 @@ export interface AccountMenuPopupProps {
   className?: string;
 }
 
+type SheetItemProps = Pick<React.ComponentPropsWithoutRef<"button">, "children" | "className" | "disabled"> & {
+  render?: React.ReactElement<React.HTMLAttributes<HTMLElement>>;
+  onClick?: React.MouseEventHandler<HTMLElement>;
+};
+
+function SheetItem({ render, className, ...props }: SheetItemProps) {
+  const itemProps = {
+    ...props,
+    className: cn("tds-menu-item", className),
+    "data-disabled": props.disabled ? "" : undefined,
+  };
+  return render ? React.cloneElement(render, itemProps) : <button type="button" {...itemProps} />;
+}
+
+const SheetParts = {
+  Popup: "div",
+  Item: SheetItem,
+  CheckboxItem: ({ checked, onCheckedChange, closeOnClick: _closeOnClick, ...props }: SheetItemProps & {
+    checked: boolean;
+    onCheckedChange: (checked: boolean) => void;
+    closeOnClick?: boolean;
+  }) => (
+    <button
+      type="button"
+      {...props}
+      className={cn("tds-menu-item", props.className)}
+      role="switch"
+      aria-checked={checked}
+      data-checked={checked ? "" : undefined}
+      onClick={() => onCheckedChange(!checked)}
+    />
+  ),
+  Separator: styledDiv("tds-menu-sep"),
+  Group: ({ children }: { children: React.ReactNode }) => <div role="group">{children}</div>,
+  GroupLabel: styledDiv("tds-menu-label"),
+} satisfies Record<string, React.ElementType>;
+
 /**
  * AccountMenuPopup — the wallet's account menu.
  *
- * It is the `Menu.Popup` of a Base UI `Menu`: mount it inside a
- * `Menu.Root` / `Menu.Portal` / `Menu.Positioner` of your own — anchored to
- * a trigger (`ConnectButton`) or to a virtual rect (the wallet iframe).
+ * Menu presentation mounts inside Base UI `Menu.Root` / `Menu.Portal` /
+ * `Menu.Positioner`. Sheet presentation renders plain elements without a menu context.
  */
 export const AccountMenuPopup = React.forwardRef<HTMLDivElement, AccountMenuPopupProps>(
   function AccountMenuPopup(
@@ -134,8 +169,7 @@ export const AccountMenuPopup = React.forwardRef<HTMLDivElement, AccountMenuPopu
       accounts,
       currentAddress,
       walletName = "Thru Wallet",
-      network,
-      authLabel = "passkey",
+      presentation = "menu",
       manageHref = DEFAULT_MANAGE_HREF,
       manageAccountsHref = DEFAULT_MANAGE_ACCOUNTS_HREF,
       explorerHref,
@@ -157,6 +191,7 @@ export const AccountMenuPopup = React.forwardRef<HTMLDivElement, AccountMenuPopu
     },
     ref,
   ) {
+    const P = presentation === "sheet" ? SheetParts : Menu;
     const { copy, notifying } = useCopy(COPIED_MS);
     const list = accounts.length > 0 ? accounts : [{ address: currentAddress }];
     const currentIdx = Math.max(
@@ -168,18 +203,16 @@ export const AccountMenuPopup = React.forwardRef<HTMLDivElement, AccountMenuPopu
     const others = list.filter((_, i) => i !== currentIdx);
 
     return (
-      <Menu.Popup ref={ref} className={cn("tds-connect-menu", className)} data-theme={theme}>
-        <div className="tds-connect-menu__label">
-          <span>{walletName}</span>
-          {network != null && <span>{network}</span>}
-        </div>
+      <P.Popup
+        ref={ref}
+        className={cn("tds-connect-menu", presentation === "sheet" && "tds-connect-menu--sheet", className)}
+        data-theme={theme}
+      >
         <div className="tds-connect-menu__head">
-          <span className="tds-connect-menu__avatar">
-            <AccountAvatar account={current} size={36} />
-          </span>
           <div className="tds-connect-menu__who">
-            <div className="tds-connect-menu__addr" title={current.address}>
-              <span>{short}</span>
+            <div className="tds-connect-menu__name">{current.name ?? short}</div>
+            <div className="tds-connect-menu__addr">
+              <span title={current.address}>{notifying ? "Address copied" : short}</span>
               <button
                 type="button"
                 className="tds-connect-menu__copy"
@@ -188,15 +221,6 @@ export const AccountMenuPopup = React.forwardRef<HTMLDivElement, AccountMenuPopu
               >
                 <CopyIcon width={14} height={14} />
               </button>
-            </div>
-            <div className="tds-connect-menu__sub">
-              {notifying ? (
-                "Address copied"
-              ) : (
-                <>
-                  {current.name ?? short} · {authLabel}
-                </>
-              )}
             </div>
           </div>
           {current.balance != null && <span className="tds-connect-menu__bal">{current.balance}</span>}
@@ -217,23 +241,23 @@ export const AccountMenuPopup = React.forwardRef<HTMLDivElement, AccountMenuPopu
         )}
         {onAddFunds && (
           <>
-            <Menu.Separator className="tds-connect-menu__sep" />
-            <Menu.Item onClick={() => onAddFunds()}>
+            <P.Separator className="tds-connect-menu__sep" />
+            <P.Item onClick={() => onAddFunds()}>
               <span className="tds-connect-menu__icon">
                 <PlusCircle width={14} height={14} />
               </span>
               {addFundsLabel}
-            </Menu.Item>
+            </P.Item>
           </>
         )}
         {(others.length > 0 || onAddAccount || onManageAccounts || manageAccountsHref) && (
           <>
-            <Menu.Separator className="tds-connect-menu__sep" />
+            <P.Separator className="tds-connect-menu__sep" />
             {others.length > 0 && (
-              <Menu.Group>
-                <Menu.GroupLabel className="tds-connect-menu__group">Switch account</Menu.GroupLabel>
+              <P.Group>
+                <P.GroupLabel className="tds-connect-menu__group">Switch account</P.GroupLabel>
                 {others.map((account) => (
-                  <Menu.Item
+                  <P.Item
                     key={account.address}
                     className="tds-connect-menu__account"
                     onClick={() => onSwitch?.(account, list.indexOf(account))}
@@ -252,28 +276,28 @@ export const AccountMenuPopup = React.forwardRef<HTMLDivElement, AccountMenuPopu
                     {account.balance != null && (
                       <span className="tds-connect-menu__account-bal">{account.balance}</span>
                     )}
-                  </Menu.Item>
+                  </P.Item>
                 ))}
-              </Menu.Group>
+              </P.Group>
             )}
             {onAddAccount && (
-              <Menu.Item onClick={() => onAddAccount()}>
+              <P.Item onClick={() => onAddAccount()}>
                 <span className="tds-connect-menu__icon">
                   <PlusIcon width={14} height={14} />
                 </span>
                 Add account
-              </Menu.Item>
+              </P.Item>
             )}
             {onManageAccounts ? (
-              <Menu.Item onClick={() => onManageAccounts()}>
+              <P.Item onClick={() => onManageAccounts()}>
                 <span className="tds-connect-menu__icon">
                   <GearIcon width={14} height={14} />
                 </span>
                 <span className="tds-connect-menu__grow">Manage accounts</span>
                 <ArrowUpRight width={12} height={12} className="tds-connect-menu__ext" />
-              </Menu.Item>
+              </P.Item>
             ) : manageAccountsHref && (
-              <Menu.Item
+              <P.Item
                 render={<a href={manageAccountsHref} target="_blank" rel="noreferrer" />}
                 onClick={onNavigate}
               >
@@ -282,14 +306,14 @@ export const AccountMenuPopup = React.forwardRef<HTMLDivElement, AccountMenuPopu
                 </span>
                 <span className="tds-connect-menu__grow">Manage accounts</span>
                 <ArrowUpRight width={12} height={12} className="tds-connect-menu__ext" />
-              </Menu.Item>
+              </P.Item>
             )}
           </>
         )}
         {children}
-        <Menu.Separator />
+        <P.Separator />
         {explorerHref && (
-          <Menu.Item
+          <P.Item
             render={<a href={explorerHref} target="_blank" rel="noreferrer" />}
             onClick={onNavigate}
           >
@@ -297,10 +321,10 @@ export const AccountMenuPopup = React.forwardRef<HTMLDivElement, AccountMenuPopu
               <LinkIcon width={14} height={14} />
             </span>
             View on explorer
-          </Menu.Item>
+          </P.Item>
         )}
         {onDeveloperModeChange && (
-          <Menu.CheckboxItem
+          <P.CheckboxItem
             className="tds-connect-menu__toggle"
             checked={developerMode}
             onCheckedChange={(checked) => onDeveloperModeChange(Boolean(checked))}
@@ -316,16 +340,16 @@ export const AccountMenuPopup = React.forwardRef<HTMLDivElement, AccountMenuPopu
             <span className="tds-connect-menu__switch" aria-hidden="true">
               <span className="tds-connect-menu__switch-thumb" />
             </span>
-          </Menu.CheckboxItem>
+          </P.CheckboxItem>
         )}
-        <Menu.Item className="tds-connect-menu__danger" onClick={() => onDisconnect?.()}>
+        <P.Item className="tds-connect-menu__danger" onClick={() => onDisconnect?.()}>
           <span className="tds-connect-menu__icon">
             <XIcon width={14} height={14} />
           </span>
           {disconnectLabel}
-        </Menu.Item>
+        </P.Item>
         <div className="tds-connect-menu__pad" />
-      </Menu.Popup>
+      </P.Popup>
     );
   },
 );

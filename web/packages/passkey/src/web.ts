@@ -60,6 +60,8 @@ export type {
 export {
   setPasskeyRecoveryHandler,
   cancelPasskeyCeremony,
+  preopenPasskeyPopup,
+  releasePreopenedPasskeyPopup,
   type PasskeyRecoveryRequest,
   type PasskeyRouteEvent,
 } from './ceremony';

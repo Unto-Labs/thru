@@ -5,7 +5,7 @@ import type {
 import { BrowserSDK } from "../BrowserSDK";
 import type { WalletAccount } from "../interfaces";
 import type {
-  AccountMenuPayload,
+  AccountMenuOptions,
   AccountMenuResult,
   DepositDestination,
   DepositRequestPayload,
@@ -44,7 +44,7 @@ export interface ThruContextValue {
   selectAccount: (account: WalletAccount) => Promise<void>;
   manageAccounts: () => Promise<ManageAccountsResult>;
   /** Open the wallet-drawn account menu under a host control (see BrowserSDK). */
-  openAccountMenu: (options: AccountMenuPayload) => Promise<AccountMenuResult>;
+  openAccountMenu: (options: AccountMenuOptions) => Promise<AccountMenuResult>;
   prepareDeposit: (
     depositTargetOrPayload?:
       PrepareDepositPayload["depositTarget"] | PrepareDepositPayload,

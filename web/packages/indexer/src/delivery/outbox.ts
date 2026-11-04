@@ -26,8 +26,10 @@ export class OutboxReader implements OutboxSource {
   }
   async outbox(after: string, limit = 100) {
     const sql = this.sql;
+    /* Qualified: a bare `batch_seq` here names the text output column, which
+       sorts '10' before '9' and pages past rows across a digit boundary. */
     const rows = await sql`SELECT batch_seq::text,payload FROM indexer_outbox
-      WHERE namespace_id=${this.namespace} AND batch_seq>${after} ORDER BY batch_seq LIMIT ${limit}`;
+      WHERE namespace_id=${this.namespace} AND batch_seq>${after} ORDER BY indexer_outbox.batch_seq LIMIT ${limit}`;
     return rows as unknown as { batch_seq: string; payload: DeliveryBatch }[];
   }
   async listen(wake: () => void, connected: () => void) {

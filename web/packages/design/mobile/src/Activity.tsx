@@ -598,7 +598,7 @@ const useStyles = makeStyles((c) => ({
     gap: touch.gutter,
     paddingHorizontal: touch.screenX,
   },
-  disclosureTitle: { flex: 1, fontFamily: font.sansMedium, fontSize: text.base, color: c.fg },
+  disclosureTitle: { flex: 1, fontFamily: font.monoMedium, fontSize: text.base, color: c.fg },
   disclosureBody: { borderTopWidth: 1, borderTopColor: c.bgMuted },
   hero: {
     flexDirection: "row",

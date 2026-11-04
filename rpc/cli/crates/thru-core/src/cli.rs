@@ -2325,19 +2325,23 @@ pub enum ValidatorCommands {
         token_amount: u64,
 
         /// Validator BLS public key as 96-byte uncompressed hex
-        #[arg(
-            long = "bls-pubkey",
-            conflicts_with_all = ["bls_seed", "bls_key"],
-            required_unless_present_any = ["bls_seed", "bls_key"]
-        )]
+        #[arg(long = "bls-pubkey", requires = "bls_pop", conflicts_with_all = ["bls_seed", "bls_key"])]
         bls_pubkey: Option<String>,
 
-        /// Deterministic test seed used to derive a valid BLS public key
-        #[arg(long = "bls-seed", conflicts_with_all = ["bls_pubkey", "bls_key"])]
+        /// Identity-bound possession proof as 192-byte uncompressed hex
+        #[arg(long = "bls-pop", requires = "bls_pubkey")]
+        bls_pop: Option<String>,
+
+        /// Deterministic test seed used to derive a valid BLS key pair
+        #[arg(
+            long = "bls-seed",
+            conflicts_with = "bls_key",
+            required_unless_present_any = ["bls_key", "bls_pubkey"]
+        )]
         bls_seed: Option<u64>,
 
         /// Path to the node's bls.json (the canonical BLS key the node signs with)
-        #[arg(long = "bls-key", conflicts_with_all = ["bls_pubkey", "bls_seed"])]
+        #[arg(long = "bls-key")]
         bls_key: Option<String>,
 
         /// Claim authority pubkey or key name (defaults to fee payer)
@@ -3714,8 +3718,8 @@ mod tests {
             "ta_source",
             "--token-amount",
             "1000",
-            "--bls-pubkey",
-            &"11".repeat(96),
+            "--bls-seed",
+            "17",
             "--claim-authority",
             "alice",
             "--fee-payer",
@@ -3731,7 +3735,6 @@ mod tests {
                     ValidatorCommands::Activate {
                         source_token_account,
                         token_amount,
-                        bls_pubkey,
                         bls_seed,
                         claim_authority,
                         fee_payer,
@@ -3741,8 +3744,7 @@ mod tests {
             } => {
                 assert_eq!(source_token_account, "ta_source");
                 assert_eq!(token_amount, 1000);
-                assert_eq!(bls_pubkey.as_deref(), Some("11".repeat(96).as_str()));
-                assert_eq!(bls_seed, None);
+                assert_eq!(bls_seed, Some(17));
                 assert_eq!(claim_authority.as_deref(), Some("alice"));
                 assert_eq!(fee_payer.as_deref(), Some("bob"));
                 assert_eq!(converted_vault.as_deref(), Some("ta_vault"));
@@ -3850,14 +3852,8 @@ mod tests {
 
         match cli.command {
             Commands::Validator {
-                subcommand:
-                    ValidatorCommands::Activate {
-                        bls_pubkey,
-                        bls_seed,
-                        ..
-                    },
+                subcommand: ValidatorCommands::Activate { bls_seed, .. },
             } => {
-                assert_eq!(bls_pubkey, None);
                 assert_eq!(bls_seed, Some(17));
             }
             _ => panic!("unexpected command"),
@@ -3985,13 +3981,9 @@ mod tests {
             Commands::Validator {
                 subcommand:
                     ValidatorCommands::Activate {
-                        bls_pubkey,
-                        bls_seed,
-                        bls_key,
-                        ..
+                        bls_seed, bls_key, ..
                     },
             } => {
-                assert_eq!(bls_pubkey, None);
                 assert_eq!(bls_seed, None);
                 assert_eq!(bls_key.as_deref(), Some("/tmp/bls.json"));
             }
@@ -4001,7 +3993,7 @@ mod tests {
 
     #[test]
     fn validator_activate_requires_a_bls_source() {
-        // None of --bls-pubkey / --bls-seed / --bls-key -> clap rejects.
+        // Neither --bls-seed nor --bls-key -> clap rejects.
         let result = Cli::try_parse_from([
             "thru",
             "validator",
@@ -4016,17 +4008,8 @@ mod tests {
 
     #[test]
     fn validator_activate_rejects_conflicting_bls_sources() {
-        // Every pair among the three sources must conflict at parse time.
-        for pair in [
-            vec!["--bls-pubkey", &"11".repeat(96), "--bls-seed", "1"],
-            vec![
-                "--bls-key",
-                "/tmp/bls.json",
-                "--bls-pubkey",
-                &"11".repeat(96),
-            ],
-            vec!["--bls-key", "/tmp/bls.json", "--bls-seed", "1"],
-        ] {
+        // The two sources must conflict at parse time.
+        for pair in [vec!["--bls-key", "/tmp/bls.json", "--bls-seed", "1"]] {
             let mut args = vec![
                 "thru",
                 "validator",

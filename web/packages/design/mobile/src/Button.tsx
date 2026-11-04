@@ -24,6 +24,9 @@ export interface ButtonProps {
   iconPosition?: "start" | "end";
   /** Set when the button opens and closes a disclosure. */
   expanded?: boolean;
+  /** Keeps the smaller label for buttons that share a row, where the full
+      size would crowd the label against the edges. */
+  compact?: boolean;
 }
 
 const HEIGHTS: Record<ButtonSize, number> = { lg: touch.controlLg, md: touch.controlMd, sm: touch.controlSm };
@@ -70,6 +73,7 @@ export function Button({
   icon,
   iconPosition = "start",
   expanded,
+  compact,
 }: ButtonProps) {
   const styles = useStyles();
   const v = variants(useThemeColors())[variant];
@@ -96,8 +100,7 @@ export function Button({
       <Text
         style={[
           styles.label,
-          size === "sm" ? { fontSize: text.sm } : null,
-          size === "lg" ? { fontSize: 16 } : null,
+          size === "sm" ? { fontSize: text.sm } : compact ? { fontSize: text.base } : null,
           v.text,
         ]}
       >
@@ -118,5 +121,5 @@ const useStyles = makeStyles(() => ({
     paddingHorizontal: 20,
     borderRadius: 0,
   },
-  label: { fontFamily: font.monoSemiBold, fontSize: text.base },
+  label: { fontFamily: font.monoSemiBold, fontSize: text.md },
 }));

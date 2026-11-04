@@ -3,6 +3,7 @@
 use super::*;
 use crate::cli::{Cli, Commands, FaucetCommands, FaucetWithdrawCommands};
 use clap::Parser;
+use cli_key::fake::FakeKeychain;
 use std::{
     collections::HashMap,
     fs,
@@ -31,6 +32,23 @@ fn token_response() -> Value {
 }
 fn account_response() -> Value {
     json!({"id":"account-1","name":"CLI user","email":"should-not-be-exposed@example.test"})
+}
+/// Isolated provisioned-key store; `keychain` is a fake (never the OS keychain).
+fn key_fixture(origin: &str, keychain: Option<Arc<FakeKeychain>>) -> (TempDir, KeyStore) {
+    let directory = tempfile::tempdir().unwrap();
+    let keychain = keychain.map(|keychain| keychain as Arc<dyn cli_key::Keychain>);
+    let keys = KeyStore::new(directory.path().join("auth"), origin, keychain);
+    (directory, keys)
+}
+/// Login with a throwaway key store, for tests that do not inspect the key.
+async fn login(
+    developers: &Developers,
+    store: &Store,
+) -> Result<(Account, KeyProvisioning), CliError> {
+    let (_directory, keys) = key_fixture(&developers.origin(), None);
+    developers
+        .login(store, &keys, "test-machine", true, true)
+        .await
 }
 fn fixture(origin: &str) -> (TempDir, Store) {
     let directory = tempfile::tempdir().unwrap();
@@ -420,7 +438,11 @@ async fn successful_logout_revokes_refresh_and_clears_local_credentials() {
         .expect(1)
         .mount(&server)
         .await;
-    assert!(developers.logout(&store).await.unwrap());
+    let (_keys_directory, keys) = key_fixture(&developers.origin(), None);
+    assert_eq!(
+        developers.logout(&store, &keys).await.unwrap(),
+        (true, KeyRevocation::None)
+    );
     assert!(store.load().await.unwrap().is_none());
     assert_eq!(
         forms(&server.received_requests().await.unwrap()[0])["refresh_token"],
@@ -436,7 +458,8 @@ async fn offline_logout_clears_local_credentials_and_reports_unconfirmed_revocat
         .save(&record(&developers.origin(), now() + 300))
         .await
         .unwrap();
-    let error = developers.logout(&store).await.unwrap_err();
+    let (_keys_directory, keys) = key_fixture(&developers.origin(), None);
+    let error = developers.logout(&store, &keys).await.unwrap_err();
     assert_eq!(code(&error), "REVOCATION_UNCONFIRMED");
     assert!(store.load().await.unwrap().is_none());
     assert!(!error.to_string().contains("old-refresh"));
@@ -487,10 +510,7 @@ async fn login_replaces_credentials_then_revokes_previous_installation() {
         .expect(1)
         .mount(&server)
         .await;
-    assert_eq!(
-        developers.login(&store, true, true).await.unwrap().id,
-        "account-1"
-    );
+    assert_eq!(login(&developers, &store).await.unwrap().0.id, "account-1");
     assert_eq!(
         store.load().await.unwrap().unwrap().refresh_token,
         "new-refresh"
@@ -513,7 +533,7 @@ async fn denied_relogin_keeps_previous_credentials() {
         .expect(1)
         .mount(&server)
         .await;
-    let error = developers.login(&store, true, true).await.err().unwrap();
+    let error = login(&developers, &store).await.err().unwrap();
     assert_eq!(code(&error), "access_denied");
     assert_eq!(
         store.load().await.unwrap().unwrap().refresh_token,
@@ -554,7 +574,7 @@ async fn invalid_new_account_keeps_previous_login_and_revokes_new_grant() {
         .expect(1)
         .mount(&server)
         .await;
-    assert!(developers.login(&store, true, true).await.is_err());
+    assert!(login(&developers, &store).await.is_err());
     assert_eq!(
         store.load().await.unwrap().unwrap().refresh_token,
         "old-refresh"
@@ -591,7 +611,7 @@ async fn relogin_save_failure_keeps_previous_credentials_and_revokes_new_grant()
         .expect(1)
         .mount(&server)
         .await;
-    let result = developers.login(&store, true, true).await;
+    let result = login(&developers, &store).await;
     fs::set_permissions(root, fs::Permissions::from_mode(0o700)).unwrap();
     let error = result.err().unwrap();
     assert_eq!(code(&error), "LOGIN_STORAGE_FAILED");
@@ -624,7 +644,7 @@ async fn relogin_revocation_failure_keeps_new_login_and_reports_cleanup() {
         .expect(1)
         .mount(&server)
         .await;
-    let error = developers.login(&store, true, true).await.err().unwrap();
+    let error = login(&developers, &store).await.err().unwrap();
     assert_eq!(code(&error), "REVOCATION_UNCONFIRMED");
     assert!(error.to_string().contains("New Developers login was saved"));
     assert_eq!(
@@ -649,11 +669,14 @@ async fn device_polling_waits_for_pending_approval_and_uses_the_public_client() 
         .mount(&server)
         .await;
     let started = std::time::Instant::now();
-    let credentials = developers.authorize(true, true).await.unwrap();
+    let (credentials, key_scope) = developers.authorize(true, true).await.unwrap();
     assert_eq!(credentials.refresh_token, "new-refresh");
-    let times = sequence.times.lock().unwrap();
-    assert!(times[0].duration_since(started) >= Duration::from_millis(950));
-    assert!(times[1].duration_since(times[0]) >= Duration::from_millis(950));
+    assert!(key_scope);
+    {
+        let times = sequence.times.lock().unwrap();
+        assert!(times[0].duration_since(started) >= Duration::from_millis(950));
+        assert!(times[1].duration_since(times[0]) >= Duration::from_millis(950));
+    }
     let requests = server.received_requests().await.unwrap();
     let device_request = requests
         .iter()
@@ -1008,4 +1031,920 @@ fn hosted_thru_has_no_local_fee_payer_flag() {
         ])
         .is_err()
     );
+}
+
+// ---- Provisioned per-machine RPC API key ----
+
+const PLAINTEXT: &str = "thru_live_provisioned_plaintext_secret";
+
+fn key_response(id: &str, plaintext: &str) -> Value {
+    json!({
+        "key": {
+            "id": id,
+            "name": "thru-cli: test-machine",
+            "prefix": "thru_live_pro",
+            "organizationId": "org-1",
+            "organizationName": "Acme Labs",
+        },
+        "plaintext": plaintext,
+    })
+}
+fn key_metadata(origin: &str, id: &str) -> KeyMetadata {
+    KeyMetadata {
+        origin: origin.into(),
+        id: id.into(),
+        name: "thru-cli: old".into(),
+        prefix: "thru_live_old".into(),
+        organization_id: "org-1".into(),
+        organization_name: "Acme Labs".into(),
+        location: SecretLocation::Keychain,
+    }
+}
+fn files_with_extension(root: &std::path::Path, extension: &str) -> Vec<std::path::PathBuf> {
+    match fs::read_dir(root) {
+        Ok(entries) => entries
+            .map(|entry| entry.unwrap().path())
+            .filter(|path| path.extension().is_some_and(|ext| ext == extension))
+            .collect(),
+        Err(_) => Vec::new(),
+    }
+}
+/// Every file under `root` (recursively) as lossy text.
+fn all_file_contents(root: &std::path::Path) -> String {
+    let mut text = String::new();
+    if let Ok(entries) = fs::read_dir(root) {
+        for entry in entries {
+            let path = entry.unwrap().path();
+            if path.is_dir() {
+                text.push_str(&all_file_contents(&path));
+            } else {
+                text.push_str(&String::from_utf8_lossy(&fs::read(path).unwrap()));
+            }
+        }
+    }
+    text
+}
+async fn mount_account(server: &MockServer) {
+    Mock::given(method("GET"))
+        .and(path("/api/cli/account"))
+        .and(header("authorization", "Bearer new-access"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(account_response()))
+        .expect(1)
+        .mount(server)
+        .await;
+}
+async fn mount_key_post(server: &MockServer, response: ResponseTemplate) {
+    Mock::given(method("POST"))
+        .and(path("/api/cli/keys"))
+        .and(header("authorization", "Bearer new-access"))
+        .and(wiremock::matchers::body_json(
+            json!({"machine":"test-machine"}),
+        ))
+        .respond_with(response)
+        .expect(1)
+        .mount(server)
+        .await;
+}
+
+#[test]
+fn machine_names_are_printable_trimmed_and_bounded() {
+    assert_eq!(sanitize_machine_name("  dev-box.local \n"), "dev-box.local");
+    assert_eq!(sanitize_machine_name("evil\u{1b}[2Jbox\u{7}"), "evil[2Jbox");
+    assert_eq!(sanitize_machine_name("caf\u{e9}-mac"), "caf-mac");
+    assert_eq!(sanitize_machine_name(""), "thru-cli");
+    assert_eq!(sanitize_machine_name("\t\n "), "thru-cli");
+    let long = format!("{} tail", "a".repeat(47));
+    let name = sanitize_machine_name(&long);
+    assert_eq!(name, "a".repeat(47));
+    assert!(sanitize_machine_name(&"x".repeat(200)).len() == MAX_MACHINE_NAME_LEN);
+    assert!(!machine_name().is_empty() && machine_name().len() <= MAX_MACHINE_NAME_LEN);
+}
+
+#[tokio::test]
+async fn login_requests_key_scope_and_stores_provisioned_key_in_keychain() {
+    let server = MockServer::start().await;
+    let developers = Developers::new(&server.uri()).unwrap();
+    let (directory, store) = fixture(&developers.origin());
+    let keychain = Arc::new(FakeKeychain::available());
+    let (keys_directory, keys) = key_fixture(&developers.origin(), Some(keychain.clone()));
+    approved_login(&server).await;
+    mount_account(&server).await;
+    mount_key_post(
+        &server,
+        ResponseTemplate::new(201).set_body_json(key_response("key-1", PLAINTEXT)),
+    )
+    .await;
+    let (account, provisioning) = developers
+        .login(&store, &keys, "test-machine", true, true)
+        .await
+        .unwrap();
+    assert_eq!(account.id, "account-1");
+    let KeyProvisioning::Provisioned(metadata, previous) = &provisioning else {
+        panic!("expected a provisioned key");
+    };
+    assert_eq!(metadata.id, "key-1");
+    assert_eq!(*previous, KeyRevocation::None);
+    assert_eq!(provisioning.to_json()["previous_key"], "none");
+    assert_eq!(metadata.organization_name, "Acme Labs");
+    assert_eq!(metadata.location, SecretLocation::Keychain);
+    // Output describes the key without the plaintext.
+    let output = provisioning.to_json().to_string();
+    assert!(output.contains("thru_live_pro") && output.contains("Acme Labs"));
+    assert!(!output.contains(PLAINTEXT));
+
+    let requests = server.received_requests().await.unwrap();
+    let device = forms(
+        requests
+            .iter()
+            .find(|request| request.url.path() == "/api/auth/device/code")
+            .unwrap(),
+    );
+    assert_eq!(
+        device["scope"],
+        "profile offline_access faucet:fund keys:cli"
+    );
+
+    // Plaintext only in the (fake) keychain, under the Developers origin.
+    assert_eq!(
+        keychain
+            .entries
+            .lock()
+            .unwrap()
+            .get(&developers.origin())
+            .map(String::as_str),
+        Some(PLAINTEXT)
+    );
+    assert_eq!(keys.load_secret().unwrap().as_deref(), Some(PLAINTEXT));
+    let root = keys_directory.path().join("auth");
+    let metadata_files = files_with_extension(&root, "cli-key");
+    assert_eq!(metadata_files.len(), 1);
+    assert_eq!(
+        fs::metadata(&metadata_files[0])
+            .unwrap()
+            .permissions()
+            .mode()
+            & 0o777,
+        0o600
+    );
+    assert!(files_with_extension(&root, "cli-key-secret").is_empty());
+    assert!(!all_file_contents(keys_directory.path()).contains(PLAINTEXT));
+    assert!(!all_file_contents(directory.path()).contains(PLAINTEXT));
+}
+
+#[tokio::test]
+async fn login_falls_back_to_an_owner_only_file_without_a_keychain() {
+    for keychain in [Some(Arc::new(FakeKeychain::default())), None] {
+        let server = MockServer::start().await;
+        let developers = Developers::new(&server.uri()).unwrap();
+        let (_directory, store) = fixture(&developers.origin());
+        let (keys_directory, keys) = key_fixture(&developers.origin(), keychain);
+        approved_login(&server).await;
+        mount_account(&server).await;
+        mount_key_post(
+            &server,
+            ResponseTemplate::new(201).set_body_json(key_response("key-1", PLAINTEXT)),
+        )
+        .await;
+        let (_, provisioning) = developers
+            .login(&store, &keys, "test-machine", true, true)
+            .await
+            .unwrap();
+        assert!(matches!(
+            provisioning,
+            KeyProvisioning::Provisioned(
+                KeyMetadata {
+                    location: SecretLocation::File,
+                    ..
+                },
+                _
+            )
+        ));
+        let root = keys_directory.path().join("auth");
+        let secret = files_with_extension(&root, "cli-key-secret");
+        assert_eq!(secret.len(), 1);
+        assert_eq!(
+            fs::metadata(&secret[0]).unwrap().permissions().mode() & 0o777,
+            0o600
+        );
+        assert_eq!(
+            fs::metadata(&root).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+        assert_eq!(keys.load_secret().unwrap().as_deref(), Some(PLAINTEXT));
+        assert!(
+            !fs::read_to_string(&files_with_extension(&root, "cli-key")[0])
+                .unwrap()
+                .contains(PLAINTEXT)
+        );
+    }
+}
+
+#[tokio::test]
+async fn login_succeeds_without_a_key_when_the_platform_has_no_key_route() {
+    let server = MockServer::start().await;
+    let developers = Developers::new(&server.uri()).unwrap();
+    let (_directory, store) = fixture(&developers.origin());
+    let keychain = Arc::new(FakeKeychain::available());
+    let (_keys_directory, keys) = key_fixture(&developers.origin(), Some(keychain.clone()));
+    approved_login(&server).await;
+    mount_account(&server).await;
+    // Older platforms answer with a non-JSON 404.
+    mount_key_post(
+        &server,
+        ResponseTemplate::new(404).set_body_string("<html>Not Found</html>"),
+    )
+    .await;
+    let (account, provisioning) = developers
+        .login(&store, &keys, "test-machine", true, true)
+        .await
+        .unwrap();
+    assert_eq!(account.id, "account-1");
+    assert!(matches!(provisioning, KeyProvisioning::Unavailable));
+    assert_eq!(provisioning.to_json()["status"], "unavailable");
+    assert_eq!(
+        store.load().await.unwrap().unwrap().refresh_token,
+        "new-refresh"
+    );
+    assert!(keys.load_metadata().unwrap().is_none());
+    assert!(keychain.entries.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn login_succeeds_with_a_warning_when_key_provisioning_fails() {
+    for (status, body, reason) in [
+        (
+            500,
+            json!({"error":{"code":"INTERNAL","message":"boom"}}),
+            "INTERNAL, HTTP 500",
+        ),
+        (
+            403,
+            json!({"error":{"code":"SCOPE_REQUIRED","message":"scope"}}),
+            "keys:cli scope",
+        ),
+        (
+            401,
+            json!({"error":{"code":"AUTH_REQUIRED","message":"auth"}}),
+            "AUTH_REQUIRED, HTTP 401",
+        ),
+    ] {
+        let server = MockServer::start().await;
+        let developers = Developers::new(&server.uri()).unwrap();
+        let (_directory, store) = fixture(&developers.origin());
+        let keychain = Arc::new(FakeKeychain::available());
+        let (_keys_directory, keys) = key_fixture(&developers.origin(), Some(keychain.clone()));
+        approved_login(&server).await;
+        mount_account(&server).await;
+        mount_key_post(&server, ResponseTemplate::new(status).set_body_json(body)).await;
+        let (_, provisioning) = developers
+            .login(&store, &keys, "test-machine", true, true)
+            .await
+            .unwrap();
+        let KeyProvisioning::Failed(message) = &provisioning else {
+            panic!("expected a provisioning failure for HTTP {status}");
+        };
+        assert!(message.contains(reason), "{message}");
+        assert_eq!(
+            store.load().await.unwrap().unwrap().refresh_token,
+            "new-refresh"
+        );
+        assert!(keys.load_metadata().unwrap().is_none());
+        assert!(keychain.entries.lock().unwrap().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn login_revokes_and_discards_an_invalid_key_response() {
+    let server = MockServer::start().await;
+    let developers = Developers::new(&server.uri()).unwrap();
+    let (_directory, store) = fixture(&developers.origin());
+    let keychain = Arc::new(FakeKeychain::available());
+    let (_keys_directory, keys) = key_fixture(&developers.origin(), Some(keychain.clone()));
+    approved_login(&server).await;
+    mount_account(&server).await;
+    mount_key_post(
+        &server,
+        ResponseTemplate::new(201).set_body_json(key_response("key-1", "Bearer not\nakey")),
+    )
+    .await;
+    Mock::given(method("DELETE"))
+        .and(path("/api/cli/keys/key-1"))
+        .and(header("authorization", "Bearer new-access"))
+        .respond_with(ResponseTemplate::new(204))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let (_, provisioning) = developers
+        .login(&store, &keys, "test-machine", true, true)
+        .await
+        .unwrap();
+    assert!(matches!(provisioning, KeyProvisioning::Failed(ref m) if m.contains("was revoked")));
+    assert!(keys.load_metadata().unwrap().is_none());
+    assert!(keychain.entries.lock().unwrap().is_empty());
+}
+
+/// Re-login (previous installation and key `key-old` recorded) where the new
+/// key comes back as `key-new`; `delete` answers the DELETE for `key-old`.
+async fn relogin_replacing_key(
+    server: &MockServer,
+    developers: &Developers,
+    previous_key: KeyMetadata,
+    delete: ResponseTemplate,
+) -> (TempDir, KeyStore, KeyProvisioning) {
+    let (_directory, store) = fixture(&developers.origin());
+    store
+        .save(&record(&developers.origin(), now() + 300))
+        .await
+        .unwrap();
+    let keychain = Arc::new(FakeKeychain::available());
+    let (keys_directory, keys) = key_fixture(&developers.origin(), Some(keychain.clone()));
+    keys.save(previous_key, "thru_live_old_plaintext").unwrap();
+    approved_login(server).await;
+    mount_account(server).await;
+    mount_key_post(
+        server,
+        ResponseTemplate::new(201).set_body_json(key_response("key-new", PLAINTEXT)),
+    )
+    .await;
+    let root = keys_directory.path().join("auth");
+    Mock::given(method("DELETE"))
+        .and(path("/api/cli/keys/key-old"))
+        .and(header("authorization", "Bearer new-access"))
+        .respond_with(move |_: &Request| {
+            // The new key is already recorded locally when the old one is revoked.
+            let recorded: KeyMetadata = serde_json::from_slice(
+                &fs::read(&files_with_extension(&root, "cli-key")[0]).unwrap(),
+            )
+            .unwrap();
+            assert_eq!(recorded.id, "key-new");
+            delete.clone()
+        })
+        .expect(1)
+        .mount(server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/cli/logout"))
+        .respond_with(|request: &Request| {
+            assert_eq!(forms(request)["refresh_token"], "old-refresh");
+            ResponseTemplate::new(200).set_body_json(json!({"success":true}))
+        })
+        .expect(1)
+        .mount(server)
+        .await;
+    let (_, provisioning) = developers
+        .login(&store, &keys, "test-machine", true, true)
+        .await
+        .unwrap();
+    // Whatever happened to the old key, the new key replaces the local record
+    // and the previous installation is still logged out.
+    assert_eq!(keys.load_metadata().unwrap().unwrap().id, "key-new");
+    assert_eq!(keys.load_secret().unwrap().as_deref(), Some(PLAINTEXT));
+    assert_eq!(
+        store.load().await.unwrap().unwrap().refresh_token,
+        "new-refresh"
+    );
+    (keys_directory, keys, provisioning)
+}
+
+#[tokio::test]
+async fn relogin_with_a_changed_org_or_machine_revokes_the_previous_key() {
+    let changed_machine = |origin: &str| key_metadata(origin, "key-old");
+    let changed_org = |origin: &str| KeyMetadata {
+        name: "thru-cli: test-machine".into(),
+        organization_id: "org-2".into(),
+        organization_name: "Previous Org".into(),
+        ..key_metadata(origin, "key-old")
+    };
+    for previous_key in [changed_machine, changed_org] {
+        let server = MockServer::start().await;
+        let developers = Developers::new(&server.uri()).unwrap();
+        let (_keys_directory, _keys, provisioning) = relogin_replacing_key(
+            &server,
+            &developers,
+            previous_key(&developers.origin()),
+            ResponseTemplate::new(204),
+        )
+        .await;
+        assert!(matches!(
+            &provisioning,
+            KeyProvisioning::Provisioned(key, KeyRevocation::Revoked) if key.id == "key-new"
+        ));
+        assert_eq!(provisioning.to_json()["previous_key"], "revoked");
+        // The old key is revoked with the new login, before the previous
+        // installation is logged out.
+        let requests: Vec<String> = server
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .map(|request| format!("{} {}", request.method, request.url.path()))
+            .collect();
+        assert_eq!(
+            requests,
+            [
+                "POST /api/auth/device/code",
+                "POST /api/auth/oauth2/token",
+                "GET /api/cli/account",
+                "POST /api/cli/keys",
+                "DELETE /api/cli/keys/key-old",
+                "POST /api/cli/logout",
+            ]
+        );
+    }
+}
+
+#[tokio::test]
+async fn relogin_warns_when_the_previous_key_is_not_found_and_continues() {
+    let server = MockServer::start().await;
+    let developers = Developers::new(&server.uri()).unwrap();
+    // Another account's key: the server cannot see it, so it is still live.
+    let (_keys_directory, _keys, provisioning) = relogin_replacing_key(
+        &server,
+        &developers,
+        key_metadata(&developers.origin(), "key-old"),
+        ResponseTemplate::new(404).set_body_json(
+            json!({"error":{"code":"KEY_NOT_FOUND","message":"This key is not available."}}),
+        ),
+    )
+    .await;
+    assert!(matches!(
+        provisioning,
+        KeyProvisioning::Provisioned(_, KeyRevocation::Unconfirmed)
+    ));
+    assert_eq!(provisioning.to_json()["previous_key"], "unconfirmed");
+}
+
+#[tokio::test]
+async fn relogin_warns_when_revoking_the_previous_key_fails_on_the_network() {
+    let server = MockServer::start().await;
+    let mut developers = Developers::new(&server.uri()).unwrap();
+    developers.client = Client::builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .retry(reqwest::retry::never())
+        .timeout(Duration::from_millis(500))
+        .build()
+        .unwrap();
+    let (_keys_directory, _keys, provisioning) = relogin_replacing_key(
+        &server,
+        &developers,
+        key_metadata(&developers.origin(), "key-old"),
+        ResponseTemplate::new(204).set_delay(Duration::from_secs(5)),
+    )
+    .await;
+    assert!(matches!(
+        provisioning,
+        KeyProvisioning::Provisioned(_, KeyRevocation::Unconfirmed)
+    ));
+}
+
+#[tokio::test]
+async fn relogin_that_gets_the_same_key_back_sends_no_delete() {
+    let server = MockServer::start().await;
+    let developers = Developers::new(&server.uri()).unwrap();
+    let (_directory, store) = fixture(&developers.origin());
+    let keychain = Arc::new(FakeKeychain::available());
+    let (_keys_directory, keys) = key_fixture(&developers.origin(), Some(keychain.clone()));
+    keys.save(
+        key_metadata(&developers.origin(), "key-1"),
+        "thru_live_old_plaintext",
+    )
+    .unwrap();
+    approved_login(&server).await;
+    mount_account(&server).await;
+    mount_key_post(
+        &server,
+        ResponseTemplate::new(201).set_body_json(key_response("key-1", PLAINTEXT)),
+    )
+    .await;
+    let (_, provisioning) = developers
+        .login(&store, &keys, "test-machine", true, true)
+        .await
+        .unwrap();
+    assert!(matches!(
+        provisioning,
+        KeyProvisioning::Provisioned(_, KeyRevocation::None)
+    ));
+    assert_eq!(keys.load_secret().unwrap().as_deref(), Some(PLAINTEXT));
+    assert!(
+        server
+            .received_requests()
+            .await
+            .unwrap()
+            .iter()
+            .all(|request| request.method.as_str() != "DELETE")
+    );
+}
+
+#[test]
+fn unrevoked_key_warning_names_the_key_and_where_to_revoke_it() {
+    let key = key_metadata("https://dev.thru.org", "key-old");
+    let warning = unrevoked_key_warning(
+        &key,
+        &failure("KEY_NOT_FOUND", "This key is not available.", Some(404)),
+    );
+    assert!(warning.contains("thru_live_old..."), "{warning}");
+    assert!(warning.contains("\"Acme Labs\""), "{warning}");
+    assert!(warning.contains("KEY_NOT_FOUND, HTTP 404"), "{warning}");
+    assert!(warning.contains("Organization settings"), "{warning}");
+    let offline = unrevoked_key_warning(&key, &Developers::network_error(false));
+    assert!(
+        offline.contains("could not contact Thru Developers"),
+        "{offline}"
+    );
+}
+
+#[tokio::test]
+async fn login_retries_with_legacy_scopes_when_the_platform_predates_keys_cli() {
+    let server = MockServer::start().await;
+    let developers = Developers::new(&server.uri()).unwrap();
+    let (_directory, store) = fixture(&developers.origin());
+    let keychain = Arc::new(FakeKeychain::available());
+    let (_keys_directory, keys) = key_fixture(&developers.origin(), Some(keychain.clone()));
+    let uri = server.uri();
+    // An older platform accepts exactly the legacy scope set and answers
+    // anything else with the hook's 400 invalid_request.
+    Mock::given(method("POST"))
+        .and(path("/api/auth/device/code"))
+        .respond_with(move |request: &Request| {
+            if forms(request)["scope"] == "profile offline_access faucet:fund" {
+                ResponseTemplate::new(200).set_body_json(json!({
+                    "device_code":"private-device-code","user_code":"ABCD2345",
+                    "verification_uri":format!("{uri}/device"),
+                    "expires_in":20,"interval":1,
+                }))
+            } else {
+                ResponseTemplate::new(400).set_body_json(json!({
+                    "error":"invalid_request",
+                    "error_description":"Invalid CLI authorization request",
+                }))
+            }
+        })
+        .expect(2)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/auth/oauth2/token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(token_response()))
+        .expect(1)
+        .mount(&server)
+        .await;
+    mount_account(&server).await;
+    Mock::given(method("POST"))
+        .and(path("/api/cli/keys"))
+        .respond_with(ResponseTemplate::new(500))
+        .expect(0)
+        .mount(&server)
+        .await;
+    let (account, provisioning) = developers
+        .login(&store, &keys, "test-machine", true, true)
+        .await
+        .unwrap();
+    assert_eq!(account.id, "account-1");
+    assert!(matches!(provisioning, KeyProvisioning::Unavailable));
+    assert_eq!(
+        store.load().await.unwrap().unwrap().refresh_token,
+        "new-refresh"
+    );
+    let scopes: Vec<String> = server
+        .received_requests()
+        .await
+        .unwrap()
+        .iter()
+        .filter(|request| request.url.path() == "/api/auth/device/code")
+        .map(|request| forms(request)["scope"].clone())
+        .collect();
+    assert_eq!(
+        scopes,
+        [
+            "profile offline_access faucet:fund keys:cli",
+            "profile offline_access faucet:fund",
+        ]
+    );
+    assert!(keys.load_metadata().unwrap().is_none());
+    assert!(keychain.entries.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn login_retries_legacy_scopes_once_and_reports_other_rejections() {
+    for (status, body, retried) in [
+        (400, json!({"error":"invalid_scope"}), true),
+        (400, json!({"error":"invalid_request"}), true),
+        (403, json!({"error":"invalid_request"}), false),
+        (400, json!({"error":"unauthorized_client"}), false),
+    ] {
+        let server = MockServer::start().await;
+        let developers = Developers::new(&server.uri()).unwrap();
+        let (_directory, store) = fixture(&developers.origin());
+        Mock::given(method("POST"))
+            .and(path("/api/auth/device/code"))
+            .respond_with(ResponseTemplate::new(status).set_body_json(body.clone()))
+            .expect(if retried { 2 } else { 1 })
+            .mount(&server)
+            .await;
+        let error = login(&developers, &store).await.err().unwrap();
+        assert_eq!(code(&error), body["error"].as_str().unwrap());
+        assert!(store.load().await.unwrap().is_none());
+    }
+}
+
+#[tokio::test]
+async fn logout_deletes_the_key_then_clears_it_then_revokes_the_installation() {
+    let server = MockServer::start().await;
+    let developers = Developers::new(&server.uri()).unwrap();
+    let (_directory, store) = fixture(&developers.origin());
+    store
+        .save(&record(&developers.origin(), now() + 300))
+        .await
+        .unwrap();
+    let keychain = Arc::new(FakeKeychain::available());
+    let (keys_directory, keys) = key_fixture(&developers.origin(), Some(keychain.clone()));
+    keys.save(key_metadata(&developers.origin(), "key-1"), PLAINTEXT)
+        .unwrap();
+    let root = keys_directory.path().join("auth");
+    let (delete_root, delete_keychain) = (root.clone(), keychain.clone());
+    Mock::given(method("DELETE"))
+        .and(path("/api/cli/keys/key-1"))
+        .and(header("authorization", "Bearer old-access"))
+        .respond_with(move |_: &Request| {
+            // DELETE happens before the local copy is removed.
+            assert_eq!(files_with_extension(&delete_root, "cli-key").len(), 1);
+            assert!(!delete_keychain.entries.lock().unwrap().is_empty());
+            ResponseTemplate::new(204)
+        })
+        .expect(1)
+        .mount(&server)
+        .await;
+    let (logout_root, logout_keychain) = (root.clone(), keychain.clone());
+    Mock::given(method("POST"))
+        .and(path("/api/cli/logout"))
+        .respond_with(move |request: &Request| {
+            // The key is cleared locally before the token is revoked.
+            assert!(files_with_extension(&logout_root, "cli-key").is_empty());
+            assert!(logout_keychain.entries.lock().unwrap().is_empty());
+            assert_eq!(forms(request)["refresh_token"], "old-refresh");
+            ResponseTemplate::new(200).set_body_json(json!({"success":true}))
+        })
+        .expect(1)
+        .mount(&server)
+        .await;
+    assert_eq!(
+        developers.logout(&store, &keys).await.unwrap(),
+        (true, KeyRevocation::Revoked)
+    );
+    assert!(store.load().await.unwrap().is_none());
+    assert!(keys.load_metadata().unwrap().is_none());
+    assert!(keychain.entries.lock().unwrap().is_empty());
+    let paths: Vec<String> = server
+        .received_requests()
+        .await
+        .unwrap()
+        .iter()
+        .map(|request| request.url.path().to_owned())
+        .collect();
+    assert_eq!(paths, ["/api/cli/keys/key-1", "/api/cli/logout"]);
+}
+
+#[tokio::test]
+async fn logout_reports_a_key_the_server_cannot_find_as_unconfirmed() {
+    let server = MockServer::start().await;
+    let developers = Developers::new(&server.uri()).unwrap();
+    let (_directory, store) = fixture(&developers.origin());
+    store
+        .save(&record(&developers.origin(), now() + 300))
+        .await
+        .unwrap();
+    let (keys_directory, keys) = key_fixture(&developers.origin(), None);
+    keys.save(key_metadata(&developers.origin(), "key-1"), PLAINTEXT)
+        .unwrap();
+    Mock::given(method("DELETE"))
+        .and(path("/api/cli/keys/key-1"))
+        .respond_with(ResponseTemplate::new(404).set_body_json(
+            json!({"error":{"code":"KEY_NOT_FOUND","message":"This key is not available."}}),
+        ))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/cli/logout"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({"success":true})))
+        .expect(1)
+        .mount(&server)
+        .await;
+    // The server answers 204 for this account's revoked keys; 404 means the
+    // key is not this account's and may still be live, so it is not claimed
+    // as revoked. The local copy is still discarded.
+    assert_eq!(
+        developers.logout(&store, &keys).await.unwrap(),
+        (true, KeyRevocation::Unconfirmed)
+    );
+    assert!(keys.load_metadata().unwrap().is_none());
+    assert!(all_file_contents(keys_directory.path()).is_empty());
+}
+
+#[tokio::test]
+async fn offline_logout_still_clears_the_local_key() {
+    let (_listener, developers) = unavailable_target();
+    let (_directory, store) = fixture(&developers.origin());
+    store
+        .save(&record(&developers.origin(), now() + 300))
+        .await
+        .unwrap();
+    let keychain = Arc::new(FakeKeychain::available());
+    let (_keys_directory, keys) = key_fixture(&developers.origin(), Some(keychain.clone()));
+    keys.save(key_metadata(&developers.origin(), "key-1"), PLAINTEXT)
+        .unwrap();
+    let error = developers.logout(&store, &keys).await.unwrap_err();
+    assert_eq!(code(&error), "REVOCATION_UNCONFIRMED");
+    assert!(keys.load_metadata().unwrap().is_none());
+    assert!(keychain.entries.lock().unwrap().is_empty());
+    assert!(store.load().await.unwrap().is_none());
+    assert!(!error.to_string().contains(PLAINTEXT));
+}
+
+#[tokio::test]
+async fn logout_retries_key_deletion_once_after_refreshing_a_rejected_token() {
+    let server = MockServer::start().await;
+    let developers = Developers::new(&server.uri()).unwrap();
+    let (_directory, store) = fixture(&developers.origin());
+    store
+        .save(&record(&developers.origin(), now() + 300))
+        .await
+        .unwrap();
+    let (_keys_directory, keys) = key_fixture(&developers.origin(), None);
+    keys.save(key_metadata(&developers.origin(), "key-1"), PLAINTEXT)
+        .unwrap();
+    Mock::given(method("DELETE"))
+        .and(path("/api/cli/keys/key-1"))
+        .and(header("authorization", "Bearer old-access"))
+        .respond_with(ResponseTemplate::new(401).set_body_json(json!({"error":"invalid_token"})))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/auth/oauth2/token"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(token_response()))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("DELETE"))
+        .and(path("/api/cli/keys/key-1"))
+        .and(header("authorization", "Bearer new-access"))
+        .respond_with(ResponseTemplate::new(204))
+        .expect(1)
+        .mount(&server)
+        .await;
+    Mock::given(method("POST"))
+        .and(path("/api/cli/logout"))
+        .respond_with(|request: &Request| {
+            assert_eq!(forms(request)["refresh_token"], "new-refresh");
+            ResponseTemplate::new(200).set_body_json(json!({"success":true}))
+        })
+        .expect(1)
+        .mount(&server)
+        .await;
+    assert_eq!(
+        developers.logout(&store, &keys).await.unwrap(),
+        (true, KeyRevocation::Revoked)
+    );
+}
+
+#[test]
+fn key_store_is_origin_isolated_validated_and_symlink_safe() {
+    let keychain = Arc::new(FakeKeychain::available());
+    let (directory, keys) = key_fixture("https://dev.thru.org", Some(keychain.clone()));
+    let root = directory.path().join("auth");
+    // Nothing recorded and no directory created by reads.
+    assert!(keys.load_metadata().unwrap().is_none());
+    assert!(keys.load_secret().unwrap().is_none());
+    assert!(!root.exists());
+    // Invalid keys or metadata are refused.
+    assert!(
+        keys.save(
+            key_metadata("https://dev.thru.org", "key-1"),
+            "not-a-thru-key"
+        )
+        .is_err()
+    );
+    assert!(
+        keys.save(key_metadata("https://dev.thru.org", "../key"), PLAINTEXT)
+            .is_err()
+    );
+    let mut hostile = key_metadata("https://dev.thru.org", "key-1");
+    hostile.organization_name = "Acme\u{1b}[2J".into();
+    assert!(keys.save(hostile, PLAINTEXT).is_err());
+    assert!(keychain.entries.lock().unwrap().is_empty());
+
+    let saved = keys
+        .save(key_metadata("https://other.example", "key-1"), PLAINTEXT)
+        .unwrap();
+    assert_eq!(saved.origin, "https://dev.thru.org");
+    let other = KeyStore::new(
+        root.clone(),
+        "https://dev.staging.example",
+        Some(keychain.clone()),
+    );
+    assert!(other.load_metadata().unwrap().is_none());
+    assert!(other.load_secret().unwrap().is_none());
+
+    // Loose permissions and symlinks are refused.
+    let metadata = files_with_extension(&root, "cli-key").remove(0);
+    fs::set_permissions(&metadata, fs::Permissions::from_mode(0o644)).unwrap();
+    assert!(keys.load_metadata().is_err());
+    fs::remove_file(&metadata).unwrap();
+    let target = directory.path().join("untouched");
+    fs::write(&target, "untouched").unwrap();
+    std::os::unix::fs::symlink(&target, &metadata).unwrap();
+    assert!(keys.load_metadata().is_err());
+    assert!(
+        keys.save(key_metadata("https://dev.thru.org", "key-2"), PLAINTEXT)
+            .is_err()
+    );
+    assert_eq!(fs::read_to_string(&target).unwrap(), "untouched");
+    fs::remove_file(&metadata).unwrap();
+
+    // A secret recorded in the keychain is not silently read from a file.
+    keys.save(key_metadata("https://dev.thru.org", "key-3"), PLAINTEXT)
+        .unwrap();
+    keychain.entries.lock().unwrap().clear();
+    assert!(keys.load_secret().is_err());
+    keys.clear().unwrap();
+    assert!(keys.load_metadata().unwrap().is_none());
+}
+
+#[test]
+fn key_store_clear_removes_the_secret_wherever_it_is() {
+    // Keychain-backed.
+    let keychain = Arc::new(FakeKeychain::available());
+    let (directory, keys) = key_fixture("https://dev.thru.org", Some(keychain.clone()));
+    keys.save(key_metadata("https://dev.thru.org", "key-1"), PLAINTEXT)
+        .unwrap();
+    keys.clear().unwrap();
+    assert!(keychain.entries.lock().unwrap().is_empty());
+    assert!(all_file_contents(directory.path()).is_empty());
+    // File-backed; clearing never needs the (unavailable) keychain.
+    let (directory, keys) = key_fixture(
+        "https://dev.thru.org",
+        Some(Arc::new(FakeKeychain::default())),
+    );
+    keys.save(key_metadata("https://dev.thru.org", "key-1"), PLAINTEXT)
+        .unwrap();
+    assert!(all_file_contents(directory.path()).contains(PLAINTEXT));
+    keys.clear().unwrap();
+    assert!(all_file_contents(directory.path()).is_empty());
+    // Clearing when nothing is stored is a no-op.
+    keys.clear().unwrap();
+}
+
+#[test]
+fn plain_metadata_writes_replace_atomically_and_refuse_symlinks() {
+    let directory = tempfile::tempdir().unwrap();
+    let root = directory.path();
+    let path = root.join("origin.cli-key");
+    storage::write_plain(root, &path, b"first").unwrap();
+    storage::write_plain(root, &path, b"second").unwrap();
+    assert_eq!(fs::read_to_string(&path).unwrap(), "second");
+    let target = root.join("untouched");
+    fs::write(&target, "untouched").unwrap();
+    let link = root.join("link.cli-key");
+    std::os::unix::fs::symlink(&target, &link).unwrap();
+    assert!(storage::write_plain(root, &link, b"hostile").is_err());
+    assert_eq!(fs::read_to_string(&target).unwrap(), "untouched");
+    // No temporary files are left behind.
+    assert_eq!(fs::read_dir(root).unwrap().count(), 3);
+}
+
+#[tokio::test]
+async fn relogin_without_a_new_key_clears_the_revoked_previous_key() {
+    let server = MockServer::start().await;
+    let developers = Developers::new(&server.uri()).unwrap();
+    let (_directory, store) = fixture(&developers.origin());
+    store
+        .save(&record(&developers.origin(), now() + 300))
+        .await
+        .unwrap();
+    let keychain = Arc::new(FakeKeychain::available());
+    let (_keys_directory, keys) = key_fixture(&developers.origin(), Some(keychain.clone()));
+    keys.save(
+        key_metadata(&developers.origin(), "key-old"),
+        "thru_live_old_plaintext",
+    )
+    .unwrap();
+    approved_login(&server).await;
+    mount_account(&server).await;
+    mount_key_post(&server, ResponseTemplate::new(500)).await;
+    Mock::given(method("POST"))
+        .and(path("/api/cli/logout"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "success": true })))
+        .expect(1)
+        .mount(&server)
+        .await;
+    let (_, provisioning) = developers
+        .login(&store, &keys, "test-machine", true, true)
+        .await
+        .unwrap();
+    assert!(matches!(provisioning, KeyProvisioning::Failed(_)));
+    // Logging out the previous installation revoked its key on the server, so
+    // the stale local record is gone and RPC calls go unkeyed.
+    assert!(keys.load_metadata().unwrap().is_none());
+    assert!(keys.load_secret().unwrap().is_none());
 }

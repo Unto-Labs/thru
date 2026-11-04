@@ -6,7 +6,11 @@ use crate::error::CliError;
 use crate::utils::validate_address_or_hex;
 use base64::Engine;
 use blst::min_pk::{PublicKey as BlsPublicKey, SecretKey as BlsSecretKey};
-use std::mem::size_of;
+use thru_base::txn_tools::bls_activation_key;
+#[cfg(test)]
+use blst::min_pk::Signature as BlsSignature;
+#[cfg(test)]
+use thru_base::txn_tools::CONSENSUS_VALIDATOR_POP_DST as BLS_POP_DST;
 use std::time::Duration;
 use thru_base::tn_tools::{KeyPair, Pubkey};
 use thru_base::txn_lib::Transaction;
@@ -14,7 +18,7 @@ use thru_base::txn_tools::{ConsensusValidatorAccounts, TransactionBuilder};
 use thru_client::{Client, ClientBuilder, TransactionDetails};
 
 const CONSENSUS_VALIDATOR_FEE: u64 = 0;
-const CONSENSUS_VALIDATOR_STATE_HEADER_SIZE: usize = 216;
+const CONSENSUS_VALIDATOR_STATE_HEADER_SIZE: usize = 232;
 const CONSENSUS_STATE_BASE_HEADER_SIZE: usize = 248;
 // Identity, BLS key, and four u64 update indexes/timestamps.
 const CONSENSUS_ATTESTOR_SEAT_SIZE: usize = 32 + 96 + 4 * 8;
@@ -43,6 +47,8 @@ struct ValidatorTable {
     last_decay_calc_slot: u64,
     last_decay_emit_slot: u64,
     last_processed_slot: u64,
+    pending_map_off: u64,
+    pending_cap: u64,
     weight_updates_cnt: u64,
     total_weights_head: u64,
     total_weights_tail: u64,
@@ -97,7 +103,7 @@ fn create_rpc_client(config: &Config) -> Result<Client, CliError> {
         .insecure(config.insecure)
         .http_endpoint(rpc_url)
         .timeout(timeout)
-        .auth_token(config.auth_token.clone())
+        .auth_token(config.rpc_auth_token())
         .announce_pending_signature(config.announce_pending_signature)
         .build()
         .map_err(Into::into)
@@ -310,27 +316,38 @@ fn resolve_consensus_accounts(
 }
 
 fn parse_bls_pubkey_hex(value: &str) -> Result<[u8; 96], CliError> {
-    let trimmed = value.trim_start_matches("0x");
-    let bytes = hex::decode(trimmed)
+    let bytes = hex::decode(value.trim_start_matches("0x"))
         .map_err(|e| CliError::Validation(format!("Invalid BLS public key hex: {}", e)))?;
-
     if bytes.len() != 96 {
         return Err(CliError::Validation(format!(
-            "BLS public key must decode to exactly 96 bytes, got {}",
-            bytes.len()
+            "BLS public key must decode to exactly 96 bytes, got {}", bytes.len()
         )));
     }
-
-    let mut pubkey = [0u8; 96];
-    pubkey.copy_from_slice(&bytes);
-
-    let pubkey = BlsPublicKey::deserialize(&pubkey).map_err(|_| {
-        CliError::Validation(
-            "BLS public key must be a valid uncompressed 96-byte BLS12-381 G1 point".to_string(),
-        )
+    let public = BlsPublicKey::deserialize(&bytes).map_err(|_| {
+        CliError::Validation("BLS public key must be a valid uncompressed 96-byte BLS12-381 G1 point".to_string())
     })?;
+    let affine: blst::blst_p1_affine = public.into();
+    let mut raw = [0u8; 96];
+    unsafe {
+        std::ptr::copy_nonoverlapping(std::ptr::from_ref(&affine).cast::<u8>(), raw.as_mut_ptr(), raw.len());
+    }
+    Ok(raw)
+}
 
-    Ok(bls_pubkey_affine_bytes(&pubkey))
+fn parse_bls_pop_hex(value: &str) -> Result<[u8; 192], CliError> {
+    let bytes = hex::decode(value.trim_start_matches("0x"))
+        .map_err(|e| CliError::Validation(format!("Invalid BLS proof hex: {}", e)))?;
+    if bytes.len() != 192 {
+        return Err(CliError::Validation("BLS proof must decode to exactly 192 bytes".to_string()));
+    }
+    let proof = blst::min_pk::Signature::deserialize(&bytes)
+        .map_err(|_| CliError::Validation("BLS proof must be a valid uncompressed G2 point".to_string()))?;
+    let affine: blst::blst_p2_affine = proof.into();
+    let mut raw = [0u8; 192];
+    unsafe {
+        std::ptr::copy_nonoverlapping(std::ptr::from_ref(&affine).cast::<u8>(), raw.as_mut_ptr(), raw.len());
+    }
+    Ok(raw)
 }
 
 /// Load a BLS private-key scalar from a `bls.json` file and return the first 32
@@ -338,7 +355,7 @@ fn parse_bls_pubkey_hex(value: &str) -> Result<[u8; 96], CliError> {
 /// the file is a JSON byte array of 32 bytes (BLS-only) or 64 bytes (legacy
 /// identity+BLS, first 32 used). Scalar validation (`blst_sk_check`, which
 /// rejects zero / out-of-range) happens in the derivation helpers
-/// (`derive_bls_pubkey_raw_from_key_file` / `derive_bls_serialized_from_key_file`).
+/// (`derive_bls_pubkey_raw_from_key_file` / `bls_secret_key_from_file`).
 fn load_bls_key_file(path: &str) -> Result<[u8; 32], CliError> {
     let contents = std::fs::read_to_string(path).map_err(|e| {
         CliError::Validation(format!("Failed to read BLS key file '{}': {}", path, e))
@@ -376,10 +393,8 @@ fn load_bls_key_file(path: &str) -> Result<[u8; 32], CliError> {
 /// (`fd_hex_encode((uchar*)&bls_pubkey, 96)`, keys.c:352) and as genesis memcpys it
 /// into the seat (tn_genesis_attestor.c:367).
 ///
-/// NOTE: this is NOT `blst_p1_affine_serialize`'s canonical big-endian form. The
-/// canonical form is what an ACTIVATE transaction must carry (see
-/// `derive_bls_serialized_from_key_file`); the program deserializes it back into
-/// this raw affine for storage.
+/// NOTE: this is NOT `blst_p1_affine_serialize`'s canonical big-endian form; it is
+/// the raw affine an ACTIVATE transaction carries (see `bls_activation_key`).
 fn derive_bls_pubkey_raw_from_key_file(path: &str) -> Result<[u8; 96], CliError> {
     let scalar_bytes = load_bls_key_file(path)?;
 
@@ -413,73 +428,54 @@ fn derive_bls_pubkey_raw_from_key_file(path: &str) -> Result<[u8; 96], CliError>
     }
 }
 
-/// Derive the node's BLS public key from its `bls.json` in the **canonical
-/// uncompressed serialized** representation (`blst_p1_affine_serialize`, 96-byte
-/// big-endian x||y). This is the form an ACTIVATE transaction must carry: the
-/// consensus-validator program runs `tn_crypto_deserialize_pubkey` on the activate
-/// argument (program line 561) before storing the raw affine into the seat — so
-/// `--bls-key` activation must send this serialized form, exactly like a pasted
-/// `--bls-pubkey` or a `--bls-seed`-derived key.
+/// Load the node's BLS secret key from its `bls.json`.
 ///
 /// `BlsSecretKey::from_bytes` performs `blst_scalar_from_bendian` + `blst_sk_check`
-/// (rejecting zero / out-of-range), and `sk_to_pk().serialize()` == the program's
-/// expected canonical form.
-fn derive_bls_serialized_from_key_file(path: &str) -> Result<[u8; 96], CliError> {
+/// (rejecting zero / out-of-range).
+fn bls_secret_key_from_file(path: &str) -> Result<BlsSecretKey, CliError> {
     let scalar = load_bls_key_file(path)?;
-    let secret_key = BlsSecretKey::from_bytes(&scalar).map_err(|_| {
+    BlsSecretKey::from_bytes(&scalar).map_err(|_| {
         CliError::Validation(format!(
             "BLS key file '{}' does not contain a valid BLS private key scalar (zero or out of range)",
             path
         ))
-    })?;
-    Ok(secret_key.sk_to_pk().serialize())
+    })
 }
 
-fn derive_bls_pubkey_from_seed(seed: u64) -> Result<[u8; 96], CliError> {
+fn bls_secret_key_from_seed(seed: u64) -> Result<BlsSecretKey, CliError> {
     let mut ikm = [0u8; 32];
     for (idx, byte) in ikm.iter_mut().enumerate() {
         *byte = ((seed >> (idx % 8)) ^ ((idx as u64) * 37)) as u8;
     }
 
-    let secret_key = BlsSecretKey::key_gen(&ikm, &[]).map_err(|_| {
+    BlsSecretKey::key_gen(&ikm, &[]).map_err(|_| {
         CliError::Validation(format!(
             "Failed to derive a BLS keypair from deterministic seed {}",
             seed
         ))
-    })?;
-
-    Ok(bls_pubkey_affine_bytes(&secret_key.sk_to_pk()))
+    })
 }
 
-fn bls_pubkey_affine_bytes(pubkey: &BlsPublicKey) -> [u8; 96] {
-    assert_eq!(size_of::<BlsPublicKey>(), 96);
-
-    let mut bytes = [0u8; 96];
-    let src = pubkey as *const BlsPublicKey as *const u8;
-    unsafe {
-        std::ptr::copy_nonoverlapping(src, bytes.as_mut_ptr(), bytes.len());
-    }
-    bytes
-}
-
-fn resolve_bls_pubkey(
-    bls_pubkey: Option<&str>,
+fn resolve_bls_activation_key(
     bls_seed: Option<u64>,
     bls_key: Option<&str>,
-) -> Result<[u8; 96], CliError> {
-    match (bls_pubkey, bls_seed, bls_key) {
-        (Some(value), None, None) => parse_bls_pubkey_hex(value),
-        (None, Some(seed), None) => derive_bls_pubkey_from_seed(seed),
-        /* The program deserializes the activate argument, so it must be the
-           canonical serialized form — NOT the raw affine that `bls-pubkey` prints. */
-        (None, None, Some(path)) => derive_bls_serialized_from_key_file(path),
-        (None, None, None) => Err(CliError::Validation(
-            "One of --bls-pubkey, --bls-seed, or --bls-key is required".to_string(),
-        )),
-        _ => Err(CliError::Validation(
-            "Use only one of --bls-pubkey, --bls-seed, or --bls-key".to_string(),
-        )),
-    }
+    identity: &[u8; 32],
+) -> Result<([u8; 96], [u8; 192]), CliError> {
+    let secret_key = match (bls_seed, bls_key) {
+        (Some(seed), None) => bls_secret_key_from_seed(seed)?,
+        (None, Some(path)) => bls_secret_key_from_file(path)?,
+        (None, None) => {
+            return Err(CliError::Validation(
+                "One of --bls-seed or --bls-key is required".to_string(),
+            ));
+        }
+        _ => {
+            return Err(CliError::Validation(
+                "Use only one of --bls-seed or --bls-key".to_string(),
+            ));
+        }
+    };
+    Ok(bls_activation_key(&secret_key, identity))
 }
 
 fn ensure_nonzero_amount(action: &str, token_amount: u64) -> Result<(), CliError> {
@@ -553,6 +549,8 @@ fn parse_validator_table(data: &[u8], attestor_table: [u8; 32], current_slot: u6
     let last_decay_calc_slot = read_u64(data, 192, "last_decay_calc_slot")?;
     let last_decay_emit_slot = read_u64(data, 200, "last_decay_emit_slot")?;
     let last_processed_slot = read_u64(data, 208, "last_processed_slot")?;
+    let pending_map_off = read_u64(data, 216, "pending_map_off")?;
+    let pending_cap = read_u64(data, 224, "pending_cap")?;
 
     let server_count_usize = usize::try_from(server_count).map_err(|_| {
         CliError::Validation(format!("Validator table server_count {} is too large", server_count))
@@ -742,6 +740,8 @@ fn parse_validator_table(data: &[u8], attestor_table: [u8; 32], current_slot: u6
         last_decay_calc_slot,
         last_decay_emit_slot,
         last_processed_slot,
+        pending_map_off,
+        pending_cap,
         weight_updates_cnt,
         total_weights_head,
         total_weights_tail,
@@ -1006,6 +1006,7 @@ pub async fn handle_validator_command(
             source_token_account,
             token_amount,
             bls_pubkey,
+            bls_pop,
             bls_seed,
             bls_key,
             claim_authority,
@@ -1020,6 +1021,7 @@ pub async fn handle_validator_command(
                 &source_token_account,
                 token_amount,
                 bls_pubkey.as_deref(),
+                bls_pop.as_deref(),
                 bls_seed,
                 bls_key.as_deref(),
                 claim_authority.as_deref(),
@@ -1137,6 +1139,7 @@ async fn activate(
     source_token_account: &str,
     token_amount: u64,
     bls_pubkey: Option<&str>,
+    bls_pop: Option<&str>,
     bls_seed: Option<u64>,
     bls_key: Option<&str>,
     claim_authority: Option<&str>,
@@ -1148,8 +1151,6 @@ async fn activate(
     json_format: bool,
 ) -> Result<(), CliError> {
     ensure_nonzero_amount("activation", token_amount)?;
-
-    let bls_pubkey = resolve_bls_pubkey(bls_pubkey, bls_seed, bls_key)?;
 
     let accounts = resolve_consensus_accounts(
         config,
@@ -1163,6 +1164,10 @@ async fn activate(
     let validator_table = fetch_validator_table(config, attestor_table).await?;
     check_activate_turnover_window(&validator_table, token_amount)?;
     let context = setup_transaction_context(config, fee_payer).await?;
+    let (bls_pubkey, bls_pop) = match (bls_pubkey, bls_pop) {
+        (Some(key), Some(proof)) => (parse_bls_pubkey_hex(key)?, parse_bls_pop_hex(proof)?),
+        _ => resolve_bls_activation_key(bls_seed, bls_key, &context.fee_payer_keypair.public_key)?,
+    };
     let claim_authority = match claim_authority {
         Some(value) => resolve_pubkey_or_key_name(config, value)?,
         None => context.fee_payer_keypair.public_key,
@@ -1173,6 +1178,7 @@ async fn activate(
         accounts,
         source_token_account,
         bls_pubkey,
+        bls_pop,
         claim_authority,
         token_amount,
         CONSENSUS_VALIDATOR_FEE,
@@ -1494,6 +1500,8 @@ async fn show_validator_table(
                 "last_decay_calc_slot": table.last_decay_calc_slot,
                 "last_decay_emit_slot": table.last_decay_emit_slot,
                 "last_processed_slot": table.last_processed_slot,
+                "pending_map_off": table.pending_map_off,
+                "pending_cap": table.pending_cap,
                 "weight_updates_cnt": table.weight_updates_cnt,
                 "total_weights_head": table.total_weights_head,
                 "total_weights_tail": table.total_weights_tail,
@@ -1816,7 +1824,10 @@ mod tests {
         let weight_updates_off = total_weights_off + total_weights_capacity * 8;
         let metadata_off =
             base_sm_off + weight_updates_off + server_count * CONSENSUS_WEIGHT_UPDATE_SIZE;
-        let total_size = metadata_off + server_count * CONSENSUS_VALIDATOR_METADATA_SIZE;
+        let pending_map_off = metadata_off + server_count * CONSENSUS_VALIDATOR_METADATA_SIZE;
+        let pending_cap = 11;
+        let pending_entry_stride = 48 + server_count.div_ceil(64) * 8;
+        let total_size = pending_map_off + pending_cap * pending_entry_stride;
         let mut data = vec![0u8; total_size];
 
         data[0..32].copy_from_slice(&[0x10u8; 32]);
@@ -1831,6 +1842,8 @@ mod tests {
         write_u64(&mut data, 192, 8);
         write_u64(&mut data, 200, 9);
         write_u64(&mut data, 208, 10);
+        write_u64(&mut data, 216, pending_map_off as u64); // pending_map_off
+        write_u64(&mut data, 224, pending_cap as u64); // pending_cap
 
         write_u64(&mut data, base_sm_off, 16);
         write_u64(&mut data, base_sm_off + 8, 8);
@@ -1917,29 +1930,39 @@ mod tests {
     ];
 
     #[test]
+    fn accepts_external_bls_key_and_proof() {
+        let sk = bls_secret_key_from_seed(17).unwrap();
+        let expected = bls_activation_key(&sk, &[0x10; 32]);
+        assert_eq!(parse_bls_pubkey_hex(&hex::encode(sk.sk_to_pk().serialize())).unwrap(), expected.0);
+        let proof = unsafe { std::ptr::read_unaligned(expected.1.as_ptr().cast::<blst::blst_p2_affine>()) };
+        let signature = blst::min_pk::Signature::from(proof);
+        assert_eq!(parse_bls_pop_hex(&hex::encode(signature.serialize())).unwrap(), expected.1);
+        assert!(parse_bls_pubkey_hex(&"22".repeat(95)).is_err());
+        assert!(parse_bls_pubkey_hex(&"11".repeat(96)).is_err());
+        assert!(parse_bls_pop_hex(&"11".repeat(192)).is_err());
+    }
+
+    #[test]
     fn derives_valid_bls_pubkey_from_seed() {
-        let pubkey = derive_bls_pubkey_from_seed(17).expect("seed-derived BLS pubkey should parse");
-        assert_eq!(pubkey, BLS_SEED_17_AFFINE_BYTES);
-    }
-
-    #[test]
-    fn rejects_bls_pubkey_wrong_length() {
-        let err =
-            parse_bls_pubkey_hex(&"22".repeat(95)).expect_err("95-byte BLS pubkey should fail");
-        assert!(err.to_string().contains("exactly 96 bytes"));
-    }
-
-    #[test]
-    fn rejects_bls_pubkey_invalid_curve_point() {
-        let err = parse_bls_pubkey_hex(&"11".repeat(96))
-            .expect_err("random 96-byte BLS pubkey should fail validation");
-        assert!(err.to_string().contains("valid uncompressed 96-byte BLS12-381 G1 point"));
+        let secret_key = bls_secret_key_from_seed(17).expect("seed-derived BLS key should parse");
+        assert_eq!(bls_activation_key(&secret_key, &[0u8; 32]).0, BLS_SEED_17_AFFINE_BYTES);
     }
 
     #[test]
     fn resolves_bls_pubkey_from_seed() {
-        let pubkey = resolve_bls_pubkey(None, Some(5), None).expect("bls seed should resolve");
+        let identity = [0x10u8; 32];
+        let (pubkey, proof) =
+            resolve_bls_activation_key(Some(5), None, &identity).expect("bls seed should resolve");
         assert_eq!(pubkey, BLS_SEED_5_AFFINE_BYTES);
+        let key = bls_secret_key_from_seed(5).unwrap().sk_to_pk();
+        let mut message = [0u8; 48 + 32];
+        message[..48].copy_from_slice(&key.compress());
+        message[48..].copy_from_slice(&identity);
+        let signature = unsafe { std::ptr::read_unaligned(proof.as_ptr().cast::<BlsSignature>()) };
+        assert_eq!(
+            signature.verify(true, &message, BLS_POP_DST, &[], &key, true),
+            blst::BLST_ERROR::BLST_SUCCESS
+        );
     }
 
     #[test]
@@ -1963,6 +1986,8 @@ mod tests {
         assert_eq!(table.blocks_per_faulty_turnover, 128);
         assert_eq!(table.turnover_sum_added, 10);
         assert_eq!(table.turnover_limit, Some(9));
+        assert_eq!(table.last_processed_slot, 10);
+        assert_eq!(table.pending_cap, 11);
 
         let validator = &table.validators[0];
         assert_eq!(validator.sid, 0);
@@ -1970,6 +1995,23 @@ mod tests {
         assert_eq!(validator.weight_source, "pending");
         assert!(validator.active);
         assert_eq!(validator.unclaimed_tokens, 5);
+    }
+
+    /// Mirrors the C FD_STATIC_ASSERTs on tn_consensus_validator_state_t: the
+    /// on-chain state header is 232 bytes, with pending_map_off @216 and
+    /// pending_cap @224.  C asserts don't reach Rust, so this guards the
+    /// positional parser against header drift.
+    #[test]
+    fn validator_state_header_layout_is_232() {
+        assert_eq!(CONSENSUS_VALIDATOR_STATE_HEADER_SIZE, 232);
+        let data = build_test_validator_table_bytes();
+        let table = parse_validator_table(&data, [0xaau8; 32], 100, None)
+            .expect("validator table should parse");
+        // The pending map follows metadata and extends to the account end.
+        let pending_entry_stride = 48 + table.server_count.div_ceil(64) * 8;
+        assert_eq!(table.pending_map_off + table.pending_cap * pending_entry_stride, table.data_size as u64);
+        assert_eq!(table.pending_cap, 11); // @224
+        assert_eq!(table.last_processed_slot, 10); // @208
     }
 
     #[test]
@@ -2038,18 +2080,10 @@ mod tests {
     // Fixed vectors (checked in, generated offline / cross-checked against the
     // running genesis node via the e2e `validator` scenario, test 8):
     //   * scalar = 1 (big-endian [0,..,0,1]) — the BLS12-381 G1 generator.
-    //     - canonical serialize == the well-known G1 generator (independent of
-    //       this code; from the BLS12-381 spec) — proves the scalar->point math.
     //     - raw affine == the in-memory blst_p1_affine (Montgomery) form printed
     //       by `keys_bls`/shown on-chain — the form `validator bls-pubkey` emits.
-    // The raw vs serialized split mirrors the on-chain reality: seats store the
-    // raw affine, but an ACTIVATE arg carries the canonical form (the program
-    // deserializes it).
+    // Seats and ACTIVATE args both carry the raw affine.
     // ----------------------------------------------------------------------
-
-    /// BLS12-381 G1 generator, uncompressed canonical (x||y). This is a spec
-    /// constant, NOT produced by the code under test.
-    const G1_GENERATOR_UNCOMPRESSED: &str = "17f1d3a73197d7942695638c4fa9ac0fc3688c4f9774b905a14e3a3f171bac586c55e83ff97a1aeffb3af00adb22c6bb08b3f481e3aaa0f1a09e30ed741d8ae4fcf5e095d5d00af600db18cb2c04b3edd03cc744a2888ae40caa232946c5e7e1";
 
     /// Raw in-memory `blst_p1_affine` (Montgomery) form of the generator — the
     /// representation `keys_bls` hex-encodes and genesis stores in each seat.
@@ -2078,30 +2112,11 @@ mod tests {
     }
 
     #[test]
-    fn derive_bls_serialized_matches_g1_generator_for_scalar_one() {
-        let file = write_bls_key_file(&scalar_one_bytes());
-        let serialized = derive_bls_serialized_from_key_file(file.path().to_str().unwrap())
-            .expect("scalar 1 should derive");
-        assert_eq!(hex::encode(serialized), G1_GENERATOR_UNCOMPRESSED);
-    }
-
-    #[test]
     fn derive_bls_raw_affine_for_scalar_one() {
         let file = write_bls_key_file(&scalar_one_bytes());
         let raw = derive_bls_pubkey_raw_from_key_file(file.path().to_str().unwrap())
             .expect("scalar 1 should derive");
         assert_eq!(hex::encode(raw), G1_GENERATOR_RAW_AFFINE);
-    }
-
-    #[test]
-    fn bls_raw_and_serialized_forms_differ() {
-        // The two representations of the same key must not be confused: the seat
-        // (raw) and the ACTIVATE wire arg (serialized) are different byte strings.
-        let file = write_bls_key_file(&scalar_one_bytes());
-        let path = file.path().to_str().unwrap();
-        let raw = derive_bls_pubkey_raw_from_key_file(path).unwrap();
-        let serialized = derive_bls_serialized_from_key_file(path).unwrap();
-        assert_ne!(raw, serialized);
     }
 
     #[test]
@@ -2159,25 +2174,25 @@ mod tests {
     }
 
     #[test]
-    fn resolve_bls_pubkey_from_key_file_uses_serialized_form() {
-        // `--bls-key` feeds activation, so it must produce the canonical form.
+    fn resolve_bls_activation_key_from_key_file_uses_raw_form() {
+        // `--bls-key` feeds activation, which carries the raw affine seat form.
         let file = write_bls_key_file(&scalar_one_bytes());
-        let resolved = resolve_bls_pubkey(None, None, Some(file.path().to_str().unwrap()))
+        let (resolved, _) = resolve_bls_activation_key(None, Some(file.path().to_str().unwrap()), &[0u8; 32])
             .expect("bls-key should resolve");
-        assert_eq!(hex::encode(resolved), G1_GENERATOR_UNCOMPRESSED);
+        assert_eq!(hex::encode(resolved), G1_GENERATOR_RAW_AFFINE);
     }
 
     #[test]
-    fn resolve_bls_pubkey_rejects_multiple_sources() {
-        let err = resolve_bls_pubkey(Some("aa"), Some(1), None)
+    fn resolve_bls_activation_key_rejects_multiple_sources() {
+        let err = resolve_bls_activation_key(Some(1), Some("/tmp/bls.json"), &[0u8; 32])
             .expect_err("two BLS sources must be rejected");
         assert!(err.to_string().contains("only one"));
     }
 
     #[test]
-    fn resolve_bls_pubkey_rejects_no_source() {
+    fn resolve_bls_activation_key_rejects_no_source() {
         let err =
-            resolve_bls_pubkey(None, None, None).expect_err("no BLS source must be rejected");
+            resolve_bls_activation_key(None, None, &[0u8; 32]).expect_err("no BLS source must be rejected");
         assert!(err.to_string().contains("is required"));
     }
 
@@ -2324,6 +2339,8 @@ mod tests {
             last_decay_calc_slot: 0,
             last_decay_emit_slot: 0,
             last_processed_slot: 0,
+            pending_map_off: 0,
+            pending_cap: 0,
             weight_updates_cnt: 0,
             total_weights_head: 0,
             total_weights_tail: 0,

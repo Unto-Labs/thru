@@ -10,6 +10,7 @@ import type {
 import type {
   IframeReadyData,
   UiHideEventPayload,
+  UiEdgeEventPayload,
   WalletDeveloperModeMessage,
   WalletTheme,
   WalletThemeMessage,
@@ -213,6 +214,7 @@ export class IframeManager {
   }
 
   private iframe: HTMLIFrameElement | null = null;
+  private edgeStrip: HTMLDivElement | null = null;
   private iframeUrl: string;
   private iframeOrigin: string;
   private frameId: string;
@@ -686,8 +688,35 @@ export class IframeManager {
     }
   }
 
+  /* Safari tints its toolbar from a short fixed bottom element, but keeps a stale sample
+     from the full-screen transparent frame. 12px clears WebKit's 10px minimum; opacity
+     0.2 exceeds its 10% cut-off and is invisible over the sheet's padding. */
+  private showEdgeStrip(edgeColor: string): void {
+    this.edgeStrip?.remove();
+    if (edgeColor.length > 64) return;
+    const strip = this.edgeStrip ??= document.createElement('div');
+    strip.setAttribute('aria-hidden', 'true');
+    strip.style.cssText = `
+      position: fixed;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      margin: 0 auto;
+      width: 100%;
+      max-width: var(--thru-wallet-frame-max-width, none);
+      height: 12px;
+      z-index: 1000000;
+      pointer-events: none;
+      opacity: 0.2;
+    `;
+    strip.style.backgroundColor = edgeColor;
+    if (strip.style.backgroundColor) document.body.appendChild(strip);
+  }
+
   private setHostInert(inert: boolean): void {
     if (!inert || !this.iframe?.isConnected) {
+      /* The edge strip is part of the same hold on the host page. */
+      this.edgeStrip?.remove();
       this.hostInertObserver?.disconnect();
       this.hostInertObserver = null;
       this.hostInerted.forEach((element) => element.removeAttribute('inert'));
@@ -707,7 +736,7 @@ export class IframeManager {
 
     if (!this.hostInertObserver) this.hostFocus = document.activeElement === this.iframe ? null : document.activeElement;
     for (const element of Array.from(document.body.children)) {
-      if (element === this.iframe || element.hasAttribute('inert')) continue;
+      if (element === this.iframe || element === this.edgeStrip || element.hasAttribute('inert')) continue;
       /* Popovers may host passkey prompts outside the wallet iframe. */
       if (element.hasAttribute('popover')) continue;
       element.setAttribute('inert', '');
@@ -925,6 +954,13 @@ export class IframeManager {
     });
     if (data.event === EMBEDDED_PROVIDER_EVENTS.UI_SHOW) {
       this.uiClaimed = true;
+    } else if (data.event === EMBEDDED_PROVIDER_EVENTS.UI_EDGE) {
+      const color = (data.data as UiEdgeEventPayload | undefined)?.color;
+      if (this.displayMode === 'modal' && this.visible && typeof color === 'string') {
+        this.showEdgeStrip(color);
+      } else {
+        this.edgeStrip?.remove();
+      }
     } else if (data.event === EMBEDDED_PROVIDER_EVENTS.UI_HIDE) {
       const exitMs = (data.data as UiHideEventPayload | undefined)?.exitMs;
       this.hideAfterExit(typeof exitMs === 'number' ? exitMs : 0);

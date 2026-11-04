@@ -24,7 +24,7 @@ impl Drop for Guard {
     }
 }
 
-fn storage_error(message: &str) -> CliError {
+pub(super) fn storage_error(message: &str) -> CliError {
     failure("CREDENTIAL_STORE", message, None)
 }
 
@@ -44,7 +44,7 @@ fn validate_owner(_: &fs::Metadata) -> Result<(), CliError> {
     Ok(())
 }
 
-fn secure_open(path: &Path, write: bool, create: bool) -> Result<File, CliError> {
+pub(super) fn secure_open(path: &Path, write: bool, create: bool) -> Result<File, CliError> {
     let mut options = OpenOptions::new();
     options.read(true).write(write).create(create);
     #[cfg(unix)]
@@ -67,6 +67,138 @@ fn secure_open(path: &Path, write: bool, create: bool) -> Result<File, CliError>
             .map_err(|_| storage_error("Could not inspect credential file permissions"))?,
     )?;
     Ok(file)
+}
+
+/// Whether the credential directory exists; errors if it exists but is unsafe.
+pub(super) fn inspect_private_dir(root: &Path) -> Result<bool, CliError> {
+    let Ok(meta) = fs::symlink_metadata(root) else {
+        return Ok(false);
+    };
+    if meta.file_type().is_symlink() || !meta.is_dir() {
+        return Err(storage_error(
+            "Refusing unsafe Developers credential directory",
+        ));
+    }
+    validate_owner(&meta)?;
+    Ok(true)
+}
+
+/// Validates an existing credential directory, or creates it owner-only.
+pub(super) fn ensure_private_dir(root: &Path) -> Result<(), CliError> {
+    if inspect_private_dir(root)? {
+        return Ok(());
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::DirBuilderExt;
+        fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(root)
+            .map_err(|_| {
+                storage_error("Could not create owner-only Developers credential directory")
+            })
+    }
+    #[cfg(not(unix))]
+    fs::create_dir_all(root)
+        .map_err(|_| storage_error("Could not create Developers credential lock directory"))
+}
+
+/// Atomically replaces `path` (inside `root`) with an owner-only (0600) file
+/// holding `raw`. Refuses to replace symlinks or files with unsafe ownership.
+#[cfg(unix)]
+pub(super) fn write_private(root: &Path, path: &Path, raw: &[u8]) -> Result<(), CliError> {
+    use std::os::unix::fs::OpenOptionsExt;
+    if path.exists() {
+        let _ = secure_open(path, false, false)?;
+    }
+    let temporary = root.join(format!(".tmp-{}", rand::random::<u64>()));
+    let result = (|| {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .custom_flags(libc::O_NOFOLLOW)
+            .open(&temporary)
+            .map_err(|_| storage_error("Could not create private credential file"))?;
+        file.write_all(raw)
+            .map_err(|_| storage_error("Could not write Developers credentials"))?;
+        file.sync_all()
+            .map_err(|_| storage_error("Could not persist Developers credentials"))?;
+        fs::rename(&temporary, path)
+            .map_err(|_| storage_error("Could not atomically replace Developers credentials"))?;
+        File::open(root)
+            .and_then(|directory| directory.sync_all())
+            .map_err(|_| storage_error("Could not persist credential directory"))?;
+        Ok(())
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result
+}
+
+/// Atomically replaces `path` (inside `root`) with `raw`, without Unix
+/// ownership or mode handling. For non-secret files on platforms without
+/// `write_private`; refuses to replace a symlink or non-file.
+#[cfg_attr(unix, allow(dead_code))]
+pub(super) fn write_plain(root: &Path, path: &Path, raw: &[u8]) -> Result<(), CliError> {
+    if let Ok(meta) = fs::symlink_metadata(path) {
+        if meta.file_type().is_symlink() || !meta.is_file() {
+            return Err(storage_error("Refusing unsafe Developers credential file"));
+        }
+    }
+    let temporary = root.join(format!(".tmp-{}", rand::random::<u64>()));
+    let result = (|| {
+        let mut file = OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&temporary)
+            .map_err(|_| storage_error("Could not create Developers credential file"))?;
+        file.write_all(raw)
+            .map_err(|_| storage_error("Could not write Developers credentials"))?;
+        file.sync_all()
+            .map_err(|_| storage_error("Could not persist Developers credentials"))?;
+        drop(file);
+        // Replaces an existing file on Windows too (MoveFileEx REPLACE_EXISTING).
+        fs::rename(&temporary, path)
+            .map_err(|_| storage_error("Could not atomically replace Developers credentials"))
+    })();
+    if result.is_err() {
+        let _ = fs::remove_file(&temporary);
+    }
+    result
+}
+
+/// Reads an owner-only file of at most `limit` bytes; `None` when absent.
+pub(super) fn read_private(path: &Path, limit: u64) -> Result<Option<String>, CliError> {
+    if !path
+        .try_exists()
+        .map_err(|_| storage_error("Could not inspect Developers credentials"))?
+    {
+        return Ok(None);
+    }
+    let mut raw = String::new();
+    secure_open(path, false, false)?
+        .take(limit + 1)
+        .read_to_string(&mut raw)
+        .map_err(|_| storage_error("Could not read Developers credentials"))?;
+    if raw.len() as u64 > limit {
+        return Err(storage_error("Invalid stored Developers credentials"));
+    }
+    Ok(Some(raw))
+}
+
+/// Removes an owner-only file after checking it is safe to touch; absent is fine.
+pub(super) fn remove_private(path: &Path) -> Result<(), CliError> {
+    if !path
+        .try_exists()
+        .map_err(|_| storage_error("Could not inspect Developers credentials"))?
+    {
+        return Ok(());
+    }
+    let _ = secure_open(path, false, false)?;
+    fs::remove_file(path).map_err(|_| storage_error("Could not clear Developers credentials"))
 }
 
 impl Store {
@@ -97,30 +229,7 @@ impl Store {
     }
 
     fn new(root: PathBuf, origin: &str, file_backend: bool) -> Result<Self, CliError> {
-        if let Ok(meta) = fs::symlink_metadata(&root) {
-            if meta.file_type().is_symlink() || !meta.is_dir() {
-                return Err(storage_error(
-                    "Refusing unsafe Developers credential directory",
-                ));
-            }
-            validate_owner(&meta)?;
-        } else {
-            #[cfg(unix)]
-            {
-                use std::os::unix::fs::DirBuilderExt;
-                fs::DirBuilder::new()
-                    .recursive(true)
-                    .mode(0o700)
-                    .create(&root)
-                    .map_err(|_| {
-                        storage_error("Could not create owner-only Developers credential directory")
-                    })?;
-            }
-            #[cfg(not(unix))]
-            fs::create_dir_all(&root).map_err(|_| {
-                storage_error("Could not create Developers credential lock directory")
-            })?;
-        }
+        ensure_private_dir(&root)?;
         Ok(Self {
             root,
             origin: origin.to_owned(),
@@ -224,38 +333,7 @@ impl Store {
                 "File credential fallback is unsupported on this platform",
             ));
             #[cfg(unix)]
-            {
-                use std::os::unix::fs::OpenOptionsExt;
-                let path = store.path("json");
-                if path.exists() {
-                    let _ = secure_open(&path, false, false)?;
-                }
-                let temporary = store.path(&format!("tmp-{}", rand::random::<u64>()));
-                let result = (|| {
-                    let mut file = OpenOptions::new()
-                        .write(true)
-                        .create_new(true)
-                        .mode(0o600)
-                        .custom_flags(libc::O_NOFOLLOW)
-                        .open(&temporary)
-                        .map_err(|_| storage_error("Could not create private credential file"))?;
-                    file.write_all(raw.as_bytes())
-                        .map_err(|_| storage_error("Could not write Developers credentials"))?;
-                    file.sync_all()
-                        .map_err(|_| storage_error("Could not persist Developers credentials"))?;
-                    fs::rename(&temporary, &path).map_err(|_| {
-                        storage_error("Could not atomically replace Developers credentials")
-                    })?;
-                    File::open(&store.root)
-                        .and_then(|directory| directory.sync_all())
-                        .map_err(|_| storage_error("Could not persist credential directory"))?;
-                    Ok(())
-                })();
-                if result.is_err() {
-                    let _ = fs::remove_file(&temporary);
-                }
-                result
-            }
+            write_private(&store.root, &store.path("json"), raw.as_bytes())
         })
         .await
         .map_err(|_| storage_error("Credential storage task failed"))?

@@ -22,8 +22,47 @@ pub use crate::bootstrap_addresses::{
     SYSTEM_TEST_PROGRAM_BYTES as SYSTEM_TEST_PROGRAM,
 };
 
+/// Domain separation for proofs bound to a registering validator identity.
+pub const CONSENSUS_VALIDATOR_POP_DST: &[u8] = b"BLS_POP_BLS12381G2_XMD:SHA-256_SSWU_RO_POP_";
+
+/// Return the raw affine key and proof carried by Activate. The proof signs
+/// the compressed BLS key followed by the registering Ed25519 identity.
+pub fn bls_activation_key(
+    secret_key: &blst::min_pk::SecretKey,
+    identity: &TnPubkey,
+) -> (
+    [u8; std::mem::size_of::<blst::blst_p1_affine>()],
+    [u8; std::mem::size_of::<blst::blst_p2_affine>()],
+) {
+    let public_key = secret_key.sk_to_pk();
+    let compressed = public_key.compress();
+    let mut message = [0u8; std::mem::size_of::<blst::blst_fp>() + std::mem::size_of::<TnPubkey>()];
+    message[..compressed.len()].copy_from_slice(&compressed);
+    message[compressed.len()..].copy_from_slice(identity);
+    let proof = secret_key.sign(&message, CONSENSUS_VALIDATOR_POP_DST, &[]);
+    let public_key: blst::blst_p1_affine = public_key.into();
+    let proof: blst::blst_p2_affine = proof.into();
+    let mut key_bytes = [0u8; std::mem::size_of::<blst::blst_p1_affine>()];
+    let mut proof_bytes = [0u8; std::mem::size_of::<blst::blst_p2_affine>()];
+    // Activate carries blst's raw affine structs, including native limbs.
+    unsafe {
+        std::ptr::copy_nonoverlapping(
+            std::ptr::from_ref(&public_key).cast::<u8>(),
+            key_bytes.as_mut_ptr(),
+            key_bytes.len(),
+        );
+        std::ptr::copy_nonoverlapping(
+            std::ptr::from_ref(&proof).cast::<u8>(),
+            proof_bytes.as_mut_ptr(),
+            proof_bytes.len(),
+        );
+    }
+    (key_bytes, proof_bytes)
+}
+
 const CONSENSUS_VALIDATOR_DEFAULT_EXPIRY_AFTER: u32 = 100;
 const CONSENSUS_VALIDATOR_COMPUTE_UNITS: u32 = 500_000_000;
+const CONSENSUS_VALIDATOR_PROOF_COMPUTE_UNITS: u32 = 1_000_000_000;
 const CONSENSUS_VALIDATOR_STATE_UNITS: u16 = 0;
 const CONSENSUS_VALIDATOR_MEMORY_UNITS: u16 = 50_000;
 
@@ -1075,12 +1114,14 @@ mod tests {
         let source_token_account = [0x20u8; 32];
         let claim_authority = [0x60u8; 32];
         let bls_pk = [0x77u8; 96];
+        let bls_pop = [0x88u8; 192];
 
         let tx = TransactionBuilder::build_activate_with_accounts(
             fee_payer,
             accounts,
             source_token_account,
             bls_pk,
+            bls_pop,
             claim_authority,
             123,
             0,
@@ -1126,11 +1167,46 @@ mod tests {
             4,
             "converted vault should resolve to rw index 4"
         );
+        let key_start = 20;
         assert_eq!(
-            u16::from_le_bytes(instruction[18..20].try_into().unwrap()),
+            u16::from_le_bytes(instruction[18..key_start].try_into().unwrap()),
             0,
             "identity should remain fee payer index 0"
         );
+        let proof_start = key_start + bls_pk.len();
+        let claim_start = proof_start + bls_pop.len();
+        let amount_start = claim_start + claim_authority.len();
+        assert_eq!(&instruction[key_start..proof_start], &bls_pk);
+        assert_eq!(&instruction[proof_start..claim_start], &bls_pop);
+        assert_eq!(&instruction[claim_start..amount_start], &claim_authority);
+        assert_eq!(
+            &instruction[amount_start..],
+            &123u64.to_le_bytes(),
+            "proof must precede claim authority and token amount"
+        );
+    }
+
+    #[test]
+    fn test_validator_program_requests_compute_for_proof() {
+        let payer = [0x10u8; 32];
+        let token_account = [0x20u8; 32];
+        let activate = TransactionBuilder::build_activate(
+            payer,
+            token_account,
+            [0x77; 96],
+            [0x88; 192],
+            payer,
+            123,
+            0,
+            9,
+            44,
+        )
+        .unwrap();
+        let deactivate =
+            TransactionBuilder::build_deactivate(payer, token_account, 0, 9, 44).unwrap();
+
+        assert_eq!(activate.req_compute_units, 1_000_000_000);
+        assert_eq!(deactivate.req_compute_units, 500_000_000);
     }
 
     #[test]
@@ -5577,6 +5653,8 @@ impl TransactionBuilder {
     /// * `fee_payer` - The validator identity (also the signer)
     /// * `source_token_account` - The validator's token account with staking tokens
     /// * `bls_pk` - BLS public key for the validator as tn_bls_pubkey_t bytes
+    /// * `bls_pop` - Proof over compressed `bls_pk` followed by `fee_payer`,
+    ///   under the PoP tag, as tn_bls_signature_t bytes
     /// * `claim_authority` - Pubkey that can claim rewards for this validator
     /// * `token_amount` - Amount of tokens to stake
     /// * `fee` - Transaction fee
@@ -5586,6 +5664,7 @@ impl TransactionBuilder {
         fee_payer: TnPubkey,
         source_token_account: TnPubkey,
         bls_pk: [u8; 96],
+        bls_pop: [u8; 192],
         claim_authority: TnPubkey,
         token_amount: u64,
         fee: u64,
@@ -5597,6 +5676,7 @@ impl TransactionBuilder {
             ConsensusValidatorAccounts::default(),
             source_token_account,
             bls_pk,
+            bls_pop,
             claim_authority,
             token_amount,
             fee,
@@ -5612,13 +5692,15 @@ impl TransactionBuilder {
         accounts: ConsensusValidatorAccounts,
         source_token_account: TnPubkey,
         bls_pk: [u8; 96],
+        bls_pop: [u8; 192],
         claim_authority: TnPubkey,
         token_amount: u64,
         fee: u64,
         nonce: u64,
         start_slot: u64,
     ) -> Result<Transaction> {
-        let tx = build_consensus_validator_tx(fee_payer, accounts.program, fee, nonce, start_slot);
+        let tx = build_consensus_validator_tx(fee_payer, accounts.program, fee, nonce, start_slot)
+            .with_compute_units(CONSENSUS_VALIDATOR_PROOF_COMPUTE_UNITS);
 
         /* Add accounts - must be sorted by pubkey within RW and RO groups:
         RW: attestor_table, source_token_account, converted_vault
@@ -5646,6 +5728,7 @@ impl TransactionBuilder {
             converted_vault_idx,
             identity_idx,
             bls_pk,
+            bls_pop,
             claim_authority,
             token_amount,
         )?;
@@ -6822,6 +6905,7 @@ fn build_activate_instruction(
     converted_vault_idx: u16,
     identity_idx: u16,
     bls_pk: [u8; 96],
+    bls_pop: [u8; 192],
     claim_authority: [u8; 32],
     token_amount: u64,
 ) -> Result<Vec<u8>> {
@@ -6848,6 +6932,9 @@ fn build_activate_instruction(
 
     /* - bls_pk (96 bytes, tn_bls_pubkey_t / blst_p1_affine) */
     instruction_data.extend_from_slice(&bls_pk);
+
+    /* - bls_pop (192 bytes, tn_bls_signature_t / blst_p2_affine) */
+    instruction_data.extend_from_slice(&bls_pop);
 
     /* - claim_authority (32 bytes, pubkey) */
     instruction_data.extend_from_slice(&claim_authority);

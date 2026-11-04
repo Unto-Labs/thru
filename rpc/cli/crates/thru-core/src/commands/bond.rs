@@ -1041,7 +1041,7 @@ fn create_rpc_client(config: &Config) -> Result<Client, CliError> {
     ClientBuilder::new()
         .http_endpoint(rpc_url)
         .timeout(timeout)
-        .auth_token(config.auth_token.clone())
+        .auth_token(config.rpc_auth_token())
         .build()
         .map_err(|e| CliError::TransactionSubmission(format!("Failed to create RPC client: {}", e)))
 }

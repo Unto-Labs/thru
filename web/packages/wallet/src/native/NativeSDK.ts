@@ -127,6 +127,11 @@ export interface NativeSDKConfig {
   developerMode?: boolean;
   autoRestore?: boolean;
   rpcUrl?: string;
+  /** Thru developer API key (`thru_` + 32 alphanumerics), sent as
+   * `Authorization: Bearer` on the SDK's own RPC calls. Typically read from
+   * EXPO_PUBLIC_THRU_API_KEY by the host app. It is never sent to a
+   * user-selected custom network endpoint. */
+  apiKey?: string;
   walletNetwork?: WalletNetworkSelection;
   network?: ThruNetwork;
   depositUiConfig?: DepositUiConfig;
@@ -231,6 +236,7 @@ export class NativeSDK implements WalletSDK {
   private initialized = false;
   private thruClient: Thru | null = null;
   private rpcUrl: string | undefined;
+  private readonly apiKey?: string;
   private connectInFlight: Promise<ConnectResult> | null = null;
   private lastConnectResult: ConnectResult | null = null;
   private walletAvailability: WalletAvailability = CHECKING_WALLET_AVAILABILITY;
@@ -291,6 +297,7 @@ export class NativeSDK implements WalletSDK {
     this.requiresNetworkProtocol = config.walletNetwork !== undefined;
     this.origin = config.origin ?? "thru-mobile://app";
     this.rpcUrl = config.rpcUrl;
+    this.apiKey = config.apiKey?.trim() || undefined;
     this.storage = config.storage
       ? networkScopedStorage(
           config.storage,
@@ -947,6 +954,8 @@ export class NativeSDK implements WalletSDK {
       this.thruClient = createNativeThruClient(
         this.rpcUrl,
         this.activeNetwork?.transactionSigningScheme,
+        /* The app's key must not leak to a user-chosen custom endpoint. */
+        this.activeNetwork?.custom ? undefined : this.apiKey,
       );
     }
     return this.thruClient;

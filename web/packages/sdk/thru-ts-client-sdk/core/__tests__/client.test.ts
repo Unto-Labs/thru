@@ -121,15 +121,81 @@ describe("createThruClientContext", () => {
     expect(merged?.headers).toEqual([["x-test", "1"], ["y-test", "2"]]);
   });
 
-  it("preserves duplicate headers when merging", () => {
+  it("replaces earlier headers with the same name when merging", () => {
     const ctx = createThruClientContext({
-      callOptions: { headers: [["set-cookie", "a=1"], ["x-test", "1"]] },
+      callOptions: { headers: [["x-trace", "a=1"], ["x-test", "1"]] },
     });
-    const merged = withCallOptions(ctx, { headers: [["set-cookie", "b=2"]] });
+    const merged = withCallOptions(ctx, { headers: [["X-Trace", "b=2"]] });
     expect(merged?.headers).toEqual([
-      ["set-cookie", "a=1"],
       ["x-test", "1"],
-      ["set-cookie", "b=2"],
+      ["X-Trace", "b=2"],
     ]);
+  });
+
+  describe("apiKey", () => {
+    const VALID_KEY = "thru_" + "x".repeat(32);
+
+    it("adds an Authorization Bearer header to default call options", () => {
+      const ctx = createThruClientContext({ apiKey: VALID_KEY });
+      expect(ctx.callOptions?.headers).toEqual([["Authorization", `Bearer ${VALID_KEY}`]]);
+    });
+
+    it("merges with user-provided call option headers", () => {
+      const ctx = createThruClientContext({
+        apiKey: VALID_KEY,
+        callOptions: { timeoutMs: 250, headers: [["x-test", "1"]] },
+      });
+      expect(ctx.callOptions?.timeoutMs).toBe(250);
+      expect(ctx.callOptions?.headers).toEqual([
+        ["Authorization", `Bearer ${VALID_KEY}`],
+        ["x-test", "1"],
+      ]);
+      const merged = withCallOptions(ctx, { headers: [["y-test", "2"]] });
+      expect(merged?.headers).toEqual([
+        ["Authorization", `Bearer ${VALID_KEY}`],
+        ["x-test", "1"],
+        ["y-test", "2"],
+      ]);
+    });
+
+    it("lets a per-call Authorization header replace the apiKey-derived one", () => {
+      const ctx = createThruClientContext({ apiKey: VALID_KEY });
+      const merged = withCallOptions(ctx, { headers: [["authorization", "Bearer other"]] });
+      expect(merged?.headers).toEqual([["authorization", "Bearer other"]]);
+      const fromHeaders = withCallOptions(ctx, { headers: new Headers({ Authorization: "Bearer other" }) });
+      expect(fromHeaders?.headers).toEqual([["authorization", "Bearer other"]]);
+    });
+
+    it("lets callOptions.headers given at client creation replace the apiKey-derived one", () => {
+      const ctx = createThruClientContext({
+        apiKey: VALID_KEY,
+        callOptions: { headers: { Authorization: "Bearer other" } },
+      });
+      expect(ctx.callOptions?.headers).toEqual([["Authorization", "Bearer other"]]);
+    });
+
+    it("applies the header even when a custom transport is supplied", () => {
+      const transport = {} as any;
+      const ctx = createThruClientContext({ transport, apiKey: VALID_KEY });
+      expect(ctx.transport).toBe(transport);
+      expect(ctx.callOptions?.headers).toEqual([["Authorization", `Bearer ${VALID_KEY}`]]);
+    });
+
+    it("sends no header when apiKey is unset or blank", () => {
+      expect(createThruClientContext({}).callOptions).toBeUndefined();
+      expect(createThruClientContext({ apiKey: undefined }).callOptions).toBeUndefined();
+      expect(createThruClientContext({ apiKey: "" }).callOptions).toBeUndefined();
+      expect(createThruClientContext({ apiKey: "   " }).callOptions).toBeUndefined();
+      const ctx = createThruClientContext({ apiKey: "", callOptions: { timeoutMs: 1 } });
+      expect(ctx.callOptions).toEqual({ timeoutMs: 1 });
+    });
+
+    it("rejects malformed keys with a clear error", () => {
+      expect(() => createThruClientContext({ apiKey: "thru_short" })).toThrow(/Invalid Thru API key/);
+      expect(() => createThruClientContext({ apiKey: "sk_" + "a".repeat(32) })).toThrow(/Invalid Thru API key/);
+      expect(() => createThruClientContext({ apiKey: "thru_" + "a".repeat(31) + "!" })).toThrow(
+        /Invalid Thru API key/,
+      );
+    });
   });
 });

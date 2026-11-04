@@ -274,6 +274,7 @@ export class ReplayStream<T, Cursor = unknown> implements AsyncIterable<T> {
       }
 
       this.logger.info("replay entering STREAMING state");
+      this.config.onStreaming?.();
       const retryConfig = DEFAULT_RETRY_CONFIG;
       let retryAttempt = 0;
       let waitingFirstReconnectEvent: {

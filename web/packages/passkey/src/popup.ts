@@ -1,3 +1,4 @@
+import { PASSKEY_POPUP_LAUNCH_HTML } from './launch-splash';
 import {
   reportPasskeyCeremony,
   type PasskeyReportingOptions,
@@ -20,7 +21,8 @@ export const PASSKEY_POPUP_CHANNEL = 'thru:passkey-popup-channel';
 export const PASSKEY_CEREMONY_TIMEOUT_MS = 60000;
 
 /** How long the opener waits for a popup response, counted from when it
- *  opens the window: a minute to start the ceremony plus the ceremony's own
+ *  sends the request (a window preopened on the tap opened a moment
+ *  earlier): a minute to start the ceremony plus the ceremony's own
  *  timeout, so a slow passkey sheet is not closed mid-ceremony. The popup page
  *  uses it to stay inside that window. */
 export const PASSKEY_POPUP_TIMEOUT_MS = 60000 + PASSKEY_CEREMONY_TIMEOUT_MS;
@@ -50,7 +52,7 @@ export function openPasskeyPopupWindow(): Window {
   url.searchParams.set('tn_network_pinned', '1');
   const popupUrl = url.toString();
   const popup = window.open(
-    popupUrl,
+    '',
     'thru_passkey_popup',
     'popup=yes,width=440,height=640',
   );
@@ -58,6 +60,18 @@ export function openPasskeyPopupWindow(): Window {
   if (!popup) {
     throw new Error('Passkey popup was blocked');
   }
+
+  /* A new window is blank white until the popup page's first byte; paint the
+     launch splash into it now. The browser keeps it on screen until the popup
+     page paints. */
+  try {
+    popup.document.open();
+    popup.document.write(PASSKEY_POPUP_LAUNCH_HTML);
+    popup.document.close();
+  } catch {
+    /* Cosmetic only: navigate regardless. */
+  }
+  popup.location.replace(popupUrl);
 
   return popup;
 }

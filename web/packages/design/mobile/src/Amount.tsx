@@ -350,7 +350,7 @@ const useStyles = makeStyles((c) => ({
   keyDisabled: { opacity: 0.45 },
   keyText: {
     color: c.fg,
-    fontFamily: font.sansMedium,
+    fontFamily: font.monoMedium,
     fontSize: text.xl,
   },
 }));

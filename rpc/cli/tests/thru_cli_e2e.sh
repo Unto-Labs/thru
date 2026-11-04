@@ -1254,19 +1254,16 @@ scenario_validator() {
   run_cli_expect_fail "validator bls-pubkey all-zero scalar" validator bls-pubkey --bls-key "$tmp_bls_zero"
 
   # --- Test 4: activate argument validation (no network mutation). -------------
-  # Provide a valid BLS source so clap's required_unless_present_any passes and the
+  # Provide a valid BLS source so clap's required_unless_present passes and the
   # failure is attributable to ensure_nonzero_amount (which runs before any RPC).
   local amt_fail
   amt_fail=$(run_cli_expect_fail_capture "validator activate zero amount" \
     validator activate --source-token-account "$ACC_0_ADDRESS" --token-amount 0 --bls-seed 1)
   assert_contains "$amt_fail" "amount must be greater than 0"
   # Mutual exclusion + missing-source: clap owns the wording, so only assert failure.
-  run_cli_expect_fail "validator activate bls-pubkey+bls-seed" \
+  run_cli_expect_fail "validator activate bls-key+bls-seed" \
     validator activate --source-token-account "$ACC_0_ADDRESS" --token-amount 1 \
-    --bls-pubkey "$(printf '11%.0s' {1..96})" --bls-seed 1
-  run_cli_expect_fail "validator activate bls-key+bls-pubkey" \
-    validator activate --source-token-account "$ACC_0_ADDRESS" --token-amount 1 \
-    --bls-key "$tmp_bls" --bls-pubkey "$(printf '11%.0s' {1..96})"
+    --bls-key "$tmp_bls" --bls-seed 1
   run_cli_expect_fail "validator activate no bls source" \
     validator activate --source-token-account "$ACC_0_ADDRESS" --token-amount 1
 

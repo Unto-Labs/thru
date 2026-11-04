@@ -1,18 +1,34 @@
-//! Public OAuth device grant and authenticated test-network funding.
+//! Public OAuth device grant, the per-machine RPC API key, and authenticated
+//! test-network funding.
+mod cli_key;
 mod storage;
 #[cfg(test)]
 mod tests;
 
-use crate::{cli::AuthCommands, config::Config, error::CliError, output};
+use crate::{
+    cli::AuthCommands,
+    config::{Config, ProvisionedApiKey, ProvisionedKeySource},
+    error::CliError,
+    output,
+};
+use cli_key::{KeyMetadata, KeyStore, SecretLocation, valid_api_key, valid_key_id, valid_text};
 use reqwest::{Client, Response};
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use storage::Store;
+use std::{
+    sync::Arc,
+    time::{Duration, SystemTime, UNIX_EPOCH},
+};
+use storage::{Store, storage_error};
 use url::{Host, Url};
 
 const CLIENT_ID: &str = "thru-cli";
-const SCOPE: &str = "profile offline_access faucet:fund";
+const SCOPE: &str = "profile offline_access faucet:fund keys:cli";
+/// Scopes a Developers deployment that predates `keys:cli` accepts. Such a
+/// deployment rejects [`SCOPE`] outright, so login retries with this set once
+/// and skips key provisioning.
+const LEGACY_SCOPE: &str = "profile offline_access faucet:fund";
+const MAX_MACHINE_NAME_LEN: usize = 48;
 
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 struct Credentials {
@@ -41,6 +57,160 @@ struct DeviceCode {
     expires_in: u64,
     interval: u64,
 }
+/// `POST /api/cli/keys` 201 body. `plaintext` is never printed or logged.
+#[derive(Deserialize)]
+struct ProvisionedKeyResponse {
+    key: ProvisionedKeyInfo,
+    plaintext: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ProvisionedKeyInfo {
+    id: String,
+    name: String,
+    prefix: String,
+    organization_id: String,
+    organization_name: String,
+}
+
+/// Result of provisioning the per-machine API key during login. Login never
+/// fails because of it.
+enum KeyProvisioning {
+    /// The new key, and what happened to the key a previous login recorded.
+    Provisioned(KeyMetadata, KeyRevocation),
+    /// The Developers server predates `POST /api/cli/keys` or `keys:cli`.
+    Unavailable,
+    Failed(String),
+}
+impl KeyProvisioning {
+    fn to_json(&self) -> Value {
+        match self {
+            Self::Provisioned(key, previous) => json!({
+                "status": "provisioned",
+                "name": key.name,
+                "prefix": key.prefix,
+                "organization": key.organization_name,
+                "previous_key": previous.as_str(),
+            }),
+            Self::Unavailable => json!({"status": "unavailable"}),
+            Self::Failed(reason) => json!({"status": "failed", "reason": reason}),
+        }
+    }
+    fn report(&self, json_format: bool) {
+        match self {
+            Self::Provisioned(key, _) => {
+                let line = format!(
+                    "Provisioned API key \"{}\" ({}...) for organization \"{}\"; it is used automatically with official Thru RPC endpoints.",
+                    key.name, key.prefix, key.organization_name
+                );
+                if json_format {
+                    eprintln!("{line}");
+                } else {
+                    println!("{line}");
+                }
+                if key.location == SecretLocation::File {
+                    eprintln!(
+                        "note: the OS keychain was unavailable or disabled; the API key is stored in an owner-only file under ~/.thru/cli/auth."
+                    );
+                }
+            }
+            Self::Unavailable => eprintln!(
+                "API key provisioning is not available on this Developers server; continuing without an RPC API key."
+            ),
+            Self::Failed(reason) => eprintln!(
+                "warning: could not provision an RPC API key ({reason}); login still succeeded. Run `thru auth login` again to retry."
+            ),
+        }
+    }
+}
+
+/// Server-side outcome for a previously provisioned key, at logout or when
+/// a new login replaces it.
+#[derive(Debug, PartialEq, Eq)]
+enum KeyRevocation {
+    /// No provisioned key was stored.
+    None,
+    Revoked,
+    /// Local copy cleared, but server revocation could not be confirmed.
+    Unconfirmed,
+}
+impl KeyRevocation {
+    fn as_str(&self) -> &'static str {
+        match self {
+            Self::None => "none",
+            Self::Revoked => "revoked",
+            Self::Unconfirmed => "unconfirmed",
+        }
+    }
+}
+
+/// Short reason for a failed key request, without any credential material.
+fn describe(error: &CliError) -> String {
+    match error {
+        CliError::Developers {
+            code,
+            status: Some(403),
+            ..
+        } if code == "SCOPE_REQUIRED" => "this login was not granted the keys:cli scope".into(),
+        CliError::Developers {
+            code,
+            status: Some(status),
+            ..
+        } => format!("{code}, HTTP {status}"),
+        CliError::Developers {
+            code, status: None, ..
+        } if code == "AUTH_UNAVAILABLE" => "could not contact Thru Developers".into(),
+        CliError::Developers { code, .. } => code.clone(),
+        _ => "unexpected error".into(),
+    }
+}
+
+/// Warning for a key whose server-side revocation was not confirmed. It
+/// names the key by prefix and organization; never by its secret.
+fn unrevoked_key_warning(key: &KeyMetadata, error: &CliError) -> String {
+    format!(
+        "warning: could not revoke API key {}... in organization \"{}\" ({}); revoke it in Organization settings.",
+        key.prefix,
+        key.organization_name,
+        describe(error)
+    )
+}
+
+/// Runs a blocking key-store operation off the async workers. On Linux the
+/// secret-service backend deadlocks if called on a tokio worker thread.
+async fn blocking<T: Send + 'static>(
+    keys: &KeyStore,
+    operation: impl FnOnce(&KeyStore) -> Result<T, CliError> + Send + 'static,
+) -> Result<T, CliError> {
+    let keys = keys.clone();
+    tokio::task::spawn_blocking(move || operation(&keys))
+        .await
+        .map_err(|_| storage_error("Credential storage task failed"))?
+}
+
+/// This machine's name for the provisioned key: printable ASCII, trimmed,
+/// at most [`MAX_MACHINE_NAME_LEN`] characters.
+fn machine_name() -> String {
+    sanitize_machine_name(&gethostname::gethostname().to_string_lossy())
+}
+fn sanitize_machine_name(raw: &str) -> String {
+    let printable: String = raw
+        .chars()
+        .filter(|c| c.is_ascii_graphic() || *c == ' ')
+        .collect();
+    let name: String = printable
+        .trim()
+        .chars()
+        .take(MAX_MACHINE_NAME_LEN)
+        .collect();
+    let name = name.trim_end();
+    if name.is_empty() {
+        "thru-cli".into()
+    } else {
+        name.into()
+    }
+}
+
 #[derive(Deserialize)]
 struct TokenResponse {
     access_token: String,
@@ -77,43 +247,57 @@ struct Developers {
     origin: Url,
     client: Client,
 }
-impl Developers {
-    fn configured() -> Result<Self, CliError> {
-        let origin = match std::env::var("THRU_DEVELOPERS_URL") {
-            Ok(value) => value,
-            Err(std::env::VarError::NotPresent) => "https://dev.thru.org".into(),
-            Err(_) => {
-                return Err(failure(
-                    "INVALID_ORIGIN",
-                    "Invalid THRU_DEVELOPERS_URL",
-                    None,
-                ));
-            }
-        };
-        Self::new(&origin)
-    }
-    fn new(origin: &str) -> Result<Self, CliError> {
-        let url = Url::parse(origin).map_err(|_| failure("INVALID_ORIGIN", "Developers URL must be an HTTPS origin (or explicit HTTP loopback for local development)", None))?;
-        let loopback = match url.host() {
-            Some(Host::Domain("localhost")) => true,
-            Some(Host::Ipv4(address)) => address.is_loopback(),
-            Some(Host::Ipv6(address)) => address.is_loopback(),
-            _ => false,
-        };
-        if !(url.scheme() == "https" || (url.scheme() == "http" && loopback))
-            || url.host().is_none()
-            || !url.username().is_empty()
-            || url.password().is_some()
-            || url.path() != "/"
-            || url.query().is_some()
-            || url.fragment().is_some()
-        {
+/// The Developers origin selected by `THRU_DEVELOPERS_URL` (default
+/// `https://dev.thru.org`), validated like [`Developers::new`].
+fn configured_origin() -> Result<Url, CliError> {
+    let origin = match std::env::var("THRU_DEVELOPERS_URL") {
+        Ok(value) => value,
+        Err(std::env::VarError::NotPresent) => "https://dev.thru.org".into(),
+        Err(_) => {
             return Err(failure(
                 "INVALID_ORIGIN",
-                "Developers URL must be an HTTPS origin without userinfo, path, query or fragment; HTTP is allowed only for explicit loopback",
+                "Invalid THRU_DEVELOPERS_URL",
                 None,
             ));
         }
+    };
+    parse_origin(&origin)
+}
+
+fn parse_origin(origin: &str) -> Result<Url, CliError> {
+    let url = Url::parse(origin).map_err(|_| failure("INVALID_ORIGIN", "Developers URL must be an HTTPS origin (or explicit HTTP loopback for local development)", None))?;
+    let loopback = match url.host() {
+        Some(Host::Domain("localhost")) => true,
+        Some(Host::Ipv4(address)) => address.is_loopback(),
+        Some(Host::Ipv6(address)) => address.is_loopback(),
+        _ => false,
+    };
+    if !(url.scheme() == "https" || (url.scheme() == "http" && loopback))
+        || url.host().is_none()
+        || !url.username().is_empty()
+        || url.password().is_some()
+        || url.path() != "/"
+        || url.query().is_some()
+        || url.fragment().is_some()
+    {
+        return Err(failure(
+            "INVALID_ORIGIN",
+            "Developers URL must be an HTTPS origin without userinfo, path, query or fragment; HTTP is allowed only for explicit loopback",
+            None,
+        ));
+    }
+    Ok(url)
+}
+
+impl Developers {
+    fn configured() -> Result<Self, CliError> {
+        Self::from_url(configured_origin()?)
+    }
+    #[cfg(test)]
+    fn new(origin: &str) -> Result<Self, CliError> {
+        Self::from_url(parse_origin(origin)?)
+    }
+    fn from_url(url: Url) -> Result<Self, CliError> {
         let client = Client::builder()
             .redirect(reqwest::redirect::Policy::none())
             .retry(reqwest::retry::never())
@@ -427,11 +611,17 @@ impl Developers {
         }
         Ok(())
     }
-    async fn logout(&self, store: &Store) -> Result<bool, CliError> {
+    async fn logout(
+        &self,
+        store: &Store,
+        keys: &KeyStore,
+    ) -> Result<(bool, KeyRevocation), CliError> {
         let _guard = store.lock().await?;
+        // The key is revoked first, while the CLI login can still authorize it.
+        let key = self.revoke_provisioned_key(store, keys).await;
         let saved = match store.load().await {
             Ok(Some(saved)) => saved,
-            Ok(None) => return Ok(false),
+            Ok(None) => return Ok((false, key)),
             Err(_) => {
                 store.clear().await?;
                 return Err(failure(
@@ -443,19 +633,21 @@ impl Developers {
         };
         let remote = self.revoke(&saved.refresh_token).await;
         store.clear().await?;
-        remote.map(|()| true).map_err(|_| failure("REVOCATION_UNCONFIRMED", "Local Developers credentials were cleared, but server revocation could not be confirmed. Revoke this CLI installation in Developers Account settings.", None))
+        remote.map(|()| (true, key)).map_err(|_| failure("REVOCATION_UNCONFIRMED", "Local Developers credentials were cleared, but server revocation could not be confirmed. Revoke this CLI installation in Developers Account settings.", None))
     }
     async fn login(
         &self,
         store: &Store,
+        keys: &KeyStore,
+        machine: &str,
         no_browser: bool,
         json_format: bool,
-    ) -> Result<Account, CliError> {
+    ) -> Result<(Account, KeyProvisioning), CliError> {
         // Serialize the entire login, including browser approval, so a second process
         // cannot create an installation that this process cannot persist.
         let _guard = store.lock().await?;
         let previous = store.load().await?;
-        let credentials = self.authorize(no_browser, json_format).await?;
+        let (credentials, key_scope) = self.authorize(no_browser, json_format).await?;
         let account = match self.account(&credentials.access_token).await {
             Ok(account) => account,
             Err(error) => {
@@ -498,6 +690,45 @@ impl Developers {
                 None,
             ));
         }
+        // Provision before revoking the previous installation so a saved login
+        // always gets a key attempt; failures here never fail the login.
+        let previous_key = blocking(keys, |keys| keys.load_metadata()).await;
+        let mut provisioning = if key_scope {
+            self.provision_key(keys, &credentials.access_token, machine)
+                .await
+        } else {
+            KeyProvisioning::Unavailable
+        };
+        provisioning.report(json_format);
+        // The new key now replaces the local record. The server replaces the
+        // previous key of this login, and of the same machine in the same
+        // organization, and revokes a login's key when that login is logged
+        // out; a key from a different organization or account is revoked here
+        // explicitly, before the previous installation is logged out.
+        if let KeyProvisioning::Provisioned(key, outcome) = &mut provisioning {
+            *outcome = match &previous_key {
+                Ok(None) => KeyRevocation::None,
+                Ok(Some(previous)) if previous.id == key.id => KeyRevocation::None,
+                Ok(Some(previous)) => {
+                    match self
+                        .delete_key(&credentials.access_token, &previous.id)
+                        .await
+                    {
+                        Ok(()) => KeyRevocation::Revoked,
+                        Err(error) => {
+                            eprintln!("{}", unrevoked_key_warning(previous, &error));
+                            KeyRevocation::Unconfirmed
+                        }
+                    }
+                }
+                Err(_) => {
+                    eprintln!(
+                        "warning: details of a previously stored API key were unreadable, so it could not be revoked; check Organization settings for an unused key."
+                    );
+                    KeyRevocation::Unconfirmed
+                }
+            };
+        }
         if let Some(previous) = previous {
             if self.revoke(&previous.refresh_token).await.is_err() {
                 return Err(failure(
@@ -506,28 +737,214 @@ impl Developers {
                     None,
                 ));
             }
+            // Revoking the previous installation also revokes its API key on
+            // the server. When no new key replaced it locally, drop the stale
+            // record so RPC calls go unkeyed instead of sending a revoked key.
+            if !matches!(provisioning, KeyProvisioning::Provisioned(..))
+                && matches!(previous_key, Ok(Some(_)))
+                && blocking(keys, |keys| keys.clear()).await.is_err()
+            {
+                eprintln!(
+                    "warning: the previous login's API key was revoked but could not be removed locally; run `thru auth logout` to clear it."
+                );
+            }
         }
-        Ok(account)
+        Ok((account, provisioning))
     }
 
-    async fn authorize(
-        &self,
-        no_browser: bool,
-        json_format: bool,
-    ) -> Result<Credentials, CliError> {
+    /// Creates an org API key named for this machine and stores it locally,
+    /// overwriting any previous local record. The server replaces this login's
+    /// previous key and the same machine's key in the same organization;
+    /// [`Self::login`] revokes any other recorded key.
+    async fn provision_key(&self, keys: &KeyStore, bearer: &str, machine: &str) -> KeyProvisioning {
+        let response = match self
+            .client
+            .post(self.endpoint("/api/cli/keys"))
+            .bearer_auth(bearer)
+            .json(&json!({ "machine": machine }))
+            .send()
+            .await
+        {
+            Ok(response) => response,
+            Err(_) => return KeyProvisioning::Failed("could not contact Thru Developers".into()),
+        };
+        if response.status() == reqwest::StatusCode::NOT_FOUND {
+            return KeyProvisioning::Unavailable;
+        }
+        let (status, retry_after, value) = match Self::body(response, false).await {
+            Ok(body) => body,
+            Err(error) => return KeyProvisioning::Failed(describe(&error)),
+        };
+        if !(200..300).contains(&status) {
+            return KeyProvisioning::Failed(describe(&Self::protocol_error(
+                status,
+                retry_after,
+                &value,
+                false,
+            )));
+        }
+        let id = value
+            .pointer("/key/id")
+            .and_then(Value::as_str)
+            .filter(|id| valid_key_id(id))
+            .map(str::to_owned);
+        let parsed = serde_json::from_value::<ProvisionedKeyResponse>(value)
+            .ok()
+            .filter(|response| {
+                valid_api_key(&response.plaintext)
+                    && valid_key_id(&response.key.id)
+                    && [
+                        &response.key.name,
+                        &response.key.prefix,
+                        &response.key.organization_id,
+                        &response.key.organization_name,
+                    ]
+                    .iter()
+                    .all(|text| valid_text(text))
+            });
+        let Some(ProvisionedKeyResponse { key, plaintext }) = parsed else {
+            let revoked = match &id {
+                Some(id) => self.delete_key(bearer, id).await.is_ok(),
+                None => false,
+            };
+            return KeyProvisioning::Failed(format!(
+                "Developers returned an invalid API key response{}",
+                if revoked { "; the key was revoked" } else { "" }
+            ));
+        };
+        let metadata = KeyMetadata {
+            origin: self.origin(),
+            id: key.id,
+            name: key.name,
+            prefix: key.prefix,
+            organization_id: key.organization_id,
+            organization_name: key.organization_name,
+            location: SecretLocation::Keychain,
+        };
+        let id = metadata.id.clone();
+        match blocking(keys, move |keys| keys.save(metadata, &plaintext)).await {
+            Ok(saved) => KeyProvisioning::Provisioned(saved, KeyRevocation::None),
+            Err(_) => {
+                let revoked = self.delete_key(bearer, &id).await.is_ok();
+                KeyProvisioning::Failed(format!(
+                    "the key could not be stored locally and {}",
+                    if revoked {
+                        "was revoked"
+                    } else {
+                        "its revocation could not be confirmed; revoke it in Organization settings"
+                    }
+                ))
+            }
+        }
+    }
+
+    /// Revokes a provisioned key. Only a 2xx confirms it: the server answers
+    /// 204 for this account's keys even when already revoked, and 404
+    /// `KEY_NOT_FOUND` for a key this account cannot see (for example one
+    /// created by another account), which is therefore still live.
+    async fn delete_key(&self, bearer: &str, id: &str) -> Result<(), CliError> {
+        if !valid_key_id(id) {
+            return Err(failure("INVALID_KEY_ID", "Invalid stored API key id", None));
+        }
+        let response = self
+            .client
+            .delete(self.endpoint(&format!("/api/cli/keys/{id}")))
+            .bearer_auth(bearer)
+            .send()
+            .await
+            .map_err(|_| Self::network_error(false))?;
+        if response.status().is_success() {
+            return Ok(());
+        }
+        let (status, retry_after, value) = Self::body(response, false).await?;
+        Err(Self::protocol_error(status, retry_after, &value, false))
+    }
+
+    /// Revokes the provisioned key on the server (best effort; warns on
+    /// failure), then removes the local copy. Caller holds the store lock.
+    async fn revoke_provisioned_key(&self, store: &Store, keys: &KeyStore) -> KeyRevocation {
+        let metadata = match blocking(keys, |keys| keys.load_metadata()).await {
+            Ok(None) => return KeyRevocation::None,
+            Ok(Some(metadata)) => Some(metadata),
+            Err(_) => None,
+        };
+        let outcome = match &metadata {
+            Some(metadata) => {
+                let remote = match self.access(store).await {
+                    Ok(saved) => match self.delete_key(&saved.access_token, &metadata.id).await {
+                        Err(CliError::Developers {
+                            status: Some(401), ..
+                        }) => match self.refresh(store, &saved).await {
+                            Ok(refreshed) => {
+                                self.delete_key(&refreshed.access_token, &metadata.id).await
+                            }
+                            Err(error) => Err(error),
+                        },
+                        result => result,
+                    },
+                    Err(error) => Err(error),
+                };
+                match remote {
+                    Ok(()) => KeyRevocation::Revoked,
+                    Err(error) => {
+                        eprintln!("{}", unrevoked_key_warning(metadata, &error));
+                        KeyRevocation::Unconfirmed
+                    }
+                }
+            }
+            None => {
+                eprintln!(
+                    "warning: stored API key details are unreadable, so it could not be revoked on the server; revoke it in Organization settings."
+                );
+                KeyRevocation::Unconfirmed
+            }
+        };
+        if blocking(keys, |keys| keys.clear()).await.is_err() {
+            eprintln!(
+                "warning: could not remove the local API key; remove the thru-cli entry from the OS keychain or the cli-key files under ~/.thru/cli/auth."
+            );
+        }
+        outcome
+    }
+
+    /// Starts a device authorization for `scope`.
+    async fn device_code(&self, scope: &str) -> Result<(u16, Option<u64>, Value), CliError> {
         let origin = self.origin();
         let response = self
             .client
             .post(self.endpoint("/api/auth/device/code"))
             .form(&[
                 ("client_id", CLIENT_ID),
-                ("scope", SCOPE),
+                ("scope", scope),
                 ("resource", origin.as_str()),
             ])
             .send()
             .await
             .map_err(|_| Self::network_error(false))?;
-        let (status, retry_after, value) = Self::body(response, false).await?;
+        Self::body(response, false).await
+    }
+
+    /// Runs the device grant. The flag is whether the login carries
+    /// `keys:cli`: a Developers deployment that predates it rejects the
+    /// request (400 `invalid_request`, or `invalid_scope`), so the request is
+    /// retried once with [`LEGACY_SCOPE`].
+    async fn authorize(
+        &self,
+        no_browser: bool,
+        json_format: bool,
+    ) -> Result<(Credentials, bool), CliError> {
+        let origin = self.origin();
+        let mut key_scope = true;
+        let (mut status, mut retry_after, mut value) = self.device_code(SCOPE).await?;
+        if status == 400
+            && matches!(
+                &Self::protocol_error(status, retry_after, &value, false),
+                CliError::Developers { code, .. } if code == "invalid_request" || code == "invalid_scope"
+            )
+        {
+            key_scope = false;
+            (status, retry_after, value) = self.device_code(LEGACY_SCOPE).await?;
+        }
         if !(200..300).contains(&status) {
             return Err(Self::protocol_error(status, retry_after, &value, false));
         }
@@ -608,7 +1025,7 @@ impl Developers {
                 ])
                 .await;
             match result {
-                Ok(credentials) => return Ok(credentials),
+                Ok(credentials) => return Ok((credentials, key_scope)),
                 Err(CliError::Developers { code, .. }) if code == "authorization_pending" => {}
                 Err(CliError::Developers { code, .. }) if code == "slow_down" => {
                     interval = interval.saturating_add(Duration::from_secs(5))
@@ -669,29 +1086,99 @@ pub async fn handle_auth(command: AuthCommands, json_format: bool) -> Result<(),
     match command {
         AuthCommands::Login { no_browser } => {
             let store = Store::configured(&origin)?;
-            let account = developers.login(&store, no_browser, json_format).await?;
+            let keys = KeyStore::configured(&origin)?;
+            let (account, provisioning) = developers
+                .login(&store, &keys, &machine_name(), no_browser, json_format)
+                .await?;
             output::print_output(
-                json!({"auth":{"status":"authenticated","origin":origin,"account":account}}),
+                json!({"auth":{"status":"authenticated","origin":origin,"account":account,"rpc_api_key":provisioning.to_json()}}),
                 json_format,
             );
         }
         AuthCommands::Status => {
             // API-key automation is faucet-only, never used for account introspection.
             let account = developers.status(&Store::configured(&origin)?).await?;
+            // Metadata only: status never reads the key from the OS keychain.
+            let rpc_api_key = match blocking(&KeyStore::configured(&origin)?, |keys| {
+                keys.load_metadata()
+            })
+            .await
+            {
+                Ok(Some(key)) => {
+                    json!({"present":true,"prefix":key.prefix,"organization":key.organization_name})
+                }
+                Ok(None) => json!({"present":false}),
+                Err(_) => json!({"present":false,"error":"stored API key details are unreadable"}),
+            };
             output::print_output(
-                json!({"auth":{"status":"authenticated","origin":origin,"credential_kind":"device","api_key_override_configured":std::env::var_os("THRU_DEVELOPERS_API_KEY").is_some(),"account":account}}),
+                json!({"auth":{"status":"authenticated","origin":origin,"credential_kind":"device","api_key_override_configured":std::env::var_os("THRU_DEVELOPERS_API_KEY").is_some(),"account":account,"rpc_api_key":rpc_api_key}}),
                 json_format,
             );
         }
         AuthCommands::Logout => {
-            let revoked = developers.logout(&Store::configured(&origin)?).await?;
+            let (revoked, key) = developers
+                .logout(
+                    &Store::configured(&origin)?,
+                    &KeyStore::configured(&origin)?,
+                )
+                .await?;
             output::print_output(
-                json!({"auth":{"status":"logged_out","origin":origin,"installation_revoked":revoked}}),
+                json!({"auth":{"status":"logged_out","origin":origin,"installation_revoked":revoked,"rpc_api_key":key.as_str()}}),
                 json_format,
             );
         }
     }
     Ok(())
+}
+
+/// Reads the key provisioned by `thru auth login` for the configured
+/// Developers origin, for use as the RPC bearer on official endpoints.
+struct ProvisionedKeyLoader {
+    warn: bool,
+}
+impl ProvisionedKeyLoader {
+    fn keys() -> Option<KeyStore> {
+        let origin = configured_origin().ok()?.origin().ascii_serialization();
+        KeyStore::configured(&origin).ok()
+    }
+}
+impl ProvisionedKeySource for ProvisionedKeyLoader {
+    fn present(&self) -> bool {
+        Self::keys().is_some_and(|keys| matches!(keys.load_metadata(), Ok(Some(_))))
+    }
+    fn load(&self) -> Option<String> {
+        let keys = Self::keys()?;
+        // Called from synchronous code that may run on a tokio worker; keychain
+        // access must happen on another thread (keyring's tokio caveat). The
+        // runtime handle is entered there as `spawn_blocking` would.
+        let handle = tokio::runtime::Handle::try_current().ok();
+        let result = std::thread::scope(|scope| {
+            scope
+                .spawn(|| {
+                    let _runtime = handle.as_ref().map(tokio::runtime::Handle::enter);
+                    keys.load_secret()
+                })
+                .join()
+        });
+        match result {
+            Ok(Ok(key)) => key,
+            _ => {
+                if self.warn {
+                    eprintln!(
+                        "warning: could not read the API key from `thru auth login` (OS keychain unavailable or locked); continuing without it."
+                    );
+                }
+                None
+            }
+        }
+    }
+}
+
+/// The API key provisioned by `thru auth login`, read lazily: nothing is read
+/// until an official RPC endpoint would receive it. `warn` reports an
+/// unreadable key on stderr.
+pub fn provisioned_rpc_key(warn: bool) -> ProvisionedApiKey {
+    ProvisionedApiKey::new(Arc::new(ProvisionedKeyLoader { warn }))
 }
 
 fn selected_network(config: &Config) -> Result<&'static str, CliError> {

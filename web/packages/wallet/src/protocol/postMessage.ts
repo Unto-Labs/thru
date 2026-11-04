@@ -53,6 +53,13 @@ export const EMBEDDED_PROVIDER_EVENTS = {
    * once the animation has played.
    */
   UI_HIDE: "ui_hide",
+  /**
+   * The colour at the bottom edge of the frame, sent whenever it changes:
+   * a phone sheet opens, closes or changes theme. `color` is absent when no
+   * sheet sits on that edge. The host paints a thin strip of it there so
+   * Safari tints its bottom toolbar to match.
+   */
+  UI_EDGE: "ui_edge",
   ACCOUNT_CHANGED: "account_changed",
   /* Add funds lifecycle, so a host can react (refresh a balance, toast)
      without waiting on the deposit() promise. `deposit:pending` fires as soon
@@ -67,6 +74,10 @@ export const EMBEDDED_PROVIDER_EVENTS = {
 
 export interface UiHideEventPayload {
   exitMs?: number;
+}
+
+export interface UiEdgeEventPayload {
+  color?: string;
 }
 
 /** Which Add funds rail a deposit runs on. */
@@ -309,6 +320,16 @@ export interface AccountMenuPayload {
   theme?: WalletTheme;
 }
 
+/** `openAccountMenu()` options: the wallet payload plus host-only settings. */
+export interface AccountMenuOptions extends AccountMenuPayload {
+  /**
+   * Preset for the wallet's Add funds flow when the user picks "Add funds",
+   * the same payload as `deposits.open()` (`source` picks the crypto
+   * network). Stays in the SDK; never posted to the wallet.
+   */
+  deposit?: DepositRequestPayload;
+}
+
 export interface AccountMenuRequestMessage extends BaseRequest {
   type: typeof POST_MESSAGE_REQUEST_TYPES.ACCOUNT_MENU;
   payload: AccountMenuPayload;
@@ -424,7 +445,10 @@ export interface ManageAccountsResult {
   restore?: WalletRestoreRecord;
 }
 
-/** `deposit`: the user picked "Add funds"; the host follows up with `deposit()`. */
+/**
+ * `deposit`: the user picked "Add funds" and the SDK already ran the wallet's
+ * Add funds flow; its outcome arrives as `deposit:*` events.
+ */
 export type AccountMenuAction =
   "closed" | "switched" | "accounts-updated" | "signed-out" | "deposit";
 

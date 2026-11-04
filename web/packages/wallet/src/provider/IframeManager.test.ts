@@ -15,6 +15,99 @@ afterEach(() => {
 });
 
 describe('IframeManager', () => {
+  it.each(['rgb(24, 25, 26)', 'rgba(24, 25, 26, 0.8)', 'color(srgb 0.1 0.2 0.3)', '#18191a'])(
+    'paints the modal bottom edge from UI_EDGE with %s',
+    async (edgeColor) => {
+      const { manager, frameId, iframe } = await readyManager();
+      manager.showModal();
+      dispatchWalletMessage(frameId, { type: 'event', event: 'ui_edge', data: { color: edgeColor } });
+
+      const strip = document.querySelector('div[aria-hidden="true"]');
+      expect(strip).toBeInstanceOf(HTMLDivElement);
+      const expectedStyle = document.createElement('div').style;
+      expectedStyle.backgroundColor = edgeColor;
+      expect(getComputedStyle(strip!).backgroundColor).toBe(expectedStyle.backgroundColor);
+      expect(strip?.previousElementSibling).toBe(iframe);
+      expect(getComputedStyle(strip!).height).toBe('12px');
+      expect(getComputedStyle(strip!).opacity).toBe('0.2');
+      expect(getComputedStyle(strip!).pointerEvents).toBe('none');
+
+      dispatchWalletMessage(frameId, { type: 'event', event: 'ui_edge', data: { color: edgeColor } });
+      expect(document.querySelectorAll('div[aria-hidden="true"]')).toHaveLength(1);
+      manager.destroy();
+    }
+  );
+
+  it.each(['ui_edge without a colour', 'ui_hide', 'hide', 'destroy', 'showInline', 'mountInline'] as const)(
+    'removes the modal bottom edge on %s',
+    async (action) => {
+      const container = document.createElement('main');
+      document.body.append(container);
+      const { manager, frameId } = await readyManager();
+      manager.showModal();
+      dispatchWalletMessage(frameId, {
+        type: 'event', event: 'ui_edge', data: { color: 'rgb(24, 25, 26)' },
+      });
+      const strip = document.querySelector('div[aria-hidden="true"]');
+      expect(strip).not.toBeNull();
+
+      if (action === 'ui_edge without a colour') {
+        dispatchWalletMessage(frameId, { type: 'event', event: 'ui_edge', data: {} });
+      } else if (action === 'ui_hide') {
+        dispatchWalletMessage(frameId, { type: 'event', event: 'ui_hide', data: { exitMs: 480 } });
+      } else if (action === 'hide') {
+        await manager.hide();
+      } else if (action === 'mountInline') {
+        await manager.mountInline(container);
+      } else {
+        manager[action]();
+      }
+      expect(strip?.isConnected).toBe(false);
+      manager.destroy();
+    }
+  );
+
+  it.each(['url(x)', 'r'.repeat(65), 123, undefined])(
+    'does not paint a modal bottom edge with invalid colour %s',
+    async (edgeColor) => {
+      const { manager, frameId } = await readyManager();
+      manager.showModal();
+      dispatchWalletMessage(frameId, { type: 'event', event: 'ui_edge', data: { color: edgeColor } });
+      expect(document.querySelector('div[aria-hidden="true"]')).toBeNull();
+      manager.destroy();
+    }
+  );
+
+  it('repaints the modal bottom edge when the colour changes', async () => {
+    const { manager, frameId } = await readyManager();
+    manager.showModal();
+    dispatchWalletMessage(frameId, { type: 'event', event: 'ui_edge', data: { color: 'rgb(249, 251, 251)' } });
+    dispatchWalletMessage(frameId, { type: 'event', event: 'ui_edge', data: { color: 'rgb(18, 26, 26)' } });
+    const strips = document.querySelectorAll('div[aria-hidden="true"]');
+    expect(strips).toHaveLength(1);
+    expect(getComputedStyle(strips[0]).backgroundColor).toBe('rgb(18, 26, 26)');
+    manager.destroy();
+  });
+
+  it('does not paint a bottom edge while the frame is hidden', async () => {
+    const { manager, frameId } = await readyManager();
+    dispatchWalletMessage(frameId, { type: 'event', event: 'ui_edge', data: { color: 'rgb(24, 25, 26)' } });
+    expect(document.querySelector('div[aria-hidden="true"]')).toBeNull();
+    manager.destroy();
+  });
+
+  it('does not paint a bottom edge for an inline wallet', async () => {
+    const container = document.createElement('main');
+    document.body.append(container);
+    const { manager, frameId } = await readyManager();
+    await manager.mountInline(container);
+    dispatchWalletMessage(frameId, {
+      type: 'event', event: 'ui_edge', data: { color: 'rgb(24, 25, 26)' },
+    });
+    expect(document.querySelector('div[aria-hidden="true"]')).toBeNull();
+    manager.destroy();
+  });
+
   it('does not restore host-owned inert after the host removes it while open', async () => {
     const app = document.createElement('main');
     app.setAttribute('inert', '');
