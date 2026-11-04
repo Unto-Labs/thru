@@ -89,10 +89,14 @@ export function streamAccountUpdates(
 ): AsyncIterable<StreamAccountUpdatesResult> {
     // Build address filter - StreamAccountUpdatesRequest now uses filter-based approach
     const addressBytes = Pubkey.from(address).toBytes();
+    let addressParam = "address";
+    for (let suffix = 1; options.filter?.hasParam(addressParam); suffix++) {
+        addressParam = `address_${suffix}`;
+    }
     const addressFilter = new Filter({
-        expression: "account_address.value == params.address",
+        expression: `account_address.value == params.${addressParam}`,
         params: {
-            address: FilterParamValue.bytes(addressBytes),
+            [addressParam]: FilterParamValue.bytes(addressBytes),
         },
     });
 
