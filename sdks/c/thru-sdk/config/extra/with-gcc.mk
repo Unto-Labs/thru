@@ -4,14 +4,16 @@
 # Define toolchain prefix
 RISCV_PREFIX := riscv64-unknown-elf-
 
-# Function to find .thru/sdk/toolchain directory by walking up filesystem
+# Function to find .thru/sdk/toolchain directory by walking up filesystem,
+# then fall back to the standard installation under HOME.
 define find-thru-toolchain
-$(strip $(call _find-thru-toolchain-rec,$(CURDIR)))
+$(strip $(or $(call _find-thru-toolchain-rec,$(CURDIR)),$(if $(wildcard $(HOME)/.thru/sdk/toolchain/bin/$(RISCV_PREFIX)gcc),$(HOME)/.thru/sdk/toolchain)))
 endef
 
-# Recursive helper function to search up the directory tree
+# Recursive helper function to search up the directory tree.
+# Return an empty result at the filesystem root so the HOME fallback can run.
 define _find-thru-toolchain-rec
-$(if $(wildcard $(1)/.thru/sdk/toolchain/bin/$(RISCV_PREFIX)gcc),$(1)/.thru/sdk/toolchain,$(if $(filter $(1),/),$(error RISC-V toolchain not found - reached root directory),$(call _find-thru-toolchain-rec,$(dir $(1:/=)))))
+$(if $(wildcard $(1)/.thru/sdk/toolchain/bin/$(RISCV_PREFIX)gcc),$(1)/.thru/sdk/toolchain,$(if $(filter $(1),/),,$(call _find-thru-toolchain-rec,$(dir $(1:/=)))))
 endef
 
 # Function to find sysroot in .thru/sdk/toolchain directory
@@ -41,8 +43,8 @@ ifndef RISCV_SYSROOT
 endif
 
 # Check if toolchain was found
-ifeq ($(RISCV_TOOLCHAIN_PATH),)
-$(error RISC-V toolchain ($(RISCV_PREFIX)gcc) not found in .thru/sdk/toolchain directory. Please run deps.sh to install the toolchain or set RISCV_TOOLCHAIN_PATH)
+ifeq ($(wildcard $(RISCV_TOOLCHAIN_PATH)/$(RISCV_PREFIX)gcc),)
+$(error RISC-V compiler $(RISCV_PREFIX)gcc not found. Please install the toolchain or set RISCV_TOOLCHAIN_ROOT to its installation directory)
 endif
 
 # Check if sysroot was found
