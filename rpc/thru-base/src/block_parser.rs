@@ -575,7 +575,7 @@ impl BlockParser {
 
             // Extract additional account addresses (32 bytes each)
             let additional_accounts_count =
-                (readwrite_accounts_cnt + readonly_accounts_cnt) as usize;
+                readwrite_accounts_cnt as usize + readonly_accounts_cnt as usize;
             let additional_accounts_size = additional_accounts_count * 32;
 
             if tx_data.len() >= header_size + additional_accounts_size {
