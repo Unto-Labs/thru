@@ -1,0 +1,32 @@
+{
+  "name": "thru-studio",
+  "version": "1.0.0",
+  "description": "Interactive Program Playground, RISC-V VM Simulator, and RPC Explorer for Thru Network.",
+  "main": "src/index.js",
+  "type": "module",
+  "bin": {
+    "thru-cli": "./bin/thru-cli.js"
+  },
+  "scripts": {
+    "start": "node src/server/app.js",
+    "cli": "node bin/thru-cli.js",
+    "test": "node tests/run-all.js"
+  },
+  "keywords": [
+    "thru",
+    "thru-network",
+    "riscv",
+    "vm-simulator",
+    "blockchain",
+    "rpc-explorer",
+    "unto-labs"
+  ],
+  "author": "Unto Labs & Thru Community",
+  "license": "MIT",
+  "dependencies": {
+    "cors": "^2.8.5",
+    "dotenv": "^16.4.7",
+    "ethers": "^6.13.5",
+    "express": "^4.21.2"
+  }
+}
